@@ -15,33 +15,52 @@ class RecordingReminderScheduler extends ReminderScheduler {
   final List<List<String>> anniversarySyncs = [];
   final List<List<String>> goalSyncs = [];
   Object? todoSyncError;
+  Object? habitSyncError;
+  Object? countdownSyncError;
+  Object? anniversarySyncError;
 
   @override
   Future<void> syncTodos(
     Iterable<TodoItem> todos, {
     bool allowJustMissedOneShotReminders = true,
+    ReminderReconciliationBatch? batch,
   }) async {
     if (todoSyncError != null) throw todoSyncError!;
     todoSyncs.add(todos.map((todo) => todo.id).toList(growable: false));
   }
 
   @override
-  Future<void> syncHabits(Iterable<Habit> habits) async {
+  Future<void> syncHabits(
+    Iterable<Habit> habits, {
+    ReminderReconciliationBatch? batch,
+  }) async {
+    if (habitSyncError != null) throw habitSyncError!;
     habitSyncs.add(habits.map((habit) => habit.id).toList(growable: false));
   }
 
   @override
-  Future<void> syncCountdowns(Iterable<CountdownItem> items) async {
+  Future<void> syncCountdowns(
+    Iterable<CountdownItem> items, {
+    ReminderReconciliationBatch? batch,
+  }) async {
+    if (countdownSyncError != null) throw countdownSyncError!;
     countdownSyncs.add(items.map((item) => item.id).toList(growable: false));
   }
 
   @override
-  Future<void> syncAnniversaries(Iterable<Anniversary> items) async {
+  Future<void> syncAnniversaries(
+    Iterable<Anniversary> items, {
+    ReminderReconciliationBatch? batch,
+  }) async {
+    if (anniversarySyncError != null) throw anniversarySyncError!;
     anniversarySyncs.add(items.map((item) => item.id).toList(growable: false));
   }
 
   @override
-  Future<void> syncGoals(Iterable<GoalItem> goals) async {
+  Future<void> syncGoals(
+    Iterable<GoalItem> goals, {
+    ReminderReconciliationBatch? batch,
+  }) async {
     goalSyncs.add(goals.map((goal) => goal.id).toList(growable: false));
   }
 }

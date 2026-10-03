@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/quick_capture_template.dart';
+import '../services/account_local_data_cleaner.dart';
 import 'cloud_sync_provider.dart';
 
 class QuickCaptureTemplateProvider extends ChangeNotifier {
@@ -11,6 +12,7 @@ class QuickCaptureTemplateProvider extends ChangeNotifier {
 
   final List<QuickCaptureTemplate> _customTemplates = [];
   int _storageGeneration = 0;
+  VoidCallback? onLocalMutationPersisted;
 
   List<QuickCaptureTemplate> get customTemplates =>
       List.unmodifiable(_customTemplates);
@@ -22,8 +24,14 @@ class QuickCaptureTemplateProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final raw = prefs.getString(_storageKey);
     _customTemplates
       ..clear()
@@ -57,11 +65,30 @@ class QuickCaptureTemplateProvider extends ChangeNotifier {
   }
 
   Future<void> _persist() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     await prefs.setString(
       _storageKey,
       json.encode(_customTemplates.map((item) => item.toJson()).toList()),
     );
+    _notifyLocalMutationPersisted();
+  }
+
+  void _notifyLocalMutationPersisted() {
+    try {
+      onLocalMutationPersisted?.call();
+    } catch (e, st) {
+      debugPrint(
+        '[QuickCaptureTemplateProvider] local mutation callback failed: $e\n$st',
+      );
+    }
   }
 
   List<QuickCaptureTemplate> _decode(String? raw) {

@@ -1259,7 +1259,9 @@ void main() {
       expect(service, contains("debugPrint('[HomeWidget]"));
       expect(service, isNot(contains('catch (_) {}')));
       expect(service, contains('AndroidWidgetManager.refreshAllWidgets()'));
-      expect(service, contains('await Future.wait(theme.saveOperations())'));
+      expect(service, contains('_lastSavedPayloadValues'));
+      expect(service, contains('_saveWidgetPayload(theme.payloadValues)'));
+      expect(service, contains('...theme.payloadValues'));
       expect(
         service,
         isNot(contains('_androidVariantProviderNames(androidName)')),
@@ -2830,7 +2832,9 @@ void main() {
       expect(quickTodoBranch, contains('_createQuickTodoFromAction'));
       expect(main, contains('_showWidgetActionFeedbackFromShell'));
       expect(main, contains('String _quickTodoCreatedMessage(TodoItem todo)'));
-      expect(main, contains('已创建待办'));
+      expect(main, contains('String _localSaveSyncMessage('));
+      expect(main, contains('localSaveSyncMessage('));
+      expect(main, contains('尚未上传服务器'));
       final completeTodoBranch = _widgetActionBranch(main, 'complete_todo');
       expect(
         completeTodoBranch,

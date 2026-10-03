@@ -7,6 +7,8 @@ import 'package:duoyi/models/goal.dart' show ReminderConfig, ReminderKind;
 import 'package:duoyi/models/recurrence.dart';
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/todo_provider.dart';
+import 'package:duoyi/services/reminder_scheduler.dart'
+    show ReminderReconciliationBatch;
 
 import '../test_support/recording_reminder_scheduler.dart';
 
@@ -156,6 +158,37 @@ void main() {
       contains('cancel old reminder failed'),
     );
   });
+
+  test('awaited todo reminder sync ignores stale background failure', () async {
+    final provider = TodoProvider();
+    final scheduler = _InterleavedTodoScheduler();
+    provider.scheduler = scheduler;
+
+    await provider.addTodo(
+      TodoItem(id: 'background-todo', title: 'background'),
+      waitForReminderSync: false,
+    );
+    await scheduler.firstStarted.future.timeout(const Duration(seconds: 1));
+
+    final current = provider.addTodoWithResult(
+      TodoItem(id: 'current-todo', title: 'current'),
+    );
+    await scheduler.secondStarted.future.timeout(const Duration(seconds: 1));
+
+    scheduler.completeFirstWithError(StateError('old background rejected'));
+    await scheduler.firstDone.future.timeout(const Duration(seconds: 1));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(provider.lastReminderSyncIssue, isNull);
+
+    scheduler.completeSecond();
+    final result = await current;
+    expect(result, isNotNull);
+    expect(result!.issue, isNull);
+    expect(provider.lastReminderSyncIssue, isNull);
+    expect(provider.todos.map((todo) => todo.id), contains('background-todo'));
+    expect(provider.todos.map((todo) => todo.id), contains('current-todo'));
+  });
 }
 
 Future<void> _waitForScheduler(_GatedTodoScheduler scheduler) async {
@@ -178,8 +211,48 @@ class _GatedTodoScheduler extends RecordingReminderScheduler {
   Future<void> syncTodos(
     Iterable<TodoItem> todos, {
     bool allowJustMissedOneShotReminders = true,
+    ReminderReconciliationBatch? batch,
   }) async {
     todoSyncs.add(todos.map((todo) => todo.id).toList(growable: false));
     await _gate.future;
+  }
+}
+
+class _InterleavedTodoScheduler extends RecordingReminderScheduler {
+  final Completer<void> firstStarted = Completer<void>();
+  final Completer<void> secondStarted = Completer<void>();
+  final Completer<void> firstDone = Completer<void>();
+  final Completer<Object?> _releaseFirst = Completer<Object?>();
+  final Completer<void> _releaseSecond = Completer<void>();
+  int _calls = 0;
+
+  void completeFirstWithError(Object error) {
+    if (!_releaseFirst.isCompleted) _releaseFirst.complete(error);
+  }
+
+  void completeSecond() {
+    if (!_releaseSecond.isCompleted) _releaseSecond.complete();
+  }
+
+  @override
+  Future<void> syncTodos(
+    Iterable<TodoItem> todos, {
+    bool allowJustMissedOneShotReminders = true,
+    ReminderReconciliationBatch? batch,
+  }) async {
+    _calls++;
+    todoSyncs.add(todos.map((todo) => todo.id).toList(growable: false));
+    if (_calls == 1) {
+      if (!firstStarted.isCompleted) firstStarted.complete();
+      try {
+        final error = await _releaseFirst.future;
+        if (error != null) throw error;
+      } finally {
+        if (!firstDone.isCompleted) firstDone.complete();
+      }
+    } else if (_calls == 2) {
+      if (!secondStarted.isCompleted) secondStarted.complete();
+      await _releaseSecond.future;
+    }
   }
 }

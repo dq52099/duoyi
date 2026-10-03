@@ -136,7 +136,12 @@ void main() {
     expect(main, contains('_focusRoomProvider?.stopRealtimeRankings()'));
     expect(main, contains('focusRoomProvider.loadFromStorage()'));
     expect(main, contains('focusRoomProvider.apiClientGetter'));
-    expect(main, contains('focusRoomProvider.onLocalChanged = markDirty'));
+    expect(
+      main,
+      contains(
+        'focusRoomProvider.onLocalChanged = cloudSyncProvider.markUserMutationPending',
+      ),
+    );
     expect(
       main,
       contains('ChangeNotifierProvider.value(value: focusRoomProvider)'),

@@ -973,10 +973,19 @@ void main() {
 
     final once = alarmService.substring(onceStart, testStart);
     expect(once, contains('NativeReminderRingtone.scheduleOnce'));
+    expect(
+      once,
+      contains('ReminderRingtoneSettings.applyPersistedSettingsToNative()'),
+    );
     expect(once, contains("_cancelFlutterAlarmQueue("));
     expect(once, contains("scheduleFullScreen native owner handoff"));
     expect(once, contains("_cancelNativeAlarmQueue("));
     expect(once, contains("scheduleFullScreen flutter fallback handoff"));
+    expect(
+      once.indexOf('ReminderRingtoneSettings.applyPersistedSettingsToNative()'),
+      lessThan(once.indexOf('NativeReminderRingtone.scheduleOnce')),
+      reason: '真实一次性闹钟不能依赖用户先试听铃声才初始化原生设置。',
+    );
     expect(
       once.indexOf('NativeReminderRingtone.scheduleOnce'),
       lessThan(
@@ -1054,10 +1063,21 @@ void main() {
 
     final daily = alarmService.substring(dailyStart, dailyEnd);
     expect(daily, contains('NativeReminderRingtone.scheduleDaily'));
+    expect(
+      daily,
+      contains('ReminderRingtoneSettings.applyPersistedSettingsToNative()'),
+    );
     expect(daily, contains("_cancelFlutterAlarmQueue("));
     expect(daily, contains("scheduleDailyFullScreen native owner handoff"));
     expect(daily, contains("_cancelNativeAlarmQueue("));
     expect(daily, contains("scheduleDailyFullScreen flutter fallback handoff"));
+    expect(
+      daily.indexOf(
+        'ReminderRingtoneSettings.applyPersistedSettingsToNative()',
+      ),
+      lessThan(daily.indexOf('NativeReminderRingtone.scheduleDaily')),
+      reason: '真实重复闹钟不能依赖用户先试听铃声才初始化原生设置。',
+    );
     expect(
       daily.indexOf('NativeReminderRingtone.scheduleDaily'),
       lessThan(
@@ -1119,6 +1139,14 @@ void main() {
     expect(alarmService, contains("_idFromPayload(payload, 'habit')"));
     expect(alarmService, contains('duoyi://action/complete_todo?id='));
     expect(alarmService, contains('duoyi://action/checkin_habit?id='));
+    expect(
+      alarmService,
+      contains('final response = launchDetails?.notificationResponse;'),
+    );
+    expect(alarmService, contains('_payloadForResponse(response)'));
+    expect(alarmService, contains("actionId.startsWith('todo_snooze_')"));
+    expect(alarmService, contains("'duoyi://snooze/\${resp.id ?? 0}'"));
+    expect(alarmService, contains('return payload;'));
     expect(alarmService, contains('Uri.encodeComponent(id)'));
   });
 

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/anniversary.dart';
+import '../models/goal.dart' show ReminderKind;
+import '../services/account_local_data_cleaner.dart';
 import '../services/reminder_scheduler.dart';
 import 'cloud_sync_provider.dart';
 
@@ -11,6 +13,8 @@ class AnniversaryProvider extends ChangeNotifier {
   List<Anniversary> _items = [];
   ReminderScheduler? _scheduler;
   int _storageGeneration = 0;
+  String? _lastReminderSyncIssue;
+  VoidCallback? onLocalMutationPersisted;
 
   List<Anniversary> get items {
     final sorted = [..._items];
@@ -42,17 +46,34 @@ class AnniversaryProvider extends ChangeNotifier {
     }).toList();
   }
 
+  String? get lastReminderSyncIssue => _lastReminderSyncIssue;
+
   // ignore: use_setters_to_change_properties
   set scheduler(ReminderScheduler? scheduler) {
     _scheduler = scheduler;
   }
 
+  bool _isCurrentStorageGeneration(
+    int storageGeneration,
+    int accountGeneration,
+  ) {
+    return storageGeneration == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        );
+  }
+
   Future<void> loadFromStorage() async {
     final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final data = prefs.getStringList(_key) ?? [];
-    _items = data.map((e) => Anniversary.fromJson(jsonDecode(e))).toList();
+    final loaded = data
+        .map((e) => Anniversary.fromJson(jsonDecode(e)))
+        .toList();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    _items = loaded;
 
     notifyListeners();
   }
@@ -60,33 +81,90 @@ class AnniversaryProvider extends ChangeNotifier {
   void resetLocalState() {
     _storageGeneration++;
     _items = [];
+    _lastReminderSyncIssue = null;
     notifyListeners();
   }
 
-  Future<void> _save() async {
+  Future<bool> _save() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final data = _items.map((e) => jsonEncode(e.toJson())).toList();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      _key,
-      _items.map((e) => jsonEncode(e.toJson())).toList(),
-    );
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+      return false;
+    }
+    await prefs.setStringList(_key, data);
+    _notifyLocalMutationPersisted();
     notifyListeners();
+    return true;
   }
 
-  Future<void> _syncRemindersNow() async {
-    final scheduler = _scheduler;
-    if (scheduler == null) return;
+  void _notifyLocalMutationPersisted() {
     try {
-      await scheduler
-          .syncAnniversaries(List.of(_items))
-          .timeout(_reminderSyncTimeout);
-    } catch (error, stackTrace) {
+      onLocalMutationPersisted?.call();
+    } catch (e, st) {
       debugPrint(
-        '[AnniversaryProvider] reminder sync failed: $error\n$stackTrace',
+        '[AnniversaryProvider] local mutation callback failed: $e\n$st',
       );
     }
   }
 
-  Future<void> add(Anniversary item) async {
+  Future<String?> _syncRemindersNow() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final scheduler = _scheduler;
+    if (scheduler == null) {
+      if (!_hasEnabledReminders()) {
+        _lastReminderSyncIssue = null;
+        return null;
+      }
+      final issue = '提醒服务未初始化，未能注册纪念日提醒。请重启应用或重新打开提醒设置后再保存。';
+      _lastReminderSyncIssue = issue;
+      return issue;
+    }
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+      return null;
+    }
+    final items = List.of(_items);
+    try {
+      await scheduler.syncAnniversaries(items).timeout(_reminderSyncTimeout);
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+        return null;
+      }
+      _lastReminderSyncIssue = null;
+      return null;
+    } on ReminderScheduleSyncException catch (error, stackTrace) {
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+        return null;
+      }
+      final issue = error.failures.isEmpty
+          ? '提醒未注册，请检查通知权限、提醒方式和提醒时间后重新保存。'
+          : error.failures.first;
+      _lastReminderSyncIssue = issue;
+      debugPrint(
+        '[AnniversaryProvider] reminder sync failed: $error\n$stackTrace',
+      );
+      return issue;
+    } catch (error, stackTrace) {
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+        return null;
+      }
+      final issue = '提醒未注册，请检查通知权限、提醒方式和提醒时间后重新保存。';
+      _lastReminderSyncIssue = issue;
+      debugPrint(
+        '[AnniversaryProvider] reminder sync failed: $error\n$stackTrace',
+      );
+      return issue;
+    }
+  }
+
+  bool _hasEnabledReminders() {
+    return _items.any(
+      (item) => item.remind && item.reminderKind != ReminderKind.off,
+    );
+  }
+
+  Future<String?> add(Anniversary item) async {
     item.updatedAt = DateTime.now();
     final index = _items.indexWhere((existing) => existing.id == item.id);
     if (index == -1) {
@@ -94,8 +172,9 @@ class AnniversaryProvider extends ChangeNotifier {
     } else {
       _items[index] = item;
     }
-    await _save();
-    await _syncRemindersNow();
+    final saved = await _save();
+    if (!saved) return null;
+    return _syncRemindersNow();
   }
 
   Future<AnniversaryImportSummary> importAnniversaries(
@@ -119,31 +198,35 @@ class AnniversaryProvider extends ChangeNotifier {
       _items.add(item);
       inserted++;
     }
+    String? reminderSyncIssue;
     if (inserted > 0) {
-      await _save();
-      await _syncRemindersNow();
+      final saved = await _save();
+      if (saved) reminderSyncIssue = await _syncRemindersNow();
     }
     return AnniversaryImportSummary(
       inserted: inserted,
       skippedDuplicates: skippedDuplicates,
+      reminderSyncIssue: reminderSyncIssue,
     );
   }
 
-  Future<void> update(Anniversary item) async {
+  Future<String?> update(Anniversary item) async {
     final idx = _items.indexWhere((e) => e.id == item.id);
     if (idx != -1) {
       item.updatedAt = DateTime.now();
       _items[idx] = item;
-      await _save();
-      await _syncRemindersNow();
+      final saved = await _save();
+      if (!saved) return null;
+      return _syncRemindersNow();
     }
+    return null;
   }
 
   Future<void> delete(String id) async {
     await CloudSyncProvider.recordDeletedItem('anniversaries', id);
     _items.removeWhere((e) => e.id == id);
-    await _save();
-    await _syncRemindersNow();
+    final saved = await _save();
+    if (saved) await _syncRemindersNow();
   }
 
   Future<void> togglePin(String id) async {
@@ -159,10 +242,12 @@ class AnniversaryProvider extends ChangeNotifier {
 class AnniversaryImportSummary {
   final int inserted;
   final int skippedDuplicates;
+  final String? reminderSyncIssue;
 
   const AnniversaryImportSummary({
     required this.inserted,
     required this.skippedDuplicates,
+    this.reminderSyncIssue,
   });
 }
 

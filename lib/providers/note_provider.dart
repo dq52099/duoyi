@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/note.dart';
+import '../services/account_local_data_cleaner.dart';
 import 'cloud_sync_provider.dart';
 
 class NoteProvider extends ChangeNotifier {
   static const _key = 'duoyi_notes';
   List<NoteItem> _notes = [];
   int _storageGeneration = 0;
+  VoidCallback? onLocalMutationPersisted;
 
   List<NoteItem> get notes => _sorted(_notes);
 
@@ -19,8 +21,14 @@ class NoteProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final data = prefs.getStringList(_key) ?? [];
     _notes = data.map((e) => NoteItem.fromJson(jsonDecode(e))).toList();
     notifyListeners();
@@ -33,10 +41,27 @@ class NoteProvider extends ChangeNotifier {
   }
 
   Future<void> _save() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final data = _notes.map((e) => jsonEncode(e.toJson())).toList();
     await prefs.setStringList(_key, data);
+    _notifyLocalMutationPersisted();
     notifyListeners();
+  }
+
+  void _notifyLocalMutationPersisted() {
+    try {
+      onLocalMutationPersisted?.call();
+    } catch (e, st) {
+      debugPrint('[NoteProvider] local mutation callback failed: $e\n$st');
+    }
   }
 
   void addOrUpdateNote(NoteItem note) {

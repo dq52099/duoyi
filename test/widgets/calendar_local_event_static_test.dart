@@ -28,6 +28,8 @@ void main() {
     expect(provider, contains('Future<void> updateLocalEvent'));
     expect(provider, contains('Future<void> deleteLocalEvent'));
     expect(provider, contains('localEventReminderCanceller'));
+    expect(provider, contains('await _cancelLocalEventReminder(event.id);'));
+    expect(provider, contains('await _cancelLocalEventReminder(id);'));
     expect(provider, contains('await localEventReminderCanceller?.call(id);'));
     expect(provider, contains('local event reminder cancel failed'));
     expect(main, contains('calendarProvider.localEventReminderCanceller'));
@@ -61,5 +63,19 @@ void main() {
     expect(sheet, contains('CalendarEventType.event'));
     expect(sheet, contains('_editLocalEvent(context)'));
     expect(sheet, contains('deleteLocalEvent(event.id)'));
+  });
+
+  test('Calendar separates shell and standalone route backgrounds', () {
+    final screen = File('lib/screens/calendar_screen.dart').readAsStringSync();
+    final main = File('lib/main.dart').readAsStringSync();
+
+    expect(screen, contains('final bool useShellBackground'));
+    expect(screen, contains('this.useShellBackground = false'));
+    expect(screen, contains('paintBackground: !widget.useShellBackground'));
+    expect(screen, contains('backgroundColor: widget.useShellBackground'));
+    expect(
+      main,
+      contains('CalendarScreen(key: calendarKey, useShellBackground: true)'),
+    );
   });
 }

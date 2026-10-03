@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/completion_visibility_policy.dart';
@@ -14,6 +15,7 @@ import '../models/habit.dart';
 import '../models/todo.dart';
 import '../models/workspace.dart';
 import '../providers/auth_provider.dart';
+import '../providers/cloud_sync_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/share_provider.dart';
@@ -47,13 +49,21 @@ class _TodoScreenState extends State<TodoScreen> {
   TodoKanbanBoardConfig _kanbanConfig = TodoKanbanBoardConfig.defaults();
   bool _batchMode = false;
   bool _batchSubmitting = false;
-  int _swipeDismissSerial = 0;
+  final ValueNotifier<int> _swipeDismissSerial = ValueNotifier<int>(0);
+  final ScrollController _listScrollController = ScrollController();
+  final Set<String> _collapsedListGroups = <String>{};
   final Set<String> _selectedTodoIds = <String>{};
+  bool _swipeDismissedForGesture = false;
 
   @override
   void initState() {
     super.initState();
+    _listScrollController.addListener(_onListScroll);
     _loadKanbanConfig();
+  }
+
+  void _onListScroll() {
+    if (_listScrollController.hasClients) _swipeDismissSerial.value++;
   }
 
   Future<void> _loadKanbanConfig() async {
@@ -127,9 +137,29 @@ class _TodoScreenState extends State<TodoScreen> {
     _setFilter(const TodoFilterState<EisenhowerQuadrant, TodoPriority>());
   }
 
+  @override
+  void dispose() {
+    _listScrollController.removeListener(_onListScroll);
+    _listScrollController.dispose();
+    _swipeDismissSerial.dispose();
+    super.dispose();
+  }
+
   bool _dismissSwipeActionsOnScroll(ScrollNotification notification) {
-    if (notification is ScrollStartNotification) {
-      setState(() => _swipeDismissSerial++);
+    if (notification is ScrollStartNotification ||
+        notification is UserScrollNotification ||
+        notification is ScrollEndNotification) {
+      if (notification is ScrollEndNotification) {
+        _swipeDismissedForGesture = false;
+        return false;
+      }
+      if (_swipeDismissedForGesture) return false;
+      // Close rows once per gesture. The list itself remains lazy; retaining
+      // this single start-time rebuild keeps legacy swipe rows in sync without
+      // rebuilding the page on every scroll tick.
+      _swipeDismissedForGesture = true;
+      _swipeDismissSerial.value++;
+      if (mounted) setState(() {});
     }
     return false;
   }
@@ -224,6 +254,19 @@ class _TodoScreenState extends State<TodoScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
+  }
+
+  String _localSaveSyncMessage(
+    BuildContext context, {
+    String localSavedText = '待办已保存到本机',
+  }) {
+    try {
+      return context.read<CloudSyncProvider>().localSaveSyncMessage(
+        localSavedText: localSavedText,
+      );
+    } on ProviderNotFoundException {
+      return localSavedText;
+    }
   }
 
   void _showAddDialog() {
@@ -524,8 +567,40 @@ class _TodoScreenState extends State<TodoScreen> {
                                   }
                                 }
                                 try {
-                                  await todoProvider.addTodo(todo);
-                                  if (ctx.mounted) Navigator.pop(ctx);
+                                  final waitForReminderSync = draft.hasReminder;
+                                  final reminderSyncResult = await todoProvider
+                                      .addTodoWithResult(
+                                        todo,
+                                        waitForReminderSync:
+                                            waitForReminderSync,
+                                      );
+                                  final reminderSyncIssue = waitForReminderSync
+                                      ? reminderSyncResult?.issue
+                                      : null;
+                                  if (!mounted || !ctx.mounted) return;
+                                  final localSaveMessage =
+                                      _localSaveSyncMessage(
+                                        context,
+                                        localSavedText: '待办已保存到本机',
+                                      );
+                                  Navigator.pop(ctx);
+                                  if (reminderSyncIssue != null) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '待办已保存到本机，但提醒未注册：$reminderSyncIssue',
+                                        ),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  } else {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(localSaveMessage),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
                                 } on StateError catch (e) {
                                   if (!ctx.mounted) return;
                                   final message = e.message.isEmpty
@@ -591,6 +666,7 @@ class _TodoScreenState extends State<TodoScreen> {
     final s = context.watch<ThemeProvider>().brand.strings;
     final now = DateTime.now();
     final baseTodos = todoProvider.visibleListTodos;
+    final cloudSyncNotice = todoProvider.cloudSyncNotice;
     final filteredTodos = filterTodos(
       baseTodos,
       _filter,
@@ -613,6 +689,17 @@ class _TodoScreenState extends State<TodoScreen> {
       (todo) => todo.listGroupName,
     );
     final listGroupEntries = listGroups.entries.toList(growable: false);
+    final listRows = <_ListRowEntry>[
+      for (final entry in listGroupEntries) ...[
+        _ListRowEntry.header(entry.key),
+        if (!_collapsedListGroups.contains(entry.key))
+          for (final todo in entry.value) _ListRowEntry.todo(entry.key, todo),
+      ],
+    ];
+    final canReorderList =
+        !_batchMode &&
+        filteredTodos.length > 1 &&
+        filteredTodos.every((todo) => shareProvider.canEdit(todo.workspaceId));
     final kanbanGroups = <String, List<TodoItem>>{
       for (final column in _kanbanConfig.columns) column.id: <TodoItem>[],
     };
@@ -695,11 +782,19 @@ class _TodoScreenState extends State<TodoScreen> {
         ],
       ),
       body: baseTodos.isEmpty
-          ? EmptyState(
-              icon: Icons.check_circle_outline,
-              message: s.todoEmpty,
-              actionLabel: s.todoAddAction,
-              onAction: _showAddDialog,
+          ? Column(
+              children: [
+                if (!_batchMode && cloudSyncNotice != null)
+                  _TodoCloudSyncNoticeBanner(notice: cloudSyncNotice),
+                Expanded(
+                  child: EmptyState(
+                    icon: Icons.check_circle_outline,
+                    message: s.todoEmpty,
+                    actionLabel: s.todoAddAction,
+                    onAction: _showAddDialog,
+                  ),
+                ),
+              ],
             )
           : Column(
               children: [
@@ -715,6 +810,8 @@ class _TodoScreenState extends State<TodoScreen> {
                     activeGoalCount: goalProvider.activeGoals.length,
                     now: now,
                   ),
+                if (!_batchMode && cloudSyncNotice != null)
+                  _TodoCloudSyncNoticeBanner(notice: cloudSyncNotice),
                 _TodoFilterBar(
                   filter: _filter,
                   totalCount: baseTodos.length,
@@ -758,35 +855,104 @@ class _TodoScreenState extends State<TodoScreen> {
                           _TodoViewMode.list =>
                             NotificationListener<ScrollNotification>(
                               onNotification: _dismissSwipeActionsOnScroll,
-                              child: ListView.builder(
-                                // ignore: deprecated_member_use
-                                cacheExtent: 640,
-                                itemCount: listGroupEntries.length,
-                                itemBuilder: (context, index) {
-                                  final entry = listGroupEntries[index];
-                                  return _ListGroupTile(
-                                    groupName: entry.key,
-                                    todos: entry.value,
-                                    batchMode: _batchMode,
-                                    selectedTodoIds: _selectedTodoIds,
-                                    onToggleSelection: _toggleSelection,
-                                    onEnterBatchMode: (id) =>
-                                        _enterBatchMode(todoId: id),
-                                    swipeDismissSerial: _swipeDismissSerial,
+                              child: ValueListenableBuilder<int>(
+                                valueListenable: _swipeDismissSerial,
+                                builder: (context, swipeSerial, _) {
+                                  Widget itemBuilder(
+                                    BuildContext context,
+                                    int index,
+                                  ) {
+                                    final row = listRows[index];
+                                    if (row.isHeader) {
+                                      return _ListGroupHeader(
+                                        key: ValueKey(
+                                          'list-header-${row.groupName}',
+                                        ),
+                                        groupName: row.groupName,
+                                        todos: listGroups[row.groupName]!,
+                                        expanded: !_collapsedListGroups
+                                            .contains(row.groupName),
+                                        onToggle: () => setState(() {
+                                          if (_collapsedListGroups.contains(
+                                            row.groupName,
+                                          )) {
+                                            _collapsedListGroups.remove(
+                                              row.groupName,
+                                            );
+                                          } else {
+                                            _collapsedListGroups.add(
+                                              row.groupName,
+                                            );
+                                          }
+                                        }),
+                                      );
+                                    }
+                                    final todo = row.todo!;
+                                    return _TodoTile(
+                                      key: ValueKey('list-todo-${todo.id}'),
+                                      todo: todo,
+                                      batchMode: _batchMode,
+                                      selected: _selectedTodoIds.contains(
+                                        todo.id,
+                                      ),
+                                      onToggleSelection: _toggleSelection,
+                                      onEnterBatchMode: (id) =>
+                                          _enterBatchMode(todoId: id),
+                                      swipeDismissSerial: swipeSerial,
+                                      swipeDismissListenable:
+                                          _swipeDismissSerial,
+                                      trailing: canReorderList
+                                          ? ReorderableDragStartListener(
+                                              index: index,
+                                              child: const Icon(
+                                                Icons.drag_indicator,
+                                              ),
+                                            )
+                                          : null,
+                                    );
+                                  }
+
+                                  if (!canReorderList) {
+                                    return ListView.builder(
+                                      controller: _listScrollController,
+                                      // ignore: deprecated_member_use
+                                      cacheExtent: 640,
+                                      itemCount: listRows.length,
+                                      itemBuilder: itemBuilder,
+                                    );
+                                  }
+                                  return ReorderableListView.builder(
+                                    scrollController: _listScrollController,
+                                    // ignore: deprecated_member_use
+                                    cacheExtent: 640,
+                                    buildDefaultDragHandles: false,
+                                    itemCount: listRows.length,
+                                    itemBuilder: itemBuilder,
+                                    onReorder: (oldIndex, newIndex) {
+                                      _reorderFlatListRows(
+                                        listRows,
+                                        oldIndex,
+                                        newIndex,
+                                      );
+                                    },
                                   );
                                 },
                               ),
                             ),
-                          _TodoViewMode.kanban => _TodoKanbanView(
-                            config: _kanbanConfig,
-                            kanbanGroups: kanbanGroups,
-                            batchMode: _batchMode,
-                            selectedTodoIds: _selectedTodoIds,
-                            onToggleSelection: _toggleSelection,
-                            onEnterBatchMode: (id) =>
-                                _enterBatchMode(todoId: id),
-                            swipeDismissSerial: _swipeDismissSerial,
-                            onScrollStart: _dismissSwipeActionsOnScroll,
+                          _TodoViewMode.kanban => ValueListenableBuilder<int>(
+                            valueListenable: _swipeDismissSerial,
+                            builder: (context, swipeSerial, _) =>
+                                _TodoKanbanView(
+                                  config: _kanbanConfig,
+                                  kanbanGroups: kanbanGroups,
+                                  batchMode: _batchMode,
+                                  selectedTodoIds: _selectedTodoIds,
+                                  onToggleSelection: _toggleSelection,
+                                  onEnterBatchMode: (id) =>
+                                      _enterBatchMode(todoId: id),
+                                  swipeDismissSerial: swipeSerial,
+                                  onScrollStart: _dismissSwipeActionsOnScroll,
+                                ),
                           ),
                         },
                 ),
@@ -819,6 +985,36 @@ class _TodoScreenState extends State<TodoScreen> {
               onPressed: _showAddDialog,
               child: const Icon(Icons.add),
             ),
+    );
+  }
+
+  void _reorderFlatListRows(
+    List<_ListRowEntry> rows,
+    int oldIndex,
+    int newIndex,
+  ) {
+    if (oldIndex < 0 || oldIndex >= rows.length) return;
+    final source = rows[oldIndex];
+    if (source.isHeader) return;
+    if (newIndex > oldIndex) newIndex -= 1;
+    if (newIndex < 0 || newIndex >= rows.length) return;
+    final target = rows[newIndex];
+    if (target.isHeader || target.groupName != source.groupName) return;
+
+    final groupTodos = rows
+        .where((row) => !row.isHeader && row.groupName == source.groupName)
+        .map((row) => row.todo!)
+        .toList();
+    final moved = groupTodos.indexWhere((todo) => todo.id == source.todo!.id);
+    final targetIndex = groupTodos.indexWhere(
+      (todo) => todo.id == target.todo!.id,
+    );
+    if (moved < 0 || targetIndex < 0 || moved == targetIndex) return;
+    final todo = groupTodos.removeAt(moved);
+    final insertAt = targetIndex.clamp(0, groupTodos.length);
+    groupTodos.insert(insertAt, todo);
+    context.read<TodoProvider>().reorderVisibleTodos(
+      groupTodos.map((todo) => todo.id).toList(),
     );
   }
 }
@@ -1037,6 +1233,75 @@ class _TodoTodaySummaryCard extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _TodoCloudSyncNoticeBanner extends StatelessWidget {
+  final TodoCloudSyncNotice notice;
+
+  const _TodoCloudSyncNoticeBanner({required this.notice});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isError = notice.level == TodoCloudSyncNoticeLevel.error;
+    final isInfo = notice.level == TodoCloudSyncNoticeLevel.info;
+    final background = isError
+        ? cs.errorContainer.withValues(alpha: 0.72)
+        : isInfo
+        ? cs.primaryContainer.withValues(alpha: 0.64)
+        : cs.tertiaryContainer.withValues(alpha: 0.68);
+    final foreground = isError
+        ? cs.onErrorContainer
+        : isInfo
+        ? cs.onPrimaryContainer
+        : cs.onTertiaryContainer;
+    final borderColor = isError
+        ? cs.error.withValues(alpha: 0.22)
+        : isInfo
+        ? cs.primary.withValues(alpha: 0.2)
+        : cs.tertiary.withValues(alpha: 0.24);
+    final icon = isError
+        ? Icons.cloud_off_outlined
+        : isInfo
+        ? Icons.cloud_queue_outlined
+        : Icons.sync_problem_outlined;
+    final text = switch (notice.level) {
+      TodoCloudSyncNoticeLevel.error =>
+        '本机待办已保存，但服务器同步失败：${notice.message}。恢复网络或重新登录后会自动重试。',
+      TodoCloudSyncNoticeLevel.warning =>
+        '本机待办已保存，服务器同步暂未完成：${notice.message}。恢复网络或重新登录后会自动重试。',
+      TodoCloudSyncNoticeLevel.info => '本机待办已保存，云同步正在排队：${notice.message}',
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 18, color: foreground),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  text,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: foreground,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2670,6 +2935,172 @@ String _quadrantLabel(EisenhowerQuadrant q) {
   }
 }
 
+class _ListRowEntry {
+  final String groupName;
+  final TodoItem? todo;
+  final bool isHeader;
+
+  const _ListRowEntry.header(this.groupName) : todo = null, isHeader = true;
+
+  const _ListRowEntry.todo(this.groupName, this.todo) : isHeader = false;
+}
+
+/// A group header is kept as its own lazy list row.  The old implementation
+/// placed every expanded group's todo tile below this header in a Column,
+/// defeating ListView virtualization for large groups.
+class _ListGroupHeader extends StatelessWidget {
+  final String groupName;
+  final List<TodoItem> todos;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  const _ListGroupHeader({
+    super.key,
+    required this.groupName,
+    required this.todos,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final todoProvider = context.watch<TodoProvider>();
+    final shareProvider = context.watch<ShareProvider>();
+    final workspaceId = todoProvider.workspaceForListGroup(groupName);
+    final workspace = workspaceId == null
+        ? null
+        : shareProvider.workspaces
+              .where((candidate) => candidate.id == workspaceId)
+              .firstOrNull;
+    return AppSurfaceCard(
+      key: key,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(18),
+      child: ListTile(
+        leading: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            expanded ? Icons.expand_less : Icons.expand_more,
+            color: cs.primary,
+          ),
+        ),
+        title: Text(
+          groupName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.normal),
+        ),
+        subtitle: workspace == null
+            ? null
+            : Text(
+                '共享：${workspace.name}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (workspace != null)
+              Icon(Icons.groups_2_outlined, size: 18, color: cs.primary),
+            IconButton(
+              tooltip: '共享清单',
+              onPressed: () => _shareGroup(context),
+              icon: const Icon(Icons.ios_share_outlined),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${todos.length}',
+                style: TextStyle(
+                  color: cs.primary,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
+            ),
+          ],
+        ),
+        onTap: onToggle,
+      ),
+    );
+  }
+
+  Future<void> _shareGroup(BuildContext context) async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.state.isLoggedIn) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ShareScreen()),
+      );
+      return;
+    }
+    final share = context.read<ShareProvider>();
+    if (share.workspaces.isEmpty) await share.load();
+    if (!context.mounted) return;
+    final workspaces = share.workspaces
+        .where((item) => !item.isPrivate)
+        .toList();
+    if (workspaces.isEmpty) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ShareScreen()),
+      );
+      return;
+    }
+    final picked = await showAppModalSheet<String>(
+      context: context,
+      builder: (_) => AppModalSheet(
+        title: '共享清单',
+        subtitle: '把「$groupName」标记到共享空间',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.lock_outline),
+              title: const Text('仅自己可见'),
+              onTap: () => Navigator.pop(context, 'private'),
+            ),
+            for (final workspace in workspaces)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.groups_2_outlined),
+                title: Text(workspace.name),
+                subtitle: Text(
+                  '${workspace.members.length} 位成员 · ${workspace.roleFor(auth.state.userId).label}',
+                ),
+                enabled: workspace.roleFor(auth.state.userId).canEdit,
+                onTap: workspace.roleFor(auth.state.userId).canEdit
+                    ? () => Navigator.pop(context, workspace.id)
+                    : null,
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !context.mounted) return;
+    await context.read<TodoProvider>().updateListGroupWorkspace(
+      groupName,
+      picked,
+      userId: auth.state.userId,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('共享状态已更新')));
+  }
+}
+
 class _ListGroupTile extends StatefulWidget {
   final String groupName;
   final List<TodoItem> todos;
@@ -2927,6 +3358,7 @@ class _TodoTile extends StatefulWidget {
   final ValueChanged<String> onEnterBatchMode;
   final Widget? trailing;
   final int swipeDismissSerial;
+  final ValueListenable<int>? swipeDismissListenable;
 
   const _TodoTile({
     super.key,
@@ -2937,6 +3369,7 @@ class _TodoTile extends StatefulWidget {
     required this.onEnterBatchMode,
     this.trailing,
     this.swipeDismissSerial = 0,
+    this.swipeDismissListenable,
   });
 
   @override
@@ -2954,8 +3387,32 @@ class _TodoTileState extends State<_TodoTile> {
   bool get _swipeActive => _swipeOffset > 0;
 
   @override
+  void initState() {
+    super.initState();
+    widget.swipeDismissListenable?.addListener(_closeSwipeFromScroll);
+  }
+
+  @override
+  void dispose() {
+    widget.swipeDismissListenable?.removeListener(_closeSwipeFromScroll);
+    super.dispose();
+  }
+
+  void _closeSwipeFromScroll() {
+    if (!mounted || !_swipeOpen) return;
+    setState(() {
+      _swipeOffset = 0;
+      _dragging = false;
+    });
+  }
+
+  @override
   void didUpdateWidget(covariant _TodoTile oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.swipeDismissListenable != oldWidget.swipeDismissListenable) {
+      oldWidget.swipeDismissListenable?.removeListener(_closeSwipeFromScroll);
+      widget.swipeDismissListenable?.addListener(_closeSwipeFromScroll);
+    }
     if (widget.batchMode ||
         widget.todo.id != oldWidget.todo.id ||
         widget.swipeDismissSerial != oldWidget.swipeDismissSerial) {
@@ -3165,64 +3622,74 @@ class _TodoTileState extends State<_TodoTile> {
 
     if (widget.batchMode) return content;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onHorizontalDragStart: canEdit
-          ? (_) => setState(() => _dragging = true)
-          : null,
-      onHorizontalDragUpdate: canEdit
-          ? (details) {
-              final next = (_swipeOffset - details.delta.dx).clamp(
-                0.0,
-                _swipeActionWidth,
-              );
-              if (next == _swipeOffset) return;
-              setState(() => _swipeOffset = next);
-            }
-          : null,
-      onHorizontalDragEnd: canEdit
-          ? (_) {
-              final shouldOpen = _swipeOffset >= _swipeOpenThreshold;
-              setState(() {
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollStartNotification ||
+            notification is UserScrollNotification ||
+            notification is ScrollUpdateNotification) {
+          _closeSwipe();
+        }
+        return false;
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: canEdit
+            ? (_) => setState(() => _dragging = true)
+            : null,
+        onHorizontalDragUpdate: canEdit
+            ? (details) {
+                final next = (_swipeOffset - details.delta.dx).clamp(
+                  0.0,
+                  _swipeActionWidth,
+                );
+                if (next == _swipeOffset) return;
+                setState(() => _swipeOffset = next);
+              }
+            : null,
+        onHorizontalDragEnd: canEdit
+            ? (_) {
+                final shouldOpen = _swipeOffset >= _swipeOpenThreshold;
+                setState(() {
+                  _dragging = false;
+                  _swipeOffset = shouldOpen ? _swipeActionWidth : 0;
+                });
+              }
+            : null,
+        onHorizontalDragCancel: canEdit
+            ? () => setState(() {
                 _dragging = false;
-                _swipeOffset = shouldOpen ? _swipeActionWidth : 0;
-              });
-            }
-          : null,
-      onHorizontalDragCancel: canEdit
-          ? () => setState(() {
-              _dragging = false;
-              _swipeOffset = _swipeOffset >= _swipeOpenThreshold
-                  ? _swipeActionWidth
-                  : 0;
-            })
-          : null,
-      child: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          if (_swipeActive)
-            Positioned.fill(
-              child: RepaintBoundary(
-                child: _TodoInlineSwipeActions(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: DesignTokens.spaceMd,
-                    vertical: DesignTokens.spaceSm,
+                _swipeOffset = _swipeOffset >= _swipeOpenThreshold
+                    ? _swipeActionWidth
+                    : 0;
+              })
+            : null,
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            if (_swipeActive)
+              Positioned.fill(
+                child: RepaintBoundary(
+                  child: _TodoInlineSwipeActions(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: DesignTokens.spaceMd,
+                      vertical: DesignTokens.spaceSm,
+                    ),
+                    onToggleCompletion: () => _toggleCompletion(context),
+                    onDelete: () => _confirmDelete(context, provider),
+                    completed: todo.isCompleted,
                   ),
-                  onToggleCompletion: () => _toggleCompletion(context),
-                  onDelete: () => _confirmDelete(context, provider),
-                  completed: todo.isCompleted,
                 ),
               ),
+            AnimatedContainer(
+              duration: _dragging
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              transform: Matrix4.translationValues(-_swipeOffset, 0, 0),
+              child: RepaintBoundary(child: content),
             ),
-          AnimatedContainer(
-            duration: _dragging
-                ? Duration.zero
-                : const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            transform: Matrix4.translationValues(-_swipeOffset, 0, 0),
-            child: RepaintBoundary(child: content),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -3781,7 +4248,8 @@ class _QuadrantListScreenState extends State<QuadrantListScreen> {
   int _swipeDismissSerial = 0;
 
   bool _dismissSwipeActionsOnScroll(ScrollNotification notification) {
-    if (notification is ScrollStartNotification) {
+    if (notification is ScrollStartNotification ||
+        notification is UserScrollNotification) {
       setState(() => _swipeDismissSerial++);
     }
     return false;

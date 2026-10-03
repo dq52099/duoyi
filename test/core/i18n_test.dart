@@ -464,6 +464,13 @@ void main() {
   });
 
   group('LocaleProvider', () {
+    test('unsupported or regional browser locales fall back to zh or en', () {
+      expect(AppLocaleX.fromLanguageCode('en-US'), AppLocale.en);
+      expect(AppLocaleX.fromLanguageCode('zh_CN'), AppLocale.zh);
+      expect(AppLocaleX.fromLanguageCode('6688667.xyz'), AppLocale.zh);
+      expect(AppLocaleX.fromLanguageCode(null), AppLocale.zh);
+    });
+
     test('无用户偏好时跟随平台语言', () async {
       addTearDown(() {
         TestWidgetsFlutterBinding.instance.platformDispatcher

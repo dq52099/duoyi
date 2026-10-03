@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,8 +15,14 @@ class AccountLocalDataCleaner {
 
   static const accountDataOwnerKey = 'duoyi_account_data_owner_v1';
   static int _accountDataGeneration = 0;
+  static final ValueNotifier<int> _accountDataGenerationNotifier =
+      ValueNotifier<int>(0);
 
   static int get accountDataGeneration => _accountDataGeneration;
+
+  /// Signals invalidation immediately, before asynchronous cleanup begins.
+  static ValueListenable<int> get accountDataGenerationListenable =>
+      _accountDataGenerationNotifier;
 
   static bool isCurrentAccountDataGeneration(int generation) {
     return generation == _accountDataGeneration;
@@ -23,6 +30,7 @@ class AccountLocalDataCleaner {
 
   static void invalidateInFlightAccountWrites() {
     _accountDataGeneration++;
+    _accountDataGenerationNotifier.value = _accountDataGeneration;
   }
 
   static const accountScopedKeys = <String>{
@@ -62,6 +70,7 @@ class AccountLocalDataCleaner {
     'widget_display_mode',
     'todo_kanban_columns_v1',
     'reminder_scheduler_registry_v1',
+    'reminder_scheduler_display_registry_v1',
     'duoyi_ics_subscriptions_v1',
     'duoyi_oauth_calendar_accounts_v1',
     'duoyi_oauth_calendar_pending_authorization_v1',
@@ -76,6 +85,7 @@ class AccountLocalDataCleaner {
     'sync_last_time',
     'sync_auto',
     'sync_deleted_items',
+    'sync_workspace_deleted_items',
     'sync_server_updated_at',
     'sync_server_version',
     'sync_collection_hashes',
@@ -202,24 +212,77 @@ class AccountLocalDataCleaner {
   }
 
   static Future<void> clearLocalFiles({Directory? documentsDirectory}) async {
-    final root = documentsDirectory ?? await getApplicationDocumentsDirectory();
-    Object? firstError;
-    StackTrace? firstStackTrace;
+    final cleanup = await quarantineLocalFiles(
+      documentsDirectory: documentsDirectory,
+    );
+    await cleanup.delete();
+  }
 
-    for (final name in accountScopedDocumentDirectories) {
-      try {
+  /// Detaches the departing account's files before a new account can write.
+  ///
+  /// Deleting the returned directory may run in the background: new avatars
+  /// and sounds use their original paths, which this handle never removes.
+  static Future<AccountLocalFileCleanup> quarantineLocalFiles({
+    Directory? documentsDirectory,
+  }) async {
+    final root = documentsDirectory ?? await getApplicationDocumentsDirectory();
+    Directory? quarantine;
+    final moved = <(Directory, String)>[];
+
+    try {
+      for (final name in accountScopedDocumentDirectories) {
         final dir = Directory('${root.path}${Platform.pathSeparator}$name');
         if (!await dir.exists()) continue;
-        await dir.delete(recursive: true);
-      } catch (e, st) {
-        firstError ??= e;
-        firstStackTrace ??= st;
+        quarantine ??= await root.createTemp('.duoyi-account-cleanup-');
+        final detached = await dir.rename(
+          '${quarantine.path}${Platform.pathSeparator}$name',
+        );
+        moved.add((detached, dir.path));
       }
+    } catch (_) {
+      // A failed transition must keep its files recoverable. Restore every
+      // directory already moved; retain quarantine if restoration also fails.
+      for (final (directory, originalPath) in moved.reversed) {
+        try {
+          await directory.rename(originalPath);
+        } catch (_) {}
+      }
+      try {
+        if (quarantine != null && await quarantine.list().isEmpty) {
+          await quarantine.delete();
+        }
+      } catch (_) {
+        // Preserve the staging failure when the empty-directory cleanup also
+        // fails. A nonempty quarantine still holds files for recovery.
+      }
+      rethrow;
     }
-    final error = firstError;
-    final stackTrace = firstStackTrace;
-    if (error != null && stackTrace != null) {
-      Error.throwWithStackTrace(error, stackTrace);
+    return AccountLocalFileCleanup._(quarantine);
+  }
+}
+
+class AccountLocalFileCleanup {
+  final Directory? _quarantine;
+  Future<void>? _deletion;
+
+  AccountLocalFileCleanup._(this._quarantine);
+
+  /// Removes only the detached files, including when retried after a failure.
+  Future<void> delete() async {
+    final pending = _deletion;
+    if (pending != null) return pending;
+    final task = _deleteQuarantinedFiles();
+    _deletion = task;
+    try {
+      await task;
+    } finally {
+      if (identical(_deletion, task)) _deletion = null;
     }
+  }
+
+  Future<void> _deleteQuarantinedFiles() async {
+    final quarantine = _quarantine;
+    if (quarantine == null || !await quarantine.exists()) return;
+    await quarantine.delete(recursive: true);
   }
 }

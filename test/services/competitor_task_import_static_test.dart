@@ -60,6 +60,8 @@ void main() {
     expect(screen, contains('我已确认预览和重复项处理策略'));
     expect(screen, contains('重复项策略：导入时会按本机已有标题、日期、内容等字段自动去重'));
     expect(screen, contains('导入完成'));
+    expect(screen, contains('提醒未完全注册'));
+    expect(screen, contains('部分提醒未注册，请打开对应事项重新保存'));
     expect(screen, contains('撤销本次导入'));
     expect(screen, contains('恢复到导入前的本地快照'));
     expect(
@@ -140,6 +142,7 @@ void main() {
     ).readAsStringSync();
 
     expect(provider, contains('class TodoImportSummary'));
+    expect(provider, contains('final String? reminderSyncIssue'));
     expect(provider, contains('Future<TodoImportSummary> importTodos('));
     expect(
       provider,
@@ -148,6 +151,7 @@ void main() {
     expect(provider, contains('skippedDuplicates++'));
     expect(provider, contains('todo.copyWith(sortOrder: nextSortOrder++)'));
     expect(provider, contains('DomainEventType.todoCreated'));
+    expect(provider, contains('reminderSyncIssue: reminderSyncResult.issue'));
     expect(provider, contains('String _importDuplicateKey(TodoItem todo)'));
   });
 
@@ -160,6 +164,7 @@ void main() {
     ).readAsStringSync();
 
     expect(habitProvider, contains('class HabitImportSummary'));
+    expect(habitProvider, contains('final String? reminderSyncIssue'));
     expect(habitProvider, contains('Future<HabitImportSummary> importHabits('));
     expect(habitProvider, contains('habit.name.trim().toLowerCase()'));
     expect(habitProvider, contains('DomainEventType.habitCreated'));
@@ -198,12 +203,17 @@ void main() {
     ).readAsStringSync();
 
     expect(anniversaryProvider, contains('class AnniversaryImportSummary'));
+    expect(anniversaryProvider, contains('final String? reminderSyncIssue'));
     expect(
       anniversaryProvider,
       contains('Future<AnniversaryImportSummary> importAnniversaries('),
     );
     expect(anniversaryProvider, contains('item.originDate.toIso8601String()'));
     expect(anniversaryProvider, contains('skippedDuplicates++'));
+    expect(
+      anniversaryProvider,
+      contains('reminderSyncIssue: reminderSyncIssue'),
+    );
   });
 
   test('competitor import supports countdown creation paths', () {
@@ -211,6 +221,9 @@ void main() {
       'lib/services/competitor_task_importer.dart',
     ).readAsStringSync();
     final screen = File('lib/screens/backup_screen.dart').readAsStringSync();
+    final countdownProvider = File(
+      'lib/providers/countdown_provider.dart',
+    ).readAsStringSync();
 
     expect(importer, contains("import '../models/countdown.dart';"));
     expect(importer, contains('List<CountdownItem>'));
@@ -219,6 +232,9 @@ void main() {
     expect(screen, contains("import '../providers/countdown_provider.dart';"));
     expect(screen, contains('parsed.countdowns'));
     expect(screen, contains('countdownInserted'));
+    expect(countdownProvider, contains('class CountdownImportSummary'));
+    expect(countdownProvider, contains('final String? reminderSyncIssue'));
+    expect(countdownProvider, contains('reminderSyncIssue: reminderSyncIssue'));
   });
 
   test('TimeAuditProvider exposes duplicate-safe bulk time entry import', () {

@@ -78,12 +78,20 @@ void main() {
     expect(main, contains('countdowns.items'));
     expect(main, isNot(contains('CalendarEventType.countdown => \'\'')));
 
-    expect(
-      provider,
-      contains('Future<void> addItem(CountdownItem item) async'),
+    final addItemStart = provider.indexOf(
+      'Future<String?> addItem(CountdownItem item) async',
     );
-    expect(provider, contains('_items.add(item)'));
-    expect(provider, contains('await _syncRemindersNow()'));
+    final addItemEnd = provider.indexOf(
+      'Future<CountdownImportSummary> importCountdowns',
+      addItemStart,
+    );
+    expect(addItemStart, greaterThanOrEqualTo(0));
+    expect(addItemEnd, greaterThan(addItemStart));
+    final addItem = provider.substring(addItemStart, addItemEnd);
+    expect(addItem, contains('_items.add(item)'));
+    expect(addItem, contains('final saved = await _save();'));
+    expect(addItem, contains('if (!saved) return null;'));
+    expect(addItem, contains('return _syncRemindersNow();'));
   });
 
   test('倒数日可见主流程文档禁止回退为旧兼容模式', () {

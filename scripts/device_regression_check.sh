@@ -15,6 +15,22 @@ READINESS_SCRIPT="$ROOT_DIR/scripts/generate_device_readiness_report.sh"
 VALIDATE_READINESS_SCRIPT="$ROOT_DIR/scripts/validate_device_readiness_report.sh"
 READINESS_DIR="${READINESS_DIR:-$ROOT_DIR/build/device-readiness/latest}"
 KVM_DEVICE="${KVM_DEVICE:-/dev/kvm}"
+BUILD_MODE="${BUILD_MODE:-debug}"
+EXPLICIT_APK_PATH="${APK_PATH:-}"
+
+case "$BUILD_MODE" in
+  debug|profile|release) ;;
+  *)
+    echo "Unsupported BUILD_MODE '$BUILD_MODE'; use debug, profile, or release." >&2
+    exit 2
+    ;;
+esac
+
+if [[ -n "$EXPLICIT_APK_PATH" ]]; then
+  APK_PATH="$EXPLICIT_APK_PATH"
+else
+  APK_PATH="$ROOT_DIR/build/app/outputs/flutter-apk/app-${BUILD_MODE}.apk"
+fi
 
 cd "$ROOT_DIR"
 
@@ -88,9 +104,15 @@ MSG
   exit 2
 fi
 
-echo
-echo "== Build debug APK =="
-"$FLUTTER_BIN" build apk --debug
+if [[ -n "$EXPLICIT_APK_PATH" ]]; then
+  echo
+  echo "== Use supplied APK =="
+  echo "$APK_PATH"
+else
+  echo
+  echo "== Build $BUILD_MODE APK =="
+  "$FLUTTER_BIN" build apk "--$BUILD_MODE"
+fi
 
 echo
 echo "== Integration smoke test =="
@@ -102,7 +124,7 @@ ios_evidence_status=1
 if "$FLUTTER_BIN" devices --machine | grep -Eq '"targetPlatform":"android'; then
   echo
   echo "== Android device evidence =="
-  "$ANDROID_EVIDENCE_SCRIPT"
+  APK_PATH="$APK_PATH" "$ANDROID_EVIDENCE_SCRIPT"
   if "$VALIDATE_EVIDENCE_SCRIPT" android; then
     android_evidence_status=0
   fi

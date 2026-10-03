@@ -11,13 +11,21 @@ import 'time_audit_provider.dart';
 
 class HabitProvider extends ChangeNotifier {
   static const Duration _reminderSyncTimeout = Duration(seconds: 5);
+  static const String _missingSchedulerIssue = '提醒调度器尚未初始化，请重新打开应用后再保存提醒';
 
   List<Habit> _habits = [];
   TimeAuditProvider? _timeAudit;
   ReminderScheduler? _scheduler;
+  String? _lastReminderSyncIssue;
+  DateTime? _lastReminderSyncAttemptAt;
+  DateTime? _lastReminderSyncSucceededAt;
   int _storageGeneration = 0;
+  VoidCallback? onLocalMutationPersisted;
 
   List<Habit> get habits => _habits;
+  String? get lastReminderSyncIssue => _lastReminderSyncIssue;
+  DateTime? get lastReminderSyncAttemptAt => _lastReminderSyncAttemptAt;
+  DateTime? get lastReminderSyncSucceededAt => _lastReminderSyncSucceededAt;
 
   double get todayOverallProgress {
     final active = _habits.where((h) => h.isActiveToday()).toList();
@@ -80,6 +88,9 @@ class HabitProvider extends ChangeNotifier {
   // ignore: use_setters_to_change_properties
   set scheduler(ReminderScheduler? scheduler) {
     _scheduler = scheduler;
+    if (scheduler != null && _lastReminderSyncIssue == _missingSchedulerIssue) {
+      _lastReminderSyncIssue = null;
+    }
   }
 
   Future<void> _save() async {
@@ -92,16 +103,38 @@ class HabitProvider extends ChangeNotifier {
       return;
     }
     await prefs.setString('habits', data);
+    _notifyLocalMutationPersisted();
+  }
+
+  void _notifyLocalMutationPersisted() {
+    try {
+      onLocalMutationPersisted?.call();
+    } catch (e, st) {
+      debugPrint('[HabitProvider] local mutation callback failed: $e\n$st');
+    }
   }
 
   Future<void> _syncRemindersNow() async {
+    _lastReminderSyncAttemptAt = DateTime.now();
     final scheduler = _scheduler;
-    if (scheduler == null) return;
+    if (scheduler == null) {
+      _lastReminderSyncIssue = _missingSchedulerIssue;
+      debugPrint('[HabitProvider] reminder sync skipped: scheduler missing');
+      return;
+    }
     try {
       await scheduler
           .syncHabits(List.of(_habits))
           .timeout(_reminderSyncTimeout);
+      _lastReminderSyncIssue = null;
+      _lastReminderSyncSucceededAt = DateTime.now();
+    } on ReminderScheduleSyncException catch (error, stackTrace) {
+      _lastReminderSyncIssue = error.failures.isEmpty
+          ? '习惯提醒未注册成功，请检查通知权限、弹出提醒兜底、精准闹钟或全屏提醒权限。'
+          : error.failures.join('；');
+      debugPrint('[HabitProvider] reminder sync failed: $error\n$stackTrace');
     } catch (error, stackTrace) {
+      _lastReminderSyncIssue = error.toString();
       debugPrint('[HabitProvider] reminder sync failed: $error\n$stackTrace');
     }
   }
@@ -147,6 +180,7 @@ class HabitProvider extends ChangeNotifier {
     return HabitImportSummary(
       inserted: inserted,
       skippedDuplicates: skippedDuplicates,
+      reminderSyncIssue: _lastReminderSyncIssue,
     );
   }
 
@@ -453,9 +487,11 @@ class HabitProvider extends ChangeNotifier {
 class HabitImportSummary {
   final int inserted;
   final int skippedDuplicates;
+  final String? reminderSyncIssue;
 
   const HabitImportSummary({
     required this.inserted,
     required this.skippedDuplicates,
+    this.reminderSyncIssue,
   });
 }

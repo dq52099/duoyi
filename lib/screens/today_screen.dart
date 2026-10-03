@@ -501,7 +501,9 @@ class TodayScreen extends StatelessWidget {
       body: ListView(
         key: const ValueKey('today_screen_list'),
         restorationId: 'today_screen_list',
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+        // Keep the final card clear of the bottom navigation bar and FAB when
+        // the mobile Today list is scrolled to its end.
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 96),
         children: [
           almanacCard,
           const SizedBox(height: 12),
@@ -509,15 +511,13 @@ class TodayScreen extends StatelessWidget {
           productivityCard,
 
           const SizedBox(height: 12),
-
-          _QuoteCard(),
-
-          const SizedBox(height: 10),
           metricsGrid(desktop: false),
 
           const SizedBox(height: 14),
 
           todosSection(),
+          const SizedBox(height: 10),
+          _QuoteCard(),
           ?reminder,
           ?courses,
           ?anniversaries,
@@ -583,12 +583,11 @@ class TodayScreen extends StatelessWidget {
   }
 }
 
-/// 桌面端左侧边栏 - 日历、一言、快捷入口
+/// 桌面端左侧边栏 - 日历、快捷入口
 class _TodayDesktopLeftSidebar extends StatelessWidget {
   final DateTime now;
-  final Widget quoteCard;
 
-  const _TodayDesktopLeftSidebar({required this.now, required this.quoteCard});
+  const _TodayDesktopLeftSidebar({required this.now});
 
   @override
   Widget build(BuildContext context) {
@@ -597,10 +596,6 @@ class _TodayDesktopLeftSidebar extends StatelessWidget {
       children: [
         // 精简月历
         _CompactMonthCalendar(currentDate: now),
-        const SizedBox(height: DesktopTokens.cardSpacing),
-
-        // 今日一言
-        quoteCard,
         const SizedBox(height: DesktopTokens.cardSpacing),
 
         // 快捷入口
@@ -882,12 +877,6 @@ class _TodayDesktopDashboard extends StatelessWidget {
     final cs = theme.colorScheme;
     final now = DateTime.now(); // 用于左侧边栏日历
 
-    final rightSidebarChildren = <Widget>[
-      goalsSection,
-      ?coursesSection,
-      ?anniversariesSection,
-    ];
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -921,6 +910,20 @@ class _TodayDesktopDashboard extends StatelessWidget {
                             DesktopTokens.isThreeColumnLayout(
                               constraints.maxWidth,
                             );
+                        final moveProductivityToRail =
+                            constraints.maxWidth >=
+                            DesktopTokens.breakpointTwoColumn;
+                        final rightSidebarChildren = <Widget>[
+                          quoteCard,
+                          const SizedBox(height: DesktopTokens.cardSpacing),
+                          if (moveProductivityToRail) ...[
+                            productivityCard,
+                            const SizedBox(height: DesktopTokens.cardSpacing),
+                          ],
+                          goalsSection,
+                          ?coursesSection,
+                          ?anniversariesSection,
+                        ];
 
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -929,10 +932,7 @@ class _TodayDesktopDashboard extends StatelessWidget {
                             if (showLeftSidebar) ...[
                               SizedBox(
                                 width: DesktopTokens.leftSidebarWidth,
-                                child: _TodayDesktopLeftSidebar(
-                                  now: now,
-                                  quoteCard: quoteCard,
-                                ),
+                                child: _TodayDesktopLeftSidebar(now: now),
                               ),
                               const SizedBox(
                                 width: DesktopTokens.columnSpacing,
@@ -943,37 +943,40 @@ class _TodayDesktopDashboard extends StatelessWidget {
                             Expanded(
                               child: Column(
                                 children: [
-                                  LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      if (constraints.maxWidth < 720) {
-                                        return Column(
+                                  if (moveProductivityToRail)
+                                    almanacCard
+                                  else
+                                    LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        if (constraints.maxWidth < 720) {
+                                          return Column(
+                                            children: [
+                                              almanacCard,
+                                              const SizedBox(
+                                                height: DesktopTokens
+                                                    .cardSpacingMedium,
+                                              ),
+                                              productivityCard,
+                                            ],
+                                          );
+                                        }
+                                        return Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            almanacCard,
+                                            Expanded(child: almanacCard),
                                             const SizedBox(
-                                              height: DesktopTokens
+                                              width: DesktopTokens
                                                   .cardSpacingMedium,
                                             ),
-                                            productivityCard,
+                                            SizedBox(
+                                              width: 340,
+                                              child: productivityCard,
+                                            ),
                                           ],
                                         );
-                                      }
-                                      return Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Expanded(child: almanacCard),
-                                          const SizedBox(
-                                            width:
-                                                DesktopTokens.cardSpacingMedium,
-                                          ),
-                                          SizedBox(
-                                            width: 340,
-                                            child: productivityCard,
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
+                                      },
+                                    ),
                                   const SizedBox(
                                     height: DesktopTokens.cardSpacingMedium,
                                   ),
@@ -981,14 +984,6 @@ class _TodayDesktopDashboard extends StatelessWidget {
                                   const SizedBox(
                                     height: DesktopTokens.cardSpacing,
                                   ),
-
-                                  // 当左侧边栏隐藏时，今日一言显示在主内容区
-                                  if (!showLeftSidebar) ...[
-                                    quoteCard,
-                                    const SizedBox(
-                                      height: DesktopTokens.cardSpacing,
-                                    ),
-                                  ],
 
                                   todosSection,
                                   ?reminderSection,
@@ -1042,8 +1037,13 @@ class _TodayDesktopHeader extends StatelessWidget {
         vertical: 16,
       ),
       decoration: BoxDecoration(
-        color: cs.surface.withValues(
-          alpha: DesktopTokens.opacityCardBackground,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(cs.primary.withValues(alpha: 0.045), cs.surface),
+            cs.surface.withValues(alpha: DesktopTokens.opacityCardBackground),
+          ],
         ),
         borderRadius: BorderRadius.circular(DesktopTokens.cardRadius),
         border: Border.all(
@@ -1056,6 +1056,21 @@ class _TodayDesktopHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+              border: Border.all(
+                color: cs.primary.withValues(alpha: 0.14),
+                width: 0.6,
+              ),
+            ),
+            child: Icon(Icons.wb_sunny_outlined, size: 21, color: cs.primary),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1088,27 +1103,23 @@ class _TodayDesktopHeader extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.65),
-              borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
-              border: Border.all(
-                color: cs.outlineVariant.withValues(alpha: 0.3),
-                width: 0.5,
+          const SizedBox(width: 16),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.today_outlined,
+                size: 17,
+                color: cs.primary.withValues(alpha: 0.78),
               ),
-            ),
-            child: Text(
-              I18n.tr('nav.today'),
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontSize: DesktopTokens.fontSizeBody,
-                color: cs.onSurfaceVariant.withValues(
-                  alpha: DesktopTokens.opacityTextSecondary,
+              const SizedBox(width: 6),
+              Text(
+                I18n.tr('nav.today'),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.72),
                 ),
               ),
-            ),
+            ],
           ),
         ],
       ),
@@ -1145,6 +1156,9 @@ class _TodayAlmanacCard extends StatelessWidget {
     final foreground = isDark ? Colors.white : cs.onSurface;
     final muted = foreground.withValues(alpha: isDark ? 0.74 : 0.68);
     final accent = cs.primary;
+    final lunarLabel = I18n.current == AppLocale.en
+        ? 'Lunar'
+        : I18n.tr('calendar.chinese_lunar_calendar');
     final backgroundAsset = brand.backgroundAsset;
     final panelFill = foreground.withValues(alpha: isDark ? 0.09 : 0.055);
     final panelBorder = foreground.withValues(alpha: isDark ? 0.13 : 0.09);
@@ -1317,8 +1331,8 @@ class _TodayAlmanacCard extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  '${I18n.tr('calendar.chinese_lunar_calendar')} $lunarText',
-                                  maxLines: 2,
+                                  '$lunarLabel · $lunarText',
+                                  maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     color: foreground,
@@ -1565,7 +1579,7 @@ class _TodayYijiPreview extends StatelessWidget {
           const SizedBox(width: 7),
           Expanded(
             child: Text(
-              text,
+              _wholeTermPreview(text),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1579,6 +1593,16 @@ class _TodayYijiPreview extends StatelessWidget {
       ),
     );
   }
+}
+
+String _wholeTermPreview(String value) {
+  final terms = value
+      .split(RegExp(r'\s+'))
+      .map((term) => term.trim())
+      .where((term) => term.isNotEmpty)
+      .toList(growable: false);
+  if (terms.length <= 4) return terms.join(' ');
+  return '${terms.take(4).join(' ')} …';
 }
 
 class _TodayProductivitySection extends StatelessWidget {
@@ -1862,35 +1886,90 @@ class _TodayTodoEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final strings = context.watch<ThemeProvider>().brand.strings;
+    final compactLayout = MediaQuery.sizeOf(context).width < 1100;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+      padding: EdgeInsets.fromLTRB(16, 2, compactLayout ? 72 : 16, 14),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
         onTap: onTap,
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.34),
-            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Color.alphaBlend(
+                  cs.primary.withValues(alpha: 0.075),
+                  cs.surface,
+                ),
+                cs.surfaceContainerHighest.withValues(alpha: 0.30),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
             border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.56),
+              color: cs.primary.withValues(alpha: 0.20),
               width: 0.7,
             ),
           ),
           child: Row(
             children: [
-              Icon(Icons.checklist_rtl_outlined, size: 17, color: cs.primary),
-              const SizedBox(width: 8),
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.add_task_rounded,
+                  size: 21,
+                  color: cs.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  '今天暂无待办，点击查看或添加任务',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    fontWeight: FontWeight.normal,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      strings.todoAddAction,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '今天暂无待办，点击查看或添加任务',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 16,
+                  color: cs.primary,
                 ),
               ),
             ],

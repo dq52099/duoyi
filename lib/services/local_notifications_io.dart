@@ -10,7 +10,6 @@ import '../core/i18n.dart';
 import '../core/local_timezone_resolver.dart';
 import 'native_reminder_ringtone.dart';
 import 'notification_permission_exception.dart';
-import 'notification_settings.dart';
 import 'reminder_ringtone_settings.dart';
 
 /// 本地通知 / 每日闹钟(Android + iOS + Linux 实现)。
@@ -258,11 +257,29 @@ class LocalNotifications {
         linux: linuxInit,
       ),
       onDidReceiveNotificationResponse: (resp) {
-        final payload = _payloadForResponse(resp);
-        if (payload != null && onTap != null) onTap!(payload);
+        dispatchNotificationResponse(resp);
       },
     );
     _pluginInitialized = true;
+  }
+
+  /// Routes every plugin callback through the ordinary notification owner.
+  ///
+  /// `FlutterLocalNotificationsPlugin` is a process-wide singleton even when
+  /// callers construct it through separate factory expressions. AlarmService
+  /// therefore delegates to this method instead of replacing the callback.
+  void dispatchNotificationResponse(
+    NotificationResponse response, {
+    void Function(String payload)? fallback,
+  }) {
+    final payload = _payloadForResponse(response);
+    if (payload == null || payload.isEmpty) return;
+    final handler = onTap;
+    if (handler != null) {
+      handler(payload);
+    } else {
+      fallback?.call(payload);
+    }
   }
 
   Future<void> _probeLaunchPayload() async {
@@ -300,9 +317,21 @@ class LocalNotifications {
       if (actionId == 'quick_focus') {
         return 'duoyi://action/start_pomodoro';
       }
+      if (actionId == 'todo_complete' && resp.payload != null) {
+        final id = _idFromPayload(resp.payload!, 'todo');
+        if (id != null && id.isNotEmpty) {
+          return 'duoyi://action/complete_todo?id=${Uri.encodeComponent(id)}';
+        }
+      }
+      if (actionId == 'habit_checkin' && resp.payload != null) {
+        final id = _idFromPayload(resp.payload!, 'habit');
+        if (id != null && id.isNotEmpty) {
+          return 'duoyi://action/checkin_habit?id=${Uri.encodeComponent(id)}';
+        }
+      }
       if (actionId.startsWith('todo_complete_')) {
         final id = actionId.substring('todo_complete_'.length);
-        return 'duoyi://action/complete_todo?id=$id';
+        return 'duoyi://action/complete_todo?id=${Uri.encodeComponent(id)}';
       }
       if (actionId.startsWith('todo_snooze_')) {
         final id = actionId.substring('todo_snooze_'.length);
@@ -313,6 +342,14 @@ class LocalNotifications {
       }
     }
     return resp.payload;
+  }
+
+  String? _idFromPayload(String payload, String host) {
+    final uri = Uri.tryParse(payload);
+    if (uri == null || uri.host != host || uri.pathSegments.isEmpty) {
+      return null;
+    }
+    return uri.pathSegments.first;
   }
 
   bool get _isAndroid {
@@ -1152,13 +1189,17 @@ class LocalNotifications {
 
   Future<List<int>> pendingIds() async {
     try {
-      if (!_initialized) await init();
-      final pending = await _plugin.pendingNotificationRequests();
-      return pending.map((e) => e.id).toList();
+      return await pendingIdsOrThrow();
     } catch (e, st) {
       debugPrint('[LocalNotifications] pendingIds failed: $e\n$st');
       return <int>[];
     }
+  }
+
+  Future<List<int>> pendingIdsOrThrow() async {
+    if (!_initialized) await init();
+    final pending = await _plugin.pendingNotificationRequests();
+    return pending.map((e) => e.id).toList();
   }
 
   String? takeLaunchPayload() {
@@ -1245,8 +1286,7 @@ class LocalNotifications {
           channelId,
           _androidSoundResourceName,
         );
-    final brokenChannel = await _androidChannelNeedsSoundRepair(channelId);
-    if (shouldRecreateChannel || brokenChannel) {
+    if (shouldRecreateChannel) {
       await android?.deleteNotificationChannel(channelId);
     }
     await android?.createNotificationChannel(
@@ -1265,14 +1305,5 @@ class LocalNotifications {
       channelId,
       _androidSoundResourceName,
     );
-  }
-
-  Future<bool> _androidChannelNeedsSoundRepair(String channelId) async {
-    final statuses = await NotificationSettings.notificationChannelStatuses([
-      channelId,
-    ]);
-    final status = statuses?[channelId];
-    return status != null &&
-        (status.isSilent || status.isLowImportance || status.isBlocked);
   }
 }

@@ -1,0 +1,115 @@
+{
+  "flutter": {
+    "test_files": 242,
+    "passed_tests": 1617,
+    "runs": [
+      {
+        "log": "flutter-final-all.log",
+        "passed_tests": 1528,
+        "exit_code": 143
+      },
+      {
+        "log": "flutter-final-continuation.log",
+        "passed_tests": 89,
+        "exit_code": 0
+      }
+    ]
+  },
+  "backend": {
+    "passed_tests": 153,
+    "exit_code": 0
+  },
+  "latest_theme_regression": {
+    "passed_tests": 21,
+    "exit_code": 0
+  },
+  "analyzer": {
+    "issues": 0,
+    "exit_code": 0
+  },
+  "alignment_gate": {
+    "exit_code": 1,
+    "groups": [
+      {
+        "group": "1/8 404 and route contracts",
+        "status": "passed",
+        "duration_seconds": "30"
+      },
+      {
+        "group": "2/8 style layout and readable selection",
+        "status": "passed",
+        "duration_seconds": "106"
+      },
+      {
+        "group": "3/8 notification ringtone and status progress",
+        "status": "passed",
+        "duration_seconds": "103"
+      },
+      {
+        "group": "4/8 widgets Android and iOS static contracts",
+        "status": "passed",
+        "duration_seconds": "10"
+      },
+      {
+        "group": "5/8 admin groups default coins and permissions",
+        "status": "passed",
+        "duration_seconds": "14"
+      },
+      {
+        "group": "6/8 Flutter analyzer",
+        "status": "passed",
+        "duration_seconds": "19"
+      },
+      {
+        "group": "7/8 debug APK build",
+        "status": "passed",
+        "duration_seconds": "1278"
+      },
+      {
+        "group": "8/8 device-only notification alarm widget regression",
+        "status": "failed(2)",
+        "duration_seconds": "17"
+      }
+    ]
+  },
+  "device_acceptance": "open(device_evidence)",
+  "log_sha256": {
+    "alignment-final-complete/1_8_404_and_route_contracts.log": "d454dfdac1df922dfa6ee75830f54bdb7de6fa89d7d8d32c7f6c221e50e92dd7",
+    "alignment-final-complete/2_8_style_layout_and_readable_selection.log": "975252ad0344b4c049b1ded4214b61ca41f3c820f16b594688cf9aef3faa10ad",
+    "alignment-final-complete/3_8_notification_ringtone_and_status_progress.log": "4f717278dc54969cbf14842ab090ef7d459d600facaa1728a0d7276f1c4cbee0",
+    "alignment-final-complete/4_8_widgets_android_and_ios_static_contracts.log": "b80786ab5d3ce9a12c305ee628f223ca1e9d9601b7523b3c0b1736a3a0a67b62",
+    "alignment-final-complete/5_8_admin_groups_default_coins_and_permissions.log": "db0c6259ad38b0bbcdde27f6cb2d8e93be1bfa1701e63db9a244b60952520ab0",
+    "alignment-final-complete/6_8_flutter_analyzer.log": "eab388831d3b09137e3634d2c39fddacec8c83a9c25f61820edf91b9cd1bdb3d",
+    "alignment-final-complete/7_8_debug_apk_build.log": "002d57ef6de1758268b857e491fd783e5bf276352d33dadb3218aced573ee4e0",
+    "alignment-final-complete/8_8_device_only_notification_alarm_widget_regression.log": "e401195841755df1c37bf6f37f95ecf223e524e2b53a5286b5411a0bad075059",
+    "analyzer-latest-explicit-context.log": "e0591f999dd251e1f6306e013cef638ce7a6619b2a832c227c5dcef84b8516f7",
+    "backend-current-final.log": "0ad5836919b795ba42afb93ebf2c54eea80b9c65e3871a20834da1214377a2fb",
+    "flutter-final-all.log": "35f5566363ff98f038a923a918fe926aa9014137c4f7eae718d7748267d9c8e9",
+    "flutter-final-continuation.log": "f12d3d5a604ec88f465bf9f374baccee5a17c24a054faf5769eab5bdb80dbf65",
+    "goal-closure-final/alignment_report.log": "b4b59424bea5eed524193f7dfe9f47e94b3ff903603edf7efa98c4ee336ee9b5",
+    "goal-closure-final/alignment_report_freshness.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "goal-closure-final/android_device_evidence.log": "ab443beb1fad2f012f6b5b1e717cf1282ec23eaadac074afa02e66c725b67b62",
+    "goal-closure-final/device_readiness.log": "f38002b058e34868548f2a98291de4da9e5e74b7f4bfa111de8b0cb4744039e4",
+    "goal-closure-final/device_readiness_missing.log": "7a3486908920e1bdd64802ae4cf962267166b9221bea39af67f13e0795d1bf50",
+    "goal-closure-final/device_readiness_missing_validation.log": "ddc73e13db248875a8c8fa7bd3fa69872a17380abeee5f6df1c3caeba545679d",
+    "goal-closure-final/device_readiness_validation.log": "5668ab3f2346e3d59ebb5a719c6ff817bcaa02563e22c875d1cda37000d47be9",
+    "goal-closure-final/goal_requirement_matrix.log": "330b3c252f85c4315d22fffba06537c3ca8fd889327ebd5656585feca6ade6ef",
+    "goal-closure-final/goal_requirement_status.log": "6c046b1d23e1dd6b018591ebd1d0eb83de45ddd55c0ada1d0a64f980438e4f4d",
+    "goal-closure-final/goal_requirement_status_validation.log": "d3cd680faee1d7e3e7f6f295c95bfeb5a1559f68a6e43606593feb93fff7e731",
+    "goal-closure-final/ios_device_evidence.log": "65678d3d1b30592f2c7dcc034ddd0ca71bf7808496c9fd9f6e4386d7ad9dfb86",
+    "theme-final-explicit-context.log": "cb26fda53be66b831d3a1fd9daaac06102dcb8586628bf3f6d8bdf49dab21b44",
+    "theme-provider-boundary-final.log": "326fd952705d9374af768a439726ca11246c5fb2fd3598468bff4dfc091e81b1",
+    "transition-boundary-final.log": "3efd9516315d7ca3b160c49cd155f288057248607b73c8f85f35d5f1e78f6659"
+  },
+  "commit_review": {
+    "whitespace_check": "passed for all staged paths except the raw evidence listed below",
+    "raw_evidence_preserved": [
+      "agy-retained-source.patch",
+      "incremental-changes.patch",
+      "device-readiness-final/adb_devices.txt",
+      "device-readiness-final/sdkmanager_list.txt"
+    ],
+    "raw_evidence_note": "Patch context markers and device command output contain original whitespace. These files retain their original bytes and are excluded only from the whitespace check."
+  },
+  "raw_logs": "Retained locally under repository *.log ignore rule; checksums preserved here."
+}

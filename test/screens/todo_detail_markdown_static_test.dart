@@ -68,6 +68,7 @@ void main() {
     final source = File(
       'lib/screens/todo_detail_screen.dart',
     ).readAsStringSync();
+    final compactSource = source.replaceAll(RegExp(r'\s+'), '');
 
     expect(source, contains('_insertNotePrefix'));
     expect(source, contains('_wrapNoteSelection'));
@@ -80,9 +81,15 @@ void main() {
     expect(source, contains("_insertNotePrefix('- [ ] ')"));
     expect(source, contains("_wrapNoteSelection('`')"));
     expect(
-      source,
+      compactSource,
       contains(
-        "final nextTodo = _todo.copyWith(\n      title: title,\n      notes: _notesCtrl.text.trim(),\n    );",
+        'finaldraftTodo=_todo.copyWith(title:title,notes:_notesCtrl.text.trim(),);',
+      ),
+    );
+    expect(
+      compactSource,
+      contains(
+        'finalnextTodo=_mergeEditableDraftIntoLatest(savedTodo,draftTodo);',
       ),
     );
   });

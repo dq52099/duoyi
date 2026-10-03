@@ -31,7 +31,7 @@ void main() {
         contains('CompletionVisibilityPolicy.runDailyRollover'),
       );
       expect(startupBlock, contains('goalProvider: goalProvider'));
-      expect(startupBlock, contains('refreshUserStats();'));
+      expect(startupBlock, contains('refreshUserStatsNow();'));
       expect(startupBlock, contains('refreshAchievements();'));
       expect(startupBlock, contains("reason: 'daily rollover completed'"));
       expect(main, contains('runDailyRolloverAfterFirstFrame'));

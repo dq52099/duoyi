@@ -192,12 +192,11 @@ void main() {
     expect(forceUpdateGate, contains('当前平台不支持应用内安装'));
     expect(forceUpdateGate, contains('downloadAndInstallLatest()'));
     expect(forceUpdateGate, contains('updater.hasDownloadedInstaller'));
-    expect(
-      mainApp,
-      contains(
-        'final showMineBadge = notification.hasUnreadHistory || updateHasUpdate',
-      ),
-    );
+    expect(mainApp, contains('class _MainShellNotificationBadgeIcon'));
+    expect(mainApp, contains('context.select<NotificationService, bool>'));
+    expect(mainApp, contains('(service) => service.hasUnreadHistory'));
+    expect(mainApp, contains('(hasUnread || showUpdate)'));
+    expect(mainApp, contains('showUpdate: updateHasUpdate'));
     expect(mainApp, contains('context.select<AppUpdateService, bool>'));
     expect(mainApp, contains('(updater) => updater.hasUpdate'));
     expect(

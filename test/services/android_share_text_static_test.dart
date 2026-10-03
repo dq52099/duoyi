@@ -51,7 +51,10 @@ void main() {
     expect(main, contains('创建待办'));
     expect(main, contains('保存笔记'));
     expect(main, contains('SmartTodoDraftBuilder.fromText(text)'));
-    expect(main, contains('latestContext.read<TodoProvider>().addTodo'));
+    expect(main, contains('final todos = latestContext.read<TodoProvider>()'));
+    expect(main, contains('await todos.addTodoWithResult('));
+    expect(main, contains('waitForReminderSync: waitForReminderSync'));
+    expect(main, contains('待办已保存到本机，但提醒未注册'));
     expect(main, contains('NoteItem('));
     expect(
       main,

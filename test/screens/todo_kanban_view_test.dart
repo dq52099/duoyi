@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/core/todo_kanban.dart';
 import 'package:duoyi/providers/auth_provider.dart';
@@ -18,6 +20,28 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  test('快速创建待办成功后显示本机保存和云同步状态', () {
+    final source = File('lib/screens/todo_screen.dart').readAsStringSync();
+    expect(source, contains("import '../providers/cloud_sync_provider.dart';"));
+    expect(source, contains('String _localSaveSyncMessage('));
+    expect(source, contains('.read<CloudSyncProvider>()'));
+    expect(source, contains('.localSaveSyncMessage('));
+
+    final dialogStart = source.indexOf('void _showAddDialog()');
+    final dialogEnd = source.indexOf(
+      'Widget build(BuildContext context)',
+      dialogStart,
+    );
+    expect(dialogStart, greaterThanOrEqualTo(0));
+    expect(dialogEnd, greaterThan(dialogStart));
+    final dialog = source.substring(dialogStart, dialogEnd);
+
+    expect(dialog, contains('addTodoWithResult('));
+    expect(dialog, contains('reminderSyncIssue != null'));
+    expect(dialog, contains('_localSaveSyncMessage('));
+    expect(dialog, contains("localSavedText: '待办已保存到本机'"));
   });
 
   testWidgets('TodoScreen can switch to kanban view', (tester) async {
@@ -70,6 +94,73 @@ void main() {
       defaultKanbanInProgressColumnId,
     );
     expect(find.text('准备汇报'), findsOneWidget);
+  });
+
+  testWidgets('TodoScreen surfaces cloud sync submit failures', (tester) async {
+    final todoProvider = TodoProvider();
+    await todoProvider.addTodo(TodoItem(title: '需要同步的待办'));
+    todoProvider.lastCloudSyncError = '服务器暂时不可用';
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
+          ChangeNotifierProvider(create: (_) => HabitProvider()),
+          ChangeNotifierProvider(create: (_) => GoalProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => AiService()),
+          ChangeNotifierProvider(create: (_) => ShareProvider()),
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ],
+        child: const MaterialApp(home: TodoScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('本机待办已保存，但服务器同步失败'), findsOneWidget);
+    expect(find.textContaining('服务器暂时不可用'), findsOneWidget);
+
+    todoProvider.lastCloudSyncError = null;
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('本机待办已保存，但服务器同步失败'), findsNothing);
+  });
+
+  testWidgets('TodoScreen surfaces pending cloud sync status', (tester) async {
+    final todoProvider = TodoProvider();
+    await todoProvider.addTodo(TodoItem(title: '离线保存的待办'));
+    todoProvider.cloudSyncNotice = const TodoCloudSyncNotice(
+      message: '未登录云同步账号。',
+      level: TodoCloudSyncNoticeLevel.warning,
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
+          ChangeNotifierProvider(create: (_) => HabitProvider()),
+          ChangeNotifierProvider(create: (_) => GoalProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => AiService()),
+          ChangeNotifierProvider(create: (_) => ShareProvider()),
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ],
+        child: const MaterialApp(home: TodoScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('服务器同步暂未完成'), findsOneWidget);
+    expect(find.textContaining('未登录云同步账号'), findsOneWidget);
+
+    todoProvider.cloudSyncNotice = const TodoCloudSyncNotice(
+      message: '远端有更新，当前同步完成后会继续拉取。',
+      level: TodoCloudSyncNoticeLevel.info,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('云同步正在排队'), findsOneWidget);
+    expect(find.textContaining('远端有更新'), findsOneWidget);
   });
 
   testWidgets('TodoScreen restores kanban grouping preference', (tester) async {
@@ -258,9 +349,25 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.drag(find.byType(ListView).first, const Offset(0, -260));
+    final verticalScrollable = find.byWidgetPredicate(
+      (widget) =>
+          widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      description: 'vertical Todo list scrollable',
+    );
+    expect(verticalScrollable, findsOneWidget);
+    final verticalScrollState = tester.state<ScrollableState>(
+      verticalScrollable,
+    );
+    final initialOffset = verticalScrollState.position.pixels;
+
+    await tester.drag(verticalScrollable, const Offset(0, -260));
     await tester.pumpAndSettle();
 
+    expect(
+      verticalScrollState.position.pixels,
+      greaterThan(initialOffset),
+      reason: 'the vertical Todo list must actually scroll',
+    );
     expect(
       find.byKey(const ValueKey('todo_swipe_complete_button')),
       findsNothing,

@@ -1,0 +1,1212 @@
+[
+  {
+    "file": "test/core/ai_command_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/app_brand_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/app_version_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/calendar_aggregator_conflict_pbt_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/completion_visibility_pbt_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/daily_rollover_goal_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/diary_deep_review_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/diary_insights_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/empty_surface_auditor_runtime_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/flutter_l10n_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/focus_report_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/focus_sound_catalog_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/focus_tag_stats_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/forbidden_injected_identifier_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/global_search_time_entry_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/goal_validation_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/growth_levels_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/habit_grouping_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/habit_insights_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/habit_templates_i18n_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/habit_templates_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/habit_trend_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/i18n_date_format_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/i18n_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/local_timezone_resolver_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/lunar_calendar_boundary_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/period_report_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/project_efficiency_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/recommended_goals_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/report_cross_analysis_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/report_engine_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/report_reminder_config_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/rollover_pbt_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/smart_date_parser_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/smart_schedule_advisor_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/smart_todo_draft_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/todo_filters_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/todo_kanban_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/virtual_rewards_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/core/web_cjk_font_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/anniversary_reminder_kind_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/course_schedule_json_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/enum_label_i18n_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/focus_room_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/goal_json_compat_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/habit_json_safety_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/note_json_compat_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/pomodoro_config_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/quick_capture_template_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/recurrence_interval_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/reminder_offset_preset_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/reminder_plan_json_compat_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/time_entry_json_compat_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/todo_json_compat_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/todo_reminder_migration_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/user_profile_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/models/workspace_permission_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/notification_history_layout_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/account_provider_reset_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/achievement_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/anniversary_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/app_lock_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/auth_provider_profile_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/auth_provider_profile_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/calendar_multiday_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/calendar_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/countdown_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/focus_room_provider_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/goal_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/habit_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/habit_time_audit_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/location_reminder_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/note_provider_management_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/notification_service_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/pomodoro_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/preferences_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/share_provider_account_generation_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/theme_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/time_audit_auto_record_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/time_audit_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/todo_batch_operations_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/todo_delete_flow_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/todo_postpone_pbt_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/todo_recurrence_reminder_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/todo_storage_safety_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/providers/todo_subtask_aggregation_pbt_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/achievement_challenges_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/achievement_rewards_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/admin_feedback_screen_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/ai_history_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/ai_schedule_flow_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/almanac_actions_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/almanac_screen_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/anniversary_i18n_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/anniversary_screen_layout_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/async_mounted_guard_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/calendar_inline_time_entry_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/calendar_project_detail_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/calendar_project_filter_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/calendar_three_day_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/calendar_year_view_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/countdown_i18n_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/countdown_screen_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/countdown_visibility_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/course_schedule_i18n_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/course_schedule_layout_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/diary_i18n_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/diary_insights_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/empty_action_feedback_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/feedback_screen_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/goal_edit_screen_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/habit_detail_edit_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/habit_detail_i18n_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/habit_grouping_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/habit_screen_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/integrations_location_reminder_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/login_screen_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/more_apps_standalone_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/more_apps_widget_routes_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/pomodoro_focus_layout_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/pomodoro_focus_report_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/pomodoro_focus_room_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/pomodoro_strict_focus_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/profile_screen_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/search_screen_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/statistics_comparison_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/statistics_focus_tag_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/statistics_layout_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/statistics_quadrant_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/statistics_report_export_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/style_layout_regression_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/theme_picker_account_boundary_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/theme_reward_shop_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/time_audit_i18n_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/time_audit_screen_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/today_detail_router_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/today_detail_router_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/today_mine_smoke_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/today_mine_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/today_reminder_order_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/todo_batch_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-continuation.log"
+  },
+  {
+    "file": "test/screens/todo_detail_markdown_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/todo_detail_save_stay_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/todo_filters_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/todo_kanban_view_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/todo_layout_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/todo_location_reminder_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/user_reported_ui_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/screens/widget_preview_screen_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/account_local_data_cleaner_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/achievement_feedback_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/admin_ai_settings_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/admin_force_update_settings_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/admin_permissions_coins_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/admin_reminder_email_settings_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/admin_user_status_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/ai_service_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/alignment_report_validator_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/android_network_security_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/android_share_text_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/android_widget_resources_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/api_client_error_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/api_route_contract_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/app_update_service_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/audio_assets_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/backup_service_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/caldav_writer_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/calendar_sync_caldav_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/channel_routing_pbt_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/cloud_sync_focus_payload_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/cloud_sync_provider_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/competitor_task_import_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/competitor_task_importer_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/custom_focus_sound_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/device_evidence_validator_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/device_readiness_report_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/device_regression_script_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/focus_distraction_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/focus_dnd_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/focus_room_api_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/focus_sound_service_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/foreground_reminder_popup_sink_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/goal_closure_validator_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/goal_requirement_matrix_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/goal_requirement_status_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/holiday_calendar_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/ics_parser_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/ios_widget_resources_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/location_geofence_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/location_service_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/module_exporter_csv_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/native_reminder_ringtone_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/no_global_bold_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/no_toast_reminder_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/note_attachment_picker_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/notification_badge_state_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/notification_callback_ownership_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/notification_channel_version_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/notification_health_copy_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/notification_quick_add_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/notification_scheduled_diagnostics_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/notification_status_bar_service_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/notification_today_progress_preferences_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/permission_health_service_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/quick_capture_template_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/recurrence_engine_pbt_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/reminder_email_channel_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/reminder_resync_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/reminder_ringtone_settings_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/reminder_scheduler_integration_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/report_digest_reminder_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/share_collaboration_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/startup_performance_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/sync_conflict_log_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/timezone_wallclock_pbt_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/todo_assignment_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/todo_attachment_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/unwanted_injection_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/user_visible_backend_error_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/web_deployment_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/services/webdav_backup_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widget_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/app_date_picker_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/calendar_day_timeline_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/calendar_drag_adjust_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/calendar_event_sheet_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/calendar_event_sheet_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/calendar_local_event_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/calendar_month_grid_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/eisenhower_matrix_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/force_update_gate_screenshot_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/notification_health_card_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/notification_history_narrow_layout_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/notification_update_narrow_layout_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/quick_ai_command_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/quick_capture_fab_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/recurrence_picker_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/reminder_plan_editor_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/result_states_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/surface_components_layout_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/surface_secondary_control_static_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  },
+  {
+    "file": "test/widgets/todo_completion_flow_test.dart",
+    "status": "passed",
+    "log": "flutter-final-all.log"
+  }
+]

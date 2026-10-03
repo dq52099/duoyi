@@ -68,6 +68,11 @@ abstract class ReminderNotificationSink {
   });
 }
 
+/// Optional transaction boundary for notification reconciliation.
+abstract class ReminderNotificationBatchSink {
+  Future<T> runNotificationBatch<T>(Future<T> Function() action);
+}
+
 /// Alarm 通道出口（对应 `duoyi_alarm` / `Importance.max` / 全屏 intent）。
 ///
 /// 仅罗列 `ReminderScheduler` 真实用到的方法；权限申请、pending 查询等
@@ -186,6 +191,16 @@ abstract class ReminderPopupSink {
   });
 
   Future<void> cancel(int id);
+}
+
+abstract class ReminderInAppOnlyPopupSink implements ReminderPopupSink {
+  Future<void> scheduleInAppOnlyOnce({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  });
 }
 
 class NoopReminderPopupSink implements ReminderPopupSink {

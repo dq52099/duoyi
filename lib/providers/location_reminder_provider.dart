@@ -113,6 +113,7 @@ class LocationReminderProvider extends ChangeNotifier {
   final Map<String, bool> _inRange = {};
   bool _loaded = false;
   int _storageGeneration = 0;
+  VoidCallback? onLocalMutationPersisted;
 
   List<LocationReminder> get reminders =>
       List<LocationReminder>.unmodifiable(_reminders);
@@ -154,6 +155,7 @@ class LocationReminderProvider extends ChangeNotifier {
   Future<void> add(LocationReminder reminder) async {
     _reminders.add(reminder);
     await _save();
+    _notifyLocalMutationPersisted();
     notifyListeners();
   }
 
@@ -162,6 +164,7 @@ class LocationReminderProvider extends ChangeNotifier {
     if (i < 0) return;
     _reminders[i] = reminder.copyWith(updatedAt: DateTime.now());
     await _save();
+    _notifyLocalMutationPersisted();
     notifyListeners();
   }
 
@@ -170,6 +173,7 @@ class LocationReminderProvider extends ChangeNotifier {
     _reminders.removeWhere((r) => r.id == id);
     _inRange.remove(id);
     await _save();
+    _notifyLocalMutationPersisted();
     notifyListeners();
   }
 
@@ -210,6 +214,7 @@ class LocationReminderProvider extends ChangeNotifier {
       );
     }
     await _save();
+    _notifyLocalMutationPersisted();
     notifyListeners();
   }
 
@@ -219,5 +224,9 @@ class LocationReminderProvider extends ChangeNotifier {
       _key,
       jsonEncode(_reminders.map((r) => r.toJson()).toList()),
     );
+  }
+
+  void _notifyLocalMutationPersisted() {
+    onLocalMutationPersisted?.call();
   }
 }

@@ -3,15 +3,24 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/domain_event_bus.dart';
 import '../models/diary_entry.dart';
+import '../services/account_local_data_cleaner.dart';
 import 'cloud_sync_provider.dart';
 
 class DiaryProvider extends ChangeNotifier {
   static const _key = 'duoyi_diary';
   List<DiaryEntry> _entries = [];
+  List<DiaryEntry>? _sortedEntriesCache;
+  Map<String, DiaryEntry>? _entriesByDateCache;
   int _storageGeneration = 0;
+  VoidCallback? onLocalMutationPersisted;
 
-  List<DiaryEntry> get entries =>
-      List.unmodifiable(_entries..sort((a, b) => b.date.compareTo(a.date)));
+  List<DiaryEntry> get entries {
+    final cached = _sortedEntriesCache;
+    if (cached != null) return cached;
+    final sorted = List<DiaryEntry>.of(_entries)
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return _sortedEntriesCache = List.unmodifiable(sorted);
+  }
 
   int get totalCount => _entries.length;
 
@@ -25,8 +34,7 @@ class DiaryProvider extends ChangeNotifier {
   /// 连续写日记天数
   int get currentStreak {
     if (_entries.isEmpty) return 0;
-    final sorted = [..._entries]..sort((a, b) => b.date.compareTo(a.date));
-    final dates = sorted.map((e) => _normalize(e.date)).toSet().toList()
+    final dates = entries.map((e) => _normalize(e.date)).toSet().toList()
       ..sort((a, b) => b.compareTo(a));
 
     final today = _normalize(DateTime.now());
@@ -55,11 +63,13 @@ class DiaryProvider extends ChangeNotifier {
   }
 
   Map<String, DiaryEntry> get entriesByDate {
+    final cached = _entriesByDateCache;
+    if (cached != null) return cached;
     final map = <String, DiaryEntry>{};
     for (final e in _entries) {
       map[e.dateKey] = e;
     }
-    return map;
+    return _entriesByDateCache = Map.unmodifiable(map);
   }
 
   /// 心情统计(过去 N 天)
@@ -77,26 +87,56 @@ class DiaryProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final data = prefs.getStringList(_key) ?? [];
     _entries = data.map((e) => DiaryEntry.fromJson(jsonDecode(e))).toList();
+    _invalidateCaches();
     notifyListeners();
   }
 
   void resetLocalState() {
     _storageGeneration++;
     _entries = [];
+    _invalidateCaches();
     notifyListeners();
   }
 
+  void _invalidateCaches() {
+    _sortedEntriesCache = null;
+    _entriesByDateCache = null;
+  }
+
   Future<void> _save() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     await prefs.setStringList(
       _key,
       _entries.map((e) => jsonEncode(e.toJson())).toList(),
     );
+    _notifyLocalMutationPersisted();
     notifyListeners();
+  }
+
+  void _notifyLocalMutationPersisted() {
+    try {
+      onLocalMutationPersisted?.call();
+    } catch (e, st) {
+      debugPrint('[DiaryProvider] local mutation callback failed: $e\n$st');
+    }
   }
 
   Future<void> addOrUpdate(DiaryEntry entry) async {
@@ -124,12 +164,14 @@ class DiaryProvider extends ChangeNotifier {
         DomainEvent(type: DomainEventType.diaryWritten, objectId: entry.id),
       );
     }
+    _invalidateCaches();
     await _save();
   }
 
   Future<void> delete(String id) async {
     await CloudSyncProvider.recordDeletedItem('diaries', id);
     _entries.removeWhere((e) => e.id == id);
+    _invalidateCaches();
     await _save();
   }
 }

@@ -10,6 +10,7 @@ const List<String> _cnFontFallback = [
   'Source Han Sans SC',
   'Microsoft YaHei',
   'WenQuanYi Micro Hei',
+  'DroidSansFallbackFull',
 ];
 
 enum BrandStyle {

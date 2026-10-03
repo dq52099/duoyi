@@ -124,6 +124,123 @@ void main() {
   });
 
   test(
+    'AuthProvider blocks logout before server request when pending sync fails',
+    () async {
+      const adminState = AuthState(
+        userId: 'admin-id',
+        username: 'admin',
+        token: 'admin-token',
+        coinBalance: 999,
+        lifetimeCoins: 1999,
+      );
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_state': jsonEncode(adminState.toJson()),
+        'habits': '[{"name":"admin habit"}]',
+        'active_brand': 'admin-theme',
+        'duoyi_virtual_rewards': jsonEncode(<String, Object>{
+          'balance': 999,
+          'lifetime': 1999,
+        }),
+      });
+
+      var logoutRequests = 0;
+      final auth = AuthProvider(
+        initialState: adminState,
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'admin-token',
+          httpClient: MockClient((request) async {
+            logoutRequests++;
+            return http.Response(
+              jsonEncode(<String, Object>{'ok': true}),
+              200,
+              headers: <String, String>{'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onBeforeAccountLogout = () async {
+        throw const AccountLocalDataCleanupBlockedException(
+          '本机还有未上传服务器的改动，已暂停退出登录，避免本地内容被清空。',
+        );
+      };
+
+      await expectLater(
+        auth.logout(),
+        throwsA(isA<AccountLocalDataCleanupBlockedException>()),
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(logoutRequests, 0);
+      expect(auth.state.userId, 'admin-id');
+      expect(auth.state.coinBalance, 999);
+      expect(auth.client.token, 'admin-token');
+      expect(prefs.getString('auth_state'), isNotNull);
+      expect(prefs.getString('habits'), isNotNull);
+      expect(prefs.getString('active_brand'), 'admin-theme');
+      expect(prefs.getString('duoyi_virtual_rewards'), isNotNull);
+    },
+  );
+
+  test(
+    'AuthProvider keeps account data when logout cleanup is pending-blocked',
+    () async {
+      const adminState = AuthState(
+        userId: 'admin-id',
+        username: 'admin',
+        token: 'admin-token',
+        coinBalance: 999,
+        lifetimeCoins: 1999,
+      );
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_state': jsonEncode(adminState.toJson()),
+        'habits': '[{"name":"admin habit"}]',
+        'active_brand': 'admin-theme',
+        'duoyi_virtual_rewards': jsonEncode(<String, Object>{
+          'balance': 999,
+          'lifetime': 1999,
+        }),
+      });
+
+      final auth = AuthProvider(
+        initialState: adminState,
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'admin-token',
+          httpClient: MockClient((request) async {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/auth/logout');
+            return http.Response(
+              jsonEncode(<String, Object>{'ok': true}),
+              200,
+              headers: <String, String>{'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      auth.onAccountLoggedOut = () async {
+        throw const AccountLocalDataCleanupBlockedException(
+          '本机还有未上传服务器的改动，已暂停退出登录，避免本地内容被清空。',
+        );
+      };
+
+      await expectLater(
+        auth.logout(),
+        throwsA(isA<AccountLocalDataCleanupBlockedException>()),
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(auth.state.userId, 'admin-id');
+      expect(auth.state.coinBalance, 999);
+      expect(auth.client.token, 'admin-token');
+      expect(prefs.getString('auth_state'), isNotNull);
+      expect(prefs.getString('habits'), isNotNull);
+      expect(prefs.getString('active_brand'), 'admin-theme');
+      expect(prefs.getString('duoyi_virtual_rewards'), isNotNull);
+    },
+  );
+
+  test(
     'AuthProvider clears auth and account prefs when logout cleanup fails',
     () async {
       const adminState = AuthState(

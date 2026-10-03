@@ -108,12 +108,12 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
   DateTime? startDate = habit.startDate;
   DateTime? endDate = habit.endDate;
   var reminderPlan = _habitReminderPlan(habit);
+  var saving = false;
 
   await showAppModalSheet(
     context: context,
     builder: (sheetCtx) => StatefulBuilder(
       builder: (sheetCtx, setSt) {
-        var saving = false;
         Future<void> save() async {
           if (saving) return;
           setSt(() => saving = true);
@@ -226,13 +226,24 @@ Future<void> showHabitEditor(BuildContext context, Habit habit) async {
             );
 
             await habitProvider.updateHabit(habit.id, updated);
+            final reminderSyncIssue = (hasReminder || _habitHasReminder(habit))
+                ? habitProvider.lastReminderSyncIssue
+                : null;
             if (!context.mounted || !sheetCtx.mounted) return;
             navigator.pop();
             messenger.showSnackBar(
               SnackBar(
-                content: Text(I18n.tr('habit.saved')),
+                content: Text(
+                  reminderSyncIssue == null
+                      ? I18n.tr('habit.saved')
+                      : '习惯已保存，但提醒未同步：'
+                            '${_habitReminderSyncIssueText(reminderSyncIssue)}',
+                ),
                 behavior: SnackBarBehavior.floating,
                 duration: const Duration(milliseconds: 1200),
+                backgroundColor: reminderSyncIssue == null
+                    ? null
+                    : Theme.of(context).colorScheme.error,
               ),
             );
           } finally {
@@ -1323,6 +1334,19 @@ DateTime? _nextHabitReminderTrigger(ReminderRule rule) {
     return target;
   }
   return null;
+}
+
+bool _habitHasReminder(Habit habit) {
+  return habit.remind ||
+      (habit.remindHour != null && habit.remindMinute != null) ||
+      (habit.reminderPlan.enabled && habit.reminderPlan.rules.isNotEmpty);
+}
+
+String _habitReminderSyncIssueText(String issue) {
+  if (issue == 'reminder_scheduler_missing') {
+    return '提醒调度器尚未初始化，请重新打开应用后再保存提醒';
+  }
+  return issue;
 }
 
 class _StatChip extends StatelessWidget {

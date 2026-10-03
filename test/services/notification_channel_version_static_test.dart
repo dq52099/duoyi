@@ -142,10 +142,28 @@ void main() {
 
       expect(local, contains('deleteNotificationChannel(channelId)'));
       expect(alarm, contains('deleteNotificationChannel(legacyId)'));
-      expect(local, contains('Future<bool> _androidChannelNeedsSoundRepair'));
-      expect(alarm, contains('Future<bool> _androidChannelNeedsSoundRepair'));
-      expect(local, contains('status.isSilent || status.isLowImportance'));
-      expect(alarm, contains('status.isSilent || status.isLowImportance'));
+      expect(
+        local,
+        contains(
+          'ReminderRingtoneSettings.androidFallbackChannelSoundNeedsRefresh',
+        ),
+      );
+      expect(
+        alarm,
+        contains(
+          'ReminderRingtoneSettings.androidFallbackChannelSoundNeedsRefresh',
+        ),
+      );
+      expect(local, isNot(contains('_androidChannelNeedsSoundRepair')));
+      expect(alarm, isNot(contains('_androidChannelNeedsSoundRepair')));
+      expect(
+        local,
+        isNot(contains('status.isSilent || status.isLowImportance')),
+      );
+      expect(
+        alarm,
+        isNot(contains('status.isSilent || status.isLowImportance')),
+      );
       expect(local, contains('Future<void> refreshAndroidRingtoneChannels()'));
       expect(alarm, contains('Future<void> refreshAndroidRingtoneChannel()'));
       expect(receiver, contains('legacyFallbackChannelIds.forEach'));

@@ -425,6 +425,7 @@ class _FakePopupSink implements ReminderPopupSink {
       'body': body,
       'hour': hour,
       'minute': minute,
+      'weekdays': weekdays == null ? null : List<int>.of(weekdays),
       'payload': payload,
     });
   }
@@ -661,6 +662,7 @@ void main() {
           display: const ReminderScheduleDisplayInfo(
             title: '提交材料',
             subtitle: '待办 · 一次提醒 · 通知 · 2 条规则',
+            kinds: <ReminderKind>{ReminderKind.push},
           ),
         );
         await registry.replaceObject('countdown', 'countdown-a', {501});
@@ -684,6 +686,7 @@ void main() {
         expect(snapshot[1].idCount, 2);
         expect(snapshot[1].title, '提交材料');
         expect(snapshot[1].subtitle, contains('待办'));
+        expect(snapshot[1].kinds, {ReminderKind.push});
         expect(snapshot[1].title, isNot(contains('todo-b')));
         expect(() => snapshot.add(snapshot.first), throwsUnsupportedError);
         expect(() => snapshot[1].ids.add(999), throwsUnsupportedError);
@@ -726,9 +729,237 @@ void main() {
 
         popup.scheduled.clear();
 
+        scheduler.resumeForActiveAccount();
         await scheduler.syncTodos([todo]);
 
         expect(popup.scheduled.map((entry) => entry['id']), [expectedId]);
+      },
+    );
+
+    test(
+      'account reset keeps failed cancellation owners and registry for retry',
+      () async {
+        final when = DateTime.now().add(const Duration(hours: 2));
+        final todo = TodoItem(
+          id: 'reset-cancel-failure-owner',
+          title: '清理失败仍保留归属',
+          dueDate: when,
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'r1',
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.popup,
+                hour: when.hour,
+                minute: when.minute,
+              ),
+            ],
+          ),
+        );
+        final expectedId = _idFor('todo:${todo.id}:r1');
+
+        await scheduler.syncTodos([todo]);
+        final popupCancelCountBeforeReset = popup.cancelled.length;
+        popup.failCancel = true;
+
+        await expectLater(
+          scheduler.resetInMemoryState(),
+          throwsA(isA<ReminderSchedulerResetException>()),
+        );
+
+        expect(scheduler.debugScheduledTodoRuleCount(todo.id), 1);
+        expect(
+          (await registry.idsByObject('todo'))[todo.id],
+          contains(expectedId),
+        );
+        expect(popup.cancelled, hasLength(popupCancelCountBeforeReset));
+
+        popup.failCancel = false;
+        await scheduler.resetInMemoryState();
+
+        expect(scheduler.debugScheduledTodoRuleCount(todo.id), 0);
+        expect(await registry.idsByObject('todo'), isEmpty);
+        scheduler.resumeForActiveAccount();
+      },
+    );
+
+    test(
+      'account reset cancels persisted owners after scheduler cold start',
+      () async {
+        const objectId = 'reset-persisted-only-owner';
+        final id = _idFor('todo:$objectId:r1');
+        await registry.replaceObject('todo', objectId, {id});
+        notif.pending.add(id);
+
+        final coldScheduler = ReminderScheduler(
+          notif,
+          alarm: alarm,
+          popup: popup,
+          email: email,
+          registry: registry,
+        );
+        await coldScheduler.resetInMemoryState();
+
+        expect(notif.cancelled, contains(id));
+        expect(alarm.cancelled, contains(id));
+        expect(popup.cancelled, contains(id));
+        expect(email.cancelled, contains(id));
+        expect(await registry.idsByObject('todo'), isEmpty);
+        coldScheduler.resumeForActiveAccount();
+      },
+    );
+
+    test(
+      'account suspension invalidates queued snapshots and resume accepts new data',
+      () async {
+        final when = DateTime.now().add(const Duration(hours: 2));
+        TodoItem todoFor(String id, String title) => TodoItem(
+          id: id,
+          title: title,
+          dueDate: when,
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'r1',
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.popup,
+                hour: when.hour,
+                minute: when.minute,
+              ),
+            ],
+          ),
+        );
+        final oldTodo = todoFor('old-account-reminder', '旧账号提醒');
+        final newTodo = todoFor('new-account-reminder', '新账号提醒');
+        final batchEntered = Completer<void>();
+        final finishBatch = Completer<void>();
+
+        final blockedBatch = scheduler.runReconciliationBatch<void>((_) async {
+          batchEntered.complete();
+          await finishBatch.future;
+        });
+        await batchEntered.future;
+        final queuedOldSync = scheduler.syncTodos([oldTodo]);
+
+        scheduler.suspendForAccountChange();
+        var suspendedBatchRan = false;
+        await scheduler.runReconciliationBatch<void>((_) async {
+          suspendedBatchRan = true;
+        });
+        expect(suspendedBatchRan, isFalse);
+        finishBatch.complete();
+        await blockedBatch;
+        await queuedOldSync;
+        await scheduler.resetInMemoryState();
+
+        expect(notif.scheduled, isEmpty);
+        expect(popup.scheduled, isEmpty);
+        expect(await registry.idsByObject('todo'), isEmpty);
+
+        scheduler.resumeForActiveAccount();
+        await scheduler.syncTodos([newTodo]);
+
+        expect(popup.scheduled.map((entry) => entry['payload']), [
+          'duoyi://todo/${newTodo.id}',
+        ]);
+        expect(
+          popup.scheduled.map((entry) => entry['payload']),
+          isNot(contains('duoyi://todo/${oldTodo.id}')),
+        );
+      },
+    );
+
+    test(
+      'suspended multi-rule habit batch retains every popup id for cold-start retry',
+      () async {
+        const habitId = 'suspended-multi-popup-owner';
+        final habit = _rawHabitWithReminderPlan(
+          id: habitId,
+          name: '多时段习惯',
+          reminderPlan: _rawHabitPlan([
+            _rawHabitRule(
+              id: 'morning',
+              type: ReminderRuleType.weeklyTime,
+              kind: ReminderKind.popup,
+              hour: 8,
+              minute: 0,
+              weekdays: const <int>[1, 2, 3, 4, 5],
+            ),
+            _rawHabitRule(
+              id: 'noon',
+              type: ReminderRuleType.weeklyTime,
+              kind: ReminderKind.popup,
+              hour: 12,
+              minute: 30,
+              weekdays: const <int>[1, 2, 3, 4, 5],
+            ),
+            _rawHabitRule(
+              id: 'evening',
+              type: ReminderRuleType.weeklyTime,
+              kind: ReminderKind.popup,
+              hour: 20,
+              minute: 0,
+              weekdays: const <int>[1, 2, 3, 4, 5],
+            ),
+          ]),
+        );
+        final batchStaged = Completer<void>();
+        final finishBatch = Completer<void>();
+
+        final blockedBatch = scheduler.runReconciliationBatch<void>((
+          batch,
+        ) async {
+          await scheduler.syncHabits([habit], batch: batch);
+          batchStaged.complete();
+          await finishBatch.future;
+        });
+        await batchStaged.future;
+        final scheduledRuleIds = popup.scheduled
+            .map((entry) => entry['id']! as int)
+            .toSet();
+        expect(scheduledRuleIds, hasLength(3));
+        final registeredIds = <int>{};
+        for (final call in popup.scheduled) {
+          final baseId = call['id']! as int;
+          registeredIds.add(baseId);
+          for (final weekday in call['weekdays']! as List<int>) {
+            registeredIds
+              ..add(_subId(baseId, weekday))
+              ..add(_legacySubId(baseId, weekday));
+          }
+        }
+
+        // Ignore the legacy-owner sweep that runs before scheduling. The reset
+        // below should attempt cancellation for all IDs staged by this batch.
+        popup.cancelled.clear();
+        scheduler.suspendForAccountChange();
+        finishBatch.complete();
+        await blockedBatch;
+
+        expect((await registry.idsByObject('habit'))[habitId], registeredIds);
+
+        popup.failCancel = true;
+        await expectLater(
+          scheduler.resetInMemoryState(),
+          throwsA(isA<ReminderSchedulerResetException>()),
+        );
+        expect(popup.cancelled, isEmpty);
+        expect((await registry.idsByObject('habit'))[habitId], registeredIds);
+
+        popup.failCancel = false;
+        final coldScheduler = ReminderScheduler(
+          notif,
+          alarm: alarm,
+          popup: popup,
+          email: email,
+          registry: registry,
+        );
+        await coldScheduler.resetInMemoryState();
+
+        expect(popup.cancelled, containsAll(registeredIds));
+        expect(await registry.idsByObject('habit'), isEmpty);
       },
     );
 
@@ -994,7 +1225,7 @@ void main() {
     );
 
     test(
-      'syncTodos records visible issue when enabled reminder resolves empty',
+      'syncTodos fails visibly when enabled reminder resolves empty',
       () async {
         final past = DateTime.now().subtract(const Duration(days: 1));
         final todo = TodoItem(
@@ -1015,7 +1246,16 @@ void main() {
           ),
         );
 
-        await scheduler.syncTodos([todo]);
+        await expectLater(
+          scheduler.syncTodos([todo]),
+          throwsA(
+            isA<ReminderScheduleSyncException>().having(
+              (e) => e.failures.join('；'),
+              'failures',
+              contains('提醒时间已过去'),
+            ),
+          ),
+        );
 
         expect(notif.scheduled, isEmpty);
         expect(notif.issues, hasLength(1));
@@ -1542,11 +1782,14 @@ void main() {
       expect(popup.scheduled.first['payload'], 'duoyi://habit/h1?confirm=1');
     });
 
-    test('syncHabits 闹钟通知权限异常时降级普通通知', () async {
+    test('syncHabits 闹钟通知权限异常时注册兜底但返回可见失败', () async {
       alarm.failDailyWithNotificationPermission = true;
       final habit = _alarmHabit(id: 'h1', name: '阅读');
 
-      await scheduler.syncHabits([habit]);
+      await expectLater(
+        scheduler.syncHabits([habit]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled.length, 1);
@@ -1584,11 +1827,14 @@ void main() {
       );
     });
 
-    test('syncHabits 闹钟插件异常时也降级普通通知', () async {
+    test('syncHabits 闹钟插件异常时注册兜底但返回可见失败', () async {
       alarm.failDailyWithGenericError = true;
       final habit = _alarmHabit(id: 'h-generic-fallback', name: '阅读');
 
-      await scheduler.syncHabits([habit]);
+      await expectLater(
+        scheduler.syncHabits([habit]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled.length, 1);
@@ -1648,10 +1894,15 @@ void main() {
       alarm.failDailyWithHandoff = true;
       final habit = _alarmHabit(id: 'h-handoff-no-fallback', name: '阅读');
 
-      await scheduler.syncHabits([habit]);
+      await expectLater(
+        scheduler.syncHabits([habit]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, isEmpty);
+      expect(notif.issues.single['title'], '习惯提醒注册失败');
+      expect(notif.issues.single['blocking'], isTrue);
     });
 
     test('syncHabits kind=push 走普通通知而不是闹钟', () async {
@@ -1800,7 +2051,10 @@ void main() {
 
       // 12 点这条注册失败，9 点成功：整体 scheduled == false。
       popup.failRepeatingHours = <int>{12};
-      await scheduler.syncHabits([habit]);
+      await expectLater(
+        scheduler.syncHabits([habit]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       // 成功的 9 点派生 id（首条沿用历史 habit_<id>）仍应入册，
       // 这样后续禁用时才能按 registry 清理掉它，不留孤儿。
@@ -1866,7 +2120,7 @@ void main() {
       );
     });
 
-    test('syncTodos 闹钟插件异常时降级一次性普通通知', () async {
+    test('syncTodos 闹钟插件异常时注册一次性兜底但返回可见失败', () async {
       alarm.failFullScreenWithGenericError = true;
       final due = DateTime.now().add(const Duration(hours: 2));
       final todo = TodoItem(
@@ -1888,7 +2142,10 @@ void main() {
         ),
       );
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled.length, 1);
@@ -1899,7 +2156,7 @@ void main() {
       );
     });
 
-    test('syncTodos 一次性闹钟降级通知后二次同步不重复注册', () async {
+    test('syncTodos 一次性闹钟降级通知后仍返回可见失败', () async {
       alarm.failFullScreenWithGenericError = true;
       final due = DateTime.now().add(const Duration(hours: 2));
       final todo = TodoItem(
@@ -1921,14 +2178,14 @@ void main() {
         ),
       );
 
-      await scheduler.syncTodos([todo]);
-      notif.cancelled.clear();
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, hasLength(1));
       expect(notif.scheduled.single['id'], _idFor('todo:${todo.id}:r1'));
-      expect(notif.cancelled, isEmpty);
     });
 
     test('syncTodos 闹钟降级通知后 pending 查询失败时记录兜底诊断', () async {
@@ -1952,25 +2209,26 @@ void main() {
           ],
         ),
       );
-      final expectedKey = 'todo:${todo.id}:r1';
-
-      await scheduler.syncTodos([todo]);
-      notif.cancelled.clear();
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
       notif.failPendingIds = true;
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
-      expect(notif.scheduled, hasLength(1));
-      expect(notif.cancelled, isEmpty);
-      expect(notif.issues, hasLength(1));
-      expect(notif.issues.single['title'], '普通通知兜底状态无法确认');
-      expect(notif.issues.single['message'], contains('普通通知兜底队列查询失败'));
+      expect(notif.scheduled, hasLength(2));
+      expect(notif.issues.last['title'], '待办提醒注册失败');
+      expect(notif.issues.last['message'], contains('闹钟提醒未注册成功'));
       expect(
-        notif.issues.single['message'],
+        notif.issues.last['message'],
         isNot(contains('forced notification pending query failure')),
       );
-      expect(notif.issues.single['relatedId'], expectedKey);
-      expect(notif.issues.single['blocking'], isFalse);
+      expect(notif.issues.last['relatedId'], todo.id);
+      expect(notif.issues.last['blocking'], isTrue);
     });
 
     test('syncTodos 一次性闹钟半注册后异常时不降级普通通知避免双弹', () async {
@@ -2030,7 +2288,10 @@ void main() {
       );
       final expectedId = _idFor('todo:${todo.id}:r1');
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, hasLength(1));
@@ -2040,15 +2301,19 @@ void main() {
         notif.scheduled.single['payload'],
         'duoyi://todo/${todo.id}?fallback=push',
       );
-      expect(notif.issues, hasLength(1));
-      expect(notif.issues.single['title'], '闹钟提醒状态无法确认');
-      expect(notif.issues.single['message'], contains('系统待触发队列查询失败'));
+      expect(notif.issues, hasLength(2));
+      expect(notif.issues.first['title'], '闹钟提醒状态无法确认');
+      expect(notif.issues.first['message'], contains('系统待触发队列查询失败'));
       expect(
-        notif.issues.single['message'],
+        notif.issues.first['message'],
         isNot(contains('forced pending query failure')),
       );
-      expect(notif.issues.single['relatedId'], 'once:$expectedId');
-      expect(notif.issues.single['blocking'], isFalse);
+      expect(notif.issues.first['relatedId'], todo.id);
+      expect(notif.issues.first['blocking'], isTrue);
+      expect(notif.issues.last['title'], '待办提醒注册失败');
+      expect(notif.issues.last['message'], contains('闹钟提醒未注册成功'));
+      expect(notif.issues.last['relatedId'], todo.id);
+      expect(notif.issues.last['blocking'], isTrue);
     });
 
     test('syncTodos 一次性闹钟权限异常但已入队时不降级普通通知避免双弹', () async {
@@ -2181,8 +2446,14 @@ void main() {
         ),
       );
 
-      await noopScheduler.syncTodos([todo]);
-      await noopScheduler.syncTodos([todo]);
+      await expectLater(
+        noopScheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
+      await expectLater(
+        noopScheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(notif.scheduled, isEmpty);
       expect(alarm.scheduled, isEmpty);
@@ -2212,13 +2483,21 @@ void main() {
         ),
       );
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '待办提醒注册失败');
+      expect(notif.issues.last['blocking'], isTrue);
 
       notif.denyScheduleOnce = false;
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(notif.scheduled.length, 1);
       expect(notif.scheduled.single['kind'], 'once');
@@ -2250,10 +2529,15 @@ void main() {
         ),
       );
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '待办提醒注册失败');
+      expect(notif.issues.last['blocking'], isTrue);
 
       alarm.failFullScreenWithNotificationPermission = false;
       await scheduler.syncTodos([todo]);
@@ -2266,7 +2550,7 @@ void main() {
       );
     });
 
-    test('syncTodos 精准闹钟权限失败且 push 插件异常时不抛出', () async {
+    test('syncTodos 精准闹钟权限失败且 push 插件异常时抛出可见同步异常', () async {
       alarm.failFullScreenWithAlarmPermission = true;
       notif.failScheduleOnceGeneric = true;
       final due = DateTime.now().add(const Duration(hours: 2));
@@ -2289,13 +2573,18 @@ void main() {
         ),
       );
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '待办提醒注册失败');
+      expect(notif.issues.last['blocking'], isTrue);
     });
 
-    test('syncTodos 重复闹钟插件异常时降级重复普通通知', () async {
+    test('syncTodos 重复闹钟插件异常时注册兜底但返回可见失败', () async {
       alarm.failDailyWithGenericError = true;
       final todo = TodoItem(
         id: 'todo-repeating-alarm-generic-fallback',
@@ -2314,7 +2603,10 @@ void main() {
         ),
       );
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled.length, 1);
@@ -2327,7 +2619,7 @@ void main() {
       );
     });
 
-    test('syncTodos 重复闹钟降级通知后二次同步不重复注册', () async {
+    test('syncTodos 重复闹钟降级通知后仍返回可见失败', () async {
       alarm.failDailyWithGenericError = true;
       final todo = TodoItem(
         id: 'todo-repeating-alarm-fallback-idempotent',
@@ -2347,14 +2639,14 @@ void main() {
         ),
       );
 
-      await scheduler.syncTodos([todo]);
-      notif.cancelled.clear();
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, hasLength(1));
       expect(notif.scheduled.single['id'], _idFor('todo:${todo.id}:daily'));
-      expect(notif.cancelled, isEmpty);
     });
 
     test('syncTodos 重复闹钟半注册后异常时不降级普通通知避免双弹', () async {
@@ -2411,10 +2703,12 @@ void main() {
           ],
         ),
       );
-      final expectedKey = 'todo:${todo.id}:weekly';
-      final expectedId = _idFor(expectedKey);
+      final expectedId = _idFor('todo:${todo.id}:weekly');
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, hasLength(1));
@@ -2424,15 +2718,19 @@ void main() {
         notif.scheduled.single['payload'],
         'duoyi://todo/${todo.id}?fallback=push',
       );
-      expect(notif.issues, hasLength(1));
-      expect(notif.issues.single['title'], '闹钟提醒状态无法确认');
-      expect(notif.issues.single['message'], contains('系统待触发队列查询失败'));
+      expect(notif.issues, hasLength(2));
+      expect(notif.issues.first['title'], '闹钟提醒状态无法确认');
+      expect(notif.issues.first['message'], contains('系统待触发队列查询失败'));
       expect(
-        notif.issues.single['message'],
+        notif.issues.first['message'],
         isNot(contains('forced pending query failure')),
       );
-      expect(notif.issues.single['relatedId'], expectedKey);
-      expect(notif.issues.single['blocking'], isFalse);
+      expect(notif.issues.first['relatedId'], todo.id);
+      expect(notif.issues.first['blocking'], isTrue);
+      expect(notif.issues.last['title'], '待办提醒注册失败');
+      expect(notif.issues.last['message'], contains('闹钟提醒未注册成功'));
+      expect(notif.issues.last['relatedId'], todo.id);
+      expect(notif.issues.last['blocking'], isTrue);
     });
 
     test('syncTodos 重复闹钟权限异常但已入队时不降级普通通知避免双弹', () async {
@@ -2521,13 +2819,21 @@ void main() {
         ),
       );
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '待办提醒注册失败');
+      expect(notif.issues.last['blocking'], isTrue);
 
       notif.denyScheduleDaily = false;
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(notif.scheduled.length, 1);
       expect(notif.scheduled.single['kind'], 'daily');
@@ -2537,7 +2843,7 @@ void main() {
       );
     });
 
-    test('syncTodos 重复闹钟权限失败且 push 插件异常时不抛出', () async {
+    test('syncTodos 重复闹钟权限失败且 push 插件异常时抛出可见同步异常', () async {
       alarm.failDailyWithAlarmPermission = true;
       notif.failScheduleDailyGeneric = true;
       final todo = TodoItem(
@@ -2557,10 +2863,15 @@ void main() {
         ),
       );
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '待办提醒注册失败');
+      expect(notif.issues.last['blocking'], isTrue);
     });
 
     test('syncHabits 闹钟和 push 都失败时不记为已调度，权限恢复后会重试', () async {
@@ -2568,32 +2879,40 @@ void main() {
       notif.denyHabitReminder = true;
       final habit = _alarmHabit(id: 'h-retry', name: '阅读');
 
-      await scheduler.syncHabits([habit]);
+      await expectLater(
+        scheduler.syncHabits([habit]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '习惯提醒注册失败');
+      expect(notif.issues.last['blocking'], isTrue);
 
       notif.denyHabitReminder = false;
-      await scheduler.syncHabits([habit]);
+      await expectLater(
+        scheduler.syncHabits([habit]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(notif.scheduled.length, 1);
       expect(notif.scheduled.single['kind'], 'habit');
       expect(notif.scheduled.single['habitId'], habit.id);
     });
 
-    test('syncHabits 闹钟降级通知后二次同步不重复注册', () async {
+    test('syncHabits 闹钟降级通知后仍返回可见失败', () async {
       alarm.failDailyWithGenericError = true;
       final habit = _alarmHabit(id: 'h-alarm-fallback-idempotent', name: '阅读');
 
-      await scheduler.syncHabits([habit]);
-      notif.cancelledHabits.clear();
-      await scheduler.syncHabits([habit]);
+      await expectLater(
+        scheduler.syncHabits([habit]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, hasLength(1));
       expect(notif.scheduled.single['kind'], 'habit');
       expect(notif.scheduled.single['habitId'], habit.id);
-      expect(notif.cancelledHabits, isEmpty);
     });
 
     test('syncHabits 关闭提醒后清理上一轮调度', () async {
@@ -2806,9 +3125,15 @@ void main() {
       );
 
       popup.failOnce = true;
-      await scheduler.syncAnniversaries([a]);
+      await expectLater(
+        scheduler.syncAnniversaries([a]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(popup.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '纪念日提醒注册失败');
+      expect(notif.issues.last['relatedId'], a.id);
+      expect(notif.issues.last['blocking'], isTrue);
 
       popup.failOnce = false;
       await scheduler.syncAnniversaries([a]);
@@ -2849,7 +3174,7 @@ void main() {
       expect(popup.scheduled, isEmpty);
     });
 
-    test('syncAnniversaries alarm 和 push fallback 都失败时不抛异常且可重试', () async {
+    test('syncAnniversaries alarm 失败时即使 push fallback 成功也记录异常且可重试', () async {
       alarm.failFullScreenWithAlarmPermission = true;
       notif.denyAnniversary = true;
       final a = Anniversary(
@@ -2863,20 +3188,36 @@ void main() {
         reminderKind: ReminderKind.alarm,
       );
 
-      await scheduler.syncAnniversaries([a]);
+      await expectLater(
+        scheduler.syncAnniversaries([a]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '纪念日提醒注册失败');
+      expect(notif.issues.last['relatedId'], a.id);
 
       notif.denyAnniversary = false;
-      await scheduler.syncAnniversaries([a]);
+      await expectLater(
+        scheduler.syncAnniversaries([a]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
+      expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled.length, 1);
       expect(notif.scheduled.single['kind'], 'anniversary_push');
       expect(notif.scheduled.single['id'], a.id);
+
+      alarm.failFullScreenWithAlarmPermission = false;
+      await scheduler.syncAnniversaries([a]);
+
+      expect(notif.cancelledAnniversaries, contains(a.id));
+      expect(alarm.scheduled.length, 1);
+      expect(alarm.scheduled.single['id'], _anniversaryAlarmId(a.id));
     });
 
-    test('syncAnniversaries 闹钟降级通知后二次同步不重复注册', () async {
+    test('syncAnniversaries 闹钟降级通知不会缓存为成功状态', () async {
       alarm.failFullScreenWithGenericError = true;
       final a = Anniversary(
         id: 'ann-alarm-fallback-idempotent',
@@ -2889,15 +3230,20 @@ void main() {
         reminderKind: ReminderKind.alarm,
       );
 
-      await scheduler.syncAnniversaries([a]);
+      await expectLater(
+        scheduler.syncAnniversaries([a]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
       notif.cancelledAnniversaries.clear();
+      alarm.failFullScreenWithGenericError = false;
       await scheduler.syncAnniversaries([a]);
 
-      expect(alarm.scheduled, isEmpty);
+      expect(notif.cancelledAnniversaries, contains(a.id));
+      expect(alarm.scheduled, hasLength(1));
+      expect(alarm.scheduled.single['id'], _anniversaryAlarmId(a.id));
       expect(notif.scheduled, hasLength(1));
       expect(notif.scheduled.single['kind'], 'anniversary_push');
       expect(notif.scheduled.single['id'], a.id);
-      expect(notif.cancelledAnniversaries, isEmpty);
     });
 
     test('syncAnniversaries 闹钟交接失败时不降级普通通知避免双弹', () async {
@@ -2913,10 +3259,15 @@ void main() {
         reminderKind: ReminderKind.alarm,
       );
 
-      await scheduler.syncAnniversaries([a]);
+      await expectLater(
+        scheduler.syncAnniversaries([a]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(alarm.scheduled, isEmpty);
       expect(notif.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '纪念日提醒注册失败');
+      expect(notif.issues.last['relatedId'], a.id);
     });
 
     test('syncAnniversaries 闹钟半注册后异常时不降级普通通知避免双弹', () async {
@@ -3227,9 +3578,15 @@ void main() {
       final expectedId = _idFor('countdown:${item.id}:due');
 
       popup.failOnce = true;
-      await scheduler.syncCountdowns([item]);
+      await expectLater(
+        scheduler.syncCountdowns([item]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(popup.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '倒数日提醒注册失败');
+      expect(notif.issues.last['relatedId'], item.id);
+      expect(notif.issues.last['blocking'], isTrue);
 
       popup.failOnce = false;
       await scheduler.syncCountdowns([item]);
@@ -3257,7 +3614,7 @@ void main() {
       popup.scheduled.clear();
       await scheduler.syncCountdowns([item]);
 
-      expect(popup.scheduled, isEmpty);
+      expect(popup.scheduled.map((entry) => entry['id']), contains(expectedId));
       expect(notif.cancelled, contains(expectedId));
       expect(alarm.cancelled, contains(expectedId));
       expect(notif.pending, isNot(contains(expectedId)));
@@ -3328,9 +3685,14 @@ void main() {
       final expectedId = _idFor('countdown:${item.id}:due');
 
       notif.failScheduleOnceGeneric = true;
-      await scheduler.syncCountdowns([item]);
+      await expectLater(
+        scheduler.syncCountdowns([item]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(notif.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '倒数日提醒注册失败');
+      expect(notif.issues.last['relatedId'], item.id);
 
       notif.failScheduleOnceGeneric = false;
       await scheduler.syncCountdowns([item]);
@@ -3721,7 +4083,6 @@ void main() {
         ),
       );
       final expectedId = _idFor('todo:${todo.id}:r-push');
-      final expectedKey = 'todo:${todo.id}:r-push';
 
       await scheduler.syncTodos([todo]);
       expect(notif.scheduled.map((entry) => entry['id']), [expectedId]);
@@ -3741,7 +4102,7 @@ void main() {
         notif.issues.single['message'],
         isNot(contains('forced notification pending query failure')),
       );
-      expect(notif.issues.single['relatedId'], expectedKey);
+      expect(notif.issues.single['relatedId'], todo.id);
       expect(notif.issues.single['blocking'], isFalse);
     });
 
@@ -4018,10 +4379,7 @@ void main() {
       expect(notif.issues.single['message'], contains('提醒已保存'));
       expect(notif.issues.single['message'], contains('我的 → 通知设置 → 已注册提醒'));
       expect(notif.issues.single['message'], isNot(contains('提醒交接失败')));
-      expect(
-        notif.issues.single['relatedId'],
-        'todo notification:${todo.id}:r-push',
-      );
+      expect(notif.issues.single['relatedId'], todo.id);
       expect(notif.issues.single['blocking'], isFalse);
     });
 
@@ -4134,6 +4492,46 @@ void main() {
       expect(alarm.pending, contains(expectedId));
     });
 
+    test('syncTodos 闹钟已在队列但残留通知清理失败时不重排当前闹钟', () async {
+      final due = DateTime.now().add(const Duration(days: 1));
+      final todo = TodoItem(
+        id: 'todo-alarm-stale-push-cancel-fails',
+        title: '残留通知清理失败',
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'r-alarm',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.alarm,
+              hour: due.hour,
+              minute: due.minute,
+            ),
+          ],
+        ),
+      );
+      final expectedId = _idFor('todo:${todo.id}:r-alarm');
+
+      await scheduler.syncTodos([todo]);
+      expect(alarm.scheduled.map((entry) => entry['id']), [expectedId]);
+
+      alarm.cancelled.clear();
+      notif.cancelled.clear();
+      notif.pending.add(expectedId);
+      notif.failCancel = true;
+      alarm.scheduled.clear();
+      await scheduler.syncTodos([todo]);
+
+      expect(alarm.scheduled, isEmpty);
+      expect(alarm.cancelled, isEmpty);
+      expect(notif.pending, contains(expectedId));
+      expect(alarm.pending, contains(expectedId));
+      expect(notif.issues, isNotEmpty);
+      expect(notif.issues.last['title'], '提醒已更新');
+      expect(notif.issues.last['blocking'], isFalse);
+    });
+
     test('syncTodos 每周闹钟规则未变时会清理旧版普通通知子 id，避免双弹', () async {
       final todo = TodoItem(
         id: 'todo-weekly-alarm-stale-legacy-push',
@@ -4241,7 +4639,47 @@ void main() {
       expect(notif.pending, contains(expectedId));
     });
 
-    test('syncTodos 弹出框规则未变时会清理残留通知和闹钟，避免双弹', () async {
+    test('syncTodos 普通通知已在队列但残留闹钟清理失败时不重排当前通知', () async {
+      final due = DateTime.now().add(const Duration(days: 1));
+      final todo = TodoItem(
+        id: 'todo-push-stale-alarm-cancel-fails',
+        title: '残留闹钟清理失败',
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'r-push',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.push,
+              hour: due.hour,
+              minute: due.minute,
+            ),
+          ],
+        ),
+      );
+      final expectedId = _idFor('todo:${todo.id}:r-push');
+
+      await scheduler.syncTodos([todo]);
+      expect(notif.scheduled.map((entry) => entry['id']), [expectedId]);
+
+      alarm.cancelled.clear();
+      notif.cancelled.clear();
+      alarm.pending.add(expectedId);
+      alarm.failCancel = true;
+      notif.scheduled.clear();
+      await scheduler.syncTodos([todo]);
+
+      expect(notif.scheduled, isEmpty);
+      expect(notif.cancelled, isEmpty);
+      expect(alarm.pending, contains(expectedId));
+      expect(notif.pending, contains(expectedId));
+      expect(notif.issues, isNotEmpty);
+      expect(notif.issues.last['title'], '提醒已更新');
+      expect(notif.issues.last['blocking'], isFalse);
+    });
+
+    test('syncTodos 弹出框规则未变时会清理残留通知和闹钟并重建前台计时器', () async {
       final due = DateTime.now().add(const Duration(days: 1));
       final todo = TodoItem(
         id: 'todo-popup-stale-peers',
@@ -4270,7 +4708,7 @@ void main() {
       popup.scheduled.clear();
       await scheduler.syncTodos([todo]);
 
-      expect(popup.scheduled, isEmpty);
+      expect(popup.scheduled.map((entry) => entry['id']), [expectedId]);
       expect(notif.cancelled, contains(expectedId));
       expect(alarm.cancelled, contains(expectedId));
       expect(notif.pending, isNot(contains(expectedId)));
@@ -4298,9 +4736,14 @@ void main() {
       );
 
       email.failOnce = true;
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(email.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '待办提醒注册失败');
+      expect(notif.issues.last['message'], contains('邮件提醒'));
 
       email.failOnce = false;
       await scheduler.syncTodos([todo]);
@@ -4329,9 +4772,14 @@ void main() {
       );
 
       email.failRepeating = true;
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(email.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '待办提醒注册失败');
+      expect(notif.issues.last['message'], contains('邮件提醒'));
 
       email.failRepeating = false;
       await scheduler.syncTodos([todo]);
@@ -4354,9 +4802,14 @@ void main() {
       );
 
       email.failOnce = true;
-      await scheduler.syncAnniversaries([a]);
+      await expectLater(
+        scheduler.syncAnniversaries([a]),
+        throwsA(isA<ReminderScheduleSyncException>()),
+      );
 
       expect(email.scheduled, isEmpty);
+      expect(notif.issues.last['title'], '纪念日提醒注册失败');
+      expect(notif.issues.last['relatedId'], a.id);
 
       email.failOnce = false;
       await scheduler.syncAnniversaries([a]);

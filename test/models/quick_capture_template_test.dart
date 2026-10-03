@@ -76,6 +76,8 @@ void main() {
       expect(habit.remind, isTrue);
       expect(habit.remindHour, 21);
       expect(habit.remindMinute, 0);
+      expect(habit.reminderPlan.enabled, isTrue);
+      expect(habit.reminderPlan.rules.single.kind, ReminderKind.popup);
     },
   );
 

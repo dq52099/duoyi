@@ -28,7 +28,8 @@ extension AppLocaleX on AppLocale {
   };
 
   static AppLocale fromLanguageCode(String? code) {
-    return code?.toLowerCase() == 'en' ? AppLocale.en : AppLocale.zh;
+    final language = code?.trim().toLowerCase().split(RegExp(r'[-_]')).first;
+    return language == 'en' ? AppLocale.en : AppLocale.zh;
   }
 
   static AppLocale? fromStorageValue(String? raw) {

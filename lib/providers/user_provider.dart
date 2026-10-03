@@ -3,10 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_profile.dart';
+import '../services/account_local_data_cleaner.dart';
 
 class UserProvider extends ChangeNotifier {
   UserProfile _profile = UserProfile();
   int _storageGeneration = 0;
+  VoidCallback? onLocalMutationPersisted;
 
   UserProfile get profile => _profile;
 
@@ -59,8 +61,14 @@ class UserProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final data = prefs.getString('user_profile');
     if (data != null) {
       _profile = UserProfile.fromJson(json.decode(data));
@@ -77,7 +85,15 @@ class UserProvider extends ChangeNotifier {
   }
 
   Future<void> _save() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     await prefs.setString('user_profile', json.encode(_profile.toJson()));
   }
 
@@ -104,6 +120,7 @@ class UserProvider extends ChangeNotifier {
       avatarUrl: avatarUrl,
       bio: bio,
       touchUpdatedAt: true,
+      markLocalMutation: true,
     );
   }
 
@@ -125,6 +142,7 @@ class UserProvider extends ChangeNotifier {
       avatarUrl: avatarUrl,
       bio: bio,
       touchUpdatedAt: false,
+      markLocalMutation: false,
     );
   }
 
@@ -137,6 +155,7 @@ class UserProvider extends ChangeNotifier {
     String? avatarUrl,
     String? bio,
     required bool touchUpdatedAt,
+    required bool markLocalMutation,
   }) async {
     final cleanName = username.trim().isEmpty ? '用户' : username.trim();
     final cleanInitials = (avatarInitials ?? '').trim();
@@ -184,6 +203,7 @@ class UserProvider extends ChangeNotifier {
       _profile.updatedAt = DateTime.now();
     }
     await _save();
+    if (markLocalMutation) _notifyLocalMutationPersisted();
     notifyListeners();
   }
 
@@ -212,5 +232,9 @@ class UserProvider extends ChangeNotifier {
 
   String _firstCodePoint(String value) {
     return String.fromCharCode(value.runes.first);
+  }
+
+  void _notifyLocalMutationPersisted() {
+    onLocalMutationPersisted?.call();
   }
 }

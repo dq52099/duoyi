@@ -61,4 +61,38 @@ void main() {
       {'existing', 'quick'},
     );
   });
+
+  test(
+    'TodoProvider force reload refreshes in-memory todos after cloud pull',
+    () async {
+      final local = TodoItem(
+        id: 'local',
+        title: '本地旧待办',
+        date: DateTime(2026, 6, 5),
+        createdAt: DateTime(2026, 6, 5, 8),
+      );
+      final remote = TodoItem(
+        id: 'remote',
+        title: '云端待办',
+        date: DateTime(2026, 6, 6),
+        createdAt: DateTime(2026, 6, 6, 9),
+      );
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'todos': jsonEncode([local.toJson()]),
+      });
+
+      final provider = TodoProvider();
+      await provider.loadFromStorage();
+      expect(provider.todos.single.id, 'local');
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('todos', jsonEncode([remote.toJson()]));
+
+      await provider.loadFromStorage();
+      expect(provider.todos.single.id, 'local');
+
+      await provider.loadFromStorage(force: true);
+      expect(provider.todos.single.id, 'remote');
+    },
+  );
 }

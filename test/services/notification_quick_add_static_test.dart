@@ -249,7 +249,9 @@ void main() {
     expect(main, contains("SmartTodoDraftBuilder.fromText(text)"));
     expect(main, contains("SmartTodoDraftBuilder.fromText(text)"));
     expect(main, contains("draft.toTodo()"));
-    expect(main, contains(".addTodo(todo)"));
+    expect(main, contains("addTodoWithResult("));
+    expect(main, contains("waitForReminderSync: waitForReminderSync"));
+    expect(main, contains("reminderSyncResult?.issue"));
     expect(main, contains("action == 'quick_todo'"));
     expect(main, contains("action == 'start_pomodoro'"));
     expect(main, contains('DeepLinkService.takeInitialLink()'));
@@ -283,13 +285,18 @@ void main() {
       reason: '用户反馈进入 App 约 30 秒后持续卡顿，启动期重任务不能集中在 30 秒附近触发。',
     );
     expect(main, contains('achievementProvider.resumeUnlockFeedback'));
-    for (final delayed in const [65, 75, 90, 110, 120]) {
+    for (final delayed in const [65, 75, 90, 120]) {
       expect(
         main,
         contains('Duration(seconds: $delayed)'),
         reason: '启动后平台服务、通知恢复、日历/云同步需要错峰，避免 30 秒附近形成持续卡顿。',
       );
     }
+    expect(
+      main,
+      contains('delay: const Duration(seconds: 3)'),
+      reason: '已登录启动提醒重放要先于云同步恢复，避免 1 分钟 popup/闹钟漏触发。',
+    );
     expect(deepLinkService, contains('takeInitialLink'));
     expect(deepLinkService, contains('_isDuoyiDeepLink(uri)'));
     expect(mainActivity, contains('pendingInitialDeepLink'));
@@ -517,8 +524,12 @@ void main() {
     );
     expect(
       main,
-      contains('Future<void> _runDailyDigestReminderSyncSerialized'),
+      contains('Future<T> _runDailyDigestReminderSyncSerialized<T>'),
       reason: '每日提醒可能由偏好监听和生命周期恢复同时触发，必须串行避免跨通道重复注册。',
+    );
+    expect(
+      main,
+      contains('Future<DailyDigestReminderResult> _syncDailyDigestReminder('),
     );
     expect(main, contains('_syncDailyDigestReminderLocked('));
     expect(
@@ -536,6 +547,8 @@ void main() {
     expect(main, contains('alarm schedule failed, fallback to push'));
     expect(main, contains('popup one-shot failed, fallback to push'));
     expect(main, contains('alarm one-shot failed, fallback to push'));
+    expect(main, contains('_recordDailyDigestFallbackIssue'));
+    expect(main, contains('每日提醒已退回普通通知'));
     expect(main, contains('_dailyDigestAlarmQueueAlreadyOwns('));
     expect(main, contains('ReminderPendingSink'));
     expect(main, contains('alarm queue already registered'));
@@ -687,5 +700,22 @@ void main() {
         'pending probe failed; skip push fallback to avoid duplicate delivery',
       ),
     );
+  });
+
+  test('日历快速添加无提醒待办不等待提醒重同步', () {
+    final calendarScreen = File(
+      'lib/screens/calendar_screen.dart',
+    ).readAsStringSync();
+    final quickAddStart = calendarScreen.indexOf('void _showQuickAddTodo()');
+    expect(quickAddStart, greaterThanOrEqualTo(0));
+    final quickAddEnd = calendarScreen.indexOf(
+      'void _previousMonth()',
+      quickAddStart,
+    );
+    expect(quickAddEnd, greaterThan(quickAddStart));
+    final quickAdd = calendarScreen.substring(quickAddStart, quickAddEnd);
+
+    expect(quickAdd, contains('TodoItem('));
+    expect(quickAdd, contains('waitForReminderSync: false'));
   });
 }

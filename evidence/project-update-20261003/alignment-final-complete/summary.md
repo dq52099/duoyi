@@ -1,0 +1,12 @@
+# Alignment Regression Gate
+
+| Group | Status | Duration | Log |
+| --- | --- | ---: | --- |
+| 1/8 404 and route contracts | passed | 30s | `/home/ubuntu/duoyi/evidence/project-update-20261003/alignment-final-complete/1_8_404_and_route_contracts.log` |
+| 2/8 style layout and readable selection | passed | 106s | `/home/ubuntu/duoyi/evidence/project-update-20261003/alignment-final-complete/2_8_style_layout_and_readable_selection.log` |
+| 3/8 notification ringtone and status progress | passed | 103s | `/home/ubuntu/duoyi/evidence/project-update-20261003/alignment-final-complete/3_8_notification_ringtone_and_status_progress.log` |
+| 4/8 widgets Android and iOS static contracts | passed | 10s | `/home/ubuntu/duoyi/evidence/project-update-20261003/alignment-final-complete/4_8_widgets_android_and_ios_static_contracts.log` |
+| 5/8 admin groups default coins and permissions | passed | 14s | `/home/ubuntu/duoyi/evidence/project-update-20261003/alignment-final-complete/5_8_admin_groups_default_coins_and_permissions.log` |
+| 6/8 Flutter analyzer | passed | 19s | `/home/ubuntu/duoyi/evidence/project-update-20261003/alignment-final-complete/6_8_flutter_analyzer.log` |
+| 7/8 debug APK build | passed | 1278s | `/home/ubuntu/duoyi/evidence/project-update-20261003/alignment-final-complete/7_8_debug_apk_build.log` |
+| 8/8 device-only notification alarm widget regression | failed(2) | 17s | `/home/ubuntu/duoyi/evidence/project-update-20261003/alignment-final-complete/8_8_device_only_notification_alarm_widget_regression.log` |

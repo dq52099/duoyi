@@ -8,3 +8,20 @@ class NotificationPermissionDeniedException implements Exception {
   @override
   String toString() => 'NotificationPermissionDeniedException: $message';
 }
+
+class NotificationScheduleUnavailableException implements Exception {
+  final String title;
+  final String message;
+  final DateTime? scheduledTime;
+  final String? relatedId;
+
+  const NotificationScheduleUnavailableException({
+    required this.title,
+    required this.message,
+    this.scheduledTime,
+    this.relatedId,
+  });
+
+  @override
+  String toString() => '$title：$message';
+}

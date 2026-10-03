@@ -70,7 +70,7 @@ class PlatformInfo {
     if (!isAndroid) return true;
     try {
       return await _channel.invokeMethod<bool>('canUseFullScreenIntent') ??
-          true;
+          false;
     } catch (_) {
       return false;
     }

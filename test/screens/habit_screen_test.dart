@@ -120,9 +120,7 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, '习惯名称'), '喝水');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byType(Switch).first);
-    await tester.tap(find.byType(Switch).first);
-    await tester.pumpAndSettle();
+    expect(find.text('默认弹出'), findsOneWidget);
 
     final saveButton = find.widgetWithText(ElevatedButton, '开启新习惯');
     await tester.ensureVisible(saveButton);

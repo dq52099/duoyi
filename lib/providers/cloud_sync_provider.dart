@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/feature_flags.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../services/api_client.dart';
 
 class SyncConfig {
@@ -122,6 +123,7 @@ class CloudSyncProvider extends ChangeNotifier {
   static const _collectionHashesStorageKey = 'sync_collection_hashes';
   static const _itemHashesStorageKey = 'sync_item_hashes';
   static const _pendingLocalChangesStorageKey = 'sync_pending_local_changes';
+  static const workspaceDeletedItemsStorageKey = 'sync_workspace_deleted_items';
   static const _preferencesUpdatedAtStorageKey = 'sync_preferences_updated_at';
   static const _preferencesValuesSnapshotStorageKey =
       'sync_preferences_values_snapshot';
@@ -139,14 +141,20 @@ class CloudSyncProvider extends ChangeNotifier {
   );
   bool _isSyncing = false;
   bool _syncQueued = false;
+  bool _syncQueuedExplicitly = false;
   bool _notifyQueued = false;
   String? _lastError;
+  String? _lastRealtimeWarning;
+  bool _syncRetryPending = false;
+  String? _syncRetryMessage;
+  Completer<void>? _queuedSyncCompleter;
   Timer? _autoSyncTimer;
   Timer? _remotePollTimer;
   Timer? _remoteEventRetryTimer;
   StreamSubscription<String>? _remoteEventSubscription;
   String _remoteEventName = '';
   final List<String> _remoteEventDataLines = <String>[];
+  bool _remotePullQueued = false;
   List<SyncMergeDecision> _lastWorkspaceMergeDecisions = const [];
   String _lastServerUpdatedAt = '';
   int? _lastServerVersion;
@@ -168,6 +176,62 @@ class CloudSyncProvider extends ChangeNotifier {
   SyncConfig get config => _config;
   bool get isSyncing => _isSyncing;
   String? get lastError => _lastError;
+  String? get lastRealtimeWarning => _lastRealtimeWarning;
+  bool get hasAuthenticatedClient {
+    final client = apiClientGetter?.call();
+    return client != null && client.token != null && client.token!.isNotEmpty;
+  }
+
+  bool get isBackupDisabledByServer {
+    final cfg = serverConfigGetter?.call();
+    return cfg != null && cfg['backup_enabled'] == false;
+  }
+
+  bool get isSyncSuspended => _syncSuspendedForAccountChange;
+  bool get hasSyncRetryPending => _syncRetryPending;
+  String? get syncRetryStatus {
+    if (!_syncRetryPending) return null;
+    return _syncRetryMessage ?? '云同步上次未完成，稍后会自动重试。';
+  }
+
+  String? get syncUnavailableStatus {
+    if (!FeatureFlags.cloudSyncV2) return '当前版本未启用云同步。';
+    if (_syncSuspendedForAccountChange) return '账号切换处理中，云同步已暂停。';
+    if (!hasAuthenticatedClient) return '未登录云同步账号。';
+    if (isBackupDisabledByServer) return '管理员已关闭云端备份。';
+    return null;
+  }
+
+  String localSaveSyncMessage({String localSavedText = '本机已保存'}) {
+    final unavailable = syncUnavailableStatus?.trim();
+    if (unavailable != null && unavailable.isNotEmpty) {
+      return '$localSavedText，尚未上传服务器：$unavailable';
+    }
+    if (!_config.autoSync) {
+      return '$localSavedText，尚未上传服务器：自动同步已关闭，重新开启后会继续同步。';
+    }
+    final retryStatus = syncRetryStatus?.trim();
+    if (retryStatus != null && retryStatus.isNotEmpty) {
+      return '$localSavedText，$retryStatus';
+    }
+    final lastError = _lastError?.trim();
+    if (_hasPendingChanges && lastError != null && lastError.isNotEmpty) {
+      return '$localSavedText，云同步上次失败，稍后会自动重试：$lastError';
+    }
+    return '$localSavedText，云同步会后台上传';
+  }
+
+  String? get queuedRemotePullStatus {
+    if (!_remotePullQueued) return null;
+    if (_hasPendingChanges) {
+      return '远端有更新，正在等待本机待上传改动同步成功后再拉取，避免覆盖本机编辑。';
+    }
+    if (_isSyncing) {
+      return '远端有更新，当前同步完成后会继续拉取。';
+    }
+    return '远端有更新，正在排队拉取。';
+  }
+
   bool get hasEverSynced => _config.lastSync.millisecondsSinceEpoch > 0;
   String get lastServerUpdatedAt => _lastServerUpdatedAt;
   int? get lastServerVersion => _lastServerVersion;
@@ -179,6 +243,7 @@ class CloudSyncProvider extends ChangeNotifier {
   int _localChangeGeneration = 0;
   int _accountGeneration = 0;
   bool _syncSuspendedForAccountChange = false;
+  bool _resumePollingAfterAccountChange = false;
   Future<void>? _activeLocalWriteback;
   bool get hasPendingChanges => _hasPendingChanges;
 
@@ -232,11 +297,87 @@ class CloudSyncProvider extends ChangeNotifier {
   }
 
   void _scheduleQueuedSyncIfNeeded() {
-    if (_syncQueued && _config.autoSync) {
-      _syncQueued = false;
-      _scheduleAutoSync(const Duration(milliseconds: 1200));
-    } else {
-      _syncQueued = false;
+    if (!_syncQueued) return;
+    final runImmediately = _syncQueuedExplicitly;
+    final completer = _queuedSyncCompleter;
+    _syncQueued = false;
+    _syncQueuedExplicitly = false;
+    _queuedSyncCompleter = null;
+
+    if (runImmediately) {
+      unawaited(
+        _syncNowInternal().then<void>(
+          (_) {
+            if (completer != null && !completer.isCompleted) {
+              completer.complete();
+            }
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            if (completer != null && !completer.isCompleted) {
+              completer.completeError(error, stackTrace);
+            }
+          },
+        ),
+      );
+    } else if (_config.autoSync) {
+      _scheduleAutoSync(_autoSyncDelay);
+    } else if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  void _queueRemotePull() {
+    final wasQueued = _remotePullQueued;
+    _remotePullQueued = true;
+    _remotePollTimer?.cancel();
+    _remotePollTimer = null;
+    if (!wasQueued) _notifySyncStateChanged();
+  }
+
+  void _drainQueuedRemotePullIfReady({int? expectedAccountGeneration}) {
+    if (!_remotePullQueued ||
+        _syncSuspendedForAccountChange ||
+        !_config.autoSync ||
+        !FeatureFlags.cloudSyncV2 ||
+        _hasPendingChanges ||
+        _isSyncing) {
+      return;
+    }
+    final accountGenerationAtStart =
+        expectedAccountGeneration ?? _accountGeneration;
+    if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
+    _remotePullQueued = false;
+    unawaited(
+      _pullRemoteChanges(expectedAccountGeneration: accountGenerationAtStart),
+    );
+  }
+
+  Future<void> _queueSyncWhileBusy({required bool explicit}) {
+    _syncQueued = true;
+    if (!explicit) return Future<void>.value();
+    _syncQueuedExplicitly = true;
+    final completer = _queuedSyncCompleter ??= Completer<void>();
+    return completer.future;
+  }
+
+  void _clearQueuedSync({bool completeWaiters = false}) {
+    final completer = _queuedSyncCompleter;
+    _syncQueued = false;
+    _syncQueuedExplicitly = false;
+    _queuedSyncCompleter = null;
+    if (completeWaiters && completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  void _completeQueuedSyncWaiters() {
+    final completer = _queuedSyncCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+    if (!_syncQueued) {
+      _syncQueuedExplicitly = false;
+      _queuedSyncCompleter = null;
     }
   }
 
@@ -246,6 +387,17 @@ class CloudSyncProvider extends ChangeNotifier {
       error,
       fallbackMessage: _serviceUnavailableMessage,
     );
+  }
+
+  void _setSyncRetryPending(String message) {
+    _syncRetryPending = true;
+    _syncRetryMessage = message;
+    _lastError = null;
+  }
+
+  void _clearSyncRetryPending() {
+    _syncRetryPending = false;
+    _syncRetryMessage = null;
   }
 
   Future<void> _persistPendingChanges(bool value) async {
@@ -262,6 +414,46 @@ class CloudSyncProvider extends ChangeNotifier {
     await _writePendingChanges(prefs, value);
   }
 
+  Future<bool> hasPendingLocalChangesIncludingDisk() async {
+    if (_hasPendingChanges) return true;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_pendingLocalChangesStorageKey) ?? false;
+  }
+
+  Future<bool> flushPendingLocalChangesBeforeAccountChange({
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final persistedPending =
+        prefs.getBool(_pendingLocalChangesStorageKey) ?? false;
+    if (persistedPending && !_hasPendingChanges) {
+      _hasPendingChanges = true;
+      _notifySyncStateChanged();
+    }
+    if (!_hasPendingChanges) return true;
+    try {
+      await syncNow().timeout(timeout);
+    } on TimeoutException {
+      _lastError = '本机改动上传超时，已暂停切换账号以避免未上传内容被清空。';
+      _hasPendingChanges = true;
+      await _writePendingChanges(prefs, true);
+      _notifySyncStateChanged();
+    } catch (e) {
+      _lastError = _userVisibleSyncError(e);
+      _hasPendingChanges = true;
+      await _writePendingChanges(prefs, true);
+      _notifySyncStateChanged();
+    }
+    final stillPersisted =
+        prefs.getBool(_pendingLocalChangesStorageKey) ?? false;
+    if (_hasPendingChanges || stillPersisted) {
+      _lastError ??= '本机还有未上传服务器的改动，已暂停切换账号以避免本地内容被清空。';
+      _notifySyncStateChanged();
+      return false;
+    }
+    return true;
+  }
+
   /// 由外部（Provider 的 addListener）在本地数据发生变动后调用，
   /// 标记待同步并排队后台自动同步。
   ///
@@ -270,18 +462,58 @@ class CloudSyncProvider extends ChangeNotifier {
   /// 误报 badge，本方法仅在 [_suppressDirtyMark] = false 时生效。
   void markPendingLocalChange() {
     if (_suppressDirtyMark) return;
+    _markPendingLocalChangeInBackground();
+  }
+
+  /// 用户主动创建、编辑、删除并已经本地落盘的变更，不能被启动加载或同步
+  /// 回写使用的 dirty 抑制窗口吞掉。
+  void markUserMutationPending() {
+    _markPendingLocalChangeInBackground();
+  }
+
+  /// 用户写入已本地落盘后调用；返回时 pending 标记也已持久化。
+  ///
+  /// 待办创建/编辑这类用户可感知提交需要等这个 Future，避免进程紧接着被
+  /// 系统杀掉时只保存了本地数据、没保存“待上传服务器”的标记。
+  Future<void> markUserMutationPendingDurably() {
+    return _markPendingLocalChange();
+  }
+
+  void _markPendingLocalChangeInBackground() {
+    unawaited(
+      _markPendingLocalChange().catchError((Object e, StackTrace st) {
+        debugPrint('[CloudSyncProvider] persist pending mark failed: $e\n$st');
+      }),
+    );
+  }
+
+  Future<void> _markPendingLocalChange() async {
     _localChangeGeneration++;
+    _clearSyncRetryPending();
     if (!_hasPendingChanges) {
       _hasPendingChanges = true;
       _notifySyncStateChanged();
     }
-    unawaited(_persistPendingChanges(true));
     _remotePollTimer?.cancel();
-    _scheduleAutoSync();
+    if (!_syncSuspendedForAccountChange) {
+      _scheduleAutoSync();
+    }
+    await _persistPendingChanges(true);
   }
 
   void markPreferencesChanged([Iterable<String>? keys]) {
     if (_suppressDirtyMark) return;
+    _markPreferencesChanged(keys, markUserMutation: false);
+  }
+
+  void markUserPreferencesChanged([Iterable<String>? keys]) {
+    _markPreferencesChanged(keys, markUserMutation: true);
+  }
+
+  void _markPreferencesChanged(
+    Iterable<String>? keys, {
+    required bool markUserMutation,
+  }) {
     final normalizedKeys = _normalizePreferenceChangedKeys(keys);
     if (keys != null && normalizedKeys.isEmpty) return;
     final stamp = DateTime.now().toUtc().toIso8601String();
@@ -294,17 +526,33 @@ class CloudSyncProvider extends ChangeNotifier {
       _pendingPreferenceKeys.addAll(normalizedKeys);
     }
     unawaited(_persistPreferenceChangedKeys());
-    markPendingLocalChange();
+    if (markUserMutation) {
+      markUserMutationPending();
+    } else {
+      markPendingLocalChange();
+    }
   }
 
   void markQuickCaptureTemplatesChanged() {
     if (_suppressDirtyMark) return;
+    _markQuickCaptureTemplatesChanged(markUserMutation: false);
+  }
+
+  void markUserQuickCaptureTemplatesChanged() {
+    _markQuickCaptureTemplatesChanged(markUserMutation: true);
+  }
+
+  void _markQuickCaptureTemplatesChanged({required bool markUserMutation}) {
     final stamp = DateTime.now().toUtc().toIso8601String();
     _pendingQuickCaptureTemplatesUpdatedAt = stamp;
     unawaited(
       _persistSyncStamp(_quickCaptureTemplatesUpdatedAtStorageKey, stamp),
     );
-    markPendingLocalChange();
+    if (markUserMutation) {
+      markUserMutationPending();
+    } else {
+      markPendingLocalChange();
+    }
   }
 
   Future<void> _persistSyncStamp(String key, String value) async {
@@ -338,9 +586,11 @@ class CloudSyncProvider extends ChangeNotifier {
     final accountGenerationAtStart = _accountGeneration;
     _autoSyncTimer = Timer(delay, () {
       if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
-      if (_hasPendingChanges && _config.autoSync && !_isSyncing) {
+      if ((_hasPendingChanges || _syncRetryPending) &&
+          _config.autoSync &&
+          !_isSyncing) {
         // ignore: discarded_futures
-        syncNow();
+        _syncNowInternal();
       }
     });
   }
@@ -364,6 +614,8 @@ class CloudSyncProvider extends ChangeNotifier {
     _remoteEventSubscription = null;
     _remoteEventName = '';
     _remoteEventDataLines.clear();
+    _lastRealtimeWarning = null;
+    _remotePullQueued = false;
   }
 
   void _startRemoteEvents() {
@@ -389,7 +641,8 @@ class CloudSyncProvider extends ChangeNotifier {
           },
           onError: (Object error) {
             if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
-            _lastError = _userVisibleSyncError(error);
+            _lastRealtimeWarning =
+                '实时同步连接中断，已切换到轮询兜底：${_userVisibleSyncError(error)}';
             _remoteEventSubscription = null;
             _remoteEventName = '';
             _remoteEventDataLines.clear();
@@ -434,6 +687,10 @@ class CloudSyncProvider extends ChangeNotifier {
       _dispatchRemoteEvent();
       return;
     }
+    if (_lastRealtimeWarning != null) {
+      _lastRealtimeWarning = null;
+      _notifySyncStateChanged();
+    }
     if (line.startsWith(':')) return;
     if (line.startsWith('event:')) {
       _remoteEventName = line.substring('event:'.length).trim();
@@ -452,7 +709,7 @@ class CloudSyncProvider extends ChangeNotifier {
     _remoteEventName = '';
     _remoteEventDataLines.clear();
     if (eventName != 'sync' || rawData.isEmpty) return;
-    if (_hasPendingChanges || _isSyncing || !_config.autoSync) return;
+    if (!_config.autoSync) return;
     try {
       final decoded = json.decode(rawData);
       if (decoded is! Map) return;
@@ -467,10 +724,16 @@ class CloudSyncProvider extends ChangeNotifier {
           serverUpdatedAt.isNotEmpty &&
           serverUpdatedAt == _lastServerUpdatedAt;
       if (versionUnchanged || timestampUnchanged) return;
+      if (_hasPendingChanges || _isSyncing) {
+        _queueRemotePull();
+        return;
+      }
       // ignore: discarded_futures
       _pullRemoteChanges(expectedAccountGeneration: accountGenerationAtStart);
     } catch (e) {
-      _lastError = _userVisibleSyncError(e);
+      final message = _userVisibleSyncError(e);
+      _setSyncRetryPending('远端更新事件处理失败，稍后会自动重试：$message');
+      _scheduleRemotePoll(_autoRetryDelay);
       _notifySyncStateChanged();
     }
   }
@@ -528,12 +791,21 @@ class CloudSyncProvider extends ChangeNotifier {
     _dirtyMarkEnabled = value;
   }
 
-  Future<void> resetForAccountChange() async {
-    _accountGeneration++;
-    _syncSuspendedForAccountChange = true;
-    _autoSyncTimer?.cancel();
-    _autoSyncTimer = null;
-    stopRemotePolling();
+  /// Invalidates old requests without discarding the current account's state.
+  /// A blocked account transition can resume its original sync settings.
+  Future<void> suspendForAccountChange() async {
+    if (!_syncSuspendedForAccountChange) {
+      _accountGeneration++;
+      _syncSuspendedForAccountChange = true;
+      _resumePollingAfterAccountChange =
+          _remoteEventSubscription != null ||
+          _remotePollTimer != null ||
+          _remoteEventRetryTimer != null;
+      _clearQueuedSync(completeWaiters: true);
+      _autoSyncTimer?.cancel();
+      _autoSyncTimer = null;
+      stopRemotePolling();
+    }
     final activeWriteback = _activeLocalWriteback;
     if (activeWriteback != null) {
       await activeWriteback;
@@ -541,7 +813,14 @@ class CloudSyncProvider extends ChangeNotifier {
     _isSyncing = false;
     _syncQueued = false;
     _notifyQueued = false;
+    _notifySyncStateChanged();
+  }
+
+  Future<void> resetForAccountChange() async {
+    await suspendForAccountChange();
+    _resumePollingAfterAccountChange = false;
     _lastError = null;
+    _clearSyncRetryPending();
     _lastWorkspaceMergeDecisions = const <SyncMergeDecision>[];
     _lastServerUpdatedAt = '';
     _lastServerVersion = null;
@@ -551,6 +830,7 @@ class CloudSyncProvider extends ChangeNotifier {
     _pendingPreferenceKeys.clear();
     _pendingPreferencesFullSync = false;
     _pendingQuickCaptureTemplatesUpdatedAt = null;
+    _remotePullQueued = false;
     _hasPendingChanges = false;
     _localChangeGeneration++;
     _config = SyncConfig(
@@ -561,7 +841,17 @@ class CloudSyncProvider extends ChangeNotifier {
   }
 
   void resumeForActiveAccount() {
+    if (!_syncSuspendedForAccountChange) return;
     _syncSuspendedForAccountChange = false;
+    final resumePolling = _resumePollingAfterAccountChange;
+    _resumePollingAfterAccountChange = false;
+    if (_hasPendingChanges || _syncRetryPending) {
+      _scheduleAutoSync(_autoSyncDelay);
+    } else {
+      _drainQueuedRemotePullIfReady();
+    }
+    if (resumePolling) startRemotePolling();
+    _notifySyncStateChanged();
   }
 
   /// cloud_sync_v2 特性开关：关闭时 [syncNow] 直接返回，不发出网络请求。
@@ -575,6 +865,7 @@ class CloudSyncProvider extends ChangeNotifier {
       return;
     }
     if (_hasPendingChanges || _isSyncing) {
+      _queueRemotePull();
       _scheduleRemotePoll();
       return;
     }
@@ -599,10 +890,11 @@ class CloudSyncProvider extends ChangeNotifier {
           serverUpdatedAt == _lastServerUpdatedAt;
 
       if (versionUnchanged || timestampUnchanged) {
-        final hadError = _lastError != null;
+        final hadStatusWarning = _lastError != null || _syncRetryPending;
         _lastError = null;
+        _clearSyncRetryPending();
         _scheduleRemotePoll();
-        if (hadError) _notifySyncStateChanged();
+        if (hadStatusWarning) _notifySyncStateChanged();
         return;
       }
 
@@ -611,7 +903,8 @@ class CloudSyncProvider extends ChangeNotifier {
       );
     } catch (e) {
       if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
-      _lastError = _userVisibleSyncError(e);
+      final message = _userVisibleSyncError(e);
+      _setSyncRetryPending('远端更新检查失败，稍后会自动重试：$message');
       _scheduleRemotePoll(_autoRetryDelay);
       _notifySyncStateChanged();
     }
@@ -790,33 +1083,120 @@ class CloudSyncProvider extends ChangeNotifier {
     String collection,
     String id, {
     DateTime? deletedAt,
+    String? workspaceId,
   }) async {
-    await recordDeletedItems(collection, [id], deletedAt: deletedAt);
+    await recordDeletedItems(
+      collection,
+      [id],
+      deletedAt: deletedAt,
+      workspaceId: workspaceId,
+    );
   }
 
   static Future<void> recordDeletedItems(
     String collection,
     Iterable<String> ids, {
     DateTime? deletedAt,
+    String? workspaceId,
   }) async {
     final cleanIds = ids
         .map((id) => id.trim())
         .where((id) => id.isNotEmpty)
         .toSet();
     if (cleanIds.isEmpty) return;
+    final accountGenerationAtStart =
+        AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGenerationAtStart,
+    )) {
+      return;
+    }
+    final stamp = (deletedAt ?? DateTime.now()).toIso8601String();
+    final sharedWorkspaceId = _normalizeSharedWorkspaceId(workspaceId);
+    if (sharedWorkspaceId != null) {
+      if (!_workspacePayloadCollections.containsKey(collection)) return;
+      final deleted = _decodeWorkspaceDeletedItems(
+        prefs.getString(workspaceDeletedItemsStorageKey),
+      );
+      final bucket = deleted
+          .putIfAbsent(sharedWorkspaceId, () => <String, Map<String, String>>{})
+          .putIfAbsent(collection, () => <String, String>{});
+      for (final id in cleanIds) {
+        final current = bucket[id];
+        if (current == null || _timestampGt(stamp, current)) {
+          bucket[id] = stamp;
+        }
+      }
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        accountGenerationAtStart,
+      )) {
+        return;
+      }
+      await prefs.setString(
+        workspaceDeletedItemsStorageKey,
+        json.encode(deleted),
+      );
+      return;
+    }
+
     final deleted = _decodeDeletedItems(
       prefs.getString(deletedItemsStorageKey),
     );
     final bucket = deleted.putIfAbsent(collection, () => <String, String>{});
-    final stamp = (deletedAt ?? DateTime.now()).toIso8601String();
     for (final id in cleanIds) {
       final current = bucket[id];
-      if (current == null || stamp.compareTo(current) > 0) {
+      if (current == null || _timestampGt(stamp, current)) {
         bucket[id] = stamp;
       }
     }
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGenerationAtStart,
+    )) {
+      return;
+    }
     await prefs.setString(deletedItemsStorageKey, json.encode(deleted));
+  }
+
+  static Map<String, Map<String, Map<String, String>>>
+  _decodeWorkspaceDeletedItems(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return <String, Map<String, Map<String, String>>>{};
+    }
+    try {
+      return _decodeWorkspaceDeletedItemsValue(json.decode(raw));
+    } catch (_) {
+      return <String, Map<String, Map<String, String>>>{};
+    }
+  }
+
+  static Map<String, Map<String, Map<String, String>>>
+  _decodeWorkspaceDeletedItemsValue(Object? raw) {
+    if (raw is! Map) return <String, Map<String, Map<String, String>>>{};
+    final result = <String, Map<String, Map<String, String>>>{};
+    for (final workspaceEntry in raw.entries) {
+      final workspaceId = _normalizeSharedWorkspaceId(
+        workspaceEntry.key.toString(),
+      );
+      if (workspaceId == null || workspaceEntry.value is! Map) continue;
+      final collections = <String, Map<String, String>>{};
+      for (final collectionEntry in (workspaceEntry.value as Map).entries) {
+        final collection = collectionEntry.key.toString();
+        if (!_workspacePayloadCollections.containsKey(collection) ||
+            collectionEntry.value is! Map) {
+          continue;
+        }
+        final items = <String, String>{};
+        for (final itemEntry in (collectionEntry.value as Map).entries) {
+          final id = itemEntry.key.toString().trim();
+          final deletedAt = itemEntry.value?.toString().trim() ?? '';
+          if (id.isNotEmpty && deletedAt.isNotEmpty) items[id] = deletedAt;
+        }
+        if (items.isNotEmpty) collections[collection] = items;
+      }
+      if (collections.isNotEmpty) result[workspaceId] = collections;
+    }
+    return result;
   }
 
   static Map<String, Map<String, String>> _decodeDeletedItems(String? raw) {
@@ -856,6 +1236,7 @@ class CloudSyncProvider extends ChangeNotifier {
     if (tombstones == null || tombstones.isEmpty) return items;
     return items.where((item) {
       if (item is! Map || item['id'] == null) return true;
+      if (_sharedWorkspaceId(item) != null) return true;
       final deletedAt = tombstones[item['id'].toString()];
       if (deletedAt == null || deletedAt.isEmpty) return true;
       final updatedAt = _remoteItemUpdatedAt(item);
@@ -955,7 +1336,7 @@ class CloudSyncProvider extends ChangeNotifier {
     if (value) {
       resumeForActiveAccount();
     }
-    if (value && _hasPendingChanges) {
+    if (value && (_hasPendingChanges || _syncRetryPending)) {
       _scheduleAutoSync();
     } else if (value) {
       _scheduleRemotePoll(Duration.zero);
@@ -966,22 +1347,32 @@ class CloudSyncProvider extends ChangeNotifier {
     _notifySyncStateChanged();
   }
 
-  Future<void> syncNow() async {
+  Future<void> syncNow() {
+    return _syncNowInternal(explicitRequest: true);
+  }
+
+  Future<void> _syncNowInternal({bool explicitRequest = false}) async {
     _autoSyncTimer?.cancel();
     // Req 12.6：关闭 cloud_sync_v2 时完全离线可用，不发出任何网络请求。
     if (!FeatureFlags.cloudSyncV2) {
+      _lastError = null;
+      _clearSyncRetryPending();
+      _notifySyncStateChanged();
       return;
     }
     if (_syncSuspendedForAccountChange) {
+      _lastError = null;
+      _clearSyncRetryPending();
+      _notifySyncStateChanged();
       return;
     }
     if (_isSyncing) {
-      _syncQueued = true;
-      return;
+      return _queueSyncWhileBusy(explicit: explicitRequest);
     }
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
-      _lastError = '请先登录';
+      _lastError = null;
+      _clearSyncRetryPending();
       _notifySyncStateChanged();
       return;
     }
@@ -989,7 +1380,8 @@ class CloudSyncProvider extends ChangeNotifier {
     if (serverConfigGetter != null) {
       final cfg = serverConfigGetter!.call();
       if (cfg != null && cfg['backup_enabled'] == false) {
-        _lastError = '管理员已关闭云端备份';
+        _lastError = null;
+        _clearSyncRetryPending();
         _notifySyncStateChanged();
         _scheduleQueuedSyncIfNeeded();
         return;
@@ -997,6 +1389,7 @@ class CloudSyncProvider extends ChangeNotifier {
     }
     _isSyncing = true;
     _lastError = null;
+    _clearSyncRetryPending();
     _notifySyncStateChanged();
     final accountGenerationAtStart = _accountGeneration;
 
@@ -1023,8 +1416,7 @@ class CloudSyncProvider extends ChangeNotifier {
       }
       shouldRetryLocalChanges =
           shouldRetryLocalChanges ||
-          changedCollections == null ||
-          changedCollections.isNotEmpty;
+          (changedCollections != null && changedCollections.isNotEmpty);
       Map<String, dynamic> response;
       if (changedCollections == null) {
         response = await client.post('/api/sync', payload);
@@ -1059,16 +1451,23 @@ class CloudSyncProvider extends ChangeNotifier {
           );
         });
         _lastError = null;
+        _clearSyncRetryPending();
         _isSyncing = false;
         if (_hasPendingChanges) {
           _scheduleAutoSync();
+        } else if (_remotePullQueued) {
+          _drainQueuedRemotePullIfReady(
+            expectedAccountGeneration: accountGenerationAtStart,
+          );
         } else {
           _scheduleRemotePoll();
         }
         _notifySyncStateChanged();
         _scheduleQueuedSyncIfNeeded();
         return;
-      } else if (itemDelta != null && itemDelta.isNotEmpty) {
+      } else if (itemDelta != null &&
+          itemDelta.isNotEmpty &&
+          !changedCollections.containsKey('workspace_payloads')) {
         response = await client.post('/api/sync/item-delta', {
           ...itemDelta,
           'collection_hashes': localHashes,
@@ -1084,12 +1483,22 @@ class CloudSyncProvider extends ChangeNotifier {
         _notifySyncStateChanged();
         return;
       }
+      if (shouldRetryLocalChanges) {
+        _validateLocalUploadAcknowledgement(
+          response,
+          requestCollectionHashes: localHashes,
+          changedCollectionKeys: changedCollections?.keys,
+        );
+      }
       await _runAccountBoundWriteback(accountGenerationAtStart, () async {
         final applyResult = await _applySyncResponse(
           prefs!,
           response,
           accountGenerationAtStart: accountGenerationAtStart,
           requestCollectionHashes: localHashes,
+          requestWorkspacePayloads: Map<String, dynamic>.from(
+            payload['workspace_payloads'] as Map,
+          ),
           fallbackDeletedItems:
               payload['deleted_items'] as Map<String, Map<String, String>>,
         );
@@ -1115,18 +1524,24 @@ class CloudSyncProvider extends ChangeNotifier {
           _throwIfAccountGenerationChanged(accountGenerationAtStart);
         }
       });
+      _lastError = null;
+      _clearSyncRetryPending();
     } on _SyncCancelled {
       _isSyncing = false;
       _notifySyncStateChanged();
+      _completeQueuedSyncWaiters();
       return;
     } catch (e) {
       if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
         _isSyncing = false;
         _notifySyncStateChanged();
+        _completeQueuedSyncWaiters();
         return;
       }
-      _lastError = _userVisibleSyncError(e);
+      final message = _userVisibleSyncError(e);
       if (shouldRetryLocalChanges) {
+        _lastError = message;
+        _clearSyncRetryPending();
         _hasPendingChanges = true;
         final localPrefs = prefs;
         if (localPrefs == null) {
@@ -1134,20 +1549,31 @@ class CloudSyncProvider extends ChangeNotifier {
         } else {
           await _writePendingChanges(localPrefs, true);
         }
+      } else {
+        _setSyncRetryPending('同步基线建立失败，稍后会自动重试：$message');
       }
     }
 
     _isSyncing = false;
     if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
       _notifySyncStateChanged();
+      _completeQueuedSyncWaiters();
       return;
     }
     if (_lastError != null && _hasPendingChanges) {
       _scheduleAutoSync(_autoRetryDelay);
+    } else if (_syncRetryPending) {
+      _scheduleAutoSync(_autoRetryDelay);
     } else if (_lastError == null && _hasPendingChanges) {
       _scheduleAutoSync();
     } else if (_lastError == null && !_hasPendingChanges) {
-      _scheduleRemotePoll();
+      if (_remotePullQueued) {
+        _drainQueuedRemotePullIfReady(
+          expectedAccountGeneration: accountGenerationAtStart,
+        );
+      } else {
+        _scheduleRemotePoll();
+      }
     }
     _notifySyncStateChanged();
     _scheduleQueuedSyncIfNeeded();
@@ -1159,7 +1585,7 @@ class CloudSyncProvider extends ChangeNotifier {
         expectedAccountGeneration ?? _accountGeneration;
     if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
     if (_isSyncing) {
-      _syncQueued = true;
+      _queueRemotePull();
       return;
     }
     final client = apiClientGetter?.call();
@@ -1169,7 +1595,9 @@ class CloudSyncProvider extends ChangeNotifier {
     if (serverConfigGetter != null) {
       final cfg = serverConfigGetter!.call();
       if (cfg != null && cfg['backup_enabled'] == false) {
-        _lastError = '管理员已关闭云端备份';
+        _lastError = null;
+        _clearSyncRetryPending();
+        _remotePullQueued = false;
         _notifySyncStateChanged();
         return;
       }
@@ -1177,6 +1605,7 @@ class CloudSyncProvider extends ChangeNotifier {
 
     _isSyncing = true;
     _lastError = null;
+    _clearSyncRetryPending();
     _notifySyncStateChanged();
 
     try {
@@ -1203,6 +1632,9 @@ class CloudSyncProvider extends ChangeNotifier {
           response,
           accountGenerationAtStart: accountGenerationAtStart,
           requestCollectionHashes: localHashes,
+          requestWorkspacePayloads: Map<String, dynamic>.from(
+            payload['workspace_payloads'] as Map,
+          ),
           fallbackDeletedItems:
               payload['deleted_items'] as Map<String, Map<String, String>>,
         );
@@ -1226,6 +1658,8 @@ class CloudSyncProvider extends ChangeNotifier {
           _throwIfAccountGenerationChanged(accountGenerationAtStart);
         }
       });
+      _lastError = null;
+      _clearSyncRetryPending();
     } on _SyncCancelled {
       _isSyncing = false;
       _notifySyncStateChanged();
@@ -1236,7 +1670,13 @@ class CloudSyncProvider extends ChangeNotifier {
         _notifySyncStateChanged();
         return;
       }
-      _lastError = _userVisibleSyncError(e);
+      final message = _userVisibleSyncError(e);
+      if (_hasPendingChanges) {
+        _lastError = message;
+        _clearSyncRetryPending();
+      } else {
+        _setSyncRetryPending('远端更新拉取失败，稍后会自动重试：$message');
+      }
     }
 
     _isSyncing = false;
@@ -1244,8 +1684,16 @@ class CloudSyncProvider extends ChangeNotifier {
       _notifySyncStateChanged();
       return;
     }
-    if (_lastError == null && !_hasPendingChanges) {
-      _scheduleRemotePoll();
+    if (_syncRetryPending && !_hasPendingChanges) {
+      _scheduleRemotePoll(_autoRetryDelay);
+    } else if (_lastError == null && !_hasPendingChanges) {
+      if (_remotePullQueued) {
+        _drainQueuedRemotePullIfReady(
+          expectedAccountGeneration: accountGenerationAtStart,
+        );
+      } else {
+        _scheduleRemotePoll();
+      }
     } else if (_lastError == null && _hasPendingChanges) {
       _scheduleAutoSync();
     } else if (_lastError != null) {
@@ -1257,23 +1705,25 @@ class CloudSyncProvider extends ChangeNotifier {
 
   Map<String, dynamic> _buildLocalSyncPayload(SharedPreferences prefs) {
     final payload = <String, dynamic>{};
+    final workspacePayloadSource = <String, dynamic>{};
     _listPayloads.forEach((localKey, remoteKey) {
+      late final List<dynamic> items;
       if (_stringEncodedListKeys.contains(localKey)) {
         final str = prefs.getString(localKey);
         if (str != null && str.isNotEmpty) {
           try {
             final decoded = json.decode(str);
-            payload[remoteKey] = decoded is List ? decoded : [];
+            items = decoded is List ? decoded : <dynamic>[];
           } catch (_) {
-            payload[remoteKey] = [];
+            items = <dynamic>[];
           }
         } else {
-          payload[remoteKey] = [];
+          items = <dynamic>[];
         }
       } else {
         final raw = prefs.getStringList(localKey);
         if (raw != null) {
-          payload[remoteKey] = raw
+          items = raw
               .map((e) {
                 try {
                   return json.decode(e);
@@ -1284,9 +1734,17 @@ class CloudSyncProvider extends ChangeNotifier {
               .where((e) => e != null)
               .toList();
         } else {
-          payload[remoteKey] = [];
+          items = <dynamic>[];
         }
       }
+      workspacePayloadSource[remoteKey] = items;
+      payload[remoteKey] = _workspacePayloadCollections.containsKey(remoteKey)
+          ? items
+                .where(
+                  (item) => item is! Map || _sharedWorkspaceId(item) == null,
+                )
+                .toList()
+          : items;
     });
 
     _objectPayloads.forEach((localKey, remoteKey) {
@@ -1310,7 +1768,12 @@ class CloudSyncProvider extends ChangeNotifier {
     payload['deleted_items'] = _decodeDeletedItems(
       prefs.getString(deletedItemsStorageKey),
     );
-    payload['workspace_payloads'] = _buildWorkspacePayloads(payload);
+    payload['workspace_payloads'] = _buildWorkspacePayloads(
+      workspacePayloadSource,
+      _decodeWorkspaceDeletedItems(
+        prefs.getString(workspaceDeletedItemsStorageKey),
+      ),
+    );
     return payload;
   }
 
@@ -1520,6 +1983,7 @@ class CloudSyncProvider extends ChangeNotifier {
     Map<String, dynamic> response, {
     required int accountGenerationAtStart,
     required Map<String, String> requestCollectionHashes,
+    required Map<String, dynamic> requestWorkspacePayloads,
     required Map<String, Map<String, String>> fallbackDeletedItems,
   }) async {
     void throwIfAccountChanged() {
@@ -1584,7 +2048,18 @@ class CloudSyncProvider extends ChangeNotifier {
         skippedCollections.add(remoteKey);
         continue;
       }
-      await _writeLocalList(prefs, localKey, filteredValue);
+      final workspaceSpec = _workspacePayloadCollections[remoteKey];
+      final writeValue = workspaceSpec == null
+          ? filteredValue
+          : <dynamic>[
+              ...filteredValue.where(
+                (item) => item is! Map || _sharedWorkspaceId(item) == null,
+              ),
+              ..._readLocalList(prefs, localKey).where(
+                (item) => item is Map && _sharedWorkspaceId(item) != null,
+              ),
+            ];
+      await _writeLocalList(prefs, localKey, writeValue);
       throwIfAccountChanged();
     }
     for (final entry in _objectPayloads.entries) {
@@ -1663,7 +2138,8 @@ class CloudSyncProvider extends ChangeNotifier {
       _lastWorkspaceMergeDecisions = await _mergeWorkspacePayloads(
         prefs,
         workspacePayloads,
-        requestCollectionHashes,
+        requestWorkspacePayloads,
+        accountGenerationAtStart,
         skippedCollections,
       );
       await prefs.setStringList(
@@ -1736,8 +2212,15 @@ class CloudSyncProvider extends ChangeNotifier {
     final currentValue = _listPayloads.containsKey(localKey)
         ? _readLocalList(prefs, localKey)
         : _readLocalObject(prefs, localKey);
+    final valueForRemoteCollection =
+        _workspacePayloadCollections.containsKey(remoteKey) &&
+            currentValue is List
+        ? currentValue
+              .where((item) => item is! Map || _sharedWorkspaceId(item) == null)
+              .toList()
+        : currentValue;
     return _syncPayloadHash(
-          _hashableCollectionValue(remoteKey, currentValue),
+          _hashableCollectionValue(remoteKey, valueForRemoteCollection),
         ) ==
         expectedHash;
   }
@@ -1766,6 +2249,38 @@ class CloudSyncProvider extends ChangeNotifier {
         json.encode(_lastCollectionHashes),
       );
     }
+  }
+
+  void _validateLocalUploadAcknowledgement(
+    Map<String, dynamic> response, {
+    required Map<String, String> requestCollectionHashes,
+    required Iterable<String>? changedCollectionKeys,
+  }) {
+    final missing = <String>[];
+    final serverUpdatedAt = response['server_updated_at']?.toString().trim();
+    if (serverUpdatedAt == null || serverUpdatedAt.isEmpty) {
+      missing.add('server_updated_at');
+    }
+    if (response['server_version'] is! num) {
+      missing.add('server_version');
+    }
+    final collectionHashes = response['collection_hashes'];
+    if (collectionHashes is! Map) {
+      missing.add('collection_hashes');
+    } else {
+      final requiredKeys =
+          (changedCollectionKeys ?? requestCollectionHashes.keys).where(
+            requestCollectionHashes.containsKey,
+          );
+      for (final key in requiredKeys) {
+        final hash = collectionHashes[key]?.toString().trim();
+        if (hash == null || hash.isEmpty) {
+          missing.add('collection_hashes.$key');
+        }
+      }
+    }
+    if (missing.isEmpty) return;
+    throw StateError('服务器同步响应缺少确认字段：${missing.join('、')}。本机改动已保留，稍后会自动重试上传。');
   }
 
   static Map<String, String> _decodeCollectionHashes(String? raw) {
@@ -1804,6 +2319,7 @@ class CloudSyncProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _clearQueuedSync(completeWaiters: true);
     _autoSyncTimer?.cancel();
     _remotePollTimer?.cancel();
     _remoteEventRetryTimer?.cancel();
@@ -1811,7 +2327,10 @@ class CloudSyncProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  Map<String, dynamic> _buildWorkspacePayloads(Map<String, dynamic> payload) {
+  Map<String, dynamic> _buildWorkspacePayloads(
+    Map<String, dynamic> payload,
+    Map<String, Map<String, Map<String, String>>> deletedItems,
+  ) {
     final result = <String, dynamic>{};
     for (final collection in _workspacePayloadCollections.keys) {
       final list = payload[collection];
@@ -1824,72 +2343,208 @@ class CloudSyncProvider extends ChangeNotifier {
         (bucket[collection] as List).add(item);
       }
     }
+    for (final entry in deletedItems.entries) {
+      final bucket = _workspaceBucket(result, entry.key);
+      bucket['deleted_items'] = <String, Map<String, String>>{
+        for (final collection in entry.value.entries)
+          if (collection.value.isNotEmpty)
+            collection.key: Map<String, String>.from(collection.value),
+      };
+    }
     return result;
   }
 
   Future<List<SyncMergeDecision>> _mergeWorkspacePayloads(
     SharedPreferences prefs,
     Map<dynamic, dynamic> payloads,
-    Map<String, String> requestCollectionHashes,
+    Map<String, dynamic> requestWorkspacePayloads,
+    int accountGenerationAtStart,
     Set<String> skippedCollections,
   ) async {
     final decisions = <SyncMergeDecision>[];
-    final remoteByCollection = <String, List<Map<String, dynamic>>>{};
-    final remoteWorkspaceIdsByCollection = <String, Map<String, String>>{};
-    for (final collection in _workspacePayloadCollections.keys) {
-      remoteByCollection[collection] = <Map<String, dynamic>>[];
-      remoteWorkspaceIdsByCollection[collection] = <String, String>{};
-    }
-
+    final localDeletedItems = _decodeWorkspaceDeletedItems(
+      prefs.getString(workspaceDeletedItemsStorageKey),
+    );
+    final requestDeletedItems = _decodeWorkspaceDeletedItemsValue({
+      for (final entry in requestWorkspacePayloads.entries)
+        if (entry.value is Map &&
+            (entry.value as Map).containsKey('deleted_items'))
+          entry.key: (entry.value as Map)['deleted_items'],
+    });
+    final responseDeletedItemsRaw = <String, dynamic>{};
+    final responseHasDeletedItems = <String>{};
     for (final entry in payloads.entries) {
-      final workspaceId = entry.key.toString();
       final payload = entry.value;
       if (payload is! Map) continue;
-      for (final collection in _workspacePayloadCollections.keys) {
-        final list = payload[collection];
-        if (list is! List) continue;
-        for (final item in list) {
-          if (item is Map && item['id'] != null) {
-            final normalized = Map<String, dynamic>.from(item);
-            final itemWorkspaceId = normalized['workspaceId']?.toString();
-            if (itemWorkspaceId == null ||
-                itemWorkspaceId.isEmpty ||
-                itemWorkspaceId == 'private') {
-              normalized['workspaceId'] = workspaceId;
-            }
-            final id = normalized['id'].toString();
-            remoteWorkspaceIdsByCollection[collection]![id] = workspaceId;
-            remoteByCollection[collection]!.add(normalized);
-          }
-        }
+      final workspaceId = _normalizeSharedWorkspaceId(entry.key.toString());
+      if (workspaceId == null || !payload.containsKey('deleted_items')) {
+        continue;
+      }
+      responseHasDeletedItems.add(workspaceId);
+      responseDeletedItemsRaw[workspaceId] = payload['deleted_items'];
+    }
+    final responseDeletedItems = _decodeWorkspaceDeletedItemsValue(
+      responseDeletedItemsRaw,
+    );
+    final mergedDeletedItems = <String, Map<String, Map<String, String>>>{
+      for (final entry in localDeletedItems.entries)
+        entry.key: {
+          for (final collection in entry.value.entries)
+            collection.key: Map<String, String>.from(collection.value),
+        },
+    };
+    for (final workspaceId in responseHasDeletedItems) {
+      final serverTombstones =
+          responseDeletedItems[workspaceId] ?? <String, Map<String, String>>{};
+      final localTombstones =
+          localDeletedItems[workspaceId] ?? <String, Map<String, String>>{};
+      final requestedTombstones =
+          requestDeletedItems[workspaceId] ?? <String, Map<String, String>>{};
+      final hasLocalChangesSinceRequest =
+          _syncPayloadHash(localTombstones) !=
+          _syncPayloadHash(requestedTombstones);
+      final nextTombstones = hasLocalChangesSinceRequest
+          ? _mergeWorkspaceCollectionDeletedItems(
+              serverTombstones,
+              localTombstones,
+            )
+          : serverTombstones;
+      if (nextTombstones.isEmpty) {
+        mergedDeletedItems.remove(workspaceId);
+      } else {
+        mergedDeletedItems[workspaceId] = nextTombstones;
       }
     }
+    if (_syncPayloadHash(localDeletedItems) !=
+        _syncPayloadHash(mergedDeletedItems)) {
+      _throwIfAccountGenerationChanged(accountGenerationAtStart);
+      await prefs.setString(
+        workspaceDeletedItemsStorageKey,
+        json.encode(mergedDeletedItems),
+      );
+      _throwIfAccountGenerationChanged(accountGenerationAtStart);
+    }
 
+    final workspaceIds = <String>{
+      for (final entry in payloads.entries)
+        if (_normalizeSharedWorkspaceId(entry.key.toString()) != null)
+          _normalizeSharedWorkspaceId(entry.key.toString())!,
+      ...mergedDeletedItems.keys,
+    };
     for (final entry in _workspacePayloadCollections.entries) {
       final collection = entry.key;
       final spec = entry.value;
-      final remoteItems = remoteByCollection[collection]!;
-      if (remoteItems.isEmpty) continue;
-      if (!_collectionStillMatchesRequest(
-        prefs,
-        spec.localKey,
-        collection,
-        requestCollectionHashes,
-      )) {
-        skippedCollections.add('workspace_payloads');
-        continue;
+      final current = _readLocalList(prefs, spec.localKey);
+      final eligibleWorkspaceIds = <String>{};
+      final remoteItems = <Map<String, dynamic>>[];
+      var hasRemoteCollectionPayload = false;
+
+      for (final workspaceId in workspaceIds) {
+        final requestWorkspace = requestWorkspacePayloads[workspaceId];
+        final requestedCollection = requestWorkspace is Map
+            ? requestWorkspace[collection]
+            : null;
+        final requestedItems = requestedCollection is List
+            ? requestedCollection
+            : const <dynamic>[];
+        final currentWorkspaceItems = current
+            .where(
+              (item) => item is Map && _sharedWorkspaceId(item) == workspaceId,
+            )
+            .toList();
+        if (_syncPayloadHash(currentWorkspaceItems) !=
+            _syncPayloadHash(requestedItems)) {
+          skippedCollections.add('workspace_payloads');
+          continue;
+        }
+        eligibleWorkspaceIds.add(workspaceId);
+
+        final remoteWorkspace = payloads[workspaceId];
+        if (remoteWorkspace is! Map) continue;
+        final remoteCollection = remoteWorkspace[collection];
+        if (remoteCollection is! List) continue;
+        hasRemoteCollectionPayload = true;
+        final tombstones =
+            mergedDeletedItems[workspaceId]?[collection] ??
+            const <String, String>{};
+        for (final item in remoteCollection) {
+          if (item is! Map || item['id'] == null) continue;
+          final normalized = Map<String, dynamic>.from(item)
+            ..['workspaceId'] = workspaceId;
+          if (_workspaceTombstoneKeepsItem(
+            normalized,
+            tombstones[normalized['id'].toString()],
+          )) {
+            remoteItems.add(normalized);
+          }
+        }
       }
+
+      final hasEligibleTombstones = eligibleWorkspaceIds.any(
+        (workspaceId) =>
+            (mergedDeletedItems[workspaceId]?[collection]?.isNotEmpty ?? false),
+      );
+      if (!hasRemoteCollectionPayload && !hasEligibleTombstones) continue;
+
       final merge = _mergeRemoteWorkspaceItems(
-        current: _readLocalList(prefs, spec.localKey),
+        current: current,
         remote: remoteItems,
-        remoteWorkspaceIds: remoteWorkspaceIdsByCollection[collection]!,
         itemType: spec.itemType,
       );
-      await _writeLocalList(prefs, spec.localKey, merge.items);
+      final filteredItems = merge.items.where((item) {
+        if (item is! Map) return true;
+        final workspaceId = _sharedWorkspaceId(item);
+        if (workspaceId == null ||
+            !eligibleWorkspaceIds.contains(workspaceId)) {
+          return true;
+        }
+        return _workspaceTombstoneKeepsItem(
+          item,
+          mergedDeletedItems[workspaceId]?[collection]?[item['id']?.toString()],
+        );
+      }).toList();
+      if (filteredItems.length != merge.items.length ||
+          hasRemoteCollectionPayload) {
+        _throwIfAccountGenerationChanged(accountGenerationAtStart);
+        await _writeLocalList(prefs, spec.localKey, filteredItems);
+        _throwIfAccountGenerationChanged(accountGenerationAtStart);
+      }
       decisions.addAll(merge.decisions);
     }
 
     return decisions;
+  }
+
+  static bool _workspaceTombstoneKeepsItem(
+    Map<dynamic, dynamic> item,
+    String? deletedAt,
+  ) {
+    if (deletedAt == null || deletedAt.isEmpty) return true;
+    final updatedAt = _remoteItemUpdatedAt(item);
+    return updatedAt.isNotEmpty && _timestampGt(updatedAt, deletedAt);
+  }
+
+  static Map<String, Map<String, String>> _mergeWorkspaceCollectionDeletedItems(
+    Map<String, Map<String, String>> first,
+    Map<String, Map<String, String>> second,
+  ) {
+    final merged = <String, Map<String, String>>{
+      for (final entry in first.entries)
+        entry.key: Map<String, String>.from(entry.value),
+    };
+    for (final collection in second.entries) {
+      final bucket = merged.putIfAbsent(
+        collection.key,
+        () => <String, String>{},
+      );
+      for (final item in collection.value.entries) {
+        final current = bucket[item.key];
+        if (current == null || _timestampGt(item.value, current)) {
+          bucket[item.key] = item.value;
+        }
+      }
+    }
+    return merged;
   }
 
   List<dynamic> _readLocalList(SharedPreferences prefs, String localKey) {
@@ -1933,6 +2588,66 @@ class CloudSyncProvider extends ChangeNotifier {
       localKey,
       list.map((item) => json.encode(item)).toList(growable: false),
     );
+  }
+
+  _WorkspaceMergeResult _mergeRemoteWorkspaceItems({
+    required List<dynamic> current,
+    required List<Map<String, dynamic>> remote,
+    required String itemType,
+  }) {
+    String keyFor(Map<dynamic, dynamic> item) =>
+        json.encode([_sharedWorkspaceId(item) ?? '', item['id'].toString()]);
+
+    final merged = <String, dynamic>{};
+    for (final item in current) {
+      if (item is Map && item['id'] != null) {
+        merged[keyFor(item)] = item;
+      }
+    }
+    final decisions = <SyncMergeDecision>[];
+    for (final item in remote) {
+      final id = item['id'].toString();
+      final workspaceId = _sharedWorkspaceId(item) ?? '';
+      final key = keyFor(item);
+      final prior = merged[key];
+      if (prior is Map) {
+        final oldTs = _remoteItemUpdatedAt(prior);
+        final newTs = _remoteItemUpdatedAt(item);
+        if (json.encode(prior) != json.encode(item)) {
+          final remoteWins = oldTs.isEmpty || !_timestampGt(oldTs, newTs);
+          final changedFields = _changedWorkspaceFields(prior, item);
+          decisions.add(
+            SyncMergeDecision(
+              workspaceId: workspaceId,
+              itemType: itemType,
+              itemId: id,
+              winner: remoteWins ? 'remote' : 'local',
+              reason: remoteWins ? '云端更新时间不早于本地' : '本地更新时间更新',
+              changedFields: changedFields,
+              localUpdatedAt: oldTs,
+              remoteUpdatedAt: newTs,
+              decidedAt: DateTime.now(),
+            ),
+          );
+          if (remoteWins) merged[key] = item;
+        }
+      } else {
+        merged[key] = item;
+        decisions.add(
+          SyncMergeDecision(
+            workspaceId: workspaceId,
+            itemType: itemType,
+            itemId: id,
+            winner: 'remote',
+            reason: '本地不存在该共享${_itemTypeLabel(itemType)}',
+            localUpdatedAt: '',
+            remoteUpdatedAt: _remoteItemUpdatedAt(item),
+            decidedAt: DateTime.now(),
+          ),
+        );
+      }
+    }
+    return _WorkspaceMergeResult(merged.values.toList(), decisions);
   }
 
   Map<String, dynamic> _readLocalObject(
@@ -2105,62 +2820,6 @@ class CloudSyncProvider extends ChangeNotifier {
     }
   }
 
-  _WorkspaceMergeResult _mergeRemoteWorkspaceItems({
-    required List<dynamic> current,
-    required List<Map<String, dynamic>> remote,
-    required Map<String, String> remoteWorkspaceIds,
-    required String itemType,
-  }) {
-    final merged = <String, dynamic>{};
-    for (final item in current) {
-      if (item is Map && item['id'] != null) {
-        merged[item['id'].toString()] = item;
-      }
-    }
-    final decisions = <SyncMergeDecision>[];
-    for (final item in remote) {
-      final id = item['id'].toString();
-      final prior = merged[id];
-      if (prior is Map) {
-        final oldTs = _remoteItemUpdatedAt(prior);
-        final newTs = _remoteItemUpdatedAt(item);
-        if (json.encode(prior) != json.encode(item)) {
-          final remoteWins = oldTs.isEmpty || !_timestampGt(oldTs, newTs);
-          final changedFields = _changedWorkspaceFields(prior, item);
-          decisions.add(
-            SyncMergeDecision(
-              workspaceId: remoteWorkspaceIds[id] ?? '',
-              itemType: itemType,
-              itemId: id,
-              winner: remoteWins ? 'remote' : 'local',
-              reason: remoteWins ? '云端更新时间不早于本地' : '本地更新时间更新',
-              changedFields: changedFields,
-              localUpdatedAt: oldTs,
-              remoteUpdatedAt: newTs,
-              decidedAt: DateTime.now(),
-            ),
-          );
-          if (remoteWins) merged[id] = item;
-        }
-      } else {
-        merged[id] = item;
-        decisions.add(
-          SyncMergeDecision(
-            workspaceId: remoteWorkspaceIds[id] ?? '',
-            itemType: itemType,
-            itemId: id,
-            winner: 'remote',
-            reason: '本地不存在该共享${_itemTypeLabel(itemType)}',
-            localUpdatedAt: '',
-            remoteUpdatedAt: _remoteItemUpdatedAt(item),
-            decidedAt: DateTime.now(),
-          ),
-        );
-      }
-    }
-    return _WorkspaceMergeResult(merged.values.toList(), decisions);
-  }
-
   List<String> _changedWorkspaceFields(
     Map<dynamic, dynamic> local,
     Map<String, dynamic> remote,
@@ -2216,10 +2875,15 @@ class CloudSyncProvider extends ChangeNotifier {
   }
 
   static String? _sharedWorkspaceId(Map<dynamic, dynamic> item) {
-    final workspaceId = item['workspaceId']?.toString().trim();
+    return _normalizeSharedWorkspaceId(item['workspaceId']?.toString());
+  }
+
+  static String? _normalizeSharedWorkspaceId(String? rawWorkspaceId) {
+    final workspaceId = rawWorkspaceId?.trim();
     if (workspaceId == null ||
         workspaceId.isEmpty ||
-        workspaceId == 'private') {
+        workspaceId == 'private' ||
+        workspaceId.startsWith('private:')) {
       return null;
     }
     return workspaceId;

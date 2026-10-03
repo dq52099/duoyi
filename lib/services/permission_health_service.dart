@@ -358,13 +358,13 @@ class PermissionHealthService {
               ),
             );
           }
-          if (channelStatusProbeError != null) {
+          if (channelStatusProbeError != null || channelStatuses == null) {
             checks.add(
               PermissionHealthCheck(
                 id: 'notification_channel_status',
                 title: '通知渠道状态',
                 subtitle:
-                    '无法读取系统通知渠道声音/静音状态，请打开系统通知设置确认普通提醒、强提醒和闹钟兜底通知均未关闭。($channelStatusProbeError)',
+                    '无法读取系统通知渠道声音/静音状态，请打开系统通知设置确认普通提醒、强提醒和闹钟兜底通知均未关闭。${channelStatusProbeError == null ? '' : '($channelStatusProbeError)'}',
                 status: PermissionHealthStatus.unknown,
                 action: PermissionHealthAction.openAppSettings,
                 actionLabel: '系统设置',

@@ -91,7 +91,15 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
   /// Tap 回调（payload）——由主入口注册处理 deep link。
   void Function(String payload)? onTap;
 
-  void clearScheduleIssue() {
+  void clearScheduleIssue({int? id, Iterable<int>? ids}) {
+    final issue = _lastScheduleIssue;
+    if (issue == null) return;
+    if (id != null || ids != null) {
+      final issueId = issue.id;
+      if (issueId == null) return;
+      final acceptedIds = <int>{?id, ...?ids};
+      if (!acceptedIds.contains(issueId)) return;
+    }
     _lastScheduleIssue = null;
   }
 
@@ -325,6 +333,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     required String? channelIssueMessage,
     DateTime? scheduledTime,
     int? id,
+    Iterable<int>? clearIds,
   }) {
     final exactDegraded = exactAlarmMissing || exactFallbackUsed;
     if (!nativeRingtoneOk && exactDegraded) {
@@ -364,7 +373,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       );
       return;
     }
-    _lastScheduleIssue = null;
+    clearScheduleIssue(id: id, ids: clearIds);
   }
 
   /// Android 闹钟通道标识。
@@ -539,29 +548,11 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         linux: linuxInit,
       ),
       onDidReceiveNotificationResponse: (resp) {
-        final payload = resp.payload;
-        final actionId = resp.actionId;
         unawaited(NativeReminderRingtone.stopActive());
-        if (onTap == null) return;
-        if (actionId == 'todo_complete' && payload != null) {
-          final id = _idFromPayload(payload, 'todo');
-          if (id != null && id.isNotEmpty) {
-            onTap!(
-              'duoyi://action/complete_todo?id=${Uri.encodeComponent(id)}',
-            );
-            return;
-          }
-        }
-        if (actionId == 'habit_checkin' && payload != null) {
-          final id = _idFromPayload(payload, 'habit');
-          if (id != null && id.isNotEmpty) {
-            onTap!(
-              'duoyi://action/checkin_habit?id=${Uri.encodeComponent(id)}',
-            );
-            return;
-          }
-        }
-        if (payload != null) onTap!(payload);
+        LocalNotifications.instance.dispatchNotificationResponse(
+          resp,
+          fallback: onTap,
+        );
       },
     );
     _pluginInitialized = true;
@@ -573,7 +564,10 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
 
     try {
       final launchDetails = await _plugin.getNotificationAppLaunchDetails();
-      final launchPayload = launchDetails?.notificationResponse?.payload;
+      final response = launchDetails?.notificationResponse;
+      final launchPayload = response == null
+          ? null
+          : _payloadForResponse(response);
       if (launchDetails?.didNotificationLaunchApp == true &&
           launchPayload != null &&
           launchPayload.isNotEmpty) {
@@ -582,6 +576,31 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     } catch (e, st) {
       debugPrint('[AlarmService] launch payload probe failed: $e\n$st');
     }
+  }
+
+  String? _payloadForResponse(NotificationResponse resp) {
+    final actionId = resp.actionId;
+    final payload = resp.payload;
+    if (actionId == 'todo_complete' && payload != null) {
+      final id = _idFromPayload(payload, 'todo');
+      if (id != null && id.isNotEmpty) {
+        return 'duoyi://action/complete_todo?id=${Uri.encodeComponent(id)}';
+      }
+    }
+    if (actionId == 'habit_checkin' && payload != null) {
+      final id = _idFromPayload(payload, 'habit');
+      if (id != null && id.isNotEmpty) {
+        return 'duoyi://action/checkin_habit?id=${Uri.encodeComponent(id)}';
+      }
+    }
+    if (actionId != null && actionId.startsWith('todo_snooze_')) {
+      final id = actionId.substring('todo_snooze_'.length);
+      final originalPayload =
+          payload ?? 'duoyi://todo/${Uri.decodeComponent(id)}';
+      return 'duoyi://snooze/${resp.id ?? 0}'
+          '?delay=5&payload=${Uri.encodeComponent(originalPayload)}';
+    }
+    return payload;
   }
 
   bool get _isAndroid {
@@ -618,6 +637,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     int repeatCount = 0,
   }) async {
     if (!_initialized) await init();
+    clearScheduleIssue(id: id);
     if (!when.isAfter(DateTime.now())) {
       _recordScheduleIssue(
         title: '闹钟提醒注册失败',
@@ -641,6 +661,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         id,
         operation: 'scheduleFullScreen native owner handoff',
       );
+      await ReminderRingtoneSettings.applyPersistedSettingsToNative();
       await _ensureAndroidFallbackChannelSound();
       channelIssueMessage = await _androidChannelIssueMessage();
       nativeRingtoneOk = await _tryNativeRingtone(
@@ -996,6 +1017,13 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     int repeatCount = 0,
   }) async {
     if (!_initialized) await init();
+    final normalizedWeekdays = weekdays == null || weekdays.isEmpty
+        ? const <int>[]
+        : weekdays.where((w) => w >= 1 && w <= 7).toSet().toList();
+    final expectedScheduleIds = normalizedWeekdays.isEmpty
+        ? <int>{id}
+        : <int>{for (final weekday in normalizedWeekdays) _subId(id, weekday)};
+    clearScheduleIssue(id: id, ids: expectedScheduleIds);
     final exactAlarmMissing = await _exactAlarmPermissionMissing(
       requireExactAlarm,
     );
@@ -1008,6 +1036,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         id,
         operation: 'scheduleDailyFullScreen native owner handoff',
       );
+      await ReminderRingtoneSettings.applyPersistedSettingsToNative();
       await _ensureAndroidFallbackChannelSound();
       channelIssueMessage = await _androidChannelIssueMessage();
       nativeRingtoneOk = await _tryNativeRingtone(
@@ -1056,11 +1085,9 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       payload: payload,
       vibrate: vibrate,
     );
-    final normalized = weekdays == null || weekdays.isEmpty
-        ? const <int>[]
-        : weekdays.where((w) => w >= 1 && w <= 7).toSet().toList();
-
-    final targets = normalized.isEmpty ? <int?>[null] : normalized.cast<int?>();
+    final targets = normalizedWeekdays.isEmpty
+        ? <int?>[null]
+        : normalizedWeekdays.cast<int?>();
     var exactFallbackUsed = false;
     var pluginFallbackIssueRecorded = false;
     final scheduledIds = <int>{};
@@ -1244,6 +1271,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       fullScreenIntentMissing: fullScreenIntentMissing,
       channelIssueMessage: channelIssueMessage,
       id: id,
+      clearIds: scheduledIds,
     );
   }
 
@@ -1460,7 +1488,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
-      return await android?.canScheduleExactNotifications() ?? true;
+      return await android?.canScheduleExactNotifications() ?? false;
     } catch (_) {
       return false;
     }
@@ -1529,8 +1557,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
           channelId,
           _androidSoundResourceName,
         );
-    final brokenChannel = await _androidChannelNeedsSoundRepair(channelId);
-    if (shouldRecreateChannel || brokenChannel) {
+    if (shouldRecreateChannel) {
       await android?.deleteNotificationChannel(channelId);
     }
     await android?.createNotificationChannel(
@@ -1550,15 +1577,6 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       channelId,
       _androidSoundResourceName,
     );
-  }
-
-  Future<bool> _androidChannelNeedsSoundRepair(String channelId) async {
-    final statuses = await NotificationSettings.notificationChannelStatuses([
-      channelId,
-    ]);
-    final status = statuses?[channelId];
-    return status != null &&
-        (status.isSilent || status.isLowImportance || status.isBlocked);
   }
 
   int _subId(int base, int weekday) {

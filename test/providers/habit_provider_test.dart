@@ -6,6 +6,7 @@ import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/models/time_entry.dart';
 import 'package:duoyi/providers/habit_provider.dart';
 import 'package:duoyi/providers/time_audit_provider.dart';
+import 'package:duoyi/services/reminder_scheduler.dart';
 
 import '../test_support/recording_reminder_scheduler.dart';
 
@@ -242,6 +243,79 @@ void main() {
       expect(scheduler.habitSyncs.last, isEmpty);
     },
   );
+
+  test(
+    'habit reminder sync records scheduler failures and later recovery',
+    () async {
+      final scheduler = RecordingReminderScheduler()
+        ..habitSyncError = StateError('habit scheduler unavailable');
+      final provider = HabitProvider()..scheduler = scheduler;
+      final habit = Habit(
+        id: 'habit-sync-fail',
+        name: '阅读',
+        remind: true,
+        remindHour: 9,
+        remindMinute: 0,
+      );
+
+      await provider.addHabit(habit);
+
+      expect(
+        provider.lastReminderSyncIssue,
+        contains('habit scheduler unavailable'),
+      );
+      expect(provider.lastReminderSyncAttemptAt, isNotNull);
+      expect(provider.lastReminderSyncSucceededAt, isNull);
+
+      scheduler.habitSyncError = null;
+      await provider.updateHabit(
+        habit.id,
+        habit.copyWith(remindHour: 10, remindMinute: 30),
+      );
+
+      expect(provider.lastReminderSyncIssue, isNull);
+      expect(provider.lastReminderSyncSucceededAt, isNotNull);
+    },
+  );
+
+  test('habit reminder sync records missing scheduler', () async {
+    final provider = HabitProvider();
+
+    await provider.addHabit(
+      Habit(
+        id: 'habit-no-scheduler',
+        name: '阅读',
+        remind: true,
+        remindHour: 9,
+        remindMinute: 0,
+      ),
+    );
+
+    expect(provider.lastReminderSyncIssue, contains('提醒调度器尚未初始化'));
+    expect(provider.lastReminderSyncAttemptAt, isNotNull);
+    expect(provider.lastReminderSyncSucceededAt, isNull);
+  });
+
+  test('habit reminder sync unwraps scheduler failure summaries', () async {
+    final scheduler = RecordingReminderScheduler()
+      ..habitSyncError = const ReminderScheduleSyncException([
+        '习惯提醒注册失败：喝水的弹出提醒未完整注册',
+      ]);
+    final provider = HabitProvider()..scheduler = scheduler;
+
+    await provider.addHabit(
+      Habit(
+        id: 'water',
+        name: '喝水',
+        remind: true,
+        remindHour: 8,
+        remindMinute: 0,
+      ),
+    );
+
+    expect(provider.lastReminderSyncIssue, contains('习惯提醒注册失败'));
+    expect(provider.lastReminderSyncIssue, isNot(contains('Exception')));
+  });
 
   test(
     'habit persists multiple popup reminder times and syncs after save',

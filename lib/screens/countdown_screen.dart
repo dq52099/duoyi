@@ -441,8 +441,9 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
         setState(() => _remind = false);
       }
     }
+    String? reminderSyncIssue;
     try {
-      await provider.updateItem(next);
+      reminderSyncIssue = await provider.updateItem(next);
     } catch (e) {
       if (!mounted) {
         _saving = false;
@@ -462,7 +463,10 @@ class _CountdownEditSheetState extends State<_CountdownEditSheet> {
       return;
     }
     final messenger = ScaffoldMessenger.maybeOf(context);
-    final feedback = reminderWarning.isNotEmpty
+    final syncIssue = reminderSyncIssue?.trim();
+    final feedback = syncIssue != null && syncIssue.isNotEmpty
+        ? '已保存到本机，但提醒未注册：$syncIssue'
+        : reminderWarning.isNotEmpty
         ? reminderWarning
         : I18n.tr('countdown.saved');
     Navigator.pop(context);

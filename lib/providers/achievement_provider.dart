@@ -161,6 +161,8 @@ class AchievementProvider extends ChangeNotifier {
     required String reason,
   }) async {
     if (coins <= 0 || _coinBalance < coins) return false;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _coinBalance -= coins;
     _rewardLedger.insert(
       0,
@@ -176,6 +178,12 @@ class AchievementProvider extends ChangeNotifier {
       _rewardLedger.removeRange(50, _rewardLedger.length);
     }
     await _saveRewards();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return false;
+    }
     _persistedRevision++;
     notifyListeners();
     return true;
@@ -200,6 +208,12 @@ class AchievementProvider extends ChangeNotifier {
       return;
     }
     await prefs.setString(_rewardStorageKey, jsonEncode(incoming));
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final changed = _loadRewardsFromPrefs(prefs);
     if (!changed) return;
     _persistedRevision++;

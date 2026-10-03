@@ -8,7 +8,7 @@ typedef ReminderPopupContextGetter = BuildContext? Function();
 typedef ReminderPopupPayloadOpener = void Function(String payload);
 typedef ReminderPopupForegroundGetter = bool Function();
 
-class ForegroundReminderPopupSink implements ReminderPopupSink {
+class ForegroundReminderPopupSink implements ReminderInAppOnlyPopupSink {
   static const Duration _visiblePopupDuplicateWindow = Duration(seconds: 3);
 
   final ReminderPopupContextGetter contextGetter;
@@ -76,6 +76,28 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
   }
 
   @override
+  Future<void> scheduleInAppOnlyOnce({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  }) async {
+    await cancel(id);
+    final delay = when.difference(DateTime.now());
+    if (delay <= Duration.zero) {
+      throw StateError('提醒时间已过去，popup 提醒未注册');
+    }
+    _timers[id] = Timer(delay, () {
+      _timers.remove(id);
+      if (!isForegroundGetter()) return;
+      final context = contextGetter();
+      if (context == null || !context.mounted) return;
+      _show(id: id, title: title, body: body, payload: payload);
+    });
+  }
+
+  @override
   Future<void> scheduleRepeating({
     required int id,
     required String title,
@@ -125,7 +147,7 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
           cancelFallbackAfterDialog: hasFallback,
           onForegroundDelivered: () {
             unawaited(
-              _scheduleFallbackRepeating(
+              _rescheduleRepeatingFallbackSafely(
                 id: id,
                 title: title,
                 body: body,
@@ -143,6 +165,42 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
     }
 
     scheduleNext();
+  }
+
+  Future<void> _rescheduleRepeatingFallbackSafely({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+  }) async {
+    try {
+      await _scheduleFallbackRepeating(
+        id: id,
+        title: title,
+        body: body,
+        hour: hour,
+        minute: minute,
+        weekdays: weekdays,
+        payload: payload,
+      );
+    } catch (e, st) {
+      debugPrint(
+        '[ForegroundReminderPopupSink] repeating fallback reschedule failed: '
+        '$e\n$st',
+      );
+      final issueSink = notificationFallback;
+      if (issueSink is ReminderScheduleIssueSink) {
+        (issueSink as ReminderScheduleIssueSink).recordReminderScheduleIssue(
+          title: '弹出提醒兜底重建失败',
+          message: '前台弹出提醒已展示，但下一次后台通知兜底未能重新注册。请检查通知权限后重新保存提醒。($e)',
+          relatedId: _relatedIdFromPayload(payload) ?? id.toString(),
+          blocking: false,
+        );
+      }
+    }
   }
 
   Future<void> _scheduleFallbackOnce({
@@ -166,6 +224,9 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
       debugPrint(
         '[ForegroundReminderPopupSink] one-shot fallback schedule failed: '
         '$e\n$st',
+      );
+      throw ReminderPopupFallbackUnavailableException(
+        '弹出提醒的系统通知兜底注册失败，提醒未可靠注册。请检查通知权限和通知渠道后重试。($e)',
       );
     }
   }
@@ -195,6 +256,9 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
       debugPrint(
         '[ForegroundReminderPopupSink] repeating fallback schedule failed: '
         '$e\n$st',
+      );
+      throw ReminderPopupFallbackUnavailableException(
+        '重复弹出提醒的系统通知兜底注册失败，提醒未可靠注册。请检查通知权限和通知渠道后重试。($e)',
       );
     }
   }
@@ -289,6 +353,25 @@ class ForegroundReminderPopupSink implements ReminderPopupSink {
     final query = Map<String, String>.from(uri.queryParameters)
       ..putIfAbsent('fallback', () => 'popup_notification');
     return uri.replace(queryParameters: query).toString();
+  }
+
+  String? _relatedIdFromPayload(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    final uri = Uri.tryParse(payload);
+    if (uri == null ||
+        uri.scheme != 'duoyi' ||
+        uri.pathSegments.isEmpty) {
+      return null;
+    }
+    return switch (uri.host) {
+      'todo' ||
+      'habit' ||
+      'anniversary' ||
+      'countdown' ||
+      'goal' ||
+      'location' => uri.pathSegments.first,
+      _ => null,
+    };
   }
 
   @override

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:duoyi/models/countdown.dart';
 import 'package:duoyi/providers/countdown_provider.dart';
+import 'package:duoyi/services/reminder_scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -87,6 +88,86 @@ void main() {
 
       await provider.deleteItem(item.id);
       expect(scheduler.countdownSyncs.last, isEmpty);
+    },
+  );
+
+  test(
+    'CountdownProvider exposes reminder sync failures after local save',
+    () async {
+      final scheduler = RecordingReminderScheduler()
+        ..countdownSyncError = const ReminderScheduleSyncException([
+          '倒数日提醒注册失败：普通通知未注册成功',
+        ]);
+      final provider = CountdownProvider()..scheduler = scheduler;
+      final item = CountdownItem(
+        id: 'countdown-sync-failure',
+        title: '发布日',
+        targetDate: DateTime.now().add(const Duration(days: 3)),
+        remind: true,
+      );
+
+      final issue = await provider.addItem(item);
+
+      expect(provider.items.map((item) => item.id), contains(item.id));
+      expect(issue, contains('倒数日提醒注册失败'));
+      expect(provider.lastReminderSyncIssue, issue);
+    },
+  );
+
+  test(
+    'CountdownProvider reports enabled reminders when scheduler is missing',
+    () async {
+      final provider = CountdownProvider();
+      final disabled = CountdownItem(
+        id: 'countdown-no-reminder',
+        title: '不提醒发布日',
+        targetDate: DateTime.now().add(const Duration(days: 3)),
+        remind: false,
+      );
+
+      final disabledIssue = await provider.addItem(disabled);
+
+      expect(disabledIssue, isNull);
+      expect(provider.lastReminderSyncIssue, isNull);
+
+      final enabled = CountdownItem(
+        id: 'countdown-missing-scheduler',
+        title: '提醒发布日',
+        targetDate: DateTime.now().add(const Duration(days: 4)),
+        remind: true,
+      );
+
+      final addIssue = await provider.addItem(enabled);
+
+      expect(addIssue, contains('提醒服务未初始化'));
+      expect(provider.lastReminderSyncIssue, addIssue);
+
+      final updateIssue = await provider.updateItem(
+        enabled.copyWith(title: '更新提醒发布日'),
+      );
+
+      expect(updateIssue, contains('提醒服务未初始化'));
+      expect(provider.lastReminderSyncIssue, updateIssue);
+    },
+  );
+
+  test(
+    'CountdownProvider import reports enabled reminders when scheduler is missing',
+    () async {
+      final provider = CountdownProvider();
+
+      final summary = await provider.importCountdowns([
+        CountdownItem(
+          id: 'countdown-import-missing-scheduler',
+          title: '导入提醒倒数日',
+          targetDate: DateTime.now().add(const Duration(days: 5)),
+          remind: true,
+        ),
+      ]);
+
+      expect(summary.inserted, 1);
+      expect(summary.reminderSyncIssue, contains('提醒服务未初始化'));
+      expect(provider.lastReminderSyncIssue, summary.reminderSyncIssue);
     },
   );
 

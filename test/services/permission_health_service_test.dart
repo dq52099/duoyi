@@ -378,6 +378,34 @@ void main() {
     expect(status.actionChannelIds, containsAll(_allNotificationChannelIds()));
   });
 
+  test('通知渠道状态探针返回 null 时报告未知', () async {
+    final service = PermissionHealthService(
+      notificationGrantedReader: () async => true,
+      exactAlarmGrantedReader: () async => true,
+      fullScreenIntentGrantedReader: () async => true,
+      isAndroidReader: () => true,
+      isIOSReader: () => false,
+      androidDeviceReader: () async => const AndroidDeviceInfoLite(
+        manufacturer: 'Google',
+        brand: 'google',
+        model: 'Pixel 8',
+        sdkInt: 34,
+      ),
+      systemAudioStatusReader: _okAudioStatus,
+      channelIdsReader: () async => _allNotificationChannelIds(),
+      channelStatusesReader: (_) async => null,
+    );
+
+    final report = await service.check();
+
+    final status = report.checks.firstWhere(
+      (check) => check.id == 'notification_channel_status',
+    );
+    expect(status.status, PermissionHealthStatus.unknown);
+    expect(status.action, PermissionHealthAction.openAppSettings);
+    expect(report.hasUnknown, isTrue);
+  });
+
   test('通知渠道优先级过低时提示打开横幅和声音入口', () async {
     final service = PermissionHealthService(
       notificationGrantedReader: () async => true,

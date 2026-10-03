@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io' show File;
 
 import 'package:flutter/material.dart';
@@ -78,6 +79,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   /// 基线快照：`_load()` 与成功保存后都会刷新。任何与基线偏离的改动
   /// 都会把状态抬升到 `editing`。用 JSON 化的字符串表示，避免深比较。
   late String _baseline;
+  late TodoItem _baselineTodo;
 
   @override
   void initState() {
@@ -116,6 +118,15 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     final beforeHasReminder = before.hasReminder;
     // ignore: deprecated_member_use_from_same_package
     final afterHasReminder = after.hasReminder;
+    final beforeReminderEnabled =
+        beforeHasReminder ||
+        before.reminder.enabled ||
+        before.reminderPlan.enabled;
+    final afterReminderEnabled =
+        afterHasReminder ||
+        after.reminder.enabled ||
+        after.reminderPlan.enabled;
+    if (!beforeReminderEnabled && !afterReminderEnabled) return false;
     // ignore: deprecated_member_use_from_same_package
     final beforeReminderAt = before.reminderAt;
     // ignore: deprecated_member_use_from_same_package
@@ -125,10 +136,10 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
         beforeReminderAt != afterReminderAt;
     return before.dueDate != after.dueDate ||
         legacyChanged ||
-        before.reminder.toJson().toString() !=
-            after.reminder.toJson().toString() ||
-        before.reminderPlan.toJson().toString() !=
-            after.reminderPlan.toJson().toString();
+        jsonEncode(before.reminder.toJson()) !=
+            jsonEncode(after.reminder.toJson()) ||
+        jsonEncode(before.reminderPlan.toJson()) !=
+            jsonEncode(after.reminderPlan.toJson());
   }
 
   void _load() {
@@ -136,6 +147,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     final matches = provider.todos.where((t) => t.id == widget.todoId);
     if (matches.isEmpty) {
       _todo = TodoItem(id: widget.todoId, title: '');
+      _baselineTodo = _cloneTodo(_todo);
       _baseline = '';
       _missingTodo = true;
       _state = _EditState.clean;
@@ -144,6 +156,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     final todo = matches.first;
     _missingTodo = false;
     _syncDraftFromProvider(todo);
+    _baselineTodo = _cloneTodo(todo);
     _baseline = _snapshot(_todo);
     _state = _EditState.clean;
   }
@@ -162,6 +175,72 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       _timeTargetCtrl.text = minutesText;
     }
   }
+
+  TodoItem _cloneTodo(TodoItem todo) => TodoItem.fromJson(todo.toJson());
+
+  TodoItem _mergeEditableDraftIntoLatest(TodoItem latest, TodoItem draft) {
+    final base = _baselineTodo;
+    var next = latest;
+    if (draft.title != base.title) {
+      next = next.copyWith(title: draft.title);
+    }
+    if (draft.notes != base.notes) {
+      next = next.copyWith(notes: draft.notes);
+    }
+    if (draft.quadrant != base.quadrant) {
+      next = next.copyWith(quadrant: draft.quadrant);
+    }
+    if (draft.priority != base.priority) {
+      next = next.copyWith(priority: draft.priority);
+    }
+    if (draft.listGroupId != base.listGroupId) {
+      next = next.copyWith(listGroupId: draft.listGroupId);
+    }
+    if (draft.listGroupName != base.listGroupName) {
+      next = next.copyWith(listGroupName: draft.listGroupName);
+    }
+    if (draft.workspaceId != base.workspaceId) {
+      next = next.copyWith(workspaceId: draft.workspaceId);
+    }
+    if (draft.assigneeId != base.assigneeId) {
+      next = next.copyWith(assigneeId: draft.assigneeId);
+    }
+    if (!_sameJson(draft.tags, base.tags)) {
+      next = next.copyWith(tags: [...draft.tags]);
+    }
+    if (!_sameJson(
+      draft.attachments.map((a) => a.toJson()).toList(),
+      base.attachments.map((a) => a.toJson()).toList(),
+    )) {
+      next = next.copyWith(attachments: [...draft.attachments]);
+    }
+    if (draft.dueDate != base.dueDate) {
+      next = next.copyWith(dueDate: draft.dueDate);
+    }
+    if (_reminderSchedulingFieldsChanged(base, draft)) {
+      next = next.copyWith(
+        hasReminder: draft.hasReminder,
+        reminderAt: draft.reminderAt,
+        reminder: draft.reminder,
+        reminderPlan: draft.reminderPlan,
+      );
+    }
+    if (!_sameJson(draft.focusLink.toJson(), base.focusLink.toJson())) {
+      next = next.copyWith(focusLink: draft.focusLink);
+    }
+    if (draft.timeTargetSeconds != base.timeTargetSeconds) {
+      next = next.copyWith(timeTargetSeconds: draft.timeTargetSeconds);
+    }
+    if (!_sameJson(draft.recurrence.toJson(), base.recurrence.toJson())) {
+      next = next.copyWith(recurrence: draft.recurrence);
+    }
+    if (draft.autoToggleByChildren != base.autoToggleByChildren) {
+      next = next.copyWith(autoToggleByChildren: draft.autoToggleByChildren);
+    }
+    return next;
+  }
+
+  bool _sameJson(Object? a, Object? b) => jsonEncode(a) == jsonEncode(b);
 
   /// 任一可编辑字段变动时调用；根据是否偏离基线切换状态。
   ///
@@ -185,7 +264,13 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   ///
   Future<void> _save() async {
     if (_state == _EditState.saving) return;
-    if (!(context.read<ShareProvider?>()?.canEdit(_todo.workspaceId) ?? true)) {
+    final provider = context.read<TodoProvider>();
+    final savedTodo = provider.todos.firstWhere(
+      (t) => t.id == widget.todoId,
+      orElse: () => _todo,
+    );
+    if (!(context.read<ShareProvider?>()?.canEdit(savedTodo.workspaceId) ??
+        true)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('你在这个共享空间中只有查看权限'),
@@ -202,7 +287,6 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     }
 
     final messenger = ScaffoldMessenger.of(context);
-    final provider = context.read<TodoProvider>();
     final cs = Theme.of(context).colorScheme;
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) {
@@ -216,18 +300,19 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       return;
     }
 
-    final nextTodo = _todo.copyWith(
+    final draftTodo = _todo.copyWith(
       title: title,
       notes: _notesCtrl.text.trim(),
     );
+    final nextTodo = _mergeEditableDraftIntoLatest(savedTodo, draftTodo);
     setState(() => _state = _EditState.saving);
 
     try {
-      final savedTodo = provider.todos.firstWhere(
-        (t) => t.id == widget.todoId,
-        orElse: () => _todo,
+      final waitForReminderSync = _reminderSchedulingFieldsChanged(
+        savedTodo,
+        nextTodo,
       );
-      if (_reminderSchedulingFieldsChanged(savedTodo, nextTodo)) {
+      if (waitForReminderSync) {
         final reminderReady = await preflightTodoReminderSave(
           context,
           todo: nextTodo,
@@ -240,7 +325,27 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
           return;
         }
       }
-      await provider.updateTodo(widget.todoId, nextTodo);
+      final saveResult = await provider.updateTodoWithResult(
+        widget.todoId,
+        nextTodo,
+        waitForReminderSync: waitForReminderSync,
+      );
+      if (!saveResult.saved) {
+        if (!mounted) return;
+        _restoreEditingAfterSaveInterruption();
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('待办正在保存中，请稍后重试。'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: cs.error,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+      final reminderSyncIssue = waitForReminderSync
+          ? saveResult.reminderSync?.issue
+          : null;
       if (!mounted) return;
 
       // 刷新本地 _todo 引用与基线，便于继续编辑。
@@ -248,10 +353,26 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
         (t) => t.id == widget.todoId,
         orElse: () => _todo,
       );
+      _baselineTodo = _cloneTodo(_todo);
       _baseline = _snapshot(_todo);
       setState(() => _state = _EditState.clean);
 
-      Navigator.of(context).maybePop(true);
+      if (reminderSyncIssue != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('待办已保存，但提醒未注册：$reminderSyncIssue'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: cs.error,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pop(true);
+      });
     } catch (e) {
       if (!mounted) return;
       _restoreEditingAfterSaveInterruption();
@@ -340,6 +461,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
         (t) => t.id == widget.todoId,
         orElse: () => _todo,
       );
+      _baselineTodo = _cloneTodo(_todo);
       _baseline = _snapshot(_todo);
     });
   }
@@ -1007,10 +1129,10 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               children: [
                 for (final s in _todo.subtasks)
                   Builder(
+                    key: ValueKey('subtask-${s.id}'),
                     builder: (context) {
                       final busy = _busySubtaskIds.contains(s.id);
                       return ListTile(
-                        key: ValueKey(s.id),
                         dense: true,
                         leading: Checkbox(
                           value: s.isCompleted,
@@ -1256,6 +1378,7 @@ Future<bool> preflightTodoReminderSave(
   final usesAlarm = result.kinds.contains(ReminderKind.alarm);
   final notif = notificationService ?? context.read<NotificationService?>();
   if ((usesPush || usesPopup) && notif != null) {
+    notif.clearScheduleIssue();
     final ready = await notif
         .ensureReadyForReminder(
           scheduledTime: result.firstScheduledTime,
@@ -1313,6 +1436,21 @@ Future<bool> preflightTodoReminderSave(
   }
 
   if (usesAlarm) {
+    try {
+      await AlarmService.instance.init().timeout(const Duration(seconds: 5));
+    } catch (e, st) {
+      debugPrint('[TodoDetail] alarm reminder init failed: $e\n$st');
+      if (!context.mounted) return false;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('闹钟提醒准备失败，请检查通知、精准闹钟、全屏提醒和后台运行权限后重试。'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return false;
+    }
+
     final alarmChannelIds = await AlarmService.instance
         .notificationChannelIds()
         .timeout(const Duration(seconds: 5), onTimeout: () => null);
@@ -1336,7 +1474,14 @@ Future<bool> preflightTodoReminderSave(
         ));
     if (!context.mounted) return false;
     if (!exactGranted) {
-      warnings.add('精准闹钟权限未开启，闹钟提醒可能延后或降级');
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('闹钟提醒注册失败：精准闹钟权限未开启，无法可靠注册锁屏闹钟。请在系统设置开启后重试。'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return false;
     }
     final fullScreenGranted =
         (await AlarmService.instance.hasFullScreenIntentPermission().timeout(
@@ -1348,7 +1493,14 @@ Future<bool> preflightTodoReminderSave(
             .timeout(const Duration(seconds: 8), onTimeout: () => false));
     if (!context.mounted) return false;
     if (!fullScreenGranted) {
-      warnings.add('全屏提醒权限未开启，锁屏弹窗可能不可用');
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('闹钟提醒注册失败：全屏提醒权限未开启，锁屏时无法弹出闹钟。请在系统设置开启后重试。'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return false;
     }
   }
 

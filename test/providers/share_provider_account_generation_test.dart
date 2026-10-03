@@ -57,6 +57,76 @@ void main() {
       expect(provider.lastError, isNull);
     },
   );
+
+  test(
+    'workspace load is deduplicated while in flight and shortly after',
+    () async {
+      var workspaceRequests = 0;
+      final firstWorkspaceResponse = Completer<http.Response>();
+      final firstWorkspaceRequestStarted = Completer<void>();
+      final provider = ShareProvider()
+        ..apiClientGetter = () => ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'admin-token',
+          httpClient: MockClient((request) async {
+            if (request.url.path == '/api/workspaces') {
+              workspaceRequests++;
+              if (workspaceRequests == 1) {
+                firstWorkspaceRequestStarted.complete();
+                return firstWorkspaceResponse.future;
+              }
+              return http.Response(
+                json.encode([
+                  {
+                    'id': 'workspace-$workspaceRequests',
+                    'name': 'Workspace $workspaceRequests',
+                    'owner_user_id': 'admin-id',
+                    'created_at': '2026-06-01T00:00:00.000Z',
+                    'updated_at': '2026-06-01T00:00:00.000Z',
+                  },
+                ]),
+                200,
+                headers: _jsonHeaders,
+              );
+            }
+            if (request.url.path == '/api/workspaces/mentions') {
+              return http.Response('[]', 200, headers: _jsonHeaders);
+            }
+            return http.Response('not found', 404);
+          }),
+        );
+
+      final firstLoad = provider.load();
+      final duplicateLoad = provider.load();
+      expect(identical(firstLoad, duplicateLoad), isTrue);
+      await firstWorkspaceRequestStarted.future;
+      expect(workspaceRequests, 1);
+
+      firstWorkspaceResponse.complete(
+        http.Response(
+          json.encode([
+            {
+              'id': 'workspace-1',
+              'name': 'Workspace 1',
+              'owner_user_id': 'admin-id',
+              'created_at': '2026-06-01T00:00:00.000Z',
+              'updated_at': '2026-06-01T00:00:00.000Z',
+            },
+          ]),
+          200,
+          headers: _jsonHeaders,
+        ),
+      );
+      await firstLoad;
+      expect(workspaceRequests, 1);
+
+      await provider.load();
+      expect(workspaceRequests, 1);
+
+      await provider.load(force: true);
+      expect(workspaceRequests, 2);
+    },
+  );
 }
 
 const _jsonHeaders = {'content-type': 'application/json'};

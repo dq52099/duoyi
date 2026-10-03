@@ -1417,6 +1417,7 @@ def init_db():
             courses TEXT DEFAULT '[]',
             time_entries TEXT DEFAULT '[]',
             calendar_events TEXT DEFAULT '[]',
+            deleted_items TEXT DEFAULT '{}',
             updated_at TEXT DEFAULT (datetime('now')),
             FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
         );
@@ -1654,6 +1655,7 @@ def init_db():
         ("sync_data", "deleted_items", "'{}'"),
         ("sync_data", "sync_version", "0"),
         ("workspace_data", "calendar_events", "'[]'"),
+        ("workspace_data", "deleted_items", "'{}'"),
         ("users", "is_disabled", "0"),
         ("users", "last_login_at", "NULL"),
         ("users", "last_active_at", "NULL"),
@@ -8689,9 +8691,57 @@ def _workspace_leaderboard(db, workspace_id: str) -> list[dict]:
     )
 
 
+WORKSPACE_SYNC_COLLECTIONS = (
+    "todos",
+    "goals",
+    "courses",
+    "time_entries",
+    "calendar_events",
+)
+
+
+def _private_sync_items(items: list) -> list:
+    return [
+        item
+        for item in items
+        if isinstance(item, dict)
+        and (
+            not item.get("workspaceId")
+            or str(item["workspaceId"]) == "private"
+            or str(item["workspaceId"]).startswith("private:")
+        )
+    ]
+
+
+def _workspace_payloads_with_legacy_items(payloads: dict, collections: dict) -> dict:
+    result = {
+        str(workspace_id): dict(payload)
+        for workspace_id, payload in payloads.items()
+        if isinstance(payload, dict)
+    }
+    for collection, items in collections.items():
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            workspace_id = str(item.get("workspaceId") or "").strip()
+            if (
+                not workspace_id
+                or workspace_id == "private"
+                or workspace_id.startswith("private:")
+            ):
+                continue
+            bucket = result.setdefault(workspace_id, {})
+            current = bucket.get(collection, [])
+            bucket[collection] = [*(current if isinstance(current, list) else []), item]
+    return result
+
+
 def _workspace_data(db, workspace_id: str) -> dict:
     row = db.execute(
-        "SELECT todos, goals, courses, time_entries, calendar_events FROM workspace_data WHERE workspace_id=?",
+        """
+        SELECT todos, goals, courses, time_entries, calendar_events, deleted_items
+        FROM workspace_data WHERE workspace_id=?
+        """,
         (workspace_id,),
     ).fetchone()
     if row is None:
@@ -8701,6 +8751,7 @@ def _workspace_data(db, workspace_id: str) -> dict:
             "courses": [],
             "time_entries": [],
             "calendar_events": [],
+            "deleted_items": {},
         }
     return {
         "todos": json.loads(row["todos"] or "[]"),
@@ -8708,6 +8759,9 @@ def _workspace_data(db, workspace_id: str) -> dict:
         "courses": json.loads(row["courses"] or "[]"),
         "time_entries": json.loads(row["time_entries"] or "[]"),
         "calendar_events": json.loads(row["calendar_events"] or "[]"),
+        "deleted_items": _normalize_deleted_items(
+            json.loads(row["deleted_items"] or "{}")
+        ),
     }
 
 
@@ -8733,28 +8787,49 @@ def _merge_workspace_payloads(db, user_id: str, payloads: dict) -> dict:
         if not isinstance(client, dict) or role == "viewer":
             merged_data = server
         else:
-            merged_data = {
-                "todos": _merge_by_timestamp(server.get("todos", []), client.get("todos", [])),
-                "goals": _merge_by_timestamp(server.get("goals", []), client.get("goals", [])),
-                "courses": _merge_by_timestamp(server.get("courses", []), client.get("courses", [])),
-                "time_entries": _merge_by_timestamp(
-                    server.get("time_entries", []), client.get("time_entries", [])
-                ),
-                "calendar_events": _merge_by_timestamp(
-                    server.get("calendar_events", []), client.get("calendar_events", [])
-                ),
-            }
+            deleted_items = _merge_deleted_items(
+                server.get("deleted_items"), client.get("deleted_items")
+            )
+
+            def scoped_items(raw):
+                if not isinstance(raw, list):
+                    return []
+                return [
+                    {**item, "workspaceId": workspace_id}
+                    for item in raw
+                    if isinstance(item, dict)
+                ]
+
+            merged_data = {}
+            for collection in WORKSPACE_SYNC_COLLECTIONS:
+                merged_data[collection] = _merge_by_timestamp(
+                    scoped_items(server.get(collection, [])),
+                    scoped_items(client.get(collection, [])),
+                    collection=collection,
+                    deleted_items=deleted_items,
+                )
+            merged_data["deleted_items"] = _prune_deleted_items(
+                deleted_items, merged_data
+            )
+            if merged_data == server:
+                merged[workspace_id] = merged_data
+                continue
+            updated_at = _utc_now_text()
             db.execute(
                 """
-                INSERT INTO workspace_data(workspace_id, todos, goals, courses, time_entries, calendar_events, updated_at)
-                VALUES(?,?,?,?,?,?,datetime('now'))
+                INSERT INTO workspace_data(
+                    workspace_id, todos, goals, courses, time_entries,
+                    calendar_events, deleted_items, updated_at
+                )
+                VALUES(?,?,?,?,?,?,?,?)
                 ON CONFLICT(workspace_id) DO UPDATE SET
                     todos=excluded.todos,
                     goals=excluded.goals,
                     courses=excluded.courses,
                     time_entries=excluded.time_entries,
                     calendar_events=excluded.calendar_events,
-                    updated_at=datetime('now')
+                    deleted_items=excluded.deleted_items,
+                    updated_at=excluded.updated_at
                 """,
                 (
                     workspace_id,
@@ -8763,8 +8838,30 @@ def _merge_workspace_payloads(db, user_id: str, payloads: dict) -> dict:
                     json.dumps(merged_data["courses"], ensure_ascii=False),
                     json.dumps(merged_data["time_entries"], ensure_ascii=False),
                     json.dumps(merged_data["calendar_events"], ensure_ascii=False),
+                    json.dumps(merged_data["deleted_items"], ensure_ascii=False),
+                    updated_at,
                 ),
             )
+            # Other members need a new revision for status/SSE polling, even
+            # when their private data has never been synchronized.
+            members = db.execute(
+                """
+                SELECT user_id FROM workspace_members
+                WHERE workspace_id=? AND user_id<>?
+                """,
+                (workspace_id, user_id),
+            ).fetchall()
+            for member in members:
+                db.execute(
+                    """
+                    INSERT INTO sync_data(user_id, sync_version, updated_at)
+                    VALUES(?,1,?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        sync_version=COALESCE(sync_data.sync_version,0)+1,
+                        updated_at=excluded.updated_at
+                    """,
+                    (member["user_id"], updated_at),
+                )
         merged[workspace_id] = merged_data
     return merged
 
@@ -8906,10 +9003,20 @@ def _sync_impl(
         merged_deleted_items = _merge_deleted_items(
             server_deleted_items, req.deleted_items
         )
+        workspace_payloads = _workspace_payloads_with_legacy_items(
+            req.workspace_payloads,
+            {
+                "todos": [*server_todos, *req.todos],
+                "goals": [*server_goals, *req.goals],
+                "courses": [*server_courses, *req.courses],
+                "time_entries": [*server_time_entries, *req.time_entries],
+                "calendar_events": [*server_calendar_events, *req.calendar_events],
+            },
+        )
 
         merged_todos = _merge_by_timestamp(
-            server_todos,
-            req.todos,
+            _private_sync_items(server_todos),
+            _private_sync_items(req.todos),
             collection="todos",
             deleted_items=merged_deleted_items,
         )
@@ -8956,26 +9063,26 @@ def _sync_impl(
             deleted_items=merged_deleted_items,
         )
         merged_goals = _merge_by_timestamp(
-            server_goals,
-            req.goals,
+            _private_sync_items(server_goals),
+            _private_sync_items(req.goals),
             collection="goals",
             deleted_items=merged_deleted_items,
         )
         merged_calendar_events = _merge_by_timestamp(
-            server_calendar_events,
-            req.calendar_events,
+            _private_sync_items(server_calendar_events),
+            _private_sync_items(req.calendar_events),
             collection="calendar_events",
             deleted_items=merged_deleted_items,
         )
         merged_courses = _merge_by_timestamp(
-            server_courses,
-            req.courses,
+            _private_sync_items(server_courses),
+            _private_sync_items(req.courses),
             collection="courses",
             deleted_items=merged_deleted_items,
         )
         merged_time_entries = _merge_by_timestamp(
-            server_time_entries,
-            req.time_entries,
+            _private_sync_items(server_time_entries),
+            _private_sync_items(req.time_entries),
             collection="time_entries",
             deleted_items=merged_deleted_items,
         )
@@ -9005,7 +9112,7 @@ def _sync_impl(
             deleted_items=merged_deleted_items,
         )
         merged_workspace_payloads = _merge_workspace_payloads(
-            db, user_id, req.workspace_payloads
+            db, user_id, workspace_payloads
         )
         merged_deleted_items = _prune_deleted_items(
             merged_deleted_items,

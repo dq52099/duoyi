@@ -4200,6 +4200,174 @@ class WorkspaceApiTest(unittest.TestCase):
             workspace_payload["calendar_events"][0]["title"], "owner event"
         )
 
+    def test_shared_deletions_persist_across_members_and_stale_replay(self):
+        owner_id = self._register("shared-delete-owner")
+        editor_id = self._register("shared-delete-editor")
+        viewer_id = self._register("shared-delete-viewer")
+        workspace = api.create_workspace(
+            api.WorkspaceCreate(name="共享删除"), user_id=owner_id
+        )
+        other = api.create_workspace(
+            api.WorkspaceCreate(name="另一个空间"), user_id=owner_id
+        )
+        for member_id, role in [(editor_id, "editor"), (viewer_id, "viewer")]:
+            invite = api.create_workspace_invite(
+                workspace["id"], api.WorkspaceInviteCreate(role=role),
+                user_id=owner_id,
+            )
+            api.accept_workspace_invite(invite["code"], user_id=member_id)
+
+        collections = ("todos", "goals", "courses", "time_entries", "calendar_events")
+        original = {
+            name: [{"id": "overlap", "title": name, "updatedAt": "2026-05-20T00:00:00Z"}]
+            for name in collections
+        }
+        api.sync(
+            api.SyncRequest(
+                todos=[{"id": "overlap", "title": "private", "updatedAt": "2026-05-20T00:00:00Z"}],
+                workspace_payloads={workspace["id"]: original, other["id"]: original},
+            ),
+            user_id=owner_id,
+        )
+        owner_version = api.sync_status(user_id=owner_id)["server_version"]
+        viewer_version = api.sync_status(user_id=viewer_id)["server_version"]
+        deleted_items = {
+            name: {"overlap": "2026-05-21T00:00:00Z"} for name in collections
+        }
+        deleted = api.sync(
+            api.SyncRequest(workspace_payloads={workspace["id"]: {"deleted_items": deleted_items}}),
+            user_id=editor_id,
+        )["workspace_payloads"][workspace["id"]]
+        for name in collections:
+            self.assertEqual(deleted[name], [], name)
+        self.assertEqual(deleted["deleted_items"], deleted_items)
+        self.assertGreater(api.sync_status(user_id=owner_id)["server_version"], owner_version)
+        self.assertGreater(api.sync_status(user_id=viewer_id)["server_version"], viewer_version)
+
+        # Re-initialization and stale clients cannot recreate deleted records.
+        api.init_db()
+        replay = api.sync(
+            api.SyncRequest(workspace_payloads={workspace["id"]: original}),
+            user_id=owner_id,
+        )
+        for name in collections:
+            self.assertEqual(replay["workspace_payloads"][workspace["id"]][name], [], name)
+            self.assertEqual(replay["workspace_payloads"][other["id"]][name][0]["id"], "overlap")
+        self.assertEqual(replay["todos"][0]["title"], "private")
+        pulled = api.sync_pull(api.SyncPullRequest(), user_id=viewer_id)
+        self.assertEqual(pulled["workspace_payloads"][workspace["id"]]["deleted_items"], deleted_items)
+        self.assertEqual(pulled["workspace_payloads"][workspace["id"]]["todos"], [])
+
+        # Reading or replaying the same state does not notify every member again.
+        viewer_version = api.sync_status(user_id=viewer_id)["server_version"]
+        api.sync(api.SyncRequest(), user_id=owner_id)
+        self.assertEqual(api.sync_status(user_id=viewer_id)["server_version"], viewer_version)
+
+    def test_workspace_tombstone_sync_delta_http_contract(self):
+        owner_id = self._register("workspace-delta-tombstone-owner")
+        workspace = api.create_workspace(
+            api.WorkspaceCreate(name="增量共享删除"), user_id=owner_id
+        )
+        api.sync(
+            api.SyncRequest(
+                todos=[
+                    {"id": "delta-overlap", "title": "私人待办"},
+                ],
+                workspace_payloads={
+                    workspace["id"]: {
+                        "todos": [
+                            {"id": "delta-overlap", "title": "共享待办"},
+                        ],
+                    },
+                },
+            ),
+            user_id=owner_id,
+        )
+        deleted_items = {"todos": {"delta-overlap": "2026-10-03T12:00:00Z"}}
+
+        with TestClient(api.app) as client:
+            response = client.post(
+                "/api/sync/delta",
+                headers={"Authorization": f"Bearer {api.TOKENS[owner_id]}"},
+                json={
+                    "collections": {
+                        "workspace_payloads": {
+                            workspace["id"]: {"deleted_items": deleted_items},
+                        },
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(
+            payload["workspace_payloads"][workspace["id"]]["todos"], []
+        )
+        self.assertEqual(
+            payload["workspace_payloads"][workspace["id"]]["deleted_items"],
+            deleted_items,
+        )
+        self.assertEqual(
+            [item["title"] for item in payload["todos"]], ["私人待办"]
+        )
+
+    def test_shared_tombstones_respect_viewer_permissions_and_newer_recreation(self):
+        owner_id = self._register("shared-recreate-owner")
+        viewer_id = self._register("shared-recreate-viewer")
+        workspace = api.create_workspace(api.WorkspaceCreate(name="只读删除"), user_id=owner_id)
+        invite = api.create_workspace_invite(
+            workspace["id"], api.WorkspaceInviteCreate(role="viewer"), user_id=owner_id
+        )
+        api.accept_workspace_invite(invite["code"], user_id=viewer_id)
+
+        def push(actor, payload):
+            return api.sync(
+                api.SyncRequest(workspace_payloads={workspace["id"]: payload}),
+                user_id=actor,
+            )["workspace_payloads"][workspace["id"]]
+
+        push(owner_id, {"todos": [{"id": "shared", "title": "original", "updatedAt": "2026-05-20T00:00:00Z"}]})
+        tombstone = {"todos": {"shared": "2026-05-21T00:00:00Z"}}
+        rejected = push(viewer_id, {"deleted_items": tombstone})
+        self.assertEqual(rejected["todos"][0]["title"], "original")
+        self.assertEqual(rejected["deleted_items"], {})
+        self.assertEqual(push(owner_id, {"deleted_items": tombstone})["todos"], [])
+        restored = push(owner_id, {"todos": [{"id": "shared", "title": "restored", "updatedAt": "2026-05-22T00:00:00Z"}]})
+        self.assertEqual(restored["todos"][0]["title"], "restored")
+        self.assertEqual(restored["deleted_items"], {})
+        self.assertEqual(push(owner_id, {"deleted_items": tombstone})["todos"][0]["title"], "restored")
+
+    def test_workspace_bucket_owns_item_identity_and_legacy_shared_items(self):
+        owner_id = self._register("workspace-scope-owner")
+        workspace = api.create_workspace(api.WorkspaceCreate(name="空间隔离"), user_id=owner_id)
+        result = api.sync(
+            api.SyncRequest(
+                todos=[{"id": "legacy-shared", "workspaceId": workspace["id"], "updatedAt": "2026-05-20T00:00:00Z"}],
+                workspace_payloads={workspace["id"]: {"todos": [{"id": "forged-space", "workspaceId": "unauthorized", "updatedAt": "2026-05-20T00:00:00Z"}]}},
+            ),
+            user_id=owner_id,
+        )
+        self.assertEqual(result["todos"], [])
+        shared = result["workspace_payloads"][workspace["id"]]["todos"]
+        self.assertEqual({item["id"] for item in shared}, {"legacy-shared", "forged-space"})
+        self.assertTrue(all(item["workspaceId"] == workspace["id"] for item in shared))
+
+    def test_init_db_migrates_workspace_deleted_items_column(self):
+        db = api.get_db()
+        try:
+            db.execute("DROP TABLE workspace_data")
+            db.execute("CREATE TABLE workspace_data (workspace_id TEXT PRIMARY KEY, todos TEXT DEFAULT '[]', goals TEXT DEFAULT '[]', courses TEXT DEFAULT '[]', time_entries TEXT DEFAULT '[]', calendar_events TEXT DEFAULT '[]', updated_at TEXT)")
+            db.commit()
+        finally:
+            db.close()
+        api.init_db()
+        db = api.get_db()
+        try:
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(workspace_data)").fetchall()}
+        finally:
+            db.close()
+        self.assertIn("deleted_items", columns)
+
     def test_sync_round_trips_calendar_events(self):
         user_id = self._register("calendar-sync")
 

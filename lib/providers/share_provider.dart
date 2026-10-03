@@ -5,6 +5,7 @@ import '../services/api_client.dart';
 
 class ShareProvider extends ChangeNotifier {
   static const _serviceUnavailableMessage = '共享空间服务暂不可用，请稍后重试或联系管理员';
+  static const _loadFreshnessWindow = Duration(seconds: 20);
 
   ApiClient? Function()? apiClientGetter;
   String? Function()? userIdGetter;
@@ -20,6 +21,10 @@ class ShareProvider extends ChangeNotifier {
   String? _lastError;
   String? _activeWorkspaceId;
   int _accountGeneration = 0;
+  Future<void>? _loadInFlight;
+  bool _loadInFlightNotifiesLoading = false;
+  bool _suppressLoadLoadingNotification = false;
+  DateTime? _lastLoadedAt;
 
   List<Workspace> get workspaces => List.unmodifiable(_workspaces);
   List<WorkspaceMention> get mentions => List.unmodifiable(_mentions);
@@ -85,6 +90,7 @@ class ShareProvider extends ChangeNotifier {
     _detailLoading = false;
     _lastError = null;
     _activeWorkspaceId = null;
+    _lastLoadedAt = null;
     notifyListeners();
   }
 
@@ -108,19 +114,83 @@ class ShareProvider extends ChangeNotifier {
     return roleFor(workspaceId).canEdit;
   }
 
-  Future<void> load() async {
+  Future<void> load({bool force = false, bool notifyLoading = true}) {
+    final effectiveNotifyLoading =
+        notifyLoading && !_suppressLoadLoadingNotification;
+    final inFlight = _loadInFlight;
+    if (inFlight != null) {
+      if (effectiveNotifyLoading && !_loadInFlightNotifiesLoading) {
+        _loadInFlightNotifiesLoading = true;
+        if (!_loading || _lastError != null) {
+          _loading = true;
+          _lastError = null;
+          notifyListeners();
+        }
+      }
+      return inFlight;
+    }
+    _loadInFlightNotifiesLoading = effectiveNotifyLoading;
+    final task = _loadLocked(
+      force: force,
+      notifyLoading: effectiveNotifyLoading,
+    );
+    late final Future<void> wrapped;
+    wrapped = task.whenComplete(() {
+      if (identical(_loadInFlight, wrapped)) {
+        _loadInFlight = null;
+        _loadInFlightNotifiesLoading = false;
+      }
+    });
+    _loadInFlight = wrapped;
+    return wrapped;
+  }
+
+  /// Suppresses loading notifications for loads started synchronously by action.
+  Future<T> withoutLoadingNotification<T>(Future<T> Function() action) {
+    final previous = _suppressLoadLoadingNotification;
+    _suppressLoadLoadingNotification = true;
+    try {
+      return action();
+    } finally {
+      _suppressLoadLoadingNotification = previous;
+    }
+  }
+
+  Future<void> _loadLocked({
+    required bool force,
+    required bool notifyLoading,
+  }) async {
     final generation = _accountGeneration;
+    final beforeWorkspacesRevision = _workspaceListRevision(_workspaces);
+    final beforeMentionsRevision = _mentionListRevision(_mentions);
+    final beforeActiveWorkspaceId = _activeWorkspaceId;
+    final beforeLastError = _lastError;
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       if (!_isCurrentAccountGeneration(generation)) return;
+      final shouldNotify =
+          _workspaces.isNotEmpty ||
+          _lastError != null ||
+          _lastLoadedAt != null ||
+          _loading;
       _workspaces = const <Workspace>[];
       _lastError = null;
-      notifyListeners();
+      _lastLoadedAt = null;
+      _loading = false;
+      if (shouldNotify) notifyListeners();
       return;
     }
-    _loading = true;
+    final loadedAt = _lastLoadedAt;
+    if (!force &&
+        loadedAt != null &&
+        DateTime.now().difference(loadedAt) < _loadFreshnessWindow) {
+      return;
+    }
     _lastError = null;
-    notifyListeners();
+    if (notifyLoading) {
+      _loading = true;
+      notifyListeners();
+    }
     try {
       final list = await client.getList('/api/workspaces');
       if (!_isCurrentAccountGeneration(generation)) return;
@@ -144,8 +214,64 @@ class ShareProvider extends ChangeNotifier {
       _lastError = _userVisibleWorkspaceError(e);
     }
     if (!_isCurrentAccountGeneration(generation)) return;
+    if (_lastError == null) {
+      _lastLoadedAt = DateTime.now();
+    }
+    final wasLoading = _loading;
     _loading = false;
-    notifyListeners();
+    final shouldNotify =
+        notifyLoading ||
+        wasLoading ||
+        beforeWorkspacesRevision != _workspaceListRevision(_workspaces) ||
+        beforeMentionsRevision != _mentionListRevision(_mentions) ||
+        beforeActiveWorkspaceId != _activeWorkspaceId ||
+        beforeLastError != _lastError;
+    if (shouldNotify) notifyListeners();
+  }
+
+  int _workspaceListRevision(List<Workspace> workspaces) {
+    return Object.hashAll(workspaces.map(_workspaceRevision));
+  }
+
+  int _workspaceRevision(Workspace workspace) {
+    return Object.hash(
+      workspace.id,
+      workspace.name,
+      workspace.ownerUserId,
+      workspace.isPrivate,
+      workspace.createdAt.millisecondsSinceEpoch,
+      workspace.updatedAt.millisecondsSinceEpoch,
+      Object.hashAll(workspace.members.map(_workspaceMemberRevision)),
+    );
+  }
+
+  int _workspaceMemberRevision(WorkspaceMember member) {
+    return Object.hash(
+      member.workspaceId,
+      member.userId,
+      member.username,
+      member.role.name,
+      member.joinedAt.millisecondsSinceEpoch,
+    );
+  }
+
+  int _mentionListRevision(List<WorkspaceMention> mentions) {
+    return Object.hashAll(mentions.map(_mentionRevision));
+  }
+
+  int _mentionRevision(WorkspaceMention mention) {
+    return Object.hash(
+      mention.id,
+      mention.workspaceId,
+      mention.workspaceName,
+      mention.commentId,
+      mention.targetId,
+      mention.authorUserId,
+      mention.authorName,
+      mention.body,
+      mention.readAt?.millisecondsSinceEpoch,
+      mention.createdAt.millisecondsSinceEpoch,
+    );
   }
 
   Future<void> loadMentionInbox() async {

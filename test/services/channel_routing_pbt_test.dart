@@ -475,7 +475,12 @@ void main() {
     test('单条 rule 调度失败不会阻断同一轮其它提醒', () async {
       final notif = _RecordingNotificationSink();
       final alarm = _RecordingAlarmSink();
-      final scheduler = ReminderScheduler(notif, alarm: alarm);
+      final registry = InMemoryReminderScheduleRegistry();
+      final scheduler = ReminderScheduler(
+        notif,
+        alarm: alarm,
+        registry: registry,
+      );
       final due = DateTime.now().add(const Duration(days: 2));
       final todo = TodoItem(
         id: 'partial-failure',
@@ -503,19 +508,37 @@ void main() {
       );
       notif.failScheduleOnceIds.add(_ruleIntId('todo', todo.id, 'broken'));
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(
+          isA<ReminderScheduleSyncException>().having(
+            (error) => error.failures.join('；'),
+            'failures',
+            contains('失败隔离'),
+          ),
+        ),
+      );
 
       expect(notif.scheduleOnceCalls, isEmpty);
       expect(
         notif.scheduleDailyCalls.map((c) => c.id),
         contains(_ruleIntId('todo', todo.id, 'ok')),
       );
+      expect(
+        (await registry.idsByObject('todo'))[todo.id],
+        equals({_ruleIntId('todo', todo.id, 'ok')}),
+      );
     });
 
     test('alarm 权限失败时回退到 push，避免提醒直接丢失', () async {
       final notif = _RecordingNotificationSink();
       final alarm = _RecordingAlarmSink();
-      final scheduler = ReminderScheduler(notif, alarm: alarm);
+      final registry = InMemoryReminderScheduleRegistry();
+      final scheduler = ReminderScheduler(
+        notif,
+        alarm: alarm,
+        registry: registry,
+      );
 
       final due = DateTime.now().add(const Duration(hours: 2));
       final todo = TodoItem(
@@ -531,7 +554,16 @@ void main() {
       );
       alarm.failFullScreenIds.add(_todoRuleIntId(todo));
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(
+          isA<ReminderScheduleSyncException>().having(
+            (error) => error.failures.join('；'),
+            'failures',
+            contains('闹钟权限失败回退'),
+          ),
+        ),
+      );
 
       expect(alarm.scheduleFullScreenCalls, isEmpty);
       expect(notif.scheduleOnceCalls, hasLength(1));
@@ -543,14 +575,20 @@ void main() {
         notif.scheduleOnceCalls.single.payload,
         'duoyi://todo/${todo.id}?fallback=push',
       );
+      expect(await registry.idsByObject('todo'), isEmpty);
     });
 
-    test('通知权限失败时不会抛出未处理异常，也不会记录为已调度', () async {
+    test('通知权限失败会抛同步异常且不入册，恢复权限后可重试', () async {
       final notif = _RecordingNotificationSink()
         ..denyScheduleOnce = true
         ..denyScheduleDaily = true;
       final alarm = _RecordingAlarmSink();
-      final scheduler = ReminderScheduler(notif, alarm: alarm);
+      final registry = InMemoryReminderScheduleRegistry();
+      final scheduler = ReminderScheduler(
+        notif,
+        alarm: alarm,
+        registry: registry,
+      );
 
       final due = DateTime.now().add(const Duration(days: 2));
       final todo = TodoItem(
@@ -578,10 +616,22 @@ void main() {
         ),
       );
 
-      await scheduler.syncTodos([todo]);
+      await expectLater(
+        scheduler.syncTodos([todo]),
+        throwsA(
+          isA<ReminderScheduleSyncException>()
+              .having((error) => error.failures, 'failures', hasLength(2))
+              .having(
+                (error) => error.failures.join('；'),
+                'failures',
+                contains('通知权限失败'),
+              ),
+        ),
+      );
 
       expect(notif.scheduleOnceCalls, isEmpty);
       expect(notif.scheduleDailyCalls, isEmpty);
+      expect(await registry.idsByObject('todo'), isEmpty);
 
       notif
         ..denyScheduleOnce = false
@@ -595,6 +645,13 @@ void main() {
       expect(
         notif.scheduleDailyCalls.map((c) => c.id),
         contains(_ruleIntId('todo', todo.id, 'daily')),
+      );
+      expect(
+        (await registry.idsByObject('todo'))[todo.id],
+        equals({
+          _ruleIntId('todo', todo.id, 'once'),
+          _ruleIntId('todo', todo.id, 'daily'),
+        }),
       );
     });
   });
@@ -693,7 +750,7 @@ void main() {
       expect(call.payload, 'duoyi://habit/${habit.id}?confirm=1');
     });
 
-    test('syncHabits 弹出框不可用时不会记为已调度', () async {
+    test('syncHabits 弹出框失败会抛同步异常且后续可以重试', () async {
       final notif = _RecordingNotificationSink();
       final alarm = _RecordingAlarmSink();
       final popup = _RecordingPopupSink()..failRepeating = true;
@@ -706,7 +763,16 @@ void main() {
         remindMinute: 15,
       );
 
-      await scheduler.syncHabits([habit]);
+      await expectLater(
+        scheduler.syncHabits([habit]),
+        throwsA(
+          isA<ReminderScheduleSyncException>().having(
+            (error) => error.failures.join('；'),
+            'failures',
+            contains('晨练'),
+          ),
+        ),
+      );
 
       expect(alarm.scheduleDailyFullScreenCalls, isEmpty);
       expect(notif.scheduleHabitReminderCalls, isEmpty);

@@ -1,6 +1,8 @@
 import 'package:duoyi/providers/notification_service.dart';
 import 'package:duoyi/providers/preferences_provider.dart';
 import 'package:duoyi/screens/notification_history_screen.dart';
+import 'package:duoyi/models/goal.dart' show ReminderKind;
+import 'package:duoyi/services/reminder_scheduler.dart';
 import 'package:duoyi/widgets/surface_components.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,7 +79,7 @@ void main() {
     _expectSettingsTileReadable(
       tester,
       key: const ValueKey('notification_registered_reminders_tile'),
-      title: '已注册提醒明细',
+      title: '提醒注册状态',
       actionKey: const ValueKey(
         'notification_registered_reminders_view_button',
       ),
@@ -85,7 +87,7 @@ void main() {
     _expectSettingsTileReadable(
       tester,
       key: const ValueKey('notification_registered_reminders_tile'),
-      title: '已注册提醒明细',
+      title: '提醒注册状态',
       actionKey: const ValueKey(
         'notification_registered_reminders_refresh_button',
       ),
@@ -229,6 +231,103 @@ void main() {
       find.byKey(const ValueKey('notification_history_mark_all_read_button')),
       findsNothing,
     );
+    _expectNoLayoutException(tester);
+  });
+
+  testWidgets('通知记录点击卡片打开详情，右侧按钮才切换已读', (tester) async {
+    await _setNarrowPhone(tester);
+    final service = NotificationService();
+    addTearDown(service.dispose);
+    service.addHistoryForTest(
+      NotificationItem(
+        id: 'detail-unread',
+        title: '待办提醒详情',
+        body: '客户回访提醒内容',
+        scheduledTime: DateTime(2026, 6, 9, 10, 30),
+        type: NotificationType.todo,
+        relatedId: 'todo-detail-1',
+        isRead: false,
+      ),
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<NotificationService>.value(
+        value: service,
+        child: const MaterialApp(home: NotificationHistoryScreen()),
+      ),
+    );
+    await _pumpFixedFrames(tester);
+
+    expect(service.unreadCount, 1);
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification_record_detail-unread')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('内容'), findsOneWidget);
+    expect(find.text('客户回访提醒内容'), findsWidgets);
+    expect(find.text('关联对象'), findsOneWidget);
+    expect(find.text('todo-detail-1'), findsOneWidget);
+    expect(service.unreadCount, 1);
+
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('标为已读'));
+    await _pumpFixedFrames(tester, frames: 3);
+
+    expect(service.unreadCount, 0);
+    _expectNoLayoutException(tester);
+  });
+
+  testWidgets('提醒注册状态 320px 下分页只渲染当前页并保留简述', (tester) async {
+    await _setNarrowPhone(tester);
+    final service = NotificationService();
+    addTearDown(service.dispose);
+    final registry = InMemoryReminderScheduleRegistry();
+    final activeIds = <int>{};
+    for (var i = 1; i <= 21; i++) {
+      final id = 9200 + i;
+      activeIds.add(id);
+      final number = i.toString().padLeft(2, '0');
+      await registry.replaceObject(
+        'todo',
+        'layout-page-$number',
+        {id},
+        display: ReminderScheduleDisplayInfo(
+          title: '分页提醒 $number',
+          subtitle: '待办 · 一次提醒 · 普通通知 · 明天 09:00',
+          kinds: const <ReminderKind>{ReminderKind.push},
+        ),
+      );
+    }
+    final scheduler = ReminderScheduler(service, registry: registry);
+
+    await tester.pumpWidget(
+      Provider<ReminderScheduler?>.value(
+        value: scheduler,
+        child: MaterialApp(
+          home: RegisteredRemindersScreen(
+            pendingQueueLoader: () async => activeIds,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    _expectNoLayoutException(tester);
+    expect(find.text('提醒事项：分页提醒 01'), findsOneWidget);
+    expect(find.text('提醒事项：分页提醒 21'), findsNothing);
+    expect(find.text('简述：待办 · 一次提醒 · 普通通知 · 明天 09:00'), findsWidgets);
+    expect(find.text('每页 20 条 · 1-20 / 21 · 第 1/2 页'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('registered_reminders_next')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('提醒事项：分页提醒 01'), findsNothing);
+    expect(find.text('提醒事项：分页提醒 21'), findsOneWidget);
+    expect(find.text('每页 20 条 · 21-21 / 21 · 第 2/2 页'), findsOneWidget);
     _expectNoLayoutException(tester);
   });
 }

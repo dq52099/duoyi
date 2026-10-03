@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:duoyi/providers/achievement_provider.dart';
 import 'package:duoyi/providers/theme_provider.dart';
+import 'package:duoyi/services/account_local_data_cleaner.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,6 +10,49 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
+
+  test(
+    'old brand write cannot increment the next account switch count',
+    () async {
+      final provider = ThemeProvider();
+      await provider.unlockBrand('re0');
+      final prefs = await SharedPreferences.getInstance();
+      final operation = provider.setBrand('re0');
+      await Future<void>.value();
+      // The first cache write has occurred; its awaited continuation is pending.
+      expect(prefs.getString('active_brand'), 're0');
+      AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+      provider.resetLocalState();
+
+      expect(await operation, isFalse);
+      expect(provider.themeSwitchCount, 0);
+      expect(prefs.getInt('theme_switch_count'), isNull);
+      provider.dispose();
+    },
+  );
+
+  test(
+    'old server theme write cannot confirm the next account state',
+    () async {
+      final provider = ThemeProvider();
+      final prefs = await SharedPreferences.getInstance();
+      final operation = provider.applyShopStateFromServer({
+        'activeBrand': 're0',
+        'unlockedBrandIds': ['defaultBrand', 're0'],
+        'updatedAt': '2026-06-01T00:00:00Z',
+      });
+      await Future<void>.value();
+      expect(prefs.getString('active_brand'), 're0');
+      AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+      provider.resetLocalState();
+
+      await operation;
+      expect(provider.consumeServerConfirmedChange(), isFalse);
+      expect(prefs.getStringList('theme_unlocked_brands'), isNull);
+      expect(prefs.getString('theme_shop_state'), isNull);
+      provider.dispose();
+    },
+  );
 
   test('server theme shop state updates provider and local cache', () async {
     final provider = ThemeProvider();

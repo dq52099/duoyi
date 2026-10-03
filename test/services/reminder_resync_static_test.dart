@@ -12,6 +12,26 @@ void main() {
       expect(main, contains('var reminderResyncInFlight = false'));
       expect(main, contains('var reminderResyncQueued = false'));
       expect(main, contains('Timer? reminderResyncDebounce'));
+      expect(main, contains('var reminderProvidersHydrated = false'));
+      expect(main, contains('Future<void> ensureReminderProvidersStartup()'));
+      final startupQueueStart = main.indexOf(
+        'Future<void> queueStartupReminderResync',
+      );
+      final startupQueueEnd = main.indexOf(
+        '_queueFullReminderResyncCallback',
+        startupQueueStart,
+      );
+      final startupQueue = main.substring(startupQueueStart, startupQueueEnd);
+      expect(
+        startupQueue,
+        contains('await ensureReminderProvidersStartup();'),
+        reason: '首次提醒重放必须等待提醒 Provider hydration，避免空状态清理持久化队列。',
+      );
+      expect(
+        startupQueue.indexOf('await ensureReminderProvidersStartup();'),
+        lessThan(startupQueue.indexOf('startupReminderResyncQueued = true;')),
+        reason: '启动 latch 只能在 reminder Provider hydration 后置位。',
+      );
       expect(
         main,
         contains('Future<void> queueFullReminderResync({'),
@@ -108,14 +128,48 @@ void main() {
         matches(
           RegExp(
             r"queueStartupReminderResync\(\s*"
-            r"delay: const Duration\(seconds: 110\),\s*"
+            r"delay: const Duration\(seconds: 3\),\s*"
             r"reason: 'initial logged-in startup',",
             multiLine: true,
           ),
         ),
         reason:
-            '已登录冷启动的全量提醒重放也必须错峰并纳入启动单次队列，'
-            '避免首屏期间重复注册本地通知造成卡顿。',
+            '已登录冷启动的全量提醒重放必须尽早纳入启动单次队列，'
+            '避免 1 分钟内的 popup/闹钟提醒在冷启动窗口漏注册。',
+      );
+      expect(
+        main,
+        matches(
+          RegExp(
+            r"queueFullReminderResync\(\s*"
+            r"delay: const Duration\(seconds: 8\),\s*"
+            r"reason: 'auth changed',",
+            multiLine: true,
+          ),
+        ),
+        reason: '登录/切号后的提醒重放要错开首屏滚动，同时仍早于 1 分钟测试窗口。',
+      );
+      expect(
+        main,
+        matches(
+          RegExp(
+            r"startCloudSyncAfterAuth\(\s*"
+            r"reason: 'auth changed',\s*"
+            r"delay: cloudSyncDelayAfterAuth\(initialStartup: false\),",
+            multiLine: true,
+          ),
+        ),
+        reason: '登录后的云同步要按 pending 状态决定延迟，避免无改动时抢主线程。',
+      );
+      expect(
+        main,
+        contains('return const Duration(milliseconds: 900);'),
+        reason: '已有本地待上传改动时，登录后要尽快提交服务器。',
+      );
+      expect(
+        main,
+        isNot(contains('delay: const Duration(seconds: 6)')),
+        reason: '登录后 6 秒启动云同步会和页面恢复、滚动抢资源。',
       );
       expect(
         main,
@@ -185,7 +239,10 @@ void main() {
       'goal': File('lib/providers/goal_provider.dart').readAsStringSync(),
     };
 
-    expect(sources['todo'], contains('Future<void> _syncTodoRemindersNow()'));
+    expect(
+      sources['todo'],
+      contains('Future<TodoReminderSyncResult> _syncTodoRemindersNow()'),
+    );
     expect(
       sources['todo'],
       contains('await scheduler.syncTodos(List.of(_todos))'),
@@ -197,9 +254,9 @@ void main() {
     expect(sources['habit'], contains('syncHabits(List.of(_habits))'));
     expect(
       sources['anniversary'],
-      contains('syncAnniversaries(List.of(_items))'),
+      contains('syncAnniversaries(items)'),
     );
-    expect(sources['countdown'], contains('syncCountdowns(List.of(_items))'));
+    expect(sources['countdown'], contains('syncCountdowns(items)'));
     expect(
       sources['goal'],
       contains('Future<void> _syncGoalRemindersNow() async'),

@@ -52,6 +52,10 @@ void main() {
     expect(fab, contains('provider.saveTemplate'));
     expect(fab, contains('template.toTodo(input)'));
     expect(fab, contains('template.toHabit(input)'));
+    expect(fab, contains('String? reminderSyncIssue'));
+    expect(fab, contains('outcome.reminderSyncIssue != null'));
+    expect(fab, contains('habitProvider.lastReminderSyncIssue'));
+    expect(fab, contains('习惯已创建，但提醒未注册'));
     expect(fab, contains('GestureDetector'));
     expect(fab, contains('onLongPress: _showTemplateSheet'));
 

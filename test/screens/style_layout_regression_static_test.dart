@@ -83,7 +83,15 @@ void main() {
     expect(surfaceCard, contains('final cardBorderColor'));
     expect(surfaceCard, contains('DesignTokens.defaultBorder'));
     expect(surfaceCard, contains('width: 0.55'));
-    expect(surfaceCard, contains('elevation <= 0'));
+    expect(
+      surfaceCard,
+      matches(
+        RegExp(
+          r'boxShadow:\s*elevation\s*>\s*0\s*\?.*?:\s*null,',
+          dotAll: true,
+        ),
+      ),
+    );
     expect(
       surfaceCard,
       isNot(contains('Colors.black.withValues(alpha: 0.05)')),

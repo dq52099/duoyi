@@ -34,6 +34,32 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <script>
+    (() => {
+      let raw = '';
+      try {
+        raw = String(navigator.language || '').trim().toLowerCase();
+      } catch (_) {}
+      const match = /^(zh|en)(?:[-_]|$)/.exec(raw);
+      const locale = match ? match[1] : 'zh';
+      const define = (target, key, value) => {
+        try {
+          Object.defineProperty(target, key, {
+            configurable: true,
+            get: () => value,
+          });
+          return true;
+        } catch (_) {
+          return false;
+        }
+      };
+      define(navigator, 'language', locale) ||
+          define(Object.getPrototypeOf(navigator), 'language', locale);
+      define(navigator, 'languages', [locale]) ||
+          define(Object.getPrototypeOf(navigator), 'languages', [locale]);
+      document.documentElement.lang = locale;
+    })();
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

@@ -1,0 +1,1 @@
+Linux mail.6688667.xyz 6.8.0-1058-oracle #61~22.04.1-Ubuntu SMP Tue Jul 14 07:47:31 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux

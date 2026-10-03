@@ -23,8 +23,8 @@ void main() {
     expect(source, contains('习惯分组'));
     expect(source, contains('Icons.folder_outlined'));
     expect(
-      source,
-      contains('category: habitCategoryOrNull(categoryCtrl.text)'),
+      source.replaceAll(RegExp(r'\s+'), ''),
+      contains('category:habitCategoryOrNull(categoryCtrl.text,),'),
     );
   });
 
@@ -386,6 +386,7 @@ void main() {
     ).readAsStringSync();
     final zh = File('lib/l10n/app_zh.arb').readAsStringSync();
     final en = File('lib/l10n/app_en.arb').readAsStringSync();
+    final compactScreen = screen.replaceAll(RegExp(r'\s+'), '');
 
     expect(screen, contains('flexRuleEnabled'));
     expect(screen, contains('SegmentedButton<HabitFlexPeriod>'));
@@ -393,8 +394,14 @@ void main() {
     expect(screen, contains("I18n.tr('habit.unit.month')"));
     expect(screen, contains("'habit.flex.period_target'"));
     expect(screen, contains("'habit.flex.period_target_hint'"));
-    expect(screen, contains('flexTarget: shouldUseFlex ? flexTarget : null'));
-    expect(screen, contains('flexPeriod: shouldUseFlex'));
+    expect(
+      compactScreen,
+      contains('flexTarget:shouldUseFlex?flexTarget:null,'),
+    );
+    expect(
+      compactScreen,
+      contains('flexPeriod:shouldUseFlex?selectedFlexPeriod:null,'),
+    );
     expect(screen, contains('_habitFlexGoalText(habit)'));
     expect(screen, contains("HabitFlexPeriod.week => '每周目标:"));
     expect(screen, contains("HabitFlexPeriod.month => '每月目标:"));
@@ -437,6 +444,8 @@ void main() {
     final dateFields = File(
       'lib/widgets/habit_date_range_fields.dart',
     ).readAsStringSync();
+    final compactScreen = screen.replaceAll(RegExp(r'\s+'), '');
+    final compactDetail = detail.replaceAll(RegExp(r'\s+'), '');
 
     expect(
       screen,
@@ -445,7 +454,10 @@ void main() {
     expect(screen, contains('DateTime? startDate'));
     expect(screen, contains('DateTime? endDate'));
     expect(screen, contains('HabitDateRangeFields('));
-    expect(screen, contains('habitDateRangeIsValid(startDate, endDate)'));
+    expect(
+      compactScreen,
+      contains('habitDateRangeIsValid(startDate,endDate,)'),
+    );
     expect(screen, contains('startDate: startDate'));
     expect(screen, contains('endDate: endDate'));
 
@@ -455,6 +467,19 @@ void main() {
     );
     expect(detail, contains('DateTime? startDate = habit.startDate'));
     expect(detail, contains('DateTime? endDate = habit.endDate'));
+    expect(detail, contains('HabitDateRangeFields('));
+    expect(
+      compactDetail,
+      contains('onStartChanged:(value)=>setSt(()=>startDate=value)'),
+    );
+    expect(
+      compactDetail,
+      contains('onEndChanged:(value)=>setSt(()=>endDate=value)'),
+    );
+    expect(
+      compactDetail,
+      contains('!habitDateRangeIsValid(startDate,endDate)'),
+    );
     expect(detail, contains('clearStartDate: startDate == null'));
     expect(detail, contains('clearEndDate: endDate == null'));
     expect(
@@ -470,5 +495,15 @@ void main() {
     expect(dateFields, contains("I18n.tr('habit.date_range.start_empty')"));
     expect(dateFields, contains("I18n.tr('habit.date_range.end_empty')"));
     expect(dateFields, contains('bool habitDateRangeIsValid'));
+    expect(
+      dateFields,
+      contains('if (startDate == null || endDate == null) return true;'),
+    );
+    expect(
+      dateFields,
+      contains(
+        'return !habitDateOnly(endDate).isBefore(habitDateOnly(startDate));',
+      ),
+    );
   });
 }

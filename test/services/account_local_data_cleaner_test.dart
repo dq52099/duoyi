@@ -94,6 +94,48 @@ void main() {
     expect(await File('${deviceDir.path}/report.csv').exists(), isTrue);
   });
 
+  test(
+    'detached cleanup preserves files created by the next account',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'duoyi_account_switch_',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      for (final name
+          in AccountLocalDataCleaner.accountScopedDocumentDirectories) {
+        final directory = await Directory('${root.path}/$name').create();
+        await File('${directory.path}/old.dat').writeAsString('account A');
+      }
+
+      final cleanup = await AccountLocalDataCleaner.quarantineLocalFiles(
+        documentsDirectory: root,
+      );
+      for (final name
+          in AccountLocalDataCleaner.accountScopedDocumentDirectories) {
+        final directory = await Directory('${root.path}/$name').create();
+        await File('${directory.path}/new.dat').writeAsString('account B');
+      }
+
+      await cleanup.delete();
+      // A retry must use the same detached directory, never the reused paths.
+      await cleanup.delete();
+      for (final name
+          in AccountLocalDataCleaner.accountScopedDocumentDirectories) {
+        expect(
+          await File('${root.path}/$name/new.dat').readAsString(),
+          'account B',
+        );
+        expect(await File('${root.path}/$name/old.dat').exists(), isFalse);
+      }
+      expect(
+        await root.list().any(
+          (entry) => entry.path.contains('.duoyi-account-cleanup-'),
+        ),
+        isFalse,
+      );
+    },
+  );
+
   test('keeps device settings and current auth state', () async {
     SharedPreferences.setMockInitialValues({
       'todos': '[{"title":"admin task"}]',
@@ -105,6 +147,7 @@ void main() {
       'ai_review_history': '[{"summary":"admin review"}]',
       'sync_pending_local_changes': true,
       'reminder_scheduler_registry_v1': '{"1":{"title":"admin alarm"}}',
+      'reminder_scheduler_display_registry_v1': '{"1":{"title":"admin alarm"}}',
       'duoyi_locale_v1': 'zh_CN',
       'app_lock_enabled': true,
       'app_lock_pin_hash': 'device-pin',
@@ -133,6 +176,7 @@ void main() {
     expect(prefs.getString('ai_review_history'), isNull);
     expect(prefs.getBool('sync_pending_local_changes'), isNull);
     expect(prefs.getString('reminder_scheduler_registry_v1'), isNull);
+    expect(prefs.getString('reminder_scheduler_display_registry_v1'), isNull);
 
     expect(prefs.getString('duoyi_locale_v1'), 'zh_CN');
     expect(prefs.getBool('app_lock_enabled'), isTrue);
@@ -163,6 +207,7 @@ void main() {
           'duoyi_notif_history_seen_at',
           'ai_review_history',
           'reminder_scheduler_registry_v1',
+          'reminder_scheduler_display_registry_v1',
           'duoyi_location_reminders_v1',
           'duoyi_ics_subscriptions_v1',
           'duoyi_oauth_calendar_accounts_v1',
@@ -196,6 +241,41 @@ void main() {
     },
   );
 
+  test('reminder registry writes are guarded by account generation', () {
+    final source = File(
+      'lib/services/reminder_scheduler.dart',
+    ).readAsStringSync();
+    final registry = _sourceBlock(
+      source,
+      'class SharedPreferencesReminderScheduleRegistry',
+      'class InMemoryReminderScheduleRegistry',
+    );
+
+    expect(source, contains("import 'account_local_data_cleaner.dart';"));
+    expect(
+      registry,
+      contains(
+        'final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;',
+      ),
+    );
+    expect(
+      registry,
+      contains(
+        'AccountLocalDataCleaner.isCurrentAccountDataGeneration(\n'
+        '      accountGeneration,\n'
+        '    )',
+      ),
+    );
+    expect(
+      registry,
+      contains('_writeAll(all, accountGeneration: accountGeneration)'),
+    );
+    expect(
+      registry,
+      contains('_writeDisplayAll(all, accountGeneration: accountGeneration)'),
+    );
+  });
+
   test(
     'account cleanup entrypoint clears native schedulers and service caches',
     () {
@@ -211,10 +291,21 @@ void main() {
       expect(block, contains('AlarmService.instance.cancelAll'));
       expect(block, contains('LocationGeofenceService.clearReminders()'));
       expect(block, contains('AccountLocalDataCleaner.clearSharedPreferences'));
-      expect(block, contains('AccountLocalDataCleaner.clearLocalFiles'));
+      expect(
+        block,
+        contains('await AccountLocalDataCleaner.quarantineLocalFiles()'),
+      );
+      expect(block, contains('deleteDetachedLocalFiles(cleanup);'));
+      expect(block, contains('await cleanup.delete();'));
+      expect(
+        block,
+        isNot(contains('AccountLocalDataCleaner.clearLocalFiles')),
+        reason: '迟到的文件清理必须只删除隔离目录，避免删除新账号复用路径中的内容。',
+      );
       expect(block, contains("'account prefs first pass'"));
       expect(block, contains("'account prefs second pass'"));
-      expect(block, contains('retryLocalFilesCleanup()'));
+      expect(block, contains('_reminderScheduler.suspendForAccountChange()'));
+      expect(block, contains('_reminderScheduler.resumeForActiveAccount()'));
       expect(block, contains("guardedSync('habits'"));
       expect(block, contains("guardedSync('theme'"));
       expect(block, contains("guardedSync('achievements'"));
@@ -222,8 +313,13 @@ void main() {
       expect(block, contains("guardedSync('calendar sync'"));
       expect(block, contains('userProvider.clearAccountProfileCache()'));
       expect(block, contains("guardedSync('ai service'"));
-      expect(block, contains("guardedSync('notification service'"));
+      expect(
+        RegExp(r"guardedSync\(\s*'notification service'").hasMatch(block),
+        isTrue,
+      );
       expect(block, contains('HomeWidgetService.resetAccountCache()'));
+      expect(block, contains('unawaited(() async {'));
+      expect(block, contains("guarded('home widget refresh'"));
       expect(block, contains('await _pushHomeWidget('));
       expect(
         block.indexOf("'account prefs first pass'"),
@@ -235,7 +331,7 @@ void main() {
       );
       expect(
         block.indexOf('HomeWidgetService.resetAccountCache()'),
-        lessThan(block.indexOf('await _pushHomeWidget(')),
+        lessThan(block.indexOf("guarded('home widget refresh'")),
       );
     },
   );

@@ -62,6 +62,11 @@ check_alignment_report_freshness() {
       ! -path "$ROOT_DIR/build/*" \
       ! -path "$ROOT_DIR/.dart_tool/*" \
       ! -path "$ROOT_DIR/.git/*" \
+      ! -path "$ROOT_DIR/android/.gradle/*" \
+      ! -path "$ROOT_DIR/android/build/*" \
+      ! -path "$ROOT_DIR/android/app/build/*" \
+      ! -path '*/__pycache__/*' \
+      ! -name '*.pyc' \
       2>/dev/null \
       | sort \
       | sed -n '1,20p'

@@ -1,0 +1,12 @@
+check	status	detail
+host_architecture	available	Host OS is Linux and architecture is aarch64.
+android_runtime	missing	Flutter does not detect an Android device or emulator.
+ios_runtime	missing	Flutter does not detect an iOS device.
+adb_device	missing	adb lists no connected Android device.
+android_emulator_binary	ready	Android Emulator binary exists at /home/ubuntu/android-sdk/emulator/emulator.
+android_emulator_package	available	sdkmanager lists the Android Emulator package.
+android_avd	ready	At least one Android Virtual Device is configured.
+android_system_images	missing	Android system images are missing under /home/ubuntu/android-sdk/system-images.
+kvm	missing	/dev/kvm is missing; accelerated Android emulator is unavailable.
+android_emulator_launchability	missing	Linux host architecture aarch64 is not x86_64; use an attached Android device or a matching host.
+ios_host	missing	iOS evidence requires macOS with xcrun and xcodebuild.

@@ -79,6 +79,7 @@ class _CompetitorImportApplySummary {
   final int timeEntryInserted;
   final int skippedRows;
   final int skippedDuplicates;
+  final List<String> reminderSyncIssues;
 
   const _CompetitorImportApplySummary({
     required this.todoInserted,
@@ -90,6 +91,7 @@ class _CompetitorImportApplySummary {
     required this.timeEntryInserted,
     required this.skippedRows,
     required this.skippedDuplicates,
+    this.reminderSyncIssues = const <String>[],
   });
 
   int get inserted =>
@@ -102,6 +104,8 @@ class _CompetitorImportApplySummary {
       timeEntryInserted;
 
   int get skipped => skippedRows + skippedDuplicates;
+
+  bool get hasReminderSyncIssues => reminderSyncIssues.isNotEmpty;
 }
 
 class BackupScreen extends StatefulWidget {
@@ -567,6 +571,20 @@ class _BackupScreenState extends State<BackupScreen> {
             anniversarySummary.skippedDuplicates +
             countdownSummary.skippedDuplicates +
             timeEntrySummary.skippedDuplicates,
+        reminderSyncIssues: [
+          if (_nonEmptyImportReminderIssue(todoSummary.reminderSyncIssue)
+              case final issue?)
+            '待办：$issue',
+          if (_nonEmptyImportReminderIssue(habitSummary.reminderSyncIssue)
+              case final issue?)
+            '习惯：$issue',
+          if (_nonEmptyImportReminderIssue(anniversarySummary.reminderSyncIssue)
+              case final issue?)
+            '纪念日：$issue',
+          if (_nonEmptyImportReminderIssue(countdownSummary.reminderSyncIssue)
+              case final issue?)
+            '倒数日：$issue',
+        ],
       );
       final undo = await _showCompetitorImportResult(
         draft: draft,
@@ -579,10 +597,13 @@ class _BackupScreenState extends State<BackupScreen> {
       if (undo == true) {
         await _rollbackCompetitorImport(rollbackSnapshot);
       } else {
+        final reminderIssueSuffix = summary.hasReminderSyncIssues
+            ? '；部分提醒未注册，请打开对应事项重新保存'
+            : '';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '已从 ${_competitorSourceLabel(draft.source)} 导入 ${summary.inserted} 项，跳过 ${summary.skipped} 项',
+              '已从 ${_competitorSourceLabel(draft.source)} 导入 ${summary.inserted} 项，跳过 ${summary.skipped} 项$reminderIssueSuffix',
             ),
           ),
         );
@@ -762,6 +783,22 @@ class _BackupScreenState extends State<BackupScreen> {
                 if (parsed.warnings.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text('提示：${parsed.warnings.take(2).join('；')}'),
+                ],
+                if (summary.hasReminderSyncIssues) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '提醒未完全注册：${summary.reminderSyncIssues.take(2).join('；')}',
+                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(ctx).colorScheme.error,
+                    ),
+                  ),
+                  if (summary.reminderSyncIssues.length > 2)
+                    Text(
+                      '另有 ${summary.reminderSyncIssues.length - 2} 类提醒需要重新保存。',
+                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(ctx).colorScheme.error,
+                      ),
+                    ),
                 ],
                 const SizedBox(height: 8),
                 Text(
@@ -962,6 +999,11 @@ class _BackupScreenState extends State<BackupScreen> {
         ],
       ),
     );
+  }
+
+  String? _nonEmptyImportReminderIssue(String? issue) {
+    final trimmed = issue?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 
   List<String> _competitorPreviewSamples(

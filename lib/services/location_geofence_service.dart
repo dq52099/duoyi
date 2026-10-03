@@ -10,43 +10,83 @@ class LocationGeofenceService {
   static const MethodChannel _channel = MethodChannel(
     'duoyi/location_geofence',
   );
+  static Future<void> _operationQueue = Future<void>.value();
+  static int _accountChangeGeneration = 0;
+  static bool _suspendedForAccountChange = false;
+
+  static void suspendForAccountChange() {
+    if (_suspendedForAccountChange) return;
+    _accountChangeGeneration++;
+    _suspendedForAccountChange = true;
+  }
+
+  static void resumeForActiveAccount() {
+    if (!_suspendedForAccountChange) return;
+    _accountChangeGeneration++;
+    _suspendedForAccountChange = false;
+  }
+
+  static bool _canSync(int generation) =>
+      !_suspendedForAccountChange && generation == _accountChangeGeneration;
+
+  static const _accountChangeResult = LocationGeofenceSyncResult(
+    available: false,
+    scheduledCount: 0,
+    status: 'account_change',
+  );
+
+  static Future<T> _runSerialized<T>(Future<T> Function() action) {
+    final result = _operationQueue.then((_) => action());
+    _operationQueue = result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {},
+    );
+    return result;
+  }
 
   static Future<LocationGeofenceSyncResult> syncReminders(
     List<LocationReminder> reminders,
-  ) async {
-    try {
-      final raw = await _channel.invokeMapMethod<String, dynamic>(
-        'syncReminders',
-        <String, Object?>{'reminders': reminders.map(_encodeReminder).toList()},
-      );
-      return LocationGeofenceSyncResult.fromMap(raw);
-    } on PlatformException catch (e, st) {
-      debugPrint('[LocationGeofenceService] sync failed: $e\n$st');
-      return LocationGeofenceSyncResult(
-        available: false,
-        scheduledCount: 0,
-        status: e.code,
-        message: e.message,
-      );
-    }
+  ) {
+    final generation = _accountChangeGeneration;
+    if (!_canSync(generation)) return Future.value(_accountChangeResult);
+    final encoded = reminders.map(_encodeReminder).toList(growable: false);
+    return _runSerialized(() async {
+      if (!_canSync(generation)) return _accountChangeResult;
+      try {
+        final raw = await _channel.invokeMapMethod<String, dynamic>(
+          'syncReminders',
+          <String, Object?>{'reminders': encoded},
+        );
+        return LocationGeofenceSyncResult.fromMap(raw);
+      } on PlatformException catch (e, st) {
+        debugPrint('[LocationGeofenceService] sync failed: $e\n$st');
+        return LocationGeofenceSyncResult(
+          available: false,
+          scheduledCount: 0,
+          status: e.code,
+          message: e.message,
+        );
+      }
+    });
   }
 
-  static Future<LocationGeofenceSyncResult> clearReminders() async {
-    try {
-      final raw = await _channel.invokeMapMethod<String, dynamic>(
-        'clearReminders',
-      );
-      return LocationGeofenceSyncResult.fromMap(raw);
-    } on PlatformException catch (e, st) {
-      debugPrint('[LocationGeofenceService] clear failed: $e\n$st');
-      return LocationGeofenceSyncResult(
-        available: false,
-        scheduledCount: 0,
-        status: e.code,
-        message: e.message,
-      );
-    }
-  }
+  static Future<LocationGeofenceSyncResult> clearReminders() =>
+      _runSerialized(() async {
+        try {
+          final raw = await _channel.invokeMapMethod<String, dynamic>(
+            'clearReminders',
+          );
+          return LocationGeofenceSyncResult.fromMap(raw);
+        } on PlatformException catch (e, st) {
+          debugPrint('[LocationGeofenceService] clear failed: $e\n$st');
+          return LocationGeofenceSyncResult(
+            available: false,
+            scheduledCount: 0,
+            status: e.code,
+            message: e.message,
+          );
+        }
+      });
 
   static Future<LocationGeofencePermissionResult> requestPermissions() async {
     var foreground = await Permission.locationWhenInUse.status;
@@ -89,7 +129,10 @@ class LocationGeofenceService {
   static Future<LocationGeofenceSyncResult> requestPermissionsAndSync(
     List<LocationReminder> reminders,
   ) async {
+    final generation = _accountChangeGeneration;
+    if (!_canSync(generation)) return _accountChangeResult;
     final permission = await requestPermissions();
+    if (!_canSync(generation)) return _accountChangeResult;
     if (permission.canScheduleGeofence) {
       return syncReminders(reminders);
     }

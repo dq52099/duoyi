@@ -8,6 +8,7 @@ import '../models/countdown.dart';
 import '../models/goal.dart';
 import '../models/habit.dart';
 import '../models/todo.dart';
+import 'account_local_data_cleaner.dart';
 import 'alarm_service.dart';
 import 'notification_permission_exception.dart';
 import 'reminder_sinks.dart';
@@ -55,15 +56,19 @@ class ReminderScheduleSnapshotEntry {
   final String objectType;
   final String objectId;
   final List<int> ids;
+  final List<Set<int>> acceptedIdSets;
   final String title;
   final String subtitle;
+  final Set<ReminderKind> kinds;
 
   const ReminderScheduleSnapshotEntry({
     required this.objectType,
     required this.objectId,
     required this.ids,
+    this.acceptedIdSets = const <Set<int>>[],
     required this.title,
     required this.subtitle,
+    this.kinds = const <ReminderKind>{},
   });
 
   int get idCount => ids.length;
@@ -74,10 +79,14 @@ class ReminderScheduleSnapshotEntry {
 class ReminderScheduleDisplayInfo {
   final String title;
   final String subtitle;
+  final Set<ReminderKind> kinds;
+  final List<Set<int>> acceptedIdSets;
 
   const ReminderScheduleDisplayInfo({
     required this.title,
     required this.subtitle,
+    this.kinds = const <ReminderKind>{},
+    this.acceptedIdSets = const <Set<int>>[],
   });
 }
 
@@ -353,6 +362,30 @@ class _ScheduledRule {
 
 enum _DispatchMode { once, repeating }
 
+class ReminderScheduleSyncException implements Exception {
+  final List<String> failures;
+
+  const ReminderScheduleSyncException(this.failures);
+
+  @override
+  String toString() {
+    if (failures.isEmpty) return 'ReminderScheduleSyncException';
+    return 'ReminderScheduleSyncException: ${failures.join('；')}';
+  }
+}
+
+class ReminderSchedulerResetException implements Exception {
+  final List<String> failures;
+
+  const ReminderSchedulerResetException(this.failures);
+
+  @override
+  String toString() {
+    if (failures.isEmpty) return 'ReminderSchedulerResetException';
+    return 'ReminderSchedulerResetException: ${failures.join('；')}';
+  }
+}
+
 abstract class ReminderScheduleRegistry {
   const ReminderScheduleRegistry();
 
@@ -370,6 +403,46 @@ abstract class ReminderScheduleRegistry {
   });
 
   Future<void> removeObject(String objectType, String objectId);
+
+  /// Applies a reconciliation's final object state. The default keeps custom
+  /// test registries compatible; persistent implementations can coalesce the
+  /// underlying JSON writes.
+  Future<void> applyBatch(
+    Map<String, Map<String, ReminderScheduleRegistryMutation>> mutations,
+  ) async {
+    for (final typeEntry in mutations.entries) {
+      for (final objectEntry in typeEntry.value.entries) {
+        final mutation = objectEntry.value;
+        if (mutation.remove || mutation.ids.isEmpty) {
+          await removeObject(typeEntry.key, objectEntry.key);
+        } else {
+          await replaceObject(
+            typeEntry.key,
+            objectEntry.key,
+            mutation.ids,
+            display: mutation.hasDisplay ? mutation.display : null,
+          );
+        }
+      }
+    }
+  }
+}
+
+class ReminderScheduleRegistryMutation {
+  final bool remove;
+  final Set<int> ids;
+  final ReminderScheduleDisplayInfo? display;
+  final bool hasDisplay;
+
+  const ReminderScheduleRegistryMutation.remove()
+    : remove = true,
+      ids = const <int>{},
+      display = null,
+      hasDisplay = false;
+
+  const ReminderScheduleRegistryMutation.replace(this.ids, {this.display})
+    : remove = false,
+      hasDisplay = display != null;
 }
 
 class SharedPreferencesReminderScheduleRegistry
@@ -409,29 +482,115 @@ class SharedPreferencesReminderScheduleRegistry
     Set<int> ids, {
     ReminderScheduleDisplayInfo? display,
   }) async {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final normalized = ids.where((id) => id != 0).toSet();
     if (normalized.isEmpty) {
-      await removeObject(objectType, objectId);
+      await _removeObjectWithGeneration(
+        objectType,
+        objectId,
+        accountGeneration: accountGeneration,
+      );
       return;
     }
     final all = await _readAll();
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
     final typeMap = all.putIfAbsent(objectType, () => <String, Set<int>>{});
     typeMap[objectId] = normalized;
-    await _writeAll(all);
+    await _writeAll(all, accountGeneration: accountGeneration);
     if (display != null) {
-      await _replaceDisplayObject(objectType, objectId, display);
+      await _replaceDisplayObject(
+        objectType,
+        objectId,
+        display,
+        accountGeneration: accountGeneration,
+      );
     }
   }
 
   @override
   Future<void> removeObject(String objectType, String objectId) async {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    await _removeObjectWithGeneration(
+      objectType,
+      objectId,
+      accountGeneration: accountGeneration,
+    );
+  }
+
+  @override
+  Future<void> applyBatch(
+    Map<String, Map<String, ReminderScheduleRegistryMutation>> mutations,
+  ) async {
+    if (mutations.isEmpty) return;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final all = await _readAll();
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
+
+    final hasDisplayMutation = mutations.values.any(
+      (objects) => objects.isNotEmpty,
+    );
+    final displays = hasDisplayMutation ? await _readDisplayAll() : null;
+    for (final typeEntry in mutations.entries) {
+      final typeMap = all.putIfAbsent(
+        typeEntry.key,
+        () => <String, Set<int>>{},
+      );
+      final displayTypeMap = displays?.putIfAbsent(
+        typeEntry.key,
+        () => <String, ReminderScheduleDisplayInfo>{},
+      );
+      for (final objectEntry in typeEntry.value.entries) {
+        final mutation = objectEntry.value;
+        if (mutation.remove || mutation.ids.isEmpty) {
+          typeMap.remove(objectEntry.key);
+          displayTypeMap?.remove(objectEntry.key);
+          continue;
+        }
+        typeMap[objectEntry.key] = Set<int>.from(mutation.ids);
+        if (mutation.hasDisplay && mutation.display != null) {
+          displayTypeMap?[objectEntry.key] = mutation.display!;
+        }
+      }
+      if (typeMap.isEmpty) all.remove(typeEntry.key);
+      if (displayTypeMap != null && displayTypeMap.isEmpty) {
+        displays!.remove(typeEntry.key);
+      }
+    }
+    await _writeAll(all, accountGeneration: accountGeneration);
+    if (displays != null) {
+      await _writeDisplayAll(displays, accountGeneration: accountGeneration);
+    }
+  }
+
+  Future<void> _removeObjectWithGeneration(
+    String objectType,
+    String objectId, {
+    required int accountGeneration,
+  }) async {
+    final all = await _readAll();
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
     final typeMap = all[objectType];
     if (typeMap == null) return;
     typeMap.remove(objectId);
     if (typeMap.isEmpty) all.remove(objectType);
-    await _writeAll(all);
-    await _removeDisplayObject(objectType, objectId);
+    await _writeAll(all, accountGeneration: accountGeneration);
+    await _removeDisplayObject(
+      objectType,
+      objectId,
+      accountGeneration: accountGeneration,
+    );
   }
 
   Future<SharedPreferences?> _prefsOrNull() async {
@@ -517,6 +676,10 @@ class SharedPreferencesReminderScheduleRegistry
           objects[objectId] = ReminderScheduleDisplayInfo(
             title: cleanTitle,
             subtitle: cleanSubtitle,
+            kinds: _decodeReminderKinds(rawDisplay['kinds']),
+            acceptedIdSets: _decodeAcceptedIdSets(
+              rawDisplay['accepted_id_sets'],
+            ),
           );
         });
         if (objects.isNotEmpty) result[type] = objects;
@@ -530,9 +693,17 @@ class SharedPreferencesReminderScheduleRegistry
     }
   }
 
-  Future<void> _writeAll(Map<String, Map<String, Set<int>>> all) async {
+  Future<void> _writeAll(
+    Map<String, Map<String, Set<int>>> all, {
+    required int accountGeneration,
+  }) async {
     final prefs = await _prefsOrNull();
     if (prefs == null) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
     final encoded = <String, Map<String, List<int>>>{};
     for (final typeEntry in all.entries) {
       final objects = <String, List<int>>{};
@@ -552,38 +723,65 @@ class SharedPreferencesReminderScheduleRegistry
   Future<void> _replaceDisplayObject(
     String objectType,
     String objectId,
-    ReminderScheduleDisplayInfo display,
-  ) async {
+    ReminderScheduleDisplayInfo display, {
+    required int accountGeneration,
+  }) async {
     final all = await _readDisplayAll();
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
     final typeMap = all.putIfAbsent(
       objectType,
       () => <String, ReminderScheduleDisplayInfo>{},
     );
     typeMap[objectId] = display;
-    await _writeDisplayAll(all);
+    await _writeDisplayAll(all, accountGeneration: accountGeneration);
   }
 
-  Future<void> _removeDisplayObject(String objectType, String objectId) async {
+  Future<void> _removeDisplayObject(
+    String objectType,
+    String objectId, {
+    required int accountGeneration,
+  }) async {
     final all = await _readDisplayAll();
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
     final typeMap = all[objectType];
     if (typeMap == null) return;
     typeMap.remove(objectId);
     if (typeMap.isEmpty) all.remove(objectType);
-    await _writeDisplayAll(all);
+    await _writeDisplayAll(all, accountGeneration: accountGeneration);
   }
 
   Future<void> _writeDisplayAll(
-    Map<String, Map<String, ReminderScheduleDisplayInfo>> all,
-  ) async {
+    Map<String, Map<String, ReminderScheduleDisplayInfo>> all, {
+    required int accountGeneration,
+  }) async {
     final prefs = await _prefsOrNull();
     if (prefs == null) return;
-    final encoded = <String, Map<String, Map<String, String>>>{};
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
+    final encoded = <String, Map<String, Map<String, Object>>>{};
     for (final typeEntry in all.entries) {
-      final objects = <String, Map<String, String>>{};
+      final objects = <String, Map<String, Object>>{};
       for (final objectEntry in typeEntry.value.entries) {
         objects[objectEntry.key] = {
           'title': objectEntry.value.title,
           'subtitle': objectEntry.value.subtitle,
+          if (objectEntry.value.kinds.isNotEmpty)
+            'kinds': objectEntry.value.kinds.map((kind) => kind.name).toList(),
+          if (objectEntry.value.acceptedIdSets.isNotEmpty)
+            'accepted_id_sets': objectEntry.value.acceptedIdSets
+                .map((ids) => (ids.toList()..sort()))
+                .toList(),
         };
       }
       if (objects.isNotEmpty) encoded[typeEntry.key] = objects;
@@ -594,6 +792,49 @@ class SharedPreferencesReminderScheduleRegistry
       await prefs.setString(_displayStorageKey, jsonEncode(encoded));
     }
   }
+
+  Set<ReminderKind> _decodeReminderKinds(Object? raw) {
+    if (raw is! List) return const <ReminderKind>{};
+    final kinds = <ReminderKind>{};
+    for (final value in raw) {
+      ReminderKind? kind;
+      if (value is String) {
+        for (final candidate in ReminderKind.values) {
+          if (candidate.name == value) {
+            kind = candidate;
+            break;
+          }
+        }
+      } else if (value is int &&
+          value >= 0 &&
+          value < ReminderKind.values.length) {
+        kind = ReminderKind.values[value];
+      }
+      if (kind != null && kind != ReminderKind.off) kinds.add(kind);
+    }
+    return kinds.isEmpty ? const <ReminderKind>{} : Set.unmodifiable(kinds);
+  }
+
+  List<Set<int>> _decodeAcceptedIdSets(Object? raw) {
+    if (raw is! List) return const <Set<int>>[];
+    final result = <Set<int>>[];
+    for (final rawSet in raw) {
+      if (rawSet is! List) continue;
+      final ids = <int>{};
+      for (final rawId in rawSet) {
+        final id = rawId is int
+            ? rawId
+            : rawId is num
+            ? rawId.toInt()
+            : null;
+        if (id != null && id != 0) ids.add(id);
+      }
+      if (ids.isNotEmpty) result.add(Set<int>.unmodifiable(ids));
+    }
+    return result.isEmpty
+        ? const <Set<int>>[]
+        : List<Set<int>>.unmodifiable(result);
+  }
 }
 
 @visibleForTesting
@@ -601,6 +842,9 @@ class InMemoryReminderScheduleRegistry implements ReminderScheduleRegistry {
   final Map<String, Map<String, Set<int>>> _store = {};
   final Map<String, Map<String, ReminderScheduleDisplayInfo>> _displayStore =
       {};
+
+  @visibleForTesting
+  int batchApplyCalls = 0;
 
   @override
   Future<Map<String, Set<int>>> idsByObject(String objectType) async {
@@ -657,6 +901,252 @@ class InMemoryReminderScheduleRegistry implements ReminderScheduleRegistry {
     displayTypeMap.remove(objectId);
     if (displayTypeMap.isEmpty) _displayStore.remove(objectType);
   }
+
+  @override
+  Future<void> applyBatch(
+    Map<String, Map<String, ReminderScheduleRegistryMutation>> mutations,
+  ) async {
+    batchApplyCalls++;
+    for (final typeEntry in mutations.entries) {
+      for (final objectEntry in typeEntry.value.entries) {
+        final mutation = objectEntry.value;
+        if (mutation.remove || mutation.ids.isEmpty) {
+          final typeMap = _store[typeEntry.key];
+          typeMap?.remove(objectEntry.key);
+          if (typeMap?.isEmpty == true) _store.remove(typeEntry.key);
+          final displayTypeMap = _displayStore[typeEntry.key];
+          displayTypeMap?.remove(objectEntry.key);
+          if (displayTypeMap?.isEmpty == true) {
+            _displayStore.remove(typeEntry.key);
+          }
+          continue;
+        }
+        _store.putIfAbsent(
+          typeEntry.key,
+          () => <String, Set<int>>{},
+        )[objectEntry.key] = Set<int>.from(
+          mutation.ids,
+        );
+        if (mutation.hasDisplay && mutation.display != null) {
+          _displayStore.putIfAbsent(
+            typeEntry.key,
+            () => <String, ReminderScheduleDisplayInfo>{},
+          )[objectEntry.key] = mutation.display!;
+        }
+      }
+    }
+  }
+}
+
+class _BatchAwareReminderScheduleRegistry implements ReminderScheduleRegistry {
+  final ReminderScheduleRegistry delegate;
+  ReminderReconciliationBatch? activeBatch;
+
+  _BatchAwareReminderScheduleRegistry(this.delegate);
+
+  @override
+  Future<Map<String, Set<int>>> idsByObject(String objectType) async {
+    final persisted = await delegate.idsByObject(objectType);
+    return activeBatch?.overlayIds(objectType, persisted) ?? persisted;
+  }
+
+  @override
+  Future<Map<String, ReminderScheduleDisplayInfo>> displayByObject(
+    String objectType,
+  ) async {
+    final persisted = await delegate.displayByObject(objectType);
+    return activeBatch?.overlayDisplays(objectType, persisted) ?? persisted;
+  }
+
+  @override
+  Future<void> replaceObject(
+    String objectType,
+    String objectId,
+    Set<int> ids, {
+    ReminderScheduleDisplayInfo? display,
+  }) async {
+    final batch = activeBatch;
+    if (batch == null) {
+      await delegate.replaceObject(objectType, objectId, ids, display: display);
+      return;
+    }
+    batch.stageReplace(objectType, objectId, ids, display: display);
+  }
+
+  @override
+  Future<void> removeObject(String objectType, String objectId) async {
+    final batch = activeBatch;
+    if (batch == null) {
+      await delegate.removeObject(objectType, objectId);
+      return;
+    }
+    batch.stageRemove(objectType, objectId);
+  }
+
+  @override
+  Future<void> applyBatch(
+    Map<String, Map<String, ReminderScheduleRegistryMutation>> mutations,
+  ) => delegate.applyBatch(mutations);
+
+  Future<void> flushBatch(ReminderReconciliationBatch batch) {
+    if (!identical(activeBatch, batch)) return Future<void>.value();
+    return delegate.applyBatch(batch.registryMutations);
+  }
+}
+
+@visibleForTesting
+class ReminderReconciliationBatchMetrics {
+  final int pendingSnapshotCalls;
+  final int pendingFallbackCalls;
+  final int pendingProbeFailures;
+  final int registryMutationCount;
+  final int registryFlushCalls;
+
+  const ReminderReconciliationBatchMetrics({
+    required this.pendingSnapshotCalls,
+    required this.pendingFallbackCalls,
+    required this.pendingProbeFailures,
+    required this.registryMutationCount,
+    required this.registryFlushCalls,
+  });
+}
+
+class ReminderReconciliationBatch {
+  final ReminderScheduler owner;
+  final int accountChangeGeneration;
+  final Map<ReminderPendingSink, Future<Set<int>>> _pendingSnapshots = {};
+  final Set<ReminderPendingSink> _pendingSnapshotFailures = {};
+  final Map<String, Map<String, ReminderScheduleRegistryMutation>>
+  registryMutations = {};
+  final Map<String, Map<String, Set<int>>> cancellationIds = {};
+  var pendingSnapshotCalls = 0;
+  var pendingFallbackCalls = 0;
+  var pendingProbeFailures = 0;
+  var registryMutationCount = 0;
+  var registryFlushCalls = 0;
+
+  ReminderReconciliationBatch(this.owner, this.accountChangeGeneration);
+
+  bool snapshotFailed(ReminderPendingSink sink) =>
+      _pendingSnapshotFailures.contains(sink);
+
+  Future<Set<int>> pendingIds(ReminderPendingSink sink) {
+    final existing = _pendingSnapshots[sink];
+    if (existing != null) return existing;
+    final future = () async {
+      pendingSnapshotCalls++;
+      try {
+        return (await sink.pendingIds()).toSet();
+      } catch (_) {
+        pendingProbeFailures++;
+        _pendingSnapshotFailures.add(sink);
+        rethrow;
+      }
+    }();
+    _pendingSnapshots[sink] = future;
+    return future.catchError((Object error, StackTrace stack) {
+      _pendingSnapshots.remove(sink);
+      Error.throwWithStackTrace(error, stack);
+    });
+  }
+
+  Future<Set<int>> fallbackPendingIds(ReminderPendingSink sink) async {
+    pendingFallbackCalls++;
+    return (await sink.pendingIds()).toSet();
+  }
+
+  Map<String, Set<int>> overlayIds(
+    String objectType,
+    Map<String, Set<int>> persisted,
+  ) {
+    final result = {
+      for (final entry in persisted.entries)
+        entry.key: Set<int>.from(entry.value),
+    };
+    final mutations = registryMutations[objectType];
+    if (mutations == null) return result;
+    for (final entry in mutations.entries) {
+      final mutation = entry.value;
+      if (mutation.remove || mutation.ids.isEmpty) {
+        result.remove(entry.key);
+      } else {
+        result[entry.key] = Set<int>.from(mutation.ids);
+      }
+    }
+    return result;
+  }
+
+  Map<String, ReminderScheduleDisplayInfo> overlayDisplays(
+    String objectType,
+    Map<String, ReminderScheduleDisplayInfo> persisted,
+  ) {
+    final result = Map<String, ReminderScheduleDisplayInfo>.from(persisted);
+    final mutations = registryMutations[objectType];
+    if (mutations == null) return result;
+    for (final entry in mutations.entries) {
+      final mutation = entry.value;
+      if (mutation.remove || mutation.ids.isEmpty) {
+        result.remove(entry.key);
+      } else if (mutation.hasDisplay && mutation.display != null) {
+        result[entry.key] = mutation.display!;
+      }
+    }
+    return result;
+  }
+
+  void stageReplace(
+    String objectType,
+    String objectId,
+    Set<int> ids, {
+    ReminderScheduleDisplayInfo? display,
+  }) {
+    final normalized = ids.where((id) => id != 0).toSet();
+    cancellationIds
+        .putIfAbsent(objectType, () => <String, Set<int>>{})
+        .putIfAbsent(objectId, () => <int>{})
+        .addAll(normalized);
+    final typeMap = registryMutations.putIfAbsent(
+      objectType,
+      () => <String, ReminderScheduleRegistryMutation>{},
+    );
+    typeMap[objectId] = normalized.isEmpty
+        ? const ReminderScheduleRegistryMutation.remove()
+        : ReminderScheduleRegistryMutation.replace(
+            normalized,
+            display: display,
+          );
+    registryMutationCount++;
+  }
+
+  void stageRemove(String objectType, String objectId) {
+    final typeMap = registryMutations.putIfAbsent(
+      objectType,
+      () => <String, ReminderScheduleRegistryMutation>{},
+    );
+    typeMap[objectId] = const ReminderScheduleRegistryMutation.remove();
+    registryMutationCount++;
+  }
+
+  Future<void> flush() async {
+    if (!owner._canRunAccountGeneration(accountChangeGeneration)) {
+      if (owner._schedulingSuspendedForAccountChange) {
+        await owner._retainInterruptedBatchOwnership(cancellationIds);
+      }
+      return;
+    }
+    if (registryMutations.isEmpty) return;
+    registryFlushCalls++;
+    await owner._batchRegistry.flushBatch(this);
+  }
+
+  ReminderReconciliationBatchMetrics metrics() =>
+      ReminderReconciliationBatchMetrics(
+        pendingSnapshotCalls: pendingSnapshotCalls,
+        pendingFallbackCalls: pendingFallbackCalls,
+        pendingProbeFailures: pendingProbeFailures,
+        registryMutationCount: registryMutationCount,
+        registryFlushCalls: registryFlushCalls,
+      );
 }
 
 class _ResolvedRule {
@@ -786,6 +1276,21 @@ class ReminderScheduler {
     'anniversary',
     'countdown',
   ];
+  static const List<String> _blockingAlarmScheduleIssuePhrases = <String>[
+    '闹钟提醒已降级注册',
+    '精准闹钟权限未开启',
+    '闹钟提醒通知权限未开启',
+    '内置闹钟铃声注册失败',
+    '内置重复闹钟铃声注册失败',
+    '强提醒弹屏权限未开启',
+    '强提醒渠道需要检查',
+    '闹钟提醒注册失败',
+    '重复闹钟注册失败',
+    '闹钟兜底通知注册失败',
+    '重复闹钟兜底通知注册失败',
+    '闹钟兜底通知待触发队列需确认',
+    '重复闹钟兜底通知待触发队列需确认',
+  ];
 
   final ReminderNotificationSink notif;
   final ReminderAlarmSink alarm;
@@ -802,6 +1307,11 @@ class ReminderScheduler {
   final Map<String, ReminderScheduleDisplayInfo> _registeredReminderDisplay =
       {};
   Future<void> _syncQueue = Future<void>.value();
+  ReminderReconciliationBatch? _activeBatch;
+  ReminderReconciliationBatchMetrics? _lastBatchMetrics;
+  int _accountChangeGeneration = 0;
+  bool _schedulingSuspendedForAccountChange = false;
+  final Map<String, Map<String, Set<int>>> _interruptedBatchIds = {};
 
   /// [notif] 必传；[alarm] 默认取 `AlarmService.instance` 单例，便于测试时
   /// 注入 fake。[popup] 未注入时默认落到 [notif] 作为系统通知兜底，避免
@@ -816,11 +1326,117 @@ class ReminderScheduler {
   }) : alarm = alarm ?? AlarmService.instance,
        email = email ?? const NoopReminderEmailSink(),
        popup = popup ?? NotificationFallbackReminderPopupSink(notif),
-       registry = registry ?? const SharedPreferencesReminderScheduleRegistry();
+       registry = _BatchAwareReminderScheduleRegistry(
+         registry ?? const SharedPreferencesReminderScheduleRegistry(),
+       );
 
   @visibleForTesting
   int debugScheduledTodoRuleCount(String todoId) {
     return _scheduledTodoRules[todoId]?.length ?? 0;
+  }
+
+  @visibleForTesting
+  ReminderReconciliationBatchMetrics? get debugLastBatchMetrics =>
+      _lastBatchMetrics;
+
+  _BatchAwareReminderScheduleRegistry get _batchRegistry =>
+      registry as _BatchAwareReminderScheduleRegistry;
+
+  Future<T?> runReconciliationBatch<T>(
+    Future<T> Function(ReminderReconciliationBatch batch) action,
+  ) {
+    final generation = _accountChangeGeneration;
+    if (!_canRunAccountGeneration(generation)) return Future<T?>.value(null);
+    return _runSerialized(() async {
+      if (!_canRunAccountGeneration(generation)) return null;
+      final batch = ReminderReconciliationBatch(this, generation);
+      _activeBatch = batch;
+      _batchRegistry.activeBatch = batch;
+      try {
+        if (notif is ReminderNotificationBatchSink) {
+          return await (notif as ReminderNotificationBatchSink)
+              .runNotificationBatch(() => action(batch));
+        }
+        return await action(batch);
+      } finally {
+        try {
+          await batch.flush();
+        } finally {
+          _batchRegistry.activeBatch = null;
+          _activeBatch = null;
+          _lastBatchMetrics = batch.metrics();
+        }
+      }
+    });
+  }
+
+  /// Prevents old-account reminder snapshots from being queued or committed.
+  ///
+  /// Call this synchronously after the pending cloud changes have been flushed
+  /// and before the first asynchronous account cleanup step. Already-running
+  /// work is allowed to finish; the serialized reset that follows cancels its
+  /// registrations before the new account is resumed.
+  void suspendForAccountChange() {
+    if (_schedulingSuspendedForAccountChange) return;
+    _accountChangeGeneration++;
+    _schedulingSuspendedForAccountChange = true;
+  }
+
+  /// Re-enables reminder scheduling after the active account providers are safe.
+  void resumeForActiveAccount() {
+    _accountChangeGeneration++;
+    _schedulingSuspendedForAccountChange = false;
+  }
+
+  bool _canRunAccountGeneration(int generation) {
+    return !_schedulingSuspendedForAccountChange &&
+        generation == _accountChangeGeneration;
+  }
+
+  Future<void> _retainInterruptedBatchOwnership(
+    Map<String, Map<String, Set<int>>> idsByType,
+  ) async {
+    for (final type in idsByType.entries) {
+      final retained = _interruptedBatchIds.putIfAbsent(
+        type.key,
+        () => <String, Set<int>>{},
+      );
+      for (final object in type.value.entries) {
+        if (object.value.isEmpty) continue;
+        retained.putIfAbsent(object.key, () => <int>{}).addAll(object.value);
+      }
+    }
+    await _persistInterruptedBatchOwnership();
+  }
+
+  Future<void> _persistInterruptedBatchOwnership() async {
+    if (_interruptedBatchIds.isEmpty) return;
+    // Use the delegate so a stale batch cannot hide cancellation ownership
+    // with its staged removals. Preserve IDs without committing old displays.
+    final delegate = _batchRegistry.delegate;
+    final mutations = <String, Map<String, ReminderScheduleRegistryMutation>>{};
+    for (final type in _interruptedBatchIds.entries) {
+      final persisted = await delegate.idsByObject(type.key);
+      mutations[type.key] = {
+        for (final object in type.value.entries)
+          object.key: ReminderScheduleRegistryMutation.replace({
+            ...persisted[object.key] ?? const <int>{},
+            ...object.value,
+          }),
+      };
+    }
+    await delegate.applyBatch(mutations);
+  }
+
+  Future<void> _runSerializedForAccountGeneration(
+    int generation,
+    Future<void> Function() action,
+  ) {
+    if (!_canRunAccountGeneration(generation)) return Future<void>.value();
+    return _runSerialized(() async {
+      if (!_canRunAccountGeneration(generation)) return;
+      await action();
+    });
   }
 
   Future<List<ReminderScheduleSnapshotEntry>> registeredRemindersSnapshot() {
@@ -846,8 +1462,10 @@ class ReminderScheduler {
             objectType: objectType,
             objectId: entry.key,
             ids: List<int>.unmodifiable(ids),
+            acceptedIdSets: display.acceptedIdSets,
             title: display.title,
             subtitle: display.subtitle,
+            kinds: display.kinds,
           ),
         );
       }
@@ -868,7 +1486,12 @@ class ReminderScheduler {
     ReminderScheduleDisplayInfo? persisted,
   }) {
     final stored = _registeredReminderDisplay['$objectType:$objectId'];
-    if (stored != null) return stored;
+    if (stored != null) {
+      return _withAcceptedIdSets(
+        stored,
+        persisted?.acceptedIdSets ?? const <Set<int>>[],
+      );
+    }
     if (persisted != null) return persisted;
     final scheduledRules = switch (objectType) {
       'todo' => _scheduledTodoRules[objectId],
@@ -876,7 +1499,15 @@ class ReminderScheduler {
       _ => null,
     };
     if (scheduledRules != null && scheduledRules.isNotEmpty) {
-      return _displayFromScheduledRules(objectType, scheduledRules.values);
+      return _displayFromScheduledRules(
+        objectType,
+        scheduledRules.values,
+        _acceptedPendingIdSetsForScheduledRules(
+          objectType,
+          objectId,
+          scheduledRules,
+        ),
+      );
     }
     final typeLabel = _objectTypeLabel(objectType);
     return ReminderScheduleDisplayInfo(
@@ -888,19 +1519,23 @@ class ReminderScheduler {
   ReminderScheduleDisplayInfo _displayFromScheduledRules(
     String objectType,
     Iterable<_ScheduledRule> rules,
+    List<Set<int>> acceptedIdSets,
   ) {
     final list = rules.toList(growable: false);
     final typeLabel = _objectTypeLabel(objectType);
     final title = list
         .map((rule) => rule.body.trim())
         .firstWhere((value) => value.isNotEmpty, orElse: () => '$typeLabel提醒');
-    final kinds = list.map((rule) => _kindLabel(rule.kind)).toSet().join('、');
+    final kinds = _kindsFromScheduledRules(list);
+    final kindLabel = kinds.map(_kindLabel).toSet().join('、');
     final repeating = list.any((rule) => rule.mode == _DispatchMode.repeating);
     final cadence = repeating ? '重复提醒' : '一次提醒';
     return ReminderScheduleDisplayInfo(
       title: title,
       subtitle:
-          '$typeLabel · $cadence · ${kinds.isEmpty ? '系统提醒' : kinds} · ${list.length} 条规则',
+          '$typeLabel · $cadence · ${kindLabel.isEmpty ? '系统提醒' : kindLabel} · ${list.length} 条规则',
+      kinds: kinds,
+      acceptedIdSets: _normalizedAcceptedIdSets(acceptedIdSets),
     );
   }
 
@@ -909,6 +1544,7 @@ class ReminderScheduler {
     String objectId, {
     required String title,
     required String subtitle,
+    Set<ReminderKind> kinds = const <ReminderKind>{},
   }) {
     final trimmedTitle = title.trim();
     _registeredReminderDisplay['$objectType:$objectId'] =
@@ -919,6 +1555,10 @@ class ReminderScheduler {
           subtitle: subtitle.trim().isEmpty
               ? '${_objectTypeLabel(objectType)} · 已登记到系统提醒队列'
               : subtitle.trim(),
+          kinds: Set<ReminderKind>.unmodifiable(
+            kinds.where((kind) => kind != ReminderKind.off),
+          ),
+          acceptedIdSets: const <Set<int>>[],
         );
   }
 
@@ -931,36 +1571,173 @@ class ReminderScheduler {
     String objectId, {
     Iterable<_ScheduledRule>? scheduledRules,
     Iterable<_ResolvedRule>? resolvedRules,
+    List<Set<int>> acceptedIdSets = const <Set<int>>[],
   }) {
     final stored = _registeredReminderDisplay['$objectType:$objectId'];
-    if (stored != null) return stored;
+    if (stored != null) {
+      return _withAcceptedIdSets(stored, acceptedIdSets);
+    }
     final scheduledList = scheduledRules?.toList(growable: false);
     if (scheduledList != null && scheduledList.isNotEmpty) {
-      return _displayFromScheduledRules(objectType, scheduledList);
+      return _displayFromScheduledRules(
+        objectType,
+        scheduledList,
+        acceptedIdSets,
+      );
     }
     final resolvedList = resolvedRules?.toList(growable: false);
     if (resolvedList != null && resolvedList.isNotEmpty) {
-      return _displayFromResolvedRules(objectType, resolvedList);
+      return _displayFromResolvedRules(
+        objectType,
+        resolvedList,
+        acceptedIdSets,
+      );
     }
-    return null;
+    if (acceptedIdSets.isEmpty) return null;
+    return ReminderScheduleDisplayInfo(
+      title: '${_objectTypeLabel(objectType)}提醒',
+      subtitle: '${_objectTypeLabel(objectType)} · 已登记到系统提醒队列',
+      acceptedIdSets: _normalizedAcceptedIdSets(acceptedIdSets),
+    );
   }
 
   ReminderScheduleDisplayInfo _displayFromResolvedRules(
     String objectType,
     Iterable<_ResolvedRule> rules,
+    List<Set<int>> acceptedIdSets,
   ) {
     final list = rules.toList(growable: false);
     final typeLabel = _objectTypeLabel(objectType);
     final title = list
         .map((rule) => rule.body.trim())
         .firstWhere((value) => value.isNotEmpty, orElse: () => '$typeLabel提醒');
-    final kinds = list.map((rule) => _kindLabel(rule.kind)).toSet().join('、');
+    final kinds = _kindsFromResolvedRules(list);
+    final kindLabel = kinds.map(_kindLabel).toSet().join('、');
     final repeating = list.any((rule) => rule.mode == _DispatchMode.repeating);
     final cadence = repeating ? '重复提醒' : '一次提醒';
     return ReminderScheduleDisplayInfo(
       title: title,
       subtitle:
-          '$typeLabel · $cadence · ${kinds.isEmpty ? '系统提醒' : kinds} · ${list.length} 条规则',
+          '$typeLabel · $cadence · ${kindLabel.isEmpty ? '系统提醒' : kindLabel} · ${list.length} 条规则',
+      kinds: kinds,
+      acceptedIdSets: _normalizedAcceptedIdSets(acceptedIdSets),
+    );
+  }
+
+  ReminderScheduleDisplayInfo _withAcceptedIdSets(
+    ReminderScheduleDisplayInfo display,
+    List<Set<int>> acceptedIdSets,
+  ) {
+    final normalized = _normalizedAcceptedIdSets(acceptedIdSets);
+    if (normalized.isEmpty) return display;
+    return ReminderScheduleDisplayInfo(
+      title: display.title,
+      subtitle: display.subtitle,
+      kinds: display.kinds,
+      acceptedIdSets: normalized,
+    );
+  }
+
+  List<Set<int>> _normalizedAcceptedIdSets(Iterable<Set<int>> groups) {
+    final seen = <String>{};
+    final result = <Set<int>>[];
+    for (final group in groups) {
+      final ids = group.where((id) => id != 0).toList()..sort();
+      if (ids.isEmpty) continue;
+      final signature = ids.join(',');
+      if (!seen.add(signature)) continue;
+      result.add(Set<int>.unmodifiable(ids));
+    }
+    return result.isEmpty
+        ? const <Set<int>>[]
+        : List<Set<int>>.unmodifiable(result);
+  }
+
+  List<Set<int>> _combineAcceptedIdSetAlternatives(
+    Iterable<List<Set<int>>> alternativesByRule,
+  ) {
+    var sawRule = false;
+    var combinations = <Set<int>>[<int>{}];
+    for (final rawAlternatives in alternativesByRule) {
+      final alternatives = _normalizedAcceptedIdSets(rawAlternatives);
+      if (alternatives.isEmpty) return const <Set<int>>[];
+      sawRule = true;
+      final next = <Set<int>>[];
+      for (final combination in combinations) {
+        for (final alternative in alternatives) {
+          next.add(<int>{...combination, ...alternative});
+        }
+      }
+      combinations = next;
+    }
+    if (!sawRule) return const <Set<int>>[];
+    return _normalizedAcceptedIdSets(combinations);
+  }
+
+  Set<ReminderKind> _kindsFromScheduledRules(Iterable<_ScheduledRule> rules) {
+    final kinds = <ReminderKind>{
+      for (final rule in rules)
+        if (rule.kind != ReminderKind.off) rule.kind,
+    };
+    return kinds.isEmpty ? const <ReminderKind>{} : Set.unmodifiable(kinds);
+  }
+
+  Set<ReminderKind> _kindsFromResolvedRules(Iterable<_ResolvedRule> rules) {
+    final kinds = <ReminderKind>{
+      for (final rule in rules)
+        if (rule.kind != ReminderKind.off) rule.kind,
+    };
+    return kinds.isEmpty ? const <ReminderKind>{} : Set.unmodifiable(kinds);
+  }
+
+  bool _kindUsesSystemPendingQueue(ReminderKind kind) {
+    return kind == ReminderKind.push || kind == ReminderKind.alarm;
+  }
+
+  List<Set<int>> _acceptedPendingIdSetsForResolvedRules(
+    Iterable<_ResolvedRule> rules,
+  ) {
+    return _combineAcceptedIdSetAlternatives([
+      for (final rule in rules)
+        if (_kindUsesSystemPendingQueue(rule.kind))
+          _acceptedPendingIdSetsForRule(rule),
+    ]);
+  }
+
+  List<Set<int>> _acceptedPendingIdSetsForScheduledRules(
+    String objectType,
+    String objectId,
+    Map<String, _ScheduledRule> rules,
+  ) {
+    return _combineAcceptedIdSetAlternatives([
+      for (final entry in rules.entries)
+        if (_kindUsesSystemPendingQueue(entry.value.kind))
+          _acceptedPendingIdSetsForScheduledRule(
+            objectType,
+            objectId,
+            entry.key,
+            entry.value,
+          ),
+    ]);
+  }
+
+  List<Set<int>> _acceptedPendingIdSetsForScheduledRule(
+    String objectType,
+    String objectId,
+    String ruleId,
+    _ScheduledRule rule,
+  ) {
+    final base = _idFor('$objectType:$objectId:$ruleId');
+    if (rule.mode == _DispatchMode.once) {
+      return <Set<int>>[
+        <int>{base},
+      ];
+    }
+    final weekdays = _weekdaysFromScope(rule.scope);
+    return _acceptedRepeatingPendingIdSets(
+      kind: rule.kind,
+      base: base,
+      weekdays: weekdays,
     );
   }
 
@@ -970,6 +1747,7 @@ class ReminderScheduler {
     Set<int> ids, {
     Iterable<_ScheduledRule>? scheduledRules,
     Iterable<_ResolvedRule>? resolvedRules,
+    List<Set<int>> acceptedIdSets = const <Set<int>>[],
   }) {
     return registry.replaceObject(
       objectType,
@@ -980,6 +1758,7 @@ class ReminderScheduler {
         objectId,
         scheduledRules: scheduledRules,
         resolvedRules: resolvedRules,
+        acceptedIdSets: acceptedIdSets,
       ),
     );
   }
@@ -1039,12 +1818,17 @@ class ReminderScheduler {
     final rule = _effectiveHabitPlan(habit).primaryRule;
     if (rule == null) return;
     final weekdays = _habitWeekdays(habit, rule);
+    final kinds = _enabledHabitRules(habit)
+        .map((rule) => rule.kind)
+        .where((kind) => kind != ReminderKind.off)
+        .toSet();
     _rememberReminderDisplay(
       'habit',
       habit.id,
       title: habit.name,
       subtitle:
           '日常 · ${_kindLabel(rule.kind)} · ${_weekdaysLabel(weekdays)} ${_timeLabel(rule.hour, rule.minute)}',
+      kinds: kinds,
     );
   }
 
@@ -1058,6 +1842,9 @@ class ReminderScheduler {
       title: item.title,
       subtitle:
           '纪念日 · ${_kindLabel(item.reminderKind)} · ${_dateTimeLabel(remindAt)}',
+      kinds: item.reminderKind == ReminderKind.off
+          ? const <ReminderKind>{}
+          : <ReminderKind>{item.reminderKind},
     );
   }
 
@@ -1071,6 +1858,9 @@ class ReminderScheduler {
       title: item.title,
       subtitle:
           '倒数日 · ${_kindLabel(item.reminderKind)} · ${_dateTimeLabel(remindAt)}',
+      kinds: item.reminderKind == ReminderKind.off
+          ? const <ReminderKind>{}
+          : <ReminderKind>{item.reminderKind},
     );
   }
 
@@ -1082,42 +1872,152 @@ class ReminderScheduler {
   /// next account can be treated as already scheduled, especially for popup
   /// reminders which do not expose a system pending queue.
   Future<void> resetInMemoryState() {
+    suspendForAccountChange();
     return _runSerialized(_resetInMemoryStateLocked);
   }
 
   Future<void> _resetInMemoryStateLocked() async {
-    for (final entry in _scheduledTodoRules.entries.toList()) {
-      await _cancelRuleObjects('todo', entry.key, entry.value.keys);
-      await _cancelTodoLegacy(entry.key);
-      await registry.removeObject('todo', entry.key);
-    }
-    _scheduledTodoRules.clear();
+    // A failed persistence attempt retains the memory ledger and blocks the
+    // transition. The next reset retries it before cancelling any ownership.
+    await _persistInterruptedBatchOwnership();
+    final failures = <String>[];
+    final failedObjectKeys = <String>{};
 
-    for (final entry in _scheduledGoalRules.entries.toList()) {
-      await _cancelRuleObjects('goal', entry.key, entry.value.keys);
-      await _cancelGoalLegacy(entry.key);
-      await registry.removeObject('goal', entry.key);
-    }
-    _scheduledGoalRules.clear();
+    Future<void> cancelObjects(
+      String objectType,
+      Iterable<String> knownIds,
+    ) async {
+      var registryReadable = true;
+      Map<String, Set<int>> persisted;
+      try {
+        persisted = await registry.idsByObject(objectType);
+      } catch (e, st) {
+        registryReadable = false;
+        persisted = <String, Set<int>>{};
+        debugPrint(
+          '[ReminderScheduler] reset registry read failed for '
+          '$objectType: $e\n$st',
+        );
+        failures.add('$objectType reminder registry could not be read: $e');
+      }
+      final interrupted =
+          _interruptedBatchIds[objectType] ?? const <String, Set<int>>{};
+      final objectIds = <String>{
+        ...persisted.keys,
+        ...knownIds,
+        ...interrupted.keys,
+      };
+      for (final objectId in objectIds) {
+        final ids = <int>{
+          ...persisted[objectId] ?? const <int>{},
+          ...interrupted[objectId] ?? const <int>{},
+        };
+        switch (objectType) {
+          case 'todo':
+            ids.addAll(
+              _registryIdsForScheduledRules(
+                'todo',
+                objectId,
+                _scheduledTodoRules[objectId] ??
+                    const <String, _ScheduledRule>{},
+              ),
+            );
+            // Also sweep the legacy owner id in case it predates the registry.
+            ids.add(_idFor('todo_$objectId'));
+            break;
+          case 'goal':
+            ids.addAll(
+              _registryIdsForScheduledRules(
+                'goal',
+                objectId,
+                _scheduledGoalRules[objectId] ??
+                    const <String, _ScheduledRule>{},
+              ),
+            );
+            ids.add(_idFor('goal_$objectId'));
+            break;
+          case 'habit':
+            ids.add(_idFor('habit_$objectId'));
+            break;
+          case 'anniversary':
+            ids
+              ..add(_idFor('anni_$objectId'))
+              ..add(_idFor('anni_alarm_$objectId'));
+            break;
+          case 'countdown':
+            ids.add(_idFor('countdown:$objectId:due'));
+            break;
+        }
 
-    for (final id in _scheduledHabitScopes.keys.toList()) {
-      await _cancelHabit(id);
-      await registry.removeObject('habit', id);
-    }
-    _scheduledHabitScopes.clear();
+        var cancelled = await _cancelIds(objectType, objectId, ids);
+        cancelled = switch (objectType) {
+          'todo' => await _cancelTodoLegacy(objectId) && cancelled,
+          'goal' => await _cancelGoalLegacy(objectId) && cancelled,
+          'habit' => await _cancelHabit(objectId) && cancelled,
+          'anniversary' => await _cancelAnniversary(objectId) && cancelled,
+          'countdown' => await _cancelCountdown(objectId) && cancelled,
+          _ => cancelled,
+        };
+        if (!cancelled) {
+          failedObjectKeys.add('$objectType:$objectId');
+          failures.add('$objectType:$objectId reminder cancellation failed');
+          continue;
+        }
+        if (!registryReadable) {
+          failedObjectKeys.add('$objectType:$objectId');
+          continue;
+        }
 
-    for (final id in _scheduledAnniversaryScopes.keys.toList()) {
-      await _cancelAnniversary(id);
-      await registry.removeObject('anniversary', id);
-    }
-    _scheduledAnniversaryScopes.clear();
+        try {
+          await registry.removeObject(objectType, objectId);
+        } catch (e, st) {
+          debugPrint(
+            '[ReminderScheduler] reset registry cleanup failed for '
+            '$objectType:$objectId: $e\n$st',
+          );
+          failedObjectKeys.add('$objectType:$objectId');
+          failures.add('$objectType:$objectId registry cleanup failed: $e');
+          continue;
+        }
+        _interruptedBatchIds[objectType]?.remove(objectId);
+        if (_interruptedBatchIds[objectType]?.isEmpty == true) {
+          _interruptedBatchIds.remove(objectType);
+        }
 
-    for (final id in _scheduledCountdownScopes.keys.toList()) {
-      await _cancelCountdown(id);
-      await registry.removeObject('countdown', id);
+        switch (objectType) {
+          case 'todo':
+            _scheduledTodoRules.remove(objectId);
+            break;
+          case 'goal':
+            _scheduledGoalRules.remove(objectId);
+            break;
+          case 'habit':
+            _scheduledHabitScopes.remove(objectId);
+            break;
+          case 'anniversary':
+            _scheduledAnniversaryScopes.remove(objectId);
+            break;
+          case 'countdown':
+            _scheduledCountdownScopes.remove(objectId);
+            break;
+        }
+      }
     }
-    _scheduledCountdownScopes.clear();
-    _registeredReminderDisplay.clear();
+
+    await cancelObjects('todo', _scheduledTodoRules.keys);
+    await cancelObjects('goal', _scheduledGoalRules.keys);
+    await cancelObjects('habit', _scheduledHabitScopes.keys);
+    await cancelObjects('anniversary', _scheduledAnniversaryScopes.keys);
+    await cancelObjects('countdown', _scheduledCountdownScopes.keys);
+
+    _registeredReminderDisplay.removeWhere(
+      (objectKey, _) => !failedObjectKeys.contains(objectKey),
+    );
+    if (failures.isNotEmpty) {
+      throw ReminderSchedulerResetException(
+        List<String>.unmodifiable(failures),
+      );
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -1128,14 +2028,27 @@ class ReminderScheduler {
   Future<void> syncTodos(
     Iterable<TodoItem> todos, {
     bool allowJustMissedOneShotReminders = true,
+    ReminderReconciliationBatch? batch,
   }) async {
+    final generation = _accountChangeGeneration;
+    if (!_canRunAccountGeneration(generation)) return;
     final snapshot = todos.toList(growable: false);
-    await _runSerialized(
-      () => _syncTodosLocked(
-        snapshot,
-        allowJustMissedOneShotReminders: allowJustMissedOneShotReminders,
-      ),
+    Future<void> action() => _syncTodosLocked(
+      snapshot,
+      allowJustMissedOneShotReminders: allowJustMissedOneShotReminders,
     );
+    if (batch != null) {
+      if (!identical(batch, _activeBatch)) {
+        throw StateError('Reminder reconciliation batch is not active');
+      }
+      if (batch.accountChangeGeneration != generation ||
+          !_canRunAccountGeneration(generation)) {
+        return;
+      }
+      await action();
+      return;
+    }
+    await _runSerializedForAccountGeneration(generation, action);
   }
 
   Future<void> _syncTodosLocked(
@@ -1143,6 +2056,7 @@ class ReminderScheduler {
     required bool allowJustMissedOneShotReminders,
   }) async {
     final wanted = <String, Map<String, _ResolvedRule>>{};
+    final scheduleFailures = <String>[];
     for (final t in todos) {
       if (t.isCompleted) {
         await _cancelCurrentTodoPlan(t);
@@ -1154,6 +2068,10 @@ class ReminderScheduler {
       );
       if (resolved.isEmpty) {
         _recordUnresolvedTodoReminderIssue(t);
+        final failure = _unresolvedTodoReminderFailureSummary(t);
+        if (failure != null) {
+          scheduleFailures.add(failure);
+        }
         await _cancelCurrentTodoPlan(t);
         continue;
       }
@@ -1170,6 +2088,11 @@ class ReminderScheduler {
       cancelLegacy: _cancelTodoLegacy,
       blockedRegistryIdsByObject: blockedRegistryIds,
     );
+    if (scheduleFailures.isNotEmpty) {
+      throw ReminderScheduleSyncException(
+        List<String>.unmodifiable(scheduleFailures),
+      );
+    }
   }
 
   void _recordUnresolvedTodoReminderIssue(TodoItem todo) {
@@ -1192,44 +2115,247 @@ class ReminderScheduler {
     );
   }
 
-  void _recordAlarmScheduleIssue({
+  String? _unresolvedTodoReminderFailureSummary(TodoItem todo) {
+    final preflight = preflightTodoReminderPlan(todo);
+    if (!preflight.hasEnabledPlan || preflight.ok) return null;
+    final blocking = preflight.blockingIssue;
+    final issue =
+        blocking ?? (preflight.issues.isEmpty ? null : preflight.issues.first);
+    if (issue == null) return null;
+    return '${issue.title}：${issue.message}';
+  }
+
+  bool _recordAlarmScheduleIssue({
     required String relatedId,
     DateTime? scheduledTime,
     bool blocking = false,
+    Set<int>? alarmIds,
   }) {
     final issueSink = notif is ReminderScheduleIssueSink
         ? notif as ReminderScheduleIssueSink
         : null;
-    if (issueSink == null || alarm is! AlarmService) return;
-    final issue = (alarm as AlarmService).lastScheduleIssue;
-    if (issue == null) {
-      final clearSink = notif is ReminderScheduleIssueClearSink
-          ? notif as ReminderScheduleIssueClearSink
-          : null;
-      clearSink?.clearReminderScheduleIssue();
-      return;
-    }
+    if (issueSink == null || alarm is! AlarmService) return false;
+    final alarmService = alarm as AlarmService;
+    final issue = alarmService.lastScheduleIssue;
+    if (issue == null) return false;
+    if (!_alarmScheduleIssueMatches(issue, alarmIds)) return false;
+    final effectiveBlocking =
+        blocking ||
+        _isAlarmScheduleIssueBlocking(
+          title: issue.title,
+          message: issue.message,
+        );
     issueSink.recordReminderScheduleIssue(
       title: issue.title,
       message: issue.message,
       scheduledTime: issue.scheduledTime ?? scheduledTime,
       relatedId: relatedId,
-      blocking: blocking,
+      blocking: effectiveBlocking,
     );
+    alarmService.clearScheduleIssue(
+      ids: alarmIds == null || alarmIds.isEmpty ? null : alarmIds,
+    );
+    return effectiveBlocking;
+  }
+
+  bool _alarmScheduleIssueMatches(
+    AlarmScheduleIssue issue,
+    Set<int>? alarmIds,
+  ) {
+    if (alarmIds == null || alarmIds.isEmpty) return true;
+    final issueId = issue.id;
+    return issueId != null && alarmIds.contains(issueId);
+  }
+
+  String _issueRelatedIdForPayload(_DispatchPayload payload) {
+    return _relatedIdFromReminderPayload(payload.payload) ??
+        payload.id.toString();
+  }
+
+  String? _relatedIdFromReminderPayload(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    final uri = Uri.tryParse(payload);
+    if (uri == null || uri.scheme != 'duoyi' || uri.pathSegments.isEmpty) {
+      return null;
+    }
+    return switch (uri.host) {
+      'todo' ||
+      'habit' ||
+      'anniversary' ||
+      'countdown' ||
+      'goal' ||
+      'location' => uri.pathSegments.first,
+      _ => null,
+    };
+  }
+
+  String? _relatedIdFromIssueLabel(String label) {
+    final trimmed = label.trim();
+    if (trimmed.isEmpty) return null;
+    final fromPayload = _relatedIdFromReminderPayload(trimmed);
+    if (fromPayload != null) return fromPayload;
+    final normalized = trimmed.startsWith('email:')
+        ? trimmed.substring('email:'.length)
+        : trimmed;
+    final match = RegExp(
+      r'^(todo|habit|anniversary|countdown|goal|location)(?:\s+[A-Za-z_]+)*:([^:#\s)]+)',
+    ).firstMatch(normalized);
+    return match?.group(2);
+  }
+
+  Set<int> _alarmIssueIdsForRule(_ResolvedRule rule) {
+    final base = _idFor(rule.key);
+    return <int>{base, ..._expectedPendingIdsForRule(rule)};
+  }
+
+  Set<int> _alarmIssueIdsForRepeating(int base, List<int> weekdays) {
+    return <int>{base, ..._expectedRepeatingPendingIds(base, weekdays)};
+  }
+
+  void _recordRuleScheduleFailure(_ResolvedRule rule) {
+    final issueSink = notif is ReminderScheduleIssueSink
+        ? notif as ReminderScheduleIssueSink
+        : null;
+    if (issueSink == null) return;
+    issueSink.recordReminderScheduleIssue(
+      title: _ruleScheduleFailureTitle(rule),
+      message: _ruleScheduleFailureMessage(rule),
+      scheduledTime: rule.when,
+      relatedId: rule.objectId,
+      blocking: true,
+    );
+  }
+
+  String _ruleScheduleFailureTitle(_ResolvedRule rule) {
+    return switch (rule.objectType) {
+      'todo' => '待办提醒注册失败',
+      'goal' => '目标提醒注册失败',
+      _ => '提醒注册失败',
+    };
+  }
+
+  String _ruleScheduleFailureMessage(_ResolvedRule rule) {
+    final target = rule.body.trim().isEmpty ? '该提醒' : '“${rule.body}”';
+    final channel = _kindLabel(rule.kind);
+    final hint = switch (rule.kind) {
+      ReminderKind.popup => '请保持应用前台运行，或开启系统通知权限以便后台兜底。',
+      ReminderKind.alarm => '请检查通知权限、精准闹钟权限、全屏提醒权限和强提醒渠道。',
+      ReminderKind.push => '请检查系统通知权限和通知渠道。',
+      ReminderKind.email => '请检查邮件提醒服务配置。',
+      ReminderKind.off => '请重新启用提醒方式。',
+    };
+    return '$target 的$channel未注册成功。$hint';
+  }
+
+  String _ruleScheduleFailureSummary(_ResolvedRule rule) {
+    return '${_ruleScheduleFailureTitle(rule)}：${_ruleScheduleFailureMessage(rule)}';
+  }
+
+  void _recordSingleScheduleFailure({
+    required String title,
+    required String target,
+    required ReminderKind kind,
+    DateTime? scheduledTime,
+    String? relatedId,
+  }) {
+    final issueSink = notif is ReminderScheduleIssueSink
+        ? notif as ReminderScheduleIssueSink
+        : null;
+    if (issueSink == null) return;
+    issueSink.recordReminderScheduleIssue(
+      title: title,
+      message: _singleScheduleFailureMessage(target: target, kind: kind),
+      scheduledTime: scheduledTime,
+      relatedId: relatedId,
+      blocking: true,
+    );
+  }
+
+  String _singleScheduleFailureSummary({
+    required String title,
+    required String target,
+    required ReminderKind kind,
+  }) {
+    return '$title：${_singleScheduleFailureMessage(target: target, kind: kind)}';
+  }
+
+  String _singleScheduleFailureMessage({
+    required String target,
+    required ReminderKind kind,
+  }) {
+    final name = target.trim().isEmpty ? '该提醒' : '“${target.trim()}”';
+    final channel = _kindLabel(kind);
+    final hint = switch (kind) {
+      ReminderKind.popup => '请保持应用前台运行，或开启系统通知权限以便后台兜底。',
+      ReminderKind.alarm => '请检查通知权限、精准闹钟权限、全屏提醒权限和强提醒渠道。',
+      ReminderKind.push => '请检查系统通知权限和通知渠道。',
+      ReminderKind.email => '请检查邮件提醒服务配置。',
+      ReminderKind.off => '请重新启用提醒方式。',
+    };
+    return '$name 的$channel未注册成功。$hint';
+  }
+
+  void _recordHabitScheduleFailure(Habit habit) {
+    final issueSink = notif is ReminderScheduleIssueSink
+        ? notif as ReminderScheduleIssueSink
+        : null;
+    if (issueSink == null) return;
+    issueSink.recordReminderScheduleIssue(
+      title: '习惯提醒注册失败',
+      message: _habitScheduleFailureMessage(habit),
+      relatedId: habit.id,
+      blocking: true,
+    );
+  }
+
+  String _habitScheduleFailureMessage(Habit habit) {
+    final name = habit.name.trim().isEmpty ? '该习惯' : '“${habit.name}”';
+    final kinds = _enabledHabitRules(
+      habit,
+    ).map((rule) => _kindLabel(rule.kind)).toSet().join('、');
+    final channel = kinds.isEmpty ? '提醒' : kinds;
+    return '$name 的$channel未完整注册。请检查通知权限、前台弹出兜底、精准闹钟或全屏提醒权限后重新保存。';
+  }
+
+  String _habitScheduleFailureSummary(Habit habit) {
+    return '习惯提醒注册失败：${_habitScheduleFailureMessage(habit)}';
+  }
+
+  bool _isAlarmScheduleIssueBlocking({required String title, String? message}) {
+    final text = '$title\n${message ?? ''}';
+    return _blockingAlarmScheduleIssuePhrases.any(text.contains);
   }
 
   /// 按最新的 [habits] 幂等地重新同步习惯提醒。
   ///
   /// 习惯提醒按用户选择走通知、应用内弹窗或柔和强提醒闹钟。闹钟权限不足时
   /// 降级为普通 push，确保不会静默丢提醒。
-  Future<void> syncHabits(Iterable<Habit> habits) async {
+  Future<void> syncHabits(
+    Iterable<Habit> habits, {
+    ReminderReconciliationBatch? batch,
+  }) async {
+    final generation = _accountChangeGeneration;
+    if (!_canRunAccountGeneration(generation)) return;
     final snapshot = habits.toList(growable: false);
-    await _runSerialized(() => _syncHabitsLocked(snapshot));
+    Future<void> action() => _syncHabitsLocked(snapshot);
+    if (batch != null) {
+      if (!identical(batch, _activeBatch)) {
+        throw StateError('Reminder reconciliation batch is not active');
+      }
+      if (batch.accountChangeGeneration != generation ||
+          !_canRunAccountGeneration(generation)) {
+        return;
+      }
+      await action();
+      return;
+    }
+    await _runSerializedForAccountGeneration(generation, action);
   }
 
   Future<void> _syncHabitsLocked(Iterable<Habit> habits) async {
     final wanted = <String, Habit>{};
     final handledInactiveHabitIds = <String>{};
+    final scheduleFailures = <String>[];
     for (final h in habits) {
       final plan = _effectiveHabitPlan(h);
       final rule = plan.primaryRule;
@@ -1299,7 +2425,7 @@ class ReminderScheduler {
           await _replaceRegistryObject('habit', h.id, {
             ...blockedRegistryIds,
             ..._habitRegistryIds(h),
-          });
+          }, acceptedIdSets: _habitAcceptedPendingIdSets(h));
           continue;
         }
         final cancelled = await _cancelHabit(h.id);
@@ -1312,6 +2438,9 @@ class ReminderScheduler {
       if (scheduled) {
         _rememberHabitReminderDisplay(h);
         _scheduledHabitScopes[h.id] = scope;
+      } else {
+        _recordHabitScheduleFailure(h);
+        scheduleFailures.add(_habitScheduleFailureSummary(h));
       }
       // 即便部分规则调度失败（scheduled == false，scope 不落库以便下次重排），
       // 也要把这条习惯当前“应注册”的全部派生 id 写入 registry：否则已成功的
@@ -1320,8 +2449,13 @@ class ReminderScheduler {
         await _replaceRegistryObject('habit', h.id, {
           ...blockedRegistryIds,
           ..._habitRegistryIds(h),
-        });
+        }, acceptedIdSets: _habitAcceptedPendingIdSets(h));
       }
+    }
+    if (scheduleFailures.isNotEmpty) {
+      throw ReminderScheduleSyncException(
+        List<String>.unmodifiable(scheduleFailures),
+      );
     }
   }
 
@@ -1412,6 +2546,7 @@ class ReminderScheduler {
           return false;
         }
       case ReminderKind.alarm:
+        final alarmIds = _alarmIssueIdsForRepeating(id, weekdays);
         try {
           await alarm.scheduleDailyFullScreen(
             id: id,
@@ -1426,8 +2561,10 @@ class ReminderScheduler {
             snoozeMinutes: rule.snoozeMinutes,
             repeatCount: rule.repeatCount,
           );
-          _recordAlarmScheduleIssue(relatedId: habit.id);
-          return true;
+          return !_recordAlarmScheduleIssue(
+            relatedId: habit.id,
+            alarmIds: alarmIds,
+          );
         } on AlarmPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] habit alarm permission denied for ${habit.id}: $e',
@@ -1440,11 +2577,14 @@ class ReminderScheduler {
               base: id,
               weekdays: weekdays,
             ),
+            relatedId: habit.id,
           )) {
-            _recordAlarmScheduleIssue(relatedId: habit.id);
-            return true;
+            return !_recordAlarmScheduleIssue(
+              relatedId: habit.id,
+              alarmIds: alarmIds,
+            );
           }
-          final fallbackScheduled = await _scheduleHabitPush(
+          await _scheduleHabitPush(
             habit,
             hour,
             minute,
@@ -1453,9 +2593,10 @@ class ReminderScheduler {
           );
           _recordAlarmScheduleIssue(
             relatedId: habit.id,
-            blocking: !fallbackScheduled,
+            blocking: true,
+            alarmIds: alarmIds,
           );
-          return fallbackScheduled;
+          return false;
         } on NotificationPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] habit alarm notification permission denied for ${habit.id}: $e',
@@ -1468,11 +2609,14 @@ class ReminderScheduler {
               base: id,
               weekdays: weekdays,
             ),
+            relatedId: habit.id,
           )) {
-            _recordAlarmScheduleIssue(relatedId: habit.id);
-            return true;
+            return !_recordAlarmScheduleIssue(
+              relatedId: habit.id,
+              alarmIds: alarmIds,
+            );
           }
-          final fallbackScheduled = await _scheduleHabitPush(
+          await _scheduleHabitPush(
             habit,
             hour,
             minute,
@@ -1481,14 +2625,19 @@ class ReminderScheduler {
           );
           _recordAlarmScheduleIssue(
             relatedId: habit.id,
-            blocking: !fallbackScheduled,
+            blocking: true,
+            alarmIds: alarmIds,
           );
-          return fallbackScheduled;
+          return false;
         } on AlarmQueueHandoffException catch (e) {
           debugPrint(
             '[ReminderScheduler] habit alarm queue handoff failed for ${habit.id}: $e',
           );
-          _recordAlarmScheduleIssue(relatedId: habit.id, blocking: true);
+          _recordAlarmScheduleIssue(
+            relatedId: habit.id,
+            blocking: true,
+            alarmIds: alarmIds,
+          );
           return false;
         } catch (e, st) {
           debugPrint(
@@ -1502,11 +2651,14 @@ class ReminderScheduler {
               base: id,
               weekdays: weekdays,
             ),
+            relatedId: habit.id,
           )) {
-            _recordAlarmScheduleIssue(relatedId: habit.id);
-            return true;
+            return !_recordAlarmScheduleIssue(
+              relatedId: habit.id,
+              alarmIds: alarmIds,
+            );
           }
-          final fallbackScheduled = await _scheduleHabitPush(
+          await _scheduleHabitPush(
             habit,
             hour,
             minute,
@@ -1515,9 +2667,10 @@ class ReminderScheduler {
           );
           _recordAlarmScheduleIssue(
             relatedId: habit.id,
-            blocking: !fallbackScheduled,
+            blocking: true,
+            alarmIds: alarmIds,
           );
-          return fallbackScheduled;
+          return false;
         }
       case ReminderKind.email:
       case ReminderKind.off:
@@ -1612,15 +2765,33 @@ class ReminderScheduler {
 
   /// 按最新的纪念日 [items] 幂等地重新同步提醒。
   ///
-  /// 纪念日提醒按 `reminderKind` 路由到通知、弹出框、闹钟或关闭；闹钟权限
-  /// 不足时自动降级为 push。
-  Future<void> syncAnniversaries(Iterable<Anniversary> items) async {
+  /// 纪念日提醒按 `reminderKind` 路由到通知、弹出框、闹钟或关闭；闹钟失败时
+  /// 可以注册普通通知兜底防漏，但仍按闹钟注册失败向上反馈。
+  Future<void> syncAnniversaries(
+    Iterable<Anniversary> items, {
+    ReminderReconciliationBatch? batch,
+  }) async {
+    final generation = _accountChangeGeneration;
+    if (!_canRunAccountGeneration(generation)) return;
     final snapshot = items.toList(growable: false);
-    await _runSerialized(() => _syncAnniversariesLocked(snapshot));
+    Future<void> action() => _syncAnniversariesLocked(snapshot);
+    if (batch != null) {
+      if (!identical(batch, _activeBatch)) {
+        throw StateError('Reminder reconciliation batch is not active');
+      }
+      if (batch.accountChangeGeneration != generation ||
+          !_canRunAccountGeneration(generation)) {
+        return;
+      }
+      await action();
+      return;
+    }
+    await _runSerializedForAccountGeneration(generation, action);
   }
 
   Future<void> _syncAnniversariesLocked(Iterable<Anniversary> items) async {
     final wanted = <String, Anniversary>{};
+    final scheduleFailures = <String>[];
     for (final a in items) {
       if (!a.remind) {
         await _cancelAnniversary(a.id);
@@ -1688,10 +2859,12 @@ class ReminderScheduler {
       if (_scheduledAnniversaryScopes[a.id] == scope) {
         if (await _anniversaryStillPending(a)) {
           _rememberAnniversaryReminderDisplay(a, remindAt);
-          await _replaceRegistryObject('anniversary', a.id, {
-            ...blockedRegistryIds,
-            ..._anniversaryRegistryIds(a),
-          });
+          await _replaceRegistryObject(
+            'anniversary',
+            a.id,
+            {...blockedRegistryIds, ..._anniversaryRegistryIds(a)},
+            acceptedIdSets: _anniversaryAcceptedPendingIdSets(a),
+          );
           continue;
         }
         final cancelled = await _cancelAnniversary(a.id);
@@ -1708,21 +2881,59 @@ class ReminderScheduler {
         await _replaceRegistryObject('anniversary', a.id, {
           ...blockedRegistryIds,
           ..._anniversaryRegistryIds(a),
-        });
+        }, acceptedIdSets: _anniversaryAcceptedPendingIdSets(a));
+      } else {
+        _recordSingleScheduleFailure(
+          title: '纪念日提醒注册失败',
+          target: a.title,
+          kind: a.reminderKind,
+          scheduledTime: remindAt,
+          relatedId: a.id,
+        );
+        scheduleFailures.add(
+          _singleScheduleFailureSummary(
+            title: '纪念日提醒注册失败',
+            target: a.title,
+            kind: a.reminderKind,
+          ),
+        );
       }
+    }
+    if (scheduleFailures.isNotEmpty) {
+      throw ReminderScheduleSyncException(
+        List<String>.unmodifiable(scheduleFailures),
+      );
     }
   }
 
   /// 按最新的倒数日 [items] 幂等地同步到期提醒。
-  Future<void> syncCountdowns(Iterable<CountdownItem> items) async {
+  Future<void> syncCountdowns(
+    Iterable<CountdownItem> items, {
+    ReminderReconciliationBatch? batch,
+  }) async {
+    final generation = _accountChangeGeneration;
+    if (!_canRunAccountGeneration(generation)) return;
     final snapshot = items.toList(growable: false);
-    await _runSerialized(() => _syncCountdownsLocked(snapshot));
+    Future<void> action() => _syncCountdownsLocked(snapshot);
+    if (batch != null) {
+      if (!identical(batch, _activeBatch)) {
+        throw StateError('Reminder reconciliation batch is not active');
+      }
+      if (batch.accountChangeGeneration != generation ||
+          !_canRunAccountGeneration(generation)) {
+        return;
+      }
+      await action();
+      return;
+    }
+    await _runSerializedForAccountGeneration(generation, action);
   }
 
   Future<void> _syncCountdownsLocked(Iterable<CountdownItem> items) async {
     final now = DateTime.now();
     final wanted = <String, CountdownItem>{};
     final scopes = <String, String>{};
+    final scheduleFailures = <String>[];
     for (final item in items) {
       if (!item.remind || item.reminderKind == ReminderKind.off) {
         await _cancelCountdown(item.id);
@@ -1775,10 +2986,12 @@ class ReminderScheduler {
       if (_scheduledCountdownScopes[item.id] == scope) {
         if (await _countdownStillPending(item)) {
           _rememberCountdownReminderDisplay(item, _countdownReminderAt(item));
-          await _replaceRegistryObject('countdown', item.id, {
-            ...blockedRegistryIds,
-            ..._countdownRegistryIds(item),
-          });
+          await _replaceRegistryObject(
+            'countdown',
+            item.id,
+            {...blockedRegistryIds, ..._countdownRegistryIds(item)},
+            acceptedIdSets: _countdownAcceptedPendingIdSets(item),
+          );
           continue;
         }
         final cancelled = await _cancelCountdown(item.id);
@@ -1803,18 +3016,57 @@ class ReminderScheduler {
       if (scheduled) {
         _rememberCountdownReminderDisplay(item, when);
         _scheduledCountdownScopes[item.id] = scope;
-        await _replaceRegistryObject('countdown', item.id, {
-          ...blockedRegistryIds,
-          ..._countdownRegistryIds(item),
-        });
+        await _replaceRegistryObject(
+          'countdown',
+          item.id,
+          {...blockedRegistryIds, ..._countdownRegistryIds(item)},
+          acceptedIdSets: _countdownAcceptedPendingIdSets(item),
+        );
+      } else {
+        _recordSingleScheduleFailure(
+          title: '倒数日提醒注册失败',
+          target: item.title,
+          kind: item.reminderKind,
+          scheduledTime: when,
+          relatedId: item.id,
+        );
+        scheduleFailures.add(
+          _singleScheduleFailureSummary(
+            title: '倒数日提醒注册失败',
+            target: item.title,
+            kind: item.reminderKind,
+          ),
+        );
       }
+    }
+    if (scheduleFailures.isNotEmpty) {
+      throw ReminderScheduleSyncException(
+        List<String>.unmodifiable(scheduleFailures),
+      );
     }
   }
 
   /// 按最新的 [goals] 幂等地重新同步目标提醒（支持多 rule）。
-  Future<void> syncGoals(Iterable<GoalItem> goals) async {
+  Future<void> syncGoals(
+    Iterable<GoalItem> goals, {
+    ReminderReconciliationBatch? batch,
+  }) async {
+    final generation = _accountChangeGeneration;
+    if (!_canRunAccountGeneration(generation)) return;
     final snapshot = goals.toList(growable: false);
-    await _runSerialized(() => _syncGoalsLocked(snapshot));
+    Future<void> action() => _syncGoalsLocked(snapshot);
+    if (batch != null) {
+      if (!identical(batch, _activeBatch)) {
+        throw StateError('Reminder reconciliation batch is not active');
+      }
+      if (batch.accountChangeGeneration != generation ||
+          !_canRunAccountGeneration(generation)) {
+        return;
+      }
+      await action();
+      return;
+    }
+    await _runSerializedForAccountGeneration(generation, action);
   }
 
   Future<void> _syncGoalsLocked(Iterable<GoalItem> goals) async {
@@ -1857,8 +3109,8 @@ class ReminderScheduler {
     final anniversarySnapshot = annis.toList(growable: false);
     final goalSnapshot = goals.toList(growable: false);
     final countdownSnapshot = countdowns.toList(growable: false);
-    await _runSerialized(
-      () => _resyncAllLocked(
+    await runReconciliationBatch(
+      (_) => _resyncAllLocked(
         todos: todoSnapshot,
         habits: habitSnapshot,
         annis: anniversarySnapshot,
@@ -1980,6 +3232,8 @@ class ReminderScheduler {
           return false;
         }
       case ReminderKind.alarm:
+        final relatedId = _issueRelatedIdForPayload(payload);
+        final alarmIds = <int>{payload.id};
         try {
           await alarm.scheduleFullScreen(
             id: payload.id,
@@ -1992,11 +3246,11 @@ class ReminderScheduler {
             snoozeMinutes: payload.snoozeMinutes,
             repeatCount: payload.repeatCount,
           );
-          _recordAlarmScheduleIssue(
-            relatedId: payload.payload ?? payload.id.toString(),
+          return !_recordAlarmScheduleIssue(
+            relatedId: relatedId,
             scheduledTime: payload.when,
+            alarmIds: alarmIds,
           );
-          return true;
         } on AlarmPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] alarm permission denied for ${payload.id}: $e',
@@ -2004,12 +3258,13 @@ class ReminderScheduler {
           if (await _alarmQueueAlreadyOwns(
             label: 'once:${payload.id}',
             expected: <int>{payload.id},
+            relatedId: relatedId,
           )) {
-            _recordAlarmScheduleIssue(
-              relatedId: payload.payload ?? payload.id.toString(),
+            return !_recordAlarmScheduleIssue(
+              relatedId: relatedId,
               scheduledTime: payload.when,
+              alarmIds: alarmIds,
             );
-            return true;
           }
           try {
             await notif.scheduleOnce(
@@ -2020,18 +3275,21 @@ class ReminderScheduler {
               payload: _fallbackPayload(payload.payload),
             );
             _recordAlarmScheduleIssue(
-              relatedId: payload.payload ?? payload.id.toString(),
+              relatedId: relatedId,
               scheduledTime: payload.when,
+              blocking: true,
+              alarmIds: alarmIds,
             );
-            return true;
+            return false;
           } on NotificationPermissionDeniedException catch (fallbackError) {
             debugPrint(
               '[ReminderScheduler] alarm fallback notification permission denied for ${payload.id}: $fallbackError',
             );
             _recordAlarmScheduleIssue(
-              relatedId: payload.payload ?? payload.id.toString(),
+              relatedId: relatedId,
               scheduledTime: payload.when,
               blocking: true,
+              alarmIds: alarmIds,
             );
             return false;
           } catch (fallbackError, fallbackStack) {
@@ -2039,9 +3297,10 @@ class ReminderScheduler {
               '[ReminderScheduler] alarm fallback notification dispatch failed for ${payload.id}: $fallbackError\n$fallbackStack',
             );
             _recordAlarmScheduleIssue(
-              relatedId: payload.payload ?? payload.id.toString(),
+              relatedId: relatedId,
               scheduledTime: payload.when,
               blocking: true,
+              alarmIds: alarmIds,
             );
             return false;
           }
@@ -2052,17 +3311,19 @@ class ReminderScheduler {
           if (await _alarmQueueAlreadyOwns(
             label: 'once:${payload.id}',
             expected: <int>{payload.id},
+            relatedId: relatedId,
           )) {
-            _recordAlarmScheduleIssue(
-              relatedId: payload.payload ?? payload.id.toString(),
+            return !_recordAlarmScheduleIssue(
+              relatedId: relatedId,
               scheduledTime: payload.when,
+              alarmIds: alarmIds,
             );
-            return true;
           }
           _recordAlarmScheduleIssue(
-            relatedId: payload.payload ?? payload.id.toString(),
+            relatedId: relatedId,
             scheduledTime: payload.when,
             blocking: true,
+            alarmIds: alarmIds,
           );
           return false;
         } on AlarmQueueHandoffException catch (e) {
@@ -2070,9 +3331,10 @@ class ReminderScheduler {
             '[ReminderScheduler] alarm queue handoff failed for ${payload.id}: $e',
           );
           _recordAlarmScheduleIssue(
-            relatedId: payload.payload ?? payload.id.toString(),
+            relatedId: relatedId,
             scheduledTime: payload.when,
             blocking: true,
+            alarmIds: alarmIds,
           );
           return false;
         } catch (e, st) {
@@ -2082,12 +3344,13 @@ class ReminderScheduler {
           if (await _alarmQueueAlreadyOwns(
             label: 'once:${payload.id}',
             expected: <int>{payload.id},
+            relatedId: relatedId,
           )) {
-            _recordAlarmScheduleIssue(
-              relatedId: payload.payload ?? payload.id.toString(),
+            return !_recordAlarmScheduleIssue(
+              relatedId: relatedId,
               scheduledTime: payload.when,
+              alarmIds: alarmIds,
             );
-            return true;
           }
           try {
             await notif.scheduleOnce(
@@ -2098,18 +3361,21 @@ class ReminderScheduler {
               payload: _fallbackPayload(payload.payload),
             );
             _recordAlarmScheduleIssue(
-              relatedId: payload.payload ?? payload.id.toString(),
+              relatedId: relatedId,
               scheduledTime: payload.when,
+              blocking: true,
+              alarmIds: alarmIds,
             );
-            return true;
+            return false;
           } on NotificationPermissionDeniedException catch (fallbackError) {
             debugPrint(
               '[ReminderScheduler] alarm fallback notification permission denied for ${payload.id}: $fallbackError',
             );
             _recordAlarmScheduleIssue(
-              relatedId: payload.payload ?? payload.id.toString(),
+              relatedId: relatedId,
               scheduledTime: payload.when,
               blocking: true,
+              alarmIds: alarmIds,
             );
             return false;
           } catch (fallbackError, fallbackStack) {
@@ -2117,9 +3383,10 @@ class ReminderScheduler {
               '[ReminderScheduler] alarm fallback notification dispatch failed for ${payload.id}: $fallbackError\n$fallbackStack',
             );
             _recordAlarmScheduleIssue(
-              relatedId: payload.payload ?? payload.id.toString(),
+              relatedId: relatedId,
               scheduledTime: payload.when,
               blocking: true,
+              alarmIds: alarmIds,
             );
             return false;
           }
@@ -2184,6 +3451,8 @@ class ReminderScheduler {
           return false;
         }
       case ReminderKind.alarm:
+        final relatedId = rule.objectId;
+        final alarmIds = _alarmIssueIdsForRule(rule);
         try {
           await alarm.scheduleDailyFullScreen(
             id: _idFor(rule.key),
@@ -2198,8 +3467,10 @@ class ReminderScheduler {
             snoozeMinutes: rule.snoozeMinutes,
             repeatCount: rule.repeatCount,
           );
-          _recordAlarmScheduleIssue(relatedId: rule.key);
-          return true;
+          return !_recordAlarmScheduleIssue(
+            relatedId: relatedId,
+            alarmIds: alarmIds,
+          );
         } on AlarmPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] alarm permission denied for ${rule.key}: $e',
@@ -2208,9 +3479,12 @@ class ReminderScheduler {
             label: rule.key,
             expected: _expectedPendingIdsForRule(rule),
             acceptedExpectedSets: _acceptedPendingIdSetsForRule(rule),
+            relatedId: relatedId,
           )) {
-            _recordAlarmScheduleIssue(relatedId: rule.key);
-            return true;
+            return !_recordAlarmScheduleIssue(
+              relatedId: relatedId,
+              alarmIds: alarmIds,
+            );
           }
           try {
             await notif.scheduleDaily(
@@ -2222,19 +3496,31 @@ class ReminderScheduler {
               weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
               payload: _fallbackPayload(rule.payload),
             );
-            _recordAlarmScheduleIssue(relatedId: rule.key);
-            return true;
+            _recordAlarmScheduleIssue(
+              relatedId: relatedId,
+              blocking: true,
+              alarmIds: alarmIds,
+            );
+            return false;
           } on NotificationPermissionDeniedException catch (fallbackError) {
             debugPrint(
               '[ReminderScheduler] repeating alarm fallback permission denied for ${rule.key}: $fallbackError',
             );
-            _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
+            _recordAlarmScheduleIssue(
+              relatedId: relatedId,
+              blocking: true,
+              alarmIds: alarmIds,
+            );
             return false;
           } catch (fallbackError, fallbackStack) {
             debugPrint(
               '[ReminderScheduler] repeating alarm fallback dispatch failed for ${rule.key}: $fallbackError\n$fallbackStack',
             );
-            _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
+            _recordAlarmScheduleIssue(
+              relatedId: relatedId,
+              blocking: true,
+              alarmIds: alarmIds,
+            );
             return false;
           }
         } on NotificationPermissionDeniedException catch (e) {
@@ -2245,17 +3531,28 @@ class ReminderScheduler {
             label: rule.key,
             expected: _expectedPendingIdsForRule(rule),
             acceptedExpectedSets: _acceptedPendingIdSetsForRule(rule),
+            relatedId: relatedId,
           )) {
-            _recordAlarmScheduleIssue(relatedId: rule.key);
-            return true;
+            return !_recordAlarmScheduleIssue(
+              relatedId: relatedId,
+              alarmIds: alarmIds,
+            );
           }
-          _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
+          _recordAlarmScheduleIssue(
+            relatedId: relatedId,
+            blocking: true,
+            alarmIds: alarmIds,
+          );
           return false;
         } on AlarmQueueHandoffException catch (e) {
           debugPrint(
             '[ReminderScheduler] repeating alarm queue handoff failed for ${rule.key}: $e',
           );
-          _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
+          _recordAlarmScheduleIssue(
+            relatedId: relatedId,
+            blocking: true,
+            alarmIds: alarmIds,
+          );
           return false;
         } catch (e, st) {
           debugPrint(
@@ -2266,9 +3563,12 @@ class ReminderScheduler {
             label: rule.key,
             expected: _expectedPendingIdsForRule(rule),
             acceptedExpectedSets: _acceptedPendingIdSetsForRule(rule),
+            relatedId: relatedId,
           )) {
-            _recordAlarmScheduleIssue(relatedId: rule.key);
-            return true;
+            return !_recordAlarmScheduleIssue(
+              relatedId: relatedId,
+              alarmIds: alarmIds,
+            );
           }
           try {
             await notif.scheduleDaily(
@@ -2280,19 +3580,31 @@ class ReminderScheduler {
               weekdays: rule.weekdays.isEmpty ? null : rule.weekdays,
               payload: _fallbackPayload(rule.payload),
             );
-            _recordAlarmScheduleIssue(relatedId: rule.key);
-            return true;
+            _recordAlarmScheduleIssue(
+              relatedId: relatedId,
+              blocking: true,
+              alarmIds: alarmIds,
+            );
+            return false;
           } on NotificationPermissionDeniedException catch (fallbackError) {
             debugPrint(
               '[ReminderScheduler] repeating alarm fallback permission denied for ${rule.key}: $fallbackError',
             );
-            _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
+            _recordAlarmScheduleIssue(
+              relatedId: relatedId,
+              blocking: true,
+              alarmIds: alarmIds,
+            );
             return false;
           } catch (fallbackError, fallbackStack) {
             debugPrint(
               '[ReminderScheduler] repeating alarm fallback dispatch failed for ${rule.key}: $fallbackError\n$fallbackStack',
             );
-            _recordAlarmScheduleIssue(relatedId: rule.key, blocking: true);
+            _recordAlarmScheduleIssue(
+              relatedId: relatedId,
+              blocking: true,
+              alarmIds: alarmIds,
+            );
             return false;
           }
         }
@@ -2462,6 +3774,9 @@ class ReminderScheduler {
             objectId,
             wantedIds,
             resolvedRules: wantedRules.values,
+            acceptedIdSets: _acceptedPendingIdSetsForResolvedRules(
+              wantedRules.values,
+            ),
           );
         }
       } else {
@@ -2660,7 +3975,7 @@ class ReminderScheduler {
     issueSink.recordReminderScheduleIssue(
       title: '提醒已更新',
       message: '提醒已保存。若旧提醒仍弹出，可前往"我的 → 通知设置 → 已注册提醒"手动检查。',
-      relatedId: label,
+      relatedId: _relatedIdFromIssueLabel(label) ?? label,
       blocking: false,
     );
   }
@@ -2674,6 +3989,7 @@ class ReminderScheduler {
     required Map<String, Set<int>> blockedRegistryIdsByObject,
   }) async {
     final nextScheduled = <String, Map<String, _ScheduledRule>>{};
+    final scheduleFailures = <String>[];
     final persistedRegistryIdsByObject = await registry.idsByObject(objectType);
 
     for (final objectId in scheduled.keys.toList()) {
@@ -2693,10 +4009,24 @@ class ReminderScheduler {
           nextScheduled[objectId] = Map<String, _ScheduledRule>.from(
             priorRules,
           );
-          await _replaceRegistryObject(objectType, objectId, {
-            ...blockedRegistryIds,
-            ..._registryIdsForScheduledRules(objectType, objectId, priorRules),
-          }, scheduledRules: priorRules.values);
+          await _replaceRegistryObject(
+            objectType,
+            objectId,
+            {
+              ...blockedRegistryIds,
+              ..._registryIdsForScheduledRules(
+                objectType,
+                objectId,
+                priorRules,
+              ),
+            },
+            scheduledRules: priorRules.values,
+            acceptedIdSets: _acceptedPendingIdSetsForScheduledRules(
+              objectType,
+              objectId,
+              priorRules,
+            ),
+          );
         } else {
           await registry.removeObject(objectType, objectId);
         }
@@ -2704,8 +4034,16 @@ class ReminderScheduler {
       }
 
       final kept = <String, _ScheduledRule>{};
+      var legacyCleanupDone = false;
+      Future<void> cancelLegacyOnce() async {
+        if (legacyCleanupDone) return;
+        legacyCleanupDone = true;
+        await cancelLegacy(objectId, blocking: false);
+      }
+
       for (final priorEntry in priorRules.entries) {
         if (!nextRules.containsKey(priorEntry.key)) {
+          await cancelLegacyOnce();
           final cancelled = await _cancelRule(
             objectType,
             objectId,
@@ -2723,6 +4061,7 @@ class ReminderScheduler {
         final needsCancel =
             prior != null && !_sameScheduledRule(prior, nextRule);
         if (needsCancel) {
+          await cancelLegacyOnce();
           await _cancelRule(
             objectType,
             objectId,
@@ -2732,7 +4071,6 @@ class ReminderScheduler {
         }
       }
 
-      await cancelLegacy(objectId, blocking: false);
       for (final nextRule in nextRules.values) {
         final prior = priorRules[nextRule.ruleId];
         if (prior != null && _sameScheduledRule(prior, nextRule)) {
@@ -2740,6 +4078,7 @@ class ReminderScheduler {
             kept[nextRule.ruleId] = prior;
             continue;
           }
+          await cancelLegacyOnce();
           final cancelled = await _cancelRule(
             objectType,
             objectId,
@@ -2750,33 +4089,54 @@ class ReminderScheduler {
             continue;
           }
         }
+        await cancelLegacyOnce();
         // 强制注册新规则，即使旧规则清理失败
         // 系统通知 ID 相同时会自动覆盖
         final ok = await _dispatchRule(nextRule);
+        var registered = false;
         if (ok) {
           kept[nextRule.ruleId] = _scheduledFromResolved(nextRule);
+          registered = true;
         } else {
           final prior = priorRules[nextRule.ruleId];
           if (prior != null &&
               _sameScheduledRule(prior, nextRule) &&
               await _scheduledRuleStillPending(nextRule)) {
             kept[nextRule.ruleId] = prior;
+            registered = true;
           }
+        }
+        if (!registered) {
+          _recordRuleScheduleFailure(nextRule);
+          scheduleFailures.add(_ruleScheduleFailureSummary(nextRule));
         }
       }
 
       if (kept.isNotEmpty) {
         nextScheduled[objectId] = kept;
-        await _replaceRegistryObject(objectType, objectId, {
-          ...blockedRegistryIds,
-          ..._registryIdsForScheduledRules(objectType, objectId, kept),
-        }, scheduledRules: kept.values);
+        await _replaceRegistryObject(
+          objectType,
+          objectId,
+          {
+            ...blockedRegistryIds,
+            ..._registryIdsForScheduledRules(objectType, objectId, kept),
+          },
+          scheduledRules: kept.values,
+          acceptedIdSets: _acceptedPendingIdSetsForScheduledRules(
+            objectType,
+            objectId,
+            kept,
+          ),
+        );
       } else if (blockedRegistryIds.isNotEmpty) {
         await _replaceRegistryObject(
           objectType,
           objectId,
           blockedRegistryIds,
           resolvedRules: nextRules.values,
+          acceptedIdSets: _acceptedPendingIdSetsForResolvedRules(
+            nextRules.values,
+          ),
         );
       } else {
         await registry.removeObject(objectType, objectId);
@@ -2812,20 +4172,36 @@ class ReminderScheduler {
         final ok = await _dispatchRule(nextRule);
         if (ok) {
           kept[nextRule.ruleId] = _scheduledFromResolved(nextRule);
+        } else {
+          _recordRuleScheduleFailure(nextRule);
+          scheduleFailures.add(_ruleScheduleFailureSummary(nextRule));
         }
       }
       if (kept.isNotEmpty) {
         nextScheduled[objectId] = kept;
-        await _replaceRegistryObject(objectType, objectId, {
-          ...blockedRegistryIds,
-          ..._registryIdsForScheduledRules(objectType, objectId, kept),
-        }, scheduledRules: kept.values);
+        await _replaceRegistryObject(
+          objectType,
+          objectId,
+          {
+            ...blockedRegistryIds,
+            ..._registryIdsForScheduledRules(objectType, objectId, kept),
+          },
+          scheduledRules: kept.values,
+          acceptedIdSets: _acceptedPendingIdSetsForScheduledRules(
+            objectType,
+            objectId,
+            kept,
+          ),
+        );
       } else if (blockedRegistryIds.isNotEmpty) {
         await _replaceRegistryObject(
           objectType,
           objectId,
           blockedRegistryIds,
           resolvedRules: nextRules.values,
+          acceptedIdSets: _acceptedPendingIdSetsForResolvedRules(
+            nextRules.values,
+          ),
         );
       } else {
         await registry.removeObject(objectType, objectId);
@@ -2835,6 +4211,12 @@ class ReminderScheduler {
     scheduled
       ..clear()
       ..addAll(nextScheduled);
+
+    if (scheduleFailures.isNotEmpty) {
+      throw ReminderScheduleSyncException(
+        List<String>.unmodifiable(scheduleFailures),
+      );
+    }
   }
 
   bool _sameScheduledRule(_ScheduledRule prior, _ResolvedRule next) {
@@ -2851,7 +4233,23 @@ class ReminderScheduler {
       expected: _expectedPendingIdsForRule(rule),
       acceptedExpectedSets: _acceptedPendingIdSetsForRule(rule),
       stalePeerIds: _registryIdsForRule(rule),
+      relatedId: rule.objectId,
     );
+  }
+
+  Future<Set<int>> _pendingIdsFor(ReminderPendingSink sink) async {
+    final batch = _activeBatch;
+    if (batch == null) return (await sink.pendingIds()).toSet();
+    if (batch.snapshotFailed(sink)) {
+      return batch.fallbackPendingIds(sink);
+    }
+    try {
+      return await batch.pendingIds(sink);
+    } catch (_) {
+      // A failed batch snapshot must not make every rule share one unsafe
+      // answer. Fall back to the existing per-item probe semantics.
+      return batch.fallbackPendingIds(sink);
+    }
   }
 
   Future<bool> _habitStillPending(Habit habit) async {
@@ -2874,6 +4272,7 @@ class ReminderScheduler {
           weekdays: _habitWeekdays(habit, rule),
         ),
         stalePeerIds: _habitRegistryIds(habit),
+        relatedId: habit.id,
       );
     }
     // 多提醒时间：任一条不在系统队列即视为整体需要重排。
@@ -2892,6 +4291,7 @@ class ReminderScheduler {
           weekdays: weekdays,
         ),
         stalePeerIds: peers,
+        relatedId: habit.id,
       );
       if (!stillPending) return false;
     }
@@ -2907,12 +4307,8 @@ class ReminderScheduler {
       label: 'anniversary:${item.id}',
       kind: item.reminderKind,
       expected: <int>{baseId},
-      notificationFallbackExpectedSets: item.reminderKind == ReminderKind.alarm
-          ? <Set<int>>[
-              <int>{_idFor('anni_${item.id}')},
-            ]
-          : null,
       stalePeerIds: _anniversaryRegistryIds(item),
+      relatedId: item.id,
     );
   }
 
@@ -2923,6 +4319,7 @@ class ReminderScheduler {
       kind: item.reminderKind,
       expected: <int>{baseId},
       stalePeerIds: _countdownRegistryIds(item),
+      relatedId: item.id,
     );
   }
 
@@ -2933,7 +4330,21 @@ class ReminderScheduler {
     List<Set<int>>? acceptedExpectedSets,
     List<Set<int>>? notificationFallbackExpectedSets,
     Set<int>? stalePeerIds,
+    String? relatedId,
   }) async {
+    if (kind == ReminderKind.popup) {
+      // Popup reminders are backed by in-process timers; there is no platform
+      // pending queue that can prove the timer survived login, app restart, or
+      // account cleanup. If peer cleanup succeeds, force the caller to
+      // re-dispatch so the foreground timer is armed again.
+      final cleanupSucceeded = await _cancelStalePeerPending(
+        label: label,
+        ownerKind: kind,
+        ids: stalePeerIds ?? expected,
+        relatedId: relatedId,
+      );
+      return !cleanupSucceeded;
+    }
     final sink = switch (kind) {
       ReminderKind.push => notif,
       ReminderKind.alarm => alarm,
@@ -2944,21 +4355,23 @@ class ReminderScheduler {
         label: label,
         ownerKind: kind,
         ids: stalePeerIds ?? expected,
+        relatedId: relatedId,
       );
     }
     try {
-      final actual = (await sink.pendingIds()).toSet();
+      final actual = await _pendingIdsFor(sink);
       final acceptedSets = acceptedExpectedSets ?? <Set<int>>[expected];
       final pendingSatisfied = acceptedSets.any(
         (ids) => ids.isNotEmpty && actual.containsAll(ids),
       );
       if (pendingSatisfied) {
-        final staleCleaned = await _cancelStalePeerPending(
+        await _cancelStalePeerPending(
           label: label,
           ownerKind: kind,
           ids: stalePeerIds ?? expected,
+          relatedId: relatedId,
         );
-        return staleCleaned;
+        return true;
       }
       if (kind == ReminderKind.alarm &&
           await _notificationFallbackStillPendingForAlarm(
@@ -2966,6 +4379,7 @@ class ReminderScheduler {
             acceptedExpectedSets:
                 notificationFallbackExpectedSets ?? acceptedSets,
             stalePeerIds: stalePeerIds ?? expected,
+            relatedId: relatedId,
           )) {
         return true;
       }
@@ -2987,7 +4401,9 @@ class ReminderScheduler {
         },
         message: '系统待触发队列查询失败，将重新注册提醒以修复可能丢失的系统队列；请检查系统提醒权限。',
         label: label,
+        relatedId: relatedId,
         error: e,
+        blocking: kind == ReminderKind.alarm,
       );
       return false;
     }
@@ -2997,11 +4413,11 @@ class ReminderScheduler {
     required String label,
     required List<Set<int>> acceptedExpectedSets,
     required Set<int> stalePeerIds,
+    String? relatedId,
   }) async {
     if (notif is! ReminderPendingSink) return false;
     try {
-      final actual = (await (notif as ReminderPendingSink).pendingIds())
-          .toSet();
+      final actual = await _pendingIdsFor(notif as ReminderPendingSink);
       final pendingSatisfied = acceptedExpectedSets.any(
         (ids) => ids.isNotEmpty && actual.containsAll(ids),
       );
@@ -3010,11 +4426,13 @@ class ReminderScheduler {
         '[ReminderScheduler] notification fallback queue owns alarm reminder '
         'for $label; keep fallback to avoid duplicate delivery.',
       );
-      return await _cancelStalePeerPending(
+      await _cancelStalePeerPending(
         label: label,
         ownerKind: ReminderKind.push,
         ids: stalePeerIds,
+        relatedId: relatedId,
       );
+      return true;
     } catch (e, st) {
       debugPrint(
         '[ReminderScheduler] notification fallback pending probe failed for '
@@ -3024,7 +4442,9 @@ class ReminderScheduler {
         title: '普通通知兜底状态无法确认',
         message: '普通通知兜底队列查询失败，已保留现有状态以避免重复弹出；请重新保存提醒或检查系统通知权限。',
         label: label,
+        relatedId: relatedId,
         error: e,
+        blocking: true,
       );
       return true;
     }
@@ -3034,11 +4454,11 @@ class ReminderScheduler {
     required String label,
     required Set<int> expected,
     List<Set<int>>? acceptedExpectedSets,
+    String? relatedId,
   }) async {
     if (alarm is! ReminderPendingSink || expected.isEmpty) return false;
     try {
-      final actual = (await (alarm as ReminderPendingSink).pendingIds())
-          .toSet();
+      final actual = await _pendingIdsFor(alarm as ReminderPendingSink);
       final acceptedSets = acceptedExpectedSets ?? <Set<int>>[expected];
       final owns = acceptedSets.any(
         (ids) => ids.isNotEmpty && actual.containsAll(ids),
@@ -3060,7 +4480,9 @@ class ReminderScheduler {
         title: '闹钟提醒状态无法确认',
         message: '系统待触发队列查询失败，已尝试使用普通通知兜底保住提醒；请重新保存提醒或检查系统提醒权限。',
         label: label,
+        relatedId: relatedId,
         error: e,
+        blocking: true,
       );
       return false;
     }
@@ -3071,6 +4493,8 @@ class ReminderScheduler {
     required String message,
     required String label,
     required Object error,
+    String? relatedId,
+    bool blocking = false,
   }) {
     final issueSink = notif is ReminderScheduleIssueSink
         ? notif as ReminderScheduleIssueSink
@@ -3079,8 +4503,8 @@ class ReminderScheduler {
     issueSink.recordReminderScheduleIssue(
       title: title,
       message: message,
-      relatedId: label,
-      blocking: false,
+      relatedId: relatedId ?? _relatedIdFromIssueLabel(label) ?? label,
+      blocking: blocking,
     );
   }
 
@@ -3088,6 +4512,7 @@ class ReminderScheduler {
     required String label,
     required ReminderKind ownerKind,
     required Set<int> ids,
+    String? relatedId,
   }) async {
     if (ids.isEmpty) return true;
     var ok = true;
@@ -3099,7 +4524,7 @@ class ReminderScheduler {
     }) async {
       Set<int> staleIds;
       try {
-        staleIds = (await pending.pendingIds()).toSet().intersection(ids);
+        staleIds = (await _pendingIdsFor(pending)).intersection(ids);
       } catch (e, st) {
         debugPrint(
           '[ReminderScheduler] stale $staleLabel pending probe failed for '
@@ -3109,6 +4534,7 @@ class ReminderScheduler {
           title: '残留提醒状态无法确认',
           message: '旧提醒队列查询失败，已保留当前注册状态以避免重复弹出；请重新保存提醒或检查系统提醒权限。',
           label: '$label stale $staleLabel',
+          relatedId: relatedId,
           error: e,
         );
         ok = false;
@@ -3286,12 +4712,49 @@ class ReminderScheduler {
     return ids;
   }
 
+  List<Set<int>> _habitAcceptedPendingIdSets(Habit habit) {
+    final rules = _enabledHabitRules(habit);
+    if (rules.isEmpty) return const <Set<int>>[];
+    return _combineAcceptedIdSetAlternatives([
+      for (var i = 0; i < rules.length; i++)
+        if (_kindUsesSystemPendingQueue(rules[i].kind))
+          _acceptedRepeatingPendingIdSets(
+            kind: rules[i].kind,
+            base: _habitRuleId(habit.id, rules[i], i),
+            weekdays: _habitWeekdays(habit, rules[i]),
+          ),
+    ]);
+  }
+
   Set<int> _anniversaryRegistryIds(Anniversary item) {
     return <int>{_idFor('anni_${item.id}'), _idFor('anni_alarm_${item.id}')};
   }
 
+  List<Set<int>> _anniversaryAcceptedPendingIdSets(Anniversary item) {
+    return switch (item.reminderKind) {
+      ReminderKind.push => <Set<int>>[
+        <int>{_idFor('anni_${item.id}')},
+      ],
+      ReminderKind.alarm => <Set<int>>[
+        <int>{_idFor('anni_alarm_${item.id}')},
+      ],
+      ReminderKind.popup ||
+      ReminderKind.email ||
+      ReminderKind.off => const <Set<int>>[],
+    };
+  }
+
   Set<int> _countdownRegistryIds(CountdownItem item) {
     return <int>{_idFor('countdown:${item.id}:due')};
+  }
+
+  List<Set<int>> _countdownAcceptedPendingIdSets(CountdownItem item) {
+    if (!_kindUsesSystemPendingQueue(item.reminderKind)) {
+      return const <Set<int>>[];
+    }
+    return <Set<int>>[
+      <int>{_idFor('countdown:${item.id}:due')},
+    ];
   }
 
   _ScheduledRule _scheduledFromResolved(_ResolvedRule rule) {
@@ -3965,9 +5428,11 @@ class ReminderScheduler {
           return false;
         }
       case ReminderKind.alarm:
+        final alarmId = _idFor('anni_alarm_${item.id}');
+        final alarmIds = <int>{alarmId};
         try {
           await alarm.scheduleFullScreen(
-            id: _idFor('anni_alarm_${item.id}'),
+            id: alarmId,
             title: '⏰ 纪念日提醒',
             body: item.remindDaysBefore == 0
                 ? '今天是 ${item.title}'
@@ -3975,54 +5440,54 @@ class ReminderScheduler {
             when: remindAt,
             payload: 'duoyi://anniversary/${item.id}',
           );
-          _recordAlarmScheduleIssue(
+          return !_recordAlarmScheduleIssue(
             relatedId: item.id,
             scheduledTime: remindAt,
+            alarmIds: alarmIds,
           );
-          return true;
         } on AlarmPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] anniversary alarm permission denied for ${item.id}: $e',
           );
-          final id = _idFor('anni_alarm_${item.id}');
           if (await _alarmQueueAlreadyOwns(
             label: 'anniversary:${item.id}',
-            expected: <int>{id},
+            expected: alarmIds,
+            relatedId: item.id,
           )) {
-            _recordAlarmScheduleIssue(
+            return !_recordAlarmScheduleIssue(
               relatedId: item.id,
               scheduledTime: remindAt,
+              alarmIds: alarmIds,
             );
-            return true;
           }
-          final fallbackScheduled = await _scheduleAnniversaryPushFallback(
-            item,
-          );
+          await _scheduleAnniversaryPushFallback(item);
           _recordAlarmScheduleIssue(
             relatedId: item.id,
             scheduledTime: remindAt,
-            blocking: !fallbackScheduled,
+            blocking: true,
+            alarmIds: alarmIds,
           );
-          return fallbackScheduled;
+          return false;
         } on NotificationPermissionDeniedException catch (e) {
           debugPrint(
             '[ReminderScheduler] anniversary notification permission denied for ${item.id}: $e',
           );
-          final id = _idFor('anni_alarm_${item.id}');
           if (await _alarmQueueAlreadyOwns(
             label: 'anniversary:${item.id}',
-            expected: <int>{id},
+            expected: alarmIds,
+            relatedId: item.id,
           )) {
-            _recordAlarmScheduleIssue(
+            return !_recordAlarmScheduleIssue(
               relatedId: item.id,
               scheduledTime: remindAt,
+              alarmIds: alarmIds,
             );
-            return true;
           }
           _recordAlarmScheduleIssue(
             relatedId: item.id,
             scheduledTime: remindAt,
             blocking: true,
+            alarmIds: alarmIds,
           );
           return false;
         } on AlarmQueueHandoffException catch (e) {
@@ -4033,32 +5498,32 @@ class ReminderScheduler {
             relatedId: item.id,
             scheduledTime: remindAt,
             blocking: true,
+            alarmIds: alarmIds,
           );
           return false;
         } catch (e, st) {
           debugPrint(
             '[ReminderScheduler] anniversary alarm dispatch failed for ${item.id}: $e\n$st',
           );
-          final id = _idFor('anni_alarm_${item.id}');
           if (await _alarmQueueAlreadyOwns(
             label: 'anniversary:${item.id}',
-            expected: <int>{id},
+            expected: alarmIds,
+            relatedId: item.id,
           )) {
-            _recordAlarmScheduleIssue(
+            return !_recordAlarmScheduleIssue(
               relatedId: item.id,
               scheduledTime: remindAt,
+              alarmIds: alarmIds,
             );
-            return true;
           }
-          final fallbackScheduled = await _scheduleAnniversaryPushFallback(
-            item,
-          );
+          await _scheduleAnniversaryPushFallback(item);
           _recordAlarmScheduleIssue(
             relatedId: item.id,
             scheduledTime: remindAt,
-            blocking: !fallbackScheduled,
+            blocking: true,
+            alarmIds: alarmIds,
           );
-          return fallbackScheduled;
+          return false;
         }
       case ReminderKind.email:
         try {

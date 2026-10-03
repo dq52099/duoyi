@@ -120,3 +120,7 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+  fonts:
+    - family: DroidSansFallbackFull
+      fonts:
+        - asset: assets/fonts/DroidSansFallbackFull.ttf

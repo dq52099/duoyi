@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/domain_event_bus.dart';
 import '../core/recommended_goals.dart';
 import '../models/goal.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../services/reminder_scheduler.dart';
 import 'cloud_sync_provider.dart';
 import 'time_audit_provider.dart';
@@ -15,6 +16,7 @@ class GoalProvider extends ChangeNotifier {
   TimeAuditProvider? _timeAudit;
   ReminderScheduler? _scheduler;
   int _storageGeneration = 0;
+  VoidCallback? onLocalMutationPersisted;
 
   Future<void> Function()? _reminderResyncRequester;
 
@@ -55,8 +57,14 @@ class GoalProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final raw = prefs.getStringList(_key) ?? [];
     _goals = raw.map((e) => GoalItem.fromJson(jsonDecode(e))).toList();
     notifyListeners();
@@ -69,12 +77,39 @@ class GoalProvider extends ChangeNotifier {
   }
 
   Future<void> _save() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     await prefs.setStringList(
       _key,
       _goals.map((e) => jsonEncode(e.toJson())).toList(),
     );
+    _notifyLocalMutationPersisted();
     notifyListeners();
+  }
+
+  bool _isCurrentStorageGeneration(
+    int storageGeneration,
+    int accountGeneration,
+  ) {
+    return storageGeneration == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        );
+  }
+
+  void _notifyLocalMutationPersisted() {
+    try {
+      onLocalMutationPersisted?.call();
+    } catch (e, st) {
+      debugPrint('[GoalProvider] local mutation callback failed: $e\n$st');
+    }
   }
 
   Future<void> _syncGoalRemindersNow() async {
@@ -131,12 +166,43 @@ class GoalProvider extends ChangeNotifier {
   }
 
   Future<void> delete(String id) async {
-    if (_timeAudit != null) {
-      await _timeAudit!.deleteGoalEntries(id);
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final existingGoals = _goals
+        .where((goal) => goal.id == id)
+        .toList(growable: false);
+    if (existingGoals.isEmpty) return;
+    final idsByWorkspace = <String, Set<String>>{};
+    for (final goal in existingGoals) {
+      idsByWorkspace
+          .putIfAbsent(goal.workspaceId, () => <String>{})
+          .add(goal.id);
     }
-    await CloudSyncProvider.recordDeletedItem('goals', id);
+
+    if (_timeAudit != null) {
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      await _timeAudit!.deleteGoalEntries(id);
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    }
+    for (final entry in idsByWorkspace.entries) {
+      for (final goalId in entry.value) {
+        if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+          return;
+        }
+        await CloudSyncProvider.recordDeletedItem(
+          'goals',
+          goalId,
+          workspaceId: entry.key,
+        );
+        if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+          return;
+        }
+      }
+    }
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     _goals.removeWhere((g) => g.id == id);
     await _save();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     await _syncGoalRemindersNow();
   }
 

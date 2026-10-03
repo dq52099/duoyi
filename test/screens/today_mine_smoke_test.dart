@@ -293,12 +293,16 @@ void main() {
     expect(mine, isNot(contains("label: '问题反馈'")));
     expect(mine, isNot(contains("label: '许愿池'")));
 
+    // 记录回顾 经 _MineRecordReviewGroup 子组件封装，其 title 出现在文件末的
+    // 子组件类定义处，无法再以 indexOf("title: '记录回顾'") 反映它在主 build 中
+    // 的真实视觉位置。改以子组件注入锚点 const _MineRecordReviewGroup() 比较，
+    // 仍保留"行动计划 → 记录回顾 → 日程日期"的主 build 视觉先后这一约束意图。
     expect(
       mine.indexOf("title: '行动计划'"),
-      lessThan(mine.indexOf("title: '记录回顾'")),
+      lessThan(mine.indexOf("const _MineRecordReviewGroup()")),
     );
     expect(
-      mine.indexOf("title: '记录回顾'"),
+      mine.indexOf("const _MineRecordReviewGroup()"),
       lessThan(mine.indexOf("title: '日程日期'")),
     );
     expect(

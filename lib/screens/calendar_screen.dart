@@ -40,8 +40,14 @@ import 'todo_screen.dart';
 class CalendarScreen extends StatefulWidget {
   final GlobalKey? todoTabKey;
   final DateTime? initialDate;
+  final bool useShellBackground;
 
-  const CalendarScreen({super.key, this.todoTabKey, this.initialDate});
+  const CalendarScreen({
+    super.key,
+    this.todoTabKey,
+    this.initialDate,
+    this.useShellBackground = false,
+  });
 
   @override
   State<CalendarScreen> createState() => _CalendarScreenState();
@@ -364,6 +370,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                             date: _selectedDay,
                             workspaceId: _activeWorkspaceId ?? 'private',
                           ),
+                          waitForReminderSync: false,
                         );
                         if (ctx.mounted) Navigator.pop(ctx);
                       } finally {
@@ -751,11 +758,15 @@ class _CalendarScreenState extends State<CalendarScreen>
         : Theme.of(context).colorScheme.surfaceContainerLowest;
 
     return BrandScaffold(
-      paintBackground: false,
+      paintBackground: !widget.useShellBackground,
       appBar: AppBar(
         title: const Text('日历'),
-        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
-        backgroundColor: routeBackground.withValues(alpha: 0.96),
+        titleTextStyle: widget.useShellBackground
+            ? null
+            : appSecondaryRouteTitleTextStyle(context),
+        backgroundColor: widget.useShellBackground
+            ? Colors.transparent
+            : routeBackground.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
         actions: [
           PopupMenuButton<String>(

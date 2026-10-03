@@ -772,9 +772,33 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
     final todo = matches.first;
     final base = todo.dueDate ?? todo.date;
     final next = _clampToDay(base.add(delta), event.date);
-    await provider.updateTodo(todo.id, todo.copyWith(dueDate: next));
-    if (!context.mounted) return;
-    _showDragResult(context, next);
+    final waitForReminderSync = _todoNeedsReminderSync(todo);
+    try {
+      final saveResult = await provider.updateTodoWithResult(
+        todo.id,
+        todo.copyWith(dueDate: next),
+        waitForReminderSync: waitForReminderSync,
+      );
+      if (!context.mounted) return;
+      if (!saveResult.saved) {
+        _showDragFailure(context, '待办正在保存中，请稍后重试');
+        return;
+      }
+      final reminderIssue = waitForReminderSync
+          ? saveResult.reminderSync?.issue
+          : null;
+      if (reminderIssue != null) {
+        _showDragFailure(
+          context,
+          '已调整到 ${I18nDateFormat.time(next)}，但提醒未注册：$reminderIssue',
+        );
+        return;
+      }
+      _showDragResult(context, next);
+    } catch (e) {
+      if (!context.mounted) return;
+      _showDragFailure(context, '待办保存失败：$e');
+    }
   }
 
   Future<void> _adjustTimeEntry(
@@ -813,6 +837,22 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
         duration: const Duration(seconds: 1),
       ),
     );
+  }
+
+  void _showDragFailure(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
+    );
+  }
+
+  bool _todoNeedsReminderSync(TodoItem todo) {
+    return todo.hasReminder ||
+        todo.reminder.enabled ||
+        todo.reminderPlan.enabled;
   }
 }
 

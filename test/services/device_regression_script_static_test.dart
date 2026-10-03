@@ -432,7 +432,25 @@ void main() {
       expect(source, contains('柔和晨铃'));
       expect(source, contains('Android launcher widgets can be added'));
       expect(source, contains('iOS WidgetKit widgets share the App Group'));
-      expect(source, contains('build apk --debug'));
+      expect(source, contains(r'BUILD_MODE="${BUILD_MODE:-debug}"'));
+      expect(source, contains('debug|profile|release'));
+      expect(
+        source,
+        contains(
+          r"Unsupported BUILD_MODE '$BUILD_MODE'; use debug, profile, or release.",
+        ),
+      );
+      expect(source, contains(r'EXPLICIT_APK_PATH="${APK_PATH:-}"'));
+      expect(
+        source,
+        contains(r'APK_PATH="$EXPLICIT_APK_PATH"'),
+      );
+      expect(
+        source,
+        contains(r'build/app/outputs/flutter-apk/app-${BUILD_MODE}.apk'),
+      );
+      expect(source, contains(r'"$FLUTTER_BIN" build apk "--$BUILD_MODE"'));
+      expect(source, contains(r'if [[ -n "$EXPLICIT_APK_PATH" ]]; then'));
       expect(
         source,
         contains('test integration_test/app_alignment_smoke_test.dart'),

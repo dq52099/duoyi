@@ -57,11 +57,12 @@ void main() {
       final source = File('lib/screens/mine_screen.dart').readAsStringSync();
       final body = _sourceBlock(
         source,
-        'body: ListView(',
-        'int _todoRate(TodoProvider t)',
+        'body: ListView.builder(',
+        'void _openProfileEditor(BuildContext context',
       );
 
       expect(body, contains("restorationId: 'mine_screen_list'"));
+      expect(body, contains('itemBuilder: (context, index)'));
       expect(body, contains('mineHeader'));
       expect(body, contains('mineStats'));
       expect(body, contains('aiAssistant'));
@@ -82,8 +83,8 @@ void main() {
       final source = File('lib/screens/mine_screen.dart').readAsStringSync();
       final stats = _sourceBlock(
         source,
-        'final mineStats = Padding(',
-        'final aiAssistant = Padding(',
+        'class _MineStatsSection extends StatelessWidget',
+        'class _MineAiAssistantSection extends StatelessWidget',
       );
       final stableGrid = _sourceBlock(
         source,

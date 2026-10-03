@@ -11,9 +11,12 @@ import '../core/notification_history_policy.dart';
 import '../core/platform_info.dart';
 import '../core/report_reminder_config.dart';
 import '../models/goal.dart' show ReminderKind;
+import '../providers/auth_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/preferences_provider.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../services/alarm_service.dart';
+import '../services/daily_digest_reminder_sync.dart';
 import '../services/local_notifications.dart';
 import '../services/notification_permission_exception.dart';
 import '../services/notification_settings.dart';
@@ -24,6 +27,7 @@ import '../services/reminder_scheduler.dart';
 import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
+import 'today_detail_router.dart';
 
 enum _NotificationReadFilter { all, unread, read }
 
@@ -214,6 +218,8 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
                               return _NotificationRecordCard(
                                 key: ValueKey('notification_record_${item.id}'),
                                 item: item,
+                                onShowDetails: () =>
+                                    _showNotificationRecordDetails(item),
                                 onToggleRead: () => service.markHistoryItemRead(
                                   item.id,
                                   read: !item.isRead,
@@ -253,6 +259,15 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
                 ],
               ),
       ),
+    );
+  }
+
+  Future<void> _showNotificationRecordDetails(NotificationItem item) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => _NotificationRecordDetailSheet(item: item),
     );
   }
 }
@@ -384,11 +399,13 @@ class _NotificationHistoryFilters extends StatelessWidget {
 
 class _NotificationRecordCard extends StatelessWidget {
   final NotificationItem item;
+  final VoidCallback onShowDetails;
   final VoidCallback onToggleRead;
 
   const _NotificationRecordCard({
     super.key,
     required this.item,
+    required this.onShowDetails,
     required this.onToggleRead,
   });
 
@@ -402,7 +419,7 @@ class _NotificationRecordCard extends StatelessWidget {
       border: item.isRead
           ? null
           : Border.all(color: cs.primary.withValues(alpha: 0.22), width: 0.45),
-      onTap: item.isRead ? null : onToggleRead,
+      onTap: onShowDetails,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -506,12 +523,178 @@ class _NotificationRecordCard extends StatelessWidget {
   }
 }
 
+class _NotificationRecordDetailSheet extends StatelessWidget {
+  final NotificationItem item;
+
+  const _NotificationRecordDetailSheet({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final typeColor = _notificationColor(item.type);
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          8,
+          20,
+          20 + MediaQuery.paddingOf(context).bottom,
+        ),
+        child: SingleChildScrollView(
+          key: const ValueKey('notification_record_detail_scroll'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: typeColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      _notificationIcon(item.type),
+                      size: 21,
+                      color: typeColor,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: cs.onSurface,
+                                fontWeight: FontWeight.normal,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            AppStatusBadge(
+                              label: _notificationTypeLabel(item.type),
+                              color: typeColor,
+                            ),
+                            AppStatusBadge(
+                              label: item.isRead ? '已读' : '未读',
+                              color: item.isRead
+                                  ? cs.onSurfaceVariant
+                                  : cs.error,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (item.body.trim().isNotEmpty)
+                _NotificationRecordDetailLine(label: '内容', value: item.body)
+              else
+                const _NotificationRecordDetailLine(label: '内容', value: '无内容'),
+              _NotificationRecordDetailLine(
+                label: '触发时间',
+                value: _formatNotificationTime(item.scheduledTime),
+              ),
+              _NotificationRecordDetailLine(label: '记录编号', value: item.id),
+              _NotificationRecordDetailLine(
+                label: '关联对象',
+                value: item.relatedId?.trim().isNotEmpty == true
+                    ? item.relatedId!.trim()
+                    : '无',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationRecordDetailLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _NotificationRecordDetailLine({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: cs.onSurface.withValues(alpha: 0.52),
+            ),
+          ),
+          const SizedBox(height: 3),
+          SelectableText(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: cs.onSurface, height: 1.28),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
 
   @override
   State<NotificationSettingsScreen> createState() =>
       _NotificationSettingsScreenState();
+}
+
+ReminderScheduler? _readReminderScheduler(BuildContext context) {
+  try {
+    final optional = context.read<ReminderScheduler?>();
+    if (optional != null) return optional;
+  } on ProviderNotFoundException {
+    // Older tests and routes may intentionally omit the scheduler.
+  }
+  try {
+    return context.read<ReminderScheduler>();
+  } on ProviderNotFoundException {
+    return null;
+  }
+}
+
+AuthProvider? _readAuthProvider(BuildContext context) {
+  try {
+    final optional = context.read<AuthProvider?>();
+    if (optional != null) return optional;
+  } on ProviderNotFoundException {
+    // Optional in test fixtures and lightweight routes.
+  } catch (_) {
+    // Gracefully handle missing provider or mock hierarchies.
+  }
+  try {
+    return context.read<AuthProvider>();
+  } on ProviderNotFoundException {
+    return null;
+  } catch (_) {
+    return null;
+  }
 }
 
 class _NotificationSettingsScreenState
@@ -522,6 +705,9 @@ class _NotificationSettingsScreenState
   Map<String, NotificationChannelStatus>? _channelStatuses;
   List<ReminderScheduleSnapshotEntry> _registeredReminders =
       const <ReminderScheduleSnapshotEntry>[];
+  Set<int> _registeredReminderSystemQueueIds = <int>{};
+  _RegisteredReminderQueueProbe _registeredReminderQueueProbe =
+      _RegisteredReminderQueueProbe.loading;
   bool _busy = false;
   int _statusBarPreferenceGeneration = 0;
 
@@ -536,13 +722,35 @@ class _NotificationSettingsScreenState
 
   Future<void> _refreshStatus() async {
     final service = context.read<NotificationService>();
-    final scheduler = context.read<ReminderScheduler?>();
-    setState(() => _busy = true);
+    final scheduler = _readReminderScheduler(context);
+    setState(() {
+      _busy = true;
+      _registeredReminderQueueProbe = _RegisteredReminderQueueProbe.loading;
+    });
     try {
       await service.refreshPermission();
-      final pendingIds = await service.pendingIds();
+      var queueProbe = _RegisteredReminderQueueProbe.resolved;
+      List<int> pendingIds;
+      try {
+        pendingIds = await LocalNotifications.instance.pendingIdsOrThrow();
+      } catch (e, st) {
+        debugPrint(
+          '[NotificationSettings] pending notification probe failed: $e\n$st',
+        );
+        pendingIds = const <int>[];
+        queueProbe = _RegisteredReminderQueueProbe.failed;
+      }
       await AlarmService.instance.init();
-      final pendingAlarmIds = await _safePendingAlarmIds();
+      List<int> pendingAlarmIds;
+      try {
+        pendingAlarmIds = await AlarmService.instance.pendingIds();
+      } catch (e, st) {
+        debugPrint(
+          '[NotificationSettings] pending alarm probe failed: $e\n$st',
+        );
+        pendingAlarmIds = const <int>[];
+        queueProbe = _RegisteredReminderQueueProbe.failed;
+      }
       final exactAlarmGranted = await AlarmService.instance
           .hasExactAlarmPermission();
       final channelStatuses =
@@ -562,6 +770,11 @@ class _NotificationSettingsScreenState
         _exactAlarmGranted = exactAlarmGranted;
         _channelStatuses = channelStatuses;
         _registeredReminders = registeredReminders;
+        _registeredReminderSystemQueueIds = <int>{
+          ...pendingIds,
+          ...pendingAlarmIds,
+        };
+        _registeredReminderQueueProbe = queueProbe;
       });
     } catch (e, st) {
       debugPrint('[NotificationSettings] refresh status failed: $e\n$st');
@@ -574,15 +787,6 @@ class _NotificationSettingsScreenState
       );
     } finally {
       if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<List<int>> _safePendingAlarmIds() async {
-    try {
-      return await AlarmService.instance.pendingIds();
-    } catch (e, st) {
-      debugPrint('[NotificationSettings] pending alarm probe failed: $e\n$st');
-      return const <int>[];
     }
   }
 
@@ -719,8 +923,18 @@ class _NotificationSettingsScreenState
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      await context.read<NotificationService>().sendTest();
+      final service = context.read<NotificationService>();
+      final sent = await service.sendTest();
       if (!mounted) return;
+      if (!sent) {
+        _showScheduleIssueSnack(
+          context,
+          service.lastScheduleIssue,
+          fallback: '测试通知未发送，请检查通知权限和渠道设置。',
+        );
+        await _refreshStatus();
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('测试通知已发送'),
@@ -754,7 +968,10 @@ class _NotificationSettingsScreenState
 
   Future<void> _sendScheduledTest() async {
     final kind = _scheduledTestReminderKind(context);
-    await _sendScheduledDiagnostic(kind: kind);
+    await _sendScheduledDiagnostic(
+      kind: kind,
+      popupInAppOnly: kind != ReminderKind.popup,
+    );
   }
 
   Future<void> _sendScheduledPushTest() {
@@ -763,6 +980,13 @@ class _NotificationSettingsScreenState
 
   Future<void> _sendScheduledPopupTest() {
     return _sendScheduledDiagnostic(kind: ReminderKind.popup);
+  }
+
+  Future<void> _sendScheduledPopupFallbackTest() {
+    return _sendScheduledDiagnostic(
+      kind: ReminderKind.popup,
+      popupInAppOnly: false,
+    );
   }
 
   Future<void> _sendScheduledAlarmTest() {
@@ -779,15 +1003,21 @@ class _NotificationSettingsScreenState
   Future<void> _sendScheduledDiagnostic({
     required ReminderKind kind,
     bool fullScreenAlarm = true,
+    bool popupInAppOnly = true,
   }) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
       final service = context.read<NotificationService>();
-      final scheduler = context.read<ReminderScheduler?>();
-      final granted = await service.requestPermission();
-      if (!granted) {
-        throw const NotificationPermissionDeniedException();
+      final scheduler = _readReminderScheduler(context);
+      service.clearScheduleIssue();
+      if (kind == ReminderKind.push ||
+          (kind == ReminderKind.popup &&
+              (!popupInAppOnly || scheduler?.popup == null))) {
+        final granted = await service.requestPermission();
+        if (!granted) {
+          throw const NotificationPermissionDeniedException();
+        }
       }
       if (kind == ReminderKind.alarm) {
         await AlarmService.instance.init();
@@ -798,6 +1028,12 @@ class _NotificationSettingsScreenState
           '[NotificationSettings] scheduled alarm exact permission: '
           '$exactAlarmGranted',
         );
+        if (!exactAlarmGranted) {
+          throw const NotificationScheduleUnavailableException(
+            title: '闹钟测试权限未开启',
+            message: '精准闹钟权限未开启，无法可靠注册 1 分钟后的闹钟测试。请在系统设置开启后重试。',
+          );
+        }
         if (fullScreenAlarm) {
           final fullScreenGranted =
               await AlarmService.instance.hasFullScreenIntentPermission() ||
@@ -806,22 +1042,50 @@ class _NotificationSettingsScreenState
             '[NotificationSettings] scheduled alarm fullscreen permission: '
             '$fullScreenGranted',
           );
+          if (!fullScreenGranted) {
+            throw const NotificationScheduleUnavailableException(
+              title: '全屏闹钟权限未开启',
+              message: '强提醒弹屏权限未开启，无法注册锁屏全屏闹钟测试。请在系统设置开启后重试。',
+            );
+          }
         }
       }
-      await service.sendScheduledTest(
+      final scheduled = await service.sendScheduledTest(
         reminderKind: kind,
         fullScreenAlarm: fullScreenAlarm,
+        popupInAppOnly: popupInAppOnly,
         popup: scheduler?.popup,
         alarm: scheduler?.alarm,
       );
       if (!mounted) return;
+      if (!scheduled) {
+        _showScheduleIssueSnack(
+          context,
+          service.lastScheduleIssue,
+          fallback: '定时测试未注册，请检查通知、精准闹钟和全屏提醒权限。',
+        );
+        await _refreshStatus();
+        return;
+      }
+      final issue = service.lastScheduleIssue;
+      if (issue != null && !issue.blocking) {
+        _showScheduleIssueSnack(context, issue, fallback: '定时测试已注册，但提醒通道需要检查。');
+        await _refreshStatus();
+        return;
+      }
       final label = _diagnosticKindLabel(
         kind,
         fullScreenAlarm: fullScreenAlarm,
+        popupInAppOnly: popupInAppOnly,
       );
+      final foregroundHint = kind == ReminderKind.popup
+          ? popupInAppOnly
+                ? '，需保持应用前台'
+                : '，后台或锁屏应收到普通通知兜底'
+          : '';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('已注册 1 分钟后的$label测试'),
+          content: Text('已注册 1 分钟后的$label测试$foregroundHint'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -831,6 +1095,15 @@ class _NotificationSettingsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('通知权限未开启，无法注册定时测试'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    } on NotificationScheduleUnavailableException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${e.title}：${e.message}'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -850,12 +1123,28 @@ class _NotificationSettingsScreenState
     }
   }
 
+  void _showScheduleIssueSnack(
+    BuildContext context,
+    NotificationScheduleIssue? issue, {
+    required String fallback,
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          issue == null ? fallback : '${issue.title}：${issue.message}',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   String _diagnosticKindLabel(
     ReminderKind kind, {
     bool fullScreenAlarm = true,
+    bool popupInAppOnly = true,
   }) {
     return switch (DailyReminderSlot.normalizeKind(kind)) {
-      ReminderKind.popup => '弹出/后台兜底提醒',
+      ReminderKind.popup => popupInAppOnly ? '应用内弹出提醒' : '弹出提醒+通知兜底',
       ReminderKind.alarm => fullScreenAlarm ? '锁屏全屏闹钟提醒' : '闹钟提醒',
       ReminderKind.push || ReminderKind.email || ReminderKind.off => '普通定时通知',
     };
@@ -1107,8 +1396,54 @@ class _NotificationSettingsScreenState
     if (_registeredReminders.isEmpty) {
       return _busy ? '正在读取提醒注册表' : '暂无通过提醒调度器注册的提醒';
     }
-    final objectCount = _registeredReminders.length;
-    return '$objectCount 个提醒对象，点查看核对任务详情';
+    var queued = 0;
+    var partial = 0;
+    var missing = 0;
+    var unconfirmed = 0;
+    for (final entry in _registeredReminders) {
+      switch (_settingsQueueStateFor(entry)) {
+        case _RegisteredReminderQueueState.queued:
+          queued++;
+        case _RegisteredReminderQueueState.partial:
+          partial++;
+        case _RegisteredReminderQueueState.missing:
+          missing++;
+        case _RegisteredReminderQueueState.unconfirmed:
+          unconfirmed++;
+      }
+    }
+    final parts = <String>[
+      if (queued > 0) '系统待触发 $queued',
+      if (partial > 0) '部分待触发 $partial',
+      if (unconfirmed > 0) '待确认 $unconfirmed',
+      if (missing > 0) '需重新保存 $missing',
+    ];
+    final statusText = parts.isEmpty ? '系统队列未命中' : parts.join(' / ');
+    final probeHint = switch (_registeredReminderQueueProbe) {
+      _RegisteredReminderQueueProbe.loading => '正在读取系统队列，',
+      _RegisteredReminderQueueProbe.failed => '系统队列读取失败，',
+      _RegisteredReminderQueueProbe.resolved => '',
+    };
+    return '${_registeredReminders.length} 条登记，$probeHint$statusText；点查看简述和原因';
+  }
+
+  _RegisteredReminderQueueState _settingsQueueStateFor(
+    ReminderScheduleSnapshotEntry entry,
+  ) {
+    if (_registeredReminderQueueProbe !=
+        _RegisteredReminderQueueProbe.resolved) {
+      return _RegisteredReminderQueueState.unconfirmed;
+    }
+    if (!_entryHasSystemQueueChannel(entry)) {
+      return _RegisteredReminderQueueState.unconfirmed;
+    }
+    if (_entryAcceptedBySystemQueue(entry, _registeredReminderSystemQueueIds)) {
+      return _RegisteredReminderQueueState.queued;
+    }
+    if (_entryHasAnySystemQueueHit(entry, _registeredReminderSystemQueueIds)) {
+      return _RegisteredReminderQueueState.partial;
+    }
+    return _RegisteredReminderQueueState.missing;
   }
 
   Future<void> _showRegisteredReminderDetails() async {
@@ -1340,8 +1675,17 @@ class _NotificationSettingsScreenState
                                 icon: Icons.open_in_new_outlined,
                                 color: Colors.teal,
                                 title: '1 分钟后弹出测试',
-                                subtitle: '前台直接弹窗；后台或锁屏时使用系统通知兜底',
+                                subtitle: '仅验证应用前台弹窗；后台和锁屏不触发兜底通知',
                                 onTap: _busy ? null : _sendScheduledPopupTest,
+                              ),
+                              AppSettingsTile(
+                                icon: Icons.notification_add_outlined,
+                                color: Colors.indigo,
+                                title: '1 分钟后弹出+通知兜底',
+                                subtitle: '模拟真实弹出提醒；前台弹框，后台或锁屏走普通通知',
+                                onTap: _busy
+                                    ? null
+                                    : _sendScheduledPopupFallbackTest,
                               ),
                               AppSettingsTile(
                                 icon: Icons.alarm_outlined,
@@ -1423,7 +1767,7 @@ class _NotificationSettingsScreenState
                                 ),
                                 icon: Icons.fact_check_outlined,
                                 color: Colors.indigo,
-                                title: '已注册提醒明细',
+                                title: '提醒注册状态',
                                 subtitle: _registeredReminderSummary(),
                                 trailing: KeyedSubtree(
                                   key: const ValueKey(
@@ -1633,11 +1977,14 @@ class _NotificationSettingsScreenState
 
 class _RegisteredReminderDetailRow extends StatelessWidget {
   final ReminderScheduleSnapshotEntry entry;
+  final _RegisteredReminderQueueState queueState;
+  final VoidCallback? onTap;
 
-  /// 是否已进入系统提醒队列；null 表示不展示生效状态徽标。
-  final bool? active;
-
-  const _RegisteredReminderDetailRow({required this.entry, this.active});
+  const _RegisteredReminderDetailRow({
+    required this.entry,
+    required this.queueState,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1646,77 +1993,618 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
     final systemCount = entry.idCount;
     final title = _registeredReminderDisplayTitle(entry, typeLabel);
     final subtitle = _registeredReminderDisplaySubtitle(entry, typeLabel);
-    return Container(
-      key: ValueKey('registered_reminder_detail_${entry.objectKey}'),
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        key: ValueKey('registered_reminder_detail_${entry.objectKey}'),
         color: cs.surfaceContainerHighest.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.22),
-          width: 0.4,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppStatusBadge(
-            label: typeLabel,
-            color: _registeredReminderTypeColor(entry.objectType, cs),
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: cs.outlineVariant.withValues(alpha: 0.22),
+            width: 0.4,
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '提醒事项：$title',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.normal,
-                          height: 1.16,
-                        ),
-                      ),
-                    ),
-                    if (active != null) ...[
-                      const SizedBox(width: 6),
-                      AppStatusBadge(
-                        label: active! ? '生效中' : '未生效',
-                        color: active! ? Colors.green : cs.error,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '提醒规则：$subtitle',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: cs.onSurface.withValues(alpha: 0.52),
+                AppStatusBadge(
+                  label: typeLabel,
+                  color: _registeredReminderTypeColor(entry.objectType, cs),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
                   ),
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  '待触发提醒：$systemCount 条',
-                  softWrap: true,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: cs.onSurface.withValues(alpha: 0.66),
-                    height: 1.22,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '提醒事项：$title',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: cs.onSurface,
+                                    fontWeight: FontWeight.normal,
+                                    height: 1.16,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          AppStatusBadge(
+                            label: _queueStateLabel(queueState),
+                            color: _queueStateColor(queueState, cs),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '简述：$subtitle',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.52),
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '已登记 $systemCount 条提醒规则 · 点开查看判断和处理建议',
+                              softWrap: true,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: cs.onSurface.withValues(alpha: 0.66),
+                                    height: 1.22,
+                                  ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right,
+                            size: 16,
+                            color: cs.onSurface.withValues(alpha: 0.45),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _RegisteredReminderFilter {
+  current,
+  all,
+  queued,
+  partial,
+  missing,
+  unconfirmed,
+}
+
+enum _RegisteredReminderQueueProbe { loading, resolved, failed }
+
+enum _RegisteredReminderQueueState { queued, partial, missing, unconfirmed }
+
+String _queueStateLabel(_RegisteredReminderQueueState state) {
+  return switch (state) {
+    _RegisteredReminderQueueState.queued => '系统待触发',
+    _RegisteredReminderQueueState.partial => '部分待触发',
+    _RegisteredReminderQueueState.missing => '需重新保存',
+    _RegisteredReminderQueueState.unconfirmed => '待确认',
+  };
+}
+
+Color _queueStateColor(_RegisteredReminderQueueState state, ColorScheme cs) {
+  return switch (state) {
+    _RegisteredReminderQueueState.queued => Colors.green,
+    _RegisteredReminderQueueState.partial => Colors.amber.shade800,
+    _RegisteredReminderQueueState.missing => cs.error,
+    _RegisteredReminderQueueState.unconfirmed => Colors.blueGrey,
+  };
+}
+
+String _queueStateSummary(_RegisteredReminderQueueState state) {
+  return switch (state) {
+    _RegisteredReminderQueueState.queued =>
+      '系统待触发表示这条提醒登记的有效通知或闹钟编号组还能在系统待触发列表里查到。它不是“保证会响”，只是确认应用已经把系统通道交给系统；实际弹出还受通知权限、精准闹钟、全屏提醒和后台限制影响。',
+    _RegisteredReminderQueueState.partial =>
+      '部分待触发表示这条提醒只有一部分规则仍能在系统待触发列表里查到。多提醒时间、重复规则或闹钟兜底可能只注册成功了一部分，需要重新保存对应提醒来补齐。',
+    _RegisteredReminderQueueState.missing =>
+      '需重新保存表示应用注册表里还有这条提醒，但系统待触发列表已经查不到对应编号。常见原因是提醒时间已过、权限关闭、系统清理后台任务，或登录切号后的提醒重放尚未完成。',
+    _RegisteredReminderQueueState.unconfirmed =>
+      '待确认表示系统待触发列表读取失败，或这条提醒只有应用内弹出、邮件等不完全进入系统队列的通道。应用内弹出只在前台运行时展示，后台和锁屏要看普通通知或闹钟兜底。',
+  };
+}
+
+String _queueStateActionHint(_RegisteredReminderQueueState state) {
+  return switch (state) {
+    _RegisteredReminderQueueState.queued =>
+      '不用重复保存。若到点没响，优先检查通知权限、渠道声音、精准闹钟和全屏提醒权限。',
+    _RegisteredReminderQueueState.partial =>
+      '打开对应事项重新保存提醒；如果是多提醒时间，请逐个确认时间和提醒方式。',
+    _RegisteredReminderQueueState.missing =>
+      '若仍需要提醒，打开对应事项，把提醒时间调整到未来后重新保存；若提醒已过期且不再需要，可忽略或删除提醒。保存前先确认通知权限、精准闹钟和全屏提醒权限已经开启。',
+    _RegisteredReminderQueueState.unconfirmed =>
+      '应用内弹出需要保持应用前台；需要后台或锁屏触发时，请选择普通通知或闹钟提醒。',
+  };
+}
+
+bool _entryHasSystemQueueChannel(ReminderScheduleSnapshotEntry entry) {
+  if (entry.kinds.isEmpty) return true;
+  return entry.kinds.contains(ReminderKind.push) ||
+      entry.kinds.contains(ReminderKind.alarm);
+}
+
+List<Set<int>> _entryAcceptedIdSets(ReminderScheduleSnapshotEntry entry) {
+  if (entry.acceptedIdSets.isNotEmpty) return entry.acceptedIdSets;
+  if (!_entryHasSystemQueueChannel(entry)) return const <Set<int>>[];
+  final ids = entry.ids.where((id) => id != 0).toSet();
+  if (ids.isEmpty) return const <Set<int>>[];
+  return <Set<int>>[Set<int>.unmodifiable(ids)];
+}
+
+bool _entryAcceptedBySystemQueue(
+  ReminderScheduleSnapshotEntry entry,
+  Set<int> systemQueueIds,
+) {
+  final acceptedSets = _entryAcceptedIdSets(entry);
+  return acceptedSets.any(
+    (ids) => ids.isNotEmpty && systemQueueIds.containsAll(ids),
+  );
+}
+
+bool _entryHasAnySystemQueueHit(
+  ReminderScheduleSnapshotEntry entry,
+  Set<int> systemQueueIds,
+) {
+  return entry.ids.any(systemQueueIds.contains) ||
+      _entryAcceptedIdSets(
+        entry,
+      ).expand((ids) => ids).any(systemQueueIds.contains);
+}
+
+String _idsPreview(List<int> ids) {
+  if (ids.isEmpty) return '无';
+  final sorted = ids.toList()..sort();
+  const visibleCount = 12;
+  final visible = sorted.take(visibleCount).join('、');
+  if (sorted.length <= visibleCount) return visible;
+  return '$visible 等 ${sorted.length} 个';
+}
+
+String _acceptedIdSetsPreview(List<Set<int>> groups) {
+  if (groups.isEmpty) return '未记录；按登记编号全量判断';
+  const visibleCount = 4;
+  final visible = groups
+      .take(visibleCount)
+      .map((ids) {
+        final sorted = ids.toList()..sort();
+        return sorted.join('+');
+      })
+      .join('；');
+  if (groups.length <= visibleCount) return visible;
+  return '$visible 等 ${groups.length} 组';
+}
+
+@immutable
+class _RegisteredReminderDetailSnapshot {
+  final ReminderScheduleSnapshotEntry entry;
+  final _RegisteredReminderQueueState queueState;
+  final Set<int> systemQueueIds;
+  final _RegisteredReminderQueueProbe probeState;
+
+  const _RegisteredReminderDetailSnapshot({
+    required this.entry,
+    required this.queueState,
+    required this.systemQueueIds,
+    required this.probeState,
+  });
+}
+
+class _RegisteredReminderRemovedDetailSheet extends StatelessWidget {
+  const _RegisteredReminderRemovedDetailSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '这条提醒已不在当前注册表中，请返回后刷新列表。',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.72),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              key: const ValueKey('registered_reminder_removed_close'),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('关闭'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RegisteredReminderDetailSheet extends StatelessWidget {
+  final ReminderScheduleSnapshotEntry entry;
+  final _RegisteredReminderQueueState queueState;
+  final Set<int> systemQueueIds;
+  final _RegisteredReminderQueueProbe probeState;
+  final VoidCallback? onOpenObject;
+  final VoidCallback? onRefresh;
+
+  const _RegisteredReminderDetailSheet({
+    required this.entry,
+    required this.queueState,
+    required this.systemQueueIds,
+    required this.probeState,
+    this.onOpenObject,
+    this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final typeLabel = _registeredReminderTypeLabel(entry.objectType);
+    final title = _registeredReminderDisplayTitle(entry, typeLabel);
+    final subtitle = _registeredReminderDisplaySubtitle(entry, typeLabel);
+    final matchedIds =
+        entry.ids.where(systemQueueIds.contains).toList(growable: false)
+          ..sort();
+    final missingIds =
+        entry.ids
+            .where((id) => !systemQueueIds.contains(id))
+            .toList(growable: false)
+          ..sort();
+    final acceptedIdSets = _entryAcceptedIdSets(entry);
+    final acceptedBySystemQueue = _entryAcceptedBySystemQueue(
+      entry,
+      systemQueueIds,
+    );
+    final canCompareSystemQueue =
+        probeState == _RegisteredReminderQueueProbe.resolved &&
+        _entryHasSystemQueueChannel(entry);
+    final probeLabel = switch (probeState) {
+      _RegisteredReminderQueueProbe.loading => '正在读取系统待触发列表',
+      _RegisteredReminderQueueProbe.resolved => '系统待触发列表已读取',
+      _RegisteredReminderQueueProbe.failed => '系统待触发列表读取失败',
+    };
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 34,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                AppStatusBadge(
+                  label: typeLabel,
+                  color: _registeredReminderTypeColor(entry.objectType, cs),
+                ),
+                const SizedBox(width: 8),
+                AppStatusBadge(
+                  label: _queueStateLabel(queueState),
+                  color: _queueStateColor(queueState, cs),
+                ),
+                const Spacer(),
+                if (onRefresh != null) ...[
+                  IconButton(
+                    key: const ValueKey('registered_reminder_detail_refresh'),
+                    icon: const Icon(Icons.refresh, size: 20),
+                    tooltip: '刷新',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 32,
+                      height: 32,
+                    ),
+                    onPressed: onRefresh,
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                IconButton(
+                  key: const ValueKey('registered_reminder_detail_close'),
+                  icon: const Icon(Icons.close, size: 20),
+                  tooltip: '关闭',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 32,
+                    height: 32,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: cs.onSurface,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _RegisteredReminderInfoLine(label: '简述', value: subtitle),
+            _RegisteredReminderInfoLine(
+              label: '当前判断',
+              value: _queueStateSummary(queueState),
+            ),
+            _RegisteredReminderInfoLine(
+              label: '处理建议',
+              value: _queueStateActionHint(queueState),
+            ),
+            _RegisteredReminderInfoLine(label: '系统检查', value: probeLabel),
+            if (onOpenObject != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  key: const ValueKey('registered_reminder_open_object'),
+                  onPressed: onOpenObject,
+                  icon: const Icon(Icons.open_in_new_outlined, size: 18),
+                  label: Text(
+                    queueState == _RegisteredReminderQueueState.queued
+                        ? '打开事项'
+                        : '打开事项并重新保存',
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 4),
+            ..._channelDetailLines(
+              entry,
+              matchedIds: matchedIds,
+              missingIds: missingIds,
+              acceptedBySystemQueue: acceptedBySystemQueue,
+              probeState: probeState,
+            ),
+            const SizedBox(height: 8),
+            _RegisteredReminderTechnicalDetails(
+              entry: entry,
+              matchedIds: matchedIds,
+              missingIds: missingIds,
+              acceptedIdSets: acceptedIdSets,
+              acceptedBySystemQueue: acceptedBySystemQueue,
+              canCompareSystemQueue: canCompareSystemQueue,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RegisteredReminderTechnicalDetails extends StatelessWidget {
+  final ReminderScheduleSnapshotEntry entry;
+  final List<int> matchedIds;
+  final List<int> missingIds;
+  final List<Set<int>> acceptedIdSets;
+  final bool acceptedBySystemQueue;
+  final bool canCompareSystemQueue;
+
+  const _RegisteredReminderTechnicalDetails({
+    required this.entry,
+    required this.matchedIds,
+    required this.missingIds,
+    required this.acceptedIdSets,
+    required this.acceptedBySystemQueue,
+    required this.canCompareSystemQueue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final missingLabel = _technicalMissingIdsLabel(
+      missingIds: missingIds,
+      acceptedBySystemQueue: acceptedBySystemQueue,
+      canCompareSystemQueue: canCompareSystemQueue,
+    );
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        title: Text(
+          '技术详情',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.72),
+            fontWeight: FontWeight.normal,
+          ),
+        ),
+        children: [
+          _RegisteredReminderInfoLine(
+            label: '来源对象',
+            value: '${entry.objectType}:${entry.objectId}',
+          ),
+          _RegisteredReminderInfoLine(
+            label: '登记编号',
+            value: _idsPreview(entry.ids),
+          ),
+          _RegisteredReminderInfoLine(
+            label: '判定编号',
+            value: _acceptedIdSetsPreview(acceptedIdSets),
+          ),
+          _RegisteredReminderInfoLine(
+            label: '系统命中',
+            value: canCompareSystemQueue
+                ? matchedIds.isEmpty
+                      ? '无'
+                      : _idsPreview(matchedIds)
+                : '待确认',
+          ),
+          _RegisteredReminderInfoLine(label: '未命中编号', value: missingLabel),
+        ],
+      ),
+    );
+  }
+}
+
+String _technicalMissingIdsLabel({
+  required List<int> missingIds,
+  required bool acceptedBySystemQueue,
+  required bool canCompareSystemQueue,
+}) {
+  if (!canCompareSystemQueue) return '不适用';
+  if (missingIds.isEmpty) return '无';
+  final ids = _idsPreview(missingIds);
+  if (acceptedBySystemQueue) {
+    return '兼容编号未命中，不影响当前判断：$ids';
+  }
+  return ids;
+}
+
+List<Widget> _channelDetailLines(
+  ReminderScheduleSnapshotEntry entry, {
+  required List<int> matchedIds,
+  required List<int> missingIds,
+  required bool acceptedBySystemQueue,
+  required _RegisteredReminderQueueProbe probeState,
+}) {
+  final kinds = entry.kinds.isEmpty
+      ? const <ReminderKind>{ReminderKind.push}
+      : entry.kinds;
+  return [
+    if (kinds.contains(ReminderKind.push))
+      _RegisteredReminderInfoLine(
+        label: '普通通知',
+        value: _systemChannelExplanation(
+          matchedIds: matchedIds,
+          missingIds: missingIds,
+          acceptedBySystemQueue: acceptedBySystemQueue,
+          probeState: probeState,
+          suffix: '需要系统通知权限和通知渠道正常开启；系统待触发只表示已交给系统队列。',
+        ),
+      ),
+    if (kinds.contains(ReminderKind.popup))
+      const _RegisteredReminderInfoLine(
+        label: '弹出框',
+        value: '应用内弹出只在应用前台运行时展示，不完全进入系统待触发队列；后台或锁屏需要普通通知或闹钟兜底。',
+      ),
+    if (kinds.contains(ReminderKind.alarm))
+      _RegisteredReminderInfoLine(
+        label: '闹钟',
+        value: _systemChannelExplanation(
+          matchedIds: matchedIds,
+          missingIds: missingIds,
+          acceptedBySystemQueue: acceptedBySystemQueue,
+          probeState: probeState,
+          suffix: '需要通知权限、精准闹钟和全屏提醒权限；锁屏弹出还受系统后台限制影响。',
+        ),
+      ),
+    if (kinds.contains(ReminderKind.email))
+      const _RegisteredReminderInfoLine(
+        label: '邮件',
+        value: '邮件提醒不进入本机系统待触发队列，这里只能确认应用注册表仍有记录。',
+      ),
+  ];
+}
+
+String _systemChannelExplanation({
+  required List<int> matchedIds,
+  required List<int> missingIds,
+  required bool acceptedBySystemQueue,
+  required _RegisteredReminderQueueProbe probeState,
+  required String suffix,
+}) {
+  if (probeState == _RegisteredReminderQueueProbe.loading) {
+    return '正在读取系统待触发列表。$suffix';
+  }
+  if (probeState == _RegisteredReminderQueueProbe.failed) {
+    return '系统待触发列表读取失败，不能确认这条提醒是否仍在系统队列中。$suffix';
+  }
+  if (matchedIds.isEmpty) {
+    return '系统队列没有查到这条提醒，若仍需要提醒，请调整到未来时间后重新保存。$suffix';
+  }
+  if (acceptedBySystemQueue) {
+    if (missingIds.isEmpty) {
+      return '系统队列已命中这条提醒的有效编号组。$suffix';
+    }
+    return '系统队列已命中这条提醒的有效编号组；未命中的登记编号多为重复规则、闹钟兜底或旧版兼容编号，不单独代表失效。$suffix';
+  }
+  if (missingIds.isEmpty) {
+    return '系统队列已命中这条提醒的登记编号。$suffix';
+  }
+  return '系统队列只查到一部分规则；注册表无法进一步拆分缺失规则属于哪次提醒，建议重新保存对应提醒。$suffix';
+}
+
+class _RegisteredReminderInfoLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _RegisteredReminderInfoLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 72,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.55),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.82),
+                height: 1.35,
+              ),
             ),
           ),
         ],
@@ -1725,17 +2613,21 @@ class _RegisteredReminderDetailRow extends StatelessWidget {
   }
 }
 
-enum _RegisteredReminderStatus { active, inactive, all }
-
-/// 已注册提醒明细独立页：支持按生效状态过滤与分页浏览。
+/// 提醒注册状态独立页：支持按系统待触发状态过滤与分页浏览。
 ///
-/// “生效中”表示该提醒的系统通知 id 仍在系统队列里、到点会触发；“未生效”表示
-/// 调度器登记了但系统队列里查不到（常见于权限被收回或被系统清理），可据此排查
-/// “到点没提醒”的问题。
+/// “系统待触发”表示该提醒的系统通知/闹钟有效编号组仍在待触发列表里；
+/// “部分待触发”表示只命中了一部分；“需重新保存”表示调度器登记了但系统列表
+/// 一个都查不到；“待确认”表示系统列表读取失败，或只有前台弹出/邮件等
+/// 通道不能单靠本机系统队列确认。
 class RegisteredRemindersScreen extends StatefulWidget {
   final Future<Set<int>> Function()? pendingQueueLoader;
+  final String? initialOpenObjectKey;
 
-  const RegisteredRemindersScreen({super.key, this.pendingQueueLoader});
+  const RegisteredRemindersScreen({
+    super.key,
+    this.pendingQueueLoader,
+    this.initialOpenObjectKey,
+  });
 
   @override
   State<RegisteredRemindersScreen> createState() =>
@@ -1746,58 +2638,224 @@ class _RegisteredRemindersScreenState extends State<RegisteredRemindersScreen> {
   static const _pageSize = 20;
 
   bool _loading = true;
+  bool _snapshotFailed = false;
   List<ReminderScheduleSnapshotEntry> _entries =
       const <ReminderScheduleSnapshotEntry>[];
   Set<int> _systemQueueIds = <int>{};
-  // 系统队列是否成功读取；读取失败/超时时无法判定生效状态，按“生效中”处理，
-  // 避免把实际已注册的提醒误标成“未生效”。
-  bool _queueResolved = false;
-  _RegisteredReminderStatus _status = _RegisteredReminderStatus.active;
+  _RegisteredReminderQueueProbe _queueProbe =
+      _RegisteredReminderQueueProbe.loading;
+  _RegisteredReminderFilter _filter = _RegisteredReminderFilter.current;
   int _page = 0;
+  int _loadGeneration = 0;
+  int _lastAccountDataGeneration = 0;
+  String? _lastAccountKey;
+  AuthProvider? _authProvider;
+  bool _accountBoundaryPending = false;
+  bool _initialDetailOpened = false;
+  String? _openDetailObjectKey;
+  ValueNotifier<_RegisteredReminderDetailSnapshot?>? _openDetailNotifier;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    _lastAccountDataGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    AccountLocalDataCleaner.accountDataGenerationListenable.addListener(
+      _handleAccountGenerationChanged,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final auth = _readAuthProvider(context);
+    if (_authProvider == auth && _lastAccountKey != null) return;
+    final nextKey = _accountKeyFor(auth?.state);
+    final nextGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final changed =
+        _lastAccountKey != null &&
+        (_lastAccountKey != nextKey ||
+            _lastAccountDataGeneration != nextGeneration);
+    _authProvider?.removeListener(_handleAccountChanged);
+    _authProvider = auth;
+    _authProvider?.addListener(_handleAccountChanged);
+    _lastAccountKey = nextKey;
+    _lastAccountDataGeneration = nextGeneration;
+    if (changed) _clearForAccountBoundary();
+    if (_accountBoundaryPending && auth != null && _accountIsAvailable) {
+      unawaited(_load());
+    }
+  }
+
+  @override
+  void dispose() {
+    AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
+      _handleAccountGenerationChanged,
+    );
+    _authProvider?.removeListener(_handleAccountChanged);
+    _authProvider = null;
+    _openDetailObjectKey = null;
+    _openDetailNotifier = null;
+    super.dispose();
+  }
+
+  static String _accountKeyFor(AuthState? state) {
+    if (state == null) return '';
+    return '${state.userId ?? ''}:${state.username ?? ''}:${state.token ?? ''}';
+  }
+
+  bool get _accountIsAvailable =>
+      _authProvider == null ||
+      (!_authProvider!.isAccountTransitionInProgress &&
+          !_authProvider!.isLocalAccountDataBlocked);
+
+  bool _isCurrentAccount(int generation, String key) =>
+      mounted &&
+      _accountIsAvailable &&
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation) &&
+      key == _accountKeyFor(_authProvider?.state);
+
+  bool _isCurrentLoad(int loadGeneration, int accountGeneration, String key) =>
+      loadGeneration == _loadGeneration &&
+      _isCurrentAccount(accountGeneration, key);
+
+  void _handleAccountGenerationChanged() {
+    _lastAccountDataGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    _clearForAccountBoundary();
+  }
+
+  void _handleAccountChanged() {
+    final nextKey = _accountKeyFor(_authProvider?.state);
+    final nextGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    if (nextKey != _lastAccountKey ||
+        nextGeneration != _lastAccountDataGeneration) {
+      _lastAccountKey = nextKey;
+      _lastAccountDataGeneration = nextGeneration;
+      _clearForAccountBoundary();
+    }
+    if (!_accountIsAvailable) {
+      if (!_accountBoundaryPending) _clearForAccountBoundary();
+      return;
+    }
+    // A failed transition can settle back to the same account key.
+    if (_accountBoundaryPending) unawaited(_load());
+  }
+
+  void _clearForAccountBoundary() {
+    if (!mounted) return;
+    _loadGeneration++;
+    _accountBoundaryPending = true;
+    setState(() {
+      _entries = const <ReminderScheduleSnapshotEntry>[];
+      _systemQueueIds = <int>{};
+      _page = 0;
+      _loading = false;
+      _snapshotFailed = false;
+      _queueProbe = _RegisteredReminderQueueProbe.loading;
+    });
+    // Keep ownership until the sheet's finally releases its notifier. Detach
+    // the object key so the old sheet cannot bind to the next account's row.
+    _openDetailObjectKey = null;
+    _openDetailNotifier?.value = null;
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    if (!_accountIsAvailable) {
+      if (!_accountBoundaryPending) _clearForAccountBoundary();
+      return;
+    }
+    _accountBoundaryPending = false;
+    final accountKey = _accountKeyFor(_authProvider?.state);
+    final generation = ++_loadGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    _lastAccountDataGeneration = accountGeneration;
     setState(() {
       _loading = true;
-      _queueResolved = false;
+      _snapshotFailed = false;
+      _queueProbe = _RegisteredReminderQueueProbe.loading;
     });
-    final scheduler = context.read<ReminderScheduler?>();
-    final entries =
-        await scheduler?.registeredRemindersSnapshot() ??
-        const <ReminderScheduleSnapshotEntry>[];
+    _refreshOpenDetailSnapshot();
     if (!mounted) return;
-    // 注册表来自内存，立即渲染；系统队列可能涉及较慢的平台调用，放到后台解析，
-    // 解析完成前所有已注册提醒先按“生效中”展示，避免页面长时间空转。
+
+    final scheduler = _readReminderScheduler(context);
+    List<ReminderScheduleSnapshotEntry> entries = const [];
+    var snapshotFailed = false;
+    try {
+      entries =
+          await scheduler?.registeredRemindersSnapshot() ??
+          const <ReminderScheduleSnapshotEntry>[];
+    } catch (e, st) {
+      debugPrint('[RegisteredReminders] load snapshot failed: $e\n$st');
+      snapshotFailed = true;
+    }
+
+    if (!_isCurrentLoad(generation, accountGeneration, accountKey)) return;
+
+    if (snapshotFailed) {
+      setState(() {
+        _entries = const <ReminderScheduleSnapshotEntry>[];
+        _loading = false;
+        _snapshotFailed = true;
+        _queueProbe = _RegisteredReminderQueueProbe.failed;
+        _page = 0;
+      });
+      _refreshOpenDetailSnapshot();
+      return;
+    }
+
     setState(() {
       _entries = entries;
       _loading = false;
+      _snapshotFailed = false;
       _page = 0;
     });
-    unawaited(_resolveSystemQueue());
+    _refreshOpenDetailSnapshot();
+    final initialKey = widget.initialOpenObjectKey;
+    if (!_initialDetailOpened &&
+        initialKey != null &&
+        _openDetailNotifier == null) {
+      _initialDetailOpened = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_isCurrentLoad(generation, accountGeneration, accountKey) ||
+            _openDetailNotifier != null) {
+          return;
+        }
+        final matches = _entries.where(
+          (entry) => entry.objectKey == initialKey,
+        );
+        if (matches.isNotEmpty) unawaited(_showEntryDetails(matches.first));
+      });
+    }
+    unawaited(_resolveSystemQueue(generation, accountGeneration, accountKey));
   }
 
-  Future<void> _resolveSystemQueue() async {
+  Future<void> _resolveSystemQueue(
+    int generation,
+    int accountGeneration,
+    String accountKey,
+  ) async {
+    if (!_isCurrentLoad(generation, accountGeneration, accountKey)) return;
     final customLoader = widget.pendingQueueLoader;
     if (customLoader != null) {
       try {
         final queue = await customLoader();
-        if (!mounted) return;
+        if (!_isCurrentLoad(generation, accountGeneration, accountKey)) return;
         setState(() {
           _systemQueueIds = queue;
-          _queueResolved = true;
+          _queueProbe = _RegisteredReminderQueueProbe.resolved;
         });
+        _refreshOpenDetailSnapshot();
       } catch (e, st) {
         debugPrint('[RegisteredReminders] custom pending ids failed: $e\n$st');
-        if (!mounted) return;
+        if (!_isCurrentLoad(generation, accountGeneration, accountKey)) return;
         setState(() {
           _systemQueueIds = <int>{};
-          _queueResolved = false;
+          _queueProbe = _RegisteredReminderQueueProbe.failed;
         });
+        _refreshOpenDetailSnapshot();
       }
       return;
     }
@@ -1814,37 +2872,200 @@ class _RegisteredRemindersScreenState extends State<RegisteredRemindersScreen> {
       }
     }
 
-    queue.addAll(await guarded(() => LocalNotifications.instance.pendingIds()));
+    queue.addAll(
+      await guarded(() => LocalNotifications.instance.pendingIdsOrThrow()),
+    );
     queue.addAll(await guarded(() => AlarmService.instance.pendingIds()));
-    if (!mounted) return;
+    if (!_isCurrentLoad(generation, accountGeneration, accountKey)) return;
     setState(() {
       _systemQueueIds = queue;
-      _queueResolved = queueResolved;
+      _queueProbe = queueResolved
+          ? _RegisteredReminderQueueProbe.resolved
+          : _RegisteredReminderQueueProbe.failed;
     });
+    _refreshOpenDetailSnapshot();
   }
 
-  bool _isActive(ReminderScheduleSnapshotEntry entry) =>
-      !_queueResolved || entry.ids.any(_systemQueueIds.contains);
+  _RegisteredReminderQueueState _queueStateFor(
+    ReminderScheduleSnapshotEntry entry,
+  ) {
+    if (_queueProbe != _RegisteredReminderQueueProbe.resolved) {
+      return _RegisteredReminderQueueState.unconfirmed;
+    }
+    if (!_entryHasSystemQueueChannel(entry)) {
+      return _RegisteredReminderQueueState.unconfirmed;
+    }
+    if (_entryAcceptedBySystemQueue(entry, _systemQueueIds)) {
+      return _RegisteredReminderQueueState.queued;
+    }
+    if (_entryHasAnySystemQueueHit(entry, _systemQueueIds)) {
+      return _RegisteredReminderQueueState.partial;
+    }
+    return _RegisteredReminderQueueState.missing;
+  }
 
   List<ReminderScheduleSnapshotEntry> get _filtered {
-    switch (_status) {
-      case _RegisteredReminderStatus.active:
-        return _entries.where(_isActive).toList(growable: false);
-      case _RegisteredReminderStatus.inactive:
+    switch (_filter) {
+      case _RegisteredReminderFilter.current:
         return _entries
-            .where((entry) => !_isActive(entry))
+            .where(
+              (entry) =>
+                  _queueStateFor(entry) !=
+                  _RegisteredReminderQueueState.missing,
+            )
             .toList(growable: false);
-      case _RegisteredReminderStatus.all:
+      case _RegisteredReminderFilter.all:
         return _entries;
+      case _RegisteredReminderFilter.queued:
+        return _entries
+            .where(
+              (entry) =>
+                  _queueStateFor(entry) == _RegisteredReminderQueueState.queued,
+            )
+            .toList(growable: false);
+      case _RegisteredReminderFilter.partial:
+        return _entries
+            .where(
+              (entry) =>
+                  _queueStateFor(entry) ==
+                  _RegisteredReminderQueueState.partial,
+            )
+            .toList(growable: false);
+      case _RegisteredReminderFilter.missing:
+        return _entries
+            .where(
+              (entry) =>
+                  _queueStateFor(entry) ==
+                  _RegisteredReminderQueueState.missing,
+            )
+            .toList(growable: false);
+      case _RegisteredReminderFilter.unconfirmed:
+        return _entries
+            .where(
+              (entry) =>
+                  _queueStateFor(entry) ==
+                  _RegisteredReminderQueueState.unconfirmed,
+            )
+            .toList(growable: false);
     }
   }
 
-  void _setStatus(_RegisteredReminderStatus status) {
-    if (_status == status) return;
+  void _setFilter(_RegisteredReminderFilter filter) {
+    if (_filter == filter) return;
     setState(() {
-      _status = status;
+      _filter = filter;
       _page = 0;
     });
+  }
+
+  Future<void> _showEntryDetails(ReminderScheduleSnapshotEntry entry) async {
+    if (!mounted ||
+        !_accountIsAvailable ||
+        _accountBoundaryPending ||
+        _openDetailNotifier != null) {
+      return;
+    }
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final accountKey = _accountKeyFor(_authProvider?.state);
+    final objectKey = entry.objectKey;
+    final notifier = ValueNotifier<_RegisteredReminderDetailSnapshot?>(
+      _detailSnapshotFor(objectKey, fallback: entry),
+    );
+    _openDetailObjectKey = objectKey;
+    _openDetailNotifier = notifier;
+    ReminderScheduleSnapshotEntry? targetToOpen;
+    try {
+      targetToOpen = await showModalBottomSheet<ReminderScheduleSnapshotEntry>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: false,
+        constraints: const BoxConstraints(maxWidth: 640),
+        builder: (sheetContext) =>
+            ValueListenableBuilder<_RegisteredReminderDetailSnapshot?>(
+              valueListenable: notifier,
+              builder: (context, snapshot, _) {
+                if (snapshot == null) {
+                  return const _RegisteredReminderRemovedDetailSheet();
+                }
+                return _RegisteredReminderDetailSheet(
+                  entry: snapshot.entry,
+                  queueState: snapshot.queueState,
+                  systemQueueIds: snapshot.systemQueueIds,
+                  probeState: snapshot.probeState,
+                  onRefresh: _loading ? null : _load,
+                  onOpenObject: _canOpenReminderObject(snapshot.entry)
+                      ? () => Navigator.of(sheetContext).pop(snapshot.entry)
+                      : null,
+                );
+              },
+            ),
+      );
+    } finally {
+      if (identical(_openDetailNotifier, notifier)) {
+        _openDetailObjectKey = null;
+        _openDetailNotifier = null;
+      }
+      notifier.dispose();
+    }
+
+    if (targetToOpen != null &&
+        _isCurrentAccount(accountGeneration, accountKey) &&
+        !_accountBoundaryPending) {
+      await _openReminderObject(targetToOpen);
+    }
+  }
+
+  bool _canOpenReminderObject(ReminderScheduleSnapshotEntry entry) {
+    return _detailKindForReminderObject(entry.objectType) != null;
+  }
+
+  Future<void> _openReminderObject(ReminderScheduleSnapshotEntry entry) async {
+    final kind = _detailKindForReminderObject(entry.objectType);
+    if (kind == null ||
+        !mounted ||
+        !_accountIsAvailable ||
+        _accountBoundaryPending) {
+      return;
+    }
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final accountKey = _accountKeyFor(_authProvider?.state);
+    await TodayDetailRouter.open(context, kind, id: entry.objectId);
+    if (!_isCurrentAccount(accountGeneration, accountKey)) return;
+    await _load();
+  }
+
+  _RegisteredReminderDetailSnapshot? _detailSnapshotFor(
+    String objectKey, {
+    ReminderScheduleSnapshotEntry? fallback,
+  }) {
+    ReminderScheduleSnapshotEntry? current;
+    for (final entry in _entries) {
+      if (entry.objectKey == objectKey) {
+        current = entry;
+        break;
+      }
+    }
+    if (current == null && _loading) {
+      current = fallback;
+    }
+    if (current == null) return null;
+    return _RegisteredReminderDetailSnapshot(
+      entry: current,
+      queueState: _queueStateFor(current),
+      systemQueueIds: Set<int>.unmodifiable(_systemQueueIds),
+      probeState: _queueProbe,
+    );
+  }
+
+  void _refreshOpenDetailSnapshot() {
+    if (!mounted) return;
+    final objectKey = _openDetailObjectKey;
+    final notifier = _openDetailNotifier;
+    if (objectKey == null || notifier == null) return;
+    notifier.value = _detailSnapshotFor(
+      objectKey,
+      fallback: notifier.value?.entry,
+    );
   }
 
   @override
@@ -1854,13 +3075,47 @@ class _RegisteredRemindersScreenState extends State<RegisteredRemindersScreen> {
         ? cs.surface
         : cs.surfaceContainerLowest;
     final filtered = _filtered;
-    final activeCount = _entries.where(_isActive).length;
-    final inactiveCount = _entries.length - activeCount;
+    final currentCount = _entries
+        .where(
+          (entry) =>
+              _queueStateFor(entry) != _RegisteredReminderQueueState.missing,
+        )
+        .length;
+    final queuedCount = _entries
+        .where(
+          (entry) =>
+              _queueStateFor(entry) == _RegisteredReminderQueueState.queued,
+        )
+        .length;
+    final partialCount = _entries
+        .where(
+          (entry) =>
+              _queueStateFor(entry) == _RegisteredReminderQueueState.partial,
+        )
+        .length;
+    final missingCount = _entries
+        .where(
+          (entry) =>
+              _queueStateFor(entry) == _RegisteredReminderQueueState.missing,
+        )
+        .length;
+    final unconfirmedCount = _entries
+        .where(
+          (entry) =>
+              _queueStateFor(entry) ==
+              _RegisteredReminderQueueState.unconfirmed,
+        )
+        .length;
 
     final totalPages = filtered.isEmpty
         ? 1
         : ((filtered.length - 1) ~/ _pageSize) + 1;
     final currentPage = _page.clamp(0, totalPages - 1).toInt();
+    if (currentPage != _page) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _page = currentPage);
+      });
+    }
     final pageStart = currentPage * _pageSize;
     final pageEnd = (pageStart + _pageSize).clamp(0, filtered.length).toInt();
     final visible = filtered.isEmpty
@@ -1870,7 +3125,7 @@ class _RegisteredRemindersScreenState extends State<RegisteredRemindersScreen> {
     return Scaffold(
       backgroundColor: routeBackground,
       appBar: AppBar(
-        title: const Text('已注册提醒'),
+        title: const Text('提醒注册状态'),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
         backgroundColor: routeBackground,
         surfaceTintColor: Colors.transparent,
@@ -1896,30 +3151,55 @@ class _RegisteredRemindersScreenState extends State<RegisteredRemindersScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _statusChip(
-                        '生效中',
-                        _RegisteredReminderStatus.active,
-                        activeCount,
-                      ),
-                      _statusChip(
-                        '未生效',
-                        _RegisteredReminderStatus.inactive,
-                        inactiveCount,
-                      ),
-                      _statusChip(
+                      _filterChip(
                         '全部',
-                        _RegisteredReminderStatus.all,
+                        _RegisteredReminderFilter.all,
                         _entries.length,
+                      ),
+                      _filterChip(
+                        '待触发/待确认',
+                        _RegisteredReminderFilter.current,
+                        currentCount,
+                      ),
+                      _filterChip(
+                        '系统待触发',
+                        _RegisteredReminderFilter.queued,
+                        queuedCount,
+                      ),
+                      _filterChip(
+                        '部分待触发',
+                        _RegisteredReminderFilter.partial,
+                        partialCount,
+                      ),
+                      _filterChip(
+                        '需重新保存',
+                        _RegisteredReminderFilter.missing,
+                        missingCount,
+                      ),
+                      _filterChip(
+                        '待确认',
+                        _RegisteredReminderFilter.unconfirmed,
+                        unconfirmedCount,
                       ),
                     ],
                   ),
                 ),
+                if (!_snapshotFailed &&
+                    (_queueProbe != _RegisteredReminderQueueProbe.resolved ||
+                        partialCount > 0 ||
+                        missingCount > 0))
+                  _RegisteredReminderProbeBanner(
+                    probe: _queueProbe,
+                    partialCount: partialCount,
+                    missingCount: missingCount,
+                    onRefresh: _loading ? null : _load,
+                  ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      _statusHint(),
+                      _statusHint(missingCount: missingCount),
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.55),
                       ),
@@ -1927,10 +3207,59 @@ class _RegisteredRemindersScreenState extends State<RegisteredRemindersScreen> {
                   ),
                 ),
                 Expanded(
-                  child: filtered.isEmpty
-                      ? EmptyState(
-                          icon: Icons.fact_check_outlined,
-                          message: _emptyMessage(),
+                  child: _snapshotFailed
+                      ? LayoutBuilder(
+                          builder: (context, constraints) =>
+                              SingleChildScrollView(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: constraints.maxHeight,
+                                  ),
+                                  child: Center(
+                                    child: EmptyState(
+                                      icon: Icons.sync_problem_outlined,
+                                      message: '读取提醒注册状态失败，请重试。',
+                                      actionLabel: '重试',
+                                      onAction: _load,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                        )
+                      : filtered.isEmpty
+                      ? LayoutBuilder(
+                          builder: (context, constraints) =>
+                              SingleChildScrollView(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: constraints.maxHeight,
+                                  ),
+                                  child: Center(
+                                    child: EmptyState(
+                                      icon: Icons.fact_check_outlined,
+                                      message: _emptyMessage(
+                                        missingCount: missingCount,
+                                      ),
+                                      actionLabel:
+                                          (_filter ==
+                                                  _RegisteredReminderFilter
+                                                      .current &&
+                                              missingCount > 0)
+                                          ? '查看需重新保存'
+                                          : null,
+                                      onAction:
+                                          (_filter ==
+                                                  _RegisteredReminderFilter
+                                                      .current &&
+                                              missingCount > 0)
+                                          ? () => _setFilter(
+                                              _RegisteredReminderFilter.missing,
+                                            )
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                              ),
                         )
                       : ListView.builder(
                           key: const ValueKey('registered_reminders_list'),
@@ -1938,9 +3267,11 @@ class _RegisteredRemindersScreenState extends State<RegisteredRemindersScreen> {
                           itemCount: visible.length,
                           itemBuilder: (context, index) {
                             final entry = visible[index];
+                            final state = _queueStateFor(entry);
                             return _RegisteredReminderDetailRow(
                               entry: entry,
-                              active: _queueResolved ? _isActive(entry) : null,
+                              queueState: state,
+                              onTap: () => _showEntryDetails(entry),
                             );
                           },
                         ),
@@ -1951,6 +3282,7 @@ class _RegisteredRemindersScreenState extends State<RegisteredRemindersScreen> {
                     totalPages: totalPages,
                     rangeStart: pageStart + 1,
                     rangeEnd: pageEnd,
+                    pageSize: _pageSize,
                     total: filtered.length,
                     onPrev: currentPage <= 0
                         ? null
@@ -1964,39 +3296,174 @@ class _RegisteredRemindersScreenState extends State<RegisteredRemindersScreen> {
     );
   }
 
-  Widget _statusChip(
+  Widget _filterChip(
     String label,
-    _RegisteredReminderStatus status,
+    _RegisteredReminderFilter filter,
     int count,
   ) {
     return ChoiceChip(
-      key: ValueKey('registered_reminders_filter_${status.name}'),
+      key: ValueKey('registered_reminders_filter_${filter.name}'),
       label: Text('$label · $count'),
-      selected: _status == status,
-      onSelected: (_) => _setStatus(status),
+      selected: _filter == filter,
+      onSelected: (_) => _setFilter(filter),
     );
   }
 
-  String _statusHint() {
-    switch (_status) {
-      case _RegisteredReminderStatus.active:
-        return '已进入系统提醒队列、到点会触发的提醒';
-      case _RegisteredReminderStatus.inactive:
-        return '已登记但系统队列中查不到，可重新保存对应待办/习惯，或检查通知与精准闹钟权限';
-      case _RegisteredReminderStatus.all:
-        return '调度器登记的全部提醒对象';
+  String _statusHint({required int missingCount}) {
+    if (_accountBoundaryPending) {
+      return _accountIsAvailable
+          ? '账号数据已变更，请刷新提醒注册状态。'
+          : '账号数据暂不可用，完成账号切换后再查看提醒。';
+    }
+    if (_snapshotFailed) {
+      return '读取提醒注册状态失败，可点击右上角或下方按钮重试。';
+    }
+    switch (_filter) {
+      case _RegisteredReminderFilter.current:
+        final missingHint = missingCount > 0
+            ? ' 另有 $missingCount 条需重新保存，已放在“全部”和“需重新保存”里。'
+            : '';
+        return '当前列表默认显示待触发/待确认的提醒。此状态反映系统队列记录或当前可确认情况；实际触发还取决于通知权限、闹钟权限和系统后台限制。$missingHint';
+      case _RegisteredReminderFilter.all:
+        return '全部显示提醒调度器登记的规则，也包括系统队列中查不到、需要重新保存的提醒。系统待触发=已交给系统；部分待触发=只确认到一部分；待确认=应用内/邮件或读取失败。';
+      case _RegisteredReminderFilter.queued:
+        return '系统待触发：通知或闹钟有效编号组仍在系统待触发列表里，但是否响铃还取决于系统权限和渠道设置。';
+      case _RegisteredReminderFilter.partial:
+        return '部分待触发：只确认到一部分提醒规则，多提醒时间或闹钟兜底可能只注册成功一部分，建议重新保存。';
+      case _RegisteredReminderFilter.missing:
+        return '需重新保存：应用注册表有记录，但系统待触发列表查不到；仍需要提醒时请调整到未来时间后重新保存。';
+      case _RegisteredReminderFilter.unconfirmed:
+        return '待确认：系统列表读取失败，或只有应用内弹出/邮件等通道；应用内弹出只在前台运行时展示。';
     }
   }
 
-  String _emptyMessage() {
-    switch (_status) {
-      case _RegisteredReminderStatus.active:
-        return '暂无生效中的提醒';
-      case _RegisteredReminderStatus.inactive:
-        return '没有未生效的提醒，一切正常';
-      case _RegisteredReminderStatus.all:
+  String _emptyMessage({required int missingCount}) {
+    switch (_filter) {
+      case _RegisteredReminderFilter.current:
+        if (missingCount > 0) {
+          return '当前没有待触发/待确认的提醒；另有 $missingCount 条需重新保存';
+        }
+        return '暂无待触发/待确认的提醒';
+      case _RegisteredReminderFilter.all:
         return '暂无已注册提醒';
+      case _RegisteredReminderFilter.queued:
+        return '暂无系统待触发的提醒';
+      case _RegisteredReminderFilter.partial:
+        return '暂无部分待触发的提醒';
+      case _RegisteredReminderFilter.missing:
+        return '暂无需要重新保存的提醒';
+      case _RegisteredReminderFilter.unconfirmed:
+        return '暂无待确认的提醒';
     }
+  }
+}
+
+class _RegisteredReminderProbeBanner extends StatelessWidget {
+  final _RegisteredReminderQueueProbe probe;
+  final int partialCount;
+  final int missingCount;
+  final VoidCallback? onRefresh;
+
+  const _RegisteredReminderProbeBanner({
+    required this.probe,
+    required this.partialCount,
+    required this.missingCount,
+    this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isFailed = probe == _RegisteredReminderQueueProbe.failed;
+    final isLoading = probe == _RegisteredReminderQueueProbe.loading;
+    final hasBroken = partialCount > 0 || missingCount > 0;
+    final background = isFailed || hasBroken
+        ? cs.errorContainer.withValues(alpha: 0.58)
+        : cs.primaryContainer.withValues(alpha: 0.5);
+    final foreground = isFailed || hasBroken
+        ? cs.onErrorContainer
+        : cs.onPrimaryContainer;
+    final icon = isFailed || hasBroken
+        ? Icons.warning_amber_rounded
+        : Icons.hourglass_top_outlined;
+    final message = switch (probe) {
+      _RegisteredReminderQueueProbe.loading => '正在读取系统待触发队列，结果出来前先标记为“待确认”。',
+      _RegisteredReminderQueueProbe.failed =>
+        '系统待触发队列读取失败，暂时不能判断系统是否还保留这些提醒；请检查通知/闹钟权限后重试。',
+      _RegisteredReminderQueueProbe.resolved =>
+        missingCount > 0 && partialCount > 0
+            ? '$missingCount 条提醒在系统队列中查不到，$partialCount 条只确认到一部分；请优先重新保存查不到的提醒。'
+            : missingCount > 0
+            ? '$missingCount 条提醒在系统队列中查不到，需要打开对应事项重新保存。'
+            : '$partialCount 条提醒只确认到一部分，多提醒时间或闹钟兜底可能没有全部注册成功。',
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+      child: DecoratedBox(
+        key: const ValueKey('registered_reminders_queue_banner'),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: foreground.withValues(alpha: 0.16),
+            width: 0.6,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, size: 18, color: foreground),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      message,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: foreground,
+                        height: 1.32,
+                      ),
+                    ),
+                  ),
+                  if (isFailed)
+                    TextButton.icon(
+                      onPressed: onRefresh,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('重试'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: foreground,
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                ],
+              ),
+              if (isLoading) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: 0.48,
+                    child: SizedBox(
+                      height: 2,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: foreground.withValues(alpha: 0.38),
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -2005,6 +3472,7 @@ class _Pager extends StatelessWidget {
   final int totalPages;
   final int rangeStart;
   final int rangeEnd;
+  final int pageSize;
   final int total;
   final VoidCallback? onPrev;
   final VoidCallback? onNext;
@@ -2014,6 +3482,7 @@ class _Pager extends StatelessWidget {
     required this.totalPages,
     required this.rangeStart,
     required this.rangeEnd,
+    required this.pageSize,
     required this.total,
     required this.onPrev,
     required this.onNext,
@@ -2028,7 +3497,7 @@ class _Pager extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              '$rangeStart-$rangeEnd / $total · 第 ${currentPage + 1}/$totalPages 页',
+              '每页 $pageSize 条 · $rangeStart-$rangeEnd / $total · 第 ${currentPage + 1}/$totalPages 页',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -2279,6 +3748,7 @@ class _NotificationReminderSlotTileState
     if (_saving) return;
     setState(() => _saving = true);
     try {
+      final slotChanged = !_sameSlot(slot, next);
       final needsReminderCheck =
           next.enabled &&
           (!slot.enabled ||
@@ -2287,36 +3757,125 @@ class _NotificationReminderSlotTileState
               slot.kind != next.kind ||
               !_sameDays(slot.repeatDays, next.repeatDays));
       if (needsReminderCheck) {
-        final notif = context.read<NotificationService?>();
-        final ready =
-            await notif?.ensureReadyForReminder(
-              scheduledTime: _nextSlotTrigger(next),
-              issueTitle: I18n.tr('preferences.daily_reminder.register_failed'),
-              relatedId: 'daily_reminder_$index',
-            ) ??
-            true;
+        final ready = await _ensureReminderSlotReady(context, next);
         if (!context.mounted) return;
-        if (!ready) {
-          final issue = notif?.lastScheduleIssue;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                issue?.message ??
-                    I18n.tr('preferences.daily_reminder.not_ready'),
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          return;
-        }
+        if (!ready) return;
       }
       await context.read<PreferencesProvider>().setDailyReminderSlot(
         index,
         next,
       );
+      if (!context.mounted || !slotChanged) return;
+      await _syncReminderSlotAfterSave(context);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  bool _sameSlot(DailyReminderSlot a, DailyReminderSlot b) {
+    return a.enabled == b.enabled &&
+        a.kind == b.kind &&
+        a.hour == b.hour &&
+        a.minute == b.minute &&
+        a.includeTodayTasks == b.includeTodayTasks &&
+        a.includeTomorrowPlan == b.includeTomorrowPlan &&
+        a.includeOverdue == b.includeOverdue &&
+        a.pauseHolidays == b.pauseHolidays &&
+        _sameDays(a.repeatDays, b.repeatDays);
+  }
+
+  Future<void> _syncReminderSlotAfterSave(BuildContext context) async {
+    final sync = context.read<DailyDigestReminderSync?>();
+    if (sync == null) return;
+
+    final notif = context.read<NotificationService?>();
+    notif?.clearScheduleIssue();
+    late final DailyDigestReminderResult result;
+    try {
+      result = await sync.registerImmediately();
+    } on NotificationScheduleUnavailableException catch (e) {
+      if (!context.mounted) return;
+      _showSlotSaveError(context, '${e.title}：${e.message}');
+      return;
+    } catch (e, st) {
+      debugPrint(
+        '[NotificationSettings] daily reminder sync after save failed: $e\n$st',
+      );
+      if (!context.mounted) return;
+      _showSlotSaveError(context, '每日提醒已保存，但系统注册失败。请检查通知、精准闹钟和后台运行权限后重试。($e)');
+      return;
+    }
+
+    if (!context.mounted) return;
+    final issue = result.issueForSlot(index);
+    if (issue == null) return;
+    final prefix = issue.blocking ? '每日提醒已保存，但未注册' : '每日提醒已保存，但需要确认';
+    _showSlotSaveError(context, '$prefix：${issue.title}：${issue.message}');
+  }
+
+  Future<bool> _ensureReminderSlotReady(
+    BuildContext context,
+    DailyReminderSlot next,
+  ) async {
+    final kind = DailyReminderSlot.normalizeKind(next.kind);
+    if (!next.enabled || kind == ReminderKind.off) return true;
+
+    if (kind == ReminderKind.alarm) {
+      try {
+        await AlarmService.instance.init();
+        final exactAlarmGranted =
+            await AlarmService.instance.hasExactAlarmPermission() ||
+            await AlarmService.instance.requestExactAlarmPermission();
+        if (!context.mounted) return false;
+        if (!exactAlarmGranted) {
+          _showSlotSaveError(context, '精准闹钟权限未开启，无法保存锁屏闹钟提醒。请在系统设置开启后重试。');
+          return false;
+        }
+
+        final fullScreenGranted =
+            await AlarmService.instance.hasFullScreenIntentPermission() ||
+            await AlarmService.instance.requestFullScreenIntentPermission();
+        if (!context.mounted) return false;
+        if (!fullScreenGranted) {
+          _showSlotSaveError(context, '全屏提醒权限未开启，无法保存锁屏闹钟提醒。请在系统设置开启后重试。');
+          return false;
+        }
+        return true;
+      } catch (e, st) {
+        debugPrint(
+          '[NotificationSettings] daily reminder alarm readiness failed: $e\n$st',
+        );
+        if (context.mounted) {
+          _showSlotSaveError(context, '闹钟提醒准备失败，请检查精准闹钟、全屏提醒和后台运行权限。');
+        }
+        return false;
+      }
+    }
+
+    final notif = context.read<NotificationService?>();
+    final ready =
+        await notif?.ensureReadyForReminder(
+          scheduledTime: _nextSlotTrigger(next),
+          issueTitle: I18n.tr('preferences.daily_reminder.register_failed'),
+          relatedId: 'daily_reminder_$index',
+        ) ??
+        true;
+    if (!context.mounted) return false;
+    if (!ready) {
+      final issue = notif?.lastScheduleIssue;
+      _showSlotSaveError(
+        context,
+        issue?.message ?? I18n.tr('preferences.daily_reminder.not_ready'),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  void _showSlotSaveError(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
   }
 
   @override
@@ -2742,6 +4301,9 @@ String _registeredReminderTypeLabel(String objectType) {
     'habit' => '习惯',
     'anniversary' => '纪念日',
     'countdown' => '倒数日',
+    'course' => '课程',
+    'note' => '随手记',
+    'diary' => '日记',
     _ => objectType,
   };
 }
@@ -2764,6 +4326,19 @@ String _registeredReminderDisplaySubtitle(
   return '$typeLabel · 提醒规则暂未同步，可刷新或重新保存对应事项';
 }
 
+TodaySectionKind? _detailKindForReminderObject(String objectType) {
+  return switch (objectType) {
+    'todo' => TodaySectionKind.todos,
+    'habit' => TodaySectionKind.habits,
+    'goal' => TodaySectionKind.goals,
+    'anniversary' => TodaySectionKind.anniversaries,
+    'course' => TodaySectionKind.courses,
+    'note' => TodaySectionKind.notes,
+    'diary' => TodaySectionKind.diary,
+    _ => null,
+  };
+}
+
 Color _registeredReminderTypeColor(String objectType, ColorScheme cs) {
   return switch (objectType) {
     'todo' => Colors.blue,
@@ -2771,6 +4346,9 @@ Color _registeredReminderTypeColor(String objectType, ColorScheme cs) {
     'habit' => Colors.green,
     'anniversary' => Colors.pink,
     'countdown' => Colors.deepOrange,
+    'course' => Colors.cyan,
+    'note' => Colors.amber.shade900,
+    'diary' => Colors.purple,
     _ => cs.primary,
   };
 }

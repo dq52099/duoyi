@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -97,6 +98,15 @@ class AuthState {
   );
 }
 
+class AccountLocalDataCleanupBlockedException implements Exception {
+  final String message;
+
+  const AccountLocalDataCleanupBlockedException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 /// 登录态 + 连接到服务器的 ApiClient。
 ///
 /// 服务器地址完全由 [AppConfig.bakedServerUrl] 决定，不可在运行时修改。
@@ -107,6 +117,9 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic> _serverConfig = const {};
   late ApiClient _client;
   int _stateMutationSerial = 0;
+  bool _accountTransitionInProgress = false;
+  bool _localAccountDataBlocked = false;
+  Future<void> _accountWritebackTail = Future<void>.value();
   int _refreshMeRequestSerial = 0;
   int _lastAppliedRefreshMeRequestSerial = 0;
   static const _refreshMeMinInterval = Duration(seconds: 30);
@@ -124,9 +137,12 @@ class AuthProvider extends ChangeNotifier {
   Future<void> Function(Map<String, dynamic> payload)? onAccountPayloadChanged;
   Future<void> Function(AuthState previous, AuthState next)?
   onAccountIdentityChanging;
+  Future<void> Function()? onBeforeAccountLogout;
   Future<void> Function()? onAccountLoggedOut;
 
   AuthState get state => _state;
+  bool get isAccountTransitionInProgress => _accountTransitionInProgress;
+  bool get isLocalAccountDataBlocked => _localAccountDataBlocked;
   String get baseUrl => _baseUrl;
   Map<String, dynamic> get serverConfig => _serverConfig;
   bool get inviteCodeRequired =>
@@ -153,6 +169,26 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage({bool refreshServerConfig = true}) async {
+    if (_accountTransitionInProgress) {
+      throw const ApiException('账号正在切换，请稍后重试。');
+    }
+    // Remain closed if hydration or its cleanup barrier fails or times out.
+    _localAccountDataBlocked = true;
+    _accountTransitionInProgress = true;
+    _markAccountMutation('storage_hydration');
+    notifyListeners();
+    try {
+      await _queueAccountWriteback(_loadFromStorageNow);
+    } finally {
+      _accountTransitionInProgress = false;
+      notifyListeners();
+    }
+    if (refreshServerConfig) {
+      await refreshServerConfigFromServer();
+    }
+  }
+
+  Future<void> _loadFromStorageNow() async {
     final prefs = await SharedPreferences.getInstance();
     // 清理旧版本可能遗留的本地服务器覆盖；当前策略不允许 APP 内改地址。
     await prefs.remove('auth_base_url');
@@ -175,10 +211,7 @@ class AuthProvider extends ChangeNotifier {
     _state = loadedState;
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistAccountDataOwner(prefs, _state);
-    notifyListeners();
-    if (refreshServerConfig) {
-      await refreshServerConfigFromServer();
-    }
+    _localAccountDataBlocked = false;
   }
 
   Future<void> refreshServerConfigFromServer({bool force = false}) {
@@ -216,14 +249,130 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _persistState() async {
+  void _refreshServerConfigInBackground(String reason) {
+    unawaited(
+      refreshServerConfigFromServer().catchError((Object e, StackTrace st) {
+        debugPrint(
+          '[auth] server config refresh after $reason failed: $e\n$st',
+        );
+      }),
+    );
+  }
+
+  Future<void> _queueAccountWriteback(Future<void> Function() task) {
+    final result = _accountWritebackTail.then((_) => task());
+    // A failed update must not prevent a later cleanup or retry from running.
+    _accountWritebackTail = result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {},
+    );
+    return result;
+  }
+
+  bool _isCurrentAccountWriteback(
+    AuthState state,
+    int generation, {
+    bool allowTransition = false,
+  }) {
+    return (allowTransition || !_accountTransitionInProgress) &&
+        generation == _stateMutationSerial &&
+        state.token == _state.token &&
+        state.userId == _state.userId;
+  }
+
+  Future<bool> _persistState(
+    AuthState state,
+    int generation, {
+    bool allowTransition = false,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_state', json.encode(_state.toJson()));
-    await _persistAccountDataOwner(prefs, _state);
+    bool isCurrent() => _isCurrentAccountWriteback(
+      state,
+      generation,
+      allowTransition: allowTransition,
+    );
+    if (!isCurrent()) return false;
+    await prefs.setString('auth_state', json.encode(state.toJson()));
+    if (!isCurrent()) return false;
+    await _persistAccountDataOwner(prefs, state);
+    if (!isCurrent()) return false;
+    _localAccountDataBlocked = false;
+    return true;
+  }
+
+  Future<bool> _persistAndNotifyAccount(
+    Map<String, dynamic> payload, {
+    bool allowTransition = false,
+  }) async {
+    final state = _state;
+    final generation = _stateMutationSerial;
+    bool isCurrent() => _isCurrentAccountWriteback(
+      state,
+      generation,
+      allowTransition: allowTransition,
+    );
+    if (!await _persistState(
+      state,
+      generation,
+      allowTransition: allowTransition,
+    )) {
+      return false;
+    }
+    if (!isCurrent()) return false;
+    await _notifyAccountPayloadChanged(payload);
+    if (!isCurrent()) return false;
+    await _notifyAccountProfileChanged(state);
+    return isCurrent();
+  }
+
+  Future<void> _applyAuthenticatedResponse(
+    Map<String, dynamic> payload, {
+    required ApiClient requestClient,
+    required int generation,
+    required String reason,
+  }) async {
+    _guardAccountRequest(requestClient, generation);
+    // Claim the transition before queuing. A cloud writeback must never queue
+    // a refresh behind this transition while cleanup waits for that writeback.
+    _accountTransitionInProgress = true;
+    _markAccountMutation(reason);
+    notifyListeners();
+    try {
+      await _queueAccountWriteback(() async {
+        final previousState = _state;
+        final nextState = _stateFromAuthResponse(
+          payload,
+          fallbackState: const AuthState(),
+        );
+        await _notifyAccountIdentityChanging(previousState, nextState);
+        _state = nextState;
+        _client = ApiClient(baseUrl: _baseUrl, token: nextState.token);
+        await _persistAndNotifyAccount(payload, allowTransition: true);
+      });
+    } finally {
+      _accountTransitionInProgress = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _applyProfileResponse(
+    Map<String, dynamic> payload, {
+    required ApiClient requestClient,
+    required int generation,
+    required String reason,
+  }) {
+    _guardAccountRequest(requestClient, generation);
+    return _queueAccountWriteback(() async {
+      _guardAccountRequest(requestClient, generation);
+      _state = _stateFromAuthResponse(payload, keepToken: true);
+      _markAccountMutation(reason);
+      if (await _persistAndNotifyAccount(payload)) notifyListeners();
+    });
   }
 
   void _markAccountMutation(String reason) {
     _stateMutationSerial++;
+    _refreshMeInFlight = null;
     debugPrint(
       '[auth-sync] mutation=$_stateMutationSerial reason=$reason '
       'user=${_state.userId ?? '-'} coin=${_state.coinBalance} '
@@ -239,7 +388,10 @@ class AuthProvider extends ChangeNotifier {
     String? displayName,
     String? inviteCode,
   }) async {
-    final res = await _client.post('/api/auth/register', {
+    final requestClient = _client;
+    final generation = _stateMutationSerial;
+    _guardAccountRequest(requestClient, generation);
+    final res = await requestClient.post('/api/auth/register', {
       'username': username,
       'password': password,
       if (email != null && email.isNotEmpty) 'email': email,
@@ -251,20 +403,14 @@ class AuthProvider extends ChangeNotifier {
         'invitation_code': inviteCode,
       },
     });
-    final previousState = _state;
-    final nextState = _stateFromAuthResponse(
+    _guardAccountRequest(requestClient, generation);
+    await _applyAuthenticatedResponse(
       res,
-      fallbackState: const AuthState(),
+      requestClient: requestClient,
+      generation: generation,
+      reason: 'register',
     );
-    await _notifyAccountIdentityChanging(previousState, nextState);
-    _state = nextState;
-    _markAccountMutation('register');
-    _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
-    await _persistState();
-    await _notifyAccountPayloadChanged(res);
-    await _notifyAccountProfileChanged();
-    notifyListeners();
-    await refreshServerConfigFromServer();
+    _refreshServerConfigInBackground('register');
   }
 
   Future<Map<String, dynamic>> sendEmailCode({
@@ -344,29 +490,29 @@ class AuthProvider extends ChangeNotifier {
     required String username,
     required String password,
   }) async {
-    final res = await _client.post('/api/auth/login', {
+    final requestClient = _client;
+    final generation = _stateMutationSerial;
+    _guardAccountRequest(requestClient, generation);
+    final res = await requestClient.post('/api/auth/login', {
       'username': username,
       'account': username,
       if (_looksLikeEmail(username)) 'email': username,
       'password': password,
     });
-    final previousState = _state;
-    final nextState = _stateFromAuthResponse(
+    _guardAccountRequest(requestClient, generation);
+    await _applyAuthenticatedResponse(
       res,
-      fallbackState: const AuthState(),
+      requestClient: requestClient,
+      generation: generation,
+      reason: 'login',
     );
-    await _notifyAccountIdentityChanging(previousState, nextState);
-    _state = nextState;
-    _markAccountMutation('login');
-    _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
-    await _persistState();
-    await _notifyAccountPayloadChanged(res);
-    await _notifyAccountProfileChanged();
-    notifyListeners();
-    await refreshServerConfigFromServer();
+    _refreshServerConfigInBackground('login');
   }
 
   Future<void> emailLogin({required String email, required String code}) async {
+    final requestClient = _client;
+    final generation = _stateMutationSerial;
+    _guardAccountRequest(requestClient, generation);
     final res = await _postFirstAvailable(
       const [
         '/api/auth/email-login',
@@ -392,54 +538,114 @@ class AuthProvider extends ChangeNotifier {
       ],
       {'email': email, 'code': code, 'email_code': code},
     );
-    final previousState = _state;
-    final nextState = _stateFromAuthResponse(
+    await _applyAuthenticatedResponse(
       res,
-      fallbackState: const AuthState(),
+      requestClient: requestClient,
+      generation: generation,
+      reason: 'email_login',
     );
-    await _notifyAccountIdentityChanging(previousState, nextState);
-    _state = nextState;
-    _markAccountMutation('email_login');
-    _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
-    await _persistState();
-    await _notifyAccountPayloadChanged(res);
-    await _notifyAccountProfileChanged();
-    notifyListeners();
-    await refreshServerConfigFromServer();
+    _refreshServerConfigInBackground('email_login');
   }
 
   Future<void> logout() async {
+    if (_accountTransitionInProgress) return;
+    if (!_state.isLoggedIn) {
+      await _clearLocalSession();
+      return;
+    }
+
+    // Finish the local account cleanup barrier before asking the server to
+    // revoke this token. A blocked cleanup must leave the still-valid session
+    // intact so the user can retry later.
+    final tokenAtStart = _state.token;
+    await _notifyBeforeAccountLogout();
+    if (_accountTransitionInProgress || _state.token != tokenAtStart) return;
+    _accountTransitionInProgress = true;
+    _markAccountMutation('logout_cleanup');
+    notifyListeners();
     try {
-      if (_state.isLoggedIn) {
-        await _sendFirstAvailable(
-          const ['POST'],
-          const [
-            '/api/auth/logout',
-            '/api/logout',
-            '/api/me/logout',
-            '/api/user/logout',
-            '/api/account/logout',
-            '/api/auth/signout',
-            '/api/auth/sign-out',
-          ],
-          null,
-          featureName: '退出登录',
-        );
-      }
-    } catch (_) {}
-    await _clearLocalSession();
+      await _accountWritebackTail;
+      await _logoutAfterCleanup();
+    } finally {
+      _accountTransitionInProgress = false;
+      notifyListeners();
+    }
   }
 
-  Future<void> _clearLocalSession() async {
+  Future<void> _logoutAfterCleanup() async {
+    final logoutClient = _client;
     Object? cleanupError;
     StackTrace? cleanupStackTrace;
     try {
       await _notifyAccountLoggedOut();
     } catch (e, st) {
+      if (e is AccountLocalDataCleanupBlockedException) {
+        debugPrint('[auth] account logout cleanup blocked: $e');
+        Error.throwWithStackTrace(e, st);
+      }
       cleanupError = e;
       cleanupStackTrace = st;
       await _clearAccountScopedPreferencesAfterLogoutCleanupFailure();
     }
+    try {
+      await _sendFirstAvailable(
+        const ['POST'],
+        const [
+          '/api/auth/logout',
+          '/api/logout',
+          '/api/me/logout',
+          '/api/user/logout',
+          '/api/account/logout',
+          '/api/auth/signout',
+          '/api/auth/sign-out',
+        ],
+        null,
+        featureName: '退出登录',
+        client: logoutClient,
+      );
+    } catch (_) {}
+
+    await _resetLocalSession();
+    if (cleanupError != null) {
+      Error.throwWithStackTrace(cleanupError, cleanupStackTrace!);
+    }
+  }
+
+  Future<void> _clearLocalSession() async {
+    if (_accountTransitionInProgress) return;
+    _accountTransitionInProgress = true;
+    _markAccountMutation('session_cleanup');
+    notifyListeners();
+    try {
+      await _accountWritebackTail;
+      await _clearLocalSessionAfterCleanup();
+    } finally {
+      _accountTransitionInProgress = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _clearLocalSessionAfterCleanup() async {
+    Object? cleanupError;
+    StackTrace? cleanupStackTrace;
+    try {
+      await _notifyAccountLoggedOut();
+    } catch (e, st) {
+      if (e is AccountLocalDataCleanupBlockedException) {
+        debugPrint('[auth] account logout cleanup blocked: $e');
+        Error.throwWithStackTrace(e, st);
+      }
+      cleanupError = e;
+      cleanupStackTrace = st;
+      await _clearAccountScopedPreferencesAfterLogoutCleanupFailure();
+    }
+    await _resetLocalSession();
+    if (cleanupError != null) {
+      Error.throwWithStackTrace(cleanupError, cleanupStackTrace!);
+    }
+  }
+
+  Future<void> _resetLocalSession() async {
     _state = const AuthState();
     _markAccountMutation('logout');
     _client = ApiClient(baseUrl: _baseUrl);
@@ -447,8 +653,16 @@ class AuthProvider extends ChangeNotifier {
     await prefs.remove('auth_state');
     await prefs.remove(AccountLocalDataCleaner.accountDataOwnerKey);
     notifyListeners();
-    if (cleanupError != null) {
-      Error.throwWithStackTrace(cleanupError, cleanupStackTrace!);
+  }
+
+  Future<void> _notifyBeforeAccountLogout() async {
+    final callback = onBeforeAccountLogout;
+    if (callback == null) return;
+    try {
+      await callback();
+    } catch (e, st) {
+      debugPrint('[auth] account logout preflight failed: $e\n$st');
+      rethrow;
     }
   }
 
@@ -464,14 +678,27 @@ class AuthProvider extends ChangeNotifier {
     SharedPreferences prefs,
     AuthState loadedState,
   ) async {
-    final currentOwner = _stableAccountIdentity(loadedState);
-    if (currentOwner == null) return;
     final storedOwner = prefs
         .getString(AccountLocalDataCleaner.accountDataOwnerKey)
         ?.trim();
+    final currentOwner = _stableAccountIdentity(loadedState);
     if (storedOwner == null || storedOwner.isEmpty) {
+      if (currentOwner == null) return;
       if (!_unownedStoredAccountDataLooksMismatched(prefs, loadedState)) return;
       debugPrint('[auth] clearing unowned local account data after mismatch');
+      if (onAccountIdentityChanging == null) {
+        await AccountLocalDataCleaner.clearSharedPreferences();
+        return;
+      }
+      await _notifyAccountIdentityChanging(
+        const AuthState(),
+        loadedState,
+        force: true,
+      );
+      return;
+    }
+    if (currentOwner == null) {
+      debugPrint('[auth] clearing account data with unknown stored owner');
       if (onAccountIdentityChanging == null) {
         await AccountLocalDataCleaner.clearSharedPreferences();
         return;
@@ -493,6 +720,12 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _clearResidualAccountDataIfSignedOut(
     SharedPreferences prefs,
   ) async {
+    final storedOwner = prefs
+        .getString(AccountLocalDataCleaner.accountDataOwnerKey)
+        ?.trim();
+    // Unowned account-scoped keys are the guest workspace. Keep them across
+    // restarts so a later login can adopt them as an intentional import.
+    if (storedOwner == null || storedOwner.isEmpty) return;
     if (!_hasStoredAccountScopedData(prefs)) return;
     debugPrint('[auth] clearing residual account data while signed out');
     if (onAccountLoggedOut == null) {
@@ -501,7 +734,11 @@ class AuthProvider extends ChangeNotifier {
     }
     try {
       await _notifyAccountLoggedOut();
-    } catch (_) {
+    } catch (e, st) {
+      if (e is AccountLocalDataCleanupBlockedException) {
+        debugPrint('[auth] residual account cleanup blocked: $e');
+        Error.throwWithStackTrace(e, st);
+      }
       await _clearAccountScopedPreferencesAfterLogoutCleanupFailure();
       rethrow;
     }
@@ -597,7 +834,9 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> refreshMe({String reason = 'manual', bool force = false}) {
-    if (!_state.isLoggedIn) return Future<void>.value();
+    if (!_state.isLoggedIn || _accountTransitionInProgress) {
+      return Future<void>.value();
+    }
     final inFlight = _refreshMeInFlight;
     if (inFlight != null) return inFlight;
     final now = DateTime.now();
@@ -634,45 +873,65 @@ class AuthProvider extends ChangeNotifier {
       _lastRefreshMeAt = DateTime.now();
       _lastRefreshMeToken = tokenAtStart;
       _lastRefreshMeMutationSerial = mutationSerialAtStart;
-      if (requestId != _refreshMeRequestSerial ||
-          requestId < _lastAppliedRefreshMeRequestSerial) {
-        debugPrint('[auth-sync] refreshMe#$requestId skipped: older response');
+      // Cloud sync may await this refresh while a transition drains sync.
+      // Do not enqueue behind that transition, even if the HTTP already ended.
+      if (_accountTransitionInProgress ||
+          _state.token != tokenAtStart ||
+          _stateMutationSerial != mutationSerialAtStart) {
         return;
       }
-      if (!_state.isLoggedIn || _state.token != tokenAtStart) {
-        debugPrint('[auth-sync] refreshMe#$requestId skipped: token changed');
-        return;
-      }
-      if (userIdAtStart != null &&
-          _state.userId != null &&
-          _state.userId != userIdAtStart) {
-        debugPrint('[auth-sync] refreshMe#$requestId skipped: user changed');
-        return;
-      }
-      if (_stateMutationSerial != mutationSerialAtStart) {
-        debugPrint(
-          '[auth-sync] refreshMe#$requestId skipped: newer account mutation '
-          '$_stateMutationSerial > $mutationSerialAtStart',
-        );
-        return;
-      }
-      final nextState = _stateFromAuthResponse(me, keepToken: true);
-      _lastAppliedRefreshMeRequestSerial = requestId;
-      if (_authStatesEqual(_state, nextState)) {
-        await _notifyAccountPayloadChanged(me);
-        debugPrint('[auth-sync] refreshMe#$requestId skipped: unchanged');
-        return;
-      }
-      _state = nextState;
-      await _persistState();
-      await _notifyAccountPayloadChanged(me);
-      await _notifyAccountProfileChanged();
-      debugPrint(
-        '[auth-sync] refreshMe#$requestId applied '
-        'coin=${_state.coinBalance} lifetime=${_state.lifetimeCoins}',
-      );
-      notifyListeners();
+      await _queueAccountWriteback(() async {
+        if (requestId != _refreshMeRequestSerial ||
+            requestId < _lastAppliedRefreshMeRequestSerial) {
+          debugPrint(
+            '[auth-sync] refreshMe#$requestId skipped: older response',
+          );
+          return;
+        }
+        if (!_state.isLoggedIn ||
+            _state.token != tokenAtStart ||
+            _accountTransitionInProgress) {
+          debugPrint('[auth-sync] refreshMe#$requestId skipped: token changed');
+          return;
+        }
+        if (userIdAtStart != null &&
+            _state.userId != null &&
+            _state.userId != userIdAtStart) {
+          debugPrint('[auth-sync] refreshMe#$requestId skipped: user changed');
+          return;
+        }
+        if (_stateMutationSerial != mutationSerialAtStart) {
+          debugPrint(
+            '[auth-sync] refreshMe#$requestId skipped: newer account mutation '
+            '$_stateMutationSerial > $mutationSerialAtStart',
+          );
+          return;
+        }
+        final nextState = _stateFromAuthResponse(me, keepToken: true);
+        _lastAppliedRefreshMeRequestSerial = requestId;
+        if (_authStatesEqual(_state, nextState)) {
+          await _notifyAccountPayloadChanged(me);
+          debugPrint('[auth-sync] refreshMe#$requestId skipped: unchanged');
+          return;
+        }
+        _state = nextState;
+        if (await _persistAndNotifyAccount(me)) {
+          debugPrint(
+            '[auth-sync] refreshMe#$requestId applied '
+            'coin=${_state.coinBalance} lifetime=${_state.lifetimeCoins}',
+          );
+          notifyListeners();
+        }
+      });
     } on ApiException catch (e) {
+      if (_accountTransitionInProgress ||
+          !_state.isLoggedIn ||
+          _state.token != tokenAtStart ||
+          _stateMutationSerial != mutationSerialAtStart ||
+          requestId != _refreshMeRequestSerial) {
+        debugPrint('[auth-sync] refreshMe#$requestId skipped: stale error');
+        return;
+      }
       if (_isAuthExpired(e)) {
         await _clearLocalSession();
       } else {
@@ -690,38 +949,47 @@ class AuthProvider extends ChangeNotifier {
     String? expectedToken,
     String? expectedUserId,
   }) async {
-    if (!_state.isLoggedIn) return;
-    if (expectedToken != null && _state.token != expectedToken) {
-      debugPrint('[auth-sync] $reason skipped: token changed');
-      return;
-    }
-    if (expectedUserId != null &&
-        _state.userId != null &&
-        _state.userId != expectedUserId) {
-      debugPrint('[auth-sync] $reason skipped: user changed');
-      return;
-    }
-    final nextState = _stateFromAuthResponse(
-      Map<String, dynamic>.from(data),
-      keepToken: true,
-    );
-    if (expectedUserId != null &&
-        nextState.userId != null &&
-        nextState.userId != expectedUserId) {
-      debugPrint('[auth-sync] $reason skipped: response user mismatch');
-      return;
-    }
-    if (_authStatesEqual(_state, nextState)) {
-      await _notifyAccountPayloadChanged(Map<String, dynamic>.from(data));
-      debugPrint('[auth-sync] $reason skipped: unchanged');
-      return;
-    }
-    _state = nextState;
-    _markAccountMutation(reason);
-    await _persistState();
-    await _notifyAccountPayloadChanged(Map<String, dynamic>.from(data));
-    await _notifyAccountProfileChanged();
-    notifyListeners();
+    if (!_state.isLoggedIn || _accountTransitionInProgress) return;
+    final requestClient = _client;
+    final generation = _stateMutationSerial;
+    await _queueAccountWriteback(() async {
+      if (_accountTransitionInProgress ||
+          !identical(requestClient, _client) ||
+          generation != _stateMutationSerial ||
+          !_state.isLoggedIn) {
+        return;
+      }
+      if (expectedToken != null && _state.token != expectedToken) {
+        debugPrint('[auth-sync] $reason skipped: token changed');
+        return;
+      }
+      if (expectedUserId != null &&
+          _state.userId != null &&
+          _state.userId != expectedUserId) {
+        debugPrint('[auth-sync] $reason skipped: user changed');
+        return;
+      }
+      final nextState = _stateFromAuthResponse(
+        Map<String, dynamic>.from(data),
+        keepToken: true,
+      );
+      if (expectedUserId != null &&
+          nextState.userId != null &&
+          nextState.userId != expectedUserId) {
+        debugPrint('[auth-sync] $reason skipped: response user mismatch');
+        return;
+      }
+      if (_authStatesEqual(_state, nextState)) {
+        await _notifyAccountPayloadChanged(Map<String, dynamic>.from(data));
+        debugPrint('[auth-sync] $reason skipped: unchanged');
+        return;
+      }
+      _state = nextState;
+      _markAccountMutation(reason);
+      if (await _persistAndNotifyAccount(Map<String, dynamic>.from(data))) {
+        notifyListeners();
+      }
+    });
   }
 
   Future<Map<String, dynamic>> applyThemeShopItem({
@@ -732,24 +1000,37 @@ class AuthProvider extends ChangeNotifier {
     if (!_state.isLoggedIn) {
       throw const ApiException('请先登录后再使用主题商店');
     }
+    final requestClient = _client;
+    final generation = _stateMutationSerial;
+    _guardAccountRequest(requestClient, generation);
     final tokenAtStart = _state.token;
     final userIdAtStart = _state.userId;
-    final res = await _client.post('/api/theme-shop/apply', {
+    final res = await requestClient.post('/api/theme-shop/apply', {
       'item_type': itemType,
       'item_id': itemId,
       'title': title,
       'activate': true,
     });
+    _guardAccountRequest(requestClient, generation);
     await applyServerAccountSnapshot(
       res,
       reason: 'theme_shop_apply',
       expectedToken: tokenAtStart,
       expectedUserId: userIdAtStart,
     );
+    if (_accountTransitionInProgress ||
+        !identical(requestClient, _client) ||
+        _state.token != tokenAtStart ||
+        _state.userId != userIdAtStart) {
+      throw const ApiException('账号已发生变化，请在当前账号重试操作。');
+    }
     return res;
   }
 
   Future<void> updateProfile({String? displayName, String? bio}) async {
+    final requestClient = _client;
+    final generation = _stateMutationSerial;
+    _guardAccountRequest(requestClient, generation);
     final payload = <String, Object?>{};
     if (displayName != null) {
       payload['display_name'] = displayName;
@@ -768,15 +1049,18 @@ class AuthProvider extends ChangeNotifier {
       payload,
       featureName: '个人资料',
     );
-    _state = _stateFromAuthResponse(res, keepToken: true);
-    _markAccountMutation('update_profile');
-    await _persistState();
-    await _notifyAccountPayloadChanged(res);
-    await _notifyAccountProfileChanged();
-    notifyListeners();
+    await _applyProfileResponse(
+      res,
+      requestClient: requestClient,
+      generation: generation,
+      reason: 'update_profile',
+    );
   }
 
   Future<void> bindEmail({required String email, required String code}) async {
+    final requestClient = _client;
+    final generation = _stateMutationSerial;
+    _guardAccountRequest(requestClient, generation);
     final body = {
       'email': email,
       'code': code,
@@ -804,18 +1088,21 @@ class AuthProvider extends ChangeNotifier {
       body,
       featureName: '邮箱绑定',
     );
-    _state = _stateFromAuthResponse(res, keepToken: true);
-    _markAccountMutation('bind_email');
-    await _persistState();
-    await _notifyAccountPayloadChanged(res);
-    await _notifyAccountProfileChanged();
-    notifyListeners();
+    await _applyProfileResponse(
+      res,
+      requestClient: requestClient,
+      generation: generation,
+      reason: 'bind_email',
+    );
   }
 
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
   }) async {
+    final requestClient = _client;
+    final generation = _stateMutationSerial;
+    _guardAccountRequest(requestClient, generation);
     await _sendFirstAvailable(
       const ['POST'],
       const ['/api/me/password', '/api/auth/change-password'],
@@ -829,6 +1116,7 @@ class AuthProvider extends ChangeNotifier {
       },
       featureName: '密码修改',
     );
+    _guardAccountRequest(requestClient, generation);
     await _clearLocalSession();
   }
 
@@ -836,6 +1124,9 @@ class AuthProvider extends ChangeNotifier {
     required String filename,
     required Uint8List bytes,
   }) async {
+    final requestClient = _client;
+    final generation = _stateMutationSerial;
+    _guardAccountRequest(requestClient, generation);
     final res = await _uploadFirstAvailable(
       const [
         '/api/me/avatar',
@@ -855,12 +1146,12 @@ class AuthProvider extends ChangeNotifier {
       bytes: bytes,
       featureName: '头像上传',
     );
-    _state = _stateFromAuthResponse(res, keepToken: true);
-    _markAccountMutation('upload_avatar');
-    await _persistState();
-    await _notifyAccountPayloadChanged(res);
-    await _notifyAccountProfileChanged();
-    notifyListeners();
+    await _applyProfileResponse(
+      res,
+      requestClient: requestClient,
+      generation: generation,
+      reason: 'upload_avatar',
+    );
   }
 
   Future<Map<String, dynamic>> requestPasswordReset({required String account}) {
@@ -1108,10 +1399,19 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> _getFirstAvailable(List<String> paths) async {
+    final requestClient = _client;
+    final generation = _stateMutationSerial;
+    _guardAccountRequest(requestClient, generation);
     ApiException? last404;
     for (final path in paths) {
       try {
-        return await _client.requestWithoutRouteDiagnosis('GET', path);
+        _guardAccountRequest(requestClient, generation);
+        final result = await requestClient.requestWithoutRouteDiagnosis(
+          'GET',
+          path,
+        );
+        _guardAccountRequest(requestClient, generation);
+        return result;
       } on ApiException catch (e) {
         if (!_isRouteMissing(e)) rethrow;
         last404 = e;
@@ -1125,40 +1425,58 @@ class AuthProvider extends ChangeNotifier {
     List<String> paths,
     Object? body, {
     String featureName = '账号资料',
+    ApiClient? client,
   }) async {
+    final requestClient = client ?? _client;
+    final generation = _stateMutationSerial;
     ApiException? last404;
     for (final path in paths) {
       for (final method in methods) {
         try {
-          return switch (method) {
-            'POST' => await _client.requestWithoutRouteDiagnosis(
+          if (client == null) _guardAccountRequest(requestClient, generation);
+          final result = switch (method) {
+            'POST' => await requestClient.requestWithoutRouteDiagnosis(
               'POST',
               path,
               body,
             ),
-            'PUT' => await _client.requestWithoutRouteDiagnosis(
+            'PUT' => await requestClient.requestWithoutRouteDiagnosis(
               'PUT',
               path,
               body,
             ),
-            'PATCH' => await _client.requestWithoutRouteDiagnosis(
+            'PATCH' => await requestClient.requestWithoutRouteDiagnosis(
               'PATCH',
               path,
               body,
             ),
-            _ => await _client.requestWithoutRouteDiagnosis(method, path, body),
+            _ => await requestClient.requestWithoutRouteDiagnosis(
+              method,
+              path,
+              body,
+            ),
           };
+          if (client == null) _guardAccountRequest(requestClient, generation);
+          return result;
         } on ApiException catch (e) {
           if (!_isRouteMissing(e)) rethrow;
           last404 = e;
         }
       }
     }
-    throw await _client.missingRoutesException(
+    throw await requestClient.missingRoutesException(
       featureName: featureName,
       paths: paths,
       fallback: last404,
     );
+  }
+
+  void _guardAccountRequest(ApiClient requestClient, int generation) {
+    if (_accountTransitionInProgress ||
+        !identical(requestClient, _client) ||
+        generation != _stateMutationSerial) {
+      throw const ApiException('账号已发生变化，请在当前账号重试操作。');
+    }
   }
 
   Future<Map<String, dynamic>> _uploadFirstAvailable(
@@ -1169,6 +1487,9 @@ class AuthProvider extends ChangeNotifier {
     required Uint8List bytes,
     String featureName = '文件上传',
   }) async {
+    final requestClient = _client;
+    final generation = _stateMutationSerial;
+    _guardAccountRequest(requestClient, generation);
     ApiException? last404;
     ApiException? lastRecoverableUploadError;
     final fieldNames = [
@@ -1180,7 +1501,8 @@ class AuthProvider extends ChangeNotifier {
       for (final method in const ['POST', 'PATCH', 'PUT']) {
         for (final uploadFieldName in fieldNames) {
           try {
-            return await _client.uploadBytes(
+            _guardAccountRequest(requestClient, generation);
+            final result = await requestClient.uploadBytes(
               path,
               method: method,
               fieldName: uploadFieldName,
@@ -1188,6 +1510,8 @@ class AuthProvider extends ChangeNotifier {
               bytes: bytes,
               diagnoseMissingRoute: false,
             );
+            _guardAccountRequest(requestClient, generation);
+            return result;
           } on ApiException catch (e) {
             if (_isRouteMissing(e)) {
               last404 = e;
@@ -1203,7 +1527,8 @@ class AuthProvider extends ChangeNotifier {
       }
     }
     if (lastRecoverableUploadError != null) throw lastRecoverableUploadError;
-    throw await _client.missingRoutesException(
+    _guardAccountRequest(requestClient, generation);
+    throw await requestClient.missingRoutesException(
       featureName: featureName,
       paths: paths,
       fallback: last404,
@@ -1241,12 +1566,12 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<void> _notifyAccountProfileChanged() async {
-    if (!_state.isLoggedIn) return;
+  Future<void> _notifyAccountProfileChanged(AuthState state) async {
+    if (!state.isLoggedIn) return;
     final callback = onAccountProfileChanged;
     if (callback == null) return;
     try {
-      await callback(_state);
+      await callback(state);
     } catch (e, st) {
       debugPrint('[auth] account profile sync failed: $e\n$st');
     }
@@ -1267,9 +1592,13 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _notifyAccountIdentityChanging(
     AuthState previous,
-    AuthState next,
-  ) async {
-    if (!_shouldClearLocalAccountDataBeforeApplying(previous, next)) return;
+    AuthState next, {
+    bool force = false,
+  }) async {
+    if (!force &&
+        !await _shouldClearLocalAccountDataBeforeApplying(previous, next)) {
+      return;
+    }
     final callback = onAccountIdentityChanging;
     try {
       if (callback == null) {
@@ -1302,12 +1631,28 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  bool _shouldClearLocalAccountDataBeforeApplying(
+  Future<bool> _shouldClearLocalAccountDataBeforeApplying(
     AuthState previous,
     AuthState next,
-  ) {
+  ) async {
     if (!next.isLoggedIn) return false;
-    if (!previous.isLoggedIn) return true;
+    final prefs = await SharedPreferences.getInstance();
+    final storedOwner = prefs
+        .getString(AccountLocalDataCleaner.accountDataOwnerKey)
+        ?.trim();
+    final nextOwner = _stableAccountIdentity(next);
+    if (storedOwner != null &&
+        storedOwner.isNotEmpty &&
+        storedOwner != nextOwner) {
+      // Ownership metadata remains authoritative even if auth_state is
+      // absent or corrupt. A different account must not inherit that data.
+      return true;
+    }
+    if (!previous.isLoggedIn) {
+      // With no account owner, local data belongs to the guest workspace and
+      // is accepted as the initial guest import.
+      return false;
+    }
     if (previous.token != next.token) return true;
     final previousIdentity = _stableAccountIdentity(previous);
     final nextIdentity = _stableAccountIdentity(next);

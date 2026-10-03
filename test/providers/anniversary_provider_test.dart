@@ -1,5 +1,6 @@
 import 'package:duoyi/models/anniversary.dart';
 import 'package:duoyi/providers/anniversary_provider.dart';
+import 'package:duoyi/services/reminder_scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -39,6 +40,89 @@ void main() {
 
       await provider.delete(item.id);
       expect(scheduler.anniversarySyncs.last, isEmpty);
+    },
+  );
+
+  test(
+    'AnniversaryProvider exposes reminder sync failures after local save',
+    () async {
+      final scheduler = RecordingReminderScheduler()
+        ..anniversarySyncError = const ReminderScheduleSyncException([
+          '纪念日提醒注册失败：闹钟提醒未注册成功',
+        ]);
+      final provider = AnniversaryProvider()..scheduler = scheduler;
+      final item = Anniversary(
+        id: 'anniversary-sync-failure',
+        title: '纪念日',
+        originDate: DateTime.now().add(const Duration(days: 30)),
+        type: AnniversaryType.memorial,
+        remind: true,
+      );
+
+      final issue = await provider.add(item);
+
+      expect(provider.items.map((item) => item.id), contains(item.id));
+      expect(issue, contains('纪念日提醒注册失败'));
+      expect(provider.lastReminderSyncIssue, issue);
+    },
+  );
+
+  test(
+    'AnniversaryProvider reports enabled reminders when scheduler is missing',
+    () async {
+      final provider = AnniversaryProvider();
+      final disabled = Anniversary(
+        id: 'anniversary-no-reminder',
+        title: '不提醒生日',
+        originDate: DateTime.now().add(const Duration(days: 30)),
+        type: AnniversaryType.birthday,
+        remind: false,
+      );
+
+      final disabledIssue = await provider.add(disabled);
+
+      expect(disabledIssue, isNull);
+      expect(provider.lastReminderSyncIssue, isNull);
+
+      final enabled = Anniversary(
+        id: 'anniversary-missing-scheduler',
+        title: '提醒生日',
+        originDate: DateTime.now().add(const Duration(days: 31)),
+        type: AnniversaryType.birthday,
+        remind: true,
+      );
+
+      final addIssue = await provider.add(enabled);
+
+      expect(addIssue, contains('提醒服务未初始化'));
+      expect(provider.lastReminderSyncIssue, addIssue);
+
+      enabled.title = '更新提醒生日';
+      final updateIssue = await provider.update(enabled);
+
+      expect(updateIssue, contains('提醒服务未初始化'));
+      expect(provider.lastReminderSyncIssue, updateIssue);
+    },
+  );
+
+  test(
+    'AnniversaryProvider import reports enabled reminders when scheduler is missing',
+    () async {
+      final provider = AnniversaryProvider();
+
+      final summary = await provider.importAnniversaries([
+        Anniversary(
+          id: 'anniversary-import-missing-scheduler',
+          title: '导入提醒纪念日',
+          originDate: DateTime.now().add(const Duration(days: 40)),
+          type: AnniversaryType.memorial,
+          remind: true,
+        ),
+      ]);
+
+      expect(summary.inserted, 1);
+      expect(summary.reminderSyncIssue, contains('提醒服务未初始化'));
+      expect(provider.lastReminderSyncIssue, summary.reminderSyncIssue);
     },
   );
 

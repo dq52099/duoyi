@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/course_schedule.dart';
+import '../services/account_local_data_cleaner.dart';
 import 'cloud_sync_provider.dart';
 
 class CourseProvider extends ChangeNotifier {
@@ -12,6 +13,7 @@ class CourseProvider extends ChangeNotifier {
   ScheduleSettings _settings = ScheduleSettings();
   int _viewingWeek = 1;
   int _storageGeneration = 0;
+  VoidCallback? onLocalMutationPersisted;
 
   List<CourseItem> get courses => List.unmodifiable(_courses);
   ScheduleSettings get settings => _settings;
@@ -24,8 +26,9 @@ class CourseProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
 
     final rawSettings = prefs.getString(_settingsKey);
     if (rawSettings != null) {
@@ -34,6 +37,7 @@ class CourseProvider extends ChangeNotifier {
 
     final raw = prefs.getStringList(_coursesKey) ?? [];
     _courses = raw.map((e) => CourseItem.fromJson(jsonDecode(e))).toList();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
 
     _viewingWeek = currentWeek;
     notifyListeners();
@@ -48,13 +52,36 @@ class CourseProvider extends ChangeNotifier {
   }
 
   Future<void> _save() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     await prefs.setStringList(
       _coursesKey,
       _courses.map((e) => jsonEncode(e.toJson())).toList(),
     );
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     await prefs.setString(_settingsKey, jsonEncode(_settings.toJson()));
+    _notifyLocalMutationPersisted();
     notifyListeners();
+  }
+
+  bool _isCurrentStorageGeneration(
+    int storageGeneration,
+    int accountGeneration,
+  ) {
+    return storageGeneration == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        );
+  }
+
+  void _notifyLocalMutationPersisted() {
+    try {
+      onLocalMutationPersisted?.call();
+    } catch (e, st) {
+      debugPrint('[CourseProvider] local mutation callback failed: $e\n$st');
+    }
   }
 
   Future<void> updateSettings(ScheduleSettings s) async {
@@ -89,9 +116,25 @@ class CourseProvider extends ChangeNotifier {
   }
 
   Future<void> delete(String id) async {
-    await CloudSyncProvider.recordDeletedItem('courses', id);
-    _courses.removeWhere((c) => c.id == id);
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final existingCourses = _courses
+        .where((course) => course.id == id)
+        .toList(growable: false);
+    if (existingCourses.isEmpty) return;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+
+    // CourseItem has no workspaceId field in its current serialized model.
+    await CloudSyncProvider.recordDeletedItem(
+      'courses',
+      existingCourses.first.id,
+      workspaceId: null,
+    );
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    _courses.removeWhere((course) => course.id == id);
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     await _save();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
   }
 
   /// 按周筛选

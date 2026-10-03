@@ -15,11 +15,60 @@ import 'time_audit_provider.dart';
 class TodoImportSummary {
   final int inserted;
   final int skippedDuplicates;
+  final String? reminderSyncIssue;
 
   const TodoImportSummary({
     required this.inserted,
     required this.skippedDuplicates,
+    this.reminderSyncIssue,
   });
+}
+
+class TodoReminderSyncResult {
+  final int generation;
+  final String? issue;
+  final DateTime attemptedAt;
+  final DateTime? succeededAt;
+
+  const TodoReminderSyncResult({
+    required this.generation,
+    required this.issue,
+    required this.attemptedAt,
+    this.succeededAt,
+  });
+
+  bool get hasIssue => issue != null;
+}
+
+class TodoMutationResult {
+  final bool saved;
+  final TodoReminderSyncResult? reminderSync;
+
+  const TodoMutationResult({required this.saved, this.reminderSync});
+
+  const TodoMutationResult.notSaved() : saved = false, reminderSync = null;
+}
+
+enum TodoCloudSyncNoticeLevel { info, warning, error }
+
+@immutable
+class TodoCloudSyncNotice {
+  final String message;
+  final TodoCloudSyncNoticeLevel level;
+
+  const TodoCloudSyncNotice({required this.message, required this.level});
+
+  bool get isError => level == TodoCloudSyncNoticeLevel.error;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoCloudSyncNotice &&
+          other.message == message &&
+          other.level == level;
+
+  @override
+  int get hashCode => Object.hash(message, level);
 }
 
 class TodoProvider extends ChangeNotifier {
@@ -31,6 +80,7 @@ class TodoProvider extends ChangeNotifier {
   Future<void> _storageWriteQueue = Future<void>.value();
   int _storageGeneration = 0;
   final Set<String> _inFlightCreateKeys = {};
+  final Set<String> _inFlightTodoMutationIds = {};
   final Set<String> _inFlightUpdateTodoIds = {};
   final Set<String> _inFlightCompleteTodoIds = {};
   final Set<String> _inFlightDeleteTodoIds = {};
@@ -54,9 +104,17 @@ class TodoProvider extends ChangeNotifier {
   /// 队列及时注册或取消；`main.dart` 的监听重同步仍作为兜底。
   ReminderScheduler? _scheduler;
   TimeAuditProvider? _timeAudit;
+  FutureOr<void> Function()? onLocalMutationPersisted;
   String? _lastReminderSyncIssue;
   DateTime? _lastReminderSyncAttemptAt;
   DateTime? _lastReminderSyncSucceededAt;
+  int _nextReminderSyncGeneration = 0;
+  int _lastAppliedReminderSyncGeneration = 0;
+  int _mineCompletionRate = 0;
+  // 最近一次云同步提示镜像（由 main.dart 从 CloudSyncProvider 单向透传）。
+  // break-local-fallback: UI 层只读本字段、不直接持有 CloudSyncProvider，符合
+  // "云同步由后台排队触发、UI 层不暴露同步入口"的架构守卫。
+  TodoCloudSyncNotice? _cloudSyncNotice;
 
   /// 注入或解绑调度器；传 `null` 即解绑。
   // ignore: use_setters_to_change_properties
@@ -72,8 +130,32 @@ class TodoProvider extends ChangeNotifier {
     _timeAudit = provider;
   }
 
+  /// 由 `main.dart` 在监听到 [CloudSyncProvider] 状态变化后单向写入：
+  /// 传入 `null` 表示最近一次云同步已完成（清空旧提示）。
+  // ignore: use_setters_to_change_properties
+  set cloudSyncNotice(TodoCloudSyncNotice? value) {
+    if (_cloudSyncNotice == value) return;
+    _cloudSyncNotice = value;
+    notifyListeners();
+  }
+
+  /// 兼容旧测试和旧调用点；新 UI 使用 [cloudSyncNotice]。
+  // ignore: use_setters_to_change_properties
+  set lastCloudSyncError(String? value) {
+    cloudSyncNotice = value == null || value.trim().isEmpty
+        ? null
+        : TodoCloudSyncNotice(
+            message: value.trim(),
+            level: TodoCloudSyncNoticeLevel.error,
+          );
+  }
+
   List<TodoItem> get todos => _todos;
+  int get mineCompletionRate => _mineCompletionRate;
   String? get lastReminderSyncIssue => _lastReminderSyncIssue;
+  TodoCloudSyncNotice? get cloudSyncNotice => _cloudSyncNotice;
+  String? get lastCloudSyncError =>
+      _cloudSyncNotice?.isError == true ? _cloudSyncNotice!.message : null;
   DateTime? get lastReminderSyncAttemptAt => _lastReminderSyncAttemptAt;
   DateTime? get lastReminderSyncSucceededAt => _lastReminderSyncSucceededAt;
 
@@ -89,7 +171,20 @@ class TodoProvider extends ChangeNotifier {
 
   void _notify() {
     _todos.sort(_compareTodos);
+    _recomputeMineStats();
     notifyListeners();
+  }
+
+  void _recomputeMineStats() {
+    if (_todos.isEmpty) {
+      _mineCompletionRate = 0;
+      return;
+    }
+    var completed = 0;
+    for (final todo in _todos) {
+      if (todo.isCompleted) completed += 1;
+    }
+    _mineCompletionRate = (completed / _todos.length * 100).round();
   }
 
   // --- Queries ---
@@ -178,17 +273,22 @@ class TodoProvider extends ChangeNotifier {
 
   // --- Persistence ---
 
-  Future<void> loadFromStorage() async {
-    if (_storageLoaded) return;
+  Future<void> loadFromStorage({bool force = false}) async {
+    if (_storageLoaded && !force) return;
     final running = _storageLoadFuture;
-    if (running != null) return running;
+    if (running != null) {
+      await running;
+      if (!force) return;
+    }
     final generation = _storageGeneration;
     final future = _loadFromStorage(generation);
     _storageLoadFuture = future;
     try {
       await future;
     } finally {
-      _storageLoadFuture = null;
+      if (identical(_storageLoadFuture, future)) {
+        _storageLoadFuture = null;
+      }
     }
   }
 
@@ -256,6 +356,8 @@ class TodoProvider extends ChangeNotifier {
         await _writeToStorage();
         if (generation != _storageGeneration) return;
       }
+    } else {
+      _todos = [];
     }
     if (generation != _storageGeneration) return;
     _storageLoaded = true;
@@ -286,6 +388,7 @@ class TodoProvider extends ChangeNotifier {
         return;
       }
       await prefs.setString('todos', data);
+      await _notifyLocalMutationPersisted();
     });
     _storageWriteQueue = write.catchError((Object e, StackTrace st) {
       debugPrint('[TodoProvider] queued local todo write failed: $e\n$st');
@@ -293,27 +396,95 @@ class TodoProvider extends ChangeNotifier {
     await write;
   }
 
+  Future<void> _notifyLocalMutationPersisted() async {
+    try {
+      await onLocalMutationPersisted?.call();
+    } catch (e, st) {
+      debugPrint('[TodoProvider] local mutation callback failed: $e\n$st');
+    }
+  }
+
   // --- CRUD ---
 
-  Future<void> _syncTodoRemindersNow() async {
-    _lastReminderSyncAttemptAt = DateTime.now();
+  Future<TodoReminderSyncResult> _syncTodoRemindersNow() async {
+    final generation = ++_nextReminderSyncGeneration;
+    final attemptedAt = DateTime.now();
     final scheduler = _scheduler;
     if (scheduler == null) {
-      _lastReminderSyncIssue = 'reminder_scheduler_missing';
+      final result = TodoReminderSyncResult(
+        generation: generation,
+        issue: 'reminder_scheduler_missing',
+        attemptedAt: attemptedAt,
+      );
+      _applyReminderSyncResult(result);
       debugPrint('[TodoProvider] reminder sync skipped: scheduler missing');
-      return;
+      return result;
     }
     try {
       await scheduler.syncTodos(List.of(_todos)).timeout(_reminderSyncTimeout);
-      _lastReminderSyncIssue = null;
-      _lastReminderSyncSucceededAt = DateTime.now();
-    } catch (e, st) {
-      _lastReminderSyncIssue = e.toString();
+      final result = TodoReminderSyncResult(
+        generation: generation,
+        issue: null,
+        attemptedAt: attemptedAt,
+        succeededAt: DateTime.now(),
+      );
+      _applyReminderSyncResult(result);
+      return result;
+    } on ReminderScheduleSyncException catch (e, st) {
+      final issue = e.failures.isEmpty
+          ? '提醒未注册成功，请检查通知权限、提醒方式和提醒时间。'
+          : e.failures.join('；');
+      final result = TodoReminderSyncResult(
+        generation: generation,
+        issue: issue,
+        attemptedAt: attemptedAt,
+      );
+      _applyReminderSyncResult(result);
       debugPrint('[TodoProvider] reminder sync failed: $e\n$st');
+      return result;
+    } on TimeoutException catch (e, st) {
+      const issue = '提醒同步超时，请稍后在待办详情中重新保存提醒。';
+      final result = TodoReminderSyncResult(
+        generation: generation,
+        issue: issue,
+        attemptedAt: attemptedAt,
+      );
+      _applyReminderSyncResult(result);
+      debugPrint('[TodoProvider] reminder sync timed out: $e\n$st');
+      return result;
+    } catch (e, st) {
+      final result = TodoReminderSyncResult(
+        generation: generation,
+        issue: e.toString(),
+        attemptedAt: attemptedAt,
+      );
+      _applyReminderSyncResult(result);
+      debugPrint('[TodoProvider] reminder sync failed: $e\n$st');
+      return result;
+    }
+  }
+
+  void _applyReminderSyncResult(TodoReminderSyncResult result) {
+    if (result.generation < _nextReminderSyncGeneration ||
+        result.generation < _lastAppliedReminderSyncGeneration) {
+      return;
+    }
+    _lastAppliedReminderSyncGeneration = result.generation;
+    _lastReminderSyncAttemptAt = result.attemptedAt;
+    _lastReminderSyncIssue = result.issue;
+    if (result.succeededAt != null) {
+      _lastReminderSyncSucceededAt = result.succeededAt;
     }
   }
 
   Future<void> addTodo(TodoItem todo, {bool waitForReminderSync = true}) async {
+    await addTodoWithResult(todo, waitForReminderSync: waitForReminderSync);
+  }
+
+  Future<TodoReminderSyncResult?> addTodoWithResult(
+    TodoItem todo, {
+    bool waitForReminderSync = true,
+  }) async {
     await _ensureStorageLoaded();
     final createKey = _createInFlightDuplicateKey(todo);
     final claimed = _claimInFlightKeys(
@@ -327,12 +498,13 @@ class TodoProvider extends ChangeNotifier {
       DomainEventBus.instance.publish(
         DomainEvent(type: DomainEventType.todoCreated, objectId: todo.id),
       );
-      _notify();
       await _saveToStorage();
+      _notify();
       if (waitForReminderSync) {
-        await _syncTodoRemindersNow();
+        return await _syncTodoRemindersNow();
       } else {
         unawaited(_syncTodoRemindersNow());
+        return null;
       }
     } finally {
       _inFlightCreateKeys.removeAll(claimed);
@@ -377,14 +549,28 @@ class TodoProvider extends ChangeNotifier {
     }
     await _saveToStorage();
     _notify();
-    await _syncTodoRemindersNow();
+    final reminderSyncResult = await _syncTodoRemindersNow();
     return TodoImportSummary(
       inserted: inserted,
       skippedDuplicates: skippedDuplicates,
+      reminderSyncIssue: reminderSyncResult.issue,
     );
   }
 
-  Future<void> updateTodo(
+  Future<bool> updateTodo(
+    String id,
+    TodoItem updated, {
+    bool waitForReminderSync = true,
+  }) async {
+    final result = await updateTodoWithResult(
+      id,
+      updated,
+      waitForReminderSync: waitForReminderSync,
+    );
+    return result.saved;
+  }
+
+  Future<TodoMutationResult> updateTodoWithResult(
     String id,
     TodoItem updated, {
     bool waitForReminderSync = true,
@@ -396,19 +582,25 @@ class TodoProvider extends ChangeNotifier {
       duplicateMessage: '待办保存正在进行中，请勿重复提交',
       throwWhenDuplicate: false,
     );
-    if (claimed.isEmpty) return;
+    if (claimed.isEmpty) return const TodoMutationResult.notSaved();
+    final mutationClaimed = _claimTodoMutationIds([id], label: 'todo update');
+    if (mutationClaimed.isEmpty) {
+      _inFlightUpdateTodoIds.removeAll(claimed);
+      return const TodoMutationResult.notSaved();
+    }
     try {
-      await _updateTodoLocked(
+      return await _updateTodoLocked(
         id,
         updated,
         waitForReminderSync: waitForReminderSync,
       );
     } finally {
       _inFlightUpdateTodoIds.removeAll(claimed);
+      _inFlightTodoMutationIds.removeAll(mutationClaimed);
     }
   }
 
-  Future<void> _updateTodoLocked(
+  Future<TodoMutationResult> _updateTodoLocked(
     String id,
     TodoItem updated, {
     required bool waitForReminderSync,
@@ -435,8 +627,9 @@ class TodoProvider extends ChangeNotifier {
       }
       await _saveToStorage();
       _notify();
+      TodoReminderSyncResult? reminderSync;
       if (waitForReminderSync) {
-        await _syncTodoRemindersNow();
+        reminderSync = await _syncTodoRemindersNow();
       } else {
         unawaited(_syncTodoRemindersNow());
       }
@@ -451,7 +644,9 @@ class TodoProvider extends ChangeNotifier {
           completedAt: prev.completedAt,
         );
       }
+      return TodoMutationResult(saved: true, reminderSync: reminderSync);
     }
+    return const TodoMutationResult.notSaved();
   }
 
   Future<int> completeTodos(
@@ -469,13 +664,24 @@ class TodoProvider extends ChangeNotifier {
       throwWhenDuplicate: false,
     );
     if (selected.isEmpty) return 0;
+    final mutationSelected = _claimTodoMutationIds(
+      selected,
+      label: 'todo complete',
+      allowPartial: true,
+    );
+    if (mutationSelected.isEmpty) {
+      _inFlightCompleteTodoIds.removeAll(selected);
+      return 0;
+    }
+    _inFlightCompleteTodoIds.removeAll(selected.difference(mutationSelected));
     try {
       return await _completeTodosLocked(
-        selected,
+        mutationSelected,
         recordCompletionTime: recordCompletionTime,
       );
     } finally {
-      _inFlightCompleteTodoIds.removeAll(selected);
+      _inFlightCompleteTodoIds.removeAll(mutationSelected);
+      _inFlightTodoMutationIds.removeAll(mutationSelected);
     }
   }
 
@@ -536,10 +742,21 @@ class TodoProvider extends ChangeNotifier {
       throwWhenDuplicate: false,
     );
     if (selected.isEmpty) return 0;
-    try {
-      return await _reopenTodosLocked(selected);
-    } finally {
+    final mutationSelected = _claimTodoMutationIds(
+      selected,
+      label: 'todo reopen',
+      allowPartial: true,
+    );
+    if (mutationSelected.isEmpty) {
       _inFlightCompleteTodoIds.removeAll(selected);
+      return 0;
+    }
+    _inFlightCompleteTodoIds.removeAll(selected.difference(mutationSelected));
+    try {
+      return await _reopenTodosLocked(mutationSelected);
+    } finally {
+      _inFlightCompleteTodoIds.removeAll(mutationSelected);
+      _inFlightTodoMutationIds.removeAll(mutationSelected);
     }
   }
 
@@ -588,10 +805,16 @@ class TodoProvider extends ChangeNotifier {
       throwWhenDuplicate: false,
     );
     if (claimed.isEmpty) return;
+    final mutationClaimed = _claimTodoMutationIds([id], label: 'todo toggle');
+    if (mutationClaimed.isEmpty) {
+      _inFlightCompleteTodoIds.removeAll(claimed);
+      return;
+    }
     try {
       await _toggleTodoLocked(id, recordCompletionTime: recordCompletionTime);
     } finally {
       _inFlightCompleteTodoIds.removeAll(claimed);
+      _inFlightTodoMutationIds.removeAll(mutationClaimed);
     }
   }
 
@@ -654,30 +877,62 @@ class TodoProvider extends ChangeNotifier {
       duplicateMessage: '待办删除操作正在进行中，请勿重复提交',
       allowPartial: true,
     );
+    if (selected.isEmpty) return 0;
+    final mutationSelected = _claimTodoMutationIds(
+      selected,
+      label: 'todo delete',
+      allowPartial: true,
+    );
+    if (mutationSelected.isEmpty) {
+      _inFlightDeleteTodoIds.removeAll(selected);
+      return 0;
+    }
+    _inFlightDeleteTodoIds.removeAll(selected.difference(mutationSelected));
 
     try {
-      return await _deleteTodosLocked(selected);
+      return await _deleteTodosLocked(mutationSelected);
     } finally {
-      _inFlightDeleteTodoIds.removeAll(selected);
+      _inFlightDeleteTodoIds.removeAll(mutationSelected);
+      _inFlightTodoMutationIds.removeAll(mutationSelected);
     }
   }
 
   Future<int> _deleteTodosLocked(Set<String> selected) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     await _ensureStorageLoaded();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     final existing = _todos.where((t) => selected.contains(t.id)).toList();
     if (existing.isEmpty) return 0;
 
-    await CloudSyncProvider.recordDeletedItems(
-      'todos',
-      existing.map((todo) => todo.id),
-    );
+    final idsByWorkspace = <String, List<String>>{};
     for (final todo in existing) {
-      await _timeAudit?.deleteBySource(TimeEntrySource.todo, todo.id);
+      idsByWorkspace
+          .putIfAbsent(todo.workspaceId, () => <String>[])
+          .add(todo.id);
     }
+    for (final entry in idsByWorkspace.entries) {
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
+      await CloudSyncProvider.recordDeletedItems(
+        'todos',
+        entry.value,
+        workspaceId: entry.key,
+      );
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
+    }
+    for (final todo in existing) {
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
+      await _timeAudit?.deleteBySource(TimeEntrySource.todo, todo.id);
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
+    }
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     _todos.removeWhere((t) => selected.contains(t.id));
     await _saveToStorage();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     _notify();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     await _syncTodoRemindersNow();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     return existing.length;
   }
 
@@ -696,10 +951,21 @@ class TodoProvider extends ChangeNotifier {
       throwWhenDuplicate: false,
     );
     if (selected.isEmpty) return 0;
-    try {
-      return await _updateTodosQuadrantLocked(selected, quadrant);
-    } finally {
+    final mutationSelected = _claimTodoMutationIds(
+      selected,
+      label: 'todo quadrant update',
+      allowPartial: true,
+    );
+    if (mutationSelected.isEmpty) {
       _inFlightQuadrantTodoIds.removeAll(selected);
+      return 0;
+    }
+    _inFlightQuadrantTodoIds.removeAll(selected.difference(mutationSelected));
+    try {
+      return await _updateTodosQuadrantLocked(mutationSelected, quadrant);
+    } finally {
+      _inFlightQuadrantTodoIds.removeAll(mutationSelected);
+      _inFlightTodoMutationIds.removeAll(mutationSelected);
     }
   }
 
@@ -736,10 +1002,21 @@ class TodoProvider extends ChangeNotifier {
       throwWhenDuplicate: false,
     );
     if (selected.isEmpty) return 0;
-    try {
-      return await _updateTodosPriorityLocked(selected, priority);
-    } finally {
+    final mutationSelected = _claimTodoMutationIds(
+      selected,
+      label: 'todo priority update',
+      allowPartial: true,
+    );
+    if (mutationSelected.isEmpty) {
       _inFlightPriorityTodoIds.removeAll(selected);
+      return 0;
+    }
+    _inFlightPriorityTodoIds.removeAll(selected.difference(mutationSelected));
+    try {
+      return await _updateTodosPriorityLocked(mutationSelected, priority);
+    } finally {
+      _inFlightPriorityTodoIds.removeAll(mutationSelected);
+      _inFlightTodoMutationIds.removeAll(mutationSelected);
     }
   }
 
@@ -782,10 +1059,28 @@ class TodoProvider extends ChangeNotifier {
     final selectedIds = {
       for (final key in selected) key.substring(0, key.lastIndexOf(':')),
     };
+    final mutationSelectedIds = _claimTodoMutationIds(
+      selectedIds,
+      label: 'todo kanban update',
+      allowPartial: true,
+    );
+    if (mutationSelectedIds.isEmpty) {
+      _inFlightKanbanTodoIds.removeAll(selected);
+      return 0;
+    }
+    final skippedIds = selectedIds.difference(mutationSelectedIds);
+    if (skippedIds.isNotEmpty) {
+      _inFlightKanbanTodoIds.removeAll(
+        selected.where(
+          (key) => skippedIds.contains(key.substring(0, key.lastIndexOf(':'))),
+        ),
+      );
+    }
     try {
-      return await _updateTodosKanbanColumnLocked(selectedIds, target);
+      return await _updateTodosKanbanColumnLocked(mutationSelectedIds, target);
     } finally {
       _inFlightKanbanTodoIds.removeAll(selected);
+      _inFlightTodoMutationIds.removeAll(mutationSelectedIds);
     }
   }
 
@@ -864,6 +1159,13 @@ class TodoProvider extends ChangeNotifier {
       throwWhenDuplicate: false,
     );
     if (claimed.isEmpty) return false;
+    final mutationClaimed = _claimTodoMutationIds([
+      id,
+    ], label: 'todo schedule today');
+    if (mutationClaimed.isEmpty) {
+      _inFlightScheduleTodayTodoIds.removeAll(claimed);
+      return false;
+    }
     try {
       return await _scheduleTodoForTodayLocked(
         id,
@@ -872,6 +1174,7 @@ class TodoProvider extends ChangeNotifier {
       );
     } finally {
       _inFlightScheduleTodayTodoIds.removeAll(claimed);
+      _inFlightTodoMutationIds.removeAll(mutationClaimed);
     }
   }
 
@@ -1144,21 +1447,35 @@ class TodoProvider extends ChangeNotifier {
     String? userId,
   }) async {
     await _ensureStorageLoaded();
+    final affectedIds = _todos
+        .where((todo) => (todo.listGroupName ?? '未分组') == groupName)
+        .map((todo) => todo.id)
+        .toSet();
+    final mutationSelected = _claimTodoMutationIds(
+      affectedIds,
+      label: 'todo list workspace update',
+      allowPartial: true,
+    );
+    if (mutationSelected.isEmpty) return;
     var mutated = false;
-    for (var i = 0; i < _todos.length; i++) {
-      final todo = _todos[i];
-      if ((todo.listGroupName ?? '未分组') != groupName) continue;
-      _todos[i] = todo.copyWith(
-        workspaceId: workspaceId,
-        updatedBy: userId,
-        createdBy: todo.createdBy ?? userId,
-      );
-      mutated = true;
+    try {
+      for (var i = 0; i < _todos.length; i++) {
+        final todo = _todos[i];
+        if (!mutationSelected.contains(todo.id)) continue;
+        _todos[i] = todo.copyWith(
+          workspaceId: workspaceId,
+          updatedBy: userId,
+          createdBy: todo.createdBy ?? userId,
+        );
+        mutated = true;
+      }
+      if (!mutated) return;
+      await _saveToStorage();
+      _notify();
+      await _syncTodoRemindersNow();
+    } finally {
+      _inFlightTodoMutationIds.removeAll(mutationSelected);
     }
-    if (!mutated) return;
-    await _saveToStorage();
-    _notify();
-    await _syncTodoRemindersNow();
   }
 
   // --- Subtask operations ---
@@ -1171,10 +1488,18 @@ class TodoProvider extends ChangeNotifier {
       debugPrint('[TodoProvider] duplicate in-flight subtask create skipped');
       throw StateError('子任务正在创建中，请勿重复提交');
     }
+    final mutationClaimed = _claimTodoMutationIds([
+      todoId,
+    ], label: 'subtask create');
+    if (mutationClaimed.isEmpty) {
+      _inFlightSubtaskCreateKeys.remove(key);
+      return;
+    }
     try {
       await _addSubtaskLocked(todoId, cleanTitle);
     } finally {
       _inFlightSubtaskCreateKeys.remove(key);
+      _inFlightTodoMutationIds.removeAll(mutationClaimed);
     }
   }
 
@@ -1193,10 +1518,18 @@ class TodoProvider extends ChangeNotifier {
   Future<void> toggleSubtask(String todoId, String subtaskId) async {
     final key = '$todoId:$subtaskId';
     if (!_inFlightSubtaskToggleKeys.add(key)) return;
+    final mutationClaimed = _claimTodoMutationIds([
+      todoId,
+    ], label: 'subtask toggle');
+    if (mutationClaimed.isEmpty) {
+      _inFlightSubtaskToggleKeys.remove(key);
+      return;
+    }
     try {
       await _toggleSubtaskLocked(todoId, subtaskId);
     } finally {
       _inFlightSubtaskToggleKeys.remove(key);
+      _inFlightTodoMutationIds.removeAll(mutationClaimed);
     }
   }
 
@@ -1204,10 +1537,21 @@ class TodoProvider extends ChangeNotifier {
     await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx == -1) return;
-    final sIdx = _todos[idx].subtasks.indexWhere((s) => s.id == subtaskId);
+    final todo = _todos[idx];
+    final sIdx = todo.subtasks.indexWhere((s) => s.id == subtaskId);
     if (sIdx == -1) return;
-    _todos[idx].subtasks[sIdx].isCompleted =
-        !_todos[idx].subtasks[sIdx].isCompleted;
+    final nextSubtasks = <Subtask>[
+      for (final subtask in todo.subtasks)
+        subtask.id == subtaskId
+            ? Subtask(
+                id: subtask.id,
+                title: subtask.title,
+                isCompleted: !subtask.isCompleted,
+                sortOrder: subtask.sortOrder,
+              )
+            : subtask,
+    ];
+    _todos[idx] = todo.copyWith(subtasks: nextSubtasks);
     await recomputeParent(todoId);
   }
 
@@ -1230,13 +1574,13 @@ class TodoProvider extends ChangeNotifier {
     if (t.autoToggleByChildren) {
       final allDone = t.subtasks.every((s) => s.isCompleted);
       if (allDone && !t.isCompleted) {
-        t.isCompleted = true;
-        t.completedAt = DateTime.now();
-        completedTodo = t;
+        final completedAt = DateTime.now();
+        final next = t.copyWith(isCompleted: true, completedAt: completedAt);
+        _todos[idx] = next;
+        completedTodo = next;
       } else if (!allDone && t.isCompleted) {
         removedCompletedAt = t.completedAt;
-        t.isCompleted = false;
-        t.completedAt = null;
+        _todos[idx] = t.copyWith(isCompleted: false, completedAt: null);
       }
     }
 
@@ -1259,10 +1603,18 @@ class TodoProvider extends ChangeNotifier {
   Future<void> deleteSubtask(String todoId, String subtaskId) async {
     final key = '$todoId:$subtaskId';
     if (!_inFlightSubtaskDeleteKeys.add(key)) return;
+    final mutationClaimed = _claimTodoMutationIds([
+      todoId,
+    ], label: 'subtask delete');
+    if (mutationClaimed.isEmpty) {
+      _inFlightSubtaskDeleteKeys.remove(key);
+      return;
+    }
     try {
       await _deleteSubtaskLocked(todoId, subtaskId);
     } finally {
       _inFlightSubtaskDeleteKeys.remove(key);
+      _inFlightTodoMutationIds.removeAll(mutationClaimed);
     }
   }
 
@@ -1270,9 +1622,19 @@ class TodoProvider extends ChangeNotifier {
     await _ensureStorageLoaded();
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx != -1) {
-      _todos[idx].subtasks.removeWhere((s) => s.id == subtaskId);
-      await _saveToStorage();
-      _notify();
+      final todo = _todos[idx];
+      final nextSubtasks = todo.subtasks
+          .where((subtask) => subtask.id != subtaskId)
+          .toList(growable: false);
+      if (nextSubtasks.length == todo.subtasks.length) return;
+      _todos[idx] = todo.copyWith(subtasks: nextSubtasks);
+      if (nextSubtasks.isEmpty) {
+        await _saveToStorage();
+        _notify();
+        await _syncTodoRemindersNow();
+      } else {
+        await recomputeParent(todoId);
+      }
     }
   }
 
@@ -1286,10 +1648,18 @@ class TodoProvider extends ChangeNotifier {
       throwWhenDuplicate: false,
     );
     if (claimed.isEmpty) return;
+    final mutationClaimed = _claimTodoMutationIds([
+      todoId,
+    ], label: 'subtask reorder');
+    if (mutationClaimed.isEmpty) {
+      _inFlightSubtaskReorderKeys.removeAll(claimed);
+      return;
+    }
     try {
       await _reorderSubtasksLocked(todoId, orderedIds);
     } finally {
       _inFlightSubtaskReorderKeys.removeAll(claimed);
+      _inFlightTodoMutationIds.removeAll(mutationClaimed);
     }
   }
 
@@ -1499,6 +1869,32 @@ class TodoProvider extends ChangeNotifier {
       throw StateError(duplicateMessage);
     }
     return <String>{};
+  }
+
+  Set<String> _claimTodoMutationIds(
+    Iterable<String> ids, {
+    required String label,
+    bool allowPartial = false,
+    bool throwWhenDuplicate = false,
+  }) {
+    return _claimInFlightKeys(
+      _inFlightTodoMutationIds,
+      ids,
+      label: '$label mutation',
+      duplicateMessage: '待办正在保存中，请稍后再试',
+      allowPartial: allowPartial,
+      throwWhenDuplicate: throwWhenDuplicate,
+    );
+  }
+
+  bool _isCurrentStorageGeneration(
+    int storageGeneration,
+    int accountGeneration,
+  ) {
+    return storageGeneration == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        );
   }
 
   String _dateKey(DateTime d) =>

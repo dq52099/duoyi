@@ -98,8 +98,7 @@ class _HabitScreenState extends State<HabitScreen>
     var selectedFlexPeriod = HabitFlexPeriod.week;
     DateTime? startDate;
     DateTime? endDate;
-    var remindEnabled = false;
-    // 习惯打卡默认弹出框提醒，支持多个时间（例如每天 8 杯水）。
+    // 习惯打卡默认应用内弹出提醒，支持多个时间（例如每天 8 杯水）。
     final remindTimes = <TimeOfDay>[nextHalfHourTimeOfDay()];
     final templatesByCategory = HabitTemplates.byCategory;
 
@@ -113,6 +112,7 @@ class _HabitScreenState extends State<HabitScreen>
       0xFFFF5722,
       0xFF607D8B,
     ];
+    var saving = false;
 
     showAppModalSheet(
       context: context,
@@ -273,79 +273,68 @@ class _HabitScreenState extends State<HabitScreen>
                       const SizedBox(width: 8),
                       const Text('打卡提醒'),
                       const Spacer(),
-                      Switch(
-                        value: remindEnabled,
-                        onChanged: (v) async {
-                          if (!v) {
-                            setSt(() => remindEnabled = false);
-                            return;
-                          }
-                          final ready = await _ensureHabitReminderReady();
-                          if (!mounted || !ctx.mounted) return;
-                          setSt(() => remindEnabled = ready);
-                        },
+                      AppStatusBadge(
+                        label: '默认弹出',
+                        color: Theme.of(ctx).colorScheme.primary,
                       ),
                     ],
                   ),
-                  if (remindEnabled) ...[
-                    const Padding(
-                      padding: EdgeInsets.only(left: 26, top: 2, bottom: 6),
-                      child: Text(
-                        '到点弹出打卡提醒，可添加多个时间（例如每天 8 杯水）',
-                        style: TextStyle(fontSize: 11, color: Colors.grey),
-                      ),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 26, top: 2, bottom: 6),
+                    child: Text(
+                      '到点应用内弹出打卡提醒，可添加多个时间（例如每天 8 杯水）',
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 20),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (var i = 0; i < remindTimes.length; i++)
-                            InputChip(
-                              avatar: const Icon(Icons.schedule, size: 16),
-                              label: Text(AppTimePicker.format(remindTimes[i])),
-                              onPressed: () async {
-                                final t = await AppTimePicker.show(
-                                  ctx,
-                                  initialTime: remindTimes[i],
-                                  title: '提醒时间',
-                                  minuteStep: 5,
-                                );
-                                if (t == null || !mounted || !ctx.mounted) {
-                                  return;
-                                }
-                                setSt(() => remindTimes[i] = t);
-                              },
-                              onDeleted: remindTimes.length <= 1
-                                  ? null
-                                  : () => setSt(() => remindTimes.removeAt(i)),
-                            ),
-                          ActionChip(
-                            avatar: const Icon(Icons.add, size: 16),
-                            label: const Text('添加时间'),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 20),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (var i = 0; i < remindTimes.length; i++)
+                          InputChip(
+                            avatar: const Icon(Icons.schedule, size: 16),
+                            label: Text(AppTimePicker.format(remindTimes[i])),
                             onPressed: () async {
                               final t = await AppTimePicker.show(
                                 ctx,
-                                initialTime: nextHalfHourTimeOfDay(),
+                                initialTime: remindTimes[i],
                                 title: '提醒时间',
                                 minuteStep: 5,
                               );
-                              if (t == null || !mounted || !ctx.mounted) return;
-                              setSt(() {
-                                if (!remindTimes.any(
-                                  (e) =>
-                                      e.hour == t.hour && e.minute == t.minute,
-                                )) {
-                                  remindTimes.add(t);
-                                }
-                              });
+                              if (t == null || !mounted || !ctx.mounted) {
+                                return;
+                              }
+                              setSt(() => remindTimes[i] = t);
                             },
+                            onDeleted: remindTimes.length <= 1
+                                ? null
+                                : () => setSt(() => remindTimes.removeAt(i)),
                           ),
-                        ],
-                      ),
+                        ActionChip(
+                          avatar: const Icon(Icons.add, size: 16),
+                          label: const Text('添加时间'),
+                          onPressed: () async {
+                            final t = await AppTimePicker.show(
+                              ctx,
+                              initialTime: nextHalfHourTimeOfDay(),
+                              title: '提醒时间',
+                              minuteStep: 5,
+                            );
+                            if (t == null || !mounted || !ctx.mounted) return;
+                            setSt(() {
+                              if (!remindTimes.any(
+                                (e) => e.hour == t.hour && e.minute == t.minute,
+                              )) {
+                                remindTimes.add(t);
+                              }
+                            });
+                          },
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                   const SizedBox(height: 4),
 
                   // --- Manual Entry ---
@@ -548,86 +537,132 @@ class _HabitScreenState extends State<HabitScreen>
                     width: double.infinity,
                     height: 46,
                     child: ElevatedButton(
-                      onPressed: () async {
-                        if (nameCtrl.text.trim().isNotEmpty) {
-                          final habitProvider = context.read<HabitProvider>();
-                          final navigator = Navigator.of(ctx);
-                          final shouldRemind =
-                              remindEnabled && remindTimes.isNotEmpty;
-                          final shouldUseFlex =
-                              flexRuleEnabled &&
-                              selectedKind == HabitKind.positive;
-                          final flexTarget =
-                              int.tryParse(flexTargetCtrl.text.trim()) ?? 0;
-                          if (shouldUseFlex && flexTarget < 1) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('周期目标至少为 1')),
-                            );
-                            return;
-                          }
-                          if (!habitDateRangeIsValid(startDate, endDate)) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('结束日期不能早于开始日期')),
-                            );
-                            return;
-                          }
-                          // legacy 字段与 reminderPlan 都从同一份排序后的时间派生，
-                          // 避免“录入顺序”与“最早时间”不一致。
-                          final sortedRemindTimes = remindTimes.toList()
-                            ..sort(
-                              (a, b) => a.hour != b.hour
-                                  ? a.hour - b.hour
-                                  : a.minute - b.minute,
-                            );
-                          final reminderPlan = shouldRemind
-                              ? _habitPopupDailyReminderPlan(sortedRemindTimes)
-                              : const ReminderPlan.disabled();
-                          final habitId = DateTime.now().millisecondsSinceEpoch
-                              .toString();
-                          final reminderReady = shouldRemind
-                              ? await _ensureHabitReminderReady(
-                                  scheduledTime:
-                                      _nextHabitReminderTriggerForTimes(
-                                        sortedRemindTimes,
+                      onPressed: saving
+                          ? null
+                          : () async {
+                              if (saving) return;
+                              setSt(() => saving = true);
+                              try {
+                                if (nameCtrl.text.trim().isNotEmpty) {
+                                  final habitProvider = context
+                                      .read<HabitProvider>();
+                                  final navigator = Navigator.of(ctx);
+                                  final shouldRemind = remindTimes.isNotEmpty;
+                                  final shouldUseFlex =
+                                      flexRuleEnabled &&
+                                      selectedKind == HabitKind.positive;
+                                  final flexTarget =
+                                      int.tryParse(
+                                        flexTargetCtrl.text.trim(),
+                                      ) ??
+                                      0;
+                                  if (shouldUseFlex && flexTarget < 1) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('周期目标至少为 1'),
                                       ),
-                                  relatedId: habitId,
-                                )
-                              : false;
-                          if (!mounted || !ctx.mounted) return;
-                          if (shouldRemind && !reminderReady) return;
-                          await habitProvider.addHabit(
-                            Habit(
-                              id: habitId,
-                              name: nameCtrl.text.trim(),
-                              icon: selectedIcon,
-                              colorValue: selectedColor,
-                              kind: selectedKind,
-                              targetCount: (int.tryParse(targetCtrl.text) ?? 1)
-                                  .clamp(1, 9999)
-                                  .toInt(),
-                              unit: unitCtrl.text.trim().isEmpty
-                                  ? null
-                                  : unitCtrl.text.trim(),
-                              category: habitCategoryOrNull(categoryCtrl.text),
-                              flexTarget: shouldUseFlex ? flexTarget : null,
-                              flexPeriod: shouldUseFlex
-                                  ? selectedFlexPeriod
-                                  : null,
-                              startDate: startDate,
-                              endDate: endDate,
-                              remind: shouldRemind,
-                              remindHour: sortedRemindTimes.isNotEmpty
-                                  ? sortedRemindTimes.first.hour
-                                  : null,
-                              remindMinute: sortedRemindTimes.isNotEmpty
-                                  ? sortedRemindTimes.first.minute
-                                  : null,
-                              reminderPlan: reminderPlan,
-                            ),
-                          );
-                          navigator.pop();
-                        }
-                      },
+                                    );
+                                    return;
+                                  }
+                                  if (!habitDateRangeIsValid(
+                                    startDate,
+                                    endDate,
+                                  )) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('结束日期不能早于开始日期'),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  // legacy 字段与 reminderPlan 都从同一份排序后的时间派生，
+                                  // 避免“录入顺序”与“最早时间”不一致。
+                                  final sortedRemindTimes = remindTimes.toList()
+                                    ..sort(
+                                      (a, b) => a.hour != b.hour
+                                          ? a.hour - b.hour
+                                          : a.minute - b.minute,
+                                    );
+                                  final reminderPlan = shouldRemind
+                                      ? _habitPopupDailyReminderPlan(
+                                          sortedRemindTimes,
+                                        )
+                                      : const ReminderPlan.disabled();
+                                  final habitId = DateTime.now()
+                                      .millisecondsSinceEpoch
+                                      .toString();
+                                  final reminderReady = shouldRemind
+                                      ? await _ensureHabitReminderReady(
+                                          scheduledTime:
+                                              _nextHabitReminderTriggerForTimes(
+                                                sortedRemindTimes,
+                                              ),
+                                          relatedId: habitId,
+                                        )
+                                      : false;
+                                  if (!mounted || !ctx.mounted) return;
+                                  if (shouldRemind && !reminderReady) return;
+                                  await habitProvider.addHabit(
+                                    Habit(
+                                      id: habitId,
+                                      name: nameCtrl.text.trim(),
+                                      icon: selectedIcon,
+                                      colorValue: selectedColor,
+                                      kind: selectedKind,
+                                      targetCount:
+                                          (int.tryParse(targetCtrl.text) ?? 1)
+                                              .clamp(1, 9999)
+                                              .toInt(),
+                                      unit: unitCtrl.text.trim().isEmpty
+                                          ? null
+                                          : unitCtrl.text.trim(),
+                                      category: habitCategoryOrNull(
+                                        categoryCtrl.text,
+                                      ),
+                                      flexTarget: shouldUseFlex
+                                          ? flexTarget
+                                          : null,
+                                      flexPeriod: shouldUseFlex
+                                          ? selectedFlexPeriod
+                                          : null,
+                                      startDate: startDate,
+                                      endDate: endDate,
+                                      remind: shouldRemind,
+                                      remindHour: sortedRemindTimes.isNotEmpty
+                                          ? sortedRemindTimes.first.hour
+                                          : null,
+                                      remindMinute: sortedRemindTimes.isNotEmpty
+                                          ? sortedRemindTimes.first.minute
+                                          : null,
+                                      reminderPlan: reminderPlan,
+                                    ),
+                                  );
+                                  final reminderSyncIssue = shouldRemind
+                                      ? habitProvider.lastReminderSyncIssue
+                                      : null;
+                                  if (!mounted || !ctx.mounted) return;
+                                  navigator.pop();
+                                  if (reminderSyncIssue != null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '习惯已保存，但提醒未同步：'
+                                          '${_habitReminderSyncIssueText(reminderSyncIssue)}',
+                                        ),
+                                        behavior: SnackBarBehavior.floating,
+                                        backgroundColor: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                      ),
+                                    );
+                                  }
+                                }
+                              } finally {
+                                if (ctx.mounted) {
+                                  setSt(() => saving = false);
+                                }
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Color(selectedColor),
                         foregroundColor: _habitButtonForeground(
@@ -638,13 +673,19 @@ class _HabitScreenState extends State<HabitScreen>
                         ),
                         elevation: 0,
                       ),
-                      child: const Text(
-                        '开启新习惯',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
+                      child: saving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text(
+                              '开启新习惯',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
                     ),
                   ),
                 ],
@@ -2106,4 +2147,11 @@ String _habitTemplateFrequencyLabel(HabitTemplate template) {
     HabitFlexPeriod.month => '每月目标',
   };
   return '$label ${template.flexTarget} ${template.localizedUnit}/$unit';
+}
+
+String _habitReminderSyncIssueText(String issue) {
+  if (issue == 'reminder_scheduler_missing') {
+    return '提醒调度器尚未初始化，请重新打开应用后再保存提醒';
+  }
+  return issue;
 }

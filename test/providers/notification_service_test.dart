@@ -18,7 +18,13 @@ void main() {
     expect(method, isNot(contains('_pendingNotifications = 0;')));
     expect(method, contains('await _saveHistory();'));
     expect(method, contains('await _saveHistorySeen();'));
-    expect(method, contains('notifyListeners();'));
+    expect(
+      method,
+      anyOf(
+        contains('notifyListeners();'),
+        contains('_notifyListenersBatched();'),
+      ),
+    );
     expect(
       method.indexOf('_history.clear();'),
       lessThan(method.indexOf('await _saveHistory();')),
@@ -42,7 +48,13 @@ void main() {
     expect(method, contains('LocalNotifications.instance.cancel(id)'));
     expect(method, contains('if (_pendingNotifications > 0)'));
     expect(method, contains('_pendingNotifications--;'));
-    expect(method, contains('notifyListeners();'));
+    expect(
+      method,
+      anyOf(
+        contains('notifyListeners();'),
+        contains('_notifyListenersBatched();'),
+      ),
+    );
   });
 
   test(
@@ -155,12 +167,40 @@ void main() {
       final group = source.substring(groupStart, groupEnd);
 
       expect(group, contains("label: '通知记录'"));
-      expect(group, contains('onTap: () => _openNotificationHistory(context)'));
+      // 通知支持组经 _MineNotificationSupportGroup 子组件封装：tile 的 onTap
+      // 通过 onOpenNotificationHistory 字段回调触发，而非内联私有方法。
+      // 字段回调由调用方注入真实私有方法（见下方独立断言），因此这里只断言
+      // 子组件内的字段回调形式，避免误判重构为回归。
+      expect(
+        group,
+        contains('onTap: () => onOpenNotificationHistory(context)'),
+      );
       expect(group, contains("label: '通知设置'"));
       expect(group, contains("subtitle: '提醒时间、权限、铃声、已注册提醒和记录保留'"));
       expect(
         group,
-        contains('onTap: () => _openNotificationSettings(context)'),
+        contains('onTap: () => onOpenNotificationSettings(context)'),
+      );
+      // 字段回调必须注入真实的私有方法实现，否则两个入口会落空：断言
+      // _MineNotificationSupportGroup 的构造处把 _openNotificationHistory /
+      // _openNotificationSettings 私有方法注入为对应字段回调。
+      expect(
+        source,
+        contains('onOpenNotificationHistory: _openNotificationHistory'),
+      );
+      expect(
+        source,
+        contains('onOpenNotificationSettings: _openNotificationSettings'),
+      );
+      expect(
+        source,
+        contains('void _openNotificationHistory(BuildContext context)'),
+      );
+      expect(
+        source,
+        contains(
+          'Future<void> _openNotificationSettings(BuildContext context)',
+        ),
       );
       expect(
         group.indexOf("label: '通知记录'"),
@@ -288,7 +328,13 @@ void main() {
     expect(addStart, greaterThanOrEqualTo(0));
     expect(addEnd, greaterThan(addStart));
     final addMethod = source.substring(addStart, addEnd);
-    expect(addMethod, contains('notifyListeners();'));
+    expect(
+      addMethod,
+      anyOf(
+        contains('notifyListeners();'),
+        contains('_notifyListenersBatched();'),
+      ),
+    );
   });
 
   test('opening notification history keeps unread until manual action', () {
@@ -667,8 +713,8 @@ void main() {
       final source = File(
         'lib/providers/notification_service.dart',
       ).readAsStringSync();
-      final start = source.indexOf('Future<void> sendTest()');
-      final end = source.indexOf('Future<void> sendScheduledTest', start);
+      final start = source.indexOf('Future<bool> sendTest()');
+      final end = source.indexOf('Future<bool> sendScheduledTest', start);
       expect(start, greaterThanOrEqualTo(0));
       expect(end, greaterThan(start));
       final method = source.substring(start, end);
@@ -703,10 +749,14 @@ void main() {
     expect(notificationScreen, contains("title: '内置铃声状态渠道'"));
     expect(notificationScreen, contains("title: '1 分钟后普通定时'"));
     expect(notificationScreen, contains("title: '1 分钟后弹出测试'"));
+    expect(notificationScreen, contains('仅验证应用前台弹窗；后台和锁屏不触发兜底通知'));
+    expect(notificationScreen, contains("title: '1 分钟后弹出+通知兜底'"));
+    expect(notificationScreen, contains('模拟真实弹出提醒；前台弹框，后台或锁屏走普通通知'));
+    expect(notificationScreen, isNot(contains('后台或锁屏用系统通知兜底')));
     expect(notificationScreen, contains("title: '1 分钟后闹钟测试'"));
     expect(notificationScreen, contains("title: '1 分钟后全屏闹钟'"));
     expect(notificationScreen, contains("title: '1 分钟后默认方式'"));
-    expect(notificationScreen, contains("title: '已注册提醒明细'"));
+    expect(notificationScreen, contains("title: '提醒注册状态'"));
     expect(notificationScreen, contains('registeredRemindersSnapshot()'));
     expect(notificationScreen, contains('_RegisteredReminderDetailRow'));
     expect(
@@ -752,7 +802,7 @@ void main() {
     final source = File(
       'lib/providers/notification_service.dart',
     ).readAsStringSync();
-    final start = source.indexOf('Future<void> sendScheduledTest');
+    final start = source.indexOf('Future<bool> sendScheduledTest');
     final end = source.indexOf('void notifyAchievementUnlocked', start);
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
@@ -760,6 +810,7 @@ void main() {
 
     expect(method, contains('ReminderKind reminderKind = ReminderKind.push'));
     expect(method, contains('bool fullScreenAlarm = true'));
+    expect(method, contains('bool popupInAppOnly = true'));
     expect(method, contains('_scheduledDiagnosticIdFor('));
     expect(method, contains('_cancelScheduledDiagnosticAcrossChannels('));
     expect(method, contains('_scheduleOnceOrRecord('));
@@ -767,8 +818,15 @@ void main() {
     expect(method, contains('_scheduleAlarmDiagnosticOrRecord('));
     expect(method, contains('alarm.scheduleFullScreen('));
     expect(method, contains('fullScreen: fullScreenAlarm'));
+    expect(method, contains('popupInAppOnly: popupInAppOnly'));
     expect(method, contains('snoozeMinutes: fullScreen ? 5 : 0'));
+    expect(method, contains('popup.scheduleInAppOnlyOnce('));
     expect(method, contains('popup.scheduleOnce('));
+    expect(
+      method,
+      isNot(contains('_popupDiagnosticFallbackPayload(')),
+      reason: '1 分钟弹出测试只能验证应用内弹出，不应退回普通通知。',
+    );
   });
 
   test('scheduled notifications require permission before registering', () {
@@ -793,6 +851,14 @@ void main() {
     expect(scheduleIndex, greaterThanOrEqualTo(0));
     expect(permissionCatchIndex, greaterThan(scheduleIndex));
     expect(helper, contains('系统通知权限未开启，提醒未注册'));
+    expect(helper, contains('系统通知权限未开启，提醒未确认注册成功'));
+    expect(helper, isNot(contains('提醒已注册，但系统通知权限未开启')));
+    final postRefreshPermissionBlock = helper.substring(
+      helper.indexOf('if (!granted) {'),
+      helper.indexOf('if (_lastScheduleIssue != null'),
+    );
+    expect(postRefreshPermissionBlock, contains('return false;'));
+    expect(postRefreshPermissionBlock, isNot(contains('return true;')));
     expect(
       helper,
       isNot(contains('LocalNotifications.instance.ensurePermission')),
@@ -830,6 +896,14 @@ void main() {
     expect(scheduleIndex, greaterThanOrEqualTo(0));
     expect(permissionCatchIndex, greaterThan(scheduleIndex));
     expect(helper, contains('系统通知权限未开启，重复提醒未注册'));
+    expect(helper, contains('系统通知权限未开启，重复提醒未确认注册成功'));
+    expect(helper, isNot(contains('重复提醒已注册，但系统通知权限未开启')));
+    final postRefreshPermissionBlock = helper.substring(
+      helper.indexOf('if (!granted) {'),
+      helper.indexOf('if (_lastScheduleIssue != null'),
+    );
+    expect(postRefreshPermissionBlock, contains('return false;'));
+    expect(postRefreshPermissionBlock, isNot(contains('return true;')));
     expect(
       helper,
       isNot(contains('LocalNotifications.instance.ensurePermission')),
@@ -1058,68 +1132,104 @@ void main() {
     },
   );
 
-  test('failed schedule attempts are not counted as pending or history', () {
-    final source = File(
-      'lib/providers/notification_service.dart',
-    ).readAsStringSync();
+  test(
+    'failed scheduler notification sink attempts throw and are not counted as pending or history',
+    () {
+      final source = File(
+        'lib/providers/notification_service.dart',
+      ).readAsStringSync();
 
-    void expectPublicScheduleGuardsSuccess(
-      String startNeedle,
-      String endNeedle, {
-      required String scheduleCall,
-      bool incrementsPending = true,
-    }) {
-      final start = source.indexOf(startNeedle);
-      final end = source.indexOf(endNeedle, start);
-      expect(start, greaterThanOrEqualTo(0), reason: startNeedle);
-      expect(end, greaterThan(start), reason: endNeedle);
-      final method = source.substring(start, end);
+      void expectPublicScheduleGuardsSuccess(
+        String startNeedle,
+        String endNeedle, {
+        required String scheduleCall,
+        bool incrementsPending = true,
+      }) {
+        final start = source.indexOf(startNeedle);
+        final end = source.indexOf(endNeedle, start);
+        expect(start, greaterThanOrEqualTo(0), reason: startNeedle);
+        expect(end, greaterThan(start), reason: endNeedle);
+        final method = source.substring(start, end);
 
-      final scheduledIndex = method.indexOf(scheduleCall);
-      final guardIndex = method.indexOf('if (!scheduled) return;');
-      final pendingIndex = method.indexOf('_pendingNotifications++;');
-      final historyIndex = method.indexOf('_addScheduledToHistory(');
-      expect(scheduledIndex, greaterThanOrEqualTo(0), reason: startNeedle);
-      expect(guardIndex, greaterThan(scheduledIndex), reason: startNeedle);
-      if (incrementsPending) {
-        expect(pendingIndex, greaterThan(guardIndex), reason: startNeedle);
-      } else {
-        expect(pendingIndex, lessThan(0), reason: startNeedle);
+        final scheduledIndex = method.indexOf(scheduleCall);
+        final guardIndex = method.indexOf('if (!scheduled)');
+        final pendingIndex = method.indexOf('_pendingNotifications++;');
+        final historyIndex = method.indexOf('_addScheduledToHistory(');
+        expect(scheduledIndex, greaterThanOrEqualTo(0), reason: startNeedle);
+        expect(guardIndex, greaterThan(scheduledIndex), reason: startNeedle);
+        if (incrementsPending) {
+          expect(pendingIndex, greaterThan(guardIndex), reason: startNeedle);
+        } else {
+          expect(pendingIndex, lessThan(0), reason: startNeedle);
+        }
+        expect(historyIndex, greaterThan(guardIndex), reason: startNeedle);
       }
-      expect(historyIndex, greaterThan(guardIndex), reason: startNeedle);
-    }
 
-    expectPublicScheduleGuardsSuccess(
-      'Future<void> snooze({',
-      '/// 通过 deep-link `duoyi://snooze/{id}?delay={minutes}` 触发的快捷路径。',
-      scheduleCall: '_scheduleOnceOrRecord(',
-    );
-    expectPublicScheduleGuardsSuccess(
-      'Future<void> scheduleOnce({',
-      '/// 每日固定时间的 push 通知',
-      scheduleCall: '_scheduleOnceOrRecord(',
-    );
-    expectPublicScheduleGuardsSuccess(
-      'Future<void> scheduleDaily({',
-      '/// 取消某个已调度的通知。',
-      scheduleCall: '_scheduleDailyOrRecord(',
-    );
-    expectPublicScheduleGuardsSuccess(
-      'Future<void> scheduleTodoReminder({',
-      'Future<void> cancelTodoReminder',
-      scheduleCall: '_scheduleOnceOrRecord(',
-    );
-    expectPublicScheduleGuardsSuccess(
-      'Future<void> scheduleHabitReminder({',
-      'Future<void> cancelHabitReminder',
-      scheduleCall: '_scheduleDailyOrRecord(',
-    );
-    expectPublicScheduleGuardsSuccess(
-      'Future<void> scheduleAnniversary({',
-      'Future<void> cancelAnniversary',
-      scheduleCall: '_scheduleOnceOrRecord(',
-    );
-  });
+      void expectSchedulerSinkThrowsOnFailure(
+        String startNeedle,
+        String endNeedle, {
+        required String scheduleCall,
+      }) {
+        final start = source.indexOf(startNeedle);
+        final end = source.indexOf(endNeedle, start);
+        expect(start, greaterThanOrEqualTo(0), reason: startNeedle);
+        expect(end, greaterThan(start), reason: endNeedle);
+        final method = source.substring(start, end);
+
+        final scheduledIndex = method.indexOf(scheduleCall);
+        final guardIndex = method.indexOf('if (!scheduled)');
+        final throwIndex = method.indexOf('_throwLastScheduleIssue(');
+        final pendingIndex = method.indexOf('_pendingNotifications++;');
+        expect(scheduledIndex, greaterThanOrEqualTo(0), reason: startNeedle);
+        expect(guardIndex, greaterThan(scheduledIndex), reason: startNeedle);
+        expect(throwIndex, greaterThan(guardIndex), reason: startNeedle);
+        expect(pendingIndex, greaterThan(throwIndex), reason: startNeedle);
+      }
+
+      expectPublicScheduleGuardsSuccess(
+        'Future<void> snooze({',
+        '/// 通过 deep-link `duoyi://snooze/{id}?delay={minutes}` 触发的快捷路径。',
+        scheduleCall: '_scheduleOnceOrRecord(',
+      );
+      expectPublicScheduleGuardsSuccess(
+        'Future<void> scheduleOnce({',
+        '/// 每日固定时间的 push 通知',
+        scheduleCall: '_scheduleOnceOrRecord(',
+      );
+      expectPublicScheduleGuardsSuccess(
+        'Future<void> scheduleDaily({',
+        '/// 取消某个已调度的通知。',
+        scheduleCall: '_scheduleDailyOrRecord(',
+      );
+      expectPublicScheduleGuardsSuccess(
+        'Future<void> scheduleTodoReminder({',
+        'Future<void> cancelTodoReminder',
+        scheduleCall: '_scheduleOnceOrRecord(',
+      );
+      expectSchedulerSinkThrowsOnFailure(
+        'Future<void> scheduleOnce({',
+        '/// 每日固定时间的 push 通知',
+        scheduleCall: '_scheduleOnceOrRecord(',
+      );
+      expectSchedulerSinkThrowsOnFailure(
+        'Future<void> scheduleDaily({',
+        '/// 取消某个已调度的通知。',
+        scheduleCall: '_scheduleDailyOrRecord(',
+      );
+      expectSchedulerSinkThrowsOnFailure(
+        'Future<void> scheduleHabitReminder({',
+        'Future<void> cancelHabitReminder',
+        scheduleCall: '_scheduleDailyOrRecord(',
+      );
+      expectSchedulerSinkThrowsOnFailure(
+        'Future<void> scheduleAnniversary({',
+        'Future<void> cancelAnniversary',
+        scheduleCall: '_scheduleOnceOrRecord(',
+      );
+      expect(source, contains('Never _throwLastScheduleIssue({'));
+      expect(source, contains('NotificationScheduleUnavailableException('));
+    },
+  );
 
   test(
     'schedule helper records permission and plugin failures without crashing callers',
@@ -1151,6 +1261,7 @@ void main() {
         expect(helper, contains('catch (e, st)'));
         expect(helper, contains('debugPrint('));
         expect(helper, contains('_recordScheduleIssue('));
+        expect(helper, contains('_clearScheduleIssueForRelatedId(relatedId)'));
         expect(helper, contains('return false;'));
         expect(helper, isNot(contains('rethrow;')));
       }
@@ -1223,7 +1334,9 @@ void main() {
     'daily digest reminders use repeating schedule unless holiday pause is on',
     () {
       final source = File('lib/main.dart').readAsStringSync();
-      final start = source.indexOf('Future<void> _syncDailyDigestReminder');
+      final start = source.indexOf(
+        'Future<DailyDigestReminderResult> _syncDailyDigestReminder',
+      );
       final end = source.indexOf('DateTime _nextDailyReminderTime', start);
       expect(start, greaterThanOrEqualTo(0));
       expect(end, greaterThan(start));
@@ -1234,6 +1347,12 @@ void main() {
       expect(method, contains('await schedulePushFallback();'));
       expect(method, contains('fallback to push'));
       expect(method, contains('_dailyDigestAlarmQueueAlreadyOwns('));
+      expect(method, contains('notification.recordReminderScheduleIssue('));
+      expect(method, contains('return DailyDigestReminderResult('));
+      expect(method, contains('issue.toResultIssue()'));
+      expect(method, contains('每日提醒注册失败'));
+      expect(method, contains('每日闹钟注册状态未确认'));
+      expect(method, contains('闹钟待触发队列读取失败'));
       expect(method, contains('daily repeating digest'));
       expect(method, contains('daily one-shot digest'));
       expect(method, contains('alarm queue already registered'));
@@ -1260,8 +1379,8 @@ void main() {
     final source = File(
       'lib/providers/notification_service.dart',
     ).readAsStringSync();
-    final start = source.indexOf('Future<void> sendTest');
-    final end = source.indexOf('Future<void> sendScheduledTest', start);
+    final start = source.indexOf('Future<bool> sendTest');
+    final end = source.indexOf('Future<bool> sendScheduledTest', start);
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
     final method = source.substring(start, end);
@@ -1279,7 +1398,8 @@ void main() {
     expect(method, contains('LocalNotifications.instance.refreshPermission()'));
     expect(method, contains('系统通知权限未开启，测试通知未发送'));
     expect(method, contains('测试通知发送失败'));
-    expect(method, contains('return;'));
+    expect(method, contains('return false;'));
+    expect(method, contains('return true;'));
     expect(method, isNot(contains('rethrow;')));
     expect(method, contains('多仪 · 通知测试'));
     expect(method, isNot(contains('AlarmService.instance.showFullScreenTest')));
@@ -1331,6 +1451,7 @@ void main() {
         'Future<void> _sendStrongTest()',
         scheduledStart,
       );
+      final appMain = File('lib/main.dart').readAsStringSync();
       expect(scheduledStart, greaterThanOrEqualTo(0));
       expect(scheduledEnd, greaterThan(scheduledStart));
       final scheduledTest = prefs.substring(scheduledStart, scheduledEnd);
@@ -1351,13 +1472,21 @@ void main() {
         lessThan(scheduledTest.indexOf('service.sendScheduledTest(')),
       );
       expect(scheduledTest, contains('_scheduledTestReminderKind(context)'));
-      expect(scheduledTest, contains('context.read<ReminderScheduler?>()'));
+      expect(scheduledTest, contains('_readReminderScheduler(context)'));
+      expect(prefs, contains('ReminderScheduler? _readReminderScheduler'));
+      expect(prefs, contains('context.read<ReminderScheduler?>()'));
+      expect(prefs, contains('context.read<ReminderScheduler>()'));
+      expect(appMain, contains('Provider<ReminderScheduler>.value'));
+      expect(appMain, contains('Provider<ReminderScheduler?>.value'));
       expect(scheduledTest, contains('reminderKind: kind'));
       expect(scheduledTest, contains('fullScreenAlarm: fullScreenAlarm'));
+      expect(scheduledTest, contains('popupInAppOnly: popupInAppOnly'));
       expect(scheduledTest, contains('popup: scheduler?.popup'));
+      expect(scheduledTest, isNot(contains('ForegroundReminderPopupSink(')));
       expect(scheduledTest, contains('alarm: scheduler?.alarm'));
       expect(prefs, contains('Future<void> _sendScheduledPushTest()'));
       expect(prefs, contains('Future<void> _sendScheduledPopupTest()'));
+      expect(prefs, contains('Future<void> _sendScheduledPopupFallbackTest()'));
       expect(prefs, contains('Future<void> _sendScheduledAlarmTest()'));
       expect(
         prefs,
@@ -1404,7 +1533,7 @@ void main() {
     final scheduler = File(
       'lib/services/reminder_scheduler.dart',
     ).readAsStringSync();
-    final start = source.indexOf('Future<void> sendScheduledTest');
+    final start = source.indexOf('Future<bool> sendScheduledTest');
     final end = source.indexOf('void notifyAchievementUnlocked', start);
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
@@ -1725,6 +1854,9 @@ void main() {
     expect(branch, contains('navigateTo(1, allowHidden: true)'));
     expect(source, contains('todos.completeTodos([target.id])'));
     expect(source, contains('已完成：'));
+    expect(source, contains("latest?.isCompleted == true"));
+    expect(source, contains('待办正在保存中，请稍后重试'));
+    expect(source, contains('待办完成失败，请稍后重试'));
     expect(branch, isNot(contains('completeTodoWithOptionalTimeRecord')));
     expect(branch, isNot(contains('todos.toggleTodo(id);')));
   });
@@ -1883,8 +2015,28 @@ void main() {
     },
   );
 
+  test('Android null channel probe is recorded as non-blocking unknown', () {
+    final source = File(
+      'lib/providers/notification_service.dart',
+    ).readAsStringSync();
+    final start = source.indexOf('Future<bool> _ensureChannelReadyOrRecord');
+    final end = source.indexOf(
+      'Future<bool> _scheduleOnceOrRecord',
+      start,
+    );
+    final helper = source.substring(start, end);
+
+    expect(helper, contains('if (!PlatformInfo.isAndroid) return true;'));
+    expect(helper, contains('status == null'));
+    expect(helper, contains('!status.exists'));
+    expect(helper, contains('status.importance == null'));
+    expect(helper, contains('status.hasSound == null'));
+    expect(helper, contains('blocking: false'));
+    expect(helper, contains('return true;'));
+  });
+
   test(
-    'todo reminder save preflight checks notification permission for alarm-only reminders',
+    'todo reminder save preflight blocks alarm reminders without exact and fullscreen permissions',
     () {
       final source = File(
         'lib/screens/todo_detail_screen.dart',
@@ -1919,6 +2071,14 @@ void main() {
       expect(method, contains('LocalNotifications.instance'));
       expect(method, contains('.ensurePermission()'));
       expect(method, contains('闹钟提醒注册失败：系统通知权限未开启'));
+      expect(method, contains('AlarmService.instance'));
+      expect(method, contains('.init()'));
+      expect(method, contains('hasExactAlarmPermission()'));
+      expect(method, contains('requestExactAlarmPermission()'));
+      expect(method, contains('hasFullScreenIntentPermission()'));
+      expect(method, contains('requestFullScreenIntentPermission()'));
+      expect(method, contains('闹钟提醒注册失败：精准闹钟权限未开启'));
+      expect(method, contains('闹钟提醒注册失败：全屏提醒权限未开启'));
       expect(method, contains('scheduledTime: result.firstScheduledTime'));
       expect(method, contains('relatedId: todo.id'));
       expect(method, isNot(contains('notif.requestPermission()')));
@@ -1930,6 +2090,20 @@ void main() {
         method.indexOf('final usesAlarm = result.kinds.contains'),
         lessThan(method.indexOf('if (usesAlarm && !usesPush && !usesPopup)')),
       );
+      expect(
+        method.indexOf('AlarmService.instance'),
+        lessThan(method.indexOf('hasExactAlarmPermission()')),
+      );
+      expect(
+        method.indexOf('hasExactAlarmPermission()'),
+        lessThan(method.indexOf('requestExactAlarmPermission()')),
+      );
+      expect(
+        method.indexOf('hasFullScreenIntentPermission()'),
+        lessThan(method.indexOf('requestFullScreenIntentPermission()')),
+      );
+      expect(method, isNot(contains("warnings.add('精准闹钟权限未开启")));
+      expect(method, isNot(contains("warnings.add('全屏提醒权限未开启")));
     },
   );
 
@@ -1982,25 +2156,81 @@ void main() {
         'lib/services/reminder_scheduler.dart',
       ).readAsStringSync();
 
-      expect(scheduler, contains('void _recordAlarmScheduleIssue({'));
+      expect(scheduler, contains('bool _recordAlarmScheduleIssue({'));
       expect(scheduler, contains('alarm is! AlarmService'));
-      expect(scheduler, contains('(alarm as AlarmService).lastScheduleIssue'));
-      expect(scheduler, contains('clearReminderScheduleIssue()'));
+      expect(scheduler, contains('final alarmService = alarm as AlarmService'));
+      expect(scheduler, contains('alarmService.lastScheduleIssue'));
+      expect(scheduler, contains('Set<int>? alarmIds'));
+      expect(
+        scheduler,
+        contains('_alarmScheduleIssueMatches(issue, alarmIds)'),
+      );
+      expect(scheduler, contains('alarmService.clearScheduleIssue('));
+      expect(scheduler, isNot(contains('clearReminderScheduleIssue()')));
       expect(scheduler, contains('issueSink.recordReminderScheduleIssue('));
+      expect(scheduler, contains('final effectiveBlocking ='));
+      expect(scheduler, contains('return effectiveBlocking;'));
+      expect(scheduler, contains('blocking ||'));
+      expect(scheduler, contains('_blockingAlarmScheduleIssuePhrases'));
+      expect(scheduler, contains('闹钟提醒已降级注册'));
+      expect(scheduler, contains('精准闹钟权限未开启'));
+      expect(scheduler, contains('闹钟提醒通知权限未开启'));
+      expect(scheduler, contains('内置闹钟铃声注册失败'));
+      expect(scheduler, contains('内置重复闹钟铃声注册失败'));
+      expect(scheduler, contains('强提醒弹屏权限未开启'));
+      expect(scheduler, contains('强提醒渠道需要检查'));
+      expect(scheduler, contains('闹钟提醒注册失败'));
+      expect(scheduler, contains('重复闹钟注册失败'));
+      expect(scheduler, contains('闹钟兜底通知注册失败'));
+      expect(scheduler, contains('重复闹钟兜底通知注册失败'));
+      expect(scheduler, contains('闹钟兜底通知待触发队列需确认'));
       expect(
         scheduler,
         contains('scheduledTime: issue.scheduledTime ?? scheduledTime'),
       );
-      expect(
-        scheduler,
-        contains('_recordAlarmScheduleIssue(relatedId: habit.id'),
-      );
-      expect(
-        scheduler,
-        contains('_recordAlarmScheduleIssue(relatedId: rule.key'),
-      );
+      expect(scheduler, contains('return !_recordAlarmScheduleIssue('));
+      expect(scheduler, contains('relatedId: habit.id'));
+      expect(scheduler, contains('relatedId: relatedId'));
       expect(scheduler, contains('scheduledTime: payload.when'));
       expect(scheduler, contains('scheduledTime: remindAt'));
     },
   );
+
+  test('generic schedule APIs derive issue relatedId from duoyi payloads', () {
+    final source = File(
+      'lib/providers/notification_service.dart',
+    ).readAsStringSync();
+
+    final onceStart = source.indexOf('Future<void> scheduleOnce({');
+    final onceEnd = source.indexOf(
+      'Future<void> scheduleCalendarReminder',
+      onceStart,
+    );
+    final dailyStart = source.indexOf('Future<void> scheduleDaily({');
+    final dailyEnd = source.indexOf('/// 取消某个已调度的通知', dailyStart);
+    expect(onceStart, greaterThanOrEqualTo(0));
+    expect(onceEnd, greaterThan(onceStart));
+    expect(dailyStart, greaterThanOrEqualTo(0));
+    expect(dailyEnd, greaterThan(dailyStart));
+
+    final once = source.substring(onceStart, onceEnd);
+    final daily = source.substring(dailyStart, dailyEnd);
+    for (final method in [once, daily]) {
+      expect(
+        method,
+        contains('final relatedId = _relatedIdFromPayload(payload);'),
+      );
+      expect(method, contains('relatedId: relatedId'));
+    }
+    expect(
+      source,
+      contains('_normalizeScheduleIssueRelatedId(String? relatedId)'),
+    );
+    expect(
+      source,
+      contains('final fromPayload = _relatedIdFromPayload(trimmed);'),
+    );
+    expect(source, contains('if (issue.id != alarmId) return false;'));
+    expect(source, contains('_lastScheduleIssueRecordedAt = now;'));
+  });
 }

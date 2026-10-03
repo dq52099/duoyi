@@ -326,6 +326,10 @@ class ThemeProvider extends ChangeNotifier {
     if (changed) notifyListeners();
   }
 
+  bool _isCurrentShopOperation(int generation, int accountGeneration) =>
+      generation == _storageGeneration &&
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(accountGeneration);
+
   Future<void> applyShopStateFromServer(
     Map<dynamic, dynamic> state, {
     bool trusted = false,
@@ -354,11 +358,14 @@ class ThemeProvider extends ChangeNotifier {
     );
     if (!changed) return;
     await prefs.setString(_storageKey, _brand.id);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
     await prefs.setStringList(
       _unlockedBrandsKey,
       _unlockedBrandIds.toList(growable: false),
     );
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
     await _saveShopState(prefs, touch: false);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
     _serverConfirmedChangePending = true;
     notifyListeners();
   }
@@ -493,7 +500,9 @@ class ThemeProvider extends ChangeNotifier {
       _unlockedBrandsKey,
       _unlockedBrandIds.toList(growable: false),
     );
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
     await _saveShopState(prefs);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
     notifyListeners();
   }
 
@@ -510,6 +519,7 @@ class ThemeProvider extends ChangeNotifier {
       return;
     }
     await _saveShopState(prefs);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
     notifyListeners();
   }
 
@@ -528,6 +538,7 @@ class ThemeProvider extends ChangeNotifier {
       return false;
     }
     await _saveShopState(prefs);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
     notifyListeners();
     return true;
   }
@@ -545,6 +556,7 @@ class ThemeProvider extends ChangeNotifier {
       return;
     }
     await _saveShopState(prefs);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
     notifyListeners();
   }
 
@@ -563,6 +575,7 @@ class ThemeProvider extends ChangeNotifier {
       return false;
     }
     await _saveShopState(prefs);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
     notifyListeners();
     return true;
   }
@@ -580,6 +593,7 @@ class ThemeProvider extends ChangeNotifier {
       return;
     }
     await _saveShopState(prefs);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
     notifyListeners();
   }
 
@@ -598,6 +612,7 @@ class ThemeProvider extends ChangeNotifier {
       return false;
     }
     await _saveShopState(prefs);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
     notifyListeners();
     return true;
   }
@@ -619,6 +634,7 @@ class ThemeProvider extends ChangeNotifier {
       return false;
     }
     await _saveShopState(prefs);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
     notifyListeners();
     return true;
   }
@@ -640,6 +656,7 @@ class ThemeProvider extends ChangeNotifier {
       return false;
     }
     await _saveShopState(prefs);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
     notifyListeners();
     return true;
   }
@@ -659,8 +676,10 @@ class ThemeProvider extends ChangeNotifier {
       return false;
     }
     await prefs.setString(_storageKey, _brand.id);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
     _switchCount++;
     await prefs.setInt(_switchCountKey, _switchCount);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
     DomainEventBus.instance.publish(
       DomainEvent(
         type: DomainEventType.themeSwitched,
@@ -668,7 +687,9 @@ class ThemeProvider extends ChangeNotifier {
         metadata: {'count': _switchCount},
       ),
     );
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
     await _saveShopState(prefs);
+    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
     notifyListeners();
     return true;
   }

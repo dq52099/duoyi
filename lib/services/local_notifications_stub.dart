@@ -1,3 +1,5 @@
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 /// Web 环境占位。所有调用都是空操作。
 class LocalNotifications {
   static final LocalNotifications instance = LocalNotifications._();
@@ -74,9 +76,15 @@ class LocalNotifications {
   Future<void> cancel(int id) async {}
   Future<void> cancelAll() async {}
   Future<List<int>> pendingIds() async => const [];
+  Future<List<int>> pendingIdsOrThrow() async => const [];
   Future<Set<String>?> notificationChannelIds() async => const <String>{};
   Future<void> refreshAndroidRingtoneChannels() async {}
   String? takeLaunchPayload() => null;
+
+  void dispatchNotificationResponse(
+    NotificationResponse response, {
+    void Function(String payload)? fallback,
+  }) {}
 
   void Function(String payload)? onTap;
 }

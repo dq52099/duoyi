@@ -36,19 +36,33 @@ class AppSurfaceCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    ThemeProvider? themeProvider;
+    CardSkinReward? cardSkin;
     try {
-      themeProvider = context.watch<ThemeProvider>();
+      cardSkin = context.select<ThemeProvider, CardSkinReward>(
+        (provider) => provider.activeCardSkin,
+      );
     } catch (_) {
-      themeProvider = null;
+      cardSkin = null;
     }
-    final cardSkin = themeProvider?.activeCardSkin;
     final useCardSkin =
         cardSkin != null &&
         cardSkin.id != ThemeProvider.defaultCardSkinId &&
         color == null &&
         gradient == null;
     final surfaceColor = color ?? cs.surface;
+    final defaultGradient = color == null && !useCardSkin
+        ? LinearGradient(
+            colors: [
+              Color.alphaBlend(
+                cs.primary.withValues(alpha: isDark ? 0.045 : 0.025),
+                surfaceColor,
+              ),
+              surfaceColor,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          )
+        : null;
     final cardBorderColor = isDark
         ? cs.outlineVariant.withValues(alpha: 0.18)
         : (Color.lerp(DesignTokens.defaultBorder, cs.outlineVariant, 0.35) ??
@@ -66,8 +80,10 @@ class AppSurfaceCard extends StatelessWidget {
           )
         : null;
     final decoration = BoxDecoration(
-      color: gradient == null && skinGradient == null ? surfaceColor : null,
-      gradient: gradient ?? skinGradient,
+      color: gradient == null && skinGradient == null && defaultGradient == null
+          ? surfaceColor
+          : null,
+      gradient: gradient ?? skinGradient ?? defaultGradient,
       borderRadius: borderRadius,
       border:
           border ??
@@ -77,15 +93,17 @@ class AppSurfaceCard extends StatelessWidget {
                 : cardBorderColor,
             width: 0.55,
           ),
-      boxShadow: elevation <= 0
-          ? const []
-          : [
+      // Flat cards are the hot path in long lists.  Do not allocate or blur
+      // a shadow when callers explicitly request elevation zero.
+      boxShadow: elevation > 0
+          ? [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.05),
-                blurRadius: 7 + elevation,
-                offset: const Offset(0, 2),
+                color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.035),
+                blurRadius: 5.5 + elevation,
+                offset: const Offset(0, 1.5),
               ),
-            ],
+            ]
+          : null,
     );
 
     final content = Ink(
@@ -97,9 +115,24 @@ class AppSurfaceCard extends StatelessWidget {
       padding: margin,
       child: Material(
         color: Colors.transparent,
+        clipBehavior: onTap == null ? Clip.none : Clip.antiAlias,
         child: onTap == null
             ? content
-            : InkWell(onTap: onTap, borderRadius: borderRadius, child: content),
+            : InkWell(
+                onTap: onTap,
+                borderRadius: borderRadius,
+                overlayColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.pressed)) {
+                    return cs.primary.withValues(alpha: isDark ? 0.14 : 0.08);
+                  }
+                  if (states.contains(WidgetState.hovered) ||
+                      states.contains(WidgetState.focused)) {
+                    return cs.primary.withValues(alpha: isDark ? 0.08 : 0.045);
+                  }
+                  return Colors.transparent;
+                }),
+                child: content,
+              ),
       ),
     );
   }
@@ -721,18 +754,38 @@ class AppMetricCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final fill = isDark
-        ? cs.surface.withValues(alpha: 0.68)
-        : cs.surface.withValues(alpha: 0.85);
+    final fill = Color.alphaBlend(
+      color.withValues(alpha: isDark ? 0.075 : 0.04),
+      cs.surface,
+    );
     final tile = Ink(
       decoration: BoxDecoration(
-        color: fill,
+        gradient: LinearGradient(
+          colors: [
+            Color.alphaBlend(
+              color.withValues(alpha: isDark ? 0.10 : 0.055),
+              fill,
+            ),
+            fill,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: borderRadius,
         border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: isDark ? 0.15 : 0.18),
-          width: 0.5,
+          color: Color.alphaBlend(
+            color.withValues(alpha: isDark ? 0.20 : 0.14),
+            cs.outlineVariant.withValues(alpha: isDark ? 0.30 : 0.42),
+          ),
+          width: 0.6,
         ),
-        boxShadow: const [],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.035),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Padding(
         padding: padding,
@@ -811,9 +864,24 @@ class AppMetricCard extends StatelessWidget {
       padding: margin,
       child: Material(
         color: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
         child: onTap == null
             ? tile
-            : InkWell(onTap: onTap, borderRadius: borderRadius, child: tile),
+            : InkWell(
+                onTap: onTap,
+                borderRadius: borderRadius,
+                overlayColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.pressed)) {
+                    return color.withValues(alpha: isDark ? 0.16 : 0.09);
+                  }
+                  if (states.contains(WidgetState.hovered) ||
+                      states.contains(WidgetState.focused)) {
+                    return color.withValues(alpha: isDark ? 0.09 : 0.05);
+                  }
+                  return Colors.transparent;
+                }),
+                child: tile,
+              ),
       ),
     );
   }

@@ -31,6 +31,8 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   int _persistedRevision = 0;
   int _storageGeneration = 0;
   int _sessionCountToday = 0;
+  int _mineWeeklyFocusMinutes = 0;
+  DateTime? _mineWeeklyFocusComputedAt;
   String? _lastDate;
   NotificationService? _notifier;
   TimeAuditProvider? _timeAudit;
@@ -58,6 +60,15 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   List<PomodoroFocusPenalty> get penalties => List.unmodifiable(_penalties);
   int get persistedRevision => _persistedRevision;
   int get sessionCountToday => _sessionCountToday;
+  int get mineWeeklyFocusMinutes {
+    final computedAt = _mineWeeklyFocusComputedAt;
+    if (computedAt == null ||
+        DateTime.now().difference(computedAt) >= const Duration(minutes: 15)) {
+      _recomputeMineWeeklyFocus();
+    }
+    return _mineWeeklyFocusMinutes;
+  }
+
   FocusDndStatus get focusDndStatus => _dndStatus;
   bool get focusDndActive => _dndActive;
   FocusDistractionStatus get focusDistractionStatus => _distractionStatus;
@@ -156,6 +167,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       _initState();
     }
+    _recomputeMineWeeklyFocus();
     _persistedRevision++;
     notifyListeners();
   }
@@ -168,6 +180,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     _sessions = [];
     _penalties = [];
     _sessionCountToday = 0;
+    _recomputeMineWeeklyFocus();
     _lastDate = null;
     _persistedRevision++;
     _initState();
@@ -255,6 +268,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (idx < 0) return false;
 
     final removed = _sessions.removeAt(idx);
+    _recomputeMineWeeklyFocus();
     await CloudSyncProvider.recordDeletedItem('pomodoro_sessions', removed.id);
     if (removed.type == PomodoroType.focus &&
         _isSameDay(removed.startTime, DateTime.now())) {
@@ -276,6 +290,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     final previous = _sessions[idx];
     _sessions[idx] = updated;
+    _recomputeMineWeeklyFocus();
     if (_affectsTodayFocusCount(previous) || _affectsTodayFocusCount(updated)) {
       await _refreshTodayFocusMeta();
     }
@@ -306,6 +321,20 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _affectsTodayFocusCount(PomodoroSession session) {
     return session.type == PomodoroType.focus &&
         _isSameDay(session.startTime, DateTime.now());
+  }
+
+  void _recomputeMineWeeklyFocus({DateTime? now}) {
+    final effectiveNow = now ?? DateTime.now();
+    final weekAgo = effectiveNow.subtract(const Duration(days: 7));
+    var seconds = 0;
+    for (final session in _sessions) {
+      if (session.type == PomodoroType.focus &&
+          session.startTime.isAfter(weekAgo)) {
+        seconds += session.durationSeconds;
+      }
+    }
+    _mineWeeklyFocusMinutes = seconds ~/ 60;
+    _mineWeeklyFocusComputedAt = effectiveNow;
   }
 
   Future<void> _refreshTodayFocusMeta() async {
@@ -451,6 +480,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       focusRoomId: completedState.focusRoomId,
     );
     _sessions.add(session);
+    _recomputeMineWeeklyFocus(now: completedAt);
 
     int newCount = completedState.completedSessions;
     final shouldSaveMeta = completedType == PomodoroType.focus;

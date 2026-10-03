@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/todo_provider.dart';
+import 'package:duoyi/services/reminder_scheduler.dart'
+    show ReminderReconciliationBatch;
 import 'package:duoyi/screens/todo_detail_screen.dart';
 
 import '../test_support/recording_reminder_scheduler.dart';
@@ -106,7 +108,7 @@ void main() {
       expect(stored.title, '修改后的标题');
     });
 
-    testWidgets('编辑保存会等待提醒同步完成后再返回', (tester) async {
+    testWidgets('只编辑标题：不等待提醒同步完成也能返回', (tester) async {
       final (provider, item) = await buildProviderWithOne();
       final scheduler = _GatedTodoScheduler();
       provider.scheduler = scheduler;
@@ -121,7 +123,45 @@ void main() {
 
       await tester.tap(find.widgetWithIcon(IconButton, Icons.check));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(scheduler.started, isTrue);
+      expect(find.text('home-root'), findsOneWidget);
+      expect(provider.todos.single.title, '等待提醒同步');
+
+      scheduler.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(TodoDetailScreen), findsNothing);
+      expect(scheduler.todoSyncs, hasLength(1));
+    });
+
+    testWidgets('提醒字段变化：等待提醒注册完成后才返回', (tester) async {
+      final provider = TodoProvider();
+      final dueDate = DateTime.now().add(const Duration(days: 1));
+      final item = TodoItem(title: '未来提醒任务', notes: '原始备注', dueDate: dueDate);
+      await provider.addTodo(item);
+      final scheduler = _GatedTodoScheduler();
+      provider.scheduler = scheduler;
+
+      await tester.pumpWidget(buildApp(provider: provider, todoId: item.id));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('open-detail'));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('提醒'),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('提醒'));
+      await tester.pump();
+
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.check));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
       expect(scheduler.started, isTrue);
       expect(find.byType(TodoDetailScreen), findsOneWidget);
@@ -132,7 +172,7 @@ void main() {
 
       expect(find.byType(TodoDetailScreen), findsNothing);
       expect(find.text('home-root'), findsOneWidget);
-      expect(provider.todos.single.title, '等待提醒同步');
+      expect(provider.todos.single.reminderPlan.enabled, isTrue);
     });
 
     testWidgets('clean 状态点保存：直接返回 home', (tester) async {
@@ -237,6 +277,64 @@ void main() {
       expect(find.text('home-root'), findsOneWidget);
       expect(provider.todos.single.title, '只修改标题');
     });
+
+    testWidgets('保存标题不会覆盖详情页打开后变更的子任务完成态', (tester) async {
+      final provider = TodoProvider();
+      final item = TodoItem(
+        title: '原始标题',
+        subtasks: [Subtask(id: 'subtask-a', title: '第一步')],
+      );
+      await provider.addTodo(item);
+
+      await tester.pumpWidget(buildApp(provider: provider, todoId: item.id));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('open-detail'));
+      await tester.pumpAndSettle();
+
+      await provider.toggleSubtask(item.id, 'subtask-a');
+      await tester.pump();
+      await tester.enterText(find.widgetWithText(TextField, '任务名称'), '只改标题');
+      await tester.pump();
+
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.check));
+      await tester.pumpAndSettle();
+
+      final stored = provider.todos.single;
+      expect(stored.title, '只改标题');
+      expect(stored.subtasks.single.isCompleted, isTrue);
+      expect(stored.isCompleted, isTrue);
+      expect(stored.completedAt, isNotNull);
+    });
+
+    testWidgets('同一待办保存中时再次保存会停留并提示', (tester) async {
+      final (provider, item) = await buildProviderWithOne();
+      final scheduler = _GatedTodoScheduler();
+      provider.scheduler = scheduler;
+
+      await tester.pumpWidget(buildApp(provider: provider, todoId: item.id));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('open-detail'));
+      await tester.pumpAndSettle();
+
+      final inFlight = provider.updateTodo(
+        item.id,
+        provider.todos.single.copyWith(title: '外部保存中'),
+      );
+      await _waitForScheduler(tester, scheduler);
+      await tester.pump();
+
+      await tester.enterText(find.widgetWithText(TextField, '任务名称'), '第二次保存');
+      await tester.pump();
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.check));
+      await tester.pump();
+
+      expect(find.byType(TodoDetailScreen), findsOneWidget);
+      expect(find.text('待办正在保存中，请稍后重试。'), findsOneWidget);
+
+      scheduler.complete();
+      expect(await inFlight, isTrue);
+      await tester.pump();
+    });
   });
 
   group('Editing 下返回键弹出确认框', () {
@@ -305,8 +403,19 @@ class _GatedTodoScheduler extends RecordingReminderScheduler {
   Future<void> syncTodos(
     Iterable<TodoItem> todos, {
     bool allowJustMissedOneShotReminders = true,
+    ReminderReconciliationBatch? batch,
   }) async {
     todoSyncs.add(todos.map((todo) => todo.id).toList(growable: false));
     await _gate.future;
+  }
+}
+
+Future<void> _waitForScheduler(
+  WidgetTester tester,
+  _GatedTodoScheduler scheduler,
+) async {
+  for (var i = 0; i < 50; i++) {
+    if (scheduler.started) return;
+    await tester.pump(const Duration(milliseconds: 1));
   }
 }

@@ -6,13 +6,20 @@ void main() {
   test(
     'account-scoped providers guard reset against stale storage reloads',
     () {
-      for (final path in const [
+      const storageGuardedProviders = [
         'lib/providers/user_provider.dart',
         'lib/providers/achievement_provider.dart',
         'lib/providers/theme_provider.dart',
         'lib/providers/preferences_provider.dart',
         'lib/providers/habit_provider.dart',
-      ]) {
+      ];
+      const accountScopedProviders = [
+        'lib/providers/user_provider.dart',
+        'lib/providers/achievement_provider.dart',
+        'lib/providers/theme_provider.dart',
+        'lib/providers/habit_provider.dart',
+      ];
+      for (final path in storageGuardedProviders) {
         final source = File(path).readAsStringSync();
         expect(source, contains('int _storageGeneration = 0;'), reason: path);
         expect(
@@ -22,7 +29,7 @@ void main() {
         );
         expect(
           source,
-          contains('if (generation != _storageGeneration) return;'),
+          contains('generation != _storageGeneration'),
           reason: path,
         );
         final reset = _sourceBlock(
@@ -31,6 +38,10 @@ void main() {
           'notifyListeners();',
         );
         expect(reset, contains('_storageGeneration++;'), reason: path);
+      }
+      for (final path in accountScopedProviders) {
+        final source = File(path).readAsStringSync();
+        expect(source, contains('AccountLocalDataCleaner'), reason: path);
       }
     },
   );
@@ -83,7 +94,7 @@ void main() {
       ),
     );
     expect(source, contains('Future<void> Function()? onAccountLoggedOut'));
-    expect(source, contains('await _notifyAccountProfileChanged();'));
+    expect(source, contains('await _notifyAccountProfileChanged(state);'));
     expect(source, contains('await _notifyAccountLoggedOut();'));
     expect(source, contains("'/api/auth/password-reset/request'"));
     expect(
@@ -128,7 +139,8 @@ void main() {
       final source = File('lib/screens/profile_screen.dart').readAsStringSync();
 
       expect(mine, contains("import 'profile_screen.dart';"));
-      expect(mine, contains('onTap: () => _openProfileEditor(context)'));
+      expect(mine, contains('onOpenProfileEditor: _openProfileEditor'));
+      expect(mine, contains('onTap: () => onOpenProfileEditor(context)'));
       expect(
         mine,
         isNot(contains('void _showProfileDetailsSheet(BuildContext context)')),
@@ -138,12 +150,14 @@ void main() {
         mine,
         contains('ProfileScreen(openAvatarSheetOnStart: avatarOnly)'),
       );
-      expect(mine, contains('onTap: () => _showAvatarPreview(context)'));
+      expect(mine, contains('onShowAvatarPreview: _showAvatarPreview'));
+      expect(mine, contains('onTap: () => onShowAvatarPreview(context)'));
       expect(mine, contains('void _showAvatarPreview(BuildContext context)'));
       expect(mine, contains('uploadAvatarBytes('));
       expect(mine, contains('_copyLocalAvatarFile(file)'));
       expect(mine, contains("message: '修改头像'"));
-      expect(mine, contains('onTap: () => _pickAndSaveAvatar(context)'));
+      expect(mine, contains('onPickAndSaveAvatar: _pickAndSaveAvatar'));
+      expect(mine, contains('onTap: () => onPickAndSaveAvatar(context)'));
       expect(mine, isNot(contains("label: '个人资料'")));
       expect(
         mine,
@@ -524,6 +538,53 @@ void main() {
       expect(source, contains(field));
     }
   });
+
+  test(
+    'AuthProvider does not block login completion on server config refresh',
+    () {
+      final source = File(
+        'lib/providers/auth_provider.dart',
+      ).readAsStringSync();
+      expect(source, contains("import 'dart:async';"));
+      expect(source, contains('void _refreshServerConfigInBackground('));
+      expect(source, contains('unawaited('));
+
+      final register = _sourceBlock(
+        source,
+        'Future<void> register({',
+        'Future<Map<String, dynamic>> sendEmailCode({',
+      );
+      final login = _sourceBlock(
+        source,
+        'Future<void> login({',
+        'Future<void> emailLogin({',
+      );
+      final emailLogin = _sourceBlock(
+        source,
+        'Future<void> emailLogin({',
+        'Future<void> logout()',
+      );
+
+      expect(
+        register,
+        contains("_refreshServerConfigInBackground('register')"),
+      );
+      expect(login, contains("_refreshServerConfigInBackground('login')"));
+      expect(
+        emailLogin,
+        contains("_refreshServerConfigInBackground('email_login')"),
+      );
+      expect(
+        register,
+        isNot(contains('await refreshServerConfigFromServer();')),
+      );
+      expect(login, isNot(contains('await refreshServerConfigFromServer();')));
+      expect(
+        emailLogin,
+        isNot(contains('await refreshServerConfigFromServer();')),
+      );
+    },
+  );
 
   test(
     'App refreshes account profile after cloud sync and foreground resume',

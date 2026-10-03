@@ -1,0 +1,10 @@
+Available Android Virtual Devices:
+
+The following Android Virtual Devices could not be loaded:
+    Name: duoyi_api35
+    Path: /home/ubuntu/.android/avd/duoyi_api35.avd
+   Error: Missing system image for Google APIs x86_64 duoyi_api35.
+---------
+    Name: duoyi_api35_arm64
+    Path: /home/ubuntu/.android/avd/duoyi_api35_arm64.avd
+   Error: Missing system image for Google APIs arm64-v8a duoyi_api35_arm64.

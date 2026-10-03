@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 class CachedAvatarImage extends StatefulWidget {
@@ -29,10 +28,11 @@ class CachedAvatarImage extends StatefulWidget {
 }
 
 class _CachedAvatarImageState extends State<CachedAvatarImage> {
+  static Future<Directory>? _cacheRootFuture;
+
   File? _cachedFile;
   bool _cacheLookupComplete = false;
   bool _networkFailed = false;
-  Object? _lastCachedUrl;
   int _cacheLookupGeneration = 0;
 
   @override
@@ -50,7 +50,6 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
     _networkFailed = false;
     _cachedFile = null;
     _cacheLookupComplete = false;
-    _lastCachedUrl = null;
     unawaited(_loadCachedFile());
   }
 
@@ -61,7 +60,7 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
     }
     final cached = _cachedFile;
     if (cached != null) {
-      return _fileImage(cached);
+      return _fileImage(context, cached);
     }
     if (!_cacheLookupComplete || _networkFailed) {
       return _stableFrame(widget.fallbackBuilder(context), center: true);
@@ -71,6 +70,8 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
         widget.url,
         width: widget.width,
         height: widget.height,
+        cacheWidth: _decodePixels(context, widget.width),
+        cacheHeight: _decodePixels(context, widget.height),
         fit: widget.fit,
         errorBuilder: (context, _, _) {
           if (!_networkFailed) {
@@ -80,31 +81,34 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
           }
           return cached == null
               ? _stableFrame(widget.fallbackBuilder(context), center: true)
-              : _fileImage(cached);
-        },
-        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-          if (frame != null || wasSynchronouslyLoaded) {
-            _cacheNetworkAvatarOnce();
-          }
-          return child;
+              : _fileImage(context, cached);
         },
       ),
       center: false,
     );
   }
 
-  Widget _fileImage(File file) {
+  Widget _fileImage(BuildContext context, File file) {
     return _stableFrame(
       Image.file(
         file,
         width: widget.width,
         height: widget.height,
+        cacheWidth: _decodePixels(context, widget.width),
+        cacheHeight: _decodePixels(context, widget.height),
         fit: widget.fit,
         errorBuilder: (context, _, _) =>
             _stableFrame(widget.fallbackBuilder(context), center: true),
       ),
       center: false,
     );
+  }
+
+  int? _decodePixels(BuildContext context, double logicalSize) {
+    if (!logicalSize.isFinite || logicalSize <= 0) return null;
+    final pixels = (logicalSize * MediaQuery.devicePixelRatioOf(context))
+        .ceil();
+    return pixels.clamp(1, 4096).toInt();
   }
 
   Widget _stableFrame(Widget child, {required bool center}) {
@@ -136,36 +140,6 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
     }
   }
 
-  void _cacheNetworkAvatarOnce() {
-    if (_lastCachedUrl == widget.url) return;
-    _lastCachedUrl = widget.url;
-    unawaited(_cacheNetworkAvatar());
-  }
-
-  Future<void> _cacheNetworkAvatar() async {
-    try {
-      final url = widget.url;
-      final cacheKey = _effectiveCacheKey;
-      final uri = Uri.tryParse(url);
-      if (uri == null || !uri.hasScheme) return;
-      final response = await http.get(uri).timeout(const Duration(seconds: 6));
-      if (!mounted || url != widget.url || cacheKey != _effectiveCacheKey) {
-        return;
-      }
-      if (response.statusCode < 200 || response.statusCode >= 300) return;
-      if (response.bodyBytes.isEmpty ||
-          response.bodyBytes.length > 4 * 1024 * 1024) {
-        return;
-      }
-      final file = await _avatarCacheFile(cacheKey);
-      await file.parent.create(recursive: true);
-      await file.writeAsBytes(response.bodyBytes, flush: false);
-      if (mounted && url == widget.url) setState(() => _cachedFile = file);
-    } catch (e, st) {
-      debugPrint('[avatar-cache] cache failed: $e\n$st');
-    }
-  }
-
   String get _effectiveCacheKey {
     final explicit = widget.cacheKey?.toString().trim();
     if (explicit != null && explicit.isNotEmpty) return explicit;
@@ -173,8 +147,9 @@ class _CachedAvatarImageState extends State<CachedAvatarImage> {
   }
 
   Future<File> _avatarCacheFile(String cacheKey) async {
-    final dir = await getApplicationDocumentsDirectory();
+    final dir = await (_cacheRootFuture ??= getApplicationDocumentsDirectory()
+        .then((root) => Directory('${root.path}/avatar_cache')));
     final digest = sha1.convert(cacheKey.codeUnits).toString();
-    return File('${dir.path}/avatar_cache/$digest.img');
+    return File('${dir.path}/$digest.img');
   }
 }

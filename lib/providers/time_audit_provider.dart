@@ -8,6 +8,7 @@ import '../models/goal.dart';
 import '../models/habit.dart';
 import '../models/time_entry.dart';
 import '../models/todo.dart';
+import '../services/account_local_data_cleaner.dart';
 import 'cloud_sync_provider.dart';
 
 class TimeEntryImportSummary {
@@ -25,6 +26,7 @@ class TimeAuditProvider extends ChangeNotifier {
 
   List<TimeEntry> _entries = [];
   int _storageGeneration = 0;
+  VoidCallback? onLocalMutationPersisted;
 
   List<TimeEntry> get entries {
     final sorted = [..._entries]
@@ -34,8 +36,14 @@ class TimeAuditProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final raw = prefs.getStringList(storageKey) ?? const <String>[];
     _entries = raw
         .map((e) {
@@ -57,11 +65,38 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   Future<void> _save() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     await prefs.setStringList(
       storageKey,
       _entries.map((e) => jsonEncode(e.toJson())).toList(),
     );
+    _notifyLocalMutationPersisted();
+  }
+
+  void _notifyLocalMutationPersisted() {
+    try {
+      onLocalMutationPersisted?.call();
+    } catch (e, st) {
+      debugPrint('[TimeAuditProvider] local mutation callback failed: $e\n$st');
+    }
+  }
+
+  bool _isCurrentStorageGeneration(
+    int storageGeneration,
+    int accountGeneration,
+  ) {
+    return storageGeneration == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        );
   }
 
   Future<void> add(TimeEntry entry) async {
@@ -110,24 +145,46 @@ class TimeAuditProvider extends ChangeNotifier {
     await add(entry);
   }
 
+  // TimeEntry serialization has no workspaceId, so these records use the
+  // account-level collection and its private tombstones.
   Future<void> deleteByDedupeKey(String dedupeKey) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final removedIds = _entries
         .where((e) => e.dedupeKey == dedupeKey)
         .map((e) => e.id)
         .toList();
     if (removedIds.isEmpty) return;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     _entries.removeWhere((e) => e.dedupeKey == dedupeKey);
-    await CloudSyncProvider.recordDeletedItems('time_entries', removedIds);
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    await CloudSyncProvider.recordDeletedItems(
+      'time_entries',
+      removedIds,
+      workspaceId: null,
+    );
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     await _save();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     notifyListeners();
   }
 
   Future<void> deleteWhere(bool Function(TimeEntry entry) test) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final removedIds = _entries.where(test).map((e) => e.id).toList();
     if (removedIds.isEmpty) return;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     _entries.removeWhere(test);
-    await CloudSyncProvider.recordDeletedItems('time_entries', removedIds);
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    await CloudSyncProvider.recordDeletedItems(
+      'time_entries',
+      removedIds,
+      workspaceId: null,
+    );
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     await _save();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     notifyListeners();
   }
 
@@ -155,11 +212,21 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   Future<void> delete(String id) async {
-    final exists = _entries.any((e) => e.id == id);
-    if (!exists) return;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final existing = _entries.where((e) => e.id == id).toList(growable: false);
+    if (existing.isEmpty) return;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     _entries.removeWhere((e) => e.id == id);
-    await CloudSyncProvider.recordDeletedItem('time_entries', id);
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    await CloudSyncProvider.recordDeletedItem(
+      'time_entries',
+      id,
+      workspaceId: null,
+    );
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     await _save();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     notifyListeners();
   }
 

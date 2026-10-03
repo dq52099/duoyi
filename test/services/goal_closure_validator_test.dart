@@ -159,34 +159,73 @@ void main() {
     timeout: _closureValidatorTimeout,
   );
 
-  test('goal closure validator rejects stale alignment report', () async {
-    _writeReport(reportDir, eighthStatus: 'passed');
-    _writeAndroidEvidence(androidDir);
-    _writeIosEvidence(iosDir);
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    final sourceFile = File('${tempDir.path}/src/lib/changed.dart');
-    sourceFile.parent.createSync(recursive: true);
-    sourceFile.writeAsStringSync('// changed after alignment report\n');
+  test(
+    'goal closure validator rejects stale alignment report',
+    () async {
+      _writeReport(reportDir, eighthStatus: 'passed');
+      _writeAndroidEvidence(androidDir);
+      _writeIosEvidence(iosDir);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      final sourceFile = File('${tempDir.path}/src/lib/changed.dart');
+      sourceFile.parent.createSync(recursive: true);
+      sourceFile.writeAsStringSync('// changed after alignment report\n');
 
-    final result = await _runValidator(
-      reportDir,
-      androidDir,
-      iosDir,
-      goalReportDir,
-      statusDir,
-      matrixFile,
-      sourceRoot: sourceFile.parent.parent.path,
-    );
+      final result = await _runValidator(
+        reportDir,
+        androidDir,
+        iosDir,
+        goalReportDir,
+        statusDir,
+        matrixFile,
+        sourceRoot: sourceFile.parent.parent.path,
+      );
 
-    expect(result.exitCode, isNot(0));
-    expect(result.stdout, contains('alignment_report_freshness: failed(1)'));
-    expect(
-      File(
-        '${goalReportDir.path}/alignment_report_freshness.log',
-      ).readAsStringSync(),
-      contains('alignment regression report is stale'),
-    );
-  }, timeout: _closureValidatorTimeout);
+      expect(result.exitCode, isNot(0));
+      expect(result.stdout, contains('alignment_report_freshness: failed(1)'));
+      expect(
+        File(
+          '${goalReportDir.path}/alignment_report_freshness.log',
+        ).readAsStringSync(),
+        contains('alignment regression report is stale'),
+      );
+    },
+    timeout: _closureValidatorTimeout,
+  );
+
+  test(
+    'goal closure freshness ignores generated build caches',
+    () async {
+      _writeReport(reportDir, eighthStatus: 'passed');
+      _writeAndroidEvidence(androidDir);
+      _writeIosEvidence(iosDir);
+      final sourceRoot = _emptySourceRoot(reportDir);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      for (final path in [
+        'android/.gradle/8.14/fileHashes/fileHashes.lock',
+        'android/build/generated/build.log',
+        'android/app/build/intermediates/build.log',
+        'backend/__pycache__/main.cpython-310.pyc',
+      ]) {
+        final cache = File('${sourceRoot.path}/$path');
+        cache.parent.createSync(recursive: true);
+        cache.writeAsStringSync('generated after the alignment report\n');
+      }
+
+      final result = await _runValidator(
+        reportDir,
+        androidDir,
+        iosDir,
+        goalReportDir,
+        statusDir,
+        matrixFile,
+        sourceRoot: sourceRoot.path,
+      );
+
+      expect(result.exitCode, 0, reason: _combinedOutput(result));
+      expect(result.stdout, contains('alignment_report_freshness: passed'));
+    },
+    timeout: _closureValidatorTimeout,
+  );
 }
 
 Future<ProcessResult> _runValidator(

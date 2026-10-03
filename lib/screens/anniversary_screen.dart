@@ -1160,12 +1160,13 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
         setState(() => _remind = false);
       }
     }
+    String? reminderSyncIssue;
     try {
       final p = context.read<AnniversaryProvider>();
       if (widget.editing == null) {
-        await p.add(item);
+        reminderSyncIssue = await p.add(item);
       } else {
-        await p.update(item);
+        reminderSyncIssue = await p.update(item);
       }
     } catch (e) {
       if (!mounted) {
@@ -1190,10 +1191,13 @@ class _AnniversaryEditSheetState extends State<_AnniversaryEditSheet> {
     final canShowSnackBar = Scaffold.maybeOf(context) != null;
     Navigator.pop(context);
     if (canShowSnackBar) {
+      final syncIssue = reminderSyncIssue?.trim();
       messenger?.showSnackBar(
         SnackBar(
           content: Text(
-            reminderWarning.isNotEmpty
+            syncIssue != null && syncIssue.isNotEmpty
+                ? '${I18n.tr('anniversary.reminder.saved_prefix')}${I18n.tr('anniversary.reminder.exception_prefix')}$syncIssue'
+                : reminderWarning.isNotEmpty
                 ? reminderWarning
                 : I18n.tr('anniversary.saved'),
           ),

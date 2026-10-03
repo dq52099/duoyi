@@ -7,10 +7,12 @@ import '../core/smart_date_parser.dart';
 import '../core/smart_todo_draft.dart';
 import '../models/goal.dart'
     show ReminderKind, ReminderPlan, ReminderRule, ReminderRuleType;
+import '../models/habit.dart';
 import '../models/note.dart';
 import '../models/quick_capture_template.dart';
 import '../models/todo.dart';
 import '../providers/habit_provider.dart';
+import '../providers/cloud_sync_provider.dart';
 import '../providers/diary_provider.dart';
 import '../providers/note_provider.dart';
 import '../providers/pomodoro_provider.dart';
@@ -234,23 +236,34 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
   Future<void> _executeAiCommands(List<AiCommand> commands) async {
     var executed = 0;
     var reminderTodos = 0;
+    var reminderFailures = 0;
     for (final command in commands) {
       final outcome = await _executeAiCommand(command, showSnackBar: false);
       if (!outcome.executed) continue;
       executed++;
       if (outcome.createdReminderTodo) reminderTodos++;
+      if (outcome.reminderSyncIssue != null) reminderFailures++;
     }
     if (!mounted || executed == 0) return;
+    final syncMessage = _localSaveSyncMessage();
     final baseMessage = executed == 1 && commands.length == 1
-        ? '${commands.single.title}已执行'
+        ? '${commands.single.title}已执行，$syncMessage'
         : executed == commands.length
-        ? '已执行 ${commands.length} 条 AI 指令'
-        : '已执行 $executed/${commands.length} 条 AI 指令';
-    final message = reminderTodos == 0
+        ? '已执行 ${commands.length} 条 AI 指令，$syncMessage'
+        : '已执行 $executed/${commands.length} 条 AI 指令，$syncMessage';
+    final message = reminderFailures > 0
+        ? '$baseMessage，其中 $reminderFailures 条提醒未注册，请打开通知设置/待办详情检查'
+        : reminderTodos == 0
         ? baseMessage
         : '$baseMessage，$reminderTodos 条提醒状态可在通知设置/待办详情检查';
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: reminderFailures > 0
+            ? Theme.of(context).colorScheme.error
+            : null,
+      ),
     );
   }
 
@@ -270,6 +283,7 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
         return _AiCommandOutcome(
           executed: outcome.created,
           createdReminderTodo: outcome.created && outcome.hasReminder,
+          reminderSyncIssue: outcome.reminderSyncIssue,
         );
       case AiCommandType.addNote:
         final note = command.note;
@@ -290,7 +304,7 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${command.title}已执行'),
+        content: Text('${command.title}已执行，${_localSaveSyncMessage()}'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -311,9 +325,43 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     if (!mounted) {
       return _TodoCreateOutcome(created: false, hasReminder: hasReminder);
     }
-    await context.read<TodoProvider>().addTodo(todo);
+    final todoProvider = context.read<TodoProvider>();
+    late final TodoReminderSyncResult? reminderSyncResult;
+    try {
+      reminderSyncResult = await todoProvider.addTodoWithResult(
+        todo,
+        waitForReminderSync: hasReminder,
+      );
+    } on StateError catch (e) {
+      if (mounted && showSnackBar) {
+        final message = e.message.isEmpty ? '待办正在保存中，请稍后重试' : e.message;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+      return _TodoCreateOutcome(created: false, hasReminder: hasReminder);
+    }
     if (!mounted) {
       return _TodoCreateOutcome(created: true, hasReminder: hasReminder);
+    }
+    final reminderSyncIssue = hasReminder ? reminderSyncResult?.issue : null;
+    if (reminderSyncIssue != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$issueTitle：待办已保存，但提醒未注册：$reminderSyncIssue'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      return _TodoCreateOutcome(
+        created: true,
+        hasReminder: hasReminder,
+        reminderSyncIssue: reminderSyncIssue,
+      );
     }
     if (showSnackBar) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -380,7 +428,19 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
   }
 
   String _todoCreatedMessage(bool hasReminder) {
-    return hasReminder ? '待办已创建，提醒状态可在通知设置/待办详情检查' : '待办已创建';
+    final syncMessage = _localSaveSyncMessage(localSavedText: '待办已保存到本机');
+    return hasReminder ? '$syncMessage；提醒状态可在通知设置/待办详情检查' : syncMessage;
+  }
+
+  String _localSaveSyncMessage({String localSavedText = '本机已保存'}) {
+    try {
+      return context.read<CloudSyncProvider>().localSaveSyncMessage(
+        localSavedText: localSavedText,
+      );
+    } catch (e, st) {
+      debugPrint('[QuickCaptureFab] local sync message unavailable: $e\n$st');
+      return '$localSavedText，云同步状态待确认';
+    }
   }
 
   Future<void> _quickNote() async {
@@ -692,7 +752,9 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(I18n.tr('quick.template.saved')),
+        content: Text(
+          '${I18n.tr('quick.template.saved')}，${_localSaveSyncMessage()}',
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -736,12 +798,13 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
       );
       if (!outcome.created) return;
       if (!mounted) return;
+      if (outcome.reminderSyncIssue != null) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             outcome.hasReminder
                 ? _todoCreatedMessage(true)
-                : I18n.tr('quick.template.todo_done'),
+                : _todoCreatedMessage(false),
           ),
           behavior: SnackBarBehavior.floating,
         ),
@@ -749,15 +812,33 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     } else {
       final habitProvider = context.read<HabitProvider?>();
       if (habitProvider == null) return;
-      await habitProvider.addHabit(template.toHabit(input));
+      final habit = template.toHabit(input);
+      final hasReminder = _habitHasReminder(habit);
+      await habitProvider.addHabit(habit);
       if (!mounted) return;
+      final reminderSyncIssue = hasReminder
+          ? habitProvider.lastReminderSyncIssue
+          : null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(I18n.tr('quick.template.habit_done')),
+          content: Text(
+            reminderSyncIssue == null
+                ? I18n.tr('quick.template.habit_done')
+                : '习惯已创建，但提醒未注册：$reminderSyncIssue',
+          ),
           behavior: SnackBarBehavior.floating,
+          backgroundColor: reminderSyncIssue == null
+              ? null
+              : Theme.of(context).colorScheme.error,
         ),
       );
     }
+  }
+
+  bool _habitHasReminder(Habit habit) {
+    return habit.remind ||
+        (habit.remindHour != null && habit.remindMinute != null) ||
+        (habit.reminderPlan.enabled && habit.reminderPlan.rules.isNotEmpty);
   }
 
   Widget _mini({
@@ -765,38 +846,59 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
     required String label,
     required Color color,
     required VoidCallback onTap,
+    required bool compact,
   }) {
     return ScaleTransition(
       scale: _ctrl,
+      alignment: Alignment.bottomRight,
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              margin: const EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 6,
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Semantics(
+          button: true,
+          label: label,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: compact ? 180 : 240),
+                child: Material(
+                  color: Theme.of(context).colorScheme.surface,
+                  elevation: 3,
+                  shadowColor: Colors.black.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: compact ? 10 : 12,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                    ),
                   ),
-                ],
+                ),
               ),
-              child: Text(label, style: const TextStyle(fontSize: 12)),
-            ),
-            FloatingActionButton(
-              heroTag: label,
-              mini: true,
-              backgroundColor: color,
-              foregroundColor: Colors.white,
-              onPressed: onTap,
-              child: Icon(icon),
-            ),
-          ],
+              const SizedBox(width: 8),
+              FloatingActionButton(
+                heroTag: label,
+                mini: true,
+                backgroundColor: color,
+                foregroundColor: Colors.white,
+                elevation: 3,
+                focusElevation: 5,
+                hoverElevation: 5,
+                onPressed: onTap,
+                tooltip: label,
+                child: Icon(icon, size: 20),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -806,59 +908,109 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final aiEnabled = context.watch<AiService>().enabled;
+    final compact = MediaQuery.sizeOf(context).width < 600;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (_open) ...[
-          _mini(
-            icon: Icons.bookmark_add_outlined,
-            label: I18n.tr('quick.menu.template'),
-            color: Colors.indigo,
-            onTap: _showTemplateSheet,
-          ),
-          if (aiEnabled)
-            _mini(
-              icon: Icons.assistant_outlined,
-              label: 'AI 指令',
-              color: Colors.deepPurple,
-              onTap: _quickAiCommand,
+          Material(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.96),
+            elevation: 6,
+            shadowColor: Colors.black.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(18),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                compact ? 10 : 12,
+                10,
+                compact ? 10 : 12,
+                2,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 2, bottom: 6),
+                    child: Text(
+                      '快速创建',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.normal,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                  _mini(
+                    icon: Icons.bookmark_add_outlined,
+                    label: I18n.tr('quick.menu.template'),
+                    color: cs.tertiary,
+                    onTap: _showTemplateSheet,
+                    compact: compact,
+                  ),
+                  if (aiEnabled)
+                    _mini(
+                      icon: Icons.assistant_outlined,
+                      label: 'AI 指令',
+                      color: cs.secondary,
+                      onTap: _quickAiCommand,
+                      compact: compact,
+                    ),
+                  if (aiEnabled)
+                    _mini(
+                      icon: Icons.auto_awesome,
+                      label: I18n.tr('quick.menu.ai_schedule'),
+                      color: cs.secondary,
+                      onTap: _quickAiTodo,
+                      compact: compact,
+                    ),
+                  _mini(
+                    icon: Icons.book_outlined,
+                    label: I18n.tr('quick.menu.diary'),
+                    color: cs.primary,
+                    onTap: _quickDiary,
+                    compact: compact,
+                  ),
+                  _mini(
+                    icon: Icons.edit_note,
+                    label: I18n.tr('quick.menu.note'),
+                    color: cs.primary,
+                    onTap: _quickNote,
+                    compact: compact,
+                  ),
+                  _mini(
+                    icon: Icons.check_circle_outline,
+                    label: I18n.tr('quick.menu.todo'),
+                    color: cs.primary,
+                    onTap: _quickTodo,
+                    compact: compact,
+                  ),
+                ],
+              ),
             ),
-          if (aiEnabled)
-            _mini(
-              icon: Icons.auto_awesome,
-              label: I18n.tr('quick.menu.ai_schedule'),
-              color: Colors.purple,
-              onTap: _quickAiTodo,
-            ),
-          _mini(
-            icon: Icons.book_outlined,
-            label: I18n.tr('quick.menu.diary'),
-            color: const Color(0xFF26A69A),
-            onTap: _quickDiary,
           ),
-          _mini(
-            icon: Icons.edit_note,
-            label: I18n.tr('quick.menu.note'),
-            color: Colors.amber.shade700,
-            onTap: _quickNote,
-          ),
-          _mini(
-            icon: Icons.check_circle_outline,
-            label: I18n.tr('quick.menu.todo'),
-            color: cs.primary,
-            onTap: _quickTodo,
-          ),
+          SizedBox(height: compact ? 8 : 10),
         ],
-        GestureDetector(
-          onLongPress: _showTemplateSheet,
-          child: FloatingActionButton(
-            heroTag: 'quick_capture',
-            onPressed: _toggle,
-            child: AnimatedRotation(
-              turns: _open ? 0.125 : 0,
-              duration: const Duration(milliseconds: 220),
-              child: const Icon(Icons.add),
+        Semantics(
+          button: true,
+          label: _open ? '关闭快速创建菜单' : '打开快速创建菜单',
+          hint: '长按打开快捷模板',
+          child: GestureDetector(
+            onLongPress: _showTemplateSheet,
+            child: Tooltip(
+              message: _open ? '关闭快速创建菜单' : '打开快速创建菜单',
+              child: FloatingActionButton(
+                heroTag: 'quick_capture',
+                onPressed: _toggle,
+                elevation: _open ? 5 : 7,
+                focusElevation: 8,
+                hoverElevation: 9,
+                child: AnimatedRotation(
+                  turns: _open ? 0.125 : 0,
+                  duration: const Duration(milliseconds: 220),
+                  child: const Icon(Icons.add),
+                ),
+              ),
             ),
           ),
         ),
@@ -870,22 +1022,30 @@ class _QuickCaptureFabState extends State<QuickCaptureFab>
 class _TodoCreateOutcome {
   final bool created;
   final bool hasReminder;
+  final String? reminderSyncIssue;
 
-  const _TodoCreateOutcome({required this.created, required this.hasReminder});
+  const _TodoCreateOutcome({
+    required this.created,
+    required this.hasReminder,
+    this.reminderSyncIssue,
+  });
 }
 
 class _AiCommandOutcome {
   final bool executed;
   final bool createdReminderTodo;
+  final String? reminderSyncIssue;
 
   const _AiCommandOutcome({
     required this.executed,
     this.createdReminderTodo = false,
+    this.reminderSyncIssue,
   });
 
   const _AiCommandOutcome.skipped()
     : executed = false,
-      createdReminderTodo = false;
+      createdReminderTodo = false,
+      reminderSyncIssue = null;
 }
 
 class _TemplateTile extends StatelessWidget {

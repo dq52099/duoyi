@@ -55,6 +55,10 @@ class FocusRoomProvider extends ChangeNotifier {
   ApiClient? Function()? apiClientGetter;
   VoidCallback? onLocalChanged;
 
+  void _notifyLocalChanged() {
+    onLocalChanged?.call();
+  }
+
   List<FocusRoom> get rooms => List.unmodifiable(_rooms);
   Set<String> get joinedRoomIds => Set.unmodifiable(_joinedRoomIds);
   String? get activeRoomId => _activeRoomId;
@@ -376,7 +380,7 @@ class FocusRoomProvider extends ChangeNotifier {
     _joinedRoomIds.add(id);
     _activeRoomId = id;
     await _save();
-    onLocalChanged?.call();
+    _notifyLocalChanged();
     notifyListeners();
   }
 
@@ -390,7 +394,7 @@ class FocusRoomProvider extends ChangeNotifier {
     _remoteRankings.remove(id);
     await _leaveRemoteRoom(id);
     await _save();
-    onLocalChanged?.call();
+    _notifyLocalChanged();
     notifyListeners();
   }
 
@@ -399,7 +403,7 @@ class FocusRoomProvider extends ChangeNotifier {
     if (_activeRoomId == id) return;
     _activeRoomId = id;
     await _save();
-    onLocalChanged?.call();
+    _notifyLocalChanged();
     notifyListeners();
   }
 
@@ -423,7 +427,7 @@ class FocusRoomProvider extends ChangeNotifier {
     _joinedRoomIds.add(id);
     _activeRoomId = id;
     await _save();
-    onLocalChanged?.call();
+    _notifyLocalChanged();
     notifyListeners();
     return room;
   }
@@ -558,7 +562,7 @@ class FocusRoomProvider extends ChangeNotifier {
         );
       }
       await _save();
-      onLocalChanged?.call();
+      _notifyLocalChanged();
       return result.room;
     } catch (e) {
       _lastRemoteError = _focusRoomRemoteError(

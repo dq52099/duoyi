@@ -6,6 +6,7 @@ import '../core/i18n.dart';
 import '../providers/achievement_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../services/api_client.dart';
 import '../widgets/surface_components.dart';
 
@@ -70,6 +71,20 @@ class ThemePickerScreen extends StatelessWidget {
         : achievementProvider.coinBalance;
   }
 
+  bool Function() _accountOperationGuard(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    final token = auth.state.token;
+    final userId = auth.state.userId;
+    return () =>
+        context.mounted &&
+        !auth.isAccountTransitionInProgress &&
+        !auth.isLocalAccountDataBlocked &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation) &&
+        auth.state.token == token &&
+        auth.state.userId == userId;
+  }
+
   Future<bool> _applyThemeShopItem(
     BuildContext context, {
     required ThemeProvider themeProvider,
@@ -79,8 +94,10 @@ class ThemePickerScreen extends StatelessWidget {
     required String title,
     required int cost,
     required bool isUnlocked,
-    required Future<void> Function() applyLocal,
+    required Future<void> Function(bool Function() isCurrent) applyLocal,
   }) async {
+    final isCurrent = _accountOperationGuard(context);
+    if (!isCurrent()) return false;
     final authProvider = context.read<AuthProvider>();
     if (authProvider.state.isLoggedIn) {
       try {
@@ -89,6 +106,7 @@ class ThemePickerScreen extends StatelessWidget {
           itemId: itemId,
           title: title,
         );
+        if (!isCurrent()) return false;
         final themeState = _nestedMapValue(res, const [
           'theme_shop_state',
           'themeShopState',
@@ -100,20 +118,25 @@ class ThemePickerScreen extends StatelessWidget {
           'rewards',
         ]);
         if (themeState is Map) {
+          if (!isCurrent()) return false;
           await themeProvider.applyShopStateFromServer(
             themeState,
             trusted: true,
           );
+          if (!isCurrent()) return false;
         }
         if (rewards is Map) {
+          if (!isCurrent()) return false;
           await achievementProvider.applyRewardsSnapshot(rewards);
+          if (!isCurrent()) return false;
         }
         if (themeState is! Map) {
-          await applyLocal();
+          if (!isCurrent()) return false;
+          await applyLocal(isCurrent);
         }
-        return true;
+        return isCurrent();
       } catch (e) {
-        if (!context.mounted) return false;
+        if (!context.mounted || !isCurrent()) return false;
         final messenger = ScaffoldMessenger.of(context);
         messenger.hideCurrentSnackBar();
         messenger.showSnackBar(
@@ -126,12 +149,13 @@ class ThemePickerScreen extends StatelessWidget {
     }
 
     if (!isUnlocked) {
+      if (!isCurrent()) return false;
       final ok = await achievementProvider.spendCoins(
         coins: cost,
         title: title,
         reason: '奖励商店主题装饰',
       );
-      if (!context.mounted) return false;
+      if (!context.mounted || !isCurrent()) return false;
       if (!ok) {
         final messenger = ScaffoldMessenger.of(context);
         messenger.hideCurrentSnackBar();
@@ -143,8 +167,9 @@ class ThemePickerScreen extends StatelessWidget {
         return false;
       }
     }
-    await applyLocal();
-    return true;
+    if (!isCurrent()) return false;
+    await applyLocal(isCurrent);
+    return isCurrent();
   }
 
   Object? _nestedMapValue(Map<String, dynamic> data, List<String> keys) {
@@ -174,6 +199,8 @@ class ThemePickerScreen extends StatelessWidget {
     AchievementProvider achievementProvider,
     AppBrand brand,
   ) async {
+    final isCurrent = _accountOperationGuard(context);
+    if (!isCurrent()) return;
     final isUnlocked = themeProvider.isBrandUnlocked(brand.id);
     final cost = themeProvider.brandCost(brand.id);
     final ok = await _applyThemeShopItem(
@@ -185,14 +212,17 @@ class ThemePickerScreen extends StatelessWidget {
       title: '兑换主题：${_styleName(brand)}',
       cost: cost,
       isUnlocked: isUnlocked,
-      applyLocal: () async {
+      applyLocal: (isCurrent) async {
+        if (!isCurrent()) return;
         if (!isUnlocked) {
           await themeProvider.unlockBrand(brand.id);
+          if (!isCurrent()) return;
         }
+        if (!isCurrent()) return;
         await themeProvider.setBrand(brand.id);
       },
     );
-    if (!context.mounted) return;
+    if (!context.mounted || !isCurrent()) return;
     if (!ok) {
       return;
     }
@@ -215,6 +245,8 @@ class ThemePickerScreen extends StatelessWidget {
     AchievementProvider achievementProvider,
     FocusBackdropReward backdrop,
   ) async {
+    final isCurrent = _accountOperationGuard(context);
+    if (!isCurrent()) return;
     final isUnlocked = themeProvider.isFocusBackdropUnlocked(backdrop.id);
     final ok = await _applyThemeShopItem(
       context,
@@ -225,14 +257,17 @@ class ThemePickerScreen extends StatelessWidget {
       title: '兑换专注背景：${backdrop.name}',
       cost: backdrop.cost,
       isUnlocked: isUnlocked,
-      applyLocal: () async {
+      applyLocal: (isCurrent) async {
+        if (!isCurrent()) return;
         if (!isUnlocked) {
           await themeProvider.unlockFocusBackdrop(backdrop.id);
+          if (!isCurrent()) return;
         }
+        if (!isCurrent()) return;
         await themeProvider.setFocusBackdrop(backdrop.id);
       },
     );
-    if (!context.mounted) return;
+    if (!context.mounted || !isCurrent()) return;
     if (!ok) {
       return;
     }
@@ -253,6 +288,8 @@ class ThemePickerScreen extends StatelessWidget {
     AchievementProvider achievementProvider,
     AvatarFrameReward frame,
   ) async {
+    final isCurrent = _accountOperationGuard(context);
+    if (!isCurrent()) return;
     final isUnlocked = themeProvider.isAvatarFrameUnlocked(frame.id);
     final ok = await _applyThemeShopItem(
       context,
@@ -263,14 +300,17 @@ class ThemePickerScreen extends StatelessWidget {
       title: '兑换头像框：${frame.name}',
       cost: frame.cost,
       isUnlocked: isUnlocked,
-      applyLocal: () async {
+      applyLocal: (isCurrent) async {
+        if (!isCurrent()) return;
         if (!isUnlocked) {
           await themeProvider.unlockAvatarFrame(frame.id);
+          if (!isCurrent()) return;
         }
+        if (!isCurrent()) return;
         await themeProvider.setAvatarFrame(frame.id);
       },
     );
-    if (!context.mounted) return;
+    if (!context.mounted || !isCurrent()) return;
     if (!ok) {
       return;
     }
@@ -291,6 +331,8 @@ class ThemePickerScreen extends StatelessWidget {
     AchievementProvider achievementProvider,
     CardSkinReward skin,
   ) async {
+    final isCurrent = _accountOperationGuard(context);
+    if (!isCurrent()) return;
     final isUnlocked = themeProvider.isCardSkinUnlocked(skin.id);
     final ok = await _applyThemeShopItem(
       context,
@@ -301,14 +343,17 @@ class ThemePickerScreen extends StatelessWidget {
       title: '兑换卡片皮肤：${skin.name}',
       cost: skin.cost,
       isUnlocked: isUnlocked,
-      applyLocal: () async {
+      applyLocal: (isCurrent) async {
+        if (!isCurrent()) return;
         if (!isUnlocked) {
           await themeProvider.unlockCardSkin(skin.id);
+          if (!isCurrent()) return;
         }
+        if (!isCurrent()) return;
         await themeProvider.setCardSkin(skin.id);
       },
     );
-    if (!context.mounted) return;
+    if (!context.mounted || !isCurrent()) return;
     if (!ok) {
       return;
     }
@@ -327,8 +372,10 @@ class ThemePickerScreen extends StatelessWidget {
     String id,
     String label,
   ) async {
+    final isCurrent = _accountOperationGuard(context);
+    if (!isCurrent()) return;
     final ok = await themeProvider.setWidgetBackgroundBrand(id);
-    if (!context.mounted) return;
+    if (!context.mounted || !isCurrent()) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
@@ -342,8 +389,10 @@ class ThemePickerScreen extends StatelessWidget {
     String id,
     String label,
   ) async {
+    final isCurrent = _accountOperationGuard(context);
+    if (!isCurrent()) return;
     final ok = await themeProvider.setWidgetCardSkin(id);
-    if (!context.mounted) return;
+    if (!context.mounted || !isCurrent()) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(

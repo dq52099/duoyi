@@ -136,15 +136,86 @@ void main() {
   test('任务滚动时自动收起横滑完成删除区', () {
     final source = File('lib/screens/todo_screen.dart').readAsStringSync();
 
-    expect(source, contains('int _swipeDismissSerial = 0'));
-    expect(source, contains('_dismissSwipeActionsOnScroll'));
-    expect(source, contains('if (notification is ScrollStartNotification)'));
-    expect(source, contains('setState(() => _swipeDismissSerial++)'));
-    expect(source, contains('NotificationListener<ScrollNotification>'));
-    expect(source, contains('swipeDismissSerial: _swipeDismissSerial'));
+    final screenStateStart = source.indexOf('class _TodoScreenState');
+    final listScrollStart = source.indexOf('void _onListScroll() {');
+    final listScrollEnd = source.indexOf(
+      '\n  Future<void> _loadKanbanConfig()',
+      listScrollStart,
+    );
+    expect(screenStateStart, greaterThanOrEqualTo(0));
+    expect(listScrollStart, greaterThan(screenStateStart));
+    expect(listScrollEnd, greaterThan(listScrollStart));
+    final listScrollListener = source.substring(listScrollStart, listScrollEnd);
+    expect(listScrollListener, contains('_listScrollController.hasClients'));
+    expect(listScrollListener, contains('_swipeDismissSerial.value++'));
     expect(
       source,
+      contains('_listScrollController.addListener(_onListScroll)'),
+    );
+    expect(
+      source,
+      contains('_listScrollController.removeListener(_onListScroll)'),
+    );
+
+    final scrollHandlerStart = source.indexOf(
+      'bool _dismissSwipeActionsOnScroll(ScrollNotification notification) {',
+      screenStateStart,
+    );
+    final scrollHandlerEnd = source.indexOf(
+      '\n  Future<void> _completeSelected()',
+      scrollHandlerStart,
+    );
+    expect(scrollHandlerStart, greaterThan(screenStateStart));
+    expect(scrollHandlerEnd, greaterThan(scrollHandlerStart));
+    final scrollHandler = source.substring(
+      scrollHandlerStart,
+      scrollHandlerEnd,
+    );
+    expect(scrollHandler, contains('notification is ScrollStartNotification'));
+    expect(scrollHandler, contains('notification is UserScrollNotification'));
+    expect(scrollHandler, contains('notification is ScrollEndNotification'));
+    expect(
+      scrollHandler,
+      contains('if (_swipeDismissedForGesture) return false'),
+    );
+    expect(scrollHandler, contains('_swipeDismissedForGesture = false'));
+    expect(scrollHandler, contains('_swipeDismissSerial.value++'));
+    expect(scrollHandler, contains('if (mounted) setState(() {})'));
+    expect(source, contains('onNotification: _dismissSwipeActionsOnScroll'));
+    expect(source, contains('controller: _listScrollController'));
+
+    final tileStateStart = source.indexOf(
+      'class _TodoTileState extends State<_TodoTile> {',
+    );
+    final tileStateEnd = source.indexOf(
+      'class _TodoInlineSwipeButton extends StatelessWidget {',
+      tileStateStart,
+    );
+    expect(tileStateStart, greaterThanOrEqualTo(0));
+    expect(tileStateEnd, greaterThan(tileStateStart));
+    final tileState = source.substring(tileStateStart, tileStateEnd);
+    expect(
+      tileState,
+      contains(
+        'widget.swipeDismissListenable?.addListener(_closeSwipeFromScroll)',
+      ),
+    );
+    expect(
+      tileState,
+      contains(
+        'widget.swipeDismissListenable?.removeListener(_closeSwipeFromScroll)',
+      ),
+    );
+    expect(tileState, contains('void _closeSwipeFromScroll()'));
+    expect(tileState, contains('_swipeOffset = 0;'));
+    expect(tileState, contains('_dragging = false;'));
+    expect(
+      tileState,
       contains('widget.swipeDismissSerial != oldWidget.swipeDismissSerial'),
+    );
+    expect(
+      source,
+      matches(RegExp(r'swipeDismissListenable:\s*_swipeDismissSerial')),
     );
   });
 

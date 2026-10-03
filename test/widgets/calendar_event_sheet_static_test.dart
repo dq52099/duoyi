@@ -122,10 +122,9 @@ void main() {
       sheet,
       contains('context.read<CountdownProvider>().deleteItem(sourceId)'),
     );
-    expect(
-      sheet,
-      contains('await provider.updateItem(item.copyWith(targetDate: picked))'),
-    );
+    expect(sheet, contains('reminderSyncIssue = await provider.update(item)'));
+    expect(sheet, contains('reminderSyncIssue = await provider.updateItem('));
+    expect(sheet, contains('日期已保存到本机，但提醒未注册'));
     expect(
       sheet,
       contains('showCourseEditor(navigationContext, course: item)'),

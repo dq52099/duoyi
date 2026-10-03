@@ -2,12 +2,60 @@ import 'dart:convert';
 
 import 'package:duoyi/core/achievements.dart';
 import 'package:duoyi/providers/achievement_provider.dart';
+import 'package:duoyi/services/account_local_data_cleaner.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  test(
+    'old reward snapshot cannot restore memory after account reset',
+    () async {
+      final provider = AchievementProvider();
+      final prefs = await SharedPreferences.getInstance();
+      final operation = provider.applyRewardsSnapshot({
+        'balance': 100,
+        'lifetime': 100,
+        'updatedAt': '2026-06-01T00:00:00Z',
+      });
+      await Future<void>.value();
+      expect(prefs.getString('duoyi_virtual_rewards'), isNotNull);
+      AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+      provider.resetLocalState();
+      final revision = provider.persistedRevision;
+
+      await operation;
+      expect(provider.coinBalance, 0);
+      expect(provider.persistedRevision, revision);
+      expect(provider.consumeServerConfirmedRewardsChange(), isFalse);
+      provider.dispose();
+    },
+  );
+
+  test('old coin spend cannot report success after account reset', () async {
+    final provider = AchievementProvider();
+    await provider.applyRewardsSnapshot({
+      'balance': 100,
+      'lifetime': 100,
+      'updatedAt': '2026-06-01T00:00:00Z',
+    });
+    final operation = provider.spendCoins(
+      coins: 10,
+      title: 'Theme',
+      reason: 'Theme purchase',
+    );
+    await Future<void>.value();
+    AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+    provider.resetLocalState();
+    final revision = provider.persistedRevision;
+
+    expect(await operation, isFalse);
+    expect(provider.coinBalance, 0);
+    expect(provider.persistedRevision, revision);
+    provider.dispose();
   });
 
   test(

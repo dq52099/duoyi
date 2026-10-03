@@ -125,6 +125,7 @@ class HomeWidgetService {
   };
   static String _lastThemeSignature = '';
   static String _lastPushSignature = '';
+  static final Map<String, Object> _lastSavedPayloadValues = <String, Object>{};
   static Future<bool>? _accountPayloadClearInFlight;
 
   static bool get _supported {
@@ -160,7 +161,12 @@ class HomeWidgetService {
     final signature = theme.signature;
     if (signature == _lastThemeSignature) return true;
     try {
-      await Future.wait(theme.saveOperations());
+      final saveResult = await _saveWidgetPayload(theme.payloadValues);
+      if (!saveResult.ok) return false;
+      if (!saveResult.changed) {
+        _lastThemeSignature = signature;
+        return true;
+      }
       final ok = await _updateAllWidgets();
       if (ok) _lastThemeSignature = signature;
       return ok;
@@ -173,6 +179,7 @@ class HomeWidgetService {
   static void resetAccountCache() {
     _lastThemeSignature = '';
     _lastPushSignature = '';
+    _lastSavedPayloadValues.clear();
     _accountPayloadClearInFlight =
         (_accountPayloadClearInFlight ?? Future<bool>.value(true)).then(
           (_) => clearAccountWidgetData(),
@@ -184,9 +191,11 @@ class HomeWidgetService {
     try {
       final initialized = await init();
       if (!initialized) return false;
-      await Future.wait(
-        accountPayloadDefaults.entries.map(_saveAccountPayloadDefault),
+      final saveResult = await _saveWidgetPayload(
+        accountPayloadDefaults,
+        force: true,
       );
+      if (!saveResult.ok) return false;
       return _updateAllWidgets();
     } catch (e, st) {
       debugPrint('[HomeWidget] clear account widget data failed: $e\n$st');
@@ -206,17 +215,41 @@ class HomeWidgetService {
     }
   }
 
-  static Future<bool?> _saveAccountPayloadDefault(
-    MapEntry<String, Object> entry,
-  ) {
-    final value = entry.value;
+  static Future<_HomeWidgetPayloadSaveResult> _saveWidgetPayload(
+    Map<String, Object> payload, {
+    bool force = false,
+  }) async {
+    final saveOperations = <Future<bool>>[];
+    var changed = false;
+    for (final entry in payload.entries) {
+      if (!force && _lastSavedPayloadValues[entry.key] == entry.value) {
+        continue;
+      }
+      changed = true;
+      saveOperations.add(_saveWidgetPayloadValue(entry.key, entry.value));
+    }
+    if (saveOperations.isEmpty) {
+      return const _HomeWidgetPayloadSaveResult(ok: true, changed: false);
+    }
+    final results = await Future.wait(saveOperations);
+    return _HomeWidgetPayloadSaveResult(
+      ok: results.every((saved) => saved),
+      changed: changed,
+    );
+  }
+
+  static Future<bool> _saveWidgetPayloadValue(String key, Object value) async {
+    final bool? saved;
     if (value is bool) {
-      return HomeWidget.saveWidgetData<bool>(entry.key, value);
+      saved = await HomeWidget.saveWidgetData<bool>(key, value);
+    } else if (value is int) {
+      saved = await HomeWidget.saveWidgetData<int>(key, value);
+    } else {
+      saved = await HomeWidget.saveWidgetData<String>(key, value.toString());
     }
-    if (value is int) {
-      return HomeWidget.saveWidgetData<int>(entry.key, value);
-    }
-    return HomeWidget.saveWidgetData<String>(entry.key, value.toString());
+    if (saved == false) return false;
+    _lastSavedPayloadValues[key] = value;
+    return true;
   }
 
   static Future<bool> push({
@@ -295,256 +328,164 @@ class HomeWidgetService {
     );
     if (signature == _lastPushSignature) return true;
     try {
-      await Future.wait([
-        HomeWidget.saveWidgetData<int>('todo_count', todoCount),
-        HomeWidget.saveWidgetData<int>('habit_percent', habitPercent),
-        HomeWidget.saveWidgetData<int>('pomodoro_today', pomodoroToday),
-        HomeWidget.saveWidgetData<int>(
-          'focus_minutes_today',
-          focusMinutesToday,
-        ),
-        HomeWidget.saveWidgetData<String>('brand_app_title', strings.appTitle),
-        HomeWidget.saveWidgetData<String>('nav_todo', strings.navTodo),
-        HomeWidget.saveWidgetData<String>('nav_habit', strings.navHabit),
-        HomeWidget.saveWidgetData<String>('nav_calendar', strings.navCalendar),
-        HomeWidget.saveWidgetData<String>('nav_focus', strings.navFocus),
-        // 今日待办 Top 3
-        HomeWidget.saveWidgetData<int>('todo_top3_count', todoCount),
-        HomeWidget.saveWidgetData<String>(
-          'todo_top3_1',
-          todoTop3.isNotEmpty ? '· ${todoTop3[0]}' : '今天没有未完成待办',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'todo_top3_1_id',
-          todoTop3Ids.isNotEmpty ? todoTop3Ids[0] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'todo_top3_2',
-          todoTop3.length > 1 ? '· ${todoTop3[1]}' : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'todo_top3_2_id',
-          todoTop3Ids.length > 1 ? todoTop3Ids[1] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'todo_top3_3',
-          todoTop3.length > 2 ? '· ${todoTop3[2]}' : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'todo_top3_3_id',
-          todoTop3Ids.length > 2 ? todoTop3Ids[2] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'goal_highlight_1',
-          goalHighlights.isNotEmpty ? '· ${goalHighlights[0]}' : '暂无进行中目标',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'goal_highlight_1_id',
-          goalHighlightIds.isNotEmpty ? goalHighlightIds[0] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'goal_highlight_2',
-          goalHighlights.length > 1 ? '· ${goalHighlights[1]}' : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'goal_highlight_2_id',
-          goalHighlightIds.length > 1 ? goalHighlightIds[1] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'goal_highlight_3',
-          goalHighlights.length > 2 ? '· ${goalHighlights[2]}' : '本周目标保持推进',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'goal_highlight_3_id',
-          goalHighlightIds.length > 2 ? goalHighlightIds[2] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'anniversary_highlight_1',
-          anniversaryHighlights.isNotEmpty
-              ? '· ${anniversaryHighlights[0]}'
-              : '暂无近期纪念日',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'anniversary_highlight_1_id',
-          anniversaryHighlightIds.isNotEmpty ? anniversaryHighlightIds[0] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'anniversary_highlight_2',
-          anniversaryHighlights.length > 1
-              ? '· ${anniversaryHighlights[1]}'
-              : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'anniversary_highlight_2_id',
-          anniversaryHighlightIds.length > 1 ? anniversaryHighlightIds[1] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'course_highlight_1',
-          courseHighlights.isNotEmpty ? '· ${courseHighlights[0]}' : '今日暂无课程',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'course_highlight_1_id',
-          courseHighlightIds.isNotEmpty ? courseHighlightIds[0] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'course_highlight_2',
-          courseHighlights.length > 1 ? '· ${courseHighlights[1]}' : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'course_highlight_2_id',
-          courseHighlightIds.length > 1 ? courseHighlightIds[1] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'course_highlight_3',
-          courseHighlights.length > 2 ? '· ${courseHighlights[2]}' : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'course_highlight_3_id',
-          courseHighlightIds.length > 2 ? courseHighlightIds[2] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'note_highlight_1',
-          noteHighlights.isNotEmpty ? '· ${noteHighlights[0]}' : '暂无随手记',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'note_highlight_1_id',
-          noteHighlightIds.isNotEmpty ? noteHighlightIds[0] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'note_highlight_2',
-          noteHighlights.length > 1 ? '· ${noteHighlights[1]}' : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'note_highlight_2_id',
-          noteHighlightIds.length > 1 ? noteHighlightIds[1] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'note_highlight_3',
-          noteHighlights.length > 2 ? '· ${noteHighlights[2]}' : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'note_highlight_3_id',
-          noteHighlightIds.length > 2 ? noteHighlightIds[2] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'memorial_highlight_1',
-          memorialHighlights.isNotEmpty
-              ? '· ${memorialHighlights[0]}'
-              : '暂无近期纪念日',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'memorial_highlight_1_id',
-          memorialHighlightIds.isNotEmpty ? memorialHighlightIds[0] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'memorial_highlight_2',
-          memorialHighlights.length > 1 ? '· ${memorialHighlights[1]}' : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'memorial_highlight_2_id',
-          memorialHighlightIds.length > 1 ? memorialHighlightIds[1] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'memorial_highlight_3',
-          memorialHighlights.length > 2 ? '· ${memorialHighlights[2]}' : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'memorial_highlight_3_id',
-          memorialHighlightIds.length > 2 ? memorialHighlightIds[2] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'diary_highlight_1',
-          diaryHighlights.isNotEmpty ? '· ${diaryHighlights[0]}' : '暂无日记',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'diary_highlight_1_id',
-          diaryHighlightIds.isNotEmpty ? diaryHighlightIds[0] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'diary_highlight_2',
-          diaryHighlights.length > 1 ? '· ${diaryHighlights[1]}' : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'diary_highlight_2_id',
-          diaryHighlightIds.length > 1 ? diaryHighlightIds[1] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'diary_highlight_3',
-          diaryHighlights.length > 2 ? '· ${diaryHighlights[2]}' : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'diary_highlight_3_id',
-          diaryHighlightIds.length > 2 ? diaryHighlightIds[2] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'today_event_summary',
-          todayEventSummary,
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'schedule_highlight_1',
-          scheduleHighlights.isNotEmpty
-              ? '· ${scheduleHighlights[0]}'
-              : '· $todayEventSummary',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'schedule_highlight_1_id',
-          scheduleHighlightIds.isNotEmpty ? scheduleHighlightIds[0] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'schedule_highlight_2',
-          scheduleHighlights.length > 1
-              ? '· ${scheduleHighlights[1]}'
-              : '· 打开日历查看完整安排',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'schedule_highlight_2_id',
-          scheduleHighlightIds.length > 1 ? scheduleHighlightIds[1] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'schedule_highlight_3',
-          scheduleHighlights.length > 2
-              ? '· ${scheduleHighlights[2]}'
-              : '提醒会跟随系统时区',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'schedule_highlight_3_id',
-          scheduleHighlightIds.length > 2 ? scheduleHighlightIds[2] : '',
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'calendar_month_summary',
-          '本月日期 · 今日已标记',
-        ),
-        HomeWidget.saveWidgetData<String>('focus_summary', focusSummary),
-        HomeWidget.saveWidgetData<String>('habit_summary', habitSummary),
-        HomeWidget.saveWidgetData<String>('streak_summary', streakSummary),
-        HomeWidget.saveWidgetData<String>('next_focus_label', nextFocusLabel),
-        HomeWidget.saveWidgetData<bool>(
-          'focus_timer_running',
-          focusTimerRunning,
-        ),
-        HomeWidget.saveWidgetData<int>(
-          'focus_timer_remaining_seconds',
-          focusTimerRemainingSeconds,
-        ),
-        HomeWidget.saveWidgetData<int>(
-          'focus_timer_total_seconds',
-          focusTimerTotalSeconds,
-        ),
-        HomeWidget.saveWidgetData<int>(
-          'focus_timer_ends_at_millis',
-          focusTimerEndsAtMillis,
-        ),
-        HomeWidget.saveWidgetData<String>('focus_timer_label', focusTimerLabel),
-        HomeWidget.saveWidgetData<String>(
-          'habit_quick_check_id',
-          habitQuickCheckId,
-        ),
-        HomeWidget.saveWidgetData<String>(
-          'habit_quick_check_label',
-          habitQuickCheckLabel,
-        ),
-        ...theme.saveOperations(),
-      ]);
+      final saveResult = await _saveWidgetPayload({
+        'todo_count': todoCount,
+        'habit_percent': habitPercent,
+        'pomodoro_today': pomodoroToday,
+        'focus_minutes_today': focusMinutesToday,
+        'brand_app_title': strings.appTitle,
+        'nav_todo': strings.navTodo,
+        'nav_habit': strings.navHabit,
+        'nav_calendar': strings.navCalendar,
+        'nav_focus': strings.navFocus,
+        'todo_top3_count': todoCount,
+        'todo_top3_1': todoTop3.isNotEmpty ? '· ${todoTop3[0]}' : '今天没有未完成待办',
+        'todo_top3_1_id': todoTop3Ids.isNotEmpty ? todoTop3Ids[0] : '',
+        'todo_top3_2': todoTop3.length > 1 ? '· ${todoTop3[1]}' : '',
+        'todo_top3_2_id': todoTop3Ids.length > 1 ? todoTop3Ids[1] : '',
+        'todo_top3_3': todoTop3.length > 2 ? '· ${todoTop3[2]}' : '',
+        'todo_top3_3_id': todoTop3Ids.length > 2 ? todoTop3Ids[2] : '',
+        'goal_highlight_1': goalHighlights.isNotEmpty
+            ? '· ${goalHighlights[0]}'
+            : '暂无进行中目标',
+        'goal_highlight_1_id': goalHighlightIds.isNotEmpty
+            ? goalHighlightIds[0]
+            : '',
+        'goal_highlight_2': goalHighlights.length > 1
+            ? '· ${goalHighlights[1]}'
+            : '',
+        'goal_highlight_2_id': goalHighlightIds.length > 1
+            ? goalHighlightIds[1]
+            : '',
+        'goal_highlight_3': goalHighlights.length > 2
+            ? '· ${goalHighlights[2]}'
+            : '本周目标保持推进',
+        'goal_highlight_3_id': goalHighlightIds.length > 2
+            ? goalHighlightIds[2]
+            : '',
+        'anniversary_highlight_1': anniversaryHighlights.isNotEmpty
+            ? '· ${anniversaryHighlights[0]}'
+            : '暂无近期纪念日',
+        'anniversary_highlight_1_id': anniversaryHighlightIds.isNotEmpty
+            ? anniversaryHighlightIds[0]
+            : '',
+        'anniversary_highlight_2': anniversaryHighlights.length > 1
+            ? '· ${anniversaryHighlights[1]}'
+            : '',
+        'anniversary_highlight_2_id': anniversaryHighlightIds.length > 1
+            ? anniversaryHighlightIds[1]
+            : '',
+        'course_highlight_1': courseHighlights.isNotEmpty
+            ? '· ${courseHighlights[0]}'
+            : '今日暂无课程',
+        'course_highlight_1_id': courseHighlightIds.isNotEmpty
+            ? courseHighlightIds[0]
+            : '',
+        'course_highlight_2': courseHighlights.length > 1
+            ? '· ${courseHighlights[1]}'
+            : '',
+        'course_highlight_2_id': courseHighlightIds.length > 1
+            ? courseHighlightIds[1]
+            : '',
+        'course_highlight_3': courseHighlights.length > 2
+            ? '· ${courseHighlights[2]}'
+            : '',
+        'course_highlight_3_id': courseHighlightIds.length > 2
+            ? courseHighlightIds[2]
+            : '',
+        'note_highlight_1': noteHighlights.isNotEmpty
+            ? '· ${noteHighlights[0]}'
+            : '暂无随手记',
+        'note_highlight_1_id': noteHighlightIds.isNotEmpty
+            ? noteHighlightIds[0]
+            : '',
+        'note_highlight_2': noteHighlights.length > 1
+            ? '· ${noteHighlights[1]}'
+            : '',
+        'note_highlight_2_id': noteHighlightIds.length > 1
+            ? noteHighlightIds[1]
+            : '',
+        'note_highlight_3': noteHighlights.length > 2
+            ? '· ${noteHighlights[2]}'
+            : '',
+        'note_highlight_3_id': noteHighlightIds.length > 2
+            ? noteHighlightIds[2]
+            : '',
+        'memorial_highlight_1': memorialHighlights.isNotEmpty
+            ? '· ${memorialHighlights[0]}'
+            : '暂无近期纪念日',
+        'memorial_highlight_1_id': memorialHighlightIds.isNotEmpty
+            ? memorialHighlightIds[0]
+            : '',
+        'memorial_highlight_2': memorialHighlights.length > 1
+            ? '· ${memorialHighlights[1]}'
+            : '',
+        'memorial_highlight_2_id': memorialHighlightIds.length > 1
+            ? memorialHighlightIds[1]
+            : '',
+        'memorial_highlight_3': memorialHighlights.length > 2
+            ? '· ${memorialHighlights[2]}'
+            : '',
+        'memorial_highlight_3_id': memorialHighlightIds.length > 2
+            ? memorialHighlightIds[2]
+            : '',
+        'diary_highlight_1': diaryHighlights.isNotEmpty
+            ? '· ${diaryHighlights[0]}'
+            : '暂无日记',
+        'diary_highlight_1_id': diaryHighlightIds.isNotEmpty
+            ? diaryHighlightIds[0]
+            : '',
+        'diary_highlight_2': diaryHighlights.length > 1
+            ? '· ${diaryHighlights[1]}'
+            : '',
+        'diary_highlight_2_id': diaryHighlightIds.length > 1
+            ? diaryHighlightIds[1]
+            : '',
+        'diary_highlight_3': diaryHighlights.length > 2
+            ? '· ${diaryHighlights[2]}'
+            : '',
+        'diary_highlight_3_id': diaryHighlightIds.length > 2
+            ? diaryHighlightIds[2]
+            : '',
+        'today_event_summary': todayEventSummary,
+        'schedule_highlight_1': scheduleHighlights.isNotEmpty
+            ? '· ${scheduleHighlights[0]}'
+            : '· $todayEventSummary',
+        'schedule_highlight_1_id': scheduleHighlightIds.isNotEmpty
+            ? scheduleHighlightIds[0]
+            : '',
+        'schedule_highlight_2': scheduleHighlights.length > 1
+            ? '· ${scheduleHighlights[1]}'
+            : '· 打开日历查看完整安排',
+        'schedule_highlight_2_id': scheduleHighlightIds.length > 1
+            ? scheduleHighlightIds[1]
+            : '',
+        'schedule_highlight_3': scheduleHighlights.length > 2
+            ? '· ${scheduleHighlights[2]}'
+            : '提醒会跟随系统时区',
+        'schedule_highlight_3_id': scheduleHighlightIds.length > 2
+            ? scheduleHighlightIds[2]
+            : '',
+        'calendar_month_summary': '本月日期 · 今日已标记',
+        'focus_summary': focusSummary,
+        'habit_summary': habitSummary,
+        'streak_summary': streakSummary,
+        'next_focus_label': nextFocusLabel,
+        'focus_timer_running': focusTimerRunning,
+        'focus_timer_remaining_seconds': focusTimerRemainingSeconds,
+        'focus_timer_total_seconds': focusTimerTotalSeconds,
+        'focus_timer_ends_at_millis': focusTimerEndsAtMillis,
+        'focus_timer_label': focusTimerLabel,
+        'habit_quick_check_id': habitQuickCheckId,
+        'habit_quick_check_label': habitQuickCheckLabel,
+        ...theme.payloadValues,
+      });
+      if (!saveResult.ok) return false;
+      if (!saveResult.changed) {
+        _lastPushSignature = signature;
+        _lastThemeSignature = theme.signature;
+        return true;
+      }
       final ok = await _updateAllWidgets();
       if (ok) {
         _lastPushSignature = signature;
@@ -704,6 +645,13 @@ class HomeWidgetService {
   }
 }
 
+class _HomeWidgetPayloadSaveResult {
+  final bool ok;
+  final bool changed;
+
+  const _HomeWidgetPayloadSaveResult({required this.ok, required this.changed});
+}
+
 class HomeWidgetThemePayload {
   final String brandId;
   final String cardSkinId;
@@ -816,55 +764,32 @@ class HomeWidgetThemePayload {
     );
   }
 
-  List<Future<bool?>> saveOperations() => [
-    HomeWidget.saveWidgetData<String>('widget_theme_brand_id', brandId),
-    HomeWidget.saveWidgetData<String>('widget_theme_card_skin_id', cardSkinId),
-    HomeWidget.saveWidgetData<bool>('widget_theme_dark', dark),
-    HomeWidget.saveWidgetData<String>('widget_theme_primary', _hex(primary)),
-    HomeWidget.saveWidgetData<String>(
-      'widget_theme_background',
-      _hex(background),
-    ),
-    HomeWidget.saveWidgetData<String>('widget_theme_surface', _hex(surface)),
-    HomeWidget.saveWidgetData<String>(
-      'widget_theme_nav_background',
-      _hex(navBackground),
-    ),
-    HomeWidget.saveWidgetData<String>('widget_theme_border', _hex(border)),
-    HomeWidget.saveWidgetData<String>('widget_theme_text', _hex(text)),
-    HomeWidget.saveWidgetData<String>(
-      'widget_theme_muted_text',
-      _hex(mutedText),
-    ),
-    HomeWidget.saveWidgetData<String>(
-      'widget_theme_on_primary',
-      _hex(onPrimary),
-    ),
-    HomeWidget.saveWidgetData<String>(
-      'widget_theme_accent_start',
-      _hex(accentStart),
-    ),
-    HomeWidget.saveWidgetData<String>(
-      'widget_theme_accent_end',
-      _hex(accentEnd),
-    ),
-    HomeWidget.saveWidgetData<String>(
-      'widget_theme_background_asset_key',
-      backgroundAssetKey,
-    ),
-    HomeWidget.saveWidgetData<int>(
-      'widget_theme_corner_radius_dp',
-      cornerRadiusDp,
-    ),
-    HomeWidget.saveWidgetData<int>(
-      'widget_theme_control_radius_dp',
-      controlRadiusDp,
-    ),
-    HomeWidget.saveWidgetData<int>(
-      'widget_theme_border_width_dp',
-      borderWidthDp,
-    ),
-  ];
+  Map<String, Object> get payloadValues => {
+    'widget_theme_brand_id': brandId,
+    'widget_theme_card_skin_id': cardSkinId,
+    'widget_theme_dark': dark,
+    'widget_theme_primary': _hex(primary),
+    'widget_theme_background': _hex(background),
+    'widget_theme_surface': _hex(surface),
+    'widget_theme_nav_background': _hex(navBackground),
+    'widget_theme_border': _hex(border),
+    'widget_theme_text': _hex(text),
+    'widget_theme_muted_text': _hex(mutedText),
+    'widget_theme_on_primary': _hex(onPrimary),
+    'widget_theme_accent_start': _hex(accentStart),
+    'widget_theme_accent_end': _hex(accentEnd),
+    'widget_theme_background_asset_key': backgroundAssetKey,
+    'widget_theme_corner_radius_dp': cornerRadiusDp,
+    'widget_theme_control_radius_dp': controlRadiusDp,
+    'widget_theme_border_width_dp': borderWidthDp,
+  };
+
+  List<Future<bool>> saveOperations() => payloadValues.entries
+      .map(
+        (entry) =>
+            HomeWidgetService._saveWidgetPayloadValue(entry.key, entry.value),
+      )
+      .toList();
 
   String get signature {
     return [

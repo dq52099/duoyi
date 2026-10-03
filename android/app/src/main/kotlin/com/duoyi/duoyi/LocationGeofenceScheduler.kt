@@ -110,31 +110,52 @@ object LocationGeofenceScheduler {
                             previous,
                             onSuccess = {
                                 Log.w(tag, "restored previous geofences after sync failure")
+                                onError(code, message)
                             },
                             onFailure = { restoreCode, restoreMessage ->
                                 Log.w(
                                     tag,
                                     "failed to restore previous geofences: $restoreCode $restoreMessage",
                                 )
+                                onError(code, message)
                             },
                         )
+                    } else {
+                        onError(code, message)
                     }
-                    onError(code, message)
                 },
             )
         }
     }
 
     fun clearReminders(context: Context, onResult: (Map<String, Any?>) -> Unit) {
-        remember(context, emptyList())
-        clearRegisteredGeofences(context) {
+        val previous = allMetadata(context)
+        fun reportFailure(error: Exception) {
+            Log.w(tag, "failed to clear account geofences", error)
             onResult(
                 mapOf(
                     "available" to hasRequiredPermission(context),
-                    "scheduledCount" to 0,
-                    "status" to "cleared",
+                    "scheduledCount" to previous.size,
+                    "status" to "geofence_clear_failed",
+                    "message" to (error.message ?: "注销 geofence 失败"),
                 ),
             )
+        }
+        try {
+            geofencingClient(context).removeGeofences(pendingIntent(context))
+                .addOnSuccessListener {
+                    remember(context, emptyList())
+                    onResult(
+                        mapOf(
+                            "available" to hasRequiredPermission(context),
+                            "scheduledCount" to 0,
+                            "status" to "cleared",
+                        ),
+                    )
+                }
+                .addOnFailureListener { error -> reportFailure(error) }
+        } catch (error: Exception) {
+            reportFailure(error)
         }
     }
 

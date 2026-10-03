@@ -177,7 +177,8 @@ void main() {
       expect(mine, contains('child: avatar'));
       expect(mine, contains('SizedBox(width: compact ? 10 : 12)'));
       expect(mine, contains("label: '查看个人资料'"));
-      expect(mine, contains('onTap: () => _openProfileEditor(context)'));
+      expect(mine, contains('onOpenProfileEditor: _openProfileEditor'));
+      expect(mine, contains('onTap: () => onOpenProfileEditor(context)'));
       expect(mine, contains("key: const ValueKey('mine_user_info_row')"));
       expect(
         mine,
@@ -216,12 +217,14 @@ void main() {
       expect(mine, contains('width: 20'));
       expect(mine, contains('height: 20'));
       expect(mine, contains('size: 10'));
-      expect(mine, contains('onTap: () => _pickAndSaveAvatar(context)'));
+      expect(mine, contains('onPickAndSaveAvatar: _pickAndSaveAvatar'));
+      expect(mine, contains('onTap: () => onPickAndSaveAvatar(context)'));
       expect(mine, contains("label: '@\$usernameText'"));
       expect(mine, contains(r"label: '时光币 $coins'"));
       expect(mine, contains('activeAvatarFrame'));
       expect(mine, contains('defaultAvatarFrameId'));
-      expect(mine, contains('onTap: () => _showAvatarPreview(context)'));
+      expect(mine, contains('onShowAvatarPreview: _showAvatarPreview'));
+      expect(mine, contains('onTap: () => onShowAvatarPreview(context)'));
       expect(mine, contains('child: Hero('));
       expect(
         mine,
@@ -259,7 +262,7 @@ void main() {
         mine,
         contains('ProfileScreen(openAvatarSheetOnStart: avatarOnly)'),
       );
-      expect(mine, contains('onTap: () => _openProfileEditor(context)'));
+      expect(mine, contains('onTap: () => onOpenProfileEditor(context)'));
       expect(mine, isNot(contains("title: '账号资料'")));
       expect(
         mine,
@@ -267,7 +270,8 @@ void main() {
       );
       expect(mine, contains("message: '退出登录'"));
       expect(mine, contains("key: const ValueKey('mine_top_logout_button')"));
-      expect(mine, contains('onPressed: () => _confirmLogout(context)'));
+      expect(mine, contains('onConfirmLogout: _confirmLogout'));
+      expect(mine, contains('onPressed: () => onConfirmLogout(context)'));
       expect(
         mine,
         contains('Future<void> _confirmLogout(BuildContext context)'),
@@ -288,8 +292,28 @@ void main() {
       for (final group in groups) {
         expect(mine, contains(group));
       }
-      for (var i = 0; i < groups.length - 1; i++) {
-        expect(mine.indexOf(groups[i]), lessThan(mine.indexOf(groups[i + 1])));
+      final mineBodyStart = mine.indexOf("body: ListView.builder(");
+      final mineBodyEnd = mine.indexOf(
+        'return const SizedBox.shrink();',
+        mineBodyStart,
+      );
+      final mineBody = mine.substring(mineBodyStart, mineBodyEnd);
+      final bodyGroupMarkers = [
+        "title: '行动计划'",
+        'const _MineRecordReviewGroup()',
+        "title: '日程日期'",
+        "title: '个性安全'",
+        "title: '数据协作'",
+        '_MineNotificationSupportGroup(',
+      ];
+      for (final group in bodyGroupMarkers) {
+        expect(mineBody, contains(group));
+      }
+      for (var i = 0; i < bodyGroupMarkers.length - 1; i++) {
+        expect(
+          mineBody.indexOf(bodyGroupMarkers[i]),
+          lessThan(mineBody.indexOf(bodyGroupMarkers[i + 1])),
+        );
       }
       expect(mine, contains("title: 'AI 助手'"));
       expect(mine, isNot(contains("title: '智能分类'")));
@@ -352,6 +376,10 @@ void main() {
       );
       expect(mine, contains("label: '更多应用'"));
       expect(mine, contains('final coins = auth.isLoggedIn'));
+      expect(
+        mine.indexOf('final coins = auth.isLoggedIn'),
+        lessThan(mine.indexOf('context.select<AchievementProvider, int>')),
+      );
       expect(mine, contains('coinBalance'));
       expect(mine, contains('auth.coinBalance'));
       expect(mine, contains("label: '通知设置'"));
@@ -557,7 +585,7 @@ void main() {
         contains('BrandRouteSurface(child: app.builder(routeContext))'),
       );
       expect(button, contains('appSecondaryMenuItemTextStyle('));
-      expect(button, contains('context,'));
+      expect(button, contains('appSecondaryMenuItemTextStyle(context)'));
       expect(button, contains('maxLines: 1'));
       expect(
         button,

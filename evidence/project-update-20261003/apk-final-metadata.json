@@ -1,0 +1,18 @@
+{
+  "path": "/home/ubuntu/duoyi/build/app/outputs/flutter-apk/app-debug.apk",
+  "size_bytes": 217438528,
+  "sha256": "6bfbade08029fb20488598b68892f41f28f0d82c035ede0631fc84f67f2a3bca",
+  "flutter_abis": [
+    "arm64-v8a",
+    "armeabi-v7a",
+    "x86_64"
+  ],
+  "build_exit_code": 0,
+  "flutter_version": "3.41.9",
+  "dart_version": "3.11.5",
+  "gradle_heap": "2G",
+  "gradle_metaspace": "1G",
+  "gradle_workers": 2,
+  "build_seconds": 1278,
+  "default_gradle_properties_unchanged": true
+}

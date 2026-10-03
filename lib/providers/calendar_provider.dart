@@ -15,6 +15,7 @@ import '../models/diary_entry.dart';
 import '../models/countdown.dart';
 import '../models/goal.dart';
 import '../models/time_entry.dart';
+import '../services/account_local_data_cleaner.dart';
 import 'cloud_sync_provider.dart';
 
 class CalendarProvider extends ChangeNotifier {
@@ -35,8 +36,14 @@ class CalendarProvider extends ChangeNotifier {
 
   Future<void> loadFromStorage() async {
     final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final data = prefs.getStringList(_localEventsKey) ?? const <String>[];
     _localEvents
       ..clear()
@@ -97,11 +104,37 @@ class CalendarProvider extends ChangeNotifier {
   Future<void> updateLocalEvent(CalendarEvent event) async {
     final index = _localEvents.indexWhere((e) => e.id == event.id);
     if (index == -1) return;
+    await _cancelLocalEventReminder(event.id);
     _localEvents[index] = _asLocalEvent(event);
     await _saveLocalEvents();
   }
 
   Future<void> deleteLocalEvent(String id) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final existing = _localEvents
+        .where((event) => event.id == id)
+        .toList(growable: false);
+    await _cancelLocalEventReminder(id);
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    for (final event in existing) {
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      await CloudSyncProvider.recordDeletedItem(
+        'calendar_events',
+        event.id,
+        workspaceId: event.workspaceId,
+      );
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    }
+    if (existing.isNotEmpty) {
+      _localEvents.removeWhere((event) => event.id == id);
+    }
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    await _saveLocalEvents();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+  }
+
+  Future<void> _cancelLocalEventReminder(String id) async {
     try {
       await localEventReminderCanceller?.call(id);
     } catch (e, st) {
@@ -109,13 +142,18 @@ class CalendarProvider extends ChangeNotifier {
         '[CalendarProvider] local event reminder cancel failed: $e\n$st',
       );
     }
-    await CloudSyncProvider.recordDeletedItem('calendar_events', id);
-    _localEvents.removeWhere((event) => event.id == id);
-    await _saveLocalEvents();
   }
 
   Future<void> _saveLocalEvents() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final data = _localEvents
         .map((event) => jsonEncode(event.toJson()))
         .toList(growable: false);
@@ -124,6 +162,16 @@ class CalendarProvider extends ChangeNotifier {
     _sourceRevision++;
     onLocalEventsChanged?.call();
     _notifyListenersSafely();
+  }
+
+  bool _isCurrentStorageGeneration(
+    int storageGeneration,
+    int accountGeneration,
+  ) {
+    return storageGeneration == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        );
   }
 
   CalendarEvent _asLocalEvent(CalendarEvent event) {
@@ -205,6 +253,41 @@ class CalendarProvider extends ChangeNotifier {
       return;
     }
     _lastRebuildSignature = signature;
+  }
+
+  List<CalendarEvent> buildEventsForDateSnapshot(
+    DateTime date,
+    List<TodoItem> todos,
+    List<Habit> habits,
+    List<PomodoroSession> pomodoroSessions,
+    ColorScheme colorScheme, {
+    List<Anniversary>? anniversaries,
+    List<CourseItem>? courses,
+    ScheduleSettings? courseSettings,
+    List<DiaryEntry>? diaries,
+    List<CountdownItem>? countdowns,
+    List<GoalItem>? goals,
+    List<TimeEntry>? timeEntries,
+  }) {
+    final key = _dateKey(date);
+    final events = CalendarAggregator.buildEvents(
+      todos: todos,
+      habits: habits,
+      pomodoroSessions: pomodoroSessions,
+      colorScheme: colorScheme,
+      anniversaries: anniversaries,
+      courses: courses,
+      courseSettings: courseSettings,
+      diaries: diaries,
+      countdowns: countdowns,
+      goals: goals,
+      timeEntries: timeEntries,
+    );
+    return [
+      ...events,
+      ..._localEvents,
+      ..._externalEvents,
+    ].where((event) => _eventOccursOnDate(event, key)).toList(growable: false);
   }
 
   int _buildSignature(

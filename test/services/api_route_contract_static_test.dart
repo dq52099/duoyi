@@ -414,8 +414,10 @@ void main() {
     expect(profileScreen, contains('onEdit: _uploadAvatar'));
     expect(profileScreen, contains('onEdit: _pickLocalAvatar'));
     expect(profileScreen, isNot(contains('Icons.photo_camera_outlined')));
-    expect(mineScreen, contains('onTap: () => _showAvatarPreview(context)'));
-    expect(mineScreen, contains('onTap: () => _openProfileEditor(context)'));
+    expect(mineScreen, contains('onShowAvatarPreview: _showAvatarPreview'));
+    expect(mineScreen, contains('onTap: () => onShowAvatarPreview(context)'));
+    expect(mineScreen, contains('onOpenProfileEditor: _openProfileEditor'));
+    expect(mineScreen, contains('onTap: () => onOpenProfileEditor(context)'));
     expect(
       mineScreen,
       contains('void _openProfileEditor(BuildContext context'),

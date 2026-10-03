@@ -15,5 +15,14 @@ void main() {
     expect(agenda, contains('_adjustTimeEntry'));
     expect(agenda, contains('Duration(minutes: steps * 15)'));
     expect(agenda, contains('Icons.drag_indicator'));
+    expect(
+      agenda,
+      contains('final saveResult = await provider.updateTodoWithResult'),
+    );
+    expect(agenda, contains('saveResult.saved'));
+    expect(agenda, contains('saveResult.reminderSync?.issue'));
+    expect(agenda, contains('待办正在保存中，请稍后重试'));
+    expect(agenda, contains('待办保存失败'));
+    expect(agenda, contains('但提醒未注册'));
   });
 }

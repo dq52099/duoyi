@@ -5,6 +5,7 @@ import '../core/i18n_date_format.dart';
 import '../core/iterable_extensions.dart';
 import '../models/calendar_event.dart';
 import '../models/habit.dart';
+import '../models/todo.dart';
 import '../providers/anniversary_provider.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/course_provider.dart';
@@ -772,13 +773,16 @@ class CalendarEventSheet extends StatelessWidget {
     );
     if (picked == null || !context.mounted) return;
 
+    String? reminderSyncIssue;
     switch (event.type) {
       case CalendarEventType.todo:
         final provider = context.read<TodoProvider>();
         final todo = provider.todos.where((t) => t.id == sourceId).firstOrNull;
         if (todo != null) {
-          await provider.updateTodo(
-            todo.id,
+          final saved = await _saveTodoFromCalendarSheet(
+            context,
+            provider,
+            todo,
             todo.copyWith(
               date: picked,
               dueDate: todo.dueDate == null
@@ -786,6 +790,7 @@ class CalendarEventSheet extends StatelessWidget {
                   : _sameTime(picked, todo.dueDate!),
             ),
           );
+          if (!saved) return;
         }
       case CalendarEventType.goal:
         final provider = context.read<GoalProvider>();
@@ -799,13 +804,15 @@ class CalendarEventSheet extends StatelessWidget {
         final item = provider.items.where((a) => a.id == sourceId).firstOrNull;
         if (item != null) {
           item.originDate = picked;
-          await provider.update(item);
+          reminderSyncIssue = await provider.update(item);
         }
       case CalendarEventType.countdown:
         final provider = context.read<CountdownProvider>();
         final item = provider.items.where((c) => c.id == sourceId).firstOrNull;
         if (item != null) {
-          await provider.updateItem(item.copyWith(targetDate: picked));
+          reminderSyncIssue = await provider.updateItem(
+            item.copyWith(targetDate: picked),
+          );
         }
       case CalendarEventType.timeEntry:
         final provider = context.read<TimeAuditProvider>();
@@ -836,7 +843,19 @@ class CalendarEventSheet extends StatelessWidget {
       default:
         break;
     }
-    if (context.mounted) Navigator.pop(context);
+    if (context.mounted) {
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      final issue = reminderSyncIssue?.trim();
+      Navigator.pop(context);
+      if (issue != null && issue.isNotEmpty) {
+        messenger?.showSnackBar(
+          SnackBar(
+            content: Text('日期已保存到本机，但提醒未注册：$issue'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _adjustTimeEntryDuration(BuildContext context) async {
@@ -921,8 +940,63 @@ class CalendarEventSheet extends StatelessWidget {
       picked.hour,
       picked.minute,
     );
-    await provider.updateTodo(todo.id, todo.copyWith(dueDate: dueDate));
+    final saved = await _saveTodoFromCalendarSheet(
+      context,
+      provider,
+      todo,
+      todo.copyWith(dueDate: dueDate),
+    );
+    if (!saved) return;
     if (context.mounted) Navigator.pop(context);
+  }
+
+  Future<bool> _saveTodoFromCalendarSheet(
+    BuildContext context,
+    TodoProvider provider,
+    TodoItem current,
+    TodoItem next,
+  ) async {
+    final waitForReminderSync = _todoNeedsReminderSync(current);
+    try {
+      final saveResult = await provider.updateTodoWithResult(
+        current.id,
+        next,
+        waitForReminderSync: waitForReminderSync,
+      );
+      if (!context.mounted) return false;
+      if (!saveResult.saved) {
+        _showTodoSaveIssue(context, '待办正在保存中，请稍后重试');
+        return false;
+      }
+      final reminderIssue = waitForReminderSync
+          ? saveResult.reminderSync?.issue
+          : null;
+      if (reminderIssue != null) {
+        _showTodoSaveIssue(context, '待办已保存，但提醒未注册：$reminderIssue');
+      }
+      return true;
+    } catch (e) {
+      if (context.mounted) {
+        _showTodoSaveIssue(context, '待办保存失败：$e');
+      }
+      return false;
+    }
+  }
+
+  bool _todoNeedsReminderSync(TodoItem todo) {
+    return todo.hasReminder ||
+        todo.reminder.enabled ||
+        todo.reminderPlan.enabled;
+  }
+
+  void _showTodoSaveIssue(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
+    );
   }
 
   Future<void> _editLocalEvent(BuildContext context) async {

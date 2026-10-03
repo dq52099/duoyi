@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/todo_provider.dart';
+import 'package:duoyi/services/reminder_scheduler.dart'
+    show ReminderReconciliationBatch;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:test/test.dart';
 
@@ -68,6 +70,35 @@ void main() {
     expect(updated.subtasks.single.title, '复核材料');
   });
 
+  test('subtask mutations refresh parent updatedAt for cloud merge', () async {
+    SharedPreferences.setMockInitialValues({});
+    final provider = TodoProvider();
+    final baseTime = DateTime(2026, 6, 1, 9);
+    final todo = TodoItem(
+      id: 'todo-subtask-updated-at',
+      title: '父任务',
+      createdAt: baseTime,
+      updatedAt: baseTime,
+    );
+    await provider.addTodo(todo);
+
+    await provider.addSubtask(todo.id, '第一步');
+    final afterAdd = provider.todos.single;
+    expect(afterAdd.updatedAt.isAfter(baseTime), isTrue);
+
+    final afterAddUpdatedAt = afterAdd.updatedAt;
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+    await provider.toggleSubtask(todo.id, afterAdd.subtasks.single.id);
+    final afterToggle = provider.todos.single;
+    expect(afterToggle.updatedAt.isAfter(afterAddUpdatedAt), isTrue);
+
+    final afterToggleUpdatedAt = afterToggle.updatedAt;
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+    await provider.deleteSubtask(todo.id, afterToggle.subtasks.single.id);
+    final afterDelete = provider.todos.single;
+    expect(afterDelete.updatedAt.isAfter(afterToggleUpdatedAt), isTrue);
+  });
+
   test('TodoProvider skips duplicate in-flight deletes', () async {
     SharedPreferences.setMockInitialValues({});
     final provider = TodoProvider();
@@ -115,14 +146,44 @@ void main() {
       await _waitForScheduler(scheduler);
       expect(scheduler.started, isTrue);
 
-      await provider.updateTodo(
+      final duplicateSaved = await provider.updateTodo(
         todo.id,
         provider.todos.single.copyWith(title: '第二次保存'),
       );
       scheduler.complete();
-      await first;
+      final firstSaved = await first;
 
+      expect(firstSaved, isTrue);
+      expect(duplicateSaved, isFalse);
       expect(provider.todos.single.title, '第一次保存');
+    },
+  );
+
+  test(
+    'TodoProvider serializes different in-flight mutations for same todo',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final provider = TodoProvider();
+      final todo = TodoItem(id: 'todo-cross-mutation', title: '原始');
+      await provider.addTodo(todo);
+
+      final scheduler = _GatedTodoScheduler();
+      provider.scheduler = scheduler;
+      final first = provider.updateTodo(
+        todo.id,
+        provider.todos.single.copyWith(title: '正在保存'),
+      );
+      await _waitForScheduler(scheduler);
+      expect(scheduler.started, isTrue);
+
+      await provider.toggleTodo(todo.id);
+      scheduler.complete();
+      final firstSaved = await first;
+
+      final stored = provider.todos.single;
+      expect(firstSaved, isTrue);
+      expect(stored.title, '正在保存');
+      expect(stored.isCompleted, isFalse);
     },
   );
 
@@ -165,115 +226,126 @@ void main() {
     expect(source, contains('return changed;'));
   });
 
-  test(
-    'TodoProvider resyncs reminders after completion and deletion changes',
-    () {
-      final source = File(
-        'lib/providers/todo_provider.dart',
-      ).readAsStringSync();
+  test('TodoProvider resyncs reminders after completion and deletion changes', () {
+    final source = File('lib/providers/todo_provider.dart').readAsStringSync();
 
-      String method(String startNeedle, String endNeedle) {
-        final start = source.indexOf(startNeedle);
-        final end = source.indexOf(endNeedle, start);
-        expect(start, greaterThanOrEqualTo(0), reason: startNeedle);
-        expect(end, greaterThan(start), reason: endNeedle);
-        return source.substring(start, end);
-      }
+    String method(String startNeedle, String endNeedle) {
+      final start = source.indexOf(startNeedle);
+      final end = source.indexOf(endNeedle, start);
+      expect(start, greaterThanOrEqualTo(0), reason: startNeedle);
+      expect(end, greaterThan(start), reason: endNeedle);
+      return source.substring(start, end);
+    }
 
-      expect(source, contains('Future<void> _syncTodoRemindersNow() async'));
-      expect(source, contains('String? get lastReminderSyncIssue'));
-      expect(source, contains('DateTime? get lastReminderSyncAttemptAt'));
-      expect(source, contains('DateTime? get lastReminderSyncSucceededAt'));
-      expect(source, contains('Future<void> _storageWriteQueue'));
-      expect(source, contains('final Set<String> _inFlightCreateKeys'));
-      expect(source, contains('_createInFlightDuplicateKey(todo)'));
-      expect(
-        source,
-        contains("_lastReminderSyncIssue = 'reminder_scheduler_missing'"),
-      );
-      expect(
-        source,
-        contains(
-          "debugPrint('[TodoProvider] reminder sync skipped: scheduler missing')",
-        ),
-      );
-      expect(source, contains('await scheduler.syncTodos(List.of(_todos))'));
-      expect(source, contains('_lastReminderSyncIssue = null'));
-      expect(source, contains('_lastReminderSyncSucceededAt = DateTime.now()'));
-      expect(source, contains('_lastReminderSyncIssue = e.toString()'));
+    expect(
+      source,
+      contains('Future<TodoReminderSyncResult> _syncTodoRemindersNow() async'),
+    );
+    expect(source, contains('class TodoReminderSyncResult'));
+    expect(source, contains('class TodoMutationResult'));
+    expect(source, contains('int _nextReminderSyncGeneration'));
+    expect(source, contains('void _applyReminderSyncResult'));
+    expect(source, contains('String? get lastReminderSyncIssue'));
+    expect(source, contains('DateTime? get lastReminderSyncAttemptAt'));
+    expect(source, contains('DateTime? get lastReminderSyncSucceededAt'));
+    expect(source, contains('Future<void> _storageWriteQueue'));
+    expect(source, contains('final Set<String> _inFlightCreateKeys'));
+    expect(source, contains('_createInFlightDuplicateKey(todo)'));
+    expect(source, contains("issue: 'reminder_scheduler_missing'"));
+    expect(
+      source,
+      contains(
+        "debugPrint('[TodoProvider] reminder sync skipped: scheduler missing')",
+      ),
+    );
+    expect(source, contains('await scheduler.syncTodos(List.of(_todos))'));
+    expect(source, contains('issue: null'));
+    expect(source, contains('succeededAt: DateTime.now()'));
+    expect(source, contains('on ReminderScheduleSyncException catch'));
+    expect(source, contains("e.failures.join('；')"));
+    expect(source, contains('issue: e.toString()'));
 
-      expect(
-        method(
-          'Future<void> addTodo(',
-          'Future<TodoImportSummary> importTodos(',
-        ),
-        allOf(
-          contains('bool waitForReminderSync = true'),
-          contains('await _syncTodoRemindersNow();'),
-          contains('unawaited(_syncTodoRemindersNow());'),
-        ),
-      );
-      expect(
-        method(
-          'Future<TodoImportSummary> importTodos(',
-          'Future<void> updateTodo(',
-        ),
+    expect(
+      method(
+        'Future<void> addTodo(',
+        'Future<TodoReminderSyncResult?> addTodoWithResult(',
+      ),
+      contains(
+        'await addTodoWithResult(todo, waitForReminderSync: waitForReminderSync);',
+      ),
+    );
+    expect(
+      method(
+        'Future<TodoReminderSyncResult?> addTodoWithResult(',
+        'Future<TodoImportSummary> importTodos(',
+      ),
+      allOf(
+        contains('bool waitForReminderSync = true'),
         contains('await _syncTodoRemindersNow();'),
-      );
-      expect(source, contains('bool waitForReminderSync = true'));
-      expect(source, contains('unawaited(_syncTodoRemindersNow())'));
-      expect(
-        method(
-          'Future<int> completeTodos(',
-          'Future<int> reopenTodos(Iterable<String> ids)',
-        ),
-        contains('await _syncTodoRemindersNow();'),
-      );
-      expect(
-        method('Future<int> reopenTodos(Iterable<String> ids)', '/// 切换完成状态。'),
-        contains('await _syncTodoRemindersNow();'),
-      );
-      expect(
-        method(
-          'Future<void> toggleTodo(String id',
-          'Future<void> deleteTodo(String id)',
-        ),
-        contains('await _syncTodoRemindersNow();'),
-      );
-      expect(
-        method(
-          'Future<void> deleteTodo(String id)',
-          'Future<int> deleteTodos(Iterable<String> ids)',
-        ),
-        contains('await deleteTodos([id]);'),
-      );
-      expect(
-        method(
-          'Future<int> _deleteTodosLocked(Set<String> selected)',
-          'Future<int> updateTodosQuadrant(',
-        ),
-        contains('await _syncTodoRemindersNow();'),
-      );
-      expect(
-        method(
-          'Future<int> updateTodosKanbanColumn(',
-          'Future<bool> scheduleTodoForToday(',
-        ),
-        contains('await _syncTodoRemindersNow();'),
-      );
-      expect(
-        method('Future<bool> scheduleTodoForToday(', 'Future<void> reorder('),
-        contains('await _syncTodoRemindersNow();'),
-      );
-      expect(
-        method(
-          'Future<void> updateListGroupWorkspace(',
-          '// --- Subtask operations ---',
-        ),
-        contains('await _syncTodoRemindersNow();'),
-      );
-    },
-  );
+        contains('unawaited(_syncTodoRemindersNow());'),
+      ),
+    );
+    expect(
+      method(
+        'Future<TodoImportSummary> importTodos(',
+        'Future<bool> updateTodo(',
+      ),
+      contains('await _syncTodoRemindersNow();'),
+    );
+    expect(source, contains('Future<TodoMutationResult> updateTodoWithResult'));
+    expect(source, contains('bool waitForReminderSync = true'));
+    expect(source, contains('unawaited(_syncTodoRemindersNow())'));
+    expect(
+      method(
+        'Future<int> completeTodos(',
+        'Future<int> reopenTodos(Iterable<String> ids)',
+      ),
+      contains('await _syncTodoRemindersNow();'),
+    );
+    expect(
+      method('Future<int> reopenTodos(Iterable<String> ids)', '/// 切换完成状态。'),
+      contains('await _syncTodoRemindersNow();'),
+    );
+    expect(
+      method(
+        'Future<void> toggleTodo(String id',
+        'Future<void> deleteTodo(String id)',
+      ),
+      contains('await _syncTodoRemindersNow();'),
+    );
+    expect(
+      method(
+        'Future<void> deleteTodo(String id)',
+        'Future<int> deleteTodos(Iterable<String> ids)',
+      ),
+      contains('await deleteTodos([id]);'),
+    );
+    expect(
+      method(
+        'Future<int> _deleteTodosLocked(Set<String> selected)',
+        'Future<int> updateTodosQuadrant(',
+      ),
+      contains('await _syncTodoRemindersNow();'),
+    );
+    expect(
+      method(
+        'Future<int> updateTodosKanbanColumn(',
+        'Future<bool> scheduleTodoForToday(',
+      ),
+      contains('await _syncTodoRemindersNow();'),
+    );
+    expect(
+      method('Future<bool> scheduleTodoForToday(', 'Future<void> reorder('),
+      contains('await _syncTodoRemindersNow();'),
+    );
+    expect(
+      method(
+        'Future<void> updateListGroupWorkspace(',
+        '// --- Subtask operations ---',
+      ),
+      contains('await _syncTodoRemindersNow();'),
+    );
+  });
 
   test('TodoProvider exposes batch reopen and deletion paths', () {
     final source = File('lib/providers/todo_provider.dart').readAsStringSync();
@@ -423,6 +495,7 @@ class _GatedTodoScheduler extends RecordingReminderScheduler {
   Future<void> syncTodos(
     Iterable<TodoItem> todos, {
     bool allowJustMissedOneShotReminders = true,
+    ReminderReconciliationBatch? batch,
   }) async {
     todoSyncs.add(todos.map((todo) => todo.id).toList(growable: false));
     await _gate.future;

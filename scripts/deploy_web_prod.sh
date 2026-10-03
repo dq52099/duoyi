@@ -27,6 +27,14 @@ WEB_ROOT="${WEB_ROOT:-/opt/1panel/apps/openresty/openresty/root/duoyi}"
 BACKUP_ROOT="${BACKUP_ROOT:-/home/ubuntu/duoyi_web_backups}"
 FLUTTER_BIN="${FLUTTER_BIN:-/opt/migrate/flutter/bin/flutter}"
 BASE_HREF="/duoyi/"
+DOWNLOADS_BACKUP_DIR=""
+
+cleanup_downloads_backup() {
+    if [ -n "$DOWNLOADS_BACKUP_DIR" ] && [ -d "$DOWNLOADS_BACKUP_DIR" ]; then
+        rm -rf "$DOWNLOADS_BACKUP_DIR"
+    fi
+}
+trap cleanup_downloads_backup EXIT
 
 verify_web_build() {
     local dir="$1"
@@ -161,8 +169,17 @@ fi
 # 4. 部署新版本
 echo "🚀 Deploying to $WEB_ROOT..."
 sudo mkdir -p "$WEB_ROOT"
+if [ -d "$WEB_ROOT/downloads" ]; then
+    DOWNLOADS_BACKUP_DIR="$(mktemp -d)"
+    echo "📦 Preserving existing downloads directory..."
+    sudo cp -a "$WEB_ROOT/downloads" "$DOWNLOADS_BACKUP_DIR/downloads"
+fi
 sudo find "$WEB_ROOT" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 sudo cp -r "$BUILD_WEB_DIR"/. "$WEB_ROOT/"
+if [ -n "$DOWNLOADS_BACKUP_DIR" ] && [ -d "$DOWNLOADS_BACKUP_DIR/downloads" ]; then
+    sudo cp -a "$DOWNLOADS_BACKUP_DIR/downloads" "$WEB_ROOT/downloads"
+    echo "   downloads directory restored"
+fi
 echo "   Files copied"
 echo ""
 

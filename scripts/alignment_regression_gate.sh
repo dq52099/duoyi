@@ -50,7 +50,9 @@ run_group() {
   printf '| %s | %s | %ss | `%s` |\n' "$name" "$status" "$duration" "$log_file" >> "$SUMMARY_MD"
   if [[ "$exit_code" -ne 0 ]]; then
     echo "Group failed: $name (exit $exit_code). Report written to $REPORT_DIR"
-    exit "$exit_code"
+    if [[ -z "${NO_EARLY_EXIT:-}" ]]; then
+      exit "$exit_code"
+    fi
   fi
 }
 
@@ -148,8 +150,14 @@ run_group "6/8 Flutter analyzer" \
 run_group "7/8 debug APK build" \
   "$FLUTTER_BIN" build apk --debug
 
-run_group "8/8 device-only notification alarm widget regression" \
-  scripts/device_regression_check.sh
+if [ -z "${SKIP_DEVICE_GROUP:-}" ]; then
+  run_group "8/8 device-only notification alarm widget regression" \
+    scripts/device_regression_check.sh
+fi
 
 echo
+if [[ "$FAILURES" -gt 0 ]]; then
+  echo "Alignment regression gate failed with $FAILURES group(s). Report written to $REPORT_DIR" >&2
+  exit 1
+fi
 echo "Alignment regression gate passed. Report written to $REPORT_DIR"

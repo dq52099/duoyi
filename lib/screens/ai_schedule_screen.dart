@@ -5,6 +5,7 @@ import '../core/i18n_date_format.dart';
 import '../models/calendar_event.dart';
 import '../models/goal.dart' show ReminderKind;
 import '../providers/calendar_provider.dart';
+import '../providers/cloud_sync_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/todo_provider.dart';
 import '../services/local_notifications.dart';
@@ -26,6 +27,8 @@ class AiScheduleScreen extends StatefulWidget {
 class _AiScheduleScreenState extends State<AiScheduleScreen> {
   late final TextEditingController _inputCtrl;
   AiScheduleDraft? _draft;
+  String? _draftSourceInput;
+  int _recognizeRequestId = 0;
   bool _loading = false;
   bool _saving = false;
   String? _error;
@@ -44,14 +47,17 @@ class _AiScheduleScreenState extends State<AiScheduleScreen> {
 
   Future<void> _recognize() async {
     final input = _inputCtrl.text.trim();
+    if (_loading) return;
     if (input.isEmpty) {
       setState(() => _error = '请输入要创建的日程或待办内容');
       return;
     }
+    final requestId = ++_recognizeRequestId;
     setState(() {
       _loading = true;
       _error = null;
       _draft = null;
+      _draftSourceInput = null;
     });
     try {
       final draft = await context.read<AiService>().createScheduleDraft(
@@ -59,13 +65,25 @@ class _AiScheduleScreenState extends State<AiScheduleScreen> {
         now: widget.initialDate,
       );
       if (!mounted) return;
-      setState(() => _draft = draft);
+      if (requestId != _recognizeRequestId || _inputCtrl.text.trim() != input) {
+        return;
+      }
+      setState(() {
+        _draft = draft;
+        _draftSourceInput = input;
+      });
     } on AiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted && requestId == _recognizeRequestId) {
+        setState(() => _error = e.message);
+      }
     } catch (e) {
-      if (mounted) setState(() => _error = '创建草稿失败：$e');
+      if (mounted && requestId == _recognizeRequestId) {
+        setState(() => _error = '创建草稿失败：$e');
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && requestId == _recognizeRequestId) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -73,11 +91,16 @@ class _AiScheduleScreenState extends State<AiScheduleScreen> {
     if (_saving) return;
     final draft = _draft;
     if (draft == null) return;
+    if (_draftSourceInput != _inputCtrl.text.trim()) {
+      setState(() => _error = '输入内容已变更，请重新识别后再创建。');
+      return;
+    }
     final calendarProvider = context.read<CalendarProvider>();
     final todoProvider = context.read<TodoProvider>();
     final notificationService = context.read<NotificationService>();
     setState(() => _saving = true);
     String? reminderStatus;
+    var reminderFailed = false;
     var created = false;
     try {
       if (draft.isCalendar) {
@@ -113,8 +136,10 @@ class _AiScheduleScreenState extends State<AiScheduleScreen> {
             reminderStatus = '提醒已注册到系统通知';
           } on NotificationPermissionDeniedException catch (e) {
             reminderStatus = e.message;
+            reminderFailed = true;
           } catch (e) {
             reminderStatus = '提醒注册失败：$e';
+            reminderFailed = true;
           }
         }
       } else {
@@ -162,26 +187,44 @@ class _AiScheduleScreenState extends State<AiScheduleScreen> {
             return;
           }
         }
-        await todoProvider.addTodo(todo);
         if (draft.reminderEnabled) {
-          final issue = notificationService.lastScheduleIssue;
-          reminderStatus = issue == null || !issue.blocking
-              ? '待办提醒已提交系统注册'
-              : '${issue.title}：${issue.message}';
+          notificationService.clearScheduleIssue();
+          final reminderSyncResult = await todoProvider.addTodoWithResult(
+            todo,
+            waitForReminderSync: true,
+          );
+          final syncIssue = reminderSyncResult?.issue;
+          if (syncIssue != null) {
+            reminderStatus = '待办提醒同步失败：$syncIssue';
+            reminderFailed = true;
+          } else {
+            reminderStatus = '待办提醒已提交系统注册';
+          }
+        } else {
+          await todoProvider.addTodo(todo, waitForReminderSync: false);
         }
       }
       if (!mounted) return;
+      final syncStatus = _localSaveSyncMessage(
+        localSavedText: '${draft.isCalendar ? '日程' : '待办'}已保存到本机',
+      );
       created = true;
       setState(() => _saving = false);
       await showDialog<void>(
         context: context,
         builder: (_) => AppDialog(
           icon: Icon(
-            draft.isCalendar
+            reminderFailed
+                ? Icons.notification_important_outlined
+                : draft.isCalendar
                 ? Icons.event_available_outlined
                 : Icons.check_circle_outline,
           ),
-          title: Text('${draft.isCalendar ? '日程' : '待办'}已创建'),
+          title: Text(
+            reminderFailed
+                ? '${draft.isCalendar ? '日程' : '待办'}已创建，但提醒未注册'
+                : '${draft.isCalendar ? '日程' : '待办'}已创建',
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,6 +247,17 @@ class _AiScheduleScreenState extends State<AiScheduleScreen> {
                 Text(
                   reminderStatus,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: reminderFailed
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              if (syncStatus != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  syncStatus,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
@@ -223,6 +277,16 @@ class _AiScheduleScreenState extends State<AiScheduleScreen> {
       if (mounted) setState(() => _error = '保存失败：$e');
     } finally {
       if (mounted && !created) setState(() => _saving = false);
+    }
+  }
+
+  String? _localSaveSyncMessage({required String localSavedText}) {
+    try {
+      return context.read<CloudSyncProvider>().localSaveSyncMessage(
+        localSavedText: localSavedText,
+      );
+    } on ProviderNotFoundException {
+      return null;
     }
   }
 

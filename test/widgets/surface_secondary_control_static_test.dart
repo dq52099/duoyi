@@ -370,7 +370,9 @@ void main() {
     expect(habit, contains('backgroundColor: routeBackground'));
     expect(calendar, contains('AppSecondaryControlTheme('));
     expect(calendar, contains('final routeBackground'));
-    expect(calendar, contains('backgroundColor: routeBackground'));
+    expect(calendar, contains('paintBackground: !widget.useShellBackground'));
+    expect(calendar, contains('backgroundColor: widget.useShellBackground'));
+    expect(calendar, contains(': routeBackground.withValues(alpha: 0.96)'));
     expect(calendar, isNot(contains('backgroundColor: Colors.transparent')));
     expect(calendar, contains('appSecondaryControlLabelStyle(context)'));
     expect(calendar, contains('AppSecondaryMenuText('));
