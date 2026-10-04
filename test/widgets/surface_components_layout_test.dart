@@ -1,3 +1,5 @@
+import 'package:duoyi/core/design_tokens.dart';
+import 'package:duoyi/widgets/stats_overview_cards.dart';
 import 'package:duoyi/widgets/surface_components.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -132,6 +134,111 @@ void main() {
     expect(subtitleRect.top, greaterThan(titleRect.bottom));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('AppMetricCard 默认数值字号为主角，标题/单位保持 11', (tester) async {
+    await _pumpNarrow(
+      tester,
+      width: 320,
+      child: const AppMetricCard(
+        title: '本周专注',
+        value: '325',
+        unit: '分钟',
+        icon: Icons.timer,
+        color: Colors.redAccent,
+      ),
+    );
+
+    final spans = _metricValueSpans(tester, valueText: '325');
+    final valueSpan = spans.value;
+    final unitSpan = spans.unit!;
+    final titleStyle = tester.widget<Text>(find.text('本周专注')).style;
+
+    expect(valueSpan.style?.fontSize, DesignTokens.fontSizeMd);
+    expect(valueSpan.style?.height, 1.1);
+    expect(unitSpan.style?.fontSize, 11);
+    expect(titleStyle?.fontSize, 11);
+    expect(valueSpan.style!.fontSize!, greaterThan(titleStyle!.fontSize!));
+    expect(valueSpan.style!.fontSize!, greaterThan(unitSpan.style!.fontSize!));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('StatsOverviewCard 不传样式时数值吃到 16 默认（我的页路径）', (tester) async {
+    await _pumpNarrow(
+      tester,
+      width: 320,
+      child: const StatsOverviewCard(
+        title: '效率评分',
+        value: '85',
+        unit: '%',
+        icon: Icons.insights,
+        color: Colors.indigo,
+      ),
+    );
+
+    final valueSpan = _metricValueSpans(tester, valueText: '85').value;
+    expect(valueSpan.style?.fontSize, DesignTokens.fontSizeMd);
+    expect(valueSpan.style?.height, 1.1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('AppMetricCard 显式 valueStyle 仍然优先生效', (tester) async {
+    await _pumpNarrow(
+      tester,
+      width: 320,
+      child: AppMetricCard(
+        title: '连续打卡',
+        value: '7',
+        unit: '天',
+        icon: Icons.repeat,
+        color: Colors.teal,
+        valueStyle: const TextStyle(fontSize: 14, height: 1.05),
+      ),
+    );
+
+    final spans = _metricValueSpans(tester, valueText: '7');
+    expect(spans.value.style?.fontSize, 14);
+    expect(spans.value.style?.height, 1.05);
+    expect(spans.unit?.style?.fontSize, 11);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// 在指标卡的富文本里找到数值/单位 span。
+/// Text.build 会把传入的 textSpan 再包一层（children: [textSpan]），
+/// 因此按文本内容在两层里递归查找，避免依赖固定层级。
+({TextSpan value, TextSpan? unit}) _metricValueSpans(
+  WidgetTester tester, {
+  required String valueText,
+}) {
+  final roots = tester
+      .widgetList<RichText>(find.byType(RichText))
+      .map((rich) => rich.text as TextSpan);
+  for (final root in roots) {
+    final children = root.children;
+    if (children == null) {
+      continue;
+    }
+    for (final child in children) {
+      final childSpan = child as TextSpan;
+      if (childSpan.text == valueText) {
+        return (value: childSpan, unit: null);
+      }
+      final nested = childSpan.children;
+      if (nested == null) {
+        continue;
+      }
+      for (var i = 0; i < nested.length; i++) {
+        final nestedSpan = nested[i] as TextSpan;
+        if (nestedSpan.text == valueText) {
+          return (
+            value: nestedSpan,
+            unit: i + 1 < nested.length ? nested[i + 1] as TextSpan : null,
+          );
+        }
+      }
+    }
+  }
+  throw StateError('找不到文本为 "$valueText" 的指标数值富文本');
 }
 
 double _textBlockCenterDy(Rect titleRect, Rect subtitleRect) {

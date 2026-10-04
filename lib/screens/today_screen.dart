@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/completion_visibility_policy.dart';
@@ -155,6 +157,25 @@ class TodayScreen extends StatelessWidget {
           final aspectRatio = desktop
               ? (useTwoColumns ? 2.75 : 2.85)
               : (useTwoColumns ? 2.55 : 3.65);
+          // 数值行默认字号已提升到 DesignTokens.fontSizeMd，移动端 4 列在
+          // 中段宽度下按 3.65 宽高比算出的瓦片高度不足以容纳“标题+数值”
+          // 两行（还要扣掉卡片 0.5 描边内缩）。这里按当前系统字号缩放换算
+          // 内容所需高度给瓦片兜底：AppMetricCard 默认竖向内容为标题
+          // 11×1.1 + 间距 2 + 数值 fontSizeMd×1.1，外加卡内边距 20、描边
+          // 1、余量 2；宽裕时仍按宽高比走，任意字号下都不溢出。
+          final textScaler = MediaQuery.textScalerOf(context);
+          final minTileExtent =
+              textScaler.scale(11 * 1.1) +
+              2 +
+              textScaler.scale(DesignTokens.fontSizeMd * 1.1) +
+              23;
+          final tileExtent = desktop || useTwoColumns
+              ? null
+              : math.max(
+                  ((constraints.maxWidth - 3 * 8) / crossAxisCount) /
+                      aspectRatio,
+                  minTileExtent,
+                );
 
           // 桌面端使用更大的字体和图标
           final titleStyle = desktop
@@ -201,6 +222,7 @@ class TodayScreen extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: crossAxisCount,
             childAspectRatio: aspectRatio,
+            mainAxisExtent: tileExtent,
             mainAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
             crossAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
             children: [

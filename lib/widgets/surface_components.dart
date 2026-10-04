@@ -776,10 +776,10 @@ class AppMetricCard extends StatelessWidget {
                           style:
                               valueStyle ??
                               theme.textTheme.titleMedium?.copyWith(
-                                fontSize: 12.5,
+                                fontSize: DesignTokens.fontSizeMd,
                                 fontWeight: FontWeight.normal,
                                 color: cs.onSurface,
-                                height: 1.08,
+                                height: 1.1,
                               ),
                         ),
                         if (unit != null && unit!.isNotEmpty)

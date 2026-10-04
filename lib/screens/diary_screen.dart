@@ -60,7 +60,14 @@ class DiaryScreen extends StatelessWidget {
               onAction: () => _openEdit(context),
             )
           : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+              // 底部 padding 计入 Android 手势条 inset + FAB 余量，
+              // 避免“写日记”按钮滚动到底时压住最后一张日记卡。
+              padding: EdgeInsets.fromLTRB(
+                12,
+                12,
+                12,
+                MediaQuery.paddingOf(context).bottom + 88,
+              ),
               // 虚拟化：index 0 摘要头卡，随后（可选）洞察卡与列表头，
               // 其余索引按 entries 快照懒构建卡片，避免全量构建。
               itemCount: 2 + (insights.isNotEmpty ? 1 : 0) + entries.length,

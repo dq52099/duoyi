@@ -689,6 +689,20 @@ class NotificationService extends ChangeNotifier
     return uri.pathSegments.first;
   }
 
+  /// 从 deep-link payload 推断调度历史记录的归属类型：
+  /// `duoyi://todo/<id>` → todo，`duoyi://habit/<id>` → habit，
+  /// 其余（含空 payload、`duoyi://tab/...` 等非对象链接）保持 general。
+  /// 通知记录页据此把可跳转记录接到 TodayDetailRouter（todo/habit 动线）；
+  /// 纪念日记录仍由 [scheduleAnniversary] 显式写 anniversary 类型。
+  NotificationType _historyTypeFromPayload(String? payload) {
+    final uri = payload == null ? null : Uri.tryParse(payload);
+    return switch (uri?.host) {
+      'todo' => NotificationType.todo,
+      'habit' => NotificationType.habit,
+      _ => NotificationType.general,
+    };
+  }
+
   void _recordAlarmPushFallback({
     required String issueTitle,
     DateTime? scheduledTime,
@@ -876,7 +890,8 @@ class NotificationService extends ChangeNotifier
         title: title,
         body: body,
         scheduledTime: when,
-        type: NotificationType.general,
+        type: _historyTypeFromPayload(payload),
+        relatedId: _relatedIdFromPayload(payload),
       ),
     );
     notifyListeners();
@@ -933,7 +948,7 @@ class NotificationService extends ChangeNotifier
         title: title,
         body: displayBody,
         scheduledTime: when,
-        type: NotificationType.general,
+        type: _historyTypeFromPayload(payload),
         relatedId: _relatedIdFromPayload(payload),
       ),
     );
@@ -977,7 +992,8 @@ class NotificationService extends ChangeNotifier
         title: title,
         body: displayBody,
         scheduledTime: when,
-        type: NotificationType.general,
+        type: _historyTypeFromPayload(payload),
+        relatedId: _relatedIdFromPayload(payload),
       ),
     );
     notifyListeners();
@@ -1057,7 +1073,7 @@ class NotificationService extends ChangeNotifier
         title: title,
         body: displayBody,
         scheduledTime: DateTime.now(),
-        type: NotificationType.general,
+        type: _historyTypeFromPayload(payload),
         relatedId: _relatedIdFromPayload(payload),
       ),
     );
@@ -1101,7 +1117,8 @@ class NotificationService extends ChangeNotifier
         title: title,
         body: displayBody,
         scheduledTime: DateTime.now(),
-        type: NotificationType.general,
+        type: _historyTypeFromPayload(payload),
+        relatedId: _relatedIdFromPayload(payload),
       ),
     );
     notifyListeners();

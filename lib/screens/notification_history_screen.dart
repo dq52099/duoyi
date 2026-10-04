@@ -24,6 +24,7 @@ import '../services/reminder_scheduler.dart';
 import '../widgets/app_time_picker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
+import 'today_detail_router.dart';
 
 enum _NotificationReadFilter { all, unread, read }
 
@@ -56,6 +57,42 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
 
   void _resetPaging() {
     _page = 0;
+  }
+
+  /// 通知类型 → 可跳转详情页的 section 映射。
+  ///
+  /// 只有 todo / habit / anniversary 关联到可打开的详情页；
+  /// pomodoro / general / location 没有对应详情页，点击保持"只切换已读"。
+  static TodaySectionKind? _relatedSectionKind(NotificationType type) {
+    switch (type) {
+      case NotificationType.todo:
+        return TodaySectionKind.todos;
+      case NotificationType.habit:
+        return TodaySectionKind.habits;
+      case NotificationType.anniversary:
+        return TodaySectionKind.anniversaries;
+      case NotificationType.pomodoro:
+      case NotificationType.general:
+      case NotificationType.location:
+        return null;
+    }
+  }
+
+  /// 点击卡片打开关联对象详情：先把这条记录标为已读，再跳转。
+  ///
+  /// - 关联对象已被删除时由 [TodayDetailRouter] 的空态兜底页承接，不会黑屏；
+  /// - 已读记录同样可以点击跳转（[NotificationService.markHistoryItemRead]
+  ///   对已读记录是幂等空操作）。
+  Future<void> _openRelatedItem(NotificationItem item) async {
+    final kind = _relatedSectionKind(item.type);
+    final relatedId = item.relatedId;
+    if (kind == null || relatedId == null || relatedId.trim().isEmpty) return;
+    await context.read<NotificationService>().markHistoryItemRead(
+      item.id,
+      read: true,
+    );
+    if (!mounted) return;
+    await TodayDetailRouter.open(context, kind, id: relatedId);
   }
 
   List<NotificationItem> _filteredHistory(List<NotificationItem> history) {
@@ -211,6 +248,12 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
                                 const SizedBox(height: 8),
                             itemBuilder: (context, index) {
                               final item = visibleHistory[index];
+                              final relatedKind = _relatedSectionKind(
+                                item.type,
+                              );
+                              final hasRelatedTarget =
+                                  relatedKind != null &&
+                                  (item.relatedId?.trim().isNotEmpty ?? false);
                               return _NotificationRecordCard(
                                 key: ValueKey('notification_record_${item.id}'),
                                 item: item,
@@ -218,6 +261,9 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
                                   item.id,
                                   read: !item.isRead,
                                 ),
+                                onOpenRelated: hasRelatedTarget
+                                    ? () => _openRelatedItem(item)
+                                    : null,
                               );
                             },
                           ),
@@ -386,10 +432,15 @@ class _NotificationRecordCard extends StatelessWidget {
   final NotificationItem item;
   final VoidCallback onToggleRead;
 
+  /// 非空时点击卡片跳到关联对象详情（todo / habit / anniversary）；
+  /// 为空时回退为原有的"点击只切换已读"。
+  final VoidCallback? onOpenRelated;
+
   const _NotificationRecordCard({
     super.key,
     required this.item,
     required this.onToggleRead,
+    this.onOpenRelated,
   });
 
   @override
@@ -402,7 +453,7 @@ class _NotificationRecordCard extends StatelessWidget {
       border: item.isRead
           ? null
           : Border.all(color: cs.primary.withValues(alpha: 0.22), width: 0.45),
-      onTap: item.isRead ? null : onToggleRead,
+      onTap: onOpenRelated ?? (item.isRead ? null : onToggleRead),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

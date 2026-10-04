@@ -1121,6 +1121,82 @@ void main() {
     );
   });
 
+  test('scheduled history records infer todo/habit type from payload', () {
+    final source = File(
+      'lib/providers/notification_service.dart',
+    ).readAsStringSync();
+
+    void expectPayloadTypedHistory(String startNeedle, String endNeedle) {
+      final start = source.indexOf(startNeedle);
+      final end = source.indexOf(endNeedle, start);
+      expect(start, greaterThanOrEqualTo(0), reason: startNeedle);
+      expect(end, greaterThan(start), reason: endNeedle);
+      final method = source.substring(start, end);
+      final historyIndex = method.indexOf('_addScheduledToHistory(');
+      expect(historyIndex, greaterThanOrEqualTo(0), reason: startNeedle);
+      expect(
+        method.substring(historyIndex),
+        contains('type: _historyTypeFromPayload(payload)'),
+        reason:
+            '$startNeedle 的调度历史必须按 payload 推断类型，'
+            '否则通知记录页“点卡片跳详情”动线在真机上是断的。',
+      );
+    }
+
+    // 通用 push 出口（ReminderScheduler 待办/习惯提醒的真实路径）：
+    expectPayloadTypedHistory(
+      'Future<bool> scheduleOnceWithResult({',
+      '/// 上层（通知中心、深链处理或通知 action）调用此通用方法重新调度提醒。',
+    );
+    expectPayloadTypedHistory(
+      'Future<void> scheduleOnce({',
+      'Future<void> scheduleCalendarReminder({',
+    );
+    expectPayloadTypedHistory(
+      'Future<bool> scheduleDailyWithResult({',
+      '/// 每日固定时间的 push 通知',
+    );
+    expectPayloadTypedHistory(
+      'Future<void> scheduleDaily({',
+      '/// 取消某个已调度的通知。',
+    );
+    // “稍后提醒”沿用原 payload，应保持同样的类型标注。
+    expectPayloadTypedHistory(
+      'Future<void> snooze({',
+      '/// 通过 deep-link `duoyi://snooze/{id}?delay={minutes}` 触发的快捷路径。',
+    );
+
+    // snooze / scheduleOnce / scheduleDaily 三处原本不带 relatedId，
+    // 必须从 payload 补齐，否则跳详情拿不到对象 id。
+    for (final needle in [
+      'Future<void> snooze({',
+      'Future<void> scheduleOnce({',
+      'Future<void> scheduleDaily({',
+    ]) {
+      final start = source.indexOf(needle);
+      expect(start, greaterThanOrEqualTo(0), reason: needle);
+      final method = source.substring(start);
+      expect(
+        method.substring(method.indexOf('_addScheduledToHistory(')),
+        contains('relatedId: _relatedIdFromPayload(payload)'),
+        reason: needle,
+      );
+    }
+
+    // 推断规则：todo/habit deep-link 分别落到对应类型，其余保持 general。
+    expect(
+      source,
+      contains("'todo' => NotificationType.todo"),
+      reason: '缺少 todo payload 的类型推断',
+    );
+    expect(
+      source,
+      contains("'habit' => NotificationType.habit"),
+      reason: '缺少 habit payload 的类型推断',
+    );
+    expect(source, contains('_ => NotificationType.general'));
+  });
+
   test(
     'schedule helper records permission and plugin failures without crashing callers',
     () {
