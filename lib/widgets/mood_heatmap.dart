@@ -2,26 +2,51 @@ import 'package:flutter/material.dart';
 import '../core/i18n_date_format.dart';
 import '../models/diary_entry.dart';
 
-/// 近 N 周心情热图：每格代表一天，颜色由当天日记的心情决定；无日记则灰色。
+/// 近 N 周心情热图：每格代表一天，颜色由当天日记的心情决定；无日记则中性灰。
 class MoodHeatmap extends StatelessWidget {
   final Map<String, DiaryEntry> entriesByDate;
   final int weeks;
 
   const MoodHeatmap({super.key, required this.entriesByDate, this.weeks = 12});
 
-  Color _colorFor(Mood? m) {
-    if (m == null) return const Color(0xFFEDEDED);
+  /// 五档心情语义色：亮色档沿用既有取值；暗色档换用更亮的同色相档，
+  /// 避免暗色主题下沿用亮色档的深色值在深背景上发闷、难以分辨。
+  Color _moodColor(Mood m, bool isDark) {
+    if (!isDark) {
+      return switch (m) {
+        Mood.awesome => const Color(0xFF2E7D32),
+        Mood.good => const Color(0xFF66BB6A),
+        Mood.okay => const Color(0xFFFFCA28),
+        Mood.bad => const Color(0xFFEF6C00),
+        Mood.terrible => const Color(0xFFD32F2F),
+      };
+    }
     return switch (m) {
-      Mood.awesome => const Color(0xFF2E7D32),
-      Mood.good => const Color(0xFF66BB6A),
-      Mood.okay => const Color(0xFFFFCA28),
-      Mood.bad => const Color(0xFFEF6C00),
-      Mood.terrible => const Color(0xFFD32F2F),
+      Mood.awesome => const Color(0xFF4CAF50),
+      Mood.good => const Color(0xFF81C784),
+      // bad 用 orange400 而非 orange300：与 okay(amber300) 色相只差约 10°，
+      // 10px 小色块主要靠明度区分，300 档两档明度几乎相同难以分辨。
+      Mood.okay => const Color(0xFFFFD54F),
+      Mood.bad => const Color(0xFFFFA726),
+      Mood.terrible => const Color(0xFFE57373),
     };
+  }
+
+  /// 空格取主题中性容器色，跟随亮暗主题，不再固定亮灰刺眼。
+  Color _emptyColor(ColorScheme cs, bool isDark) {
+    return cs.surfaceContainerHighest.withValues(alpha: isDark ? 0.12 : 0.22);
+  }
+
+  Color _colorFor(Mood? m, ColorScheme cs, bool isDark) {
+    if (m == null) return _emptyColor(cs, isDark);
+    return _moodColor(m, isDark);
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final now = DateTime.now();
     // 对齐到周一
     final thisMonday = DateTime(
@@ -55,7 +80,7 @@ class MoodHeatmap extends StatelessWidget {
                             d,
                             style: TextStyle(
                               fontSize: 9,
-                              color: Colors.grey.shade500,
+                              color: cs.onSurface.withValues(alpha: 0.45),
                             ),
                           ),
                         ),
@@ -91,7 +116,7 @@ class MoodHeatmap extends StatelessWidget {
                                   width: cell,
                                   height: cell,
                                   decoration: BoxDecoration(
-                                    color: _colorFor(entry?.mood),
+                                    color: _colorFor(entry?.mood, cs, isDark),
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
@@ -112,7 +137,10 @@ class MoodHeatmap extends StatelessWidget {
           children: [
             Text(
               '少',
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+              style: TextStyle(
+                fontSize: 10,
+                color: cs.onSurface.withValues(alpha: 0.55),
+              ),
             ),
             const SizedBox(width: 4),
             ...Mood.values.map(
@@ -122,7 +150,7 @@ class MoodHeatmap extends StatelessWidget {
                   width: 10,
                   height: 10,
                   decoration: BoxDecoration(
-                    color: _colorFor(m),
+                    color: _colorFor(m, cs, isDark),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -131,7 +159,10 @@ class MoodHeatmap extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               '多',
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+              style: TextStyle(
+                fontSize: 10,
+                color: cs.onSurface.withValues(alpha: 0.55),
+              ),
             ),
           ],
         ),

@@ -23,6 +23,8 @@ class BackupService {
     'duoyi_virtual_rewards',
     'duoyi_custom_focus_sounds',
     'duoyi_focus_rooms',
+    'duoyi_location_reminders_v1',
+    'duoyi_quick_capture_templates_v1',
     'active_brand',
     'theme_unlocked_brands',
     'theme_shop_state',
@@ -35,10 +37,17 @@ class BackupService {
     final p = await SharedPreferences.getInstance();
     final map = <String, dynamic>{};
     for (final k in _keys) {
-      if (p.getStringList(k) != null) {
-        map[k] = {'type': 'stringList', 'value': p.getStringList(k)};
-      } else if (p.getString(k) != null) {
-        map[k] = {'type': 'string', 'value': p.getString(k)};
+      // 用无类型 get 探测：getStringList 对 string 值会抛类型转换异常
+      // (shared_preferences 的 getStringList 直接 as List)，string 键
+      // (pomodoro_config/user_profile 等) 不能先走 getStringList。
+      final value = p.get(k);
+      if (value is List) {
+        map[k] = {
+          'type': 'stringList',
+          'value': value.map((e) => e.toString()).toList(),
+        };
+      } else if (value is String) {
+        map[k] = {'type': 'string', 'value': value};
       }
     }
     return const JsonEncoder.withIndent('  ').convert({

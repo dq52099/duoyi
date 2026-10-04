@@ -10,8 +10,10 @@ import '../providers/course_provider.dart';
 import '../providers/diary_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
+import '../providers/location_reminder_provider.dart';
 import '../providers/note_provider.dart';
 import '../providers/pomodoro_provider.dart';
+import '../providers/quick_capture_template_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/user_provider.dart';
 import '../providers/time_audit_provider.dart';
@@ -1229,6 +1231,8 @@ class _BackupScreenState extends State<BackupScreen> {
       context.read<AchievementProvider>().loadFromStorage(),
       context.read<ShareProvider>().load(),
       context.read<CalendarProvider>().loadFromStorage(),
+      context.read<LocationReminderProvider>().loadFromStorage(),
+      context.read<QuickCaptureTemplateProvider>().loadFromStorage(),
     ]);
   }
 

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../core/design_tokens.dart';
 import '../providers/habit_provider.dart';
+import '../providers/theme_provider.dart';
 import 'surface_components.dart';
 
 class HabitWeeklyCard extends StatelessWidget {
@@ -11,6 +12,7 @@ class HabitWeeklyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<HabitProvider>();
+    final s = context.watch<ThemeProvider>().brand.strings;
     final data = provider.currentWeekProgress();
     final labels = ['一', '二', '三', '四', '五', '六', '日'];
     final todayDOW = DateTime.now().weekday - 1;
@@ -82,7 +84,7 @@ class HabitWeeklyCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '本周概述',
+                      s.habitWeekOverview,
                       style: appSecondaryRouteTitleTextStyle(context).copyWith(
                         fontSize: 13,
                         fontWeight: DesignTokens.fontWeightRegular,

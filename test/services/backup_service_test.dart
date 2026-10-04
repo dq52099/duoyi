@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:duoyi/providers/location_reminder_provider.dart';
+import 'package:duoyi/providers/quick_capture_template_provider.dart';
 import 'package:duoyi/services/backup_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -145,4 +147,80 @@ void main() {
       ]);
     },
   );
+
+  test('exports location reminders and quick capture templates', () async {
+    final prefs = await SharedPreferences.getInstance();
+    const locationRaw =
+        '[{"id":"lr-1","title":"到家提醒","latitude":31.23,"longitude":121.47,"radiusMeters":200,"trigger":"enter"}]';
+    const templateRaw =
+        '[{"id":"tpl-1","name":"晨间冥想","kind":1,"habitTargetCount":10}]';
+    await prefs.setString('duoyi_location_reminders_v1', locationRaw);
+    await prefs.setString('duoyi_quick_capture_templates_v1', templateRaw);
+
+    final raw = await BackupService.exportAll();
+    final data =
+        (json.decode(raw) as Map<String, dynamic>)['data']
+            as Map<String, dynamic>;
+
+    expect(data['duoyi_location_reminders_v1'], <String, Object>{
+      'type': 'string',
+      'value': locationRaw,
+    });
+    expect(data['duoyi_quick_capture_templates_v1'], <String, Object>{
+      'type': 'string',
+      'value': templateRaw,
+    });
+  });
+
+  test(
+    'restore makes location reminders and quick templates visible to providers',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'duoyi_location_reminders_v1',
+        '[{"id":"lr-1","title":"到家提醒","latitude":31.23,"longitude":121.47,"radiusMeters":200,"trigger":"enter"}]',
+      );
+      await prefs.setString(
+        'duoyi_quick_capture_templates_v1',
+        '[{"id":"tpl-1","name":"晨间冥想","kind":1,"habitTargetCount":10}]',
+      );
+      // 模拟旧设备生成备份 JSON。
+      final snapshot = await BackupService.exportAll();
+
+      // 模拟新设备：本机存储为空后导入。
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final count = await BackupService.importAll(snapshot);
+      expect(count, 2);
+
+      // 与 backup_screen._reloadAll 相同的重载调用，恢复后无需重启即可见。
+      final locationProvider = LocationReminderProvider();
+      final templateProvider = QuickCaptureTemplateProvider();
+      await Future.wait([
+        locationProvider.loadFromStorage(),
+        templateProvider.loadFromStorage(),
+      ]);
+
+      expect(locationProvider.isLoaded, isTrue);
+      expect(locationProvider.reminders.length, 1);
+      expect(locationProvider.reminders.first.title, '到家提醒');
+      expect(locationProvider.reminders.first.radiusMeters, 200);
+      expect(templateProvider.customTemplates.length, 1);
+      expect(templateProvider.customTemplates.first.name, '晨间冥想');
+      expect(templateProvider.customTemplates.first.habitTargetCount, 10);
+
+      locationProvider.dispose();
+      templateProvider.dispose();
+    },
+  );
+
+  test('wipe removes location reminders and quick capture templates', () async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('duoyi_location_reminders_v1', '[]');
+    await prefs.setString('duoyi_quick_capture_templates_v1', '[]');
+
+    await BackupService.wipeAll();
+
+    expect(prefs.getString('duoyi_location_reminders_v1'), isNull);
+    expect(prefs.getString('duoyi_quick_capture_templates_v1'), isNull);
+  });
 }

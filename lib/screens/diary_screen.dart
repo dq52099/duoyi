@@ -215,61 +215,69 @@ class DiaryScreen extends StatelessWidget {
     final total = dist.values.fold(0, (s, v) => s + v);
     showAppModalSheet(
       context: context,
-      builder: (_) => AppModalSheet(
-        title: I18n.tr('diary.mood.stats.title'),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (total == 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: Text(I18n.tr('diary.no_data'))),
-              )
-            else
-              ...Mood.values.map((m) {
-                final c = dist[m] ?? 0;
-                final pct = total == 0 ? 0.0 : c / total;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 52,
-                        child: Text(
-                          '${m.emoji} ${_moodLabel(m)}',
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      ),
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: pct,
-                            minHeight: 10,
-                            backgroundColor: Colors.grey.shade200,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final cs = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
+        return AppModalSheet(
+          title: I18n.tr('diary.mood.stats.title'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (total == 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: Text(I18n.tr('diary.no_data'))),
+                )
+              else
+                ...Mood.values.map((m) {
+                  final c = dist[m] ?? 0;
+                  final pct = total == 0 ? 0.0 : c / total;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 52,
+                          child: Text(
+                            '${m.emoji} ${_moodLabel(m)}',
+                            style: const TextStyle(fontSize: 13),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 40,
-                        child: Text(
-                          '$c${I18n.tr('diary.entry.count_suffix')}',
-                          textAlign: TextAlign.end,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: pct,
+                              minHeight: 10,
+                              backgroundColor:
+                                  cs.surfaceContainerHighest.withValues(
+                                    alpha: isDark ? 0.12 : 0.22,
+                                  ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-          ],
-        ),
-      ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 40,
+                          child: Text(
+                            '$c${I18n.tr('diary.entry.count_suffix')}',
+                            textAlign: TextAlign.end,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurface.withValues(alpha: 0.55),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+            ],
+          ),
+        );
+      },
     );
   }
 

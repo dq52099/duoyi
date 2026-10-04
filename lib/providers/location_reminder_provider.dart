@@ -124,7 +124,14 @@ class LocationReminderProvider extends ChangeNotifier {
     if (generation != _storageGeneration) return;
     final raw = prefs.getString(_key);
     if (raw == null || raw.isEmpty) {
+      // 存储已被 wipe（清空本机数据）时，内存里的旧提醒也必须清掉，
+      // 否则 UI 仍显示旧列表，且下一次写操作会把整份内存列表重新
+      // 持久化——刚被删除的旧数据“复活”。与 QuickCaptureTemplateProvider
+      // / HabitProvider 的空键清空行为保持一致。
+      _reminders.clear();
+      _inRange.clear();
       _loaded = true;
+      notifyListeners();
       return;
     }
     try {

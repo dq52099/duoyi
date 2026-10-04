@@ -104,7 +104,7 @@ void main() {
         find.byKey(const ValueKey('habit_weekly_overview_card')),
         findsOneWidget,
       );
-      expect(find.text('本周概述'), findsOneWidget);
+      expect(find.text('本周概览'), findsOneWidget);
       expect(find.text('添加习惯'), findsOneWidget);
     },
   );
@@ -151,7 +151,7 @@ void main() {
       find.byKey(const ValueKey('habit_weekly_overview_card')),
       findsOneWidget,
     );
-    expect(find.text('本周概述'), findsOneWidget);
+    expect(find.text('本周概览'), findsOneWidget);
 
     final iconRect = tester.getRect(
       find.byKey(const ValueKey('habit_weekly_overview_icon_box')),
