@@ -13,6 +13,7 @@ import '../providers/habit_provider.dart';
 import '../providers/location_reminder_provider.dart';
 import '../providers/note_provider.dart';
 import '../providers/pomodoro_provider.dart';
+import '../providers/preferences_provider.dart';
 import '../providers/quick_capture_template_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/user_provider.dart';
@@ -22,6 +23,7 @@ import '../providers/share_provider.dart';
 import '../services/backup_service.dart';
 import '../services/competitor_task_importer.dart';
 import '../services/ics_exporter.dart';
+import '../services/reminder_ringtone_settings.dart';
 import '../services/webdav_backup_service.dart';
 import '../widgets/surface_components.dart';
 
@@ -1217,6 +1219,16 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   Future<void> _reloadAll() async {
+    // 偏好键已纳入备份键集（BackupService._keys）：wipeAll/importAll 都会
+    // 改写偏好存储，而根级 PreferencesProvider 的值缓存在内存字段，不重载
+    // 会造成进程内偏好与存储分叉。与 main.dart 账号清理/云同步拉取一致：
+    // 先 resetLocalState 作废在途读取并套用默认值，再 loadFromStorage 读回
+    // 存储真值，最后把铃声偏好重放到原生设置（非 Android 为 no-op）。
+    final preferencesProvider = context.read<PreferencesProvider>();
+    preferencesProvider.resetLocalState();
+    await preferencesProvider.loadFromStorage();
+    await ReminderRingtoneSettings.applyPersistedSettingsToNative();
+    if (!mounted) return;
     await Future.wait([
       context.read<TodoProvider>().loadFromStorage(),
       context.read<HabitProvider>().loadFromStorage(),
