@@ -106,6 +106,7 @@ class NotificationService extends ChangeNotifier
     implements
         ReminderNotificationSink,
         ReminderNotificationBatchSink,
+        ReminderNotificationScheduleResultSink,
         ReminderPendingSink,
         ReminderScheduleIssueSink,
         ReminderScheduleIssueClearSink {
@@ -1016,6 +1017,48 @@ class NotificationService extends ChangeNotifier
     );
   }
 
+  @override
+  Future<bool> scheduleOnceWithResult({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  }) async {
+    final displayBody = _notificationBodyForPayload(body, payload);
+    final relatedId = _relatedIdFromPayload(payload);
+    final scheduled = await _scheduleOnceOrRecord(
+      id: id,
+      title: title,
+      body: displayBody,
+      when: when,
+      payload: payload,
+      issueTitle: '提醒注册失败',
+      relatedId: relatedId,
+    );
+    if (!scheduled) return false;
+    if (_isAlarmPushFallbackPayload(payload)) {
+      _recordAlarmPushFallback(
+        issueTitle: '提醒注册降级',
+        scheduledTime: when,
+        relatedId: _relatedIdFromPayload(payload),
+      );
+    }
+    _pendingNotifications++;
+    _addScheduledToHistory(
+      NotificationItem(
+        id: id.toString(),
+        title: title,
+        body: displayBody,
+        scheduledTime: when,
+        type: NotificationType.general,
+        relatedId: _relatedIdFromPayload(payload),
+      ),
+    );
+    _notifyListenersBatched();
+    return true;
+  }
+
   /// 上层（通知中心、深链处理或通知 action）调用此通用方法重新调度提醒。
   ///
   /// 这是对齐 Task 12 描述的通用 `scheduleOnce(id, title, body, when, payload)`
@@ -1111,6 +1154,51 @@ class NotificationService extends ChangeNotifier
     await LocalNotifications.instance.cancel(
       _idFor('ai_calendar_$calendarEventId'),
     );
+  }
+
+  @override
+  Future<bool> scheduleDailyWithResult({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    List<int>? weekdays,
+    String? payload,
+  }) async {
+    final displayBody = _notificationBodyForPayload(body, payload);
+    final relatedId = _relatedIdFromPayload(payload);
+    final scheduled = await _scheduleDailyOrRecord(
+      id: id,
+      title: title,
+      body: displayBody,
+      hour: hour,
+      minute: minute,
+      weekdays: weekdays,
+      payload: payload,
+      issueTitle: '重复提醒注册失败',
+      relatedId: relatedId,
+    );
+    if (!scheduled) return false;
+    if (_isAlarmPushFallbackPayload(payload)) {
+      _recordAlarmPushFallback(
+        issueTitle: '重复提醒注册降级',
+        relatedId: _relatedIdFromPayload(payload),
+      );
+    }
+    _pendingNotifications++;
+    _addScheduledToHistory(
+      NotificationItem(
+        id: id.toString(),
+        title: title,
+        body: displayBody,
+        scheduledTime: DateTime.now(),
+        type: NotificationType.general,
+        relatedId: _relatedIdFromPayload(payload),
+      ),
+    );
+    _notifyListenersBatched();
+    return true;
   }
 
   /// 每日固定时间的 push 通知；可选 `weekdays`（1=Mon..7=Sun）限定。

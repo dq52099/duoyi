@@ -9,11 +9,18 @@ import 'cloud_sync_provider.dart';
 class DiaryProvider extends ChangeNotifier {
   static const _key = 'duoyi_diary';
   List<DiaryEntry> _entries = [];
+
+  /// entries 倒序视图缓存；为 null 表示脏，下次读取时重排一次。
   List<DiaryEntry>? _sortedEntriesCache;
   Map<String, DiaryEntry>? _entriesByDateCache;
   int _storageGeneration = 0;
   VoidCallback? onLocalMutationPersisted;
 
+  /// 按 date 倒序的只读条目列表。
+  ///
+  /// 首次访问排序一次并缓存，后续访问直接返回同一不可变视图；
+  /// 增/删/改/加载等变异入口通过 [_invalidateCaches] 置脏。
+  /// 读取本 getter 不会变异 [_entries] 的内部顺序。
   List<DiaryEntry> get entries {
     final cached = _sortedEntriesCache;
     if (cached != null) return cached;
@@ -127,6 +134,12 @@ class DiaryProvider extends ChangeNotifier {
       _key,
       _entries.map((e) => jsonEncode(e.toJson())).toList(),
     );
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     _notifyLocalMutationPersisted();
     notifyListeners();
   }

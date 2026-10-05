@@ -26,6 +26,7 @@ class TimeAuditProvider extends ChangeNotifier {
 
   List<TimeEntry> _entries = [];
   int _storageGeneration = 0;
+  int _saveRevision = 0;
   VoidCallback? onLocalMutationPersisted;
 
   List<TimeEntry> get entries {
@@ -45,7 +46,7 @@ class TimeAuditProvider extends ChangeNotifier {
       return;
     }
     final raw = prefs.getStringList(storageKey) ?? const <String>[];
-    _entries = raw
+    final loadedEntries = raw
         .map((e) {
           try {
             return TimeEntry.fromJson(jsonDecode(e) as Map<String, dynamic>);
@@ -55,6 +56,9 @@ class TimeAuditProvider extends ChangeNotifier {
         })
         .whereType<TimeEntry>()
         .toList();
+    // An accepted reload supersedes any save snapshots captured before it.
+    _saveRevision++;
+    _entries = loadedEntries;
     notifyListeners();
   }
 
@@ -65,19 +69,19 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   Future<void> _save() async {
+    final saveRevision = ++_saveRevision;
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final snapshot = List<TimeEntry>.of(_entries);
+    // Large lists can block the UI while JSON is encoded. Use a background
+    // isolate for the captured snapshot and keep small saves synchronous.
+    final data = snapshot.length >= _isolateEncodeMinItems
+        ? await compute(_encodeTimeAuditPayload, snapshot)
+        : snapshot.map((e) => jsonEncode(e.toJson())).toList();
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return;
-    }
-    await prefs.setStringList(
-      storageKey,
-      _entries.map((e) => jsonEncode(e.toJson())).toList(),
-    );
+    if (!_isCurrentSave(saveRevision, generation, accountGeneration)) return;
+    await prefs.setStringList(storageKey, data);
+    if (!_isCurrentSave(saveRevision, generation, accountGeneration)) return;
     _notifyLocalMutationPersisted();
   }
 
@@ -97,6 +101,15 @@ class TimeAuditProvider extends ChangeNotifier {
         AccountLocalDataCleaner.isCurrentAccountDataGeneration(
           accountGeneration,
         );
+  }
+
+  bool _isCurrentSave(
+    int saveRevision,
+    int storageGeneration,
+    int accountGeneration,
+  ) {
+    return saveRevision == _saveRevision &&
+        _isCurrentStorageGeneration(storageGeneration, accountGeneration);
   }
 
   Future<void> add(TimeEntry entry) async {
@@ -493,3 +506,9 @@ class TimeAuditProvider extends ChangeNotifier {
   String _dateKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 }
+
+/// 单文件本地持久化的 JSON 编码条数阈值：超过后挪到后台 isolate 编码。
+const int _isolateEncodeMinItems = 500;
+
+List<String> _encodeTimeAuditPayload(List<TimeEntry> entries) =>
+    entries.map((e) => jsonEncode(e.toJson())).toList();

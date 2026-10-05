@@ -582,7 +582,7 @@ class ReminderRingtoneService : Service() {
         }
 
         private fun legacySubId(base: Int, weekday: Int): Int {
-            return base * 10 + weekday
+            return (base.toLong() * 10L + weekday.toLong()).toInt()
         }
 
         fun stopActive(context: Context) {

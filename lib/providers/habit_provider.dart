@@ -95,7 +95,11 @@ class HabitProvider extends ChangeNotifier {
 
   Future<void> _save() async {
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final data = json.encode(_habits.map((e) => e.toJson()).toList());
+    // 大列表的 JSON 编码会阻塞主 isolate，挪到后台 isolate 执行（对齐
+    // todo_provider 的做法）；小列表直接同步编码，省去 isolate 往返。
+    final data = _habits.length >= _isolateEncodeMinItems
+        ? await compute(_encodeHabitStoragePayload, List<Habit>.of(_habits))
+        : json.encode(_habits.map((e) => e.toJson()).toList());
     final prefs = await SharedPreferences.getInstance();
     if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
       accountGeneration,
@@ -495,3 +499,9 @@ class HabitImportSummary {
     this.reminderSyncIssue,
   });
 }
+
+/// 单文件本地持久化的 JSON 编码条数阈值：超过后挪到后台 isolate 编码。
+const int _isolateEncodeMinItems = 500;
+
+String _encodeHabitStoragePayload(List<Habit> habits) =>
+    json.encode(habits.map((e) => e.toJson()).toList());

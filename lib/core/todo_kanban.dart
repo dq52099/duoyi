@@ -141,6 +141,26 @@ class TodoKanbanBoardConfig {
     return null;
   }
 
+  /// 删除自定义列；内置列不可删（返回 null 表示无法删除）。
+  ///
+  /// 原列上的任务无需迁移：读取列归属时 [normalizeColumnId]
+  /// 会把指向已删列的任务自动归并到默认「待处理」列。
+  /// 删除后剩余列的 sortOrder 重新压实，保持相对顺序。
+  TodoKanbanBoardConfig? removeColumn(String id) {
+    final column = columnById(id);
+    if (column == null || column.builtIn) return null;
+    final remaining = columns.where((item) => item.id != id).toList()
+      ..sort((a, b) {
+        final order = a.sortOrder.compareTo(b.sortOrder);
+        if (order != 0) return order;
+        return a.title.compareTo(b.title);
+      });
+    for (var i = 0; i < remaining.length; i++) {
+      remaining[i] = remaining[i].copyWith(sortOrder: i);
+    }
+    return copyWith(columns: remaining);
+  }
+
   TodoKanbanBoardConfig copyWith({
     List<TodoKanbanColumn>? columns,
     TodoKanbanGroupMode? groupMode,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -9,9 +11,18 @@ class _FakeNotificationFallback
   final List<Map<String, Object?>> once = [];
   final List<Map<String, Object?>> daily = [];
   final List<int> cancelled = [];
+  final List<String> operations = [];
   final List<Map<String, Object?>> issues = [];
   bool failOnce = false;
   bool failDaily = false;
+  Object? onceError;
+  Object? dailyError;
+  Object? cancelError;
+  bool failCancelAfterSchedule = false;
+  int scheduleCount = 0;
+  Completer<void>? dailyGate;
+  int? failDailyCall;
+  int dailyCalls = 0;
 
   @override
   Future<void> scheduleOnce({
@@ -21,9 +32,14 @@ class _FakeNotificationFallback
     required DateTime when,
     String? payload,
   }) async {
+    operations.add('once:$id');
     if (failOnce) {
-      throw StateError('forced scheduleOnce fallback failure');
+      throw const ReminderPopupFallbackUnavailableException(
+        'forced scheduleOnce fallback failure',
+      );
     }
+    if (onceError case final error?) throw error;
+    scheduleCount += 1;
     once.add({
       'id': id,
       'title': title,
@@ -43,9 +59,21 @@ class _FakeNotificationFallback
     List<int>? weekdays,
     String? payload,
   }) async {
+    dailyCalls += 1;
+    operations.add('daily-start:$dailyCalls');
+    await dailyGate?.future;
     if (failDaily) {
-      throw StateError('forced scheduleDaily fallback failure');
+      throw const ReminderPopupFallbackUnavailableException(
+        'forced scheduleDaily fallback failure',
+      );
     }
+    final error = dailyError;
+    if ((failDailyCall == null || failDailyCall == dailyCalls) &&
+        error != null) {
+      throw error;
+    }
+    operations.add('daily-done:$dailyCalls');
+    scheduleCount += 1;
     daily.add({
       'id': id,
       'title': title,
@@ -59,7 +87,28 @@ class _FakeNotificationFallback
 
   @override
   Future<void> cancel(int id) async {
+    operations.add('cancel:$id');
+    if (cancelError case final error?) {
+      if (!failCancelAfterSchedule || scheduleCount > 0) throw error;
+    }
     cancelled.add(id);
+  }
+
+  @override
+  void recordReminderScheduleIssue({
+    required String title,
+    required String message,
+    DateTime? scheduledTime,
+    String? relatedId,
+    bool blocking = true,
+  }) {
+    issues.add({
+      'title': title,
+      'message': message,
+      'scheduledTime': scheduledTime,
+      'relatedId': relatedId,
+      'blocking': blocking,
+    });
   }
 
   @override
@@ -89,25 +138,106 @@ class _FakeNotificationFallback
     required int minute,
     List<int>? weekdays,
   }) async {}
-
-  @override
-  void recordReminderScheduleIssue({
-    required String title,
-    required String message,
-    DateTime? scheduledTime,
-    String? relatedId,
-    bool blocking = true,
-  }) {
-    issues.add({
-      'title': title,
-      'message': message,
-      'relatedId': relatedId,
-      'blocking': blocking,
-    });
-  }
 }
 
 void main() {
+  testWidgets('one-shot popup reports fallback registration failures', (
+    tester,
+  ) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final fallback = _FakeNotificationFallback()
+      ..onceError = StateError('one-shot fallback failed');
+    final sink = ForegroundReminderPopupSink(
+      contextGetter: () => navigatorKey.currentContext,
+      notificationFallback: fallback,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        home: const Scaffold(body: SizedBox()),
+      ),
+    );
+
+    await expectLater(
+      sink.scheduleOnce(
+        id: 88,
+        title: '提醒',
+        body: '兜底注册失败',
+        when: DateTime.now().add(const Duration(minutes: 1)),
+        payload: 'duoyi://todo/88',
+      ),
+      throwsStateError,
+    );
+    expect(fallback.issues.single['relatedId'], '88');
+
+    await sink.cancel(88);
+  });
+
+  testWidgets('repeating popup reports fallback registration failures', (
+    tester,
+  ) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final fallback = _FakeNotificationFallback()
+      ..dailyError = StateError('repeating fallback failed');
+    final sink = ForegroundReminderPopupSink(
+      contextGetter: () => navigatorKey.currentContext,
+      notificationFallback: fallback,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        home: const Scaffold(body: SizedBox()),
+      ),
+    );
+
+    await expectLater(
+      sink.scheduleRepeating(
+        id: 89,
+        title: '提醒',
+        body: '兜底注册失败',
+        hour: 19,
+        minute: 5,
+        payload: 'duoyi://todo/89',
+      ),
+      throwsStateError,
+    );
+    expect(fallback.issues.single['relatedId'], '89');
+    await sink.cancel(89);
+  });
+
+  testWidgets('cancel failure still closes the popup dialog', (tester) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final fallback = _FakeNotificationFallback()
+      ..cancelError = StateError('cancel failed')
+      ..failCancelAfterSchedule = true;
+    final sink = ForegroundReminderPopupSink(
+      contextGetter: () => navigatorKey.currentContext,
+      notificationFallback: fallback,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        home: const Scaffold(body: SizedBox()),
+      ),
+    );
+    await sink.scheduleOnce(
+      id: 87,
+      title: '提醒',
+      body: '需要关闭',
+      when: DateTime.now().add(const Duration(seconds: 1)),
+    );
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.text('需要关闭'), findsOneWidget);
+
+    await expectLater(sink.cancel(87), throwsStateError);
+    await tester.pumpAndSettle();
+    expect(find.text('需要关闭'), findsNothing);
+  });
+
   testWidgets(
     'one-shot popup registers notification fallback and cancels it for foreground dialog',
     (tester) async {
@@ -262,6 +392,49 @@ void main() {
     },
   );
 
+  testWidgets('foreground repeating delivery serializes fallback refresh', (
+    tester,
+  ) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final now = DateTime(2030, 6, 1, 10);
+    final fallback = _FakeNotificationFallback();
+    final sink = ForegroundReminderPopupSink(
+      contextGetter: () => navigatorKey.currentContext,
+      notificationFallback: fallback,
+      nowGetter: () => now,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        home: const Scaffold(body: SizedBox()),
+      ),
+    );
+    await sink.scheduleRepeating(
+      id: 68,
+      title: '每日提醒',
+      body: '顺序刷新',
+      hour: 10,
+      minute: 1,
+      payload: 'duoyi://todo/68',
+    );
+    expect(fallback.operations, ['cancel:68', 'daily-start:1', 'daily-done:1']);
+
+    await tester.pump(const Duration(minutes: 1, seconds: 1));
+    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 10 && fallback.dailyCalls < 2; attempt++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    expect(find.text('顺序刷新'), findsOneWidget);
+    expect(fallback.operations.sublist(3), [
+      'cancel:68',
+      'daily-start:2',
+      'daily-done:2',
+    ]);
+    await sink.cancel(68);
+  });
+
   testWidgets('repeating popup registers daily notification fallback', (
     tester,
   ) async {
@@ -401,6 +574,83 @@ void main() {
       throwsA(isA<ReminderPopupFallbackUnavailableException>()),
     );
     expect(fallback.daily, isEmpty);
+  });
+
+  testWidgets('repeating popup reports second fallback registration failure', (
+    tester,
+  ) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final now = DateTime(2030, 6, 1, 10);
+    final fallback = _FakeNotificationFallback()
+      ..dailyError = StateError('second repeating fallback failed')
+      ..failDailyCall = 2;
+    final sink = ForegroundReminderPopupSink(
+      contextGetter: () => navigatorKey.currentContext,
+      notificationFallback: fallback,
+      nowGetter: () => now,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        home: const Scaffold(body: SizedBox()),
+      ),
+    );
+    await sink.scheduleRepeating(
+      id: 69,
+      title: '每日提醒',
+      body: '兜底失败',
+      hour: 10,
+      minute: 1,
+      payload: 'duoyi://todo/69',
+    );
+
+    await tester.pump(const Duration(minutes: 1, seconds: 1));
+    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 10 && fallback.dailyCalls < 2; attempt++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    expect(fallback.dailyCalls, 2);
+    expect(fallback.issues, hasLength(1));
+    expect(fallback.issues.single['relatedId'], '69');
+    await sink.cancel(69);
+  });
+
+  testWidgets('delayed fallback registration cannot resurrect after cancel', (
+    tester,
+  ) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final fallback = _FakeNotificationFallback()..dailyGate = Completer<void>();
+    final sink = ForegroundReminderPopupSink(
+      contextGetter: () => navigatorKey.currentContext,
+      notificationFallback: fallback,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        home: const Scaffold(body: SizedBox()),
+      ),
+    );
+
+    final schedule = sink.scheduleRepeating(
+      id: 70,
+      title: '旧提醒',
+      body: '应取消',
+      hour: 19,
+      minute: 5,
+    );
+    await tester.pump();
+    final cancel = sink.cancel(70);
+    fallback.dailyGate!.complete();
+    await Future.wait([schedule, cancel]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('旧提醒'), findsNothing);
+    expect(fallback.operations, contains('daily-done:1'));
+    expect(fallback.operations.last, 'cancel:70');
+    expect(fallback.cancelled, contains(70));
   });
 
   testWidgets('cancel closes a visible foreground reminder dialog', (

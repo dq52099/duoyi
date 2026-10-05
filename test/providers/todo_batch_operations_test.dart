@@ -239,39 +239,66 @@ void main() {
 
     expect(
       source,
-      contains('Future<TodoReminderSyncResult> _syncTodoRemindersNow() async'),
+      matches(
+        RegExp(
+          r'Future<TodoReminderSyncResult> _syncTodoRemindersNow\(\{\s*String\? reportTodoId,?\s*\}\) async',
+        ),
+      ),
     );
     expect(source, contains('class TodoReminderSyncResult'));
     expect(source, contains('class TodoMutationResult'));
     expect(source, contains('int _nextReminderSyncGeneration'));
     expect(source, contains('void _applyReminderSyncResult'));
     expect(source, contains('String? get lastReminderSyncIssue'));
+    expect(source, contains('String? get lastReminderScheduleIssue'));
+    expect(source, contains('DateTime? get lastReminderScheduleIssueAt'));
     expect(source, contains('DateTime? get lastReminderSyncAttemptAt'));
     expect(source, contains('DateTime? get lastReminderSyncSucceededAt'));
     expect(source, contains('Future<void> _storageWriteQueue'));
     expect(source, contains('final Set<String> _inFlightCreateKeys'));
     expect(source, contains('_createInFlightDuplicateKey(todo)'));
-    expect(source, contains("issue: 'reminder_scheduler_missing'"));
+    expect(source, contains("resultFor('reminder_scheduler_missing')"));
+    expect(source, contains('_lastReminderSyncIssue = result.issue'));
     expect(
       source,
       contains(
         "debugPrint('[TodoProvider] reminder sync skipped: scheduler missing')",
       ),
     );
-    expect(source, contains('await scheduler.syncTodos(List.of(_todos))'));
-    expect(source, contains('issue: null'));
-    expect(source, contains('succeededAt: DateTime.now()'));
+    expect(
+      source,
+      contains('scheduler.syncTodos(List.of(_todos)).then((_) => null)'),
+    );
+    expect(source, contains('.syncTodos(List.of(_todos))'));
+    expect(source, contains('syncTodosAndGetTodoFailure'));
+    expect(source, contains('final result = resultFor(failure);'));
+    expect(source, contains('_lastReminderSyncIssue = null'));
+    expect(
+      source,
+      contains(
+        'succeededAt: confirmed && issue == null ? DateTime.now() : null',
+      ),
+    );
+    expect(
+      source,
+      contains('_lastReminderSyncSucceededAt = result.succeededAt'),
+    );
     expect(source, contains('on ReminderScheduleSyncException catch'));
-    expect(source, contains("e.failures.join('；')"));
-    expect(source, contains('issue: e.toString()'));
+    expect(source, contains("error.failures.join('；')"));
+    expect(source, contains('final result = resultFor(error.toString());'));
+    expect(source, contains('_lastReminderSyncIssue = result.issue'));
 
     expect(
       method(
         'Future<void> addTodo(',
         'Future<TodoReminderSyncResult?> addTodoWithResult(',
       ),
-      contains(
-        'await addTodoWithResult(todo, waitForReminderSync: waitForReminderSync);',
+      allOf(
+        contains('await addTodoWithResult('),
+        contains('waitForReminderSync: waitForReminderSync,'),
+        contains(
+          'reportReminderScheduleFailure: reportReminderScheduleFailure,',
+        ),
       ),
     );
     expect(
@@ -281,7 +308,20 @@ void main() {
       ),
       allOf(
         contains('bool waitForReminderSync = true'),
-        contains('await _syncTodoRemindersNow();'),
+        contains('await _syncTodoRemindersNow('),
+        contains(
+          'reportTodoId: reportReminderScheduleFailure ? todo.id : null',
+        ),
+        contains('unawaited(_syncTodoRemindersNow());'),
+      ),
+    );
+    expect(
+      method('Future<void> addTodo(', 'Future<TodoImportSummary> importTodos('),
+      allOf(
+        contains('bool waitForReminderSync = true'),
+        contains('bool reportReminderScheduleFailure = false'),
+        contains('reportReminderScheduleFailure'),
+        contains('await _syncTodoRemindersNow('),
         contains('unawaited(_syncTodoRemindersNow());'),
       ),
     );

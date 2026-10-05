@@ -4802,6 +4802,18 @@ abstract class AppLocalizations {
   /// **'紧急'**
   String get todoPriorityUrgent;
 
+  /// No description provided for @todoQuickAddReminderPreflightFailedPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒权限检查失败，待办未创建：'**
+  String get todoQuickAddReminderPreflightFailedPrefix;
+
+  /// No description provided for @todoQuickAddReminderSyncFailedPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'待办已创建，但提醒未能确认注册：'**
+  String get todoQuickAddReminderSyncFailedPrefix;
+
   /// No description provided for @calendarMonth.
   ///
   /// In zh, this message translates to:
@@ -5215,6 +5227,78 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'工作日'**
   String get repeatWeekdays;
+
+  /// No description provided for @habitActiveWeekdays.
+  ///
+  /// In zh, this message translates to:
+  /// **'生效星期'**
+  String get habitActiveWeekdays;
+
+  /// No description provided for @habitActiveWeekdaysHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'勾选习惯在哪些天生效，未勾选的日子不计入统计'**
+  String get habitActiveWeekdaysHint;
+
+  /// No description provided for @habitActiveWeekdaysReminderHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'每周提醒日与生效星期相互独立，保存后互不改动'**
+  String get habitActiveWeekdaysReminderHint;
+
+  /// No description provided for @syncStatusTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'云同步'**
+  String get syncStatusTitle;
+
+  /// No description provided for @syncStateNever.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未同步'**
+  String get syncStateNever;
+
+  /// No description provided for @syncStateNeverHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录并开启云同步后，数据会自动备份到云端'**
+  String get syncStateNeverHint;
+
+  /// No description provided for @syncStateSyncing.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在同步…'**
+  String get syncStateSyncing;
+
+  /// No description provided for @syncStateSynced.
+  ///
+  /// In zh, this message translates to:
+  /// **'已同步'**
+  String get syncStateSynced;
+
+  /// No description provided for @syncStateFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'同步失败'**
+  String get syncStateFailed;
+
+  /// No description provided for @syncLastSyncPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'上次同步 '**
+  String get syncLastSyncPrefix;
+
+  /// No description provided for @syncPendingBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'待同步'**
+  String get syncPendingBadge;
+
+  /// No description provided for @syncStateAutoRetryHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'将在后台自动重试'**
+  String get syncStateAutoRetryHint;
 }
 
 class _AppLocalizationsDelegate

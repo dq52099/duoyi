@@ -2494,6 +2494,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get todoPriorityUrgent => 'Urgent';
 
   @override
+  String get todoQuickAddReminderPreflightFailedPrefix =>
+      'Reminder permission check failed; task was not created: ';
+
+  @override
+  String get todoQuickAddReminderSyncFailedPrefix =>
+      'Task was created, but reminder registration could not be confirmed: ';
+
+  @override
   String get calendarMonth => 'Month';
 
   @override
@@ -2699,4 +2707,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get repeatWeekdays => 'Weekdays';
+
+  @override
+  String get habitActiveWeekdays => 'Active weekdays';
+
+  @override
+  String get habitActiveWeekdaysHint =>
+      'Pick the days this habit is active; unchecked days are excluded from stats';
+
+  @override
+  String get habitActiveWeekdaysReminderHint =>
+      'Weekly reminder days are independent of active weekdays; neither changes the other';
+
+  @override
+  String get syncStatusTitle => 'Cloud sync';
+
+  @override
+  String get syncStateNever => 'Not synced yet';
+
+  @override
+  String get syncStateNeverHint =>
+      'Sign in and enable cloud sync to back up your data automatically';
+
+  @override
+  String get syncStateSyncing => 'Syncing…';
+
+  @override
+  String get syncStateSynced => 'Synced';
+
+  @override
+  String get syncStateFailed => 'Sync failed';
+
+  @override
+  String get syncLastSyncPrefix => 'Last synced ';
+
+  @override
+  String get syncPendingBadge => 'Pending';
+
+  @override
+  String get syncStateAutoRetryHint =>
+      'Will retry automatically in the background';
 }

@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/note.dart';
 import '../services/account_local_data_cleaner.dart';
@@ -9,6 +9,7 @@ class NoteProvider extends ChangeNotifier {
   static const _key = 'duoyi_notes';
   List<NoteItem> _notes = [];
   int _storageGeneration = 0;
+  int _saveRevision = 0;
   VoidCallback? onLocalMutationPersisted;
 
   List<NoteItem> get notes => _sorted(_notes);
@@ -30,7 +31,12 @@ class NoteProvider extends ChangeNotifier {
       return;
     }
     final data = prefs.getStringList(_key) ?? [];
-    _notes = data.map((e) => NoteItem.fromJson(jsonDecode(e))).toList();
+    final loadedNotes = data
+        .map((e) => NoteItem.fromJson(jsonDecode(e)))
+        .toList();
+    // An accepted reload supersedes any save snapshots captured before it.
+    _saveRevision++;
+    _notes = loadedNotes;
     notifyListeners();
   }
 
@@ -41,19 +47,33 @@ class NoteProvider extends ChangeNotifier {
   }
 
   Future<void> _save() async {
+    final saveRevision = ++_saveRevision;
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final snapshot = List<NoteItem>.of(_notes);
+    // Large lists can block the UI while JSON is encoded. Match todo storage:
+    // encode the captured model snapshot in a background isolate when useful.
+    final data = snapshot.length >= _isolateEncodeMinItems
+        ? await compute(_encodeNoteStoragePayload, snapshot)
+        : snapshot.map((e) => jsonEncode(e.toJson())).toList();
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return;
-    }
-    final data = _notes.map((e) => jsonEncode(e.toJson())).toList();
+    if (!_isCurrentSave(saveRevision, generation, accountGeneration)) return;
     await prefs.setStringList(_key, data);
+    if (!_isCurrentSave(saveRevision, generation, accountGeneration)) return;
     _notifyLocalMutationPersisted();
     notifyListeners();
+  }
+
+  bool _isCurrentSave(
+    int saveRevision,
+    int storageGeneration,
+    int accountGeneration,
+  ) {
+    return saveRevision == _saveRevision &&
+        storageGeneration == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        );
   }
 
   void _notifyLocalMutationPersisted() {
@@ -146,3 +166,9 @@ class NoteImportSummary {
     required this.skippedDuplicates,
   });
 }
+
+/// 单文件本地持久化的 JSON 编码条数阈值：超过后挪到后台 isolate 编码。
+const int _isolateEncodeMinItems = 500;
+
+List<String> _encodeNoteStoragePayload(List<NoteItem> notes) =>
+    notes.map((e) => jsonEncode(e.toJson())).toList();

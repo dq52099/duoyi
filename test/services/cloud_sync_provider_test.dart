@@ -1008,7 +1008,8 @@ void main() {
     );
     expect(providerSource, contains("client.post('/api/sync/pull'"));
     expect(providerSource, contains("'collection_hashes'"));
-    expect(providerSource, contains('_buildCollectionHashes(payload)'));
+    expect(providerSource, contains('_collectionHashForKey('));
+    expect(providerSource, contains('_itemHashBucketForKey('));
     expect(providerSource, contains('static const _syncPullCollections'));
     expect(providerSource, contains('sha256'));
     expect(providerSource, contains('.convert(utf8.encode'));
@@ -1092,7 +1093,11 @@ void main() {
     expect(providerSource, contains("static const _itemHashesStorageKey"));
     expect(providerSource, contains("'sync_item_hashes'"));
     expect(providerSource, contains('_lastItemHashes'));
-    expect(providerSource, contains('_buildItemHashes(payload)'));
+    expect(
+      providerSource,
+      contains('_itemHashBucketForKey('),
+      reason: '条目哈希按集合计算并缓存，原始存储不变的集合复用结果，避免重复全量哈希。',
+    );
     expect(providerSource, contains('_buildSyncItemDelta('));
     expect(providerSource, contains("client.post('/api/sync/item-delta'"));
     expect(providerSource, contains("'items': items"));
@@ -1216,13 +1221,19 @@ void main() {
       contains('Future<_SyncApplyResult> _applySyncResponse'),
     );
     expect(providerSource, contains('final skippedCollections = <String>{};'));
-    expect(providerSource, contains('final localChangedBeforeApply ='));
+    expect(
+      providerSource,
+      contains(
+        'var localChangedBeforeApply =\n'
+        '        _localChangeGeneration != localChangeGenerationAtStart;',
+      ),
+      reason: '应用前的本地改动判定改用变更生成数，避免每轮同步在主线程全量重建负载比对哈希。',
+    );
     expect(providerSource, contains('skippedCollections.add(remoteKey);'));
     expect(
       providerSource,
       contains('if (!localChangedBeforeApply && skippedCollections.isEmpty)'),
     );
-    expect(providerSource, contains('final previousHashes ='));
     expect(providerSource, contains('final nextHashes ='));
     expect(
       providerSource,
@@ -1243,6 +1254,11 @@ void main() {
       contains(
         'reloadTasks.add(() => todoProvider.loadFromStorage(force: true))',
       ),
+    );
+    expect(
+      mainSource,
+      contains('todoProvider.loadFromStorage(force: true)'),
+      reason: '云同步回写后 TodoProvider 必须强制重读，避免内存旧快照覆盖同步结果。',
     );
     expect(mainSource, contains("changedCollections.contains('habits')"));
     expect(
@@ -1328,7 +1344,7 @@ void main() {
       'lib/providers/cloud_sync_provider.dart',
     ).readAsStringSync();
 
-    expect(providerSource, contains('Future<void> _writeLocalList('));
+    expect(providerSource, contains('Future<bool> _writeLocalList('));
     expect(providerSource, contains('Map<String, dynamic> _readLocalObject('));
     expect(providerSource, contains('Future<void> _writeLocalObject('));
     expect(
@@ -1341,7 +1357,7 @@ void main() {
     );
     expect(
       providerSource,
-      contains('await _writeLocalList(prefs, localKey, writeValue);'),
+      contains('if (!await _writeLocalList(prefs, localKey, writeValue))'),
     );
     expect(
       providerSource,

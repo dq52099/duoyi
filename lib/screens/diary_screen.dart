@@ -33,7 +33,6 @@ class DiaryScreen extends StatelessWidget {
     final provider = context.watch<DiaryProvider>();
     final entries = provider.entries;
     final insights = DiaryInsightEngine.buildInsights(entries);
-    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -60,76 +59,99 @@ class DiaryScreen extends StatelessWidget {
               actionLabel: I18n.tr('diary.write'),
               onAction: () => _openEdit(context),
             )
-          : ListView(
+          : ListView.builder(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-              children: [
-                AppSurfaceCard(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AppSectionHeader(
-                        title: I18n.tr('diary.summary.title'),
-                        subtitle: I18n.tr('diary.summary.subtitle'),
-                        padding: EdgeInsets.zero,
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _stat(
-                              context,
-                              I18n.tr('diary.summary.total'),
-                              '${provider.totalCount}${I18n.tr('diary.entry.count_suffix')}',
-                              Icons.book_outlined,
-                              cs.primary,
-                            ),
-                          ),
-                          _metricDivider(cs),
-                          Expanded(
-                            child: _stat(
-                              context,
-                              I18n.tr('diary.summary.this_month'),
-                              '${provider.thisMonthCount}${I18n.tr('diary.entry.count_suffix')}',
-                              Icons.calendar_month,
-                              Colors.green,
-                            ),
-                          ),
-                          _metricDivider(cs),
-                          Expanded(
-                            child: _stat(
-                              context,
-                              I18n.tr('diary.summary.streak'),
-                              '${provider.currentStreak} ${I18n.tr('unit.day')}',
-                              Icons.bolt,
-                              Colors.orange,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      MoodHeatmap(entriesByDate: provider.entriesByDate),
-                    ],
-                  ),
-                ),
-                if (insights.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _DiaryInsightCard(insights: insights),
-                ],
-                const SizedBox(height: 12),
-                AppSectionHeader(
-                  title: I18n.tr('diary.recent.title'),
-                  subtitle:
-                      '${entries.length}${I18n.tr('diary.recent.records_suffix')}',
-                  padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-                ),
-                ...entries.map((entry) => _DiaryCard(entry: entry)),
-              ],
+              // 虚拟化：index 0 摘要头卡，随后（可选）洞察卡与列表头，
+              // 其余索引按 entries 快照懒构建卡片，避免全量构建。
+              itemCount: 2 + (insights.isNotEmpty ? 1 : 0) + entries.length,
+              itemBuilder: (context, index) {
+                final hasInsights = insights.isNotEmpty;
+                if (index == 0) return _buildSummaryCard(context, provider);
+                if (index == 1) {
+                  return hasInsights
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: _DiaryInsightCard(insights: insights),
+                        )
+                      : _buildRecentHeader(entries.length);
+                }
+                if (index == 2 && hasInsights) {
+                  return _buildRecentHeader(entries.length);
+                }
+                final firstCardIndex = 2 + (hasInsights ? 1 : 0);
+                return _DiaryCard(entry: entries[index - firstCardIndex]);
+              },
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEdit(context),
         icon: const Icon(Icons.edit_note),
         label: Text(I18n.tr('diary.write')),
+      ),
+    );
+  }
+
+  /// 摘要头卡：统计行 + 心情热力图。
+  Widget _buildSummaryCard(BuildContext context, DiaryProvider provider) {
+    final cs = Theme.of(context).colorScheme;
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppSectionHeader(
+            title: I18n.tr('diary.summary.title'),
+            subtitle: I18n.tr('diary.summary.subtitle'),
+            padding: EdgeInsets.zero,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _stat(
+                  context,
+                  I18n.tr('diary.summary.total'),
+                  '${provider.totalCount}${I18n.tr('diary.entry.count_suffix')}',
+                  Icons.book_outlined,
+                  cs.primary,
+                ),
+              ),
+              _metricDivider(cs),
+              Expanded(
+                child: _stat(
+                  context,
+                  I18n.tr('diary.summary.this_month'),
+                  '${provider.thisMonthCount}${I18n.tr('diary.entry.count_suffix')}',
+                  Icons.calendar_month,
+                  Colors.green,
+                ),
+              ),
+              _metricDivider(cs),
+              Expanded(
+                child: _stat(
+                  context,
+                  I18n.tr('diary.summary.streak'),
+                  '${provider.currentStreak} ${I18n.tr('unit.day')}',
+                  Icons.bolt,
+                  Colors.orange,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          MoodHeatmap(entriesByDate: provider.entriesByDate),
+        ],
+      ),
+    );
+  }
+
+  /// "最近日记"列表头（含条目数）。
+  Widget _buildRecentHeader(int count) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: AppSectionHeader(
+        title: I18n.tr('diary.recent.title'),
+        subtitle: '$count${I18n.tr('diary.recent.records_suffix')}',
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
       ),
     );
   }
@@ -429,6 +451,7 @@ class _DiaryCard extends StatelessWidget {
     final accent = _moodColor(entry.mood, cs);
 
     return AppSurfaceCard(
+      key: ValueKey('diary_card_${entry.id}'),
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       onTap: () => showDiaryEditor(context, entry: entry),

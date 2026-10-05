@@ -11,6 +11,7 @@ import '../core/local_timezone_resolver.dart';
 import 'native_reminder_ringtone.dart';
 import 'notification_permission_exception.dart';
 import 'reminder_ringtone_settings.dart';
+import 'reminder_notification_id.dart';
 
 /// 本地通知 / 每日闹钟(Android + iOS + Linux 实现)。
 class LocalNotifications {
@@ -1101,7 +1102,8 @@ class LocalNotifications {
     return h == 0 ? weekday : h;
   }
 
-  int _legacySubId(int base, int weekday) => base * 10 + weekday;
+  int _legacySubId(int base, int weekday) =>
+      legacyWeekdayNotificationId(base, weekday);
 
   tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
     final now = tz.TZDateTime.now(tz.local);

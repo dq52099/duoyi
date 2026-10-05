@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/app_brand.dart';
 import '../providers/theme_provider.dart';
 import 'surface_components.dart';
 
@@ -119,6 +120,50 @@ class BrandScaffold extends StatelessWidget {
     return ColoredBox(
       color: paintBackground ? routeBackground : Colors.transparent,
       child: paintBackground ? BrandBackground(child: scaffold) : scaffold,
+    );
+  }
+}
+
+/// 主题卡片的背景图缩略图（纯预览，不触发任何解锁/网络操作）。
+///
+/// 有 [AppBrand.backgroundAsset] 时渲染圆角裁剪的图片，加载失败或
+/// 无图（默认主题）时回退到 [fallback]——复用 [BrandBackground] 的
+/// errorBuilder 方案，缺图不会崩溃。
+class BrandBackgroundThumbnail extends StatelessWidget {
+  final AppBrand brand;
+  final double size;
+  final Widget fallback;
+
+  const BrandBackgroundThumbnail({
+    super.key,
+    required this.brand,
+    this.size = 52,
+    required this.fallback,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = brand.backgroundAsset;
+    return Container(
+      width: size,
+      height: size,
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: brand.theme.colorScheme.primary.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: asset == null
+          ? fallback
+          : Image.asset(
+              asset,
+              fit: BoxFit.cover,
+              width: size,
+              height: size,
+              filterQuality: FilterQuality.low,
+              gaplessPlayback: true,
+              errorBuilder: (context, error, stack) => fallback,
+            ),
     );
   }
 }

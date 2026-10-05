@@ -171,6 +171,16 @@ void main() {
       reason: '通知按钮回调需要插件 action receiver，但不能对外暴露。',
     );
     expect(receiver, contains('context.startForegroundService(serviceIntent)'));
+    expect(
+      scheduler,
+      contains('(base.toLong() * 10L + weekday.toLong()).toInt()'),
+      reason: '原生闹钟旧周期 ID 必须保留 Android signed Int 溢出语义。',
+    );
+    expect(
+      service,
+      contains('(base.toLong() * 10L + weekday.toLong()).toInt()'),
+      reason: '铃声服务清理插件通知时必须使用相同旧周期 ID 算法。',
+    );
     expect(receiver, contains('try {'));
     expect(receiver, contains('showFallbackNotification('));
     expect(service, contains('start ringtone playback failed'));
@@ -656,6 +666,12 @@ void main() {
     expect(scheduler, isNot(contains('return "Asia/Shanghai"')));
     expect(mainActivity, isNot(contains('?: "Asia/Shanghai"')));
     expect(scheduler, contains('return systemDefault'));
+    expect(mainActivity, contains('call.arguments as? Map<*, *>'));
+    expect(
+      mainActivity,
+      contains('(arguments?.get("id") as? Number)?.toInt()'),
+    );
+    expect(mainActivity, isNot(contains('call.argument<Int>("id")')));
   });
 
   test('点击内置铃声通知进入应用会停止响铃服务', () {

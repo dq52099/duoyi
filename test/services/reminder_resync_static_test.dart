@@ -241,21 +241,25 @@ void main() {
 
     expect(
       sources['todo'],
-      contains('Future<TodoReminderSyncResult> _syncTodoRemindersNow()'),
+      matches(
+        RegExp(
+          r'Future<TodoReminderSyncResult> _syncTodoRemindersNow\(\{\s*String\? reportTodoId,?\s*\}\)',
+        ),
+      ),
     );
+    expect(sources['todo'], contains('.syncTodos(List.of(_todos))'));
     expect(
       sources['todo'],
-      contains('await scheduler.syncTodos(List.of(_todos))'),
+      contains('syncTodosAndGetTodoFailure'),
+      reason: '创建路径要能读取按待办 ID 记录的注册失败，避免把“已保存”误报成“提醒已注册”。',
     );
+    expect(sources['todo'], contains('lastReminderScheduleIssue'));
     expect(
       sources['habit'],
       contains('Future<void> _syncRemindersNow() async'),
     );
     expect(sources['habit'], contains('syncHabits(List.of(_habits))'));
-    expect(
-      sources['anniversary'],
-      contains('syncAnniversaries(items)'),
-    );
+    expect(sources['anniversary'], contains('syncAnniversaries(items)'));
     expect(sources['countdown'], contains('syncCountdowns(items)'));
     expect(
       sources['goal'],

@@ -22,6 +22,7 @@ import '../widgets/brand_background.dart';
 import '../widgets/cached_avatar_image.dart';
 import '../widgets/stats_overview_cards.dart';
 import '../widgets/surface_components.dart';
+import '../widgets/sync_status_card.dart';
 import 'theme_picker_screen.dart';
 import 'login_screen.dart';
 import 'announcements_screen.dart';
@@ -302,88 +303,96 @@ class MineScreen extends StatelessWidget {
                 ],
               );
             case 8:
-              return _TileGroup(
-                title: '数据协作',
+              return Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _Tile(
-                    icon: Icons.groups_2_outlined,
-                    label: '共享空间',
-                    color: Colors.cyan,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            const BrandRouteSurface(child: ShareScreen()),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.extension_outlined,
-                    label: '扩展功能',
-                    color: Colors.deepPurple,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const BrandRouteSurface(
-                          child: IntegrationsScreen(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.sync_problem_outlined,
-                    label: '同步冲突记录',
-                    color: Colors.orange,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const BrandRouteSurface(
-                          child: SyncConflictLogScreen(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.event_note_outlined,
-                    label: '导出为日历 (.ics)',
-                    color: Colors.lightBlue,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            const BrandRouteSurface(child: ExportScreen()),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.backup_outlined,
-                    label: '备份',
-                    color: Colors.brown,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const BrandRouteSurface(
-                          child: BackupScreen(
-                            initialMode: BackupEntryMode.backup,
+                  // 云同步状态卡：上次同步时间 / 进行中 / 未同步角标 / 失败原因
+                  // 与自动重试提示，紧贴"数据协作"分组（含同步冲突记录入口）上方。
+                  const SyncStatusCard(),
+                  _TileGroup(
+                    title: '数据协作',
+                    children: [
+                      _Tile(
+                        icon: Icons.groups_2_outlined,
+                        label: '共享空间',
+                        color: Colors.cyan,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const BrandRouteSurface(child: ShareScreen()),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.restore_outlined,
-                    label: '恢复数据',
-                    color: Colors.blueGrey,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const BrandRouteSurface(
-                          child: BackupScreen(
-                            initialMode: BackupEntryMode.restore,
+                      _Tile(
+                        icon: Icons.extension_outlined,
+                        label: '扩展功能',
+                        color: Colors.deepPurple,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BrandRouteSurface(
+                              child: IntegrationsScreen(),
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      _Tile(
+                        icon: Icons.sync_problem_outlined,
+                        label: '同步冲突记录',
+                        color: Colors.orange,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BrandRouteSurface(
+                              child: SyncConflictLogScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _Tile(
+                        icon: Icons.event_note_outlined,
+                        label: '导出为日历 (.ics)',
+                        color: Colors.lightBlue,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const BrandRouteSurface(child: ExportScreen()),
+                          ),
+                        ),
+                      ),
+                      _Tile(
+                        icon: Icons.backup_outlined,
+                        label: '备份',
+                        color: Colors.brown,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BrandRouteSurface(
+                              child: BackupScreen(
+                                initialMode: BackupEntryMode.backup,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _Tile(
+                        icon: Icons.restore_outlined,
+                        label: '恢复数据',
+                        color: Colors.blueGrey,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BrandRouteSurface(
+                              child: BackupScreen(
+                                initialMode: BackupEntryMode.restore,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               );

@@ -138,9 +138,21 @@ class AchievementProvider extends ChangeNotifier {
   /// [generation] 非空时仅当它仍是最新一轮抑制才放开——这样上一轮切号的
   /// 安全兜底定时器不会误恢复正处于抑制窗口的新一轮切号。云端基线回填的
   /// 即时恢复不传 [generation]，无条件放开。
+  ///
+  /// 恢复前会把当前所有已解锁成就（`_unlockedAt.keys`）标记为"已通知"：
+  /// 这些成就是在抑制窗口内 / 云端基线回填期间记录下来的，属于"早已解锁"，
+  /// 不应在恢复后被当成"新解锁"重复弹窗。真正的新解锁只可能发生在恢复之后。
   void resumeUnlockFeedback({int? generation}) {
     if (generation != null && generation != _unlockSuppressionGeneration) {
       return;
+    }
+    if (_unlockFeedbackSuppressed) {
+      final beforeCount = _notifiedAchievementIds.length;
+      _notifiedAchievementIds.addAll(_unlockedAt.keys);
+      if (_notifiedAchievementIds.length != beforeCount) {
+        // 持久化新增的"已通知"标记，避免下次 loadFromStorage 再次丢失。
+        unawaited(_saveNotifiedAchievements());
+      }
     }
     _unlockFeedbackSuppressed = false;
   }

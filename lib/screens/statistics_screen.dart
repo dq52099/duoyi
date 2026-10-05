@@ -29,6 +29,7 @@ import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
 import '../services/ai_service.dart';
 import '../widgets/habit_heatmap.dart';
+import '../widgets/result_states.dart';
 import '../widgets/surface_components.dart';
 import 'ai_history_screen.dart';
 import 'time_audit_screen.dart';
@@ -760,12 +761,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           ),
           const SizedBox(height: 8),
           if (stats.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text('暂无专注标签数据', style: TextStyle(color: Colors.grey)),
-              ),
-            )
+            const EmptyHint(icon: Icons.timer_outlined, message: '暂无专注标签数据')
           else
             for (final (index, stat) in stats.indexed)
               Padding(
@@ -864,12 +860,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           ),
           const SizedBox(height: 8),
           if (activeSeries.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text('暂无专注标签趋势', style: TextStyle(color: Colors.grey)),
-              ),
-            )
+            const EmptyHint(icon: Icons.trending_up, message: '暂无专注标签趋势')
           else ...[
             SizedBox(
               height: 190,
@@ -1050,12 +1041,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           SizedBox(
             height: 190,
             child: activePoints.isEmpty
-                ? const Center(
-                    child: Text(
-                      '暂无交叉分析数据',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  )
+                ? const EmptyHint(icon: Icons.donut_small, message: '暂无交叉分析数据')
                 : _buildFocusTodoScatter(correlation, cs),
           ),
           const SizedBox(height: 10),
@@ -1223,12 +1209,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           SizedBox(
             height: 190,
             child: activePoints.isEmpty
-                ? const Center(
-                    child: Text(
-                      '暂无习惯交叉数据',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  )
+                ? const EmptyHint(icon: Icons.repeat, message: '暂无习惯交叉数据')
                 : _buildHabitTodoScatter(correlation, cs),
           ),
           const SizedBox(height: 10),
@@ -1396,12 +1377,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           SizedBox(
             height: 190,
             child: activePoints.isEmpty
-                ? const Center(
-                    child: Text(
-                      '暂无日记专注交叉数据',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  )
+                ? const EmptyHint(icon: Icons.menu_book, message: '暂无日记专注交叉数据')
                 : _buildDiaryFocusScatter(correlation, cs),
           ),
           const SizedBox(height: 10),
@@ -1552,11 +1528,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             height: 200,
             child: trend.hasData
                 ? _buildTimeCategoryShareChart(trend, cs)
-                : const Center(
-                    child: Text(
-                      '暂无时间分类趋势',
-                      style: TextStyle(color: Colors.grey),
-                    ),
+                : const EmptyHint(
+                    icon: Icons.pie_chart_outline,
+                    message: '暂无时间分类趋势',
                   ),
           ),
           if (trend.hasData) ...[
@@ -1723,12 +1697,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             height: 180,
             child: hasData
                 ? _buildTimeOutputEfficiencyChart(trend, cs)
-                : const Center(
-                    child: Text(
-                      '暂无时间投入产出数据',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
+                : const EmptyHint(icon: Icons.swap_vert, message: '暂无时间投入产出数据'),
           ),
         ],
       ),
@@ -1942,12 +1911,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           ),
           const SizedBox(height: 10),
           if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text('暂无项目效率数据', style: TextStyle(color: Colors.grey)),
-              ),
-            )
+            const EmptyHint(icon: Icons.speed, message: '暂无项目效率数据')
           else ...[
             SizedBox(
               height: 190,
@@ -2238,9 +2202,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         .toList();
     final total = values.fold<int>(0, (sum, entry) => sum + entry.value);
     if (total == 0) {
-      return const Center(
-        child: Text('暂无时间足迹', style: TextStyle(color: Colors.grey)),
-      );
+      return const EmptyHint(icon: Icons.schedule, message: '暂无时间足迹');
     }
     PieChartSectionData sec(int v, Color c) => PieChartSectionData(
       value: v.toDouble(),
@@ -2328,12 +2290,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Widget _buildAuditTimeline(List<TimeEntry> entries, ColorScheme cs) {
     if (entries.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(
-          child: Text('暂无时间记录', style: TextStyle(color: Colors.grey)),
-        ),
-      );
+      return const EmptyHint(icon: Icons.schedule, message: '暂无时间记录');
     }
     final sorted = [...entries]..sort((a, b) => b.startAt.compareTo(a.startAt));
     return Column(
@@ -2632,9 +2589,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }
 
     if (buckets.values.every((v) => v == 0)) {
-      return const Center(
-        child: Text('暂无专注数据', style: TextStyle(color: Colors.grey)),
-      );
+      return const EmptyHint(icon: Icons.timer_outlined, message: '暂无专注数据');
     }
 
     final entries = buckets.entries.toList();
@@ -4577,9 +4532,7 @@ class _ProductivityTrendCard extends StatelessWidget {
           SizedBox(
             height: 180,
             child: points.isEmpty
-                ? const Center(
-                    child: Text('暂无趋势数据', style: TextStyle(color: Colors.grey)),
-                  )
+                ? const EmptyHint(icon: Icons.trending_up, message: '暂无趋势数据')
                 : _buildChart(context, cs),
           ),
           if (latest != null && best != null) ...[
@@ -5538,9 +5491,7 @@ class _WeeklyTimeOverview extends StatelessWidget {
     final nonZero = sourceSeconds.entries.where((e) => e.value > 0).toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     if (nonZero.isEmpty) {
-      return const Center(
-        child: Text('暂无数据', style: TextStyle(color: Colors.grey)),
-      );
+      return const EmptyHint(icon: Icons.inbox_outlined, message: '暂无数据');
     }
     final total = nonZero.fold<int>(0, (s, e) => s + e.value);
 
@@ -5620,9 +5571,7 @@ class _WeeklyTimeOverview extends StatelessWidget {
 
     final maxV = buckets.values.fold<int>(0, (a, b) => a > b ? a : b);
     if (maxV == 0) {
-      return const Center(
-        child: Text('暂无本周数据', style: TextStyle(color: Colors.grey)),
-      );
+      return const EmptyHint(icon: Icons.date_range, message: '暂无本周数据');
     }
 
     final entries = buckets.entries.toList();
