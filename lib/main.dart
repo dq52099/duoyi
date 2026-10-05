@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,8 @@ import 'core/app_version.dart';
 import 'core/achievements.dart';
 import 'core/completion_visibility_policy.dart';
 import 'core/crash_guard.dart';
+import 'core/design_tokens.dart';
+import 'core/desktop_tokens.dart';
 import 'core/i18n.dart';
 import 'core/iterable_extensions.dart';
 import 'core/local_timezone_resolver.dart';
@@ -4197,19 +4200,76 @@ class MainShellState extends State<MainShell> {
     required bool showingHiddenTab,
     required List<NavigationDestination> destinations,
   }) {
+    // 底部导航"液态玻璃"：仅注册了 AppSurfaceStyle（默认主题）时启用——
+    // 半透明底色由 navigationBarTheme 档位控制，模糊在此包 BackdropFilter，
+    // 其余 7 套主题（navBarBlurSigma=0）保持原样，不引入模糊开销。
+    final navBarBlurSigma = appSurfaceStyleOf(context)?.navBarBlurSigma ?? 0;
+    final navBar = NavigationBar(
+      selectedIndex: selectedNavIndex < 0 ? 0 : selectedNavIndex,
+      onDestinationSelected: (i) => setState(() {
+        _currentIndex = safeVisibleTabs[i];
+        _builtTabs.add(_currentIndex);
+        _allowHiddenCurrentIndex = false;
+        _hasExplicitNavigation = true;
+      }),
+      destinations: destinations,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+    );
+    // 液态玻璃需要真实内容垫在导航条下：Scaffold 默认（extendBody=false）
+    // 的 body 不延伸到 bottomNavigationBar 之下，BackdropFilter 无内容可
+    // 模糊，半透明白底色只能合成在根背景上呈灰条。仅对玻璃主题开启
+    // extendBody，让 BrandBackground 铺到条下；页面内容用与导航条等高的
+    // 内层 Padding 避让，并把 Scaffold 因 extendBody 对 body 提升的
+    // MediaQuery bottom padding/viewInsets 归零——不延伸时 Scaffold 对 body
+    // 的基线本就是移除这两个 bottom 值（bottomNavigationBar 槽位
+    // removeBottomPadding、resizeToAvoidBottomInset 时 removeBottomInset），
+    // 归零后屏内 SafeArea/滚动尾部 padding/键盘消费者与 7 套非玻璃主题一致。
+    // 隐藏页返回条（不透明）与其余 7 套主题不延伸，观感不变。
+    final glassNavBarActive = navBarBlurSigma > 0 && !showingHiddenTab;
+    // web 渲染器下 BackdropFilter 逐帧回读像素、开销显著高于原生：模糊
+    // 降到轻量档（毛玻璃观感保留、像素回读量减半），原生保持全档。
+    final navBarBlurEffectiveSigma =
+        WebTarget.shouldReduceNavBarBlur &&
+            navBarBlurSigma > DesignTokens.navBarWebBlurSigma
+        ? DesignTokens.navBarWebBlurSigma
+        : navBarBlurSigma;
+    final rootMediaQuery = MediaQuery.of(context);
+    // NavigationBar 结构为 Material > SafeArea > SizedBox(height)，
+    // 总高 = navigationBarTheme.height + 系统底部 inset。
+    final navBarTotalHeight =
+        (NavigationBarTheme.of(context).height ?? 80.0) +
+        rootMediaQuery.padding.bottom;
+    final tabStack = IndexedStack(
+      index: safeIndex,
+      children: List.generate(
+        _tabCount,
+        (tab) => _builtTabs.contains(tab)
+            ? _buildTab(tab, safeVisibleTabs)
+            : _LazyTabPlaceholder(tab: tab),
+      ),
+    );
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: BrandBackground(
-        child: IndexedStack(
-          index: safeIndex,
-          children: List.generate(
-            _tabCount,
-            (tab) => _builtTabs.contains(tab)
-                ? _buildTab(tab, safeVisibleTabs)
-                : _LazyTabPlaceholder(tab: tab),
-          ),
-        ),
-      ),
+      extendBody: glassNavBarActive,
+      body: glassNavBarActive
+          ? MediaQuery(
+              // 对齐不延伸时的 Scaffold body 基线：两个 bottom 值归零，而非
+              // 还原为系统原值。系统 inset 已由导航条内部 SafeArea 消费
+              // （条高 = height + inset），也含在内层 Padding 里；若还原成
+              // 系统原值，屏内 SafeArea/滚动尾部 padding 会在其上再多避让
+              // 一次 inset（如批量操作条与导航条之间露出背景空条）。
+              data: rootMediaQuery.copyWith(
+                padding: rootMediaQuery.padding.copyWith(bottom: 0),
+                viewInsets: rootMediaQuery.viewInsets.copyWith(bottom: 0),
+              ),
+              child: BrandBackground(
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: navBarTotalHeight),
+                  child: tabStack,
+                ),
+              ),
+            )
+          : BrandBackground(child: tabStack),
       floatingActionButton: safeIndex == 0 && prefs.quickCaptureFab
           ? const QuickCaptureFab()
           : null,
@@ -4224,17 +4284,17 @@ class MainShellState extends State<MainShell> {
                 _hasExplicitNavigation = true;
               }),
             )
-          : NavigationBar(
-              selectedIndex: selectedNavIndex < 0 ? 0 : selectedNavIndex,
-              onDestinationSelected: (i) => setState(() {
-                _currentIndex = safeVisibleTabs[i];
-                _builtTabs.add(_currentIndex);
-                _allowHiddenCurrentIndex = false;
-                _hasExplicitNavigation = true;
-              }),
-              destinations: destinations,
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            ),
+          : glassNavBarActive
+          ? ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: navBarBlurEffectiveSigma,
+                  sigmaY: navBarBlurEffectiveSigma,
+                ),
+                child: navBar,
+              ),
+            )
+          : navBar,
     );
   }
 
@@ -4332,7 +4392,21 @@ class MainShellState extends State<MainShell> {
                   thickness: 1,
                   color: cs.outlineVariant.withValues(alpha: 0.52),
                 ),
-                Expanded(child: body),
+                Expanded(
+                  // 宽屏内容限宽：todo/habit/calendar/mine 的 body 均为全幅
+                  // Column/ListView，玻璃/实底卡面在无限宽下拉成大平板；用
+                  // 今日页桌面档同款 maxContentWidth（DesktopTokens 既有档位，
+                  // 不新增档位）一处约束全部 tab，两侧留白透出 BrandBackground。
+                  child: Center(
+                    child: ConstrainedBox(
+                      key: const ValueKey('desktop_web_body_max_width'),
+                      constraints: BoxConstraints(
+                        maxWidth: DesktopTokens.maxContentWidth,
+                      ),
+                      child: body,
+                    ),
+                  ),
+                ),
               ],
             );
           },

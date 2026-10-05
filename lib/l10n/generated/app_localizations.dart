@@ -3098,6 +3098,18 @@ abstract class AppLocalizations {
   /// **'希卡之石 · 具现化'**
   String get themeStyleBotwDescription;
 
+  /// No description provided for @themeStyleLiquidGlassName.
+  ///
+  /// In zh, this message translates to:
+  /// **'液态玻璃'**
+  String get themeStyleLiquidGlassName;
+
+  /// No description provided for @themeStyleLiquidGlassDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'iOS 玻璃拟态 · 半透明白与高光'**
+  String get themeStyleLiquidGlassDescription;
+
   /// No description provided for @goalTitle.
   ///
   /// In zh, this message translates to:

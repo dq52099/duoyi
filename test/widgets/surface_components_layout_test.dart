@@ -1,3 +1,4 @@
+import 'package:duoyi/core/app_brand.dart';
 import 'package:duoyi/core/design_tokens.dart';
 import 'package:duoyi/widgets/stats_overview_cards.dart';
 import 'package:duoyi/widgets/surface_components.dart';
@@ -200,6 +201,48 @@ void main() {
     expect(spans.value.style?.height, 1.05);
     expect(spans.unit?.style?.fontSize, 11);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('AppMetricCard 亮色下填充/描边/阴影走主题玻璃档（两套主题同源）', (tester) async {
+    Future<BoxDecoration> pumpDecoration(ThemeData theme) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: const Scaffold(
+            body: Center(
+              child: AppMetricCard(
+                title: '本周专注',
+                value: '325',
+                icon: Icons.timer,
+                color: Colors.redAccent,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final ink = tester.widget<Ink>(find.byType(Ink).first);
+      return ink.decoration! as BoxDecoration;
+    }
+
+    final defaultDecoration = await pumpDecoration(
+      AppBrands.defaultBrand.theme,
+    );
+    final glassDecoration = await pumpDecoration(AppBrands.liquidGlass.theme);
+    final defaultStyle = AppBrands.defaultBrand.theme
+        .extension<AppSurfaceStyle>()!;
+    final glassStyle = AppBrands.liquidGlass.theme
+        .extension<AppSurfaceStyle>()!;
+
+    // 填充走 cardFillColor（默认主题此前回退 surface@0.85）。
+    expect(defaultDecoration.color, defaultStyle.cardFillColor);
+    expect(glassDecoration.color, glassStyle.cardFillColor);
+    // 描边走 cardBorder（此前固定灰 outlineVariant@0.18）。
+    expect(defaultDecoration.border, defaultStyle.cardBorder);
+    expect(glassDecoration.border, glassStyle.cardBorder);
+    // 阴影走 cardShadow（此前固定无阴影）。
+    expect(defaultDecoration.boxShadow, defaultStyle.cardShadow);
+    expect(glassDecoration.boxShadow, glassStyle.cardShadow);
   });
 }
 

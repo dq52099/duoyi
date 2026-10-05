@@ -2494,6 +2494,10 @@ THEME_SHOP_CATALOG = {
         "zzz": 220,
         "yanyun": 240,
         "botw": 260,
+        # 与客户端 brandCost（premiumBrandCost 120 + AppBrands.all 索引 8 × 20）一致。
+        # 缺了它，登录用户在主题商店兑换 liquidGlass 会被 400 拒绝，
+        # 且登录同步时 activeBrand 会被回退为 defaultBrand。
+        "liquidGlass": 280,
     },
     "focus_backdrop": {
         "classic_focus": 0,

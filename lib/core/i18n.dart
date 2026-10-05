@@ -570,6 +570,8 @@ const Map<String, String> _zh = <String, String>{
   'theme.style.yanyun.description': '江湖画案 · 墨痕回转',
   'theme.style.botw.name': '希卡之石',
   'theme.style.botw.description': '希卡之石 · 具现化',
+  'theme.style.liquid_glass.name': '液态玻璃',
+  'theme.style.liquid_glass.description': 'iOS 玻璃拟态 · 半透明白与高光',
   // 目标
   'goal.title': '目标管理',
   'goal.recommended_templates': '推荐模板',

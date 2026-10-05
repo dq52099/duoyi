@@ -1598,6 +1598,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themeStyleBotwDescription => 'Sheikah Slate · materialized';
 
   @override
+  String get themeStyleLiquidGlassName => 'Liquid Glass';
+
+  @override
+  String get themeStyleLiquidGlassDescription =>
+      'iOS glassmorphism · translucent white and highlights';
+
+  @override
   String get goalTitle => 'Goals';
 
   @override

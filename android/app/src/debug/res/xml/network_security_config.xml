@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 仅 debug 构建生效：debug 资源集整体覆盖 src/main 同名文件（替换而非
+         合并），因此须完整保留 main 的域名（默认服务器
+         http://6688667.xyz 走明文），再追加本地开发联调域。release/profile
+         使用 main 的配置，不含下列开发域。 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">6688667.xyz</domain>
+        <!-- 模拟器宿主回环别名：仅本地开发联调可达（dart-define 注入
+             DUOYI_SERVER_URL=http://10.0.2.2:端口），真机上该地址无路由意义。 -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

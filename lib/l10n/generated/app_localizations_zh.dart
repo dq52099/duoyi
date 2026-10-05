@@ -1524,6 +1524,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get themeStyleBotwDescription => '希卡之石 · 具现化';
 
   @override
+  String get themeStyleLiquidGlassName => '液态玻璃';
+
+  @override
+  String get themeStyleLiquidGlassDescription => 'iOS 玻璃拟态 · 半透明白与高光';
+
+  @override
   String get goalTitle => '目标管理';
 
   @override

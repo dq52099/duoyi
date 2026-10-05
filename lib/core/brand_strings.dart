@@ -786,6 +786,82 @@ class BrandStrings {
     notifHabitRemindTitle: '修行提醒',
   );
 
+  // ---- 液态玻璃 ----
+  static const liquidGlass = BrandStrings(
+    appTitle: '多仪 · 液态玻璃',
+    greetingMorning: '早上好',
+    greetingNoon: '午安',
+    greetingAfternoon: '午后好',
+    greetingEvening: '晚上好',
+    navToday: '今天',
+    navTodo: '待办',
+    navHabit: '习惯',
+    navCalendar: '日历',
+    navFocus: '专注',
+    navMine: '我的',
+    navWidget: '小组件',
+    todoTitle: '待办事项',
+    todoMatrixView: '四象限',
+    todoListView: '列表',
+    todoEmpty: '还没有待办事项',
+    todoAddAction: '添加待办',
+    todoCreateTitle: '新待办',
+    quadrantQ1Label: '重要且紧急',
+    quadrantQ1Sub: '立即处理',
+    quadrantQ2Label: '重要不紧急',
+    quadrantQ2Sub: '安排计划',
+    quadrantQ3Label: '紧急不重要',
+    quadrantQ3Sub: '快速处理',
+    quadrantQ4Label: '不重要不紧急',
+    quadrantQ4Sub: '稍后处理',
+    subtasksHeading: '子任务',
+    habitTitle: '习惯',
+    habitTabToday: '今日打卡',
+    habitTabHeatmap: '打卡热度',
+    habitEmpty: '今天没有待打卡的习惯',
+    habitAddAction: '添加习惯',
+    habitCreateTitle: '新习惯',
+    habitWeekOverview: '本周概览',
+    habitHeatmapHeading: '打卡热度统计',
+    habitStreakLabel: '连续',
+    habitTodayDone: '已完成',
+    calendarTitle: '日历',
+    calendarTabMonth: '月',
+    calendarTabWeek: '周',
+    calendarTabDay: '日',
+    calendarEmpty: '这一天暂无安排',
+    calendarQuickAddTitle: '新建日程',
+    focusTitle: '专注',
+    focusTabTimer: '计时',
+    focusTabHistory: '记录',
+    focusStateFocus: '专注中',
+    focusStateShortBreak: '短休息',
+    focusStateLongBreak: '长休息',
+    focusCompletedSuffix: '次专注',
+    focusEmpty: '暂无专注记录',
+    focusWhiteNoiseOn: '白噪音 开',
+    focusWhiteNoiseOff: '白噪音 关',
+    focusTaskLinkLabel: '关联任务',
+    mineTitle: '我的',
+    mineProductivityScore: '效率评分',
+    mineSectionShortcuts: '快捷入口',
+    mineSectionSettings: '设置',
+    mineAllTodos: '全部待办',
+    mineAllHabits: '全部习惯',
+    mineDataDetail: '数据详情',
+    mineThemeLabel: '主题风格',
+    mineNotificationsLabel: '提醒偏好',
+    mineCloudSyncLabel: '云同步',
+    mineDataMgmtLabel: '数据管理',
+    mineAboutLabel: '关于多仪',
+    notifPomodoroDoneTitle: '专注完成',
+    notifPomodoroDoneBody: '本次专注已完成，休息一下吧',
+    notifBreakDoneTitle: '休息结束',
+    notifBreakDoneBody: '准备好开始下一段专注了吗？',
+    notifTodoDueTitle: '待办提醒',
+    notifHabitRemindTitle: '习惯打卡提醒',
+  );
+
   static BrandStrings forStyle(BrandStyle style) {
     switch (style) {
       case BrandStyle.defaultBrand:
@@ -804,6 +880,8 @@ class BrandStrings {
         return yanyun;
       case BrandStyle.botw:
         return botw;
+      case BrandStyle.liquidGlass:
+        return liquidGlass;
     }
   }
 }

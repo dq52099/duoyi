@@ -5,6 +5,25 @@ import 'package:provider/provider.dart';
 import '../core/design_tokens.dart';
 import '../providers/theme_provider.dart';
 
+/// 当前主题的表面观感档位。
+///
+/// 仅默认主题注册了 [AppSurfaceStyle.ios]；re0..botw 未注册，返回 null，
+/// 调用点沿用下方 `_standard*` 既有默认值，观感保持不变。
+AppSurfaceStyle? appSurfaceStyleOf(BuildContext context) =>
+    Theme.of(context).extension<AppSurfaceStyle>();
+
+// 既有通用档（未注册 AppSurfaceStyle 的主题沿用），与改造前逐值一致。
+const BorderRadius _standardCardRadius = BorderRadius.all(
+  Radius.circular(DesignTokens.radiusCard),
+);
+const BorderRadius _standardMetricTileRadius = BorderRadius.all(
+  Radius.circular(DesignTokens.radiusMd),
+);
+const double _standardSheetTopRadius = 20;
+const BorderRadius _standardSettingsSectionRadius = BorderRadius.all(
+  Radius.circular(8),
+);
+
 class AppSurfaceCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -12,7 +31,9 @@ class AppSurfaceCard extends StatelessWidget {
   final VoidCallback? onTap;
   final Color? color;
   final Gradient? gradient;
-  final BorderRadius borderRadius;
+
+  /// null 时取主题观感档位（默认主题 iOS 档 16，其余主题 radiusCard 12）。
+  final BorderRadius? borderRadius;
   final Border? border;
   final double elevation;
 
@@ -24,9 +45,7 @@ class AppSurfaceCard extends StatelessWidget {
     this.onTap,
     this.color,
     this.gradient,
-    this.borderRadius = const BorderRadius.all(
-      Radius.circular(DesignTokens.radiusCard),
-    ),
+    this.borderRadius,
     this.border,
     this.elevation = 0,
   });
@@ -36,6 +55,12 @@ class AppSurfaceCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final effectiveRadius =
+        borderRadius ??
+        (surfaceStyle == null
+            ? _standardCardRadius
+            : BorderRadius.circular(surfaceStyle.cardRadius));
     ThemeProvider? themeProvider;
     try {
       themeProvider = context.watch<ThemeProvider>();
@@ -49,6 +74,10 @@ class AppSurfaceCard extends StatelessWidget {
         color == null &&
         gradient == null;
     final surfaceColor = color ?? cs.surface;
+    // 液态玻璃主题：默认填充换成半透明白玻璃（调用方传 color 时豁免——
+    // 选中态 / 横幅等语义色优先；性能优先走伪玻璃填充，不做逐卡模糊）。
+    final effectiveFillColor =
+        (color == null ? surfaceStyle?.cardFillColor : null) ?? surfaceColor;
     final cardBorderColor = isDark
         ? cs.outlineVariant.withValues(alpha: 0.18)
         : (Color.lerp(DesignTokens.defaultBorder, cs.outlineVariant, 0.35) ??
@@ -66,19 +95,24 @@ class AppSurfaceCard extends StatelessWidget {
           )
         : null;
     final decoration = BoxDecoration(
-      color: gradient == null && skinGradient == null ? surfaceColor : null,
+      color: gradient == null && skinGradient == null
+          ? effectiveFillColor
+          : null,
       gradient: gradient ?? skinGradient,
-      borderRadius: borderRadius,
+      borderRadius: effectiveRadius,
+      // 默认主题 iOS 档：去描边，改由 cardShadow 提供极淡层次；
+      // 液态玻璃主题：白色高光描边；其余主题沿用 defaultBorder 淡描边。
       border:
           border ??
-          Border.all(
-            color: useCardSkin
-                ? cardSkin.colors.first.withValues(alpha: 0.10)
-                : cardBorderColor,
-            width: 0.55,
-          ),
+          (useCardSkin
+              ? Border.all(
+                  color: cardSkin.colors.first.withValues(alpha: 0.10),
+                  width: 0.55,
+                )
+              : surfaceStyle?.cardBorder ??
+                    Border.all(color: cardBorderColor, width: 0.55)),
       boxShadow: elevation <= 0
-          ? const []
+          ? (surfaceStyle?.cardShadow ?? const [])
           : [
               BoxShadow(
                 color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.05),
@@ -99,7 +133,11 @@ class AppSurfaceCard extends StatelessWidget {
         color: Colors.transparent,
         child: onTap == null
             ? content
-            : InkWell(onTap: onTap, borderRadius: borderRadius, child: content),
+            : InkWell(
+                onTap: onTap,
+                borderRadius: effectiveRadius,
+                child: content,
+              ),
       ),
     );
   }
@@ -689,7 +727,9 @@ class AppMetricCard extends StatelessWidget {
   final VoidCallback? onTap;
   final EdgeInsetsGeometry margin;
   final EdgeInsetsGeometry padding;
-  final BorderRadius borderRadius;
+
+  /// null 时取主题观感档位（默认主题 iOS 控件档 12，其余主题 radiusMd 10）。
+  final BorderRadius? borderRadius;
   final TextStyle? valueStyle;
   final TextStyle? unitStyle;
   final TextStyle? titleStyle;
@@ -706,9 +746,7 @@ class AppMetricCard extends StatelessWidget {
     this.onTap,
     this.margin = EdgeInsets.zero,
     this.padding = const EdgeInsets.fromLTRB(12, 10, 12, 10),
-    this.borderRadius = const BorderRadius.all(
-      Radius.circular(DesignTokens.radiusMd),
-    ),
+    this.borderRadius,
     this.valueStyle,
     this.unitStyle,
     this.titleStyle,
@@ -721,18 +759,37 @@ class AppMetricCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final fill = isDark
-        ? cs.surface.withValues(alpha: 0.68)
-        : cs.surface.withValues(alpha: 0.85);
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final effectiveRadius =
+        borderRadius ??
+        (surfaceStyle == null
+            ? _standardMetricTileRadius
+            : BorderRadius.circular(surfaceStyle.smallTileRadius));
+    // 液态玻璃档：小卡与卡面（AppSurfaceCard）、Material Card 共用同一
+    // 玻璃填充档（cardFillColor = 白@glassFillLightAlpha），三类卡面质感
+    // 一致。其余主题未注册 cardFillColor（null）、暗色无玻璃档，均维持
+    // 既有实底档，观感不变。
+    final fill =
+        (!isDark ? surfaceStyle?.cardFillColor : null) ??
+        (isDark
+            ? cs.surface.withValues(alpha: 0.68)
+            : cs.surface.withValues(alpha: 0.85));
+    // 玻璃体系统一：亮色下小卡描边/阴影与卡面、Material Card 同走
+    // AppSurfaceStyle 玻璃档（cardBorder / cardShadow），三类卡面同屏
+    // 同质感；未注册主题与暗色维持既有灰描边、无阴影档，观感不变。
+    final tileBorder =
+        (!isDark ? surfaceStyle?.cardBorder : null) ??
+        Border.all(
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.15 : 0.18),
+          width: 0.5,
+        );
+    final tileShadow = (!isDark ? surfaceStyle?.cardShadow : null) ?? const [];
     final tile = Ink(
       decoration: BoxDecoration(
         color: fill,
-        borderRadius: borderRadius,
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: isDark ? 0.15 : 0.18),
-          width: 0.5,
-        ),
-        boxShadow: const [],
+        borderRadius: effectiveRadius,
+        border: tileBorder,
+        boxShadow: tileShadow,
       ),
       child: Padding(
         padding: padding,
@@ -813,7 +870,7 @@ class AppMetricCard extends StatelessWidget {
         color: Colors.transparent,
         child: onTap == null
             ? tile
-            : InkWell(onTap: onTap, borderRadius: borderRadius, child: tile),
+            : InkWell(onTap: onTap, borderRadius: effectiveRadius, child: tile),
       ),
     );
   }
@@ -925,12 +982,16 @@ class AppSettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surfaceStyle = appSurfaceStyleOf(context);
     return AppSurfaceCard(
       margin: margin,
       padding: padding,
       border: border,
       elevation: elevation,
-      borderRadius: BorderRadius.circular(8),
+      // 默认主题 iOS 档取卡片圆角 16，其余主题沿用既有 8。
+      borderRadius: surfaceStyle == null
+          ? _standardSettingsSectionRadius
+          : BorderRadius.circular(surfaceStyle.cardRadius),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1113,6 +1174,7 @@ class AppListTileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surfaceStyle = appSurfaceStyleOf(context);
     return AppSurfaceCard(
       margin: margin,
       padding: EdgeInsets.zero,
@@ -1121,9 +1183,9 @@ class AppListTileCard extends StatelessWidget {
       elevation: elevation,
       child: Material(
         color: Colors.transparent,
-        borderRadius: const BorderRadius.all(
-          Radius.circular(DesignTokens.radiusCard),
-        ),
+        borderRadius: surfaceStyle == null
+            ? _standardCardRadius
+            : BorderRadius.circular(surfaceStyle.cardRadius),
         clipBehavior: Clip.antiAlias,
         child: ListTile(
           dense: dense,
@@ -1507,8 +1569,13 @@ class AppModalSheet extends StatelessWidget {
                 surfaceTintColor: Colors.transparent,
                 elevation: 0,
                 clipBehavior: Clip.antiAlias,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(
+                      appSurfaceStyleOf(context)?.sheetTopRadius ??
+                          _standardSheetTopRadius,
+                    ),
+                  ),
                 ),
                 child: body,
               ),

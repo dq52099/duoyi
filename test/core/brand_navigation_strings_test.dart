@@ -6,9 +6,9 @@ import 'package:duoyi/core/app_brand.dart';
 import 'package:duoyi/core/brand_strings.dart';
 
 void main() {
-  group('BrandStrings 导航与问候词条（8 套主题）', () {
+  group('BrandStrings 导航与问候词条（9 套主题）', () {
     test('每套主题提供全部 7 个底导航标签，且不为空', () {
-      expect(AppBrands.all, hasLength(8), reason: '应有 8 套主题');
+      expect(AppBrands.all, hasLength(9), reason: '应有 9 套主题');
       for (final brand in AppBrands.all) {
         final s = brand.strings;
         final labels = <String, String>{
@@ -59,10 +59,31 @@ void main() {
         'zzz': AppBrands.zzz.strings,
         'yanyun': AppBrands.yanyun.strings,
         'botw': AppBrands.botw.strings,
+        'liquidGlass': AppBrands.liquidGlass.strings,
       };
       expect(themes['default']!.navTodo, '待办');
       expect(themes['re0']!.navTodo, isNot('待办'));
       expect(themes['re0']!.navToday, isNot(themes['default']!.navToday));
+    });
+
+    test('液态玻璃主题词条齐备且走 iOS 简洁中文', () {
+      final s = AppBrands.liquidGlass.strings;
+      expect(BrandStrings.forStyle(BrandStyle.liquidGlass), same(s));
+      expect(s.navToday, '今天');
+      expect(s.todoCreateTitle, '新待办');
+      expect(s.appTitle, isNot(AppBrands.defaultBrand.strings.appTitle));
+      for (final value in <String>[
+        s.todoTitle,
+        s.todoEmpty,
+        s.habitCreateTitle,
+        s.calendarQuickAddTitle,
+        s.focusTitle,
+        s.mineProductivityScore,
+        s.notifPomodoroDoneTitle,
+        s.notifHabitRemindTitle,
+      ]) {
+        expect(value.trim(), isNotEmpty, reason: 'liquidGlass 词条不应为空');
+      }
     });
   });
 

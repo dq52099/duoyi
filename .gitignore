@@ -68,3 +68,4 @@ backend/uploads/
 
 # Local UI verification captures
 .playwright-mcp/
+.workbuddy/

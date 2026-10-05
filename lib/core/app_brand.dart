@@ -21,6 +21,7 @@ enum BrandStyle {
   zzz,
   yanyun,
   botw,
+  liquidGlass,
 }
 
 class AppBrand {
@@ -177,7 +178,50 @@ Color _buttonActionBackground(Color primary, {required bool isDark}) {
   return Color.lerp(primary, target, isDark ? 0.42 : 0.44)!;
 }
 
-ThemeData _withSharedControls(ThemeData theme) {
+/// 共享控件层的观感档位：所有字段默认值 = 既有观感。
+///
+/// 四条主题构造路径（_lightTheme/_darkTheme/_re0Theme/_botwTheme）都汇入
+/// [_withSharedControls]；只有 [_defaultTheme] 传 [_SharedFeel.ios]，
+/// 其余 7 套主题走默认值，观感保持不变（参数化差异，而非全局改档）。
+class _SharedFeel {
+  final double controlRadius;
+  final double dialogRadius;
+  final double sheetTopRadius;
+  final double buttonMinHeight;
+  final double inputVerticalPadding;
+  final double navBarAlphaLight;
+  final double dividerAlphaLight;
+  final double dividerAlphaDark;
+
+  const _SharedFeel({
+    this.controlRadius = DesignTokens.radiusControl,
+    this.dialogRadius = 18,
+    this.sheetTopRadius = 20,
+    this.buttonMinHeight = 38,
+    this.inputVerticalPadding = 9,
+    this.navBarAlphaLight = 0.96,
+    this.dividerAlphaLight = 0.64,
+    this.dividerAlphaDark = 0.52,
+  });
+
+  /// 默认主题专用 iOS 档：更大圆角、更宽松控件内边距、更柔和分隔、
+  /// 半透明底导航（毛玻璃模糊由 [AppSurfaceStyle.ios.navBarBlurSigma] 驱动）。
+  static const _SharedFeel ios = _SharedFeel(
+    controlRadius: DesignTokens.radiusControlIos,
+    dialogRadius: DesignTokens.dialogIosRadius,
+    sheetTopRadius: DesignTokens.sheetIosTopRadius,
+    buttonMinHeight: DesignTokens.buttonIosMinHeight,
+    inputVerticalPadding: DesignTokens.inputIosVerticalPadding,
+    navBarAlphaLight: DesignTokens.navBarIosBackgroundAlpha,
+    dividerAlphaLight: DesignTokens.dividerIosAlpha,
+    dividerAlphaDark: DesignTokens.dividerIosDarkAlpha,
+  );
+}
+
+ThemeData _withSharedControls(
+  ThemeData theme, {
+  _SharedFeel feel = const _SharedFeel(),
+}) {
   final cs = theme.colorScheme;
   final isDark = theme.brightness == Brightness.dark;
   final surface = cs.surface;
@@ -197,11 +241,13 @@ ThemeData _withSharedControls(ThemeData theme) {
     cs.surfaceContainerHighest.withValues(alpha: isDark ? 0.52 : 0.64),
     surface,
   );
-  final sheetShape = const RoundedRectangleBorder(
-    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  final sheetShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.vertical(
+      top: Radius.circular(feel.sheetTopRadius),
+    ),
   );
   final dialogShape = RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(18),
+    borderRadius: BorderRadius.circular(feel.dialogRadius),
   );
   final appBarForeground =
       theme.appBarTheme.titleTextStyle?.color ??
@@ -267,7 +313,7 @@ ThemeData _withSharedControls(ThemeData theme) {
   );
   OutlineInputBorder fieldBorder(Color color, {double width = 0.4}) {
     return OutlineInputBorder(
-      borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+      borderRadius: BorderRadius.circular(feel.controlRadius),
       borderSide: BorderSide(color: color, width: width),
     );
   }
@@ -279,7 +325,10 @@ ThemeData _withSharedControls(ThemeData theme) {
       surface,
     ),
     isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    contentPadding: EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: feel.inputVerticalPadding,
+    ),
     border: fieldBorder(outline),
     enabledBorder: fieldBorder(outline),
     focusedBorder: fieldBorder(cs.primary.withValues(alpha: 0.18), width: 0.45),
@@ -433,10 +482,10 @@ ThemeData _withSharedControls(ThemeData theme) {
         disabledForegroundColor: cs.onSurface.withValues(alpha: 0.38),
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        minimumSize: const Size(0, 38),
+        minimumSize: Size(0, feel.buttonMinHeight),
         overlayColor: actionForeground.withValues(alpha: 0.10),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+          borderRadius: BorderRadius.circular(feel.controlRadius),
         ),
         textStyle: label,
       ),
@@ -451,10 +500,10 @@ ThemeData _withSharedControls(ThemeData theme) {
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        minimumSize: const Size(0, 38),
+        minimumSize: Size(0, feel.buttonMinHeight),
         overlayColor: actionForeground.withValues(alpha: 0.10),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+          borderRadius: BorderRadius.circular(feel.controlRadius),
         ),
         textStyle: label,
       ),
@@ -467,7 +516,7 @@ ThemeData _withSharedControls(ThemeData theme) {
         minimumSize: const Size(0, 36),
         overlayColor: cs.primary.withValues(alpha: 0.07),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+          borderRadius: BorderRadius.circular(feel.controlRadius),
         ),
         textStyle: label,
       ),
@@ -479,7 +528,7 @@ ThemeData _withSharedControls(ThemeData theme) {
         minimumSize: const Size(0, 34),
         overlayColor: actionBackground.withValues(alpha: 0.07),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+          borderRadius: BorderRadius.circular(feel.controlRadius),
         ),
         textStyle: label,
       ),
@@ -515,7 +564,7 @@ ThemeData _withSharedControls(ThemeData theme) {
         }),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+            borderRadius: BorderRadius.circular(feel.controlRadius),
           ),
         ),
         padding: const WidgetStatePropertyAll(
@@ -534,7 +583,9 @@ ThemeData _withSharedControls(ThemeData theme) {
       style: IconButton.styleFrom(
         minimumSize: const Size(36, 36),
         padding: const EdgeInsets.all(8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(feel.controlRadius),
+        ),
       ),
     ),
     chipTheme: ChipThemeData(
@@ -671,7 +722,9 @@ ThemeData _withSharedControls(ThemeData theme) {
       circularTrackColor: cs.primary.withValues(alpha: 0.16),
     ),
     dividerTheme: DividerThemeData(
-      color: cs.outlineVariant.withValues(alpha: isDark ? 0.52 : 0.64),
+      color: cs.outlineVariant.withValues(
+        alpha: isDark ? feel.dividerAlphaDark : feel.dividerAlphaLight,
+      ),
       thickness: 1,
       space: 1,
     ),
@@ -702,7 +755,10 @@ ThemeData _withSharedControls(ThemeData theme) {
     navigationBarTheme: NavigationBarThemeData(
       height: 60,
       elevation: 0,
-      backgroundColor: surface.withValues(alpha: isDark ? 0.92 : 0.96),
+      // 暗色主题保持既有 0.92；亮色走档位（默认主题 iOS 档 0.72）。
+      backgroundColor: surface.withValues(
+        alpha: isDark ? 0.92 : feel.navBarAlphaLight,
+      ),
       indicatorColor: selectedNavigationBackground,
       surfaceTintColor: Colors.transparent,
       labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>((states) {
@@ -809,7 +865,9 @@ ThemeData _withSharedControls(ThemeData theme) {
         backgroundColor: actionBackground,
         foregroundColor: actionForeground,
         minimumSize: const Size(0, 38),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(feel.controlRadius),
+        ),
         textStyle: label,
       ),
     ),
@@ -841,7 +899,9 @@ ThemeData _withSharedControls(ThemeData theme) {
         backgroundColor: actionBackground,
         foregroundColor: actionForeground,
         minimumSize: const Size(0, 38),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(feel.controlRadius),
+        ),
         textStyle: label,
       ),
       cancelButtonStyle: TextButton.styleFrom(
@@ -871,6 +931,8 @@ ThemeData _lightTheme({
   required Color surface,
   required Color background,
   Color error = const Color(0xFFA23535),
+  _SharedFeel feel = const _SharedFeel(),
+  AppSurfaceStyle? surfaceStyle,
 }) {
   final theme = ThemeData(
     useMaterial3: true,
@@ -889,6 +951,11 @@ ThemeData _lightTheme({
       error: error,
       onSurface: DesignTokens.defaultText,
     ),
+    // 仅默认主题注册 AppSurfaceStyle.ios；其余主题不带该 extension，
+    // 共享组件在调用点回退到既有默认值，观感不变。
+    extensions: surfaceStyle == null
+        ? null
+        : <ThemeExtension<dynamic>>[surfaceStyle],
     scaffoldBackgroundColor: background,
     cardTheme: CardThemeData(
       color: surface,
@@ -896,11 +963,15 @@ ThemeData _lightTheme({
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       shadowColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
-        side: BorderSide(
-          color: DesignTokens.defaultBorder.withValues(alpha: 0.72),
-          width: 0.55,
+        borderRadius: BorderRadius.circular(
+          surfaceStyle?.cardRadius ?? DesignTokens.radiusCard,
         ),
+        side: surfaceStyle == null
+            ? BorderSide(
+                color: DesignTokens.defaultBorder.withValues(alpha: 0.72),
+                width: 0.55,
+              )
+            : BorderSide.none,
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
@@ -943,7 +1014,7 @@ ThemeData _lightTheme({
       ),
     ),
   );
-  return _withSharedControls(theme);
+  return _withSharedControls(theme, feel: feel);
 }
 
 ThemeData _darkTheme({
@@ -1188,6 +1259,72 @@ final _defaultTheme = _lightTheme(
   surface: DesignTokens.defaultSurface,
   background: DesignTokens.defaultPageBackground,
   error: DesignTokens.defaultError,
+  // 默认主题专属 iOS 档：更大圆角 / 更宽松控件 / 更柔和分隔 / 半透明底导航。
+  // 其余 7 套主题不传 feel / surfaceStyle，走既有默认值，观感不变。
+  feel: _SharedFeel.ios,
+  surfaceStyle: AppSurfaceStyle.ios,
+);
+
+/// 液态玻璃主题：浅色 iOS 基底（iOS 蓝），玻璃质感卡片。
+///
+/// 卡片走"半透明白填充 + 白高光描边"伪玻璃（由 AppSurfaceStyle.liquidGlass
+/// 驱动，列表内不做逐卡 BackdropFilter）；底部导航启用真模糊。无背景图，
+/// overlay 为浅色近白纯色。控件层复用 iOS 档（_SharedFeel.ios）。
+final _liquidGlassTheme = _withSharedControls(
+  ThemeData(
+    useMaterial3: true,
+    fontFamily: _cnFontFamily,
+    fontFamilyFallback: _cnFontFallback,
+    textTheme: _textTheme(
+      brightness: Brightness.light,
+      bodyColor: const Color(0xFF17233B),
+      mutedColor: const Color(0xFF5B6B82),
+      headingColor: const Color(0xFF101B2D),
+    ),
+    colorScheme: const ColorScheme.light(
+      // iOS 蓝系（#0A84FF 同色相深阶）：保证按钮前景对 surface 对比 ≥4.5。
+      primary: Color(0xFF0A6CDB),
+      secondary: Color(0xFF5AC8FA),
+      surface: Color(0xFFF7F9FC),
+      error: Color(0xFFC64747),
+      onSurface: Color(0xFF17233B),
+    ),
+    extensions: <ThemeExtension<dynamic>>[AppSurfaceStyle.liquidGlass],
+    scaffoldBackgroundColor: const Color(0xFFE9EEF6),
+    cardTheme: CardThemeData(
+      // 白玻璃填充：与 AppSurfaceCard / AppMetricCard 共用同一档
+      // （DesignTokens.glassFillLightAlpha），保证三类卡面质感一致。
+      color: Colors.white.withValues(alpha: DesignTokens.glassFillLightAlpha),
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      shadowColor: Colors.transparent,
+      // 白高光描边与 AppSurfaceStyle.liquidGlass.cardBorder 同源
+      // （Colors.white@glassHighlightAlpha、0.55），三类卡面同屏同质感。
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.all(
+          Radius.circular(DesignTokens.radiusCardIos),
+        ),
+        side: BorderSide(
+          color: Colors.white.withValues(
+            alpha: DesignTokens.glassHighlightAlpha,
+          ),
+          width: 0.55,
+        ),
+      ),
+    ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      centerTitle: true,
+      foregroundColor: Color(0xFF101B2D),
+      titleTextStyle: TextStyle(
+        fontSize: DesignTokens.fontSizeMd,
+        fontWeight: FontWeight.normal,
+        color: Color(0xFF101B2D),
+      ),
+    ),
+  ),
+  feel: _SharedFeel.ios,
 );
 
 class AppBrands {
@@ -1254,6 +1391,14 @@ class AppBrands {
     backgroundOverlay: const Color(0xFF061417),
     backgroundOverlayOpacity: 0.68,
   );
+  static final liquidGlass = AppBrand(
+    style: BrandStyle.liquidGlass,
+    name: '液态玻璃',
+    theme: _liquidGlassTheme,
+    // 无背景图主题：浅色近白 overlay 全幅铺底，衬托半透明玻璃卡片。
+    backgroundOverlay: const Color(0xFFE9EEF6),
+    backgroundOverlayOpacity: 1.0,
+  );
 
   static List<AppBrand> get all => [
     defaultBrand,
@@ -1264,6 +1409,7 @@ class AppBrands {
     zzz,
     yanyun,
     botw,
+    liquidGlass,
   ];
 
   static AppBrand byId(String? id) {

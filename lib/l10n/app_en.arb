@@ -500,6 +500,8 @@
   "themeStyleYanyunDescription": "Jianghu sketchbook · ink trails",
   "themeStyleBotwName": "Sheikah Slate",
   "themeStyleBotwDescription": "Sheikah Slate · materialized",
+  "themeStyleLiquidGlassName": "Liquid Glass",
+  "themeStyleLiquidGlassDescription": "iOS glassmorphism · translucent white and highlights",
   "goalTitle": "Goals",
   "goalRecommendedTemplates": "Recommended templates",
   "goalEmpty": "Set a goal and let time compound for you",
