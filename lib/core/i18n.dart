@@ -929,6 +929,8 @@ const Map<String, String> _zh = <String, String>{
   'widget.schedule_timezone_hint': '提醒会跟随系统时区',
   'widget.calendar_month_summary': '本月日期 · 今日已标记',
   'widget.habit_pending': '今日习惯待打卡',
+  'widget.habit_none_today': '今天没有安排习惯',
+  'widget.habit_view': '查看习惯',
   'widget.streak_record_prefix': '连续记录 ',
   // 时间足迹
   'time_audit.title': '时间足迹',
@@ -2073,6 +2075,8 @@ const Map<String, String> _en = <String, String>{
   'widget.schedule_timezone_hint': 'Reminders follow the system time zone',
   'widget.calendar_month_summary': 'Month view · today is marked',
   'widget.habit_pending': 'Habits to check in today',
+  'widget.habit_none_today': 'No habits scheduled today',
+  'widget.habit_view': 'View habits',
   'widget.streak_record_prefix': 'Streak: ',
   'time_audit.title': 'Time Tracking',
   'time_audit.add_manual': 'Add entry',

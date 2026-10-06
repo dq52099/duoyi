@@ -72,7 +72,9 @@ open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 R.id.widget_habit_title,
                 prefs.getString("brand_app_title", "多仪") ?: "多仪"
             )
-            views.setTextViewText(R.id.widget_habit_percent, "${prefs.getInt("habit_percent", 0)}%")
+            val noHabitsToday = prefs.getInt("habit_active_count", -1) == 0
+            views.setTextViewText(R.id.widget_habit_percent,
+                if (noHabitsToday) "—" else "${prefs.getInt("habit_percent", 0).coerceIn(0, 100)}%")
             views.setTextViewText(R.id.widget_habit_subtitle, "今日习惯")
             views.setTextViewText(
                 R.id.widget_habit_summary,
@@ -88,9 +90,11 @@ open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 "点击进入习惯打卡"
             ) ?: "点击进入习惯打卡"
             views.setTextViewText(R.id.widget_habit_hint, habitQuickCheckLabel)
+            views.setContentDescription(R.id.widget_habit_hint, habitQuickCheckLabel)
             views.setViewVisibility(
                 R.id.widget_habit_streak,
-                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
+                if (noHabitsToday) android.view.View.GONE
+                else DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
             )
             views.setViewVisibility(
                 R.id.widget_habit_bottom_nav,

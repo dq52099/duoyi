@@ -59,10 +59,13 @@
 
         <TextView
             android:id="@+id/widget_calendar_today_button"
-            android:layout_width="40dp"
-            android:layout_height="32dp"
-            android:minHeight="32dp"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:minWidth="44dp"
+            android:minHeight="34dp"
             android:layout_marginLeft="6dp"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
             android:background="@drawable/widget_nav_bg"
             android:gravity="center"
             android:ellipsize="end"
@@ -73,8 +76,10 @@
 
         <TextView
             android:id="@+id/widget_refresh"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:minWidth="36dp"
+            android:minHeight="36dp"
             android:layout_marginLeft="4dp"
             android:gravity="center"
             android:ellipsize="end"
@@ -108,7 +113,8 @@
         android:maxLines="1"
         android:text="本月日期 · 今日已标记"
         android:textColor="#1E88E5"
-        android:textSize="11sp" />
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <LinearLayout
         android:id="@+id/widget_calendar_bottom_nav"
@@ -120,7 +126,8 @@
         android:orientation="horizontal"
         android:paddingLeft="4dp"
         android:paddingRight="4dp"
-        android:weightSum="4">
+        android:weightSum="4"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/widget_calendar_nav_todo"

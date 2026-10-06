@@ -116,6 +116,10 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
                 R.id.widget_course_summary,
                 DuoyiWidgetDisplayMode.detailedVisibility(prefs, id)
             )
+            views.setViewVisibility(
+                R.id.widget_bottom_nav,
+                DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
+            )
 
             val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
             val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"

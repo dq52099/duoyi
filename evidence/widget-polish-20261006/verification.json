@@ -73,5 +73,17 @@
     },
     "source_commit": "0e8c4edd95113266c9385768effc3d23c0cd318b"
   },
-  "release_signing_available": false
+  "release_signing_available": false,
+  "refinement": {
+    "date": "2026-10-06",
+    "flutter_unique_cases": 57,
+    "final_preview_and_android_resources_cases": 40,
+    "kotlin_compile_exit": 0,
+    "android_resources_compile_exit": 0,
+    "habit_preview_320_1_6_reviewed": true,
+    "physical_device_verified": false,
+    "web_stage_build_exit": 0,
+    "production_refinement_deployed": false,
+    "logs_private_directory": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006"
+  }
 }

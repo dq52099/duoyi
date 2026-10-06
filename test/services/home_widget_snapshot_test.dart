@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:duoyi/core/brand_strings.dart';
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/services/home_widget_service.dart';
 import 'package:flutter/services.dart';
@@ -82,9 +83,60 @@ void main() {
   });
 
   tearDown(() {
+    I18n.setLocale(AppLocale.zh);
     messenger.setMockMethodCallHandler(channel, null);
     HomeWidgetService.supportedForTesting = null;
   });
+
+  test(
+    'empty highlights contain no invented rows and follow language changes',
+    () async {
+      Future<bool> pushEmpty() => HomeWidgetService.push(
+        todoCount: 0,
+        habitPercent: 0,
+        habitActiveCount: 0,
+        pomodoroToday: 0,
+        focusMinutesToday: 0,
+        strings: BrandStrings.defaultBrand,
+        theme: theme,
+      );
+      expect(await pushEmpty(), isTrue);
+      expect(stored['todo_top3_1'], '今天没有未完成待办');
+      expect(stored['goal_highlight_3'], isEmpty);
+      expect(stored['schedule_highlight_2'], isEmpty);
+      expect(stored['schedule_highlight_3'], isEmpty);
+      final previousRefreshes = refreshes;
+      I18n.setLocale(AppLocale.en);
+      expect(await pushEmpty(), isTrue);
+      expect(stored['todo_top3_1'], 'No open tasks today');
+      expect(stored['note_highlight_1'], 'No notes yet');
+      expect(refreshes, greaterThan(previousRefreshes));
+    },
+  );
+
+  test(
+    'active habit count invalidates deduplication and clears with account',
+    () async {
+      Future<bool> pushHabits(int count) => HomeWidgetService.push(
+        todoCount: 0,
+        habitPercent: 0,
+        habitActiveCount: count,
+        pomodoroToday: 0,
+        focusMinutesToday: 0,
+        strings: BrandStrings.defaultBrand,
+        theme: theme,
+      );
+      expect(await pushHabits(0), isTrue);
+      expect(stored['habit_active_count'], 0);
+      final previousRefreshes = refreshes;
+      expect(await pushHabits(1), isTrue);
+      expect(stored['habit_active_count'], 1);
+      expect(refreshes, greaterThan(previousRefreshes));
+      HomeWidgetService.resetAccountCache();
+      expect(await HomeWidgetService.waitForAccountClear(), isTrue);
+      expect(stored['habit_active_count'], 0);
+    },
+  );
 
   test(
     'snapshot day is published last and widget actions bind to day, offset and account',

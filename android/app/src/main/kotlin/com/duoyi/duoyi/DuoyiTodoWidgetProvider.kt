@@ -208,6 +208,10 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
             return
         }
         val encodedTodoId = Uri.encode(todoId)
+        val todoTitle = cleanTodoTitle(prefs.getString("todo_top3_${index}", "") ?: "")
+        views.setContentDescription(doneViewId, "完成待办：$todoTitle")
+        views.setContentDescription(itemViewId, "查看待办：$todoTitle")
+        views.setTextViewText(doneViewId, "○")
         views.setViewVisibility(doneViewId, View.VISIBLE)
         views.setOnClickPendingIntent(
             itemViewId,

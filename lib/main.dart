@@ -2690,6 +2690,9 @@ Future<bool> _pushHomeWidget(
   final activeTodayTodos = activeToday.length;
   final top3 = activeToday.take(3).map((e) => e.title).toList();
   final top3Ids = activeToday.take(3).map((e) => e.id).toList();
+  final activeHabits = h.habits
+      .where((habit) => habit.isActiveToday())
+      .toList();
   final habitPercent = (h.todayCompletionRate * 100).round();
   final quickCheckHabits =
       h.habits
@@ -2805,6 +2808,7 @@ Future<bool> _pushHomeWidget(
     snapshotAt: now,
     todoCount: activeTodayTodos,
     habitPercent: habitPercent,
+    habitActiveCount: activeHabits.length,
     pomodoroToday: p.sessionCountToday,
     focusMinutesToday:
         p.todayFocusSessions.fold<int>(
@@ -2834,7 +2838,9 @@ Future<bool> _pushHomeWidget(
         ? I18n.tr('widget.focus_not_started')
         : "${I18n.tr('widget.focus_today_prefix')}${p.sessionCountToday}"
               "${I18n.tr('widget.focus_today_suffix')}",
-    habitSummary: habitPercent >= 100
+    habitSummary: activeHabits.isEmpty
+        ? I18n.tr('widget.habit_none_today')
+        : habitPercent >= 100
         ? I18n.tr('widget.habit_all_done')
         : "${I18n.tr('widget.habit_progress_prefix')}$habitPercent"
               "${I18n.tr('widget.habit_progress_suffix')}",
@@ -2852,7 +2858,7 @@ Future<bool> _pushHomeWidget(
     focusTimerLabel: focusTimerLabel,
     habitQuickCheckId: quickCheckHabit?.id ?? '',
     habitQuickCheckLabel: quickCheckHabit == null
-        ? I18n.tr('widget.habit_quick_check_hint')
+        ? I18n.tr('widget.habit_view')
         : "${I18n.tr('widget.habit_checkin_prefix')}${quickCheckHabit.name}",
     theme: HomeWidgetThemePayload.fromThemeProvider(tp),
   );

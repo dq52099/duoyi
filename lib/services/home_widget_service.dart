@@ -47,6 +47,7 @@ class HomeWidgetService {
     'widget_snapshot_utc_offset_minutes': 0,
     'todo_count': 0,
     'habit_percent': 0,
+    'habit_active_count': 0,
     'pomodoro_today': 0,
     'focus_minutes_today': 0,
     'brand_app_title': I18n.tr('mine.about.title'),
@@ -65,7 +66,7 @@ class HomeWidgetService {
     'goal_highlight_1_id': '',
     'goal_highlight_2': '',
     'goal_highlight_2_id': '',
-    'goal_highlight_3': I18n.tr('widget.goal_hint'),
+    'goal_highlight_3': '',
     'goal_highlight_3_id': '',
     'anniversary_highlight_1': I18n.tr('widget.anniversary_empty'),
     'anniversary_highlight_1_id': '',
@@ -98,9 +99,9 @@ class HomeWidgetService {
     'today_event_summary': I18n.tr('widget.no_schedule_today'),
     'schedule_highlight_1': '· ${I18n.tr('widget.no_schedule_today')}',
     'schedule_highlight_1_id': '',
-    'schedule_highlight_2': '· ${I18n.tr('widget.schedule_open_calendar')}',
+    'schedule_highlight_2': '',
     'schedule_highlight_2_id': '',
-    'schedule_highlight_3': I18n.tr('widget.schedule_timezone_hint'),
+    'schedule_highlight_3': '',
     'schedule_highlight_3_id': '',
     'calendar_month_summary': I18n.tr('widget.calendar_month_summary'),
     'focus_summary': I18n.tr('widget.focus_not_started'),
@@ -373,6 +374,7 @@ class HomeWidgetService {
   static Future<bool> push({
     required int todoCount,
     required int habitPercent,
+    int habitActiveCount = -1,
     required int pomodoroToday,
     required int focusMinutesToday,
     required BrandStrings strings,
@@ -459,7 +461,8 @@ class HomeWidgetService {
         habitQuickCheckLabel: habitQuickCheckLabel,
         theme: theme,
       );
-      final datedSignature = '$day|$offset|$signature';
+      final datedSignature =
+          '$day|$offset|${I18n.current.name}|$habitActiveCount|$signature';
       if (!force && datedSignature == _lastPushSignature && !_refreshPending) {
         return true;
       }
@@ -473,7 +476,8 @@ class HomeWidgetService {
         final saveResult = await _saveWidgetPayload({
           'widget_account_nonce': _accountActionNonce ?? '',
           'todo_count': todoCount,
-          'habit_percent': habitPercent,
+          'habit_percent': habitPercent.clamp(0, 100),
+          'habit_active_count': habitActiveCount,
           'pomodoro_today': pomodoroToday,
           'focus_minutes_today': focusMinutesToday,
           'brand_app_title': strings.appTitle,
@@ -482,7 +486,9 @@ class HomeWidgetService {
           'nav_calendar': strings.navCalendar,
           'nav_focus': strings.navFocus,
           'todo_top3_count': todoCount,
-          'todo_top3_1': todoTop3.isNotEmpty ? '· ${todoTop3[0]}' : '今天没有未完成待办',
+          'todo_top3_1': todoTop3.isNotEmpty
+              ? '· ${todoTop3[0]}'
+              : I18n.tr('widget.todo_top3_empty'),
           'todo_top3_1_id': todoTop3Ids.isNotEmpty ? todoTop3Ids[0] : '',
           'todo_top3_2': todoTop3.length > 1 ? '· ${todoTop3[1]}' : '',
           'todo_top3_2_id': todoTop3Ids.length > 1 ? todoTop3Ids[1] : '',
@@ -490,7 +496,7 @@ class HomeWidgetService {
           'todo_top3_3_id': todoTop3Ids.length > 2 ? todoTop3Ids[2] : '',
           'goal_highlight_1': goalHighlights.isNotEmpty
               ? '· ${goalHighlights[0]}'
-              : '暂无进行中目标',
+              : I18n.tr('widget.goal_empty'),
           'goal_highlight_1_id': goalHighlightIds.isNotEmpty
               ? goalHighlightIds[0]
               : '',
@@ -502,13 +508,13 @@ class HomeWidgetService {
               : '',
           'goal_highlight_3': goalHighlights.length > 2
               ? '· ${goalHighlights[2]}'
-              : '本周目标保持推进',
+              : '',
           'goal_highlight_3_id': goalHighlightIds.length > 2
               ? goalHighlightIds[2]
               : '',
           'anniversary_highlight_1': anniversaryHighlights.isNotEmpty
               ? '· ${anniversaryHighlights[0]}'
-              : '暂无近期纪念日',
+              : I18n.tr('widget.anniversary_empty'),
           'anniversary_highlight_1_id': anniversaryHighlightIds.isNotEmpty
               ? anniversaryHighlightIds[0]
               : '',
@@ -520,7 +526,7 @@ class HomeWidgetService {
               : '',
           'course_highlight_1': courseHighlights.isNotEmpty
               ? '· ${courseHighlights[0]}'
-              : '今日暂无课程',
+              : I18n.tr('widget.course_empty'),
           'course_highlight_1_id': courseHighlightIds.isNotEmpty
               ? courseHighlightIds[0]
               : '',
@@ -538,7 +544,7 @@ class HomeWidgetService {
               : '',
           'note_highlight_1': noteHighlights.isNotEmpty
               ? '· ${noteHighlights[0]}'
-              : '暂无随手记',
+              : I18n.tr('widget.note_empty'),
           'note_highlight_1_id': noteHighlightIds.isNotEmpty
               ? noteHighlightIds[0]
               : '',
@@ -556,7 +562,7 @@ class HomeWidgetService {
               : '',
           'memorial_highlight_1': memorialHighlights.isNotEmpty
               ? '· ${memorialHighlights[0]}'
-              : '暂无近期纪念日',
+              : I18n.tr('widget.anniversary_empty'),
           'memorial_highlight_1_id': memorialHighlightIds.isNotEmpty
               ? memorialHighlightIds[0]
               : '',
@@ -574,7 +580,7 @@ class HomeWidgetService {
               : '',
           'diary_highlight_1': diaryHighlights.isNotEmpty
               ? '· ${diaryHighlights[0]}'
-              : '暂无日记',
+              : I18n.tr('widget.diary_empty'),
           'diary_highlight_1_id': diaryHighlightIds.isNotEmpty
               ? diaryHighlightIds[0]
               : '',
@@ -599,17 +605,17 @@ class HomeWidgetService {
               : '',
           'schedule_highlight_2': scheduleHighlights.length > 1
               ? '· ${scheduleHighlights[1]}'
-              : '· 打开日历查看完整安排',
+              : '',
           'schedule_highlight_2_id': scheduleHighlightIds.length > 1
               ? scheduleHighlightIds[1]
               : '',
           'schedule_highlight_3': scheduleHighlights.length > 2
               ? '· ${scheduleHighlights[2]}'
-              : '提醒会跟随系统时区',
+              : '',
           'schedule_highlight_3_id': scheduleHighlightIds.length > 2
               ? scheduleHighlightIds[2]
               : '',
-          'calendar_month_summary': '本月日期 · 今日已标记',
+          'calendar_month_summary': I18n.tr('widget.calendar_month_summary'),
           'focus_summary': focusSummary,
           'habit_summary': habitSummary,
           'streak_summary': streakSummary,

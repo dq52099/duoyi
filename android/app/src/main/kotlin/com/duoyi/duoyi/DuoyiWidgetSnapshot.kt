@@ -113,6 +113,37 @@ object DuoyiWidgetSnapshot {
             if (prefs.getString("todo_top3_2_id", "").isNullOrBlank()) views.setViewVisibility(R.id.widget_todo_row_2, View.GONE)
             if (prefs.getString("todo_top3_3_id", "").isNullOrBlank()) views.setViewVisibility(R.id.widget_todo_row_3, View.GONE)
         }
+        // Empty secondary rows should not reserve space or look like real data.
+        // Only hide here: the provider's density choice remains the upper limit.
+        val optionalRows = when (views.layoutId) {
+            R.layout.duoyi_schedule_widget -> listOf(
+                R.id.widget_schedule_2 to "schedule_highlight_2",
+                R.id.widget_schedule_3 to "schedule_highlight_3")
+            R.layout.duoyi_goal_widget -> listOf(
+                R.id.widget_goal_2 to "goal_highlight_2",
+                R.id.widget_goal_3 to "goal_highlight_3")
+            R.layout.duoyi_course_widget -> listOf(
+                R.id.widget_course_2 to "course_highlight_2",
+                R.id.widget_course_3 to "course_highlight_3")
+            R.layout.duoyi_note_widget -> listOf(
+                R.id.widget_note_2 to "note_highlight_2",
+                R.id.widget_note_3 to "note_highlight_3")
+            R.layout.duoyi_diary_widget -> listOf(
+                R.id.widget_diary_2 to "diary_highlight_2",
+                R.id.widget_diary_3 to "diary_highlight_3")
+            R.layout.duoyi_anniversary_widget -> listOf(
+                R.id.widget_anniversary_2 to "anniversary_highlight_2",
+                R.id.widget_anniversary_3 to "anniversary_highlight_3")
+            else -> emptyList()
+        }
+        optionalRows.forEach { (viewId, key) ->
+            val value = prefs.getString(key, null)
+                ?: if (key.startsWith("anniversary_"))
+                    prefs.getString(key.replace("anniversary_", "memorial_"), "") else ""
+            if (value.isNullOrBlank()) {
+                views.setViewVisibility(viewId, View.GONE)
+            }
+        }
         views.setContentDescription(R.id.widget_refresh,
             if (isFresh(prefs)) "刷新小组件" else "数据待刷新，点按更新")
         if (isFresh(prefs)) return

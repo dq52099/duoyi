@@ -59,8 +59,11 @@
 
         <TextView
             android:id="@+id/widget_refresh"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:minWidth="36dp"
+            android:minHeight="36dp"
+            android:layout_marginLeft="4dp"
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
@@ -188,7 +191,8 @@
     <TextView
         android:id="@+id/widget_focus_quick_start"
         android:layout_width="match_parent"
-        android:layout_height="32dp"
+        android:layout_height="36dp"
+        android:minHeight="36dp"
         android:layout_marginTop="6dp"
         android:gravity="center"
         android:ellipsize="end"
@@ -196,7 +200,8 @@
         android:text="开始 25 分钟专注"
         android:textColor="#FFFFFF"
         android:textSize="12sp"
-        android:background="@drawable/widget_btn_primary" />
+        android:background="@drawable/widget_btn_primary"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/widget_focus_summary"
@@ -218,7 +223,8 @@
         android:maxLines="1"
         android:text="下一轮：25 分钟专注"
         android:textColor="#666666"
-        android:textSize="11sp" />
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/widget_focus_streak_summary"
@@ -229,7 +235,8 @@
         android:maxLines="1"
         android:text="结束后提醒休息"
         android:textColor="#666666"
-        android:textSize="11sp" />
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <LinearLayout
         android:id="@+id/widget_focus_habit_bottom_nav"
@@ -241,7 +248,8 @@
         android:orientation="horizontal"
         android:paddingLeft="4dp"
         android:paddingRight="4dp"
-        android:weightSum="4">
+        android:weightSum="4"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/widget_focus_nav_todo"

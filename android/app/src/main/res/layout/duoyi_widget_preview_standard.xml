@@ -13,8 +13,7 @@
         android:maxLines="1"
         android:text="多仪 · 标准"
         android:textColor="#FF6B6B"
-        android:textSize="14sp"
-        android:textStyle="bold" />
+        android:textSize="14sp" />
 
     <TextView
         android:layout_width="match_parent"

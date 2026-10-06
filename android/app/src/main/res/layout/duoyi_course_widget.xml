@@ -48,8 +48,10 @@
 
         <TextView
             android:id="@+id/widget_refresh"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:minWidth="36dp"
+            android:minHeight="36dp"
             android:contentDescription="刷新小组件"
             android:ellipsize="end"
             android:gravity="center"
@@ -96,7 +98,8 @@
             android:maxLines="1"
             android:text="· 第 3-4 节 产品设计"
             android:textColor="#333333"
-            android:textSize="12sp" />
+            android:textSize="12sp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/widget_course_3"
@@ -107,7 +110,8 @@
             android:maxLines="1"
             android:text="14:30 团队例会"
             android:textColor="#1E88E5"
-            android:textSize="11sp" />
+            android:textSize="11sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <LinearLayout
@@ -120,7 +124,8 @@
         android:orientation="horizontal"
         android:paddingLeft="4dp"
         android:paddingRight="4dp"
-        android:weightSum="4">
+        android:weightSum="4"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/widget_course_nav_todo"

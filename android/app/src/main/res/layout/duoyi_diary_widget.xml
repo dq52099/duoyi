@@ -48,8 +48,10 @@
 
         <TextView
             android:id="@+id/widget_refresh"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:minWidth="36dp"
+            android:minHeight="36dp"
             android:contentDescription="刷新小组件"
             android:ellipsize="end"
             android:gravity="center"
@@ -96,7 +98,8 @@
             android:maxLines="1"
             android:text="· 5/17 记录一次散步"
             android:textColor="#333333"
-            android:textSize="12sp" />
+            android:textSize="12sp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/widget_diary_3"
@@ -107,7 +110,8 @@
             android:maxLines="1"
             android:text="· 5/16 睡前整理心情"
             android:textColor="#333333"
-            android:textSize="12sp" />
+            android:textSize="12sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <LinearLayout
@@ -120,7 +124,8 @@
         android:orientation="horizontal"
         android:paddingLeft="4dp"
         android:paddingRight="4dp"
-        android:weightSum="4">
+        android:weightSum="4"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/widget_diary_nav_todo"

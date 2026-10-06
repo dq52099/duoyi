@@ -68,10 +68,13 @@
 
         <TextView
             android:id="@+id/widget_todo_quick_add"
-            android:layout_width="54dp"
-            android:layout_height="32dp"
-            android:minHeight="32dp"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:minWidth="50dp"
+            android:minHeight="34dp"
             android:layout_marginLeft="6dp"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
             android:background="@drawable/widget_nav_bg"
             android:gravity="center"
             android:ellipsize="end"
@@ -82,8 +85,10 @@
 
         <TextView
             android:id="@+id/widget_refresh"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:minWidth="36dp"
+            android:minHeight="36dp"
             android:layout_marginLeft="4dp"
             android:gravity="center"
             android:ellipsize="end"
@@ -116,15 +121,16 @@
 
         <TextView
             android:id="@+id/widget_todo_done_1"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:minWidth="32dp"
-            android:minHeight="32dp"
-            android:background="@drawable/widget_nav_bg"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:minWidth="38dp"
+            android:minHeight="38dp"
+            android:background="@drawable/widget_btn_done"
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="o"
+            android:text="○"
+            android:contentDescription="完成待办"
             android:textColor="#1E88E5"
             android:textSize="14sp" />
     </LinearLayout>
@@ -136,7 +142,8 @@
         android:layout_weight="1"
         android:layout_marginTop="3dp"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/widget_todo_item_2"
@@ -151,17 +158,19 @@
 
         <TextView
             android:id="@+id/widget_todo_done_2"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:minWidth="32dp"
-            android:minHeight="32dp"
-            android:background="@drawable/widget_nav_bg"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:minWidth="38dp"
+            android:minHeight="38dp"
+            android:background="@drawable/widget_btn_done"
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="o"
+            android:text="○"
+            android:contentDescription="完成待办"
             android:textColor="#1E88E5"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <LinearLayout
@@ -171,7 +180,8 @@
         android:layout_weight="1"
         android:layout_marginTop="3dp"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/widget_todo_item_3"
@@ -186,17 +196,19 @@
 
         <TextView
             android:id="@+id/widget_todo_done_3"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:minWidth="32dp"
-            android:minHeight="32dp"
-            android:background="@drawable/widget_nav_bg"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:minWidth="38dp"
+            android:minHeight="38dp"
+            android:background="@drawable/widget_btn_done"
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="o"
+            android:text="○"
+            android:contentDescription="完成待办"
             android:textColor="#1E88E5"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <LinearLayout
@@ -209,7 +221,8 @@
         android:orientation="horizontal"
         android:paddingLeft="4dp"
         android:paddingRight="4dp"
-        android:weightSum="4">
+        android:weightSum="4"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/widget_todo_nav_todo"
@@ -269,7 +282,8 @@
         android:maxLines="1"
         android:text="今日待办 · 5 项"
         android:textColor="#666666"
-        android:textSize="11sp" />
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     </LinearLayout>
 </FrameLayout>

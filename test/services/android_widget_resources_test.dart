@@ -518,6 +518,21 @@ void main() {
           'DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(context)',
         ),
       );
+      final legacyOnUpdate = legacyProvider.substring(
+        legacyProvider.indexOf('override fun onUpdate('),
+        legacyProvider.indexOf('companion object'),
+      );
+      expect(
+        legacyOnUpdate,
+        matches(
+          RegExp(
+            r'views\.setViewVisibility\(\s*R\.id\.widget_bottom_nav,\s*'
+            r'DuoyiWidgetDisplayMode\.bottomNavVisibility\(prefs,\s*id\)\s*\)',
+          ),
+        ),
+        reason:
+            'Legacy widget updates must restore bottom navigation visibility after rendering new RemoteViews.',
+      );
     });
 
     test('升级或重启后恢复旧桌面小组件并延后启动期恢复任务', () {
@@ -672,10 +687,39 @@ void main() {
       );
       expect(mainActivity, contains('resolveActivity(packageManager)'));
 
-      expect(widgetScreen, contains('当前桌面启动器不支持应用内直接添加小组件'));
-      expect(widgetScreen, contains('系统拒绝了本次添加请求'));
-      expect(widgetScreen, contains('桌面没有展示或接受系统确认弹窗'));
-      expect(widgetScreen, contains('已发起添加请求，但桌面暂未返回确认结果'));
+      final pinHelpStart = widgetScreen.indexOf(
+        'Future<void> _showPinWidgetHelp(',
+      );
+      final confirmationHelpStart = widgetScreen.indexOf(
+        'Future<void> _showPinWidgetConfirmationFailureHelp(',
+        pinHelpStart,
+      );
+      final settingsStart = widgetScreen.indexOf(
+        'Future<void> _openWidgetSettings(',
+        confirmationHelpStart,
+      );
+      final pinHelp = widgetScreen.substring(
+        pinHelpStart,
+        confirmationHelpStart,
+      );
+      final confirmationHelp = widgetScreen.substring(
+        confirmationHelpStart,
+        settingsStart,
+      );
+      for (final result in [
+        'AndroidWidgetPinResult.unsupportedLauncher =>',
+        'AndroidWidgetPinResult.permissionDenied =>',
+        'AndroidWidgetPinResult.confirmationBlocked =>',
+      ]) {
+        expect(pinHelp, contains(result));
+      }
+      expect(pinHelp, contains('系统小组件列表'));
+      expect(pinHelp, contains('权限'));
+      expect(pinHelp, contains('确认'));
+      expect(
+        confirmationHelp,
+        contains('AndroidWidgetPinFinalStatus.timeout =>'),
+      );
       expect(widgetScreen, contains('if (widget.canOpenWidgetSettings)'));
       expect(widgetScreen, contains('if (canOpenSettings)'));
       expect(widgetScreen, contains('打开权限设置'));
@@ -926,7 +970,7 @@ void main() {
       );
     });
 
-    test('待办小组件未完成任务使用 o 圆圈并保留交互按钮', () {
+    test('待办小组件未完成任务使用空心圆并保留交互按钮', () {
       final layout = File(
         'android/app/src/main/res/layout/duoyi_todo_widget.xml',
       ).readAsStringSync();
@@ -941,8 +985,8 @@ void main() {
         final doneView = _xmlTextViewWithId(layout, 'widget_todo_done_$index');
         expect(
           doneView,
-          contains('android:text="o"'),
-          reason: '待办小组件展示的是未完成任务，右侧操作符号应是 o/圆圈，不应误导成已完成勾选。',
+          contains('android:text="○"'),
+          reason: '待办小组件展示的是未完成任务，右侧应使用空心圆而不是已完成勾选。',
         );
         expect(doneView, isNot(contains('android:text="✓"')));
       }
@@ -963,25 +1007,19 @@ void main() {
         widgetScreen.indexOf('class _WidgetPreviewTodoBody'),
         widgetScreen.indexOf('class _WidgetPreviewFocusBody'),
       );
-      expect(todoBody, contains("const _WidgetPreviewTodoRow(text: '整理今日计划')"));
       expect(
-        todoBody,
-        contains("const _WidgetPreviewTodoRow(text: '项目复盘 · 3 个子任务')"),
+        RegExp(r'_WidgetPreviewTodoRow\(').allMatches(todoBody),
+        hasLength(3),
       );
-      expect(
-        todoBody,
-        contains("const _WidgetPreviewTodoRow(text: '晚间运动 30 分钟')"),
-      );
-      expect(
-        todoBody,
-        contains("const _WidgetPreviewQuickAdd(label: '+ 添加待办')"),
-      );
+      expect(todoBody, contains('maxLines >= 2'));
+      expect(todoBody, contains('maxLines >= 3'));
+      expect(todoBody, contains('_WidgetPreviewQuickAdd('));
 
       final previewRow = widgetScreen.substring(
         widgetScreen.indexOf('class _WidgetPreviewTodoRow'),
         widgetScreen.indexOf('class _WidgetPreviewMetric'),
       );
-      expect(previewRow, contains("child: const Text(\n            'o',"));
+      expect(previewRow, contains("'○'"));
       expect(previewRow, isNot(contains('Icons.check_circle')));
     });
 
@@ -1041,17 +1079,22 @@ void main() {
       expect(service, contains('setDisplayMode'));
       expect(service, contains('widget_display_mode'));
       expect(widgetScreen, contains('小组件样式已设为'));
-      expect(widgetScreen, contains('final homeWidgetSynced'));
       expect(
         widgetScreen,
-        contains('final nativeSynced = appliedCount != null'),
+        contains('final nativeSynced = isWeb || appliedCount != null'),
       );
-      expect(widgetScreen, contains('桌面小组件同步失败'));
-      expect(widgetScreen, contains(r'已同步 $appliedCount 个桌面实例'));
-      expect(widgetScreen, contains('当前未检测到已添加的桌面实例'));
-      expect(widgetScreen, contains(r'新添加时会请求 ${mode.launcherRequestLabel}'));
-      expect(widgetScreen, contains('桌面格子大小仍由启动器控制'));
-      expect(widgetScreen, contains('新添加实例的请求尺寸'));
+      expect(widgetScreen, contains('桌面小组件样式同步失败'));
+      expect(widgetScreen, contains('if (_isUpdatingDisplayMode) return'));
+      expect(widgetScreen, contains('enabled: !_isUpdatingDisplayMode'));
+      expect(widgetScreen, contains('_userChangedDisplayMode = true'));
+      expect(
+        widgetScreen,
+        contains('setState(() => _isUpdatingDisplayMode = false)'),
+      );
+      expect(
+        widgetScreen,
+        contains("SnackBarAction(\n            label: '重试'"),
+      );
       expect(widgetScreen, contains('SegmentedButton<WidgetDisplayMode>'));
       expect(
         widgetScreen,
@@ -1067,7 +1110,7 @@ void main() {
         widgetScreen,
         contains('AndroidWidgetManager.applyDisplayModeToExistingWidgets'),
       );
-      expect(widgetScreen, contains('style: widget.displayMode.androidStyle'));
+      expect(widgetScreen, contains('style: requestedMode.androidStyle'));
       final manager = File(
         'lib/services/android_widget_manager.dart',
       ).readAsStringSync();
@@ -1096,8 +1139,9 @@ void main() {
       );
       expect(
         widgetScreen,
-        contains('WidgetPreviewCard.todo(displayMode: _displayMode)'),
+        contains('WidgetPreviewCard.todo(displayMode: mode)'),
       );
+      expect(widgetScreen, contains('item.previewBuilder(_displayMode)'));
       expect(widgetScreen, contains('class _WidgetPreviewDensity'));
       expect(widgetScreen, contains('class _WidgetPreviewDensityScope'));
       expect(widgetScreen, contains('class _WidgetPreviewLineList'));
@@ -1368,37 +1412,23 @@ void main() {
         contains('AndroidWidgetPinResult.unsupportedLauncher'),
       );
       expect(widgetScreen, contains('AndroidWidgetPinResult.permissionDenied'));
-      expect(widgetScreen, contains('可打开完成流程或快速添加'));
-      expect(widgetScreen, isNot(contains('可直接完成或快速添加')));
       expect(widgetScreen, contains('_WidgetPinSupportBanner'));
       expect(widgetScreen, contains('正在检查桌面小组件支持'));
       expect(widgetScreen, contains('当前桌面支持应用内添加'));
-      expect(widgetScreen, contains('等待桌面确认'));
-      expect(widgetScreen, isNot(contains('添加未确认')));
-      expect(widgetScreen, contains('添加未完成'));
-      expect(widgetScreen, contains('桌面返回了无效的小组件实例'));
+      expect(widgetScreen, contains('AndroidWidgetPinFinalStatus.timeout'));
       expect(
         widgetScreen,
         contains('AndroidWidgetPinFinalStatus.invalidWidgetId'),
       );
+      expect(
+        widgetScreen,
+        contains('AndroidWidgetManager.openWidgetSettings()'),
+      );
       expect(widgetScreen, contains('_showPinWidgetConfirmationFailureHelp'));
-      expect(widgetScreen, contains('当前桌面可能不支持应用内添加'));
-      expect(widgetScreen, contains('重新检测'));
-      expect(widgetScreen, contains('打开应用设置'));
       expect(widgetScreen, contains('WidgetsBindingObserver'));
       expect(widgetScreen, contains('didChangeAppLifecycleState'));
       expect(widgetScreen, contains('AppLifecycleState.resumed'));
       expect(widgetScreen, contains('onPinSupportChanged'));
-      expect(widgetScreen, contains('当前桌面不支持应用内直接添加小组件'));
-      expect(widgetScreen, contains('当前平台不支持直接添加 Android 桌面小组件'));
-      expect(widgetScreen, contains('系统拒绝了本次添加请求'));
-      expect(widgetScreen, contains('桌面没有展示或接受系统确认弹窗'));
-      expect(widgetScreen, contains('仅 Android 支持应用内添加'));
-      expect(widgetScreen, contains('请从系统小组件列表添加'));
-      expect(widgetScreen, contains('紧凑 2×2、标准 3×2 或详细 4×3'));
-      expect(widgetScreen, isNot(contains('系统列表只能添加标准尺寸')));
-      expect(widgetScreen, contains('桌面小组件权限'));
-      expect(widgetScreen, contains('后台弹窗'));
       expect(widgetScreen, contains('launcherRequestLabel'));
       expect(
         widgetScreen,
@@ -1419,14 +1449,18 @@ void main() {
       expect(widgetScreen, contains('if (_requesting) return'));
       expect(widgetScreen, contains('CircularProgressIndicator'));
       expect(widgetScreen, contains('正在请求添加'));
-      expect(widgetScreen, contains('新添加实例的请求尺寸'));
-      expect(widgetScreen, contains('不会修改已添加实例'));
-      expect(widgetScreen, contains('style: widget.displayMode.androidStyle'));
-      expect(widgetScreen, contains('请在桌面确认'));
+      expect(widgetScreen, contains('requestPinWidgetDetailed'));
+      expect(widgetScreen, contains('final requestedKind = widget.kind'));
+      expect(
+        widgetScreen,
+        contains('final requestedMode = widget.displayMode'),
+      );
+      expect(widgetScreen, contains('        requestedKind,\n'));
+      expect(widgetScreen, contains('waitForPinResult'));
+      expect(widgetScreen, contains('confirmation.isSuccess'));
+      expect(widgetScreen, contains('style: requestedMode.androidStyle'));
       expect(widgetScreen, isNot(contains('_showBeforePinPrompt')));
       expect(widgetScreen, contains('openWidgetSettings'));
-      expect(widgetScreen, contains('允许多仪'));
-      expect(widgetScreen, isNot(contains('长按空白处')));
       expect(mainActivity, contains('call.argument<String>("style")'));
       expect(mainActivity, contains('"openWidgetSettings"'));
       expect(mainActivity, contains('private fun openWidgetSettings'));
@@ -1820,15 +1854,16 @@ void main() {
       expect(pinStyle, contains('targetCellHeight = 2'));
       expect(pinStyle, contains('targetCellHeight = 3'));
       expect(widgetScreen, contains('previewCellLabel'));
-      expect(widgetScreen, contains('桌面小组件权限未允许'));
+      expect(
+        widgetScreen,
+        contains('AndroidWidgetPinResult.permissionDenied =>'),
+      );
       expect(widgetScreen, contains('previewAspectRatio'));
       expect(widgetScreen, contains('previewMaxWidth'));
       expect(widgetScreen, contains("'2x2'"));
       expect(widgetScreen, contains("'3x2'"));
       expect(widgetScreen, contains("'4x3'"));
       expect(widgetScreen, contains('小组件样式已设为'));
-      expect(widgetScreen, contains('桌面格子大小仍由启动器控制'));
-      expect(widgetScreen, contains('新添加实例的请求尺寸'));
       expect(widgetScreen, contains('label: Text('));
       expect(widgetScreen, contains("'添加\${widget.displayMode.label} "));
       expect(
@@ -2737,30 +2772,57 @@ void main() {
       expect(service, isNot(contains('_androidVariantProviderNames')));
       expect(widgetScreen, contains('WidgetPreviewCard'));
       expect(widgetScreen, contains('_WidgetPreviewNav'));
-      for (final title in [
-        '今日待办预览',
-        '专注预览',
-        '习惯预览',
-        '月历预览',
-        '今日日程预览',
-        '目标预览',
-        '课程表预览',
-        '随手记预览',
-        '纪念日预览',
-        '日记预览',
-      ]) {
-        expect(widgetScreen, contains(title));
+      const previewKinds = [
+        'todo',
+        'focus',
+        'habit',
+        'calendar',
+        'schedule',
+        'goal',
+        'course',
+        'note',
+        'anniversary',
+        'diary',
+      ];
+      for (final kind in previewKinds) {
+        expect(widgetScreen, contains('kind: DuoyiWidgetKind.$kind,'));
+        expect(
+          widgetScreen,
+          contains(
+            'previewBuilder: (mode) => WidgetPreviewCard.$kind(displayMode: mode)',
+          ),
+        );
+        expect(widgetScreen, contains('WidgetPreviewKind.$kind'));
       }
+      for (final body in [
+        '_WidgetPreviewTodoBody',
+        '_WidgetPreviewFocusBody',
+        '_WidgetPreviewHabitBody',
+        '_WidgetPreviewCalendarBody',
+        '_WidgetPreviewScheduleBody',
+        '_WidgetPreviewGoalBody',
+        '_WidgetPreviewCourseBody',
+        '_WidgetPreviewNoteBody',
+        '_WidgetPreviewAnniversaryBody',
+        '_WidgetPreviewDiaryBody',
+      ]) {
+        expect(widgetScreen, contains('const $body()'));
+      }
+      expect(widgetScreen, contains('item.previewBuilder(_displayMode)'));
+      expect(widgetScreen, contains('class _WidgetPreviewNav'));
       expect(widgetScreen, isNot(contains('多仪概览')));
       expect(widgetScreen, isNot(contains('WidgetPreviewCard.overview')));
       expect(widgetScreen, isNot(contains('WidgetPreviewKind.overview')));
       expect(widgetScreen, isNot(contains('_WidgetPreviewOverviewBody')));
-      expect(widgetScreen, contains("'待办', '习惯', '日历', '专注'"));
-      expect(widgetScreen, contains('展示进行中目标和进度'));
-      expect(widgetScreen, contains('发版准备 · 68%'));
-      expect(widgetScreen, contains('今日优先处理'));
-      expect(widgetScreen, contains('+ 添加待办'));
-      expect(widgetScreen, contains('开始 25 分钟专注'));
+      final goalBodyStart = widgetScreen.indexOf(
+        'class _WidgetPreviewGoalBody',
+      );
+      final courseBodyStart = widgetScreen.indexOf(
+        'class _WidgetPreviewCourseBody',
+        goalBodyStart,
+      );
+      final goalBody = widgetScreen.substring(goalBodyStart, courseBodyStart);
+      expect(goalBody, matches(RegExp(r'\d+\s*%')));
     });
 
     test('桌面小组件 deep link 跳转隐藏底部页时允许打开隐藏 tab', () {

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +9,128 @@ import '../services/android_widget_manager.dart';
 import '../services/home_widget_service.dart';
 import '../widgets/surface_components.dart';
 import 'calendar_screen.dart';
+
+enum _WidgetCategory {
+  all('全部'),
+  productivity('效率'),
+  life('生活');
+
+  final String label;
+  const _WidgetCategory(this.label);
+}
+
+class _WidgetCatalogItem {
+  final DuoyiWidgetKind kind;
+  final _WidgetCategory category;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final Widget Function(WidgetDisplayMode mode) previewBuilder;
+
+  const _WidgetCatalogItem({
+    required this.kind,
+    required this.category,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.previewBuilder,
+  });
+}
+
+final List<_WidgetCatalogItem> _widgetCatalog = [
+  _WidgetCatalogItem(
+    kind: DuoyiWidgetKind.todo,
+    category: _WidgetCategory.productivity,
+    icon: Icons.checklist_rtl_outlined,
+    title: '今日待办',
+    subtitle: '桌面查看与完成待办，支持快速记一笔',
+    color: Colors.blue,
+    previewBuilder: (mode) => WidgetPreviewCard.todo(displayMode: mode),
+  ),
+  _WidgetCatalogItem(
+    kind: DuoyiWidgetKind.focus,
+    category: _WidgetCategory.productivity,
+    icon: Icons.timer_outlined,
+    title: '专注',
+    subtitle: '展示今日专注次数、时长与下一轮计划',
+    color: Colors.redAccent,
+    previewBuilder: (mode) => WidgetPreviewCard.focus(displayMode: mode),
+  ),
+  _WidgetCatalogItem(
+    kind: DuoyiWidgetKind.habit,
+    category: _WidgetCategory.life,
+    icon: Icons.self_improvement_outlined,
+    title: '习惯',
+    subtitle: '查看今日完成率、连续记录与快捷打卡',
+    color: Colors.green,
+    previewBuilder: (mode) => WidgetPreviewCard.habit(displayMode: mode),
+  ),
+  _WidgetCatalogItem(
+    kind: DuoyiWidgetKind.calendar,
+    category: _WidgetCategory.life,
+    icon: Icons.calendar_month_outlined,
+    title: '月历',
+    subtitle: '月视图概览与今日标记',
+    color: Colors.indigo,
+    previewBuilder: (mode) => WidgetPreviewCard.calendar(displayMode: mode),
+  ),
+  _WidgetCatalogItem(
+    kind: DuoyiWidgetKind.schedule,
+    category: _WidgetCategory.productivity,
+    icon: Icons.event_note_outlined,
+    title: '今日日程',
+    subtitle: '查看今日按时间排序的日程安排',
+    color: Colors.cyan,
+    previewBuilder: (mode) => WidgetPreviewCard.schedule(displayMode: mode),
+  ),
+  _WidgetCatalogItem(
+    kind: DuoyiWidgetKind.goal,
+    category: _WidgetCategory.productivity,
+    icon: Icons.flag_outlined,
+    title: '目标',
+    subtitle: '展示当前目标与推进进度',
+    color: Colors.orange,
+    previewBuilder: (mode) => WidgetPreviewCard.goal(displayMode: mode),
+  ),
+  _WidgetCatalogItem(
+    kind: DuoyiWidgetKind.course,
+    category: _WidgetCategory.productivity,
+    icon: Icons.school_outlined,
+    title: '课程表',
+    subtitle: '展示今日课程节次、教室与时间',
+    color: Colors.orange,
+    previewBuilder: (mode) => WidgetPreviewCard.course(displayMode: mode),
+  ),
+  _WidgetCatalogItem(
+    kind: DuoyiWidgetKind.note,
+    category: _WidgetCategory.life,
+    icon: Icons.edit_note_outlined,
+    title: '随手记',
+    subtitle: '查看最近更新的便签与随手记',
+    color: Colors.purple,
+    previewBuilder: (mode) => WidgetPreviewCard.note(displayMode: mode),
+  ),
+  _WidgetCatalogItem(
+    kind: DuoyiWidgetKind.anniversary,
+    category: _WidgetCategory.life,
+    icon: Icons.event_available_outlined,
+    title: '纪念日',
+    subtitle: '倒数重要日子与累计天数',
+    color: Colors.pink,
+    previewBuilder: (mode) => WidgetPreviewCard.anniversary(displayMode: mode),
+  ),
+  _WidgetCatalogItem(
+    kind: DuoyiWidgetKind.diary,
+    category: _WidgetCategory.life,
+    icon: Icons.book_outlined,
+    title: '日记',
+    subtitle: '回顾最近记录的心情与日记摘要',
+    color: Colors.teal,
+    previewBuilder: (mode) => WidgetPreviewCard.diary(displayMode: mode),
+  ),
+];
 
 class WidgetScreen extends StatefulWidget {
   const WidgetScreen({super.key});
@@ -24,6 +147,11 @@ class _WidgetScreenState extends State<WidgetScreen>
   bool _checkingPinSupport = true;
   bool _canOpenWidgetSettings = false;
   bool _refreshingData = false;
+  _WidgetCategory _selectedCategory = _WidgetCategory.all;
+  bool _userChangedDisplayMode = false;
+  int _pinSupportSeq = 0;
+  int _displayModeSeq = 0;
+  bool _isUpdatingDisplayMode = false;
 
   @override
   void initState() {
@@ -49,16 +177,17 @@ class _WidgetScreenState extends State<WidgetScreen>
   Future<void> _loadDisplayMode() async {
     final prefs = await SharedPreferences.getInstance();
     final value = prefs.getString(_displayModeKey);
-    if (!mounted) return;
+    if (!mounted || _userChangedDisplayMode) return;
     setState(() {
       _displayMode = WidgetDisplayMode.fromId(value);
     });
   }
 
   Future<void> _loadPinSupport() async {
+    final seq = ++_pinSupportSeq;
     final support = await AndroidWidgetManager.checkPinSupport();
     final canOpenSettings = await AndroidWidgetManager.canOpenWidgetSettings();
-    if (!mounted) return;
+    if (!mounted || seq != _pinSupportSeq) return;
     setState(() {
       _pinSupport = support;
       _checkingPinSupport = false;
@@ -67,24 +196,61 @@ class _WidgetScreenState extends State<WidgetScreen>
   }
 
   Future<void> _setDisplayMode(WidgetDisplayMode mode) async {
-    setState(() => _displayMode = mode);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_displayModeKey, mode.id);
-    final homeWidgetSynced = await HomeWidgetService.setDisplayMode(mode.id);
-    final appliedCount =
-        await AndroidWidgetManager.applyDisplayModeToExistingWidgets(
-          mode.androidStyle,
+    if (_isUpdatingDisplayMode) return;
+    _userChangedDisplayMode = true;
+    final seq = ++_displayModeSeq;
+    setState(() {
+      _displayMode = mode;
+      _isUpdatingDisplayMode = true;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_displayModeKey, mode.id);
+      final isWeb = kIsWeb || WebTarget.isDesktopWebBuild;
+      bool homeWidgetSynced = true;
+      int? appliedCount = 0;
+      if (!isWeb) {
+        homeWidgetSynced = await HomeWidgetService.setDisplayMode(mode.id);
+        appliedCount =
+            await AndroidWidgetManager.applyDisplayModeToExistingWidgets(
+              mode.androidStyle,
+            );
+      }
+      if (!mounted || seq != _displayModeSeq) return;
+      final nativeSynced = isWeb || appliedCount != null;
+      if (!homeWidgetSynced || !nativeSynced) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('桌面小组件样式同步失败，请重试'),
+            action: SnackBarAction(
+              label: '重试',
+              onPressed: () => _setDisplayMode(mode),
+            ),
+          ),
         );
-    if (!mounted) return;
-    final nativeSynced = appliedCount != null;
-    final message = !homeWidgetSynced || !nativeSynced
-        ? '应用内样式已保存，但桌面小组件同步失败；请稍后重试或重新添加小组件'
-        : appliedCount > 0
-        ? '小组件样式已设为${mode.label}，已同步 $appliedCount 个桌面实例；桌面格子大小仍由启动器控制'
-        : '小组件样式已设为${mode.label}，当前未检测到已添加的桌面实例；新添加时会请求 ${mode.launcherRequestLabel}';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('小组件样式已设为${mode.label}。长按桌面小组件可调整大小。'),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted || seq != _displayModeSeq) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('桌面小组件样式同步失败，请重试'),
+          action: SnackBarAction(
+            label: '重试',
+            onPressed: () => _setDisplayMode(mode),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted && seq == _displayModeSeq) {
+        setState(() => _isUpdatingDisplayMode = false);
+      }
+    }
   }
 
   Future<void> _openWidgetSettings() async {
@@ -98,6 +264,7 @@ class _WidgetScreenState extends State<WidgetScreen>
   }
 
   void _setPinSupport(AndroidWidgetPinResult support) {
+    _pinSupportSeq++;
     if (!mounted) return;
     setState(() {
       _pinSupport = support;
@@ -132,6 +299,12 @@ class _WidgetScreenState extends State<WidgetScreen>
     final routeBackground = Theme.of(context).brightness == Brightness.dark
         ? cs.surface
         : cs.surfaceContainerLowest;
+    final filteredCatalog = _selectedCategory == _WidgetCategory.all
+        ? _widgetCatalog
+        : _widgetCatalog
+            .where((item) => item.category == _selectedCategory)
+            .toList();
+
     return Scaffold(
       backgroundColor: routeBackground,
       appBar: AppBar(
@@ -180,7 +353,8 @@ class _WidgetScreenState extends State<WidgetScreen>
                   const SizedBox(height: 12),
                   _WidgetDisplayModePanel(
                     value: _displayMode,
-                    onChanged: _setDisplayMode,
+                    enabled: !_isUpdatingDisplayMode,
+                    onChanged: _isUpdatingDisplayMode ? null : _setDisplayMode,
                   ),
                   const SizedBox(height: 12),
                   _WidgetPinSupportBanner(
@@ -191,192 +365,40 @@ class _WidgetScreenState extends State<WidgetScreen>
                     onOpenSettings: _openWidgetSettings,
                   ),
                   const SizedBox(height: 12),
-                  const _WidgetCatalogTile(
-                    icon: Icons.checklist_rtl_outlined,
-                    title: '今日待办',
-                    subtitle: '展示前三个今日任务，可打开完成流程或快速添加',
-                    color: Colors.blue,
+                  _WidgetCategoryFilter(
+                    selected: _selectedCategory,
+                    onSelected: (category) {
+                      setState(() => _selectedCategory = category);
+                    },
                   ),
-                  const SizedBox(height: 10),
-                  WidgetPreviewCard.todo(displayMode: _displayMode),
-                  const SizedBox(height: 8),
-                  _AddWidgetButton(
-                    pinSupport: _pinSupport,
-                    checkingPinSupport: _checkingPinSupport,
-                    kind: DuoyiWidgetKind.todo,
-                    displayMode: _displayMode,
-                    canOpenWidgetSettings: _canOpenWidgetSettings,
-                    onPinSupportChanged: _setPinSupport,
-                  ),
+                  for (final item in filteredCatalog) ...[
+                    const SizedBox(height: 16),
+                    _WidgetCatalogTile(
+                      icon: item.icon,
+                      title: item.title,
+                      subtitle: item.subtitle,
+                      color: item.color,
+                    ),
+                    const SizedBox(height: 10),
+                    item.previewBuilder(_displayMode),
+                    const SizedBox(height: 8),
+                    _AddWidgetButton(
+                      key: ValueKey(item.kind),
+                      pinSupport: _pinSupport,
+                      checkingPinSupport: _checkingPinSupport,
+                      kind: item.kind,
+                      displayMode: _displayMode,
+                      canOpenWidgetSettings: _canOpenWidgetSettings,
+                      onPinSupportChanged: _setPinSupport,
+                    ),
+                  ],
                   const SizedBox(height: 16),
-                  const _WidgetCatalogTile(
-                    icon: Icons.timer_outlined,
-                    title: '专注',
-                    subtitle: '今日专注次数、专注时长和快速开始',
-                    color: Colors.redAccent,
-                  ),
-                  const SizedBox(height: 10),
-                  WidgetPreviewCard.focus(displayMode: _displayMode),
-                  const SizedBox(height: 8),
-                  _AddWidgetButton(
-                    pinSupport: _pinSupport,
-                    checkingPinSupport: _checkingPinSupport,
-                    kind: DuoyiWidgetKind.focus,
-                    displayMode: _displayMode,
-                    canOpenWidgetSettings: _canOpenWidgetSettings,
-                    onPinSupportChanged: _setPinSupport,
-                  ),
-                  const SizedBox(height: 16),
-                  const _WidgetCatalogTile(
-                    icon: Icons.self_improvement_outlined,
-                    title: '习惯',
-                    subtitle: '今日习惯进度、待打卡习惯和连续记录',
-                    color: Colors.green,
-                  ),
-                  const SizedBox(height: 10),
-                  WidgetPreviewCard.habit(displayMode: _displayMode),
-                  const SizedBox(height: 8),
-                  _AddWidgetButton(
-                    pinSupport: _pinSupport,
-                    checkingPinSupport: _checkingPinSupport,
-                    kind: DuoyiWidgetKind.habit,
-                    displayMode: _displayMode,
-                    canOpenWidgetSettings: _canOpenWidgetSettings,
-                    onPinSupportChanged: _setPinSupport,
-                  ),
-                  const SizedBox(height: 16),
-                  const _WidgetCatalogTile(
-                    icon: Icons.calendar_month_outlined,
-                    title: '月历',
-                    subtitle: '显示本月日期和今日标记',
-                    color: Colors.indigo,
-                  ),
-                  const SizedBox(height: 10),
-                  WidgetPreviewCard.calendar(displayMode: _displayMode),
-                  const SizedBox(height: 8),
-                  _AddWidgetButton(
-                    pinSupport: _pinSupport,
-                    checkingPinSupport: _checkingPinSupport,
-                    kind: DuoyiWidgetKind.calendar,
-                    displayMode: _displayMode,
-                    canOpenWidgetSettings: _canOpenWidgetSettings,
-                    onPinSupportChanged: _setPinSupport,
-                  ),
-                  const SizedBox(height: 16),
-                  const _WidgetCatalogTile(
-                    icon: Icons.event_note_outlined,
-                    title: '今日日程',
-                    subtitle: '展示今天的日程和提醒时间',
-                    color: Colors.cyan,
-                  ),
-                  const SizedBox(height: 10),
-                  WidgetPreviewCard.schedule(displayMode: _displayMode),
-                  const SizedBox(height: 8),
-                  _AddWidgetButton(
-                    pinSupport: _pinSupport,
-                    checkingPinSupport: _checkingPinSupport,
-                    kind: DuoyiWidgetKind.schedule,
-                    displayMode: _displayMode,
-                    canOpenWidgetSettings: _canOpenWidgetSettings,
-                    onPinSupportChanged: _setPinSupport,
-                  ),
-                  const SizedBox(height: 16),
-                  const _WidgetCatalogTile(
-                    icon: Icons.flag_outlined,
-                    title: '目标',
-                    subtitle: '展示进行中目标和进度',
-                    color: Colors.orange,
-                  ),
-                  const SizedBox(height: 10),
-                  WidgetPreviewCard.goal(displayMode: _displayMode),
-                  const SizedBox(height: 8),
-                  _AddWidgetButton(
-                    pinSupport: _pinSupport,
-                    checkingPinSupport: _checkingPinSupport,
-                    kind: DuoyiWidgetKind.goal,
-                    displayMode: _displayMode,
-                    canOpenWidgetSettings: _canOpenWidgetSettings,
-                    onPinSupportChanged: _setPinSupport,
-                  ),
-                  const SizedBox(height: 16),
-                  const _WidgetCatalogTile(
-                    icon: Icons.school_outlined,
-                    title: '课程表',
-                    subtitle: '展示今日课程和下一节课',
-                    color: Colors.orange,
-                  ),
-                  const SizedBox(height: 10),
-                  WidgetPreviewCard.course(displayMode: _displayMode),
-                  const SizedBox(height: 8),
-                  _AddWidgetButton(
-                    pinSupport: _pinSupport,
-                    checkingPinSupport: _checkingPinSupport,
-                    kind: DuoyiWidgetKind.course,
-                    displayMode: _displayMode,
-                    canOpenWidgetSettings: _canOpenWidgetSettings,
-                    onPinSupportChanged: _setPinSupport,
-                  ),
-                  const SizedBox(height: 16),
-                  const _WidgetCatalogTile(
-                    icon: Icons.edit_note_outlined,
-                    title: '随手记',
-                    subtitle: '展示最近更新的三条笔记，点击进入随手记',
-                    color: Colors.purple,
-                  ),
-                  const SizedBox(height: 10),
-                  WidgetPreviewCard.note(displayMode: _displayMode),
-                  const SizedBox(height: 8),
-                  _AddWidgetButton(
-                    pinSupport: _pinSupport,
-                    checkingPinSupport: _checkingPinSupport,
-                    kind: DuoyiWidgetKind.note,
-                    displayMode: _displayMode,
-                    canOpenWidgetSettings: _canOpenWidgetSettings,
-                    onPinSupportChanged: _setPinSupport,
-                  ),
-                  const SizedBox(height: 16),
-                  const _WidgetCatalogTile(
-                    icon: Icons.event_available_outlined,
-                    title: '纪念日',
-                    subtitle: '展示最近的纪念日，点击进入纪念日列表',
-                    color: Colors.pink,
-                  ),
-                  const SizedBox(height: 10),
-                  WidgetPreviewCard.anniversary(displayMode: _displayMode),
-                  const SizedBox(height: 8),
-                  _AddWidgetButton(
-                    pinSupport: _pinSupport,
-                    checkingPinSupport: _checkingPinSupport,
-                    kind: DuoyiWidgetKind.anniversary,
-                    displayMode: _displayMode,
-                    canOpenWidgetSettings: _canOpenWidgetSettings,
-                    onPinSupportChanged: _setPinSupport,
-                  ),
-                  const SizedBox(height: 16),
-                  const _WidgetCatalogTile(
-                    icon: Icons.book_outlined,
-                    title: '日记',
-                    subtitle: '展示最近三篇日记，点击进入日记',
-                    color: Colors.teal,
-                  ),
-                  const SizedBox(height: 10),
-                  WidgetPreviewCard.diary(displayMode: _displayMode),
-                  const SizedBox(height: 8),
-                  _AddWidgetButton(
-                    pinSupport: _pinSupport,
-                    checkingPinSupport: _checkingPinSupport,
-                    kind: DuoyiWidgetKind.diary,
-                    displayMode: _displayMode,
-                    canOpenWidgetSettings: _canOpenWidgetSettings,
-                    onPinSupportChanged: _setPinSupport,
-                  ),
-                  const SizedBox(height: 12),
-                  AppInfoBanner(
+                  const AppInfoBanner(
                     icon: Icons.touch_app_outlined,
                     color: Colors.teal,
-                    title: '添加桌面无权限时的处理',
+                    title: '桌面小组件使用提示',
                     message:
-                        '这里选择的是新添加小组件的默认样式/请求尺寸；已添加到桌面的实例不会被修改。系统小组件列表也提供紧凑 2×2、标准 3×2 和详细 4×3 入口。',
+                        '长按桌面小组件可调整大小。添加小组件需系统弹窗确认；若未弹出确认框，请打开系统设置检查多仪的桌面小组件权限。',
                   ),
                 ],
               ),
@@ -429,6 +451,53 @@ class _DesktopWebWidgetFallback extends StatelessWidget {
   }
 }
 
+class _WidgetCategoryFilter extends StatelessWidget {
+  final _WidgetCategory selected;
+  final ValueChanged<_WidgetCategory> onSelected;
+
+  const _WidgetCategoryFilter({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final segmented = SegmentedButton<_WidgetCategory>(
+          segments: [
+            for (final cat in _WidgetCategory.values)
+              ButtonSegment<_WidgetCategory>(
+                value: cat,
+                label: Text(
+                  cat.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          selected: {selected},
+          showSelectedIcon: false,
+          onSelectionChanged: (next) => onSelected(next.single),
+        );
+        if (constraints.maxWidth >= 320) {
+          return SizedBox(
+            width: double.infinity,
+            child: segmented,
+          );
+        }
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: segmented,
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _WidgetPinSupportBanner extends StatelessWidget {
   final AndroidWidgetPinResult? result;
   final bool checking;
@@ -472,20 +541,20 @@ class _WidgetPinSupportBanner extends StatelessWidget {
             _ => '当前桌面可能不支持应用内添加',
           };
     final message = checking
-        ? '正在检测当前桌面是否支持直接固定小组件。'
+        ? '正在检测当前桌面是否支持直接添加小组件。'
         : supported
-        ? '选择紧凑 2×2、标准 3×2 或详细 4×3 后再添加；这是新添加实例的请求尺寸，最终占位仍由桌面网格决定。'
+        ? '可直接添加到桌面，添加后需系统弹窗确认；长按桌面小组件可调整大小。'
         : switch (support) {
             AndroidWidgetPinResult.unsupportedPlatform =>
-              '请在 Android 手机上使用系统小组件列表添加多仪，可选择紧凑 2×2、标准 3×2 或详细 4×3。',
+              '请在 Android 手机上通过系统小组件列表添加多仪。',
             AndroidWidgetPinResult.unsupportedLauncher =>
-              '当前桌面启动器未开放应用内添加；请从系统小组件列表选择紧凑 2×2、标准 3×2 或详细 4×3。',
+              '当前桌面启动器未开放应用内添加，请从系统小组件列表选择添加。',
             AndroidWidgetPinResult.permissionDenied =>
-              '系统拒绝了添加请求，通常是桌面小组件权限未允许。请在系统设置里允许多仪添加桌面小组件后重试，或从系统小组件列表选择尺寸。',
+              '系统未允许多仪添加桌面小组件，请在系统设置中开启权限后重试。',
             AndroidWidgetPinResult.confirmationBlocked =>
-              '桌面没有展示或接受系统确认弹窗，常见于后台弹窗/悬浮窗限制。请允许多仪显示系统确认后重试，或从系统小组件列表选择尺寸。',
+              '桌面确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。',
             AndroidWidgetPinResult.invalidKind => '请更新应用后重试。',
-            _ => '如果点击添加后没有系统确认框，请打开系统设置检查桌面小组件权限、后台弹窗权限后重试，或从系统小组件列表选择尺寸。',
+            _ => '若未弹出确认框，请打开系统设置检查桌面小组件与后台弹窗权限，或从系统小组件列表添加。',
           };
     final cs = Theme.of(context).colorScheme;
     return AppSurfaceCard(
@@ -493,63 +562,67 @@ class _WidgetPinSupportBanner extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       color: color.withValues(alpha: 0.08),
       border: Border.all(color: color.withValues(alpha: 0.12), width: 0.45),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              supported ? Icons.check_circle_outline : Icons.info_outline,
-              size: 18,
-              color: color,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  message,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurface.withValues(alpha: 0.72),
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 360;
+          final headerAndBody = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (canOpenSettings) ...[
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  supported ? Icons.check_circle_outline : Icons.info_outline,
+                  size: 18,
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      message,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.72),
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+          final actions = Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            alignment: WrapAlignment.end,
+            children: [
+              if (canOpenSettings)
                 TextButton.icon(
                   onPressed: checking ? null : onOpenSettings,
                   icon: const Icon(Icons.settings_outlined, size: 16),
-                  label: const Text('打开应用设置'),
+                  label: const Text('应用设置'),
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     textStyle: appSecondaryControlTextStyle(context),
                   ),
                 ),
-                const SizedBox(height: 2),
-              ],
               TextButton.icon(
                 onPressed: checking ? null : onRefresh,
                 icon: const Icon(Icons.refresh, size: 16),
@@ -561,17 +634,36 @@ class _WidgetPinSupportBanner extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-        ],
+          );
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                headerAndBody,
+                const SizedBox(height: 8),
+                Align(alignment: Alignment.centerRight, child: actions),
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: headerAndBody),
+              const SizedBox(width: 8),
+              actions,
+            ],
+          );
+        },
       ),
     );
   }
 }
 
 enum WidgetDisplayMode {
-  compact('compact', '紧凑', '新添加时请求 2x2，只保留最关键的一行内容', '2x2', 1.0, 320),
-  standard('standard', '标准', '新添加时请求 3x2，展示两行内容', '3x2', 1.5, 480),
-  detailed('detailed', '详细', '新添加时请求 4x3，展示三行内容', '4x3', 4 / 3, 640);
+  compact('compact', '紧凑', '紧凑尺寸，展示核心一行内容，长按桌面可调整大小', '2x2', 1.0, 320),
+  standard('standard', '标准', '标准尺寸，展示两行内容，长按桌面可调整大小', '3x2', 1.5, 480),
+  detailed('detailed', '详细', '详细尺寸，展示三行内容，长按桌面可调整大小', '4x3', 4 / 3, 640);
 
   final String id;
   final String label;
@@ -605,9 +697,14 @@ enum WidgetDisplayMode {
 
 class _WidgetDisplayModePanel extends StatelessWidget {
   final WidgetDisplayMode value;
-  final ValueChanged<WidgetDisplayMode> onChanged;
+  final bool enabled;
+  final ValueChanged<WidgetDisplayMode>? onChanged;
 
-  const _WidgetDisplayModePanel({required this.value, required this.onChanged});
+  const _WidgetDisplayModePanel({
+    required this.value,
+    this.enabled = true,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -622,10 +719,14 @@ class _WidgetDisplayModePanel extends StatelessWidget {
             children: [
               Icon(Icons.tune, size: 18, color: cs.primary),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '新添加默认样式',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.normal),
+                  '小组件样式',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.normal,
+                    color: cs.onSurface,
+                  ),
                 ),
               ),
             ],
@@ -647,10 +748,15 @@ class _WidgetDisplayModePanel extends StatelessWidget {
                 ],
                 selected: {value},
                 showSelectedIcon: false,
-                onSelectionChanged: (next) => onChanged(next.single),
+                onSelectionChanged: enabled && onChanged != null
+                    ? (next) => onChanged!(next.single)
+                    : null,
               );
               if (constraints.maxWidth >= 340) {
-                return segmented;
+                return SizedBox(
+                  width: double.infinity,
+                  child: segmented,
+                );
               }
               return SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -664,7 +770,11 @@ class _WidgetDisplayModePanel extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value.description,
-            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.normal,
+              color: cs.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -681,6 +791,7 @@ class _AddWidgetButton extends StatefulWidget {
   final ValueChanged<AndroidWidgetPinResult> onPinSupportChanged;
 
   const _AddWidgetButton({
+    super.key,
     required this.kind,
     required this.displayMode,
     required this.pinSupport,
@@ -756,6 +867,8 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
 
   Future<void> _request(BuildContext context) async {
     if (_requesting) return;
+    final requestedKind = widget.kind;
+    final requestedMode = widget.displayMode;
     setState(() => _requesting = true);
     try {
       final support = await AndroidWidgetManager.checkPinSupport();
@@ -768,15 +881,15 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
         return;
       }
       final request = await AndroidWidgetManager.requestPinWidgetDetailed(
-        widget.kind,
-        style: widget.displayMode.androidStyle,
+        requestedKind,
+        style: requestedMode.androidStyle,
       );
       if (!context.mounted) return;
       if (request.result == AndroidWidgetPinResult.requested) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '等待桌面确认${widget.displayMode.label} ${widget.displayMode.launcherRequestLabel} 小组件；这是新添加实例的请求尺寸，不会修改已添加实例。',
+              '已发起添加，请在系统弹窗中确认添加${requestedMode.label}小组件。长按桌面可调整大小。',
             ),
           ),
         );
@@ -792,7 +905,7 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '已添加${widget.displayMode.label} ${widget.displayMode.launcherRequestLabel} 小组件到桌面。',
+                '已添加${requestedMode.label}小组件到桌面。',
               ),
             ),
           );
@@ -820,19 +933,19 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
   ) async {
     final message = switch (result) {
       AndroidWidgetPinResult.unsupported =>
-        '当前桌面不支持应用内直接添加小组件。请从系统小组件列表选择紧凑 2×2、标准 3×2 或详细 4×3。',
+        '当前桌面不支持应用内直接添加小组件。请长按桌面空白处，从系统小组件列表添加。',
       AndroidWidgetPinResult.unsupportedPlatform =>
-        '当前平台不支持直接添加 Android 桌面小组件。请在 Android 手机上使用系统小组件列表添加多仪，可选择紧凑 2×2、标准 3×2 或详细 4×3。',
+        '当前平台不支持直接添加 Android 桌面小组件。请在 Android 手机上从系统小组件列表添加多仪。',
       AndroidWidgetPinResult.unsupportedLauncher =>
-        '当前桌面启动器不支持应用内直接添加小组件。请从系统小组件列表选择紧凑 2×2、标准 3×2 或详细 4×3。',
+        '当前桌面启动器未开放应用内添加，请长按桌面空白处从系统小组件列表添加。',
       AndroidWidgetPinResult.permissionDenied =>
-        '系统拒绝了本次添加请求，通常是桌面小组件权限未允许；也可能没有桌面添加权限。请在系统设置里允许多仪添加桌面小组件后重试，或从系统小组件列表选择尺寸。',
+        '系统未允许多仪添加桌面小组件。请在系统设置中开启权限后重试，或从系统小组件列表添加。',
       AndroidWidgetPinResult.confirmationBlocked =>
-        '桌面没有展示或接受系统确认弹窗，常见于后台弹出确认、后台弹窗或悬浮窗限制，或桌面拦截了确认流程。请允许多仪显示系统确认后重试，或从系统小组件列表选择尺寸。',
+        '系统确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。',
       AndroidWidgetPinResult.invalidKind => '当前小组件类型暂不支持添加，请更新应用后重试。',
       AndroidWidgetPinResult.unavailable =>
-        '无法发起添加到桌面。可打开系统设置检查桌面小组件权限、后台弹窗权限后重试，或从系统小组件列表选择尺寸。',
-      AndroidWidgetPinResult.requested => '已发起添加请求，请在桌面确认小组件。',
+        '无法发起添加请求，请检查桌面权限后重试，或从系统小组件列表添加。',
+      AndroidWidgetPinResult.requested => '已发起添加请求，请在桌面系统弹窗中确认。',
     };
     await showDialog<void>(
       context: context,
@@ -866,15 +979,15 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
     final (title, message) = switch (confirmation.status) {
       AndroidWidgetPinFinalStatus.invalidWidgetId => (
         '添加未完成',
-        '桌面返回了无效的小组件实例，系统没有真正创建桌面小组件。请重新点击添加；如果反复出现，请切换标准尺寸或在系统小组件列表中添加。',
+        '桌面未成功创建小组件，请重试或从系统小组件列表添加。',
       ),
       AndroidWidgetPinFinalStatus.timeout => (
         '等待桌面确认',
-        '已发起添加请求，但桌面暂未返回确认结果。部分桌面会延迟回调，可先回到桌面查看；如果一直没有确认弹窗，请检查桌面小组件权限和后台弹窗权限，或从系统小组件列表选择尺寸。',
+        '已发起添加请求，但尚未收到系统确认。请查看桌面是否有确认弹窗，或在系统设置中检查权限。',
       ),
       AndroidWidgetPinFinalStatus.unavailable => (
-        '添加状态异常',
-        '桌面没有返回有效的添加结果。请重新点击添加；如果反复失败，请检查桌面小组件权限、后台弹窗权限，或从系统小组件列表添加标准尺寸。',
+        '添加异常',
+        '桌面未返回添加结果。请重试或从系统小组件列表添加。',
       ),
       AndroidWidgetPinFinalStatus.success => ('已添加', '桌面小组件已添加。'),
     };
@@ -1140,34 +1253,36 @@ class WidgetPreviewCard extends StatelessWidget {
                                     WidgetPreviewKind.diary =>
                                       Icons.book_outlined,
                                   },
-                                  size: 18,
+                                  size: 16,
                                   color: accent,
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
-                                    title,
+                                    '$title 示例',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.normal,
                                     ),
                                   ),
                                 ),
+                                const SizedBox(width: 4),
                                 Text(
                                   '${displayMode.previewCellLabel} · 05/17',
+                                  maxLines: 1,
                                   style: TextStyle(
-                                    fontSize: 11,
+                                    fontSize: 10,
                                     color: cs.onSurfaceVariant,
                                     fontWeight: FontWeight.normal,
                                   ),
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 4),
                                 Text(
                                   '↻',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     color: cs.onSurfaceVariant,
                                     fontWeight: FontWeight.normal,
                                   ),
@@ -1273,11 +1388,6 @@ class _WidgetPreviewContentFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final designHeight = switch (mode) {
-      WidgetDisplayMode.compact => 92.0,
-      WidgetDisplayMode.standard => 150.0,
-      WidgetDisplayMode.detailed => 200.0,
-    };
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth.isFinite
@@ -1291,7 +1401,6 @@ class _WidgetPreviewContentFrame extends StatelessWidget {
               alignment: Alignment.topLeft,
               child: SizedBox(
                 width: width,
-                height: designHeight,
                 child: _WidgetPreviewDensity(mode: mode, child: child),
               ),
             ),
@@ -1330,26 +1439,27 @@ class _WidgetPreviewTodoBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final maxLines = _WidgetPreviewDensityScope.maxLinesOf(context);
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _WidgetPreviewLine(
-          icon: Icons.warning_amber_outlined,
-          text: '逾期 1 项 · 20:25 有提醒 · 今日优先处理',
-        ),
-        const SizedBox(height: 5),
         const _WidgetPreviewTodoRow(text: '整理今日计划'),
         if (maxLines >= 2) ...[
           const SizedBox(height: 7),
-          const _WidgetPreviewTodoRow(text: '项目复盘 · 3 个子任务'),
+          const _WidgetPreviewTodoRow(text: '项目方案复盘'),
         ],
         if (maxLines >= 3) ...[
           const SizedBox(height: 7),
           const _WidgetPreviewTodoRow(text: '晚间运动 30 分钟'),
-          const SizedBox(height: 6),
-          const _WidgetPreviewQuickAdd(label: '+ 添加待办'),
-          const SizedBox(height: 5),
-          const _WidgetPreviewLine(
-            icon: Icons.subdirectory_arrow_right,
-            text: 'AI 子任务：列清单 / 订闹钟 / 完成确认 / 今日可见',
+          const SizedBox(height: 8),
+          const Row(
+            children: [
+              Expanded(
+                child: _WidgetPreviewLine(
+                  icon: Icons.checklist_rtl_outlined,
+                  text: '今日待办 · 3 项',
+                ),
+              ),
+              _WidgetPreviewQuickAdd(label: '+ 记一笔'),
+            ],
           ),
         ],
       ],
@@ -1370,21 +1480,21 @@ class _WidgetPreviewFocusBody extends StatelessWidget {
             Expanded(
               child: _WidgetPreviewMetric(
                 value: '2',
-                label: '专注',
+                label: '今日专注',
                 color: Colors.redAccent,
               ),
             ),
             Expanded(
               child: _WidgetPreviewMetric(
                 value: '50',
-                label: '分钟',
+                label: '时长(分)',
                 color: Colors.redAccent,
               ),
             ),
             Expanded(
               child: _WidgetPreviewMetric(
                 value: '25',
-                label: '下一轮',
+                label: '下一轮(分)',
                 color: Colors.redAccent,
               ),
             ),
@@ -1425,11 +1535,11 @@ class _WidgetPreviewFocusBody extends StatelessWidget {
         if (maxLines >= 3) ...[
           const _WidgetPreviewLine(
             icon: Icons.play_circle_outline,
-            text: '下一轮 25 分钟 · 点击立即开始',
+            text: '下一轮：25 分钟专注',
           ),
           const _WidgetPreviewLine(
-            icon: Icons.notifications_active_outlined,
-            text: '结束后提醒休息 5 分钟',
+            icon: Icons.touch_app_outlined,
+            text: '点击开始专注',
           ),
         ],
       ],
@@ -1442,35 +1552,48 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final maxLines = _WidgetPreviewDensityScope.maxLinesOf(context);
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
+        Row(
           children: [
             Expanded(
-              child: _WidgetPreviewMetric(
-                value: '4/5',
-                label: '完成',
-                color: Colors.green,
+              child: Text(
+                '今日习惯',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.normal,
+                ),
               ),
             ),
-            Expanded(
-              child: _WidgetPreviewMetric(
-                value: '80%',
-                label: '进度',
+            const Text(
+              '80%',
+              style: TextStyle(
+                fontSize: 14,
                 color: Colors.green,
-              ),
-            ),
-            Expanded(
-              child: _WidgetPreviewMetric(
-                value: '12',
-                label: '连续',
-                color: Colors.green,
+                fontWeight: FontWeight.normal,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
+        const _WidgetPreviewLine(
+          icon: Icons.self_improvement_outlined,
+          text: '· 晚间拉伸 · 今日待打卡',
+        ),
+        if (maxLines >= 2) ...[
+          const SizedBox(height: 4),
+          const _WidgetPreviewLine(
+            icon: Icons.local_fire_department_outlined,
+            text: '· 连续记录 5 天',
+          ),
+        ],
+        const SizedBox(height: 6),
         Row(
           children: [
             Expanded(
@@ -1486,12 +1609,12 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
                   ),
                 ),
                 child: const Text(
-                  '点击进入习惯打卡',
+                  '打卡：晚间拉伸',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Colors.green,
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.normal,
                   ),
                 ),
@@ -1499,23 +1622,6 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
             ),
           ],
         ),
-        if (maxLines >= 2) ...[
-          const SizedBox(height: 8),
-          const _WidgetPreviewLine(
-            icon: Icons.self_improvement_outlined,
-            text: '晚间拉伸 · 今天待打卡',
-          ),
-        ],
-        if (maxLines >= 3) ...[
-          const _WidgetPreviewLine(
-            icon: Icons.water_drop_outlined,
-            text: '喝水 · 已记录 7 杯',
-          ),
-          const _WidgetPreviewLine(
-            icon: Icons.local_fire_department_outlined,
-            text: '连续记录 12 天',
-          ),
-        ],
       ],
     );
   }
@@ -1907,7 +2013,7 @@ class _WidgetPreviewTodoRow extends StatelessWidget {
             ),
           ),
           child: const Text(
-            'o',
+            '○',
             maxLines: 1,
             overflow: TextOverflow.clip,
             style: TextStyle(
@@ -2034,14 +2140,41 @@ class _WidgetCatalogTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(
-        backgroundColor: color.withValues(alpha: 0.14),
-        child: Icon(icon, color: color),
-      ),
-      title: Text(title),
-      subtitle: Text(subtitle),
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: color.withValues(alpha: 0.14),
+          child: Icon(icon, size: 20, color: color),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.normal,
+                  color: cs.onSurface,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.normal,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
