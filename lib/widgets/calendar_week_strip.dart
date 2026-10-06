@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/completion_visibility_policy.dart';
+import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
+import '../core/main_ui_copy.dart';
 import '../models/calendar_event.dart';
 import '../providers/calendar_provider.dart';
 import 'calendar_event_sheet.dart';
@@ -14,6 +16,7 @@ class CalendarWeekStrip extends StatelessWidget {
   final Set<CalendarEventType>? activeTypes;
   final String? projectKey;
   final String? workspaceId;
+  final bool? hasActiveFilters;
 
   const CalendarWeekStrip({
     super.key,
@@ -24,6 +27,7 @@ class CalendarWeekStrip extends StatelessWidget {
     this.activeTypes,
     this.projectKey,
     this.workspaceId,
+    this.hasActiveFilters,
   });
 
   static Color _colorFor(CalendarEventType t, ColorScheme cs) {
@@ -95,7 +99,15 @@ class CalendarWeekStrip extends StatelessWidget {
                     d.year == today.year &&
                     d.month == today.month &&
                     d.day == today.day;
-                final labels = ['一', '二', '三', '四', '五', '六', '日'];
+                final labels = [
+                  I18n.tr('weekday.mon'),
+                  I18n.tr('weekday.tue'),
+                  I18n.tr('weekday.wed'),
+                  I18n.tr('weekday.thu'),
+                  I18n.tr('weekday.fri'),
+                  I18n.tr('weekday.sat'),
+                  I18n.tr('weekday.sun'),
+                ];
                 final selectedBackground = Color.alphaBlend(
                   cs.primary.withValues(
                     alpha: Theme.of(context).brightness == Brightness.dark
@@ -204,6 +216,8 @@ class CalendarWeekStrip extends StatelessWidget {
           child: _WeekAgendaList(
             days: weekEvents,
             onDaySelected: onDaySelected,
+            hasActiveFilters:
+                hasActiveFilters ?? (activeTypes != null || projectKey != null),
           ),
         ),
       ],
@@ -225,6 +239,18 @@ class CalendarWeekStrip extends StatelessWidget {
     required bool isSelected,
     required int eventTypeCount,
   }) {
+    if (MainUiCopy.isEn) {
+      final parts = <String>[
+        I18nDateFormat.date(date),
+        weekdayLabel,
+        if (isToday) 'Today',
+        if (isSelected) 'Selected',
+        eventTypeCount > 0
+            ? '$eventTypeCount event type${eventTypeCount > 1 ? "s" : ""}'
+            : 'No events',
+      ];
+      return parts.join(', ');
+    }
     final parts = <String>[
       '${date.year}年${date.month}月${date.day}日',
       weekdayLabel,
@@ -246,19 +272,52 @@ class _WeekDayEvents {
 class _WeekAgendaList extends StatelessWidget {
   final List<_WeekDayEvents> days;
   final void Function(DateTime) onDaySelected;
+  final bool hasActiveFilters;
 
-  const _WeekAgendaList({required this.days, required this.onDaySelected});
+  const _WeekAgendaList({
+    required this.days,
+    required this.onDaySelected,
+    required this.hasActiveFilters,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final visibleDays = days.where((day) => day.events.isNotEmpty).toList();
     if (visibleDays.isEmpty) {
       return Center(
-        child: Text(
-          '本周暂无日程',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            fontSize: 13,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                hasActiveFilters
+                    ? Icons.filter_alt_off_outlined
+                    : Icons.event_note_outlined,
+                size: 40,
+                color: cs.outlineVariant.withValues(alpha: 0.6),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                hasActiveFilters
+                    ? MainUiCopy.calendarNoEventsWeekFilter
+                    : MainUiCopy.calendarNoEventsWeek,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+              if (hasActiveFilters) ...[
+                const SizedBox(height: 6),
+                Text(
+                  MainUiCopy.calendarEmptyFilterHint,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       );
@@ -286,15 +345,17 @@ class _WeekDaySection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final label = [
-      '周一',
-      '周二',
-      '周三',
-      '周四',
-      '周五',
-      '周六',
-      '周日',
-    ][day.date.weekday - 1];
+    final weekdayKey = switch (day.date.weekday) {
+      1 => 'mon',
+      2 => 'tue',
+      3 => 'wed',
+      4 => 'thu',
+      5 => 'fri',
+      6 => 'sat',
+      _ => 'sun',
+    };
+    final label = I18n.tr('weekday.$weekdayKey');
+    final countSuffix = MainUiCopy.isEn ? 'items' : '项';
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -317,7 +378,7 @@ class _WeekDaySection extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '${day.events.length} 项',
+                    '${day.events.length} $countSuffix',
                     style: TextStyle(
                       fontSize: 12,
                       color: cs.onSurfaceVariant.withValues(alpha: 0.75),
@@ -424,7 +485,9 @@ class _WeekEventTile extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 3),
                         child: _WeekEventStatusBadge(
-                          label: isCompleted ? '已完成' : '逾期',
+                          label: isCompleted
+                              ? MainUiCopy.calendarStatusCompleted
+                              : MainUiCopy.calendarStatusOverdue,
                           color: statusColor,
                         ),
                       ),

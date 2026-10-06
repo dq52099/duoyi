@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../core/completion_visibility_policy.dart';
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
+import '../core/i18n_date_format.dart';
+import '../core/main_ui_copy.dart';
 import 'package:provider/provider.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/todo_provider.dart';
@@ -732,6 +734,10 @@ class _CalendarScreenState extends State<CalendarScreen>
         projectOptions.any((option) => option.key == _activeProjectKey)
         ? _activeProjectKey
         : null;
+    final hasActiveCalendarFilters =
+        _activeTypes != null ||
+        effectiveProjectKey != null ||
+        effectiveWorkspaceId != null;
     final dateTypes = calendarProvider.filteredDateEventTypes(
       _activeTypes,
       projectKey: effectiveProjectKey,
@@ -742,17 +748,21 @@ class _CalendarScreenState extends State<CalendarScreen>
       projectKey: effectiveProjectKey,
       workspaceId: effectiveWorkspaceId,
     );
-    final monthLabel = '${_focusedMonth.year}年${_focusedMonth.month}月';
+    final monthLabel = MainUiCopy.isEn
+        ? '${I18nDateFormat.monthDay(DateTime(_focusedMonth.year, _focusedMonth.month, 1)).split(" ").first} ${_focusedMonth.year}'
+        : '${_focusedMonth.year}年${_focusedMonth.month}月';
     final weekStart = _selectedDay.subtract(
       Duration(days: _selectedDay.weekday - 1),
     );
     final weekEnd = weekStart.add(const Duration(days: 6));
     final weekLabel =
-        '${weekStart.month}/${weekStart.day} - ${weekEnd.month}/${weekEnd.day}';
+        '${I18nDateFormat.monthDay(weekStart)} - ${I18nDateFormat.monthDay(weekEnd)}';
     final threeDayEnd = _selectedDay.add(const Duration(days: 2));
     final threeDayLabel =
-        '${_selectedDay.year}年${_selectedDay.month}/${_selectedDay.day} - ${threeDayEnd.month}/${threeDayEnd.day}';
-    final yearLabel = '${_focusedMonth.year} 年';
+        '${I18nDateFormat.monthDay(_selectedDay)} - ${I18nDateFormat.monthDay(threeDayEnd)}';
+    final yearLabel = MainUiCopy.isEn
+        ? '${_focusedMonth.year}'
+        : '${_focusedMonth.year} 年';
     final routeBackground = Theme.of(context).brightness == Brightness.dark
         ? Theme.of(context).colorScheme.surface
         : Theme.of(context).colorScheme.surfaceContainerLowest;
@@ -760,7 +770,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     return BrandScaffold(
       paintBackground: !widget.useShellBackground,
       appBar: AppBar(
-        title: const Text('日历'),
+        title: Text(MainUiCopy.calendarTitle),
         titleTextStyle: widget.useShellBackground
             ? null
             : appSecondaryRouteTitleTextStyle(context),
@@ -769,8 +779,19 @@ class _CalendarScreenState extends State<CalendarScreen>
             : routeBackground.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
         actions: [
+          IconButton(
+            tooltip: MainUiCopy.calendarBackToToday,
+            icon: const Icon(Icons.today_outlined),
+            onPressed: () {
+              final now = DateTime.now();
+              setState(() {
+                _selectedDay = now;
+                _focusedMonth = DateTime(now.year, now.month);
+              });
+            },
+          ),
           PopupMenuButton<String>(
-            tooltip: '日历菜单',
+            tooltip: MainUiCopy.calendarMenu,
             icon: const Icon(Icons.more_horiz),
             onSelected: (value) {
               if (value == 'today') {
@@ -794,41 +815,41 @@ class _CalendarScreenState extends State<CalendarScreen>
               }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'today',
                 height: 38,
-                child: AppSecondaryMenuText('回到今天'),
+                child: AppSecondaryMenuText(MainUiCopy.calendarBackToToday),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'pick',
                 height: 38,
-                child: AppSecondaryMenuText('选择日期'),
+                child: AppSecondaryMenuText(MainUiCopy.calendarPickDate),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'month',
                 height: 38,
-                child: AppSecondaryMenuText('月视图'),
+                child: AppSecondaryMenuText(MainUiCopy.calendarViewMonth),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'week',
                 height: 38,
-                child: AppSecondaryMenuText('周视图'),
+                child: AppSecondaryMenuText(MainUiCopy.calendarViewWeek),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'day',
                 height: 38,
-                child: AppSecondaryMenuText('日视图'),
+                child: AppSecondaryMenuText(MainUiCopy.calendarViewDay),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'three_day',
                 height: 38,
-                child: AppSecondaryMenuText('三日视图'),
+                child: AppSecondaryMenuText(MainUiCopy.calendarViewThreeDay),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'year',
                 height: 38,
-                child: AppSecondaryMenuText('年视图'),
+                child: AppSecondaryMenuText(MainUiCopy.calendarViewYear),
               ),
             ],
           ),
@@ -840,8 +861,7 @@ class _CalendarScreenState extends State<CalendarScreen>
             tabIndex: _tabController.index,
             monthLabel: monthLabel,
             weekLabel: weekLabel,
-            dayLabel:
-                '${_selectedDay.year}年${_selectedDay.month}月${_selectedDay.day}日',
+            dayLabel: I18nDateFormat.date(_selectedDay),
             threeDayLabel: threeDayLabel,
             yearLabel: yearLabel,
             onPreviousMonth: _previousMonth,
@@ -960,6 +980,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                               activeTypes: _activeTypes,
                               projectKey: effectiveProjectKey,
                               workspaceId: effectiveWorkspaceId,
+                              hasActiveFilters: hasActiveCalendarFilters,
                               horizontalPadding: 8,
                               scrollable: false,
                               previewLimit: 8,
@@ -982,6 +1003,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                   activeTypes: _activeTypes,
                   projectKey: effectiveProjectKey,
                   workspaceId: effectiveWorkspaceId,
+                  hasActiveFilters: hasActiveCalendarFilters,
                 ),
                 // Day
                 Padding(
@@ -996,6 +1018,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                       activeTypes: _activeTypes,
                       projectKey: effectiveProjectKey,
                       workspaceId: effectiveWorkspaceId,
+                      hasActiveFilters: hasActiveCalendarFilters,
                       horizontalPadding: 8,
                     ),
                   ),
@@ -1003,6 +1026,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                 // Three-day
                 _CalendarThreeDayView(
                   key: const ValueKey('calendar_three_day_view'),
+                  hasActiveFilters: hasActiveCalendarFilters,
                   startDate: _selectedDay,
                   calendarProvider: calendarProvider,
                   activeTypes: _activeTypes,
@@ -1666,20 +1690,20 @@ class _CalendarNavigationHeader extends StatelessWidget {
       _ => null,
     };
     final previousTooltip = switch (tabIndex) {
-      0 => '上一月',
-      1 => '上一周',
-      2 => '上一天',
-      3 => '前三天',
-      4 => '上一年',
-      _ => '上一段',
+      0 => MainUiCopy.calendarPrevMonth,
+      1 => MainUiCopy.calendarPrevWeek,
+      2 => MainUiCopy.calendarPrevDay,
+      3 => MainUiCopy.calendarPrevThreeDays,
+      4 => MainUiCopy.calendarPrevYear,
+      _ => MainUiCopy.calendarPrevDay,
     };
     final nextTooltip = switch (tabIndex) {
-      0 => '下一月',
-      1 => '下一周',
-      2 => '下一天',
-      3 => '后三天',
-      4 => '下一年',
-      _ => '下一段',
+      0 => MainUiCopy.calendarNextMonth,
+      1 => MainUiCopy.calendarNextWeek,
+      2 => MainUiCopy.calendarNextDay,
+      3 => MainUiCopy.calendarNextThreeDays,
+      4 => MainUiCopy.calendarNextYear,
+      _ => MainUiCopy.calendarNextDay,
     };
 
     return Material(
@@ -1742,11 +1766,12 @@ class _CalendarNavigationHeader extends StatelessWidget {
                                 width: 0.45,
                               ),
                             ),
-                            textStyle: TextStyle(
-                              fontSize: compact ? 12.5 : 13.5,
-                              fontWeight: FontWeight.normal,
-                              height: 1.15,
-                            ),
+                            textStyle: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(
+                                  fontSize: compact ? 12.5 : 13.5,
+                                  fontWeight: FontWeight.normal,
+                                  height: 1.15,
+                                ),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -1830,6 +1855,7 @@ class _CalendarThreeDayView extends StatelessWidget {
   final Set<CalendarEventType>? activeTypes;
   final String? projectKey;
   final String? workspaceId;
+  final bool hasActiveFilters;
 
   const _CalendarThreeDayView({
     super.key,
@@ -1838,6 +1864,7 @@ class _CalendarThreeDayView extends StatelessWidget {
     this.activeTypes,
     this.projectKey,
     this.workspaceId,
+    required this.hasActiveFilters,
   });
 
   @override
@@ -1860,6 +1887,7 @@ class _CalendarThreeDayView extends StatelessWidget {
                     activeTypes: activeTypes,
                     projectKey: projectKey,
                     workspaceId: workspaceId,
+                    hasActiveFilters: hasActiveFilters,
                   ),
                 ),
                 if (i != days.length - 1)
@@ -1890,6 +1918,7 @@ class _CalendarThreeDayView extends StatelessWidget {
                     activeTypes: activeTypes,
                     projectKey: projectKey,
                     workspaceId: workspaceId,
+                    hasActiveFilters: hasActiveFilters,
                   ),
                 ),
             ],
@@ -1906,6 +1935,7 @@ class _ThreeDayLane extends StatelessWidget {
   final Set<CalendarEventType>? activeTypes;
   final String? projectKey;
   final String? workspaceId;
+  final bool hasActiveFilters;
 
   const _ThreeDayLane({
     required this.date,
@@ -1913,6 +1943,7 @@ class _ThreeDayLane extends StatelessWidget {
     this.activeTypes,
     this.projectKey,
     this.workspaceId,
+    required this.hasActiveFilters,
   });
 
   @override
@@ -1966,6 +1997,7 @@ class _ThreeDayLane extends StatelessWidget {
               activeTypes: activeTypes,
               projectKey: projectKey,
               workspaceId: workspaceId,
+              hasActiveFilters: hasActiveFilters,
               horizontalPadding: 8,
             ),
           ),

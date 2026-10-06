@@ -521,9 +521,30 @@ String userVisibleApiError(
   Object error, {
   String fallbackMessage = defaultUserVisibleBackendErrorMessage,
 }) {
-  final message = error is ApiException ? error.message : error.toString();
-  if (isBackendCompatibilityDiagnosticMessage(message)) {
+  // Unexpected exceptions can contain URLs, tokens or implementation details.
+  // Only API messages explicitly intended for presentation may reach the UI.
+  if (error is! ApiException) return fallbackMessage;
+  final message = error.message;
+  if (isBackendCompatibilityDiagnosticMessage(message) ||
+      message.startsWith('接口返回不是有效 JSON') ||
+      message.startsWith('接口返回结构错误') ||
+      message.startsWith('当前安装包未配置服务器地址') ||
+      RegExp(
+        r'<(?:!doctype|html|body)\b',
+        caseSensitive: false,
+      ).hasMatch(message)) {
     return fallbackMessage;
   }
-  return message;
+  if (message.startsWith('无法连接服务器')) {
+    return '无法连接服务器，请检查网络后重试';
+  }
+  if (message.startsWith('连接服务器超时')) {
+    return '连接超时，请稍后重试';
+  }
+  final httpStatus = RegExp(r'^(\d{3}):\s*').firstMatch(message);
+  if (httpStatus != null) {
+    if (int.parse(httpStatus.group(1)!) >= 500) return fallbackMessage;
+    return message.substring(httpStatus.end);
+  }
+  return message.isEmpty ? fallbackMessage : message;
 }

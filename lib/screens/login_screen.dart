@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/account_ui_copy.dart';
 import '../core/i18n.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
@@ -28,13 +29,13 @@ class _LoginActionField extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final actionWidth = constraints.maxWidth < 360 ? 64.0 : 72.0;
+        final actionWidth = constraints.maxWidth < 360 ? 68.0 : 76.0;
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: field),
             const SizedBox(width: 8),
-            SizedBox(width: actionWidth, height: 34, child: action),
+            SizedBox(width: actionWidth, height: 40, child: action),
           ],
         );
       },
@@ -56,6 +57,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _registerWithEmail = true;
   bool _busy = false;
   bool _sendingEmailCode = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   int _emailCooldownSeconds = 0;
   Timer? _emailCooldownTimer;
   String? _error;
@@ -123,8 +126,10 @@ class _LoginScreenState extends State<LoginScreen> {
           password: _pwdCtrl.text,
         );
       }
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      Navigator.pop(context);
     } on ApiException catch (e) {
+      if (!mounted) return;
       if (passwordLogin && _isInvalidCredentialsError(e)) {
         setState(() {
           _error = I18n.tr('auth.error.invalid_credentials');
@@ -132,10 +137,11 @@ class _LoginScreenState extends State<LoginScreen> {
         });
         _pwdFocus.requestFocus();
       } else {
-        setState(() => _error = userVisibleApiError(e));
+        setState(() => _error = AccountUiCopy.formatError(e));
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (!mounted) return;
+      setState(() => _error = AccountUiCopy.formatError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -163,10 +169,10 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         purpose: _isRegister ? 'bind' : 'login',
       );
+      if (!mounted) return;
       final devCode = (result['dev_code'] ?? '').toString();
       final message = (result['message'] ?? I18n.tr('auth.email_code.sent'))
           .toString();
-      if (!mounted) return;
       _startEmailCooldown();
       setState(() {
         _message = devCode.isEmpty
@@ -174,9 +180,11 @@ class _LoginScreenState extends State<LoginScreen> {
             : '$message ${I18n.tr('auth.email_code.code_prefix')}$devCode';
       });
     } on ApiException catch (e) {
-      setState(() => _error = userVisibleApiError(e));
+      if (!mounted) return;
+      setState(() => _error = AccountUiCopy.formatError(e));
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (!mounted) return;
+      setState(() => _error = AccountUiCopy.formatError(e));
     } finally {
       if (mounted) setState(() => _sendingEmailCode = false);
     }
@@ -235,6 +243,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _startEmailCooldown() {
+    if (!mounted) return;
     _emailCooldownTimer?.cancel();
     setState(() => _emailCooldownSeconds = 60);
     _emailCooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -571,8 +580,23 @@ class _LoginScreenState extends State<LoginScreen> {
                                   focusNode: _pwdFocus,
                                   decoration: InputDecoration(
                                     labelText: I18n.tr('auth.password'),
+                                    suffixIcon: IconButton(
+                                      tooltip: _obscurePassword
+                                          ? AccountUiCopy.tooltipShowPassword
+                                          : AccountUiCopy.tooltipHidePassword,
+                                      icon: Icon(
+                                        _obscurePassword
+                                            ? Icons.visibility_off_outlined
+                                            : Icons.visibility_outlined,
+                                        size: 18,
+                                      ),
+                                      onPressed: () => setState(
+                                        () => _obscurePassword =
+                                            !_obscurePassword,
+                                      ),
+                                    ),
                                   ),
-                                  obscureText: true,
+                                  obscureText: _obscurePassword,
                                 ),
                               ),
                             if (!_isRegister && !_emailLogin) ...[
@@ -581,10 +605,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 alignment: Alignment.centerRight,
                                 child: TextButton(
                                   style: TextButton.styleFrom(
-                                    minimumSize: const Size(0, 36),
+                                    minimumSize: const Size(0, 38),
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 8,
-                                      vertical: 4,
+                                      vertical: 6,
                                     ),
                                     tapTargetSize:
                                         MaterialTapTargetSize.shrinkWrap,
@@ -604,8 +628,23 @@ class _LoginScreenState extends State<LoginScreen> {
                                   controller: _confirmPwdCtrl,
                                   decoration: InputDecoration(
                                     labelText: I18n.tr('auth.confirm_password'),
+                                    suffixIcon: IconButton(
+                                      tooltip: _obscureConfirmPassword
+                                          ? AccountUiCopy.tooltipShowPassword
+                                          : AccountUiCopy.tooltipHidePassword,
+                                      icon: Icon(
+                                        _obscureConfirmPassword
+                                            ? Icons.visibility_off_outlined
+                                            : Icons.visibility_outlined,
+                                        size: 18,
+                                      ),
+                                      onPressed: () => setState(
+                                        () => _obscureConfirmPassword =
+                                            !_obscureConfirmPassword,
+                                      ),
+                                    ),
                                   ),
-                                  obscureText: true,
+                                  obscureText: _obscureConfirmPassword,
                                 ),
                               ),
                             ],
@@ -633,23 +672,83 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                             if (_error != null) ...[
                               const SizedBox(height: 12),
-                              Text(
-                                _error!,
-                                style: TextStyle(
-                                  color: cs.error,
-                                  fontSize: 12,
-                                  height: 1.25,
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: cs.errorContainer.withValues(
+                                    alpha: 0.45,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: cs.error.withValues(alpha: 0.2),
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline,
+                                      size: 16,
+                                      color: cs.error,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _error!,
+                                        style: TextStyle(
+                                          color: cs.onErrorContainer,
+                                          fontSize: 12,
+                                          height: 1.3,
+                                          fontWeight: FontWeight.normal,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                             if (_message != null) ...[
                               const SizedBox(height: 12),
-                              Text(
-                                _message!,
-                                style: TextStyle(
-                                  color: cs.primary,
-                                  fontSize: 12,
-                                  height: 1.25,
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: cs.primaryContainer.withValues(
+                                    alpha: 0.45,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: cs.primary.withValues(alpha: 0.2),
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle_outline,
+                                      size: 16,
+                                      color: cs.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _message!,
+                                        style: TextStyle(
+                                          color: cs.onPrimaryContainer,
+                                          fontSize: 12,
+                                          height: 1.3,
+                                          fontWeight: FontWeight.normal,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -658,12 +757,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: appSecondaryFilledButtonStyle(context)
                                   .copyWith(
                                     minimumSize: const WidgetStatePropertyAll(
-                                      Size(0, 38),
+                                      Size(0, 42),
                                     ),
                                     padding: const WidgetStatePropertyAll(
                                       EdgeInsets.symmetric(
                                         horizontal: 14,
-                                        vertical: 7,
+                                        vertical: 8,
                                       ),
                                     ),
                                   ),
@@ -685,15 +784,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                       _isRegister
                                           ? I18n.tr('auth.register')
                                           : I18n.tr('auth.login'),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.normal,
+                                        fontSize: 14,
+                                      ),
                                     ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 8),
                             TextButton(
                               style: TextButton.styleFrom(
-                                minimumSize: const Size(0, 34),
+                                minimumSize: const Size(0, 38),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
-                                  vertical: 6,
+                                  vertical: 8,
                                 ),
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 visualDensity: VisualDensity.compact,
@@ -751,6 +854,7 @@ class _PasswordResetDialogState extends State<_PasswordResetDialog> {
   final _newPwdCtrl = TextEditingController();
   bool _requested = false;
   bool _busy = false;
+  bool _obscureNewPassword = true;
   int _cooldownSeconds = 0;
   Timer? _cooldownTimer;
   String? _error;
@@ -780,6 +884,7 @@ class _PasswordResetDialogState extends State<_PasswordResetDialog> {
       final result = await context.read<AuthProvider>().requestPasswordReset(
         account: account,
       );
+      if (!mounted) return;
       _startCooldown();
       final devCode = (result['dev_code'] ?? '').toString();
       final message =
@@ -792,9 +897,11 @@ class _PasswordResetDialogState extends State<_PasswordResetDialog> {
             : '$message ${I18n.tr('auth.email_code.code_prefix')}$devCode';
       });
     } on ApiException catch (e) {
-      setState(() => _error = userVisibleApiError(e));
+      if (!mounted) return;
+      setState(() => _error = AccountUiCopy.formatError(e));
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (!mounted) return;
+      setState(() => _error = AccountUiCopy.formatError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -830,15 +937,18 @@ class _PasswordResetDialogState extends State<_PasswordResetDialog> {
         SnackBar(content: Text(I18n.tr('auth.password_reset.done'))),
       );
     } on ApiException catch (e) {
-      setState(() => _error = userVisibleApiError(e));
+      if (!mounted) return;
+      setState(() => _error = AccountUiCopy.formatError(e));
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (!mounted) return;
+      setState(() => _error = AccountUiCopy.formatError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   void _startCooldown() {
+    if (!mounted) return;
     _cooldownTimer?.cancel();
     setState(() => _cooldownSeconds = 60);
     _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -862,58 +972,132 @@ class _PasswordResetDialogState extends State<_PasswordResetDialog> {
       title: Text(I18n.tr('auth.password_reset.title')),
       icon: const Icon(Icons.lock_reset_outlined),
       shiftForKeyboard: true,
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _accountCtrl,
-            enabled: !_requested,
-            keyboardType: TextInputType.text,
-            decoration: InputDecoration(
-              labelText: I18n.tr('auth.reset_account'),
-              helperText: I18n.tr('auth.reset_account.helper'),
-            ),
-          ),
-          if (_requested) ...[
-            const SizedBox(height: 12),
+      content: AppSecondaryControlTheme(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             TextField(
-              controller: _codeCtrl,
-              keyboardType: TextInputType.number,
+              controller: _accountCtrl,
+              enabled: !_requested,
+              keyboardType: TextInputType.text,
               decoration: InputDecoration(
-                labelText: I18n.tr('auth.email_code'),
+                labelText: I18n.tr('auth.reset_account'),
+                helperText: I18n.tr('auth.reset_account.helper'),
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _newPwdCtrl,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: I18n.tr('auth.new_password'),
+            if (_requested) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _codeCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: I18n.tr('auth.email_code'),
+                ),
               ),
-            ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _newPwdCtrl,
+                obscureText: _obscureNewPassword,
+                decoration: InputDecoration(
+                  labelText: I18n.tr('auth.new_password'),
+                  suffixIcon: IconButton(
+                    tooltip: _obscureNewPassword
+                        ? AccountUiCopy.tooltipShowPassword
+                        : AccountUiCopy.tooltipHidePassword,
+                    icon: Icon(
+                      _obscureNewPassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 18,
+                    ),
+                    onPressed: () => setState(
+                      () => _obscureNewPassword = !_obscureNewPassword,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 16,
+                      color: cs.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _message!,
+                        style: TextStyle(
+                          color: cs.onPrimaryContainer,
+                          fontSize: 12,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: cs.error),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: cs.onErrorContainer,
+                          fontSize: 12,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
-          if (_message != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              _message!,
-              style: TextStyle(color: cs.primary, fontSize: 12, height: 1.25),
-            ),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              _error!,
-              style: TextStyle(color: cs.error, fontSize: 12, height: 1.25),
-            ),
-          ],
-        ],
+        ),
       ),
       actions: [
         TextButton(
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 38),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+          ),
           onPressed: _busy ? null : () => Navigator.pop(context),
           child: Text(I18n.tr('action.cancel')),
         ),
         FilledButton(
+          style: appSecondaryFilledButtonStyle(context).copyWith(
+            minimumSize: const WidgetStatePropertyAll(Size(0, 38)),
+            padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 14),
+            ),
+          ),
           onPressed: _busy || (!_requested && _cooldownSeconds > 0)
               ? null
               : (_requested ? _confirm : _request),

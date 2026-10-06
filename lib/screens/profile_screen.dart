@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
+import '../core/account_ui_copy.dart';
 import '../core/i18n.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/user_provider.dart';
 import '../services/api_client.dart';
+import '../widgets/account_status_chip.dart';
 import '../widgets/cached_avatar_image.dart';
 import '../widgets/surface_components.dart';
 import 'login_screen.dart';
@@ -413,6 +415,9 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
   final _newCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
   bool _saving = false;
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
   String? _error;
 
   @override
@@ -451,9 +456,9 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
       if (!mounted) return;
       Navigator.pop(context, true);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = userVisibleApiError(e));
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -464,31 +469,70 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
     return AppDialog(
       title: Text(I18n.tr('profile.change_password')),
       icon: const Icon(Icons.lock_reset_outlined),
+      shiftForKeyboard: true,
       content: AppSecondaryControlTheme(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: _currentCtrl,
-              obscureText: true,
+              obscureText: _obscureCurrent,
               decoration: InputDecoration(
                 labelText: I18n.tr('profile.current_password'),
+                suffixIcon: IconButton(
+                  tooltip: _obscureCurrent
+                      ? AccountUiCopy.tooltipShowPassword
+                      : AccountUiCopy.tooltipHidePassword,
+                  icon: Icon(
+                    _obscureCurrent
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 18,
+                  ),
+                  onPressed: () =>
+                      setState(() => _obscureCurrent = !_obscureCurrent),
+                ),
               ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _newCtrl,
-              obscureText: true,
+              obscureText: _obscureNew,
               decoration: InputDecoration(
                 labelText: I18n.tr('auth.new_password'),
+                suffixIcon: IconButton(
+                  tooltip: _obscureNew
+                      ? AccountUiCopy.tooltipShowPassword
+                      : AccountUiCopy.tooltipHidePassword,
+                  icon: Icon(
+                    _obscureNew
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 18,
+                  ),
+                  onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                ),
               ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _confirmCtrl,
-              obscureText: true,
+              obscureText: _obscureConfirm,
               decoration: InputDecoration(
                 labelText: I18n.tr('profile.confirm_new_password'),
+                suffixIcon: IconButton(
+                  tooltip: _obscureConfirm
+                      ? AccountUiCopy.tooltipShowPassword
+                      : AccountUiCopy.tooltipHidePassword,
+                  icon: Icon(
+                    _obscureConfirm
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 18,
+                  ),
+                  onPressed: () =>
+                      setState(() => _obscureConfirm = !_obscureConfirm),
+                ),
               ),
             ),
             if (_error != null) ...[
@@ -506,6 +550,10 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
       ),
       actions: [
         TextButton(
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 38),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+          ),
           onPressed: _saving ? null : () => Navigator.pop(context, false),
           child: Text(I18n.tr('action.cancel')),
         ),
@@ -572,6 +620,7 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
   }
 
   void _startCooldown() {
+    if (!mounted) return;
     _cooldownTimer?.cancel();
     setState(() => _cooldownSeconds = 60);
     _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -619,9 +668,9 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
             : '$message ${I18n.tr('auth.email_code.code_prefix')}$devCode';
       });
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = userVisibleApiError(e));
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -653,9 +702,9 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
       if (!mounted) return;
       Navigator.pop(context, true);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = userVisibleApiError(e));
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } finally {
       if (mounted) setState(() => _binding = false);
     }
@@ -694,6 +743,7 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
     return AppDialog(
       title: Text(I18n.tr('profile.email.binding')),
       icon: const Icon(Icons.alternate_email_outlined),
+      shiftForKeyboard: true,
       content: AppSecondaryControlTheme(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1035,11 +1085,11 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         bio: state.bio ?? '',
       );
       if (!mounted) return;
-      setState(() => _message = I18n.tr('profile.avatar.saved'));
+      setState(() => _message = AccountUiCopy.feedbackAvatarSaved);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = userVisibleApiError(e));
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } finally {
       if (mounted) setState(() => _avatarBusy = false);
     }
@@ -1152,9 +1202,9 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         context,
       ).showSnackBar(SnackBar(content: Text(I18n.tr('profile.updated'))));
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = userVisibleApiError(e));
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1240,87 +1290,99 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         children: [
           AppSurfaceCard(
             padding: const EdgeInsets.all(14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _ProfileAvatarWithEdit(
-                  size: 76,
-                  busy: _avatarBusy,
-                  onPreview: _showAvatarPreview,
-                  onEdit: _uploadAvatar,
-                  child: Container(
-                    width: 76,
-                    height: 76,
-                    padding:
-                        avatarFrame.id == ThemeProvider.defaultAvatarFrameId
-                        ? EdgeInsets.zero
-                        : const EdgeInsets.all(3),
-                    decoration:
-                        avatarFrame.id == ThemeProvider.defaultAvatarFrameId
-                        ? null
-                        : BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: avatarFrame.colors,
-                            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 340;
+                final avatarSize = compact ? 66.0 : 76.0;
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _ProfileAvatarWithEdit(
+                      size: avatarSize,
+                      busy: _avatarBusy,
+                      onPreview: _showAvatarPreview,
+                      onEdit: _uploadAvatar,
+                      child: Container(
+                        width: avatarSize,
+                        height: avatarSize,
+                        padding:
+                            avatarFrame.id == ThemeProvider.defaultAvatarFrameId
+                            ? EdgeInsets.zero
+                            : const EdgeInsets.all(3),
+                        decoration:
+                            avatarFrame.id == ThemeProvider.defaultAvatarFrameId
+                            ? null
+                            : BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: avatarFrame.colors,
+                                ),
+                              ),
+                        child: Hero(
+                          tag: 'profile-avatar-preview',
+                          child: _ProfileAvatarPreview(
+                            avatar: previewAvatar,
+                            displayName: displayName.isEmpty
+                                ? '我'
+                                : displayName,
+                            radius: (avatarSize / 2) - 2,
+                            cacheKey: avatarCacheKey,
                           ),
-                    child: Hero(
-                      tag: 'profile-avatar-preview',
-                      child: _ProfileAvatarPreview(
-                        avatar: previewAvatar,
-                        displayName: displayName.isEmpty ? '我' : displayName,
-                        radius: 36,
-                        cacheKey: avatarCacheKey,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        displayName.isEmpty
-                            ? I18n.tr('profile.display_name.empty')
-                            : displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: appSecondaryRouteTitleTextStyle(context),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        account.email?.isNotEmpty == true
-                            ? '${account.email}${account.emailVerified ? ' · ${I18n.tr('profile.email.verified')}' : ' · ${I18n.tr('profile.email.unverified')}'}'
-                            : I18n.tr('profile.email.unbound'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.62),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
+                    ),
+                    SizedBox(width: compact ? 10 : 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _ProfileMetricChip(
-                            icon: Icons.savings_outlined,
-                            label: I18n.tr('profile.coins'),
-                            value: '${account.coinBalance}',
+                          Text(
+                            displayName.isEmpty
+                                ? I18n.tr('profile.display_name.empty')
+                                : displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: appSecondaryRouteTitleTextStyle(context),
                           ),
-                          if (account.username?.trim().isNotEmpty == true)
-                            _ProfileMetricChip(
-                              icon: Icons.badge_outlined,
-                              label: I18n.tr('profile.account_id'),
-                              value: account.username!.trim(),
-                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            account.email?.isNotEmpty == true
+                                ? '${account.email}${account.emailVerified ? ' · ${I18n.tr('profile.email.verified')}' : ' · ${I18n.tr('profile.email.unverified')}'}'
+                                : I18n.tr('profile.email.unbound'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.62),
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              const AccountStatusChip(
+                                status: AccountDisplayStatus.loggedIn,
+                              ),
+                              _ProfileMetricChip(
+                                icon: Icons.savings_outlined,
+                                label: I18n.tr('profile.coins'),
+                                value: '${account.coinBalance}',
+                              ),
+                              if (account.username?.trim().isNotEmpty == true)
+                                _ProfileMetricChip(
+                                  icon: Icons.badge_outlined,
+                                  label: I18n.tr('profile.account_id'),
+                                  value: account.username!.trim(),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),
@@ -1560,7 +1622,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
       if (!mounted) return;
       setState(() => _message = I18n.tr('profile.avatar.saved'));
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } finally {
       if (mounted) setState(() => _avatarBusy = false);
     }
@@ -1625,7 +1687,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
         );
       }
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1667,7 +1729,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     final subtitle = _firstNonEmptyProfileText([
       _bioCtrl.text,
       _emailCtrl.text,
-      I18n.tr('profile.local'),
+      AccountUiCopy.profileLocalHint,
     ]);
     final cs = Theme.of(context).colorScheme;
     final routeBackground = Colors.transparent;
@@ -1768,6 +1830,10 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                         color: cs.onSurface.withValues(alpha: 0.62),
                         height: 1.25,
                       ),
+                    ),
+                    const SizedBox(height: 6),
+                    const AccountStatusChip(
+                      status: AccountDisplayStatus.localOnly,
                     ),
                   ],
                 );

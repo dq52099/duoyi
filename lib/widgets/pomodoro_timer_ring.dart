@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/main_ui_copy.dart';
 
 class PomodoroTimerRing extends StatelessWidget {
   final double progress;
@@ -53,30 +54,43 @@ class PomodoroTimerRing extends StatelessWidget {
               value: countUp ? 1.0 : progress,
               strokeWidth: 6,
               strokeCap: StrokeCap.round,
-              backgroundColor: Colors.grey.withValues(alpha: 0.1),
+              backgroundColor: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
               valueColor: AlwaysStoppedAnimation(color),
             ),
           ),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                timeText,
-                style: TextStyle(
-                  fontSize: timeFontSize,
-                  fontWeight: FontWeight.w300,
-                  fontFamily: 'monospace',
-                  letterSpacing: 0,
-                  color: Theme.of(context).textTheme.headlineSmall?.color,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    timeText,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: timeFontSize,
+                      fontWeight: FontWeight.w300,
+                      fontFamily: 'monospace',
+                      letterSpacing: 0,
+                      color: Theme.of(context).textTheme.headlineSmall?.color,
+                    ),
+                  ),
                 ),
               ),
               if (!compact) const SizedBox(height: 8),
               if (!countUp && progress > 0 && !compact)
                 Text(
-                  '${(progress.clamp(0.0, 1.0) * 100).round()}%',
+                  MainUiCopy.pomodoroRemainingPercent(
+                    (progress.clamp(0.0, 1.0) * 100).round(),
+                  ),
                   style: TextStyle(
                     fontSize: progress >= 1.0 ? 14 : 16,
-                    color: Colors.grey.shade500,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.58),
                     fontWeight: FontWeight.normal,
                   ),
                 ),

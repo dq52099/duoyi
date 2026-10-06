@@ -252,7 +252,6 @@ void main() {
     expect(today, contains(': (useTwoColumns ? 2.55 : 3.65)'));
     expect(mine, contains('class _MineStatsGrid extends StatelessWidget'));
     expect(mine, contains("ValueKey('mine_stats_stable_grid')"));
-    expect(mine, contains('height: compact ? 70 : 64'));
     expect(mine, contains('RepaintBoundary('));
     expect(mine, isNot(contains('GridView.count(')));
     expect(surface, contains('fontSize: 12'));
@@ -337,7 +336,8 @@ void main() {
     expect(find.text('个性安全'), findsOneWidget);
     expect(find.text('目标管理'), findsOneWidget);
     expect(find.text('效率评分'), findsOneWidget);
-    expect(find.textContaining('时光币'), findsOneWidget);
+    expect(find.textContaining('时光币'), findsNothing);
+    expect(find.text('未登录'), findsOneWidget);
     expect(find.text('修改登录密码'), findsNothing);
     expect(find.text('综合评分'), findsNothing);
     expect(find.text('纪念日'), findsOneWidget);

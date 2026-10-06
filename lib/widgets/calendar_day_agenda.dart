@@ -14,6 +14,7 @@ import '../core/todo_templates.dart';
 import '../models/calendar_event.dart';
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
+import '../core/main_ui_copy.dart';
 import '../models/diary_entry.dart';
 import '../models/todo.dart';
 import '../core/lunar_calendar.dart';
@@ -29,6 +30,7 @@ class CalendarDayAgenda extends StatelessWidget {
   final double horizontalPadding;
   final bool scrollable;
   final int? previewLimit;
+  final bool? hasActiveFilters;
 
   const CalendarDayAgenda({
     super.key,
@@ -40,6 +42,7 @@ class CalendarDayAgenda extends StatelessWidget {
     this.horizontalPadding = 16,
     this.scrollable = true,
     this.previewLimit,
+    this.hasActiveFilters,
   });
 
   @override
@@ -83,6 +86,9 @@ class CalendarDayAgenda extends StatelessWidget {
     final todayCourses = courses.coursesOfDate(date);
 
     final todayDiary = diary.entryForDate(date);
+
+    final isFilterActive =
+        hasActiveFilters ?? (activeTypes != null || projectKey != null);
 
     final children = [
       // 农历 / 节日 / 节气头
@@ -181,11 +187,42 @@ class CalendarDayAgenda extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.event_busy, size: 48, color: Colors.grey.shade300),
-                const SizedBox(height: 16),
+                Icon(
+                  isFilterActive
+                      ? Icons.filter_alt_off_outlined
+                      : Icons.event_available_outlined,
+                  size: 44,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outlineVariant.withValues(alpha: 0.6),
+                ),
+                const SizedBox(height: 14),
                 Text(
-                  s.calendarEmpty,
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                  isFilterActive
+                      ? MainUiCopy.calendarNoEventsDayFilter
+                      : (events.isEmpty
+                            ? MainUiCopy.calendarNoEventsDay
+                            : s.calendarEmpty),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 14,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  isFilterActive
+                      ? MainUiCopy.calendarEmptyFilterHint
+                      : MainUiCopy.calendarEmptyDayHint,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
+                    fontSize: 12,
+                    fontWeight: FontWeight.normal,
+                  ),
                 ),
               ],
             ),
@@ -431,6 +468,7 @@ class _CalendarDayTimeGrid extends StatelessWidget {
         child: _DraggableEventCard(
           event: event,
           compact: clampedHeight < 88,
+          timelineHeight: clampedHeight,
           todoById: todoById,
         ),
       ),
@@ -514,12 +552,14 @@ class _TimelineHourRow extends StatelessWidget {
 class _DraggableEventCard extends StatefulWidget {
   final CalendarEvent event;
   final bool compact;
+  final double? timelineHeight;
   final Map<String, TodoItem> todoById;
 
   const _DraggableEventCard({
     required this.event,
     required this.todoById,
     this.compact = false,
+    this.timelineHeight,
   });
 
   @override
@@ -537,7 +577,16 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
   @override
   Widget build(BuildContext context) {
     final e = widget.event;
-    final compact = widget.compact;
+    final scaler = MediaQuery.textScalerOf(context);
+    final regularHeight =
+        scaler.scale(13) * 1.2 * 2 +
+        (e.subtitle?.isNotEmpty == true ? 3 + scaler.scale(11) * 1.2 : 0) +
+        (e.time != null ? 3 + scaler.scale(11) * 1.2 : 0) +
+        16;
+    final compact =
+        widget.compact ||
+        (widget.timelineHeight != null &&
+            widget.timelineHeight! - 20.9 < regularHeight);
     final cs = Theme.of(context).colorScheme;
     final visual = _eventVisualState(e);
     final isCompleted = visual == TodoVisualState.completed;
@@ -574,7 +623,11 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
         ),
         child: compact
             ? _buildCompactContent(context, e)
-            : _buildRegularContent(context, e),
+            : _buildRegularContent(
+                context,
+                e,
+                limitedHeight: widget.timelineHeight != null,
+              ),
       ),
     );
 
@@ -600,15 +653,27 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
         : null;
     return Row(
       children: [
-        if (_canDrag) ...[
-          Icon(Icons.drag_indicator, size: 14, color: Colors.grey.shade500),
-          const SizedBox(width: 3),
-        ],
-        Icon(eventVisual.icon, size: 14, color: eventVisual.color),
+        Tooltip(
+          message: isCompleted
+              ? MainUiCopy.calendarStatusCompleted
+              : isOverdue
+              ? MainUiCopy.calendarStatusOverdue
+              : e.type.label,
+          child: Icon(
+            isCompleted
+                ? Icons.check_circle_outline
+                : isOverdue
+                ? Icons.schedule
+                : eventVisual.icon,
+            size: 14,
+            color: statusColor ?? eventVisual.color,
+          ),
+        ),
         const SizedBox(width: 5),
         Expanded(
           child: Text(
             e.title,
+            key: ValueKey('calendar-compact-title-${e.id}'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -623,13 +688,6 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
             ),
           ),
         ),
-        if (statusColor != null) ...[
-          const SizedBox(width: 6),
-          _CalendarAgendaStatusBadge(
-            label: isCompleted ? '已完成' : '逾期',
-            color: statusColor,
-          ),
-        ],
         if (e.time != null) ...[
           const SizedBox(width: 6),
           Text(
@@ -655,7 +713,11 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
     );
   }
 
-  Widget _buildRegularContent(BuildContext context, CalendarEvent e) {
+  Widget _buildRegularContent(
+    BuildContext context,
+    CalendarEvent e, {
+    required bool limitedHeight,
+  }) {
     final visual = _eventVisualState(e);
     final eventVisual = _calendarEventVisual(e, widget.todoById);
     final cs = Theme.of(context).colorScheme;
@@ -680,8 +742,11 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
             Expanded(
               child: Text(
                 e.title,
+                maxLines: limitedHeight ? 2 : null,
+                overflow: limitedHeight ? TextOverflow.ellipsis : null,
                 style: TextStyle(
                   fontSize: 13,
+                  height: 1.2,
                   fontWeight: FontWeight.normal,
                   color: isCompleted
                       ? Colors.grey
@@ -717,7 +782,11 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
               e.subtitle!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              style: TextStyle(
+                fontSize: 11,
+                height: 1.2,
+                color: Colors.grey.shade600,
+              ),
             ),
           ),
         if (e.time != null)
@@ -728,7 +797,11 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
                 hour: e.time!.hour,
                 minute: e.time!.minute,
               ),
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              style: TextStyle(
+                fontSize: 11,
+                height: 1.2,
+                color: Colors.grey.shade500,
+              ),
             ),
           ),
         Align(

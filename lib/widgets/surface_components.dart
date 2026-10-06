@@ -631,7 +631,10 @@ class AppStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bg = filled ? color : color.withValues(alpha: 0.12);
+    final bg = Color.alphaBlend(
+      filled ? color : color.withValues(alpha: 0.12),
+      theme.colorScheme.surface,
+    );
     final fg = _appReadableForeground(bg, filled ? Colors.white : color);
     return Container(
       constraints: BoxConstraints(maxWidth: maxWidth),
@@ -1294,8 +1297,6 @@ class AppSwitchTile extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: appSecondaryMenuItemTextStyle(
                         context,
                       ).copyWith(color: cs.onSurface),
@@ -1304,8 +1305,6 @@ class AppSwitchTile extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         subtitle!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                         style: appSecondaryControlLabelStyle(
                           context,
                         ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),

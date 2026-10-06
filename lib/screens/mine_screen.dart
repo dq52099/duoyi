@@ -22,6 +22,9 @@ import '../services/app_update_service.dart';
 import '../services/web_page_reload.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/cached_avatar_image.dart';
+import '../core/account_ui_copy.dart';
+import '../providers/sync_status_presenter.dart';
+import '../widgets/account_status_chip.dart';
 import '../widgets/stats_overview_cards.dart';
 import '../widgets/surface_components.dart';
 import '../widgets/sync_status_card.dart';
@@ -520,15 +523,15 @@ class MineScreen extends StatelessWidget {
         );
       }
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(I18n.tr('profile.avatar.saved'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AccountUiCopy.feedbackAvatarSaved)),
+      );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${I18n.tr('profile.avatar.save_failed_prefix')}${_avatarErrorMessage(e)}',
+            '${I18n.tr('profile.avatar.save_failed_prefix')}${AccountUiCopy.formatError(e)}',
           ),
         ),
       );
@@ -940,18 +943,35 @@ class _MineHeaderSection extends StatelessWidget {
           ])
         : _firstNonEmpty([profile.avatarUrl, profile.avatarInitials]);
 
+    final syncController = context.watch<SyncStatusController?>();
+    final AccountDisplayStatus displayStatus;
+    if (!auth.isLoggedIn) {
+      displayStatus = AccountDisplayStatus.notLoggedIn;
+    } else if (syncController?.isSyncing == true) {
+      displayStatus = AccountDisplayStatus.syncing;
+    } else if (syncController?.lastError != null) {
+      displayStatus = AccountDisplayStatus.syncFailed;
+    } else {
+      displayStatus = AccountDisplayStatus.loggedIn;
+    }
+
     return RepaintBoundary(
       child: AppSurfaceCard(
-        margin: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+        margin: const EdgeInsets.fromLTRB(12, 2, 12, 10),
         padding: const EdgeInsets.all(14),
         borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 360;
             final avatarSize = compact ? 50.0 : 56.0;
-            final headerHeight = compact
+            final textScaler = MediaQuery.textScalerOf(context);
+            final textScale = textScaler.scale(14) / 14;
+            final baseHeaderHeight = compact
                 ? _mineHeaderCompactHeight
                 : _mineHeaderRegularHeight;
+            final headerHeight = textScale > 1.15
+                ? baseHeaderHeight * textScale.clamp(1.0, 1.55)
+                : baseHeaderHeight;
             final avatar = SizedBox(
               width: avatarSize + 6,
               height: avatarSize + 6,
@@ -1067,8 +1087,8 @@ class _MineHeaderSection extends StatelessWidget {
                 ? _firstNonEmpty([auth.username, profile.username])
                 : profile.username;
             final accountAction = SizedBox(
-              width: auth.isLoggedIn ? 38 : 54,
-              height: 30,
+              width: auth.isLoggedIn ? 38 : 64,
+              height: 34,
               child: auth.isLoggedIn
                   ? Tooltip(
                       message: I18n.tr('auth.logout'),
@@ -1092,10 +1112,18 @@ class _MineHeaderSection extends StatelessWidget {
                         context,
                         MaterialPageRoute(builder: (_) => const LoginScreen()),
                       ),
-                      style: appSecondaryFilledButtonStyle(context),
+                      style: appSecondaryFilledButtonStyle(context).copyWith(
+                        padding: const WidgetStatePropertyAll(
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        ),
+                      ),
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: Text(I18n.tr('auth.login'), maxLines: 1),
+                        child: Text(
+                          I18n.tr('auth.login'),
+                          maxLines: 1,
+                          style: const TextStyle(fontWeight: FontWeight.normal),
+                        ),
                       ),
                     ),
             );
@@ -1111,20 +1139,28 @@ class _MineHeaderSection extends StatelessWidget {
                     color: cs.primary,
                   );
             final rewardChips = <Widget>[
-              _MineUserLineChip(
-                label: '${I18n.tr('profile.coins')} $coins',
-                icon: Icons.savings_outlined,
-                color: cs.secondary,
-              ),
+              AccountStatusChip(status: displayStatus),
+              if (auth.isLoggedIn)
+                _MineUserLineChip(
+                  label: '${I18n.tr('profile.coins')} $coins',
+                  icon: Icons.savings_outlined,
+                  color: cs.secondary,
+                )
+              else if (coins > 0)
+                _MineUserLineChip(
+                  label: '${I18n.tr('profile.coins')} $coins',
+                  icon: Icons.savings_outlined,
+                  color: cs.secondary,
+                ),
               if (auth.isLoggedIn && auth.isAdmin)
                 _MineUserLineChip(
                   label: I18n.tr('mine.badge.admin'),
                   color: cs.primary,
                 ),
             ];
-            return SizedBox(
+            return ConstrainedBox(
               key: const ValueKey('mine_header_stable_box'),
-              height: headerHeight,
+              constraints: BoxConstraints(minHeight: headerHeight),
               child: Row(
                 key: const ValueKey('mine_user_info_row'),
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -1132,8 +1168,8 @@ class _MineHeaderSection extends StatelessWidget {
                   Center(key: const ValueKey('mine_avatar_row'), child: avatar),
                   SizedBox(width: compact ? 10 : 12),
                   Expanded(
-                    child: SizedBox(
-                      height: headerHeight,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: headerHeight),
                       child: Semantics(
                         button: true,
                         label: I18n.tr('mine.view_profile_semantics'),
@@ -1176,10 +1212,7 @@ class _MineHeaderSection extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(
-                    height: headerHeight,
-                    child: Center(child: accountAction),
-                  ),
+                  Center(child: accountAction),
                 ],
               ),
             );
@@ -1196,7 +1229,13 @@ class _MineStatsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final hasTodos = context.select<TodoProvider, bool>(
+      (provider) => provider.todos.isNotEmpty,
+    );
     final todoCompletionRate = context.select<TodoProvider, int>(_mineTodoRate);
+    final hasSessions = context.select<PomodoroProvider, bool>(
+      (provider) => provider.sessions.isNotEmpty,
+    );
     final weeklyFocus = context.select<PomodoroProvider, int>(_mineWeeklyFocus);
     final profile = context.select<UserProvider, _MineStatsProfileSlice>((
       provider,
@@ -1207,14 +1246,17 @@ class _MineStatsSection extends StatelessWidget {
         productivityScore: p.productivityScore,
       );
     });
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: _MineStatsGrid(
         cards: [
           StatsOverviewCard(
             title: I18n.tr('mine.stats.todos'),
-            value: '$todoCompletionRate',
-            unit: '%',
+            value: hasTodos
+                ? '$todoCompletionRate'
+                : AccountUiCopy.noDataPlaceholder,
+            unit: hasTodos ? '%' : null,
             icon: Icons.check_circle_outline,
             color: cs.primary,
           ),
@@ -1227,8 +1269,12 @@ class _MineStatsSection extends StatelessWidget {
           ),
           StatsOverviewCard(
             title: I18n.tr('mine.stats.focus'),
-            value: '$weeklyFocus',
-            unit: I18n.tr('unit.minute'),
+            value: (hasSessions || weeklyFocus > 0)
+                ? '$weeklyFocus'
+                : AccountUiCopy.noDataPlaceholder,
+            unit: (hasSessions || weeklyFocus > 0)
+                ? I18n.tr('unit.minute')
+                : null,
             icon: Icons.timer,
             color: DesignTokens.defaultError,
           ),
@@ -1978,13 +2024,6 @@ String _avatarExtensionFor(String name) {
   return '.png';
 }
 
-String _avatarErrorMessage(Object error) {
-  final message = error.toString();
-  return message.startsWith('Exception: ')
-      ? message.substring('Exception: '.length)
-      : message;
-}
-
 class _MineStatsGrid extends StatelessWidget {
   final List<Widget> cards;
 
@@ -1992,18 +2031,24 @@ class _MineStatsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textScaler = MediaQuery.textScalerOf(context);
+    final scale = textScaler.scale(14) / 14;
     return RepaintBoundary(
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 520;
           final columns = compact ? 2 : 4;
+          final baseHeight = compact ? 70.0 : 64.0;
+          final rowHeight = scale > 1.1
+              ? baseHeight * scale.clamp(1.0, 1.65)
+              : baseHeight;
           final rows = <Widget>[];
 
           for (var index = 0; index < cards.length; index += columns) {
             final rowCards = cards.skip(index).take(columns).toList();
             rows.add(
               SizedBox(
-                height: compact ? 70 : 64,
+                height: rowHeight,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -2117,9 +2162,9 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
       _generatedToday = true;
       _reviewExpanded = true;
     } on AiException catch (e) {
-      _error = e.message;
+      _error = AccountUiCopy.formatError(e.message);
     } catch (e) {
-      _error = e.toString();
+      _error = AccountUiCopy.formatError(e);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

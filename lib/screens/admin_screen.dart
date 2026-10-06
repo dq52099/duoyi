@@ -86,6 +86,14 @@ class _AdminScreenState extends State<AdminScreen>
       );
     }
     final api = AdminApi(auth.client);
+    final permissions = auth.state.adminPermissions?.toSet().toList();
+    permissions?.sort();
+    final accessKey = (auth.state.userId, permissions?.join(',') ?? 'legacy');
+    bool canAccess(String permission) =>
+        permissions == null ||
+        (!permissions.contains(_adminNoPermission) &&
+            (permissions.contains(_adminAllPermission) ||
+                permissions.contains(permission)));
 
     return Theme(
       data: theme,
@@ -97,6 +105,61 @@ class _AdminScreenState extends State<AdminScreen>
           backgroundColor: routeBackground.withValues(alpha: 0.96),
           surfaceTintColor: Colors.transparent,
           actions: [
+            PopupMenuButton<int>(
+              tooltip: '选择管理模块',
+              icon: const Icon(Icons.grid_view_outlined),
+              initialValue: _activeTabIndex,
+              onSelected: (index) {
+                if (index != _tabs.index) {
+                  _tabs.animateTo(index);
+                }
+              },
+              itemBuilder: (context) {
+                const tabsMeta = [
+                  (Icons.dashboard_outlined, '概览'),
+                  (Icons.tune, '全站设置'),
+                  (Icons.auto_awesome, 'AI 配置'),
+                  (Icons.cloud_outlined, '云端备份'),
+                  (Icons.people_outline, '用户'),
+                  (Icons.groups_2_outlined, '用户组'),
+                  (Icons.campaign_outlined, '公告'),
+                  (Icons.feedback_outlined, '许愿与反馈'),
+                  (Icons.vpn_key_outlined, '邀请码'),
+                  (Icons.receipt_long_outlined, '日志'),
+                ];
+                return [
+                  for (var i = 0; i < tabsMeta.length; i++)
+                    PopupMenuItem<int>(
+                      value: i,
+                      height: 48,
+                      child: Row(
+                        children: [
+                          Icon(
+                            tabsMeta[i].$1,
+                            size: 18,
+                            color: _activeTabIndex == i
+                                ? cs.primary
+                                : cs.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              tabsMeta[i].$2,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: _activeTabIndex == i
+                                    ? cs.primary
+                                    : cs.onSurface,
+                              ),
+                            ),
+                          ),
+                          if (_activeTabIndex == i)
+                            Icon(Icons.check, size: 16, color: cs.primary),
+                        ],
+                      ),
+                    ),
+                ];
+              },
+            ),
             IconButton(
               tooltip: '刷新当前页',
               onPressed: () {
@@ -134,58 +197,58 @@ class _AdminScreenState extends State<AdminScreen>
             unselectedLabelColor: cs.onSurfaceVariant,
             tabs: const [
               Tab(
-                height: 34,
+                height: 36,
                 child: _AdminTabLabel(
                   icon: Icons.dashboard_outlined,
                   text: '概览',
                 ),
               ),
               Tab(
-                height: 34,
+                height: 36,
                 child: _AdminTabLabel(icon: Icons.tune, text: '全站设置'),
               ),
               Tab(
-                height: 34,
+                height: 36,
                 child: _AdminTabLabel(icon: Icons.auto_awesome, text: 'AI 配置'),
               ),
               Tab(
-                height: 34,
+                height: 36,
                 child: _AdminTabLabel(icon: Icons.cloud_outlined, text: '云端备份'),
               ),
               Tab(
-                height: 34,
+                height: 36,
                 child: _AdminTabLabel(icon: Icons.people_outline, text: '用户'),
               ),
               Tab(
-                height: 34,
+                height: 36,
                 child: _AdminTabLabel(
                   icon: Icons.groups_2_outlined,
                   text: '用户组',
                 ),
               ),
               Tab(
-                height: 34,
+                height: 36,
                 child: _AdminTabLabel(
                   icon: Icons.campaign_outlined,
                   text: '公告',
                 ),
               ),
               Tab(
-                height: 34,
+                height: 36,
                 child: _AdminTabLabel(
                   icon: Icons.feedback_outlined,
                   text: '许愿与反馈',
                 ),
               ),
               Tab(
-                height: 34,
+                height: 36,
                 child: _AdminTabLabel(
                   icon: Icons.vpn_key_outlined,
                   text: '邀请码',
                 ),
               ),
               Tab(
-                height: 34,
+                height: 36,
                 child: _AdminTabLabel(
                   icon: Icons.receipt_long_outlined,
                   text: '日志',
@@ -195,6 +258,7 @@ class _AdminScreenState extends State<AdminScreen>
           ),
         ),
         body: TabBarView(
+          key: ValueKey(accessKey),
           controller: _tabs,
           children: [
             _AdminTabContent(
@@ -204,6 +268,7 @@ class _AdminScreenState extends State<AdminScreen>
               ),
             ),
             _AdminTabContent(
+              allowed: canAccess('settings'),
               child: _SettingsTab(
                 key: ValueKey('admin-settings-${_tabRefreshSerials[1]}'),
                 api: api,
@@ -211,12 +276,14 @@ class _AdminScreenState extends State<AdminScreen>
               ),
             ),
             _AdminTabContent(
+              allowed: canAccess('ai'),
               child: _AiSettingsTab(
                 key: ValueKey('admin-ai-${_tabRefreshSerials[2]}'),
                 api: api,
               ),
             ),
             _AdminTabContent(
+              allowed: canAccess('backup'),
               child: _BackupSettingsTab(
                 key: ValueKey('admin-backup-${_tabRefreshSerials[3]}'),
                 api: api,
@@ -320,7 +387,7 @@ ThemeData _buildAdminMobileTheme(ThemeData baseTheme) {
       fontWeight: FontWeight.normal,
     ),
     headlineMedium: (baseText.headlineMedium ?? const TextStyle()).copyWith(
-      fontSize: 18,
+      fontSize: 17,
       fontWeight: FontWeight.normal,
     ),
   );
@@ -357,6 +424,8 @@ ThemeData _buildAdminMobileTheme(ThemeData baseTheme) {
               .copyWith(fontSize: 13, fontWeight: FontWeight.normal),
     ),
     inputDecorationTheme: baseTheme.inputDecorationTheme.copyWith(
+      helperMaxLines: 5,
+      errorMaxLines: 3,
       labelStyle:
           (baseTheme.inputDecorationTheme.labelStyle ??
                   mobileTextTheme.bodyMedium ??
@@ -474,16 +543,26 @@ ThemeData _buildAdminMobileTheme(ThemeData baseTheme) {
             ),
           ),
     ),
+    popupMenuTheme: baseTheme.popupMenuTheme.copyWith(
+      textStyle: mobileTextTheme.bodyMedium?.copyWith(
+        fontSize: 13.5,
+        fontWeight: FontWeight.normal,
+      ),
+    ),
   );
 }
 
 class _AdminTabContent extends StatelessWidget {
   final Widget child;
+  final bool allowed;
 
-  const _AdminTabContent({required this.child});
+  const _AdminTabContent({required this.child, this.allowed = true});
 
   @override
   Widget build(BuildContext context) {
+    if (!allowed) {
+      return const EmptyState(icon: Icons.lock_outline, message: '暂无此模块的管理权限');
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         return Align(
@@ -536,10 +615,10 @@ class _AdminGlassControlTheme extends StatelessWidget {
       return TextButton.styleFrom(
         foregroundColor: cs.primary,
         textStyle: controlText,
-        minimumSize: const Size(0, 34),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        minimumSize: const Size(0, 44),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        visualDensity: VisualDensity.standard,
+        tapTargetSize: MaterialTapTargetSize.padded,
       );
     }
 
@@ -549,10 +628,10 @@ class _AdminGlassControlTheme extends StatelessWidget {
         disabledForegroundColor: cs.onSurface.withValues(alpha: 0.36),
         side: BorderSide(color: defaultBorder, width: 0.45),
         textStyle: controlText,
-        minimumSize: const Size(0, 34),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        minimumSize: const Size(0, 44),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        visualDensity: VisualDensity.standard,
+        tapTargetSize: MaterialTapTargetSize.padded,
       );
     }
 
@@ -564,10 +643,10 @@ class _AdminGlassControlTheme extends StatelessWidget {
         disabledForegroundColor: cs.onSurface.withValues(alpha: 0.34),
         side: BorderSide(color: defaultBorder, width: 0.45),
         textStyle: controlText,
-        minimumSize: const Size(0, 34),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        minimumSize: const Size(0, 44),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        visualDensity: VisualDensity.standard,
+        tapTargetSize: MaterialTapTargetSize.padded,
       );
     }
 
@@ -614,7 +693,7 @@ class _AdminTabLabel extends StatelessWidget {
     return ConstrainedBox(
       constraints: BoxConstraints(
         minWidth: textWidth.clamp(72.0, 118.0),
-        maxWidth: 128,
+        maxWidth: 140,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1045,15 +1124,29 @@ class _AdminMobileMetric extends StatelessWidget {
                       fontWeight: FontWeight.normal,
                     ),
                   ),
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.normal,
-                    ),
-                  ),
+                  value.length > 8
+                      ? FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            value,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                        )
+                      : Text(
+                          value,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.normal,
+                          ),
+                        ),
                 ],
               ),
             ),
@@ -1079,6 +1172,7 @@ class _DashboardTabState extends State<_DashboardTab> {
   Map<String, dynamic>? _stats;
   String? _error;
   bool _loading = true;
+  int _loadSerial = 0;
 
   @override
   void initState() {
@@ -1087,28 +1181,38 @@ class _DashboardTabState extends State<_DashboardTab> {
   }
 
   Future<void> _load() async {
+    final serial = ++_loadSerial;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      _stats = await widget.api.stats();
+      final res = await widget.api.stats();
+      if (!mounted || serial != _loadSerial) return;
+      setState(() {
+        _stats = res;
+        _error = null;
+      });
     } on ApiException catch (e) {
-      _error = userVisibleApiError(e);
+      if (!mounted || serial != _loadSerial) return;
+      setState(() => _error = userVisibleApiError(e));
     } catch (e) {
-      _error = e.toString();
+      if (!mounted || serial != _loadSerial) return;
+      setState(() => _error = _adminErrorMessage(e, '概览数据'));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && serial == _loadSerial) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
+    if (_loading && _stats == null) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_stats == null) {
-      return Center(child: Text(_error ?? '加载失败'));
+      return _AdminErrorState(message: _error ?? '概览加载失败，请重试', onRetry: _load);
     }
     final users = _stats!['users'] as Map? ?? {};
     final fb = _stats!['feedback'] as Map? ?? {};
@@ -1123,6 +1227,35 @@ class _DashboardTabState extends State<_DashboardTab> {
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          if (_error != null)
+            AppSurfaceCard(
+              color: cs.errorContainer.withValues(alpha: 0.35),
+              border: Border.all(color: cs.error.withValues(alpha: 0.5)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: cs.error, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '概览刷新失败：$_error',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.error,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _loading ? null : _load,
+                    child: const Text('重试'),
+                  ),
+                ],
+              ),
+            ),
+          _AdminInlineLoadingIndicator(
+            visible: _loading && _stats != null,
+            label: '正在更新概览数据',
+          ),
           AppInfoBanner(
             icon: Icons.verified_outlined,
             color: Colors.indigo,
@@ -1133,65 +1266,81 @@ class _DashboardTabState extends State<_DashboardTab> {
             margin: const EdgeInsets.only(bottom: 12),
           ),
           _GridCards([
-            _Kpi('总用户', '${users['total'] ?? 0}', Icons.people, Colors.blue),
+            _Kpi(
+              '总用户',
+              users['total'] == null ? '-' : '${users['total']}',
+              Icons.people,
+              Colors.blue,
+            ),
             _Kpi(
               '管理员',
-              '${users['admin'] ?? 0}',
+              users['admin'] == null ? '-' : '${users['admin']}',
               Icons.shield,
               Colors.deepOrange,
             ),
-            _Kpi('已禁用', '${users['disabled'] ?? 0}', Icons.block, cs.error),
+            _Kpi(
+              '已禁用',
+              users['disabled'] == null ? '-' : '${users['disabled']}',
+              Icons.block,
+              cs.error,
+            ),
             _Kpi(
               '今日新增',
-              '${users['new_today'] ?? 0}',
+              users['new_today'] == null ? '-' : '${users['new_today']}',
               Icons.person_add_alt,
               Colors.green,
             ),
             _Kpi(
               '7 日活跃',
-              '${users['active_7d'] ?? 0}',
+              users['active_7d'] == null ? '-' : '${users['active_7d']}',
               Icons.trending_up,
               Colors.teal,
             ),
             _Kpi(
               '在线',
-              '${users['online'] ?? _stats!['tokens_online'] ?? 0}',
+              (users['online'] ?? _stats!['tokens_online']) == null
+                  ? '-'
+                  : '${users['online'] ?? _stats!['tokens_online']}',
               Icons.wifi_tethering,
               Colors.cyan,
             ),
             _Kpi(
               '邮箱未验证',
-              '${users['unverified_email'] ?? 0}',
+              users['unverified_email'] == null
+                  ? '-'
+                  : '${users['unverified_email']}',
               Icons.mark_email_unread_outlined,
               Colors.amber,
             ),
             _Kpi(
               '待处理反馈',
-              '${fb['open'] ?? 0}',
+              fb['open'] == null ? '-' : '${fb['open']}',
               Icons.chat_bubble_outline,
               Colors.orange,
             ),
             _Kpi(
               '处理中反馈',
-              '${fb['in_progress'] ?? 0}',
+              fb['in_progress'] == null ? '-' : '${fb['in_progress']}',
               Icons.pending_actions_outlined,
               Colors.deepPurple,
             ),
             _Kpi(
               '反馈总数',
-              '${fb['total'] ?? 0}',
+              fb['total'] == null ? '-' : '${fb['total']}',
               Icons.forum_outlined,
               Colors.grey,
             ),
             _Kpi(
               '公告(已发)',
-              '${ann['published'] ?? 0}',
+              ann['published'] == null ? '-' : '${ann['published']}',
               Icons.campaign,
               Colors.indigo,
             ),
             _Kpi(
               '邀请码已用',
-              '${inv['used'] ?? 0} / ${inv['total'] ?? 0}',
+              inv['used'] == null && inv['total'] == null
+                  ? '-'
+                  : '${inv['used'] ?? '-'} / ${inv['total'] ?? '-'}',
               Icons.vpn_key,
               Colors.purple,
             ),
@@ -1317,15 +1466,29 @@ class _GridCards extends StatelessWidget {
                       fontWeight: FontWeight.normal,
                     ),
                   ),
-                  Text(
-                    k.value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.normal,
-                    ),
-                  ),
+                  k.value.length > 8
+                      ? FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            k.value,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                        )
+                      : Text(
+                          k.value,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.normal,
+                          ),
+                        ),
                 ],
               ),
             ),
@@ -1349,6 +1512,9 @@ class _GridCards extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final textScaler = MediaQuery.textScalerOf(context);
+        final isLargeText = textScaler.scale(1.0) >= 1.25;
+        final isNarrow = constraints.maxWidth < 360;
+        final crossAxisCount = (isNarrow || isLargeText) ? 1 : 2;
         final bodySmall = theme.textTheme.bodySmall;
         final titleMedium = theme.textTheme.titleMedium;
         final titleHeight =
@@ -1360,7 +1526,9 @@ class _GridCards extends StatelessWidget {
         final textHeight = titleHeight + valueHeight;
         final contentHeight = textHeight > 38.0 ? textHeight : 38.0;
         final computedExtent = (24.0 + contentHeight).ceilToDouble() + 2.0;
-        final baseExtent = constraints.maxWidth < 340 ? 82.0 : 80.0;
+        final baseExtent = crossAxisCount == 1
+            ? 68.0
+            : (constraints.maxWidth < 340 ? 82.0 : 80.0);
         final mainAxisExtent = computedExtent > baseExtent
             ? computedExtent
             : baseExtent;
@@ -1369,7 +1537,7 @@ class _GridCards extends StatelessWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
+            crossAxisCount: crossAxisCount,
             mainAxisSpacing: 8,
             crossAxisSpacing: 8,
             mainAxisExtent: mainAxisExtent,
@@ -1562,6 +1730,12 @@ int _adminIntValueOrDefault(dynamic raw, int fallback) {
   if (raw == null) return fallback;
   if (raw is String && raw.trim().isEmpty) return fallback;
   return _adminIntValue(raw);
+}
+
+String _adminIntValueOrDash(dynamic raw) {
+  if (raw == null) return '-';
+  if (raw is String && raw.trim().isEmpty) return '-';
+  return _adminIntValue(raw).toString();
 }
 
 String _adminAnnouncementSortLabel(String value) {
@@ -2276,6 +2450,7 @@ class _GroupsTabState extends State<_GroupsTab> {
   int _offset = 0;
   int _pageSize = _adminPageSize;
   int _loadSerial = 0;
+  Future<void> Function()? _failedLoad;
 
   bool _canUseAdminPermission(String permission) {
     final permissions = widget.selfAdminPermissions;
@@ -2299,8 +2474,6 @@ class _GroupsTabState extends State<_GroupsTab> {
     setState(() {
       _loading = true;
       _error = null;
-      _pageSize = nextPageSize;
-      _offset = nextOffset;
     });
     try {
       final page = await widget.api.listGroupsPage(
@@ -2309,19 +2482,26 @@ class _GroupsTabState extends State<_GroupsTab> {
       );
       if (!mounted || serial != _loadSerial) return;
       _page = page;
+      _pageSize = nextPageSize;
+      _offset = nextOffset;
+      _failedLoad = null;
       _groups
         ..clear()
         ..addAll(page.items);
     } on ApiException catch (e) {
       if (!mounted || serial != _loadSerial) return;
       _error = userVisibleApiError(e);
+      _failedLoad = () => _load(pageSize: nextPageSize, offset: nextOffset);
     } catch (e) {
       if (!mounted || serial != _loadSerial) return;
-      _error = e.toString();
+      _error = _adminErrorMessage(e, '用户组');
+      _failedLoad = () => _load(pageSize: nextPageSize, offset: nextOffset);
     } finally {
       if (mounted && serial == _loadSerial) setState(() => _loading = false);
     }
   }
+
+  Future<void> _retryLoad() => (_failedLoad ?? _load)();
 
   void _showSnack(String message) {
     if (!mounted) return;
@@ -2409,10 +2589,13 @@ class _GroupsTabState extends State<_GroupsTab> {
         defaultTimeCoins: (int.tryParse(coinsText) ?? 100).clamp(0, 1000000),
         isActive: isActive,
       );
+      if (!mounted) return;
       await _load(offset: _offset);
       _showSnack('用户组已保存');
     } on ApiException catch (e) {
       _showSnack(userVisibleApiError(e));
+    } catch (e) {
+      _showSnack(_adminActionErrorMessage(e, '保存用户组'));
     }
   }
 
@@ -2458,6 +2641,7 @@ class _GroupsTabState extends State<_GroupsTab> {
     if (ok != true) return;
     try {
       final result = await widget.api.deleteGroup(id);
+      if (!mounted) return;
       await _load(
         offset: _offsetAfterAdminDelete(
           offset: _offset,
@@ -2465,12 +2649,13 @@ class _GroupsTabState extends State<_GroupsTab> {
           pageSize: _pageSize,
         ),
       );
+      if (!mounted) return;
       final reassigned = _adminIntValue(result['reassigned_users']);
       _showSnack(reassigned > 0 ? '用户组已删除，$reassigned 个用户已回退到默认组' : '用户组已删除');
     } on ApiException catch (e) {
       _showSnack(userVisibleApiError(e));
     } catch (e) {
-      _showSnack(e.toString());
+      _showSnack(_adminActionErrorMessage(e, '删除用户组'));
     }
   }
 
@@ -2480,7 +2665,7 @@ class _GroupsTabState extends State<_GroupsTab> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null && _groups.isEmpty) {
-      return Center(child: Text(_error!));
+      return _AdminErrorState(message: _error!, onRetry: _retryLoad);
     }
     final cs = Theme.of(context).colorScheme;
     final canManageGroups = _canManageGroups;
@@ -2495,6 +2680,9 @@ class _GroupsTabState extends State<_GroupsTab> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               children: [
+                if (_error != null)
+                  _AdminErrorState(message: _error!, onRetry: _retryLoad),
+                if (_loading) const LinearProgressIndicator(),
                 _AdminSettingsSection(
                   title: '用户组管理',
                   subtitle: '默认普通用户 100 时光币；管理员可调整各组额度和启用状态',
@@ -2680,13 +2868,14 @@ class _SettingsTabState extends State<_SettingsTab> {
       );
     } catch (e) {
       if (!mounted) return;
-      _error = e.toString();
+      _error = _adminErrorMessage(e, '全站设置');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _set(String key, dynamic value) async {
+    if (_saving(key)) return;
     if (key == 'force_update_required') {
       await _saveForceUpdateRequired(value == true);
       return;
@@ -2712,12 +2901,16 @@ class _SettingsTabState extends State<_SettingsTab> {
             ? (value is int ? value : int.tryParse(value.toString()) ?? 100)
             : null,
       );
+      if (!mounted) return;
       _data[key] = value;
+      _showSettingsSnack('设置已更新');
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+        _showSettingsSnack(userVisibleApiError(e));
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSettingsSnack(_adminActionErrorMessage(e, '更新设置'));
       }
     } finally {
       if (mounted) setState(() => _savingKeys.remove(key));
@@ -2840,10 +3033,13 @@ class _SettingsTabState extends State<_SettingsTab> {
         ),
         isActive: isActive,
       );
+      if (!mounted) return;
       await _reloadGroupsRoles();
       _showSettingsSnack('用户组已保存');
     } on ApiException catch (e) {
       _showSettingsSnack(userVisibleApiError(e));
+    } catch (e) {
+      _showSettingsSnack(_adminActionErrorMessage(e, '保存用户组'));
     }
   }
 
@@ -2917,10 +3113,13 @@ class _SettingsTabState extends State<_SettingsTab> {
         permissions: selected.toList(),
         isActive: isActive,
       );
+      if (!mounted) return;
       await _reloadGroupsRoles();
       _showSettingsSnack('角色已保存');
     } on ApiException catch (e) {
       _showSettingsSnack(userVisibleApiError(e));
+    } catch (e) {
+      _showSettingsSnack(_adminActionErrorMessage(e, '保存角色'));
     }
   }
 
@@ -3135,6 +3334,7 @@ class _SettingsTabState extends State<_SettingsTab> {
   }
 
   Future<void> _saveUpdateConfig() async {
+    if (_savingUpdateConfig) return;
     final latestVersion = _latestVersionForSave();
     final minimumSupportedVersion = _minimumSupportedVersionForSave();
     final forceUpdateRequired = _data['force_update_required'] == true;
@@ -3167,6 +3367,7 @@ class _SettingsTabState extends State<_SettingsTab> {
         updateNotes: versions.updateNotes,
         updateDownloadUrl: '',
       );
+      if (!mounted) return;
       _data['latest_version'] = versions.latestVersion;
       _data['minimum_supported_version'] = versions.minimumSupportedVersion;
       _data['update_notes'] = versions.updateNotes;
@@ -3175,12 +3376,15 @@ class _SettingsTabState extends State<_SettingsTab> {
       _showSettingsSnack('更新配置已保存');
     } on ApiException catch (e) {
       _showSettingsSnack(userVisibleApiError(e));
+    } catch (e) {
+      _showSettingsSnack(_adminActionErrorMessage(e, '保存更新配置'));
     } finally {
       if (mounted) setState(() => _savingKeys.removeAll(keys));
     }
   }
 
   Future<void> _saveForceUpdateRequired(bool value) async {
+    if (_savingUpdateConfig) return;
     final latestVersion = _latestVersionForSave();
     final minimumSupportedVersion = _minimumSupportedVersionForSave();
     final versions = _normalizedUpdateVersionsForSave(
@@ -3214,14 +3418,18 @@ class _SettingsTabState extends State<_SettingsTab> {
         updateNotes: versions.updateNotes,
         updateDownloadUrl: '',
       );
+      if (!mounted) return;
       _data['force_update_required'] = value;
       _data['latest_version'] = versions.latestVersion;
       _data['minimum_supported_version'] = versions.minimumSupportedVersion;
       _data['update_notes'] = versions.updateNotes;
       _data['update_download_url'] = '';
       _syncUpdateVersionPreset();
+      _showSettingsSnack('设置已更新');
     } on ApiException catch (e) {
       _showSettingsSnack(userVisibleApiError(e));
+    } catch (e) {
+      _showSettingsSnack(_adminActionErrorMessage(e, '更新强制升级设置'));
     } finally {
       if (mounted) setState(() => _savingKeys.removeAll(keys));
     }
@@ -3426,7 +3634,9 @@ class _SettingsTabState extends State<_SettingsTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return Center(child: Text(_error!));
+    if (_error != null) {
+      return _AdminErrorState(message: _error!, onRetry: _load);
+    }
     final cs = Theme.of(context).colorScheme;
 
     return AppSecondaryControlTheme(
@@ -3442,7 +3652,7 @@ class _SettingsTabState extends State<_SettingsTab> {
                 color: Colors.green,
                 value: _data['registration_enabled'] == true,
                 title: '允许注册',
-                subtitle: '关闭后新用户无法注册，现有用户仍可登录',
+                subtitle: '关闭后仅允许已有账号登录',
                 onChanged: _saving('registration_enabled')
                     ? null
                     : (v) => _set('registration_enabled', v),
@@ -3461,7 +3671,7 @@ class _SettingsTabState extends State<_SettingsTab> {
                 icon: Icons.mark_email_read_outlined,
                 color: Colors.teal,
                 value: _data['registration_email_required'] == true,
-                title: '注册需要邮箱验证',
+                title: '注册邮箱验证',
                 subtitle: '新账号必须填写邮箱并通过验证码后才能创建',
                 onChanged: _saving('registration_email_required')
                     ? null
@@ -3470,6 +3680,7 @@ class _SettingsTabState extends State<_SettingsTab> {
               const SizedBox(height: 10),
               TextField(
                 controller: _defaultCoinsCtrl,
+                enabled: !_saving('default_registration_coins'),
                 decoration: const InputDecoration(
                   labelText: '默认用户组时光币',
                   helperText: '新注册普通用户默认获得的额度，管理员可继续在用户列表单独调整',
@@ -3497,7 +3708,7 @@ class _SettingsTabState extends State<_SettingsTab> {
                 color: Colors.orange,
                 value: _data['maintenance_mode'] == true,
                 title: '启用维护模式',
-                subtitle: '开启后 /api/sync 拒绝服务；客户端登录页会提示',
+                subtitle: '开启后暂停云同步，并在登录页展示维护公告',
                 onChanged: _saving('maintenance_mode')
                     ? null
                     : (v) => _set('maintenance_mode', v),
@@ -3505,6 +3716,7 @@ class _SettingsTabState extends State<_SettingsTab> {
               const SizedBox(height: 10),
               TextField(
                 controller: _msgCtrl,
+                enabled: !_saving('maintenance_message'),
                 decoration: const InputDecoration(
                   labelText: '维护公告文字',
                   hintText: '将在客户端登录/同步报错时展示',
@@ -3518,15 +3730,15 @@ class _SettingsTabState extends State<_SettingsTab> {
           const SizedBox(height: 12),
           _AdminSettingsSection(
             title: '应用更新',
-            subtitle: '通过 /api/config 下发版本、更新内容与强制更新策略',
+            subtitle: '设置更新提示、最低支持版本与强制更新策略',
             children: [
               AppSwitchTile(
                 icon: Icons.system_update_alt_outlined,
                 color: cs.error,
                 value: _data['force_update_required'] == true,
                 title: '强制更新',
-                subtitle: '开启后由发布通道判定可安装新版本，并在客户端全屏阻断',
-                onChanged: _saving('force_update_required')
+                subtitle: '有可安装的新版本时，用户需完成更新后继续使用',
+                onChanged: _savingUpdateConfig
                     ? null
                     : (v) => _set('force_update_required', v),
               ),
@@ -3542,6 +3754,7 @@ class _SettingsTabState extends State<_SettingsTab> {
               const SizedBox(height: 10),
               AppDropdownField<String>(
                 key: ValueKey(_updateVersionPreset),
+                enabled: !_savingUpdateConfig,
                 initialValue: _updateVersionPreset,
                 labelText: '版本策略',
                 prefixIcon: const Icon(Icons.rule_folder_outlined),
@@ -3553,6 +3766,7 @@ class _SettingsTabState extends State<_SettingsTab> {
                     ),
                 ],
                 onChanged: (value) {
+                  if (_savingUpdateConfig) return;
                   if (value != null) _applyUpdateVersionPreset(value);
                 },
               ),
@@ -3662,13 +3876,14 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       context.read<AiService>().updateFromServerConfig(data);
     } catch (e) {
       if (!mounted) return;
-      _error = e.toString();
+      _error = _adminErrorMessage(e, 'AI 配置');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     setState(() => _saving = true);
     try {
       final newKey = _keyCtrl.text.trim();
@@ -3683,11 +3898,10 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
         payload['ai_api_key'] = submitKey;
       }
       await widget.api.client.patch('/api/admin/settings', payload);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('AI 配置已保存')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('AI 配置已保存')));
       await _load();
     } catch (e) {
       if (mounted) {
@@ -3701,6 +3915,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
   }
 
   Future<void> _test() async {
+    if (_testing) return;
     setState(() {
       _testing = true;
       _testResult = null;
@@ -3749,7 +3964,9 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return Center(child: Text(_error!));
+    if (_error != null) {
+      return _AdminErrorState(message: _error!, onRetry: _load);
+    }
     final cs = Theme.of(context).colorScheme;
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -3770,7 +3987,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
             TextField(
               controller: _baseCtrl,
               decoration: const InputDecoration(
-                labelText: 'Base URL (OpenAI 兼容网关)',
+                labelText: '服务地址 (Base URL)',
                 hintText: 'https://api.openai.com',
                 helperText: '路径后自动加 /v1/chat/completions',
                 prefixIcon: Icon(Icons.link_outlined),
@@ -3986,6 +4203,8 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   String _serverBackupSort = 'created_desc';
   final _backupSearchCtrl = TextEditingController();
   final _serverBackupSearchCtrl = TextEditingController();
+  int _loadSerial = 0;
+  Future<void> Function()? _failedLoad;
 
   @override
   void initState() {
@@ -4058,23 +4277,30 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     final nextServerBackupStatus = serverBackupStatus ?? _serverBackupStatus;
     final nextBackupSort = backupSort ?? _backupSort;
     final nextServerBackupSort = serverBackupSort ?? _serverBackupSort;
-    _backupOffset = nextBackupOffset;
-    _serverBackupOffset = nextServerBackupOffset;
-    _backupPageSize = nextBackupPageSize;
-    _serverBackupPageSize = nextServerBackupPageSize;
-    _backupQuery = nextBackupQuery;
-    _serverBackupQuery = nextServerBackupQuery;
-    _backupStatus = nextBackupStatus;
-    _serverBackupStatus = nextServerBackupStatus;
-    _backupSort = nextBackupSort;
-    _serverBackupSort = nextServerBackupSort;
+    final serial = ++_loadSerial;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final data = await widget.api.getSettings(scope: 'backup');
-      if (!mounted) return;
+      if (!mounted || serial != _loadSerial) return;
+      final backupPage = await widget.api.listBackupsPage(
+        query: nextBackupQuery.isEmpty ? null : nextBackupQuery,
+        status: nextBackupStatus.isEmpty ? null : nextBackupStatus,
+        sort: nextBackupSort,
+        limit: nextBackupPageSize,
+        offset: nextBackupOffset,
+      );
+      if (!mounted || serial != _loadSerial) return;
+      final serverBackupPage = await widget.api.listServerBackupsPage(
+        query: nextServerBackupQuery.isEmpty ? null : nextServerBackupQuery,
+        status: nextServerBackupStatus.isEmpty ? null : nextServerBackupStatus,
+        sort: nextServerBackupSort,
+        limit: nextServerBackupPageSize,
+        offset: nextServerBackupOffset,
+      );
+      if (!mounted || serial != _loadSerial) return;
       _backupEnabled = data['backup_enabled'] != false;
       _maxSizeCtrl.text =
           (((data['backup_max_size_kb'] as num?) ?? 2048).toInt()).toString();
@@ -4165,35 +4391,45 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           .toString();
       _accountSmtpPasswordMasked = data['email_smtp_password_set'] == true;
       _accountSmtpUseSsl = data['email_smtp_use_ssl'] != false;
-      final backupPage = await widget.api.listBackupsPage(
-        query: nextBackupQuery.isEmpty ? null : nextBackupQuery,
-        status: nextBackupStatus.isEmpty ? null : nextBackupStatus,
-        sort: nextBackupSort,
-        limit: nextBackupPageSize,
-        offset: nextBackupOffset,
-      );
-      if (!mounted) return;
-      final serverBackupPage = await widget.api.listServerBackupsPage(
-        query: nextServerBackupQuery.isEmpty ? null : nextServerBackupQuery,
-        status: nextServerBackupStatus.isEmpty ? null : nextServerBackupStatus,
-        sort: nextServerBackupSort,
-        limit: nextServerBackupPageSize,
-        offset: nextServerBackupOffset,
-      );
-      if (!mounted) return;
+      _backupOffset = nextBackupOffset;
+      _serverBackupOffset = nextServerBackupOffset;
+      _backupPageSize = nextBackupPageSize;
+      _serverBackupPageSize = nextServerBackupPageSize;
+      _backupQuery = nextBackupQuery;
+      _serverBackupQuery = nextServerBackupQuery;
+      _backupStatus = nextBackupStatus;
+      _serverBackupStatus = nextServerBackupStatus;
+      _backupSort = nextBackupSort;
+      _serverBackupSort = nextServerBackupSort;
       _backupPage = backupPage;
       _serverBackupPage = serverBackupPage;
       _backups = backupPage.items;
       _serverBackups = serverBackupPage.items;
+      _failedLoad = null;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || serial != _loadSerial) return;
       _error = _adminErrorMessage(e, '备份配置与备份记录');
+      _failedLoad = () => _load(
+        backupOffset: nextBackupOffset,
+        serverBackupOffset: nextServerBackupOffset,
+        backupPageSize: nextBackupPageSize,
+        serverBackupPageSize: nextServerBackupPageSize,
+        backupQuery: nextBackupQuery,
+        serverBackupQuery: nextServerBackupQuery,
+        backupStatus: nextBackupStatus,
+        serverBackupStatus: nextServerBackupStatus,
+        backupSort: nextBackupSort,
+        serverBackupSort: nextServerBackupSort,
+      );
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && serial == _loadSerial) setState(() => _loading = false);
     }
   }
 
+  Future<void> _retryLoad() => (_failedLoad ?? _load)();
+
   Future<void> _save() async {
+    if (_saving) return;
     setState(() => _saving = true);
     try {
       final openlistPassword = _openlistPasswordCtrl.text.trim();
@@ -4274,11 +4510,10 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         payload['email_smtp_password'] = accountSmtpPassword;
       }
       await widget.api.client.patch('/api/admin/settings', payload);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('云端备份配置已保存')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('云端备份配置已保存')));
       await _load();
     } catch (e) {
       if (mounted) {
@@ -4410,6 +4645,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     if (ok != true) return;
     try {
       await widget.api.wipeBackup(row['user_id'].toString());
+      if (!mounted) return;
       final nextOffset = _backups.length == 1 && _backupOffset > 0
           ? (_backupOffset - _backupPageSize).clamp(0, _backupOffset)
           : _backupOffset;
@@ -4635,20 +4871,26 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                 child: AppDropdownField<String>(
                   initialValue: _serverBackupSort,
                   labelText: '服务器备份排序',
-                  items: const [
+                  items: [
                     DropdownMenuItem(
                       value: 'created_desc',
-                      child: Text('最新生成优先'),
+                      child: Text(_adminServerBackupSortLabel('created_desc')),
                     ),
-                    DropdownMenuItem(value: 'size_desc', child: Text('文件从大到小')),
-                    DropdownMenuItem(value: 'size_asc', child: Text('文件从小到大')),
+                    DropdownMenuItem(
+                      value: 'size_desc',
+                      child: Text(_adminServerBackupSortLabel('size_desc')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'size_asc',
+                      child: Text(_adminServerBackupSortLabel('size_asc')),
+                    ),
                     DropdownMenuItem(
                       value: 'status_asc',
-                      child: Text('状态 A-Z'),
+                      child: Text(_adminServerBackupSortLabel('status_asc')),
                     ),
                     DropdownMenuItem(
                       value: 'filename_asc',
-                      child: Text('文件名 A-Z'),
+                      child: Text(_adminServerBackupSortLabel('filename_asc')),
                     ),
                   ],
                   onChanged: (value) => _load(
@@ -4692,7 +4934,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                       leading: Icon(Icons.backup_outlined, color: cs.primary),
                       title: Text((b['filename'] ?? '-').toString()),
                       subtitle: Text(
-                        '${b['created_at'] ?? '-'} · ${_adminStatusLabel(status)} · ${b['size_bytes'] ?? 0} bytes · 排序: ${_adminServerBackupSortLabel(_serverBackupSort)}',
+                        '${b['created_at'] ?? '-'} · ${_adminStatusLabel(status)} · ${b['size_bytes'] ?? 0} 字节',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.62),
                         ),
@@ -4787,26 +5029,26 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                 child: AppDropdownField<String>(
                   initialValue: _backupSort,
                   labelText: '用户备份排序',
-                  items: const [
+                  items: [
                     DropdownMenuItem(
                       value: 'updated_desc',
-                      child: Text('最近同步优先'),
+                      child: Text(_adminBackupSortLabel('updated_desc')),
                     ),
                     DropdownMenuItem(
                       value: 'username_asc',
-                      child: Text('用户名 A-Z'),
+                      child: Text(_adminBackupSortLabel('username_asc')),
                     ),
                     DropdownMenuItem(
                       value: 'size_desc',
-                      child: Text('备份体积从大到小'),
+                      child: Text(_adminBackupSortLabel('size_desc')),
                     ),
                     DropdownMenuItem(
                       value: 'size_asc',
-                      child: Text('备份体积从小到大'),
+                      child: Text(_adminBackupSortLabel('size_asc')),
                     ),
                     DropdownMenuItem(
                       value: 'version_desc',
-                      child: Text('同步版本较高优先'),
+                      child: Text(_adminBackupSortLabel('version_desc')),
                     ),
                   ],
                   onChanged: (value) => _load(
@@ -4864,7 +5106,6 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                           updated,
                           '版本 ${b['sync_version'] ?? 0}',
                           '${b['size_kb']} KB',
-                          '排序: ${_adminBackupSortLabel(_backupSort)}',
                         ].join(' · '),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.62),
@@ -4904,7 +5145,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return _AdminErrorState(message: _error!, onRetry: () => _load());
+      return _AdminErrorState(message: _error!, onRetry: _retryLoad);
     }
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
@@ -4926,7 +5167,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
               color: cs.primary,
               value: _backupEnabled,
               title: '启用云端备份',
-              subtitle: '关闭后所有 /api/sync 请求会被拒绝',
+              subtitle: '关闭后暂停所有账号的云同步',
               onChanged: (v) => setState(() => _backupEnabled = v),
             ),
             const SizedBox(height: 10),
@@ -5989,6 +6230,13 @@ class _UsersTabState extends State<_UsersTab> {
 
   Future<void> _toggleAdmin(Map<String, dynamic> u) async {
     final becomeAdmin = !(u['is_admin'] == true);
+    if (!becomeAdmin && u['user_id'].toString() == widget.selfId) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('不能撤销当前登录账号的管理员权限')));
+      return;
+    }
     if (becomeAdmin && !_hasAllAdminPermission) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -5998,6 +6246,7 @@ class _UsersTabState extends State<_UsersTab> {
     }
     try {
       await widget.api.updateUser(u['user_id'], isAdmin: becomeAdmin);
+      if (!mounted) return;
       u['is_admin'] = becomeAdmin;
       await _load(quiet: true);
     } on ApiException catch (e) {
@@ -6005,6 +6254,12 @@ class _UsersTabState extends State<_UsersTab> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '更新管理员权限'))),
+        );
       }
     }
   }
@@ -6020,6 +6275,7 @@ class _UsersTabState extends State<_UsersTab> {
     final disable = !(u['is_disabled'] == true);
     try {
       await widget.api.updateUser(u['user_id'], isDisabled: disable);
+      if (!mounted) return;
       u['is_disabled'] = disable;
       await _load(quiet: true);
     } on ApiException catch (e) {
@@ -6027,6 +6283,12 @@ class _UsersTabState extends State<_UsersTab> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '更新用户状态'))),
+        );
       }
     }
   }
@@ -6133,6 +6395,16 @@ class _UsersTabState extends State<_UsersTab> {
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _adminActionErrorMessage(e, disabled ? '批量禁用账号' : '批量恢复账号'),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -6172,6 +6444,12 @@ class _UsersTabState extends State<_UsersTab> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '重置密码'))),
+        );
       }
     }
   }
@@ -6242,6 +6520,7 @@ class _UsersTabState extends State<_UsersTab> {
         roleId: isAdmin ? null : roleIdForPromotion,
         adminPermissions: permissions,
       );
+      if (!mounted) return;
       await _load(quiet: true);
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -6252,6 +6531,12 @@ class _UsersTabState extends State<_UsersTab> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '设置管理权限'))),
+        );
       }
     }
   }
@@ -6343,6 +6628,7 @@ class _UsersTabState extends State<_UsersTab> {
         groupId: _canAssignGroups ? selectedGroupId : null,
         roleId: canEditRoleForTarget ? selectedRoleId : null,
       );
+      if (!mounted) return;
       await _load(quiet: true);
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -6353,6 +6639,12 @@ class _UsersTabState extends State<_UsersTab> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '设置用户组与角色'))),
+        );
       }
     }
   }
@@ -6416,6 +6708,7 @@ class _UsersTabState extends State<_UsersTab> {
         delta: delta,
         reason: reasonCtrl.text,
       );
+      if (!mounted) return;
       u['coin_balance'] = adjusted['balance'];
       u['lifetime_coins'] = adjusted['lifetime'];
       await _load(quiet: true);
@@ -6429,10 +6722,24 @@ class _UsersTabState extends State<_UsersTab> {
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '调整时光币'))),
+        );
+      }
     }
   }
 
   Future<void> _delete(Map<String, dynamic> u) async {
+    if (u['user_id'].toString() == widget.selfId) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('不能删除当前登录账号')));
+      }
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AppDialog(
@@ -6458,6 +6765,7 @@ class _UsersTabState extends State<_UsersTab> {
     if (ok != true) return;
     try {
       await widget.api.deleteUser(u['user_id']);
+      if (!mounted) return;
       await _load(
         offset: _offsetAfterAdminDelete(
           offset: _offset,
@@ -6470,6 +6778,12 @@ class _UsersTabState extends State<_UsersTab> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '删除用户'))),
+        );
       }
     }
   }
@@ -6525,10 +6839,10 @@ class _UsersTabState extends State<_UsersTab> {
       '注册时间: ${_formatServerTime(u['created_at'])}',
       '最近登录: ${_formatLastLogin(u['last_login_at'])}',
       '最近活跃: ${_formatLastActive(u['last_active_at'])}',
-      '反馈数: ${u['feedback_count'] ?? 0}',
+      '反馈数: ${u['feedback_count'] ?? '-'}',
       '当前排序: ${_adminUserSortLabel(_sort)}',
-      '时光币: ${_adminIntValue(u['coin_balance'])}',
-      '累计时光币: ${_adminIntValue(u['lifetime_coins'])}',
+      '时光币: ${_adminIntValueOrDash(u['coin_balance'])}',
+      '累计时光币: ${_adminIntValueOrDash(u['lifetime_coins'])}',
     ];
     await showDialog<void>(
       context: context,
@@ -6697,8 +7011,10 @@ class _UsersTabState extends State<_UsersTab> {
       u['admin_permissions'],
       isAdmin: admin,
     );
-    final coinBalance = _adminIntValue(u['coin_balance']);
-    final lifetimeCoins = _adminIntValue(u['lifetime_coins']);
+    final rawCoinBalance = u['coin_balance'];
+    final rawLifetimeCoins = u['lifetime_coins'];
+    final coinBalance = _adminIntValue(rawCoinBalance);
+    final lifetimeCoins = _adminIntValue(rawLifetimeCoins);
     final canSelectForBulk = _canManageUsers;
     final selected = canSelectForBulk && _selectedUserIds.contains(userId);
     final registeredAt = _formatServerTime(u['created_at']);
@@ -6833,7 +7149,7 @@ class _UsersTabState extends State<_UsersTab> {
                 SizedBox(
                   width: 118,
                   child: Text(
-                    '$coinBalance / $lifetimeCoins',
+                    '${rawCoinBalance == null ? '-' : coinBalance} / ${rawLifetimeCoins == null ? '-' : lifetimeCoins}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
@@ -6980,7 +7296,9 @@ class _UsersTabState extends State<_UsersTab> {
                         Expanded(
                           child: _AdminMobileMetric(
                             label: '当前时光币',
-                            value: '$coinBalance',
+                            value: rawCoinBalance == null
+                                ? '-'
+                                : '$coinBalance',
                             icon: Icons.toll_outlined,
                           ),
                         ),
@@ -6988,7 +7306,9 @@ class _UsersTabState extends State<_UsersTab> {
                         Expanded(
                           child: _AdminMobileMetric(
                             label: '累计时光币',
-                            value: '$lifetimeCoins',
+                            value: rawLifetimeCoins == null
+                                ? '-'
+                                : '$lifetimeCoins',
                             icon: Icons.savings_outlined,
                           ),
                         ),
@@ -7559,12 +7879,23 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
           published: published,
         );
       }
+      if (!mounted) return;
       await _load();
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _adminActionErrorMessage(e, item == null ? '发布公告' : '更新公告'),
+            ),
+          ),
+        );
       }
     }
   }
@@ -7639,11 +7970,23 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
           child: AppDropdownField<String>(
             initialValue: _sort,
             labelText: '公告排序',
-            items: const [
-              DropdownMenuItem(value: 'created_desc', child: Text('最新创建优先')),
-              DropdownMenuItem(value: 'updated_desc', child: Text('最近更新优先')),
-              DropdownMenuItem(value: 'level_desc', child: Text('紧急程度优先')),
-              DropdownMenuItem(value: 'title_asc', child: Text('标题 A-Z')),
+            items: [
+              DropdownMenuItem(
+                value: 'created_desc',
+                child: Text(_adminAnnouncementSortLabel('created_desc')),
+              ),
+              DropdownMenuItem(
+                value: 'updated_desc',
+                child: Text(_adminAnnouncementSortLabel('updated_desc')),
+              ),
+              DropdownMenuItem(
+                value: 'level_desc',
+                child: Text(_adminAnnouncementSortLabel('level_desc')),
+              ),
+              DropdownMenuItem(
+                value: 'title_asc',
+                child: Text(_adminAnnouncementSortLabel('title_asc')),
+              ),
             ],
             onChanged: (value) =>
                 _load(sort: value ?? 'created_desc', offset: 0),
@@ -7674,10 +8017,12 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
             ),
           )
         else if (_items.isEmpty)
-          const Expanded(
+          Expanded(
             child: EmptyState(
               icon: Icons.campaign_outlined,
-              message: '当前筛选下没有公告。可调整关键词、发布状态或级别筛选，公告较多时使用底部分页查看。',
+              message: _query.isEmpty && _status.isEmpty && _level.isEmpty
+                  ? '暂无公告，点击“发布公告”创建'
+                  : '没有匹配的公告，请调整筛选条件',
             ),
           )
         else
@@ -7728,7 +8073,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                       ],
                     ),
                     subtitle: Text(
-                      '创建: ${a['created_at']} · 更新: ${a['updated_at'] ?? '-'} · 排序: ${_adminAnnouncementSortLabel(_sort)}\n${(a['body'] ?? '').toString()}',
+                      '创建: ${a['created_at']}${a['updated_at'] != null ? ' · 更新: ${a['updated_at']}' : ''}\n${(a['body'] ?? '').toString()}',
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -7988,6 +8333,12 @@ class _FeedbackTabState extends State<_FeedbackTab> {
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '批量处理反馈'))),
+        );
+      }
     }
   }
 
@@ -8109,6 +8460,12 @@ class _FeedbackTabState extends State<_FeedbackTab> {
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '回复反馈'))),
+        );
+      }
     }
   }
 
@@ -8169,9 +8526,8 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                     if (loadError != null) ...[
                       Text(
                         '详情加载失败，已展示列表摘要：$loadError',
-                        style: TextStyle(
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.error,
-                          fontSize: 12,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -8254,6 +8610,11 @@ class _FeedbackTabState extends State<_FeedbackTab> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_adminActionErrorMessage(e, '删除反馈'))),
+      );
     }
   }
 
@@ -8284,6 +8645,11 @@ class _FeedbackTabState extends State<_FeedbackTab> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_adminActionErrorMessage(e, '关闭反馈'))),
+      );
     }
   }
 
@@ -8455,9 +8821,12 @@ class _FeedbackTabState extends State<_FeedbackTab> {
             );
           }
           if (_items.isEmpty) {
-            return const EmptyState(
+            return EmptyState(
               icon: Icons.inbox_outlined,
-              message: '当前筛选下没有反馈。反馈较多时请用底部分页查看其他页面，或切换处理状态和分类。',
+              message:
+                  _query.isEmpty && _filter.isEmpty && _categoryFilter.isEmpty
+                  ? '暂无反馈'
+                  : '没有匹配的反馈，请调整筛选条件',
             );
           }
           return RefreshIndicator(
@@ -9132,6 +9501,12 @@ class _InvitesTabState extends State<_InvitesTab> {
           context,
         ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_adminActionErrorMessage(e, '生成邀请码'))),
+        );
+      }
     }
   }
 
@@ -9196,11 +9571,23 @@ class _InvitesTabState extends State<_InvitesTab> {
           child: AppDropdownField<String>(
             initialValue: _sort,
             labelText: '邀请码排序',
-            items: const [
-              DropdownMenuItem(value: 'created_desc', child: Text('最新生成优先')),
-              DropdownMenuItem(value: 'used_desc', child: Text('最近使用优先')),
-              DropdownMenuItem(value: 'code_asc', child: Text('邀请码 A-Z')),
-              DropdownMenuItem(value: 'note_asc', child: Text('备注 A-Z')),
+            items: [
+              DropdownMenuItem(
+                value: 'created_desc',
+                child: Text(_adminInviteSortLabel('created_desc')),
+              ),
+              DropdownMenuItem(
+                value: 'used_desc',
+                child: Text(_adminInviteSortLabel('used_desc')),
+              ),
+              DropdownMenuItem(
+                value: 'code_asc',
+                child: Text(_adminInviteSortLabel('code_asc')),
+              ),
+              DropdownMenuItem(
+                value: 'note_asc',
+                child: Text(_adminInviteSortLabel('note_asc')),
+              ),
             ],
             onChanged: (value) =>
                 _load(sort: value ?? 'created_desc', offset: 0),
@@ -9231,10 +9618,12 @@ class _InvitesTabState extends State<_InvitesTab> {
             ),
           )
         else if (_codes.isEmpty)
-          const Expanded(
+          Expanded(
             child: EmptyState(
               icon: Icons.vpn_key_outlined,
-              message: '当前筛选下没有邀请码。可搜索邀请码、备注或使用者；邀请码较多时请用底部分页查看其他页面。',
+              message: _query.isEmpty && _status.isEmpty
+                  ? '暂无邀请码，点击“生成邀请码”创建'
+                  : '没有匹配的邀请码，请调整筛选条件',
             ),
           )
         else
@@ -9284,8 +9673,8 @@ class _InvitesTabState extends State<_InvitesTab> {
                     ),
                     subtitle: Text(
                       used
-                          ? '已被 ${c['used_by_name'] ?? '?'} 使用 · ${c['used_at']} · 排序: ${_adminInviteSortLabel(_sort)}'
-                          : '创建 ${c['created_at']} · 排序: ${_adminInviteSortLabel(_sort)}${(c['note'] ?? '').toString().isNotEmpty ? ' · ${c['note']}' : ''}',
+                          ? '已被 ${c['used_by_name'] ?? '?'} 使用 · ${c['used_at']}'
+                          : '创建 ${c['created_at']}${(c['note'] ?? '').toString().isNotEmpty ? ' · ${c['note']}' : ''}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.62),
                       ),
@@ -9485,11 +9874,23 @@ class _AuditLogTabState extends State<_AuditLogTab> {
           child: AppDropdownField<String>(
             initialValue: _sort,
             labelText: '日志排序',
-            items: const [
-              DropdownMenuItem(value: 'created_desc', child: Text('最新操作优先')),
-              DropdownMenuItem(value: 'actor_asc', child: Text('管理员 A-Z')),
-              DropdownMenuItem(value: 'action_asc', child: Text('操作类型 A-Z')),
-              DropdownMenuItem(value: 'target_asc', child: Text('对象 A-Z')),
+            items: [
+              DropdownMenuItem(
+                value: 'created_desc',
+                child: Text(_adminAuditSortLabel('created_desc')),
+              ),
+              DropdownMenuItem(
+                value: 'actor_asc',
+                child: Text(_adminAuditSortLabel('actor_asc')),
+              ),
+              DropdownMenuItem(
+                value: 'action_asc',
+                child: Text(_adminAuditSortLabel('action_asc')),
+              ),
+              DropdownMenuItem(
+                value: 'target_asc',
+                child: Text(_adminAuditSortLabel('target_asc')),
+              ),
             ],
             onChanged: (value) =>
                 _load(sort: value ?? 'created_desc', offset: 0),
@@ -9520,10 +9921,12 @@ class _AuditLogTabState extends State<_AuditLogTab> {
             ),
           )
         else if (_items.isEmpty)
-          const Expanded(
+          Expanded(
             child: EmptyState(
               icon: Icons.receipt_long_outlined,
-              message: '当前筛选下没有审计日志。管理员操作较多时可搜索管理员、操作或对象，并使用底部分页查看。',
+              message: _query.isEmpty && _action.isEmpty
+                  ? '暂无操作记录'
+                  : '没有匹配的操作记录，请调整筛选条件',
             ),
           )
         else
@@ -9559,7 +9962,6 @@ class _AuditLogTabState extends State<_AuditLogTab> {
                     subtitle: Text(
                       [
                         if (createdAt.isNotEmpty) createdAt,
-                        '排序: ${_adminAuditSortLabel(_sort)}',
                         if (target.isNotEmpty) '对象: $target',
                         if (detail.isNotEmpty) '详情: $detail',
                       ].join('\n'),

@@ -1,0 +1,248 @@
+{
+  "recorded_at_utc": "2026-10-06T23:32:44.750061+00:00",
+  "base_commit": "c6b4f04",
+  "version": "1.1.44+140010",
+  "scope": "Account/main-page/admin UI batch; broader widget/i18n goal remains active",
+  "flutter_regression_files": 24,
+  "flutter_cases_passed": 251,
+  "full_repository_pass_claimed": false,
+  "dart_analyze_files": 32,
+  "source_sha256": {
+    "lib/core/account_ui_copy.dart": "8452b1a3bb03b2538dae00bd12c04c172159922b1bb2cef094a397d5e37b601c",
+    "lib/core/main_ui_copy.dart": "8450f33acaefda41a41534283c1bf84dc9d7991dbc69cb60226f9b7221afe815",
+    "lib/widgets/account_status_chip.dart": "deb5e90cc45908c8027be5399fb63782da7d4e826c6b635d0e4a2f57a06f5688",
+    "test/core/account_ui_copy_test.dart": "876ff9445f8c3564187ea4fd0f40980291502284a87969e79d04963ede191ef0",
+    "test/screens/admin_ui_upgrade_test.dart": "f05281a1c108abde5905c3cc0276241eab2f899874280f2078998d188908fcde",
+    "test/screens/app_ui_upgrade_test.dart": "89d53dd1b2c9d077903d0c0c68656ec0ebf223ccdfb23028aa0ddb521d27a141",
+    "lib/screens/admin_screen.dart": "1246d85975b509320186483d690ee5fb288aee42a1a5e365a16823fde15b74c3",
+    "lib/screens/calendar_screen.dart": "adcefd52b63a7e48b7820f8507ed2a0356081a1438dbb5d4787bcf85c9f6bccf",
+    "lib/screens/habit_screen.dart": "02e27fe3a929e3bd62710393c8da2bf4e129afe4997df61eea18613f6e71f850",
+    "lib/screens/login_screen.dart": "1f25dce7c29fcfe5f8af248a497544a2c0678468b893d7451225d7592113a1c0",
+    "lib/screens/mine_screen.dart": "f67bddb1900372e7157c009e489878feac339fbbd3cdf25572898eb5fdd1e92c",
+    "lib/screens/pomodoro_screen.dart": "8c02d9cf3e016d80941b17397001d5dc34476b369cdfbc2011210ccdecf825d1",
+    "lib/screens/profile_screen.dart": "d46a74879479dcdc86668ef8d6f1ec8fa32bc0a511276f015c47aac39b624063",
+    "lib/screens/todo_screen.dart": "c297dcadb138a288ba3f3b2a4472d44ffa4730637074374be01df5b56b6c3d5f",
+    "lib/services/api_client.dart": "e82c211ce8b05870f4a28e077ef5c8c1db657d5f6114163e8dbc30e8b91d1376",
+    "lib/widgets/calendar_day_agenda.dart": "d982031918a1ba2edeea020779ed82beaa6e0cdc046a8474f3051eb3694dbf3e",
+    "lib/widgets/calendar_week_strip.dart": "4af8dc6136c27e22ef14df4ec640833d1aa4cf92f0d9e2300656786ce12de7f5",
+    "lib/widgets/empty_state.dart": "409304be5cb72a6ded7262615e1200b1ad305e9dc901789b83fae4227d378d9c",
+    "lib/widgets/habit_weekly_card.dart": "3d351d01f8ab65db8a2ec24f59312567f718d8e9696107205fec88ff00f70af7",
+    "lib/widgets/pomodoro_session_card.dart": "99636a2b023e5ca0fe2f7ea92c58f25efe5b500f57dafb55f52c360519bdd71f",
+    "lib/widgets/pomodoro_timer_ring.dart": "400db6f57cde6b7d9e3ffba8f219b387281c9030f2f5b78cffc48be1189b1b3b",
+    "lib/widgets/surface_components.dart": "0d119666d9f8e439f9c911232f43bd170e78ab4775935d6c69a82902d3873fef",
+    "test/screens/admin_feedback_screen_test.dart": "70bc53a18d4fcb881a4e232e2a963a05a70ccfcc8041817113259778e4ea8bc9",
+    "test/screens/calendar_year_view_test.dart": "6d440efde04813fedf233fd620ea6a0ac45841060ee34c9c4b59710bb50198b4",
+    "test/screens/habit_screen_test.dart": "78900e6de6519f5bb25bcbefcae5f0b42817226e6735a7eaf5aeaf1517565184",
+    "test/screens/login_screen_test.dart": "193ae45c774e53148ac4658f7952ab958e509779e3988374103105e63d2d84ee",
+    "test/screens/today_mine_smoke_test.dart": "2f6b08834a1663d494be142fec7aae186e6b563babd3e81562edc028b8693333",
+    "test/screens/today_mine_static_test.dart": "14f7676fabdf9179e528ac964084507d1526f96c69e11845aca1d9de9b494298",
+    "test/services/admin_force_update_settings_test.dart": "df88605216022bda5751972cd398fdac2154c71faad1af3bd3f2d5e3860f16e3",
+    "test/services/admin_user_status_test.dart": "0a1592e2a884d4eb48bf9cb67bb35329e9257ddd389bfa6a3e06f8fcb789075d",
+    "test/services/api_client_error_test.dart": "ebaca4f724ca7188aefcc2cde9a00d4326e416bc5cc193fe6d9dfb1b70172f23",
+    "test/widgets/surface_components_layout_test.dart": "2337a06610c077445462045a39692ba932273cbaebd9bf9e75a627c1df57122f"
+  },
+  "screenshots": {
+    "app_renderings": 41,
+    "admin_renderings": 30,
+    "contact_sheets": 2,
+    "physical_device": false
+  },
+  "results": {
+    "regression": {
+      "started": "2026-10-06T23:05:57.870956+00:00",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/screens/app_ui_upgrade_test.dart",
+        "test/screens/admin_ui_upgrade_test.dart",
+        "test/core/account_ui_copy_test.dart",
+        "test/screens/login_screen_test.dart",
+        "test/screens/profile_screen_test.dart",
+        "test/screens/today_mine_static_test.dart",
+        "test/screens/today_mine_smoke_test.dart",
+        "test/screens/habit_screen_test.dart",
+        "test/screens/calendar_project_filter_test.dart",
+        "test/screens/calendar_year_view_test.dart",
+        "test/screens/pomodoro_focus_layout_static_test.dart",
+        "test/screens/pomodoro_strict_focus_static_test.dart",
+        "test/screens/todo_layout_static_test.dart",
+        "test/widgets/todo_habit_empty_geometry_test.dart",
+        "test/screens/admin_feedback_screen_test.dart",
+        "test/services/admin_user_status_test.dart",
+        "test/services/admin_permissions_coins_static_test.dart",
+        "test/services/admin_reminder_email_settings_test.dart",
+        "test/services/admin_ai_settings_test.dart",
+        "test/services/admin_force_update_settings_test.dart",
+        "test/services/api_client_error_test.dart",
+        "test/services/app_update_service_test.dart",
+        "test/widgets/surface_components_layout_test.dart",
+        "test/widgets/surface_secondary_control_static_test.dart"
+      ],
+      "cwd": "/tmp/duoyi-update-deploy-20261005-isvisjkp/source",
+      "exit_code": 0,
+      "finished": "2026-10-06T23:08:44.083263+00:00"
+    },
+    "analyzer": {
+      "started": "2026-10-06T23:11:49.859665+00:00",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "analyze",
+        "--no-pub",
+        "lib/core/account_ui_copy.dart",
+        "lib/core/main_ui_copy.dart",
+        "lib/screens/admin_screen.dart",
+        "lib/screens/calendar_screen.dart",
+        "lib/screens/habit_screen.dart",
+        "lib/screens/login_screen.dart",
+        "lib/screens/mine_screen.dart",
+        "lib/screens/pomodoro_screen.dart",
+        "lib/screens/profile_screen.dart",
+        "lib/screens/todo_screen.dart",
+        "lib/services/api_client.dart",
+        "lib/widgets/account_status_chip.dart",
+        "lib/widgets/calendar_day_agenda.dart",
+        "lib/widgets/calendar_week_strip.dart",
+        "lib/widgets/habit_weekly_card.dart",
+        "lib/widgets/pomodoro_session_card.dart",
+        "lib/widgets/pomodoro_timer_ring.dart",
+        "test/core/account_ui_copy_test.dart",
+        "test/screens/admin_ui_upgrade_test.dart",
+        "test/screens/app_ui_upgrade_test.dart",
+        "test/screens/habit_screen_test.dart",
+        "test/screens/login_screen_test.dart",
+        "test/screens/today_mine_smoke_test.dart",
+        "test/screens/today_mine_static_test.dart",
+        "test/services/admin_force_update_settings_test.dart",
+        "test/services/api_client_error_test.dart",
+        "lib/widgets/empty_state.dart",
+        "test/screens/admin_feedback_screen_test.dart",
+        "test/screens/calendar_year_view_test.dart",
+        "lib/widgets/surface_components.dart",
+        "test/widgets/surface_components_layout_test.dart",
+        "test/services/admin_user_status_test.dart"
+      ],
+      "cwd": "/tmp/duoyi-update-deploy-20261005-isvisjkp/source",
+      "exit_code": 0,
+      "finished": "2026-10-06T23:13:18.035311+00:00"
+    },
+    "web_build": {
+      "started": "2026-10-06T23:15:09.729619+00:00",
+      "command": [
+        "bash",
+        "scripts/deploy_web_prod.sh"
+      ],
+      "cwd": "/tmp/duoyi-update-deploy-20261005-isvisjkp/source",
+      "exit_code": 0,
+      "finished": "2026-10-06T23:18:07.766137+00:00"
+    },
+    "android_build": {
+      "started": "2026-10-06T23:19:58.965470+00:00",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "build",
+        "apk",
+        "--debug",
+        "--no-pub",
+        "--target-platform",
+        "android-arm64"
+      ],
+      "cwd": "/tmp/duoyi-update-deploy-20261005-isvisjkp/source",
+      "exit_code": 0,
+      "finished": "2026-10-06T23:29:56.986217+00:00"
+    },
+    "android": {
+      "package": "com.duoyi.duoyi",
+      "version_code": 140010,
+      "version": "1.1.44",
+      "channel": "debug-verification-only",
+      "bytes": 182423399,
+      "sha256": "20249c0035b35bfb61e742c70f08614ee2e03fe44aae69bb1436036f286f876e",
+      "signature_verified": true,
+      "signing_certificate_sha256": "909e3be9598683126ce5fb618babbcee632b84d587970a43a63ea54129282fdf",
+      "flutter_runtime_abis": [
+        "arm64-v8a"
+      ],
+      "widget_receivers_verified": 33,
+      "published": false,
+      "physical_device_verified": false
+    },
+    "web": {
+      "version": {
+        "app_name": "duoyi",
+        "version": "1.1.44",
+        "build_number": "140010",
+        "package_name": "duoyi"
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:8099/duoyi/version.json",
+          "status": 200
+        },
+        {
+          "url": "http://6688667.xyz/duoyi/version.json",
+          "status": 200
+        },
+        {
+          "url": "https://work.6688667.xyz/duoyi/version.json",
+          "status": 401
+        }
+      ],
+      "artifacts": {
+        "main.dart.js": {
+          "bytes": 9449441,
+          "sha256": "815f5f7579f088f59893bad5d37183a724083331e391bc23f190e4a75d3ca2e0"
+        },
+        "flutter_bootstrap.js": {
+          "bytes": 10039,
+          "sha256": "efe8985fff1fa3a174e2bf077412f873d24e13b469f64085c894a2becbd40c1d"
+        },
+        "version.json": {
+          "bytes": 86,
+          "sha256": "4bb610fed3bf999ddc325ac9664bb097f3956c23d5e267017687ae2225bcf3d4"
+        },
+        "index.html": {
+          "bytes": 2525,
+          "sha256": "964fb0aa42ec4121e96e5cc166a383974eb7c04f6678cface9790f12df068f20"
+        }
+      },
+      "downloads_preserved": 1
+    },
+    "publication": {
+      "deployed_at_utc": "2026-10-06T23:21:45.025980+00:00",
+      "backup": "/home/ubuntu/duoyi_web_backups/duoyi.backup.ui.20261006_232143",
+      "version": {
+        "app_name": "duoyi",
+        "version": "1.1.44",
+        "build_number": "140010",
+        "package_name": "duoyi"
+      },
+      "sha256": {
+        "main.dart.js": "815f5f7579f088f59893bad5d37183a724083331e391bc23f190e4a75d3ca2e0",
+        "flutter_bootstrap.js": "efe8985fff1fa3a174e2bf077412f873d24e13b469f64085c894a2becbd40c1d",
+        "version.json": "4bb610fed3bf999ddc325ac9664bb097f3956c23d5e267017687ae2225bcf3d4",
+        "index.html": "964fb0aa42ec4121e96e5cc166a383974eb7c04f6678cface9790f12df068f20"
+      },
+      "downloads_preserved": 1
+    },
+    "backend": {
+      "health_status": 200,
+      "native_policy": {
+        "current_version": "1.1.43",
+        "current_version_code": 140009,
+        "latest_version": "1.1.43",
+        "latest_version_code": 140009,
+        "minimum_supported_version": "1.1.43"
+      },
+      "service": "active",
+      "restarted": false
+    }
+  },
+  "release_signing_available": false,
+  "native_apk_published": false,
+  "global_localization_complete": false,
+  "real_device_performance_verified": false,
+  "logs_private_directory": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006"
+}

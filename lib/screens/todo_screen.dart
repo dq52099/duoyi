@@ -7,6 +7,7 @@ import '../core/design_tokens.dart';
 import '../core/i18n_date_format.dart';
 import '../core/iterable_extensions.dart';
 import '../core/i18n.dart';
+import '../core/main_ui_copy.dart';
 import '../core/smart_date_parser.dart';
 import '../core/smart_todo_draft.dart';
 import '../core/todo_filters.dart';
@@ -775,7 +776,7 @@ class _TodoScreenState extends State<TodoScreen> {
                                       messenger.showSnackBar(
                                         SnackBar(
                                           content: Text(
-                                            '${I18n.tr('todo.quick_add.reminder_preflight_failed_prefix')}$error',
+                                            '${I18n.tr('todo.quick_add.reminder_preflight_failed_prefix')}${userVisibleApiError(error, fallbackMessage: MainUiCopy.todoNotificationNotReady)}',
                                           ),
                                           behavior: SnackBarBehavior.floating,
                                         ),

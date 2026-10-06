@@ -17,7 +17,6 @@ void main() {
       expect(today, contains(': (useTwoColumns ? 2.55 : 3.65)'));
       expect(mine, contains('class _MineStatsGrid extends StatelessWidget'));
       expect(mine, contains("ValueKey('mine_stats_stable_grid')"));
-      expect(mine, contains('height: compact ? 70 : 64'));
       expect(mine, contains('RepaintBoundary('));
       expect(mine, isNot(contains('GridView.count(')));
       expect(surface, contains('class AppMetricCard'));
@@ -32,9 +31,8 @@ void main() {
       expect(today, contains("unit: I18n.tr('today.unit.item')"));
       expect(today, contains('icon: Icons.check_circle_outline'));
       expect(todo, contains('icon: Icons.check_circle_outline'));
-      expect(mine, contains("unit: '%'"));
       expect(mine, contains("unit: I18n.tr('unit.day')"));
-      expect(mine, contains("unit: I18n.tr('unit.minute')"));
+      expect(mine, contains("I18n.tr('unit.minute')"));
       expect(mine, contains("title: I18n.tr('mine.stats.productivity')"));
       expect(mine, isNot(contains("title: '综合评分'")));
     });
@@ -153,9 +151,9 @@ void main() {
       );
       expect(mine, contains('final compact = constraints.maxWidth < 360'));
       expect(mine, contains('final avatarSize = compact ? 50.0 : 56.0'));
-      expect(mine, contains('final headerHeight = compact'));
+      expect(mine, contains('final baseHeaderHeight = compact'));
       expect(mine, contains("key: const ValueKey('mine_header_stable_box')"));
-      expect(mine, contains('height: headerHeight'));
+      expect(mine, contains('BoxConstraints(minHeight: headerHeight)'));
       expect(
         mine,
         contains('class _MineHeaderMetadata extends StatelessWidget'),
@@ -170,7 +168,7 @@ void main() {
       );
       expect(mine, contains('final identityChip = usernameText.isEmpty'));
       expect(mine, contains('final rewardChips = <Widget>['));
-      expect(mine, contains('return SizedBox('));
+      expect(mine, contains('return ConstrainedBox('));
       expect(mine, contains('child: Row('));
       expect(mine, contains('crossAxisAlignment: CrossAxisAlignment.center'));
       expect(mine, contains("key: const ValueKey('mine_avatar_row')"));

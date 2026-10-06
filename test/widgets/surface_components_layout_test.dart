@@ -6,6 +6,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final brightness in Brightness.values) {
+    testWidgets('status badge contrast uses rendered $brightness surface', (
+      tester,
+    ) async {
+      for (final color in [Colors.green, Colors.indigo, Colors.deepOrange]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(brightness: brightness),
+            home: Scaffold(
+              body: AppStatusBadge(label: 'Online', color: color),
+            ),
+          ),
+        );
+        final badge = find.byType(AppStatusBadge);
+        final container = tester.widget<Container>(
+          find.descendant(of: badge, matching: find.byType(Container)).first,
+        );
+        final background = (container.decoration! as BoxDecoration).color!;
+        final foreground = tester
+            .widget<Text>(find.text('Online'))
+            .style!
+            .color!;
+        final a = background.computeLuminance();
+        final b = foreground.computeLuminance();
+        final contrast =
+            (a > b ? a + 0.05 : b + 0.05) / (a > b ? b + 0.05 : a + 0.05);
+        expect(background.a, 1);
+        expect(contrast, greaterThanOrEqualTo(4.5));
+      }
+    });
+  }
+
   testWidgets('AppSectionHeader handles long action on narrow width', (
     tester,
   ) async {

@@ -13,6 +13,52 @@ import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 
 void main() {
+  testWidgets('a rejected login is ignored after leaving the login page', (
+    tester,
+  ) async {
+    I18n.setLocale(AppLocale.zh);
+    final response = Completer<http.Response>();
+    final auth = AuthProvider(
+      baseUrl: 'https://api.example.test',
+      client: ApiClient(
+        baseUrl: 'https://api.example.test',
+        httpClient: MockClient((_) => response.future),
+      ),
+    );
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthProvider>.value(value: auth),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ],
+        child: const MaterialApp(home: LoginScreen()),
+      ),
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, I18n.tr('auth.account')),
+      'demo',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, I18n.tr('auth.password')),
+      'wrong-password',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, I18n.tr('auth.login')));
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    await tester.pumpWidget(const MaterialApp(home: Text('Left login')));
+    response.complete(
+      http.Response(
+        json.encode({'detail': 'Invalid credentials'}),
+        401,
+        headers: {'content-type': 'application/json'},
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Left login'), findsOneWidget);
+    auth.dispose();
+  });
+
   testWidgets('password login maps 401 invalid credentials to friendly text', (
     tester,
   ) async {

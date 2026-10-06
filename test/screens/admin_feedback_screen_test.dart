@@ -910,6 +910,8 @@ void main() {
     expect(find.byTooltip('关闭', skipOffstage: false), findsNothing);
     expect(find.byTooltip('删除', skipOffstage: false), findsNothing);
     expect(tester.getRect(feedbackRow).width, greaterThan(260));
+    await tester.ensureVisible(feedbackRow);
+    await tester.pumpAndSettle();
     await tester.tap(feedbackRow);
     await tester.pumpAndSettle();
     expect(find.text('反馈详情'), findsOneWidget);

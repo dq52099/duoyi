@@ -277,6 +277,48 @@ void main() {
     },
   );
 
+  test(
+    'unexpected errors use the caller fallback without exposing details',
+    () {
+      expect(
+        userVisibleApiError(
+          StateError('request failed: https://example.test/?token=private'),
+          fallbackMessage: '保存失败，请重试',
+        ),
+        '保存失败，请重试',
+      );
+      expect(
+        userVisibleApiError(const FormatException('invalid payload')),
+        defaultUserVisibleBackendErrorMessage,
+      );
+    },
+  );
+
+  test(
+    'presentation errors hide transport details but preserve action feedback',
+    () {
+      expect(
+        userVisibleApiError(
+          const ApiException(
+            '无法连接服务器 example.test：ClientException: token=private',
+          ),
+        ),
+        '无法连接服务器，请检查网络后重试',
+      );
+      expect(
+        userVisibleApiError(const ApiException('503: database unavailable')),
+        defaultUserVisibleBackendErrorMessage,
+      );
+      expect(
+        userVisibleApiError(
+          const ApiException('502: <html>proxy details</html>'),
+        ),
+        defaultUserVisibleBackendErrorMessage,
+      );
+      expect(userVisibleApiError(const ApiException('400: 邮箱已被使用')), '邮箱已被使用');
+    },
+  );
+
   test('upload avatar 404 also explains stale server contract', () async {
     final client = ApiClient(
       baseUrl: 'https://duoyi.test',

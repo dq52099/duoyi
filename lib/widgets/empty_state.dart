@@ -58,68 +58,71 @@ class EmptyState extends StatelessWidget {
             : double.infinity;
         final effectiveMinHeight = minCardHeight != null
             ? (constraints.maxHeight.isFinite
-                ? math.max(0.0, math.min(minCardHeight!, maxAvailableHeight))
-                : math.max(0.0, minCardHeight!))
+                  ? math.max(0.0, math.min(minCardHeight!, maxAvailableHeight))
+                  : math.max(0.0, minCardHeight!))
             : 0.0;
         return Center(
-          child: Padding(
-            padding: EdgeInsets.all(outerPadding),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minWidth: cardWidth,
-                maxWidth: cardWidth,
-                minHeight: effectiveMinHeight,
-              ),
-              child: AppSurfaceCard(
-                padding: cardPadding,
-                borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: iconSize,
-                      height: iconSize,
-                      decoration: BoxDecoration(
-                        color: cs.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(compact ? 14 : 20),
+          child: SingleChildScrollView(
+            primary: false,
+            child: Padding(
+              padding: EdgeInsets.all(outerPadding),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: cardWidth,
+                  maxWidth: cardWidth,
+                  minHeight: effectiveMinHeight,
+                ),
+                child: AppSurfaceCard(
+                  padding: cardPadding,
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: iconSize,
+                        height: iconSize,
+                        decoration: BoxDecoration(
+                          color: cs.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(
+                            compact ? 14 : 20,
+                          ),
+                        ),
+                        child:
+                            iconWidget ??
+                            Icon(icon, size: iconGlyphSize, color: cs.primary),
                       ),
-                      child:
-                          iconWidget ??
-                          Icon(icon, size: iconGlyphSize, color: cs.primary),
-                    ),
-                    SizedBox(height: gap),
-                    Text(
-                      message,
-                      textAlign: TextAlign.center,
-                      maxLines: compact ? 3 : null,
-                      overflow: compact ? TextOverflow.ellipsis : null,
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.72),
-                        fontSize: compact ? 13 : 15,
-                        height: compact ? 1.35 : 1.55,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                    if (actionLabel != null && onAction != null) ...[
                       SizedBox(height: gap),
-                      SizedBox(
-                        width: narrow ? double.infinity : null,
-                        child: FilledButton.tonalIcon(
-                          onPressed: onAction,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: Text(
-                            actionLabel!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.normal,
+                      Text(
+                        message,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.72),
+                          fontSize: compact ? 13 : 15,
+                          height: compact ? 1.35 : 1.55,
+                          fontWeight: FontWeight.normal,
+                        ),
+                      ),
+                      if (actionLabel != null && onAction != null) ...[
+                        SizedBox(height: gap),
+                        SizedBox(
+                          width: narrow ? double.infinity : null,
+                          child: FilledButton.tonalIcon(
+                            onPressed: onAction,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: Text(
+                              actionLabel!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.normal,
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),

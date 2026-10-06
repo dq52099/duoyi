@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../core/focus_report.dart';
 import '../core/focus_sound_catalog.dart';
+import '../core/main_ui_copy.dart';
 import '../models/focus_room.dart';
 import '../models/pomodoro.dart';
 import '../providers/custom_focus_sound_provider.dart';
@@ -481,7 +482,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
     String typeLabel(PomodoroType t) {
       switch (t) {
         case PomodoroType.focus:
-          return s.focusStateFocus;
+          return MainUiCopy.pomodoroCountdownMode;
         case PomodoroType.shortBreak:
           return s.focusStateShortBreak;
         case PomodoroType.longBreak:
@@ -616,7 +617,9 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      typeLabel(state.type),
+                                      state.isCountUp
+                                          ? MainUiCopy.pomodoroFreeTimer
+                                          : typeLabel(state.type),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: Theme.of(context)
@@ -645,23 +648,46 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                   ],
                                 ),
                               ),
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: tight ? 8 : 10,
-                                  vertical: tight ? 4 : 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: color.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  state.isRunning ? '进行中' : '已暂停',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.normal,
-                                    color: color,
-                                  ),
-                                ),
+                              Builder(
+                                builder: (_) {
+                                  final isNotStarted = state.isCountUp
+                                      ? state.remainingSeconds == 0
+                                      : state.remainingSeconds ==
+                                            state.totalSeconds;
+                                  final isBreak =
+                                      state.type == PomodoroType.shortBreak ||
+                                      state.type == PomodoroType.longBreak;
+                                  final statusText = state.isRunning
+                                      ? (isBreak
+                                            ? MainUiCopy.pomodoroStatusResting
+                                            : MainUiCopy.pomodoroStatusFocusing)
+                                      : (isNotStarted
+                                            ? MainUiCopy
+                                                  .pomodoroStatusNotStarted
+                                            : (isBreak
+                                                  ? MainUiCopy
+                                                        .pomodoroStatusBreakPaused
+                                                  : MainUiCopy
+                                                        .pomodoroStatusPaused));
+                                  return Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: tight ? 8 : 10,
+                                      vertical: tight ? 4 : 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: color.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      statusText,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.normal,
+                                        color: color,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -747,7 +773,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                   child: ChoiceChip(
                                     visualDensity: VisualDensity.compact,
                                     avatar: const Icon(Icons.timer_outlined),
-                                    label: const Text('自由计时'),
+                                    label: Text(MainUiCopy.pomodoroFreeTimer),
                                     selected: state.isCountUp,
                                     onSelected: state.isRunning
                                         ? null
@@ -844,57 +870,94 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                             ),
                           ),
                           SizedBox(height: tight ? 8 : 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              IconButton.filled(
-                                onPressed: () => _confirmStrictFocusExit(
-                                  context,
-                                  FocusPenaltyReason.reset,
-                                  provider.resetTimer,
-                                ),
-                                icon: const Icon(Icons.refresh),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: cs.surfaceContainerHighest,
-                                  foregroundColor: cs.onSurface,
-                                ),
-                              ),
-                              SizedBox(width: tight ? 14 : 18),
-                              SizedBox(
-                                width: tight ? 50 : 58,
-                                height: tight ? 50 : 58,
-                                child: FloatingActionButton(
-                                  onPressed: provider.toggleTimer,
-                                  backgroundColor: color,
-                                  child: Icon(
-                                    state.isRunning
-                                        ? Icons.pause
-                                        : Icons.play_arrow,
-                                    size: tight ? 28 : 30,
-                                    color: Colors.white,
+                          Builder(
+                            builder: (context) {
+                              final isNotStarted = state.isCountUp
+                                  ? state.remainingSeconds == 0
+                                  : state.remainingSeconds ==
+                                        state.totalSeconds;
+                              final isBreak =
+                                  state.type == PomodoroType.shortBreak ||
+                                  state.type == PomodoroType.longBreak;
+                              final mainButtonTooltip = state.isRunning
+                                  ? (isBreak
+                                        ? MainUiCopy.pomodoroActionPauseBreak
+                                        : MainUiCopy.pomodoroActionPauseFocus)
+                                  : (isNotStarted
+                                        ? (isBreak
+                                              ? MainUiCopy
+                                                    .pomodoroActionStartBreak
+                                              : MainUiCopy
+                                                    .pomodoroActionStartFocus)
+                                        : (isBreak
+                                              ? MainUiCopy
+                                                    .pomodoroActionResumeBreak
+                                              : MainUiCopy
+                                                    .pomodoroActionResumeFocus));
+
+                              return Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  IconButton.filled(
+                                    onPressed: () => _confirmStrictFocusExit(
+                                      context,
+                                      FocusPenaltyReason.reset,
+                                      provider.resetTimer,
+                                    ),
+                                    tooltip: MainUiCopy.pomodoroActionReset,
+                                    icon: const Icon(Icons.refresh),
+                                    style: IconButton.styleFrom(
+                                      minimumSize: const Size(48, 48),
+                                      backgroundColor:
+                                          cs.surfaceContainerHighest,
+                                      foregroundColor: cs.onSurface,
+                                    ),
                                   ),
-                                ),
-                              ),
-                              SizedBox(width: tight ? 14 : 18),
-                              IconButton.filled(
-                                onPressed: state.isCountUp
-                                    ? provider.finishCurrentSession
-                                    : () => _confirmStrictFocusExit(
-                                        context,
-                                        FocusPenaltyReason.skip,
-                                        provider.skipSession,
+                                  SizedBox(width: tight ? 14 : 18),
+                                  SizedBox(
+                                    width: tight ? 50 : 58,
+                                    height: tight ? 50 : 58,
+                                    child: FloatingActionButton(
+                                      heroTag: 'pomodoro_main_timer_fab',
+                                      tooltip: mainButtonTooltip,
+                                      onPressed: provider.toggleTimer,
+                                      backgroundColor: color,
+                                      child: Icon(
+                                        state.isRunning
+                                            ? Icons.pause
+                                            : Icons.play_arrow,
+                                        size: tight ? 28 : 30,
+                                        color: Colors.white,
                                       ),
-                                icon: Icon(
-                                  state.isCountUp
-                                      ? Icons.stop
-                                      : Icons.skip_next,
-                                ),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: cs.surfaceContainerHighest,
-                                  foregroundColor: cs.onSurface,
-                                ),
-                              ),
-                            ],
+                                    ),
+                                  ),
+                                  SizedBox(width: tight ? 14 : 18),
+                                  IconButton.filled(
+                                    onPressed: state.isCountUp
+                                        ? provider.finishCurrentSession
+                                        : () => _confirmStrictFocusExit(
+                                            context,
+                                            FocusPenaltyReason.skip,
+                                            provider.skipSession,
+                                          ),
+                                    tooltip: state.isCountUp
+                                        ? MainUiCopy.pomodoroActionFinishCountUp
+                                        : MainUiCopy.pomodoroActionSkip,
+                                    icon: Icon(
+                                      state.isCountUp
+                                          ? Icons.stop
+                                          : Icons.skip_next,
+                                    ),
+                                    style: IconButton.styleFrom(
+                                      minimumSize: const Size(48, 48),
+                                      backgroundColor:
+                                          cs.surfaceContainerHighest,
+                                      foregroundColor: cs.onSurface,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -2074,11 +2137,20 @@ class _PomodoroLiveTimer extends StatelessWidget {
             ),
             SizedBox(height: tight ? 4 : 6),
             Center(
-              child: Text(
-                state.isCountUp
-                    ? '自由计时 · ${state.completedSessions} $completedSuffix'
-                    : '$timerLabel · ${state.completedSessions} $completedSuffix',
-                style: TextStyle(color: textColor, fontSize: tight ? 12 : 13),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    state.isCountUp
+                        ? '${MainUiCopy.pomodoroFreeTimer} · ${state.completedSessions} $completedSuffix'
+                        : '$timerLabel · ${state.completedSessions} $completedSuffix',
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: tight ? 12 : 13,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

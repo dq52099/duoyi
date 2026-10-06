@@ -129,7 +129,7 @@ void main() {
     expect(adminScreen, isNot(contains('hasRaisedMinimum')));
     expect(adminScreen, contains('当前版本也允许保存强制更新开关'));
     expect(adminScreen, contains('由后端发布通道'));
-    expect(adminScreen, contains('客户端全屏阻断'));
+    expect(adminScreen, contains('用户需完成更新后继续使用'));
     expect(adminScreen, contains('当前客户端版本 \${AppVersion.name}'));
 
     expect(updateService, contains("_backendUri("));

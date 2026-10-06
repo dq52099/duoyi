@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
+import '../core/main_ui_copy.dart';
 import '../core/habit_grouping.dart';
 import '../core/habit_icons.dart';
 import '../core/habit_insights.dart';
@@ -777,7 +778,9 @@ class _HabitScreenState extends State<HabitScreen>
                   key: const ValueKey('habit_today_empty_state_sliver'),
                   child: EmptyState(
                     icon: Icons.repeat,
-                    message: s.habitEmpty,
+                    message: provider.habits.isEmpty
+                        ? s.habitEmpty
+                        : MainUiCopy.habitNoScheduleToday,
                     actionLabel: s.habitAddAction,
                     onAction: _showAddDialog,
                     minCardHeight: EmptyState.defaultMinCardHeight,
@@ -993,14 +996,21 @@ class _HabitTodaySummaryCard extends StatelessWidget {
                     backgroundColor: cs.primary.withValues(alpha: 0.12),
                     color: progress >= 1 ? const Color(0xFF2E7D32) : cs.primary,
                   ),
-                  Text(
-                    '${(progress * 100).toInt()}%',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.normal,
-                      color: progress >= 1
-                          ? const Color(0xFF2E7D32)
-                          : cs.primary,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '${(progress * 100).toInt()}%',
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.normal,
+                          color: progress >= 1
+                              ? const Color(0xFF2E7D32)
+                              : cs.primary,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -1213,6 +1223,10 @@ class _HabitSummaryTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final habitColor = Color(habit.colorValue);
     final streakUnit = habit.streakUnitLabel;
+    final textScale = (MediaQuery.textScalerOf(context).scale(12) / 12).clamp(
+      1.0,
+      double.infinity,
+    );
     return _HabitSwipeActionWrapper(
       habit: habit,
       showEndAction: _habitCanEnd(habit),
@@ -1231,7 +1245,7 @@ class _HabitSummaryTile extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(9, 2, 9, 3),
             child: SizedBox(
-              height: 34,
+              height: 34 * textScale,
               child: Row(
                 children: [
                   Container(
@@ -1324,6 +1338,11 @@ class _HabitCheckinCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    final textScale = (MediaQuery.textScalerOf(context).scale(13) / 13).clamp(
+      1.0,
+      double.infinity,
+    );
+    final titleStatusHeight = _habitTitleStatusHeight * textScale;
     final isNegative = habit.kind == HabitKind.negative;
     final todayCount = habit.todayCount();
     final flexProgress = habit.flexProgressForDate(DateTime.now());
@@ -1381,7 +1400,7 @@ class _HabitCheckinCard extends StatelessWidget {
           width: 0.55,
         ),
         child: SizedBox(
-          height: _habitCheckinCardBodyHeight,
+          height: _habitCheckinCardBodyHeight * textScale,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -1412,7 +1431,7 @@ class _HabitCheckinCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(
-                      height: _habitTitleStatusHeight,
+                      height: titleStatusHeight,
                       child: Row(
                         children: [
                           Expanded(
@@ -1437,7 +1456,7 @@ class _HabitCheckinCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           SizedBox(
-                            height: _habitTitleStatusHeight,
+                            height: titleStatusHeight,
                             child: ConstrainedBox(
                               constraints: BoxConstraints(
                                 maxWidth: habit.hasFlexRule ? 68 : 58,
@@ -1574,7 +1593,7 @@ class _HabitCheckinCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 3),
                           minimumSize: const Size(_habitCheckinButtonWidth, 25),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          textStyle: const TextStyle(
+                          textStyle: theme.textTheme.labelLarge?.copyWith(
                             fontSize: 10,
                             fontWeight: FontWeight.normal,
                           ),

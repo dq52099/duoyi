@@ -62,7 +62,8 @@ void main() {
     await habitProvider.addHabit(
       Habit(id: 'read', name: '阅读', icon: Icons.book.codePoint.toString()),
     );
-    final expectedAfter = (100 / DateTime.now().weekday).round();
+    // This habit was created today; earlier unscheduled days are excluded.
+    const expectedAfter = 100;
 
     await pumpHabitScreen(tester, habitProvider);
 
@@ -106,8 +107,51 @@ void main() {
       );
       expect(find.text('本周概览'), findsOneWidget);
       expect(find.text('添加习惯'), findsOneWidget);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('habit_weekly_overview_percent')),
+            )
+            .data,
+        '—',
+      );
     },
   );
+
+  testWidgets('weekly overview excludes days without a scheduled habit', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final habitProvider = HabitProvider();
+    final habit = Habit(
+      id: 'today-only',
+      name: '每周一次阅读',
+      activeWeekdays: [now.weekday - 1],
+      createdAt: now.subtract(const Duration(days: 14)),
+    );
+    habit.completions[habit.todayKey()] = 1;
+    await habitProvider.addHabit(habit);
+
+    await pumpHabitScreen(tester, habitProvider);
+
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('habit_weekly_overview_percent')),
+          )
+          .data,
+      '100%',
+    );
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(
+            find.byKey(const ValueKey('habit_weekly_overview_progress_bar')),
+          )
+          .value,
+      1,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('new habit reminder defaults to popup plan', (tester) async {
     final habitProvider = HabitProvider();

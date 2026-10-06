@@ -4,11 +4,21 @@ import 'package:provider/provider.dart';
 import '../core/design_tokens.dart';
 import '../core/habit_icons.dart';
 import '../core/i18n.dart';
+import '../core/i18n_date_format.dart';
+import '../core/main_ui_copy.dart';
 import '../models/habit.dart';
 import '../providers/habit_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/account_local_data_cleaner.dart';
 import 'surface_components.dart';
+
+DateTime _habitDateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+bool _habitExistsOnDate(Habit h, DateTime date) {
+  final day = _habitDateOnly(date);
+  final start = _habitDateOnly(h.startDate ?? h.createdAt);
+  return !day.isBefore(start);
+}
 
 class HabitWeeklyCard extends StatelessWidget {
   static const _weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
@@ -47,15 +57,31 @@ class HabitWeeklyCard extends StatelessWidget {
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final primaryColor = cs.primary;
-    final elapsed = todayDOW + 1;
-    final weekAverage =
-        data.take(elapsed).fold<double>(0, (sum, value) => sum + value) /
-        elapsed;
+    final scheduledProgress = <double>[];
+    for (var i = 0; i <= todayDOW; i++) {
+      final date = DateTime(today.year, today.month, today.day - todayDOW + i);
+      if (provider.habits.any(
+        (habit) => _habitExistsOnDate(habit, date) && habit.activeForDate(date),
+      )) {
+        scheduledProgress.add(data[i]);
+      }
+    }
+    final weekAverage = scheduledProgress.isEmpty
+        ? 0.0
+        : scheduledProgress.fold<double>(0, (sum, value) => sum + value) /
+              scheduledProgress.length;
     final activeToday = provider.habits.where((h) => h.isActiveToday()).length;
     final completedToday = provider.habits
         .where((h) => h.isActiveToday() && h.isCompletedToday())
         .length;
     final weekPercent = (weekAverage * 100).round();
+    final todayStatusText = provider.habits.isEmpty
+        ? MainUiCopy.habitNoHabits
+        : (activeToday == 0
+              ? MainUiCopy.habitNoScheduleToday
+              : (completedToday == activeToday
+                    ? "${MainUiCopy.habitAllCompletedToday} ($completedToday/$activeToday)"
+                    : "${I18n.tr('habit.weekly.today_prefix')}$completedToday/$activeToday${I18n.tr('habit.weekly.today_suffix')}"));
 
     return AppSurfaceCard(
       key: const ValueKey('habit_weekly_overview_card'),
@@ -120,7 +146,7 @@ class HabitWeeklyCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      "${I18n.tr('habit.weekly.today_prefix')}$completedToday/$activeToday${I18n.tr('habit.weekly.today_suffix')}",
+                      todayStatusText,
                       style: appSecondaryControlLabelStyle(context).copyWith(
                         fontSize: DesignTokens.fontSizeCaption,
                         color: cs.onSurface.withValues(alpha: 0.58),
@@ -145,7 +171,7 @@ class HabitWeeklyCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '$weekPercent%',
+                      scheduledProgress.isEmpty ? '—' : '$weekPercent%',
                       key: const ValueKey('habit_weekly_overview_percent'),
                       style: TextStyle(
                         color: primaryColor,
@@ -193,17 +219,34 @@ class HabitWeeklyCard extends StatelessWidget {
                 today.month,
                 today.day - (todayDOW - i),
               );
+              final activeOnDay = provider.habits
+                  .where(
+                    (h) =>
+                        _habitExistsOnDate(h, dayDate) &&
+                        h.activeForDate(dayDate),
+                  )
+                  .toList();
+              final hasNoHabits = activeOnDay.isEmpty;
+              final allCompletedOnDay =
+                  !hasNoHabits &&
+                  activeOnDay.every((h) => h.isCompletedForDate(dayDate));
               Color bg;
               Color textColor = cs.onSurface;
               Color borderColor = Colors.transparent;
 
-              if (isFuture) {
+              if (hasNoHabits) {
+                bg = cs.surfaceContainerHighest.withValues(
+                  alpha: isDark ? 0.12 : 0.28,
+                );
+                textColor = cs.onSurface.withValues(alpha: 0.38);
+                borderColor = cs.outlineVariant.withValues(alpha: 0.14);
+              } else if (isFuture) {
                 bg = cs.surfaceContainerHighest.withValues(
                   alpha: isDark ? 0.15 : 0.34,
                 );
                 textColor = cs.onSurface.withValues(alpha: 0.36);
                 borderColor = cs.outlineVariant.withValues(alpha: 0.12);
-              } else if (val >= 1.0) {
+              } else if (val >= 1.0 || allCompletedOnDay) {
                 bg = const Color(0xFF2E7D32);
                 textColor = Colors.white;
               } else if (val > 0) {
@@ -215,12 +258,55 @@ class HabitWeeklyCard extends StatelessWidget {
                 borderColor = cs.outlineVariant.withValues(alpha: 0.18);
               }
 
-              final tooltipMessage = isFuture
-                  ? '周${labels[i]} (未开始)'
-                  : '周${labels[i]} ${(val * 100).round()}%${isToday ? ' (今天)' : ''}';
-              final semanticsLabel = isFuture
-                  ? '周${labels[i]}，未开始'
-                  : '周${labels[i]}，完成率 ${(val * 100).round()}%${isToday ? '，今天' : ''}';
+              final weekdayKey = switch (i) {
+                0 => 'mon',
+                1 => 'tue',
+                2 => 'wed',
+                3 => 'thu',
+                4 => 'fri',
+                5 => 'sat',
+                _ => 'sun',
+              };
+              final weekdayName = I18n.tr('weekday.$weekdayKey');
+              final dateSemantics = I18nDateFormat.monthDay(dayDate);
+
+              final String tooltipMessage;
+              final String semanticsLabel;
+              final String dayValueText;
+
+              if (hasNoHabits) {
+                dayValueText = '—';
+                tooltipMessage = MainUiCopy.isEn
+                    ? '$weekdayName (${isFuture ? "Not scheduled" : (isToday ? "Today, no schedule" : "Not scheduled")})'
+                    : '$weekdayName (${isFuture ? "未安排" : (isToday ? "今天未安排" : "未安排")})';
+                semanticsLabel = MainUiCopy.isEn
+                    ? '$dateSemantics $weekdayName, not scheduled${isToday ? ", today" : ""}'
+                    : '$dateSemantics $weekdayName，未安排${isToday ? "，今天" : ""}';
+              } else if (isFuture) {
+                dayValueText = '-';
+                tooltipMessage = MainUiCopy.isEn
+                    ? '$weekdayName (Upcoming)'
+                    : '$weekdayName (未开始)';
+                semanticsLabel = MainUiCopy.isEn
+                    ? '$dateSemantics $weekdayName, upcoming'
+                    : '$dateSemantics $weekdayName，未开始';
+              } else if (allCompletedOnDay || val >= 1.0) {
+                dayValueText = '100%';
+                tooltipMessage = MainUiCopy.isEn
+                    ? '$weekdayName 100% (Completed)${isToday ? " (Today)" : ""}'
+                    : '$weekdayName 100% (全部完成)${isToday ? " (今天)" : ""}';
+                semanticsLabel = MainUiCopy.isEn
+                    ? '$dateSemantics $weekdayName, 100% completed${isToday ? ", today" : ""}'
+                    : '$dateSemantics $weekdayName，全部完成 100%${isToday ? "，今天" : ""}';
+              } else {
+                dayValueText = '${(val * 100).round()}%';
+                tooltipMessage = MainUiCopy.isEn
+                    ? '$weekdayName ${(val * 100).round()}%${isToday ? " (Today)" : ""}'
+                    : '$weekdayName ${(val * 100).round()}%${isToday ? " (今天)" : ""}';
+                semanticsLabel = MainUiCopy.isEn
+                    ? '$dateSemantics $weekdayName, ${(val * 100).round()}% done${isToday ? ", today" : ""}'
+                    : '$dateSemantics $weekdayName，完成率 ${(val * 100).round()}%${isToday ? "，今天" : ""}';
+              }
 
               return Tooltip(
                 message: tooltipMessage,
@@ -294,7 +380,7 @@ class HabitWeeklyCard extends StatelessWidget {
                                 child: Padding(
                                   padding: const EdgeInsets.all(2.0),
                                   child: Text(
-                                    isFuture ? '-' : '${(val * 100).round()}%',
+                                    dayValueText,
                                     style: TextStyle(
                                       fontSize: 8.5,
                                       color: textColor,
@@ -408,7 +494,17 @@ class _HabitWeeklyDayDetailSheetState
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final date = widget.date;
     final weekdayLabel = HabitWeeklyCard._weekdayLabels[date.weekday - 1];
-    final dateTitle = '${date.month}月${date.day}日 周$weekdayLabel';
+    final dateTitle = MainUiCopy.isEn
+        ? '${I18nDateFormat.monthDay(date)} · ${I18n.tr("weekday.${switch (date.weekday) {
+            1 => "mon",
+            2 => "tue",
+            3 => "wed",
+            4 => "thu",
+            5 => "fri",
+            6 => "sat",
+            _ => "sun",
+          }}")}'
+        : '${date.month}月${date.day}日 周$weekdayLabel';
 
     return Consumer<HabitProvider>(
       builder: (context, provider, child) {
@@ -427,7 +523,9 @@ class _HabitWeeklyDayDetailSheetState
             .length;
         final subtitle = activeHabits.isEmpty
             ? null
-            : '达标 $completedCount/${activeHabits.length}';
+            : (MainUiCopy.isEn
+                  ? 'Done $completedCount/${activeHabits.length}'
+                  : '达标 $completedCount/${activeHabits.length}');
 
         return AppModalSheet(
           title: dateTitle,
@@ -444,7 +542,7 @@ class _HabitWeeklyDayDetailSheetState
                   borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
                   child: Center(
                     child: Text(
-                      '当天暂无活跃习惯',
+                      MainUiCopy.habitEmptyDayDetail,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: DesignTokens.fontWeightRegular,
@@ -528,7 +626,7 @@ class _HabitWeeklyDayDetailSheetState
                   borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
                 ),
                 child: Text(
-                  isCompleted ? '已达标' : '未达标',
+                  isCompleted ? MainUiCopy.habitDone : MainUiCopy.habitNotDone,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: DesignTokens.fontWeightRegular,

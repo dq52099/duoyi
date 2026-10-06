@@ -162,9 +162,9 @@ void main() {
     final nextRangeStart = today.add(const Duration(days: 3));
     final nextRangeEnd = today.add(const Duration(days: 5));
     final todayRange =
-        '${today.year}年${today.month}/${today.day} - ${rangeEnd.month}/${rangeEnd.day}';
+        '${today.month}月${today.day}日 - ${rangeEnd.month}月${rangeEnd.day}日';
     final nextRange =
-        '${nextRangeStart.year}年${nextRangeStart.month}/${nextRangeStart.day} - ${nextRangeEnd.month}/${nextRangeEnd.day}';
+        '${nextRangeStart.month}月${nextRangeStart.day}日 - ${nextRangeEnd.month}月${nextRangeEnd.day}日';
 
     await tester.pumpWidget(_wrapCalendar());
     await tester.pumpAndSettle();

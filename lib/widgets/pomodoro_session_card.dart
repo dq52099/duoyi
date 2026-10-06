@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/focus_sound_catalog.dart';
 import '../core/i18n_date_format.dart';
 import '../models/pomodoro.dart';
+import '../core/main_ui_copy.dart';
 import 'surface_components.dart';
 
 class PomodoroSessionCard extends StatelessWidget {
@@ -29,23 +30,32 @@ class PomodoroSessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final dur = session.durationSeconds ~/ 60;
     final time = I18nDateFormat.time(session.startTime);
     final isFocus = session.type == PomodoroType.focus;
     final color = isFocus ? const Color(0xFFE53935) : const Color(0xFF4CAF50);
+    final title = session.taskName?.trim().isNotEmpty == true
+        ? session.taskName!
+        : (MainUiCopy.isEn
+              ? '$dur min ${isFocus ? "Focus" : "Break"}'
+              : '$dur分钟${isFocus ? "专注" : "休息"}');
+    final durationText = MainUiCopy.isEn ? '$dur min' : '$dur 分钟';
 
     return AppSurfaceCard(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: EdgeInsets.zero,
       borderRadius: BorderRadius.circular(14),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
+                color: color.withValues(alpha: isDark ? 0.16 : 0.10),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(_icon(session.type), color: color, size: 20),
@@ -56,43 +66,56 @@ class PomodoroSessionCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    session.taskName ?? '$dur分钟${isFocus ? "专注" : "休息"}',
+                    title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
+                    style: TextStyle(
+                      fontSize: 14.5,
                       fontWeight: FontWeight.normal,
+                      color: cs.onSurface,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
+                  const SizedBox(height: 5),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Icon(
-                        Icons.access_time,
-                        size: 12,
-                        color: Colors.grey.shade500,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            time,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        time,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Icon(
-                        Icons.hourglass_bottom,
-                        size: 12,
-                        color: Colors.grey.shade500,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$dur 分钟',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.hourglass_bottom,
+                            size: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            durationText,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -101,43 +124,48 @@ class PomodoroSessionCard extends StatelessWidget {
             ),
             if (session.whiteNoiseSound != 'none')
               Container(
+                margin: const EdgeInsets.only(left: 4),
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: cs.surfaceContainerHighest.withValues(
+                    alpha: isDark ? 0.35 : 0.65,
+                  ),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   _soundIcon(session.whiteNoiseSound),
                   size: 14,
-                  color: Colors.grey,
+                  color: cs.onSurfaceVariant,
                 ),
               ),
-            if (onEdit != null) ...[
-              const SizedBox(width: 4),
+            if (onEdit != null)
               Tooltip(
-                message: '编辑记录',
+                message: MainUiCopy.pomodoroEditRecord,
                 child: IconButton(
                   onPressed: onEdit,
                   icon: const Icon(Icons.edit_outlined),
                   iconSize: 20,
-                  visualDensity: VisualDensity.compact,
-                  color: Theme.of(context).colorScheme.primary,
+                  constraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: 44,
+                  ),
+                  color: cs.primary,
                 ),
               ),
-            ],
-            if (onDelete != null) ...[
-              const SizedBox(width: 4),
+            if (onDelete != null)
               Tooltip(
-                message: '删除记录',
+                message: MainUiCopy.pomodoroDeleteRecord,
                 child: IconButton(
                   onPressed: onDelete,
                   icon: const Icon(Icons.delete_outline),
                   iconSize: 20,
-                  visualDensity: VisualDensity.compact,
-                  color: Theme.of(context).colorScheme.error,
+                  constraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: 44,
+                  ),
+                  color: cs.error,
                 ),
               ),
-            ],
           ],
         ),
       ),
