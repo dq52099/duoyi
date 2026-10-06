@@ -16,8 +16,10 @@ import '../providers/notification_service.dart';
 import '../providers/auth_provider.dart';
 import '../providers/achievement_provider.dart';
 import '../services/ai_service.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../services/app_update_installer.dart';
 import '../services/app_update_service.dart';
+import '../services/web_page_reload.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/cached_avatar_image.dart';
 import '../widgets/stats_overview_cards.dart';
@@ -567,6 +569,57 @@ class MineScreen extends StatelessWidget {
       barrierDismissible: !u.mustUpdate,
       builder: (ctx) => Consumer<AppUpdateService>(
         builder: (context, updater, _) {
+          if (kIsWeb) {
+            return PopScope(
+              canPop: true,
+              child: AppDialog(
+                title: const Text('检查更新'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('当前版本: ${updater.currentVersion}'),
+                    if (updater.latestVersion != null &&
+                        updater.latestVersion!.isNotEmpty)
+                      Text('远端版本: ${updater.latestVersion}'),
+                    if (updater.checking) ...[
+                      const SizedBox(height: 12),
+                      const LinearProgressIndicator(),
+                      const SizedBox(height: 6),
+                      const Text('正在检查更新...', style: TextStyle(fontSize: 12)),
+                    ],
+                    if (updater.error != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        updater.error!,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ],
+                    if (updater.hasUpdate) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        '发现网页新版本，刷新网页即可载入最新代码。',
+                        style: TextStyle(fontWeight: FontWeight.normal),
+                      ),
+                    ] else if (updater.error == null && !updater.checking) ...[
+                      const SizedBox(height: 12),
+                      const Text('已是最新版本'),
+                    ],
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('关闭'),
+                  ),
+                  FilledButton(
+                    onPressed: () => reloadWebPage(),
+                    child: const Text('刷新网页'),
+                  ),
+                ],
+              ),
+            );
+          }
           final notes = updater.latestNotesForDisplay;
           return PopScope(
             canPop: !updater.mustUpdate && !updater.busy,

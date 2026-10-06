@@ -83,15 +83,18 @@ class AppUpdateService extends ChangeNotifier {
     return compareAppVersions(_latestVersion!, currentVersion) > 0;
   }
 
-  bool get mustUpdate => shouldForceAppUpdate(
-    currentVersion: currentVersion,
-    latestVersion: _latestVersion,
-    minimumSupportedVersion: _minimumSupportedVersion,
-    forceUpdateRequired: _forceUpdateRequired,
-    currentVersionCode: currentVersionCode,
-    latestVersionCode: _latestVersionCode,
-    minimumSupportedVersionCode: _minimumSupportedVersionCode,
-  );
+  bool get mustUpdate {
+    if (kIsWeb) return false;
+    return shouldForceAppUpdate(
+      currentVersion: currentVersion,
+      latestVersion: _latestVersion,
+      minimumSupportedVersion: _minimumSupportedVersion,
+      forceUpdateRequired: _forceUpdateRequired,
+      currentVersionCode: currentVersionCode,
+      latestVersionCode: _latestVersionCode,
+      minimumSupportedVersionCode: _minimumSupportedVersionCode,
+    );
+  }
 
   Future<void> checkNow() async {
     if (_checking) return;
@@ -99,6 +102,10 @@ class AppUpdateService extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
+      if (kIsWeb) {
+        await _checkWebManifest();
+        return;
+      }
       await _restoreDownloadedInstaller(allowPopulateUpdateInfo: true);
       bool? mobileUpdateLoaded;
       try {
@@ -162,6 +169,10 @@ class AppUpdateService extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
+      if (kIsWeb) {
+        await _checkWebManifest();
+        return;
+      }
       await _restoreDownloadedInstaller(allowPopulateUpdateInfo: true);
       bool? mobileUpdateLoaded;
       try {
@@ -412,6 +423,48 @@ class AppUpdateService extends ChangeNotifier {
     if (compareAppVersions(currentVersion, normalized) <= 0) return code;
     final currentCode = currentVersionCode ?? _versionToCode(currentVersion);
     return code < currentCode ? currentCode : code;
+  }
+
+  Future<void> _checkWebManifest() async {
+    _latestUrl = null;
+    _latestAssetName = null;
+    _latestNotes = null;
+    _minimumSupportedVersion = null;
+    _minimumSupportedVersionCode = null;
+    _forceUpdateBlockedReason = null;
+    _forceUpdateRequired = false;
+    _serverPolicyLoaded = false;
+    _downloadedFilePath = null;
+    try {
+      final manifestUri = Uri.base
+          .resolve('version.json')
+          .replace(
+            queryParameters: {
+              't': DateTime.now().millisecondsSinceEpoch.toString(),
+            },
+          );
+      final resp = await _httpClient
+          .get(manifestUri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) {
+        throw _BackendUpdateCheckException(
+          '检查更新失败：version.json 返回 ${resp.statusCode}',
+        );
+      }
+      final decoded = json.decode(utf8.decode(resp.bodyBytes));
+      if (decoded is! Map) {
+        throw const _BackendUpdateCheckException('检查更新失败：version.json 返回结构错误');
+      }
+      final version = _stringValue(decoded['version']);
+      final buildNumber = _intValue(decoded['build_number']);
+      _latestVersion = version.isEmpty ? null : version;
+      _latestVersionCode = buildNumber;
+      _error = null;
+    } catch (e) {
+      _latestVersion = null;
+      _latestVersionCode = null;
+      _error = userVisibleApiError(e);
+    }
   }
 
   int? _intValue(dynamic value) {

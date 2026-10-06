@@ -4,9 +4,10 @@ set -euo pipefail
 # Duoyi Web Production Deployment Script
 #
 # 环境变量配置：
-#   WEB_ROOT       - Web 部署根目录 (默认: /opt/1panel/apps/openresty/openresty/root/duoyi)
+#   WEB_ROOT       - Web 部署根目录 (默认: /home/ubuntu/www/duoyi)
 #   BACKUP_ROOT    - 备份存储目录 (默认: /home/ubuntu/duoyi_web_backups)
-#   FLUTTER_BIN    - Flutter 可执行文件路径 (默认: /opt/migrate/flutter/bin/flutter)
+#   FLUTTER_BIN    - Flutter 可执行文件路径 (默认: /home/ubuntu/flutter/bin/flutter)
+#   DUOYI_SERVER_URL - API 地址 (默认: /duoyi，使用当前网页同源反代)
 #
 # 使用示例：
 #   ./scripts/deploy_web_prod.sh
@@ -23,10 +24,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_WEB_DIR="$PROJECT_ROOT/build/web"
-WEB_ROOT="${WEB_ROOT:-/opt/1panel/apps/openresty/openresty/root/duoyi}"
+WEB_ROOT="${WEB_ROOT:-/home/ubuntu/www/duoyi}"
 BACKUP_ROOT="${BACKUP_ROOT:-/home/ubuntu/duoyi_web_backups}"
-FLUTTER_BIN="${FLUTTER_BIN:-/opt/migrate/flutter/bin/flutter}"
+FLUTTER_BIN="${FLUTTER_BIN:-/home/ubuntu/flutter/bin/flutter}"
 BASE_HREF="/duoyi/"
+DUOYI_SERVER_URL="${DUOYI_SERVER_URL-/duoyi}"
 DOWNLOADS_BACKUP_DIR=""
 
 cleanup_downloads_backup() {
@@ -152,7 +154,8 @@ echo ""
 # 2. 构建 Web
 echo "🔨 Building web (release)..."
 rm -rf "$BUILD_WEB_DIR"
-$FLUTTER_BIN build web --release --base-href=/duoyi/ --dart-define=DUOYI_SERVER_URL= --dart-define=DUOYI_WEB_TARGET=desktop
+"$FLUTTER_BIN" build web --release --no-wasm-dry-run --base-href=/duoyi/ --dart-define="DUOYI_SERVER_URL=$DUOYI_SERVER_URL" --dart-define=DUOYI_WEB_TARGET=desktop
+python3 "$SCRIPT_DIR/version_web_assets.py" "$BUILD_WEB_DIR"
 verify_web_build "$BUILD_WEB_DIR" "fresh build output"
 echo ""
 
@@ -193,7 +196,7 @@ echo "=================================================="
 echo ""
 echo "Deployed: v$VERSION_NAME (build $VERSION_CODE)"
 echo "Location: $WEB_ROOT"
-echo "Access: http://6688667.xyz/duoyi/"
+echo "Access: https://work.6688667.xyz/duoyi/"
 echo ""
-echo "Note: Users may need to hard refresh (Ctrl+Shift+R) to see the new version."
+echo "Note: Reload the webpage to load the new release. Both Web entries share this static root."
 echo ""

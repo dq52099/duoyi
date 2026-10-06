@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// 应用硬编码配置 —— APK/Web 编译后即固定，不再可在运行时修改。
 ///
 /// 两层策略：
@@ -14,8 +16,8 @@
 /// flutter build web --release \
 ///   --dart-define=DUOYI_SERVER_URL=https://duoyi.mycompany.com
 ///
-/// # 或者与前端同域反代：留空，走相对路径，在 nginx 里把 /api 代到后端
-/// flutter build web --release --dart-define=DUOYI_SERVER_URL=
+/// # 与前端同域反代：/duoyi/api 转发到后端；留空则使用根目录 /api
+/// flutter build web --release --dart-define=DUOYI_SERVER_URL=/duoyi
 /// ```
 class AppConfig {
   /// 源码默认值 —— 发布前按需改动；
@@ -31,6 +33,15 @@ class AppConfig {
   static const String _kSentinel = '__USE_DEFAULT__';
 
   /// 最终使用的服务器地址。返回空串代表相对路径。
-  static String get bakedServerUrl =>
-      buildTimeServerUrl == _kSentinel ? defaultServerUrl : buildTimeServerUrl;
+  static String get bakedServerUrl {
+    final configured = buildTimeServerUrl == _kSentinel
+        ? defaultServerUrl
+        : buildTimeServerUrl;
+    // A Web build can use /duoyi on each deployment's own origin.
+    // Resolve it before clients derive HTTP, avatar and websocket URLs.
+    if (kIsWeb && configured.isNotEmpty && !Uri.parse(configured).hasScheme) {
+      return Uri.base.resolve(configured).toString();
+    }
+    return configured;
+  }
 }
