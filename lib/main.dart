@@ -1699,12 +1699,24 @@ void main() async {
 
   // 预约提醒（scheduler 派发）与即时通知共用品牌标题：启动注入一次，
   // 主题切换跟随，避免非 default 主题下两路通知标题不一致。
-  reminderScheduler.setStrings(themeProvider.brand.strings);
-  notificationService.setStrings(themeProvider.brand.strings);
-  themeProvider.addListener(() {
+  // 语言切换也会改变 AppBrand.strings（BrandStrings.forLocale 按 I18n 分发），
+  // 因此 localeProvider 变更时同样需要重推，通知/提醒文案才能跟随语言。
+  void pushBrandStringsToNotifiers() {
     reminderScheduler.setStrings(themeProvider.brand.strings);
     notificationService.setStrings(themeProvider.brand.strings);
+  }
+
+  pushBrandStringsToNotifiers();
+  themeProvider.addListener(() {
+    pushBrandStringsToNotifiers();
     queueHomeWidgetThemeUpdate(reason: 'theme provider changed');
+    queueHomeWidgetPush();
+  });
+  localeProvider.addListener(() {
+    pushBrandStringsToNotifiers();
+    // 语言切换同样改变小组件 payload 文案（_pushHomeWidget 走 I18n）与
+    // 品牌词条（brand.strings），必须重推小组件数据；主题 payload 与语言
+    // 无关，updateHomeWidgetThemeNow 的签名去重会自然跳过写入。
     queueHomeWidgetPush();
   });
   unawaited(updateHomeWidgetThemeNow(reason: 'startup theme loaded'));
@@ -1985,7 +1997,11 @@ Future<bool> _pushHomeWidget(
       .take(2)
       .toList();
   final anniversaryHighlights = anniversaryItems
-      .map((item) => '${item.title} · 还有 ${item.daysRemaining} 天')
+      .map(
+        (item) =>
+            '${item.title} · ${I18n.tr('widget.days_remaining_prefix')}'
+            '${item.daysRemaining}${I18n.tr('widget.days_remaining_suffix')}',
+      )
       .toList();
   final anniversaryHighlightIds = anniversaryItems
       .map((item) => 'duoyi://anniversary/${Uri.encodeComponent(item.id)}')
@@ -1995,7 +2011,11 @@ Future<bool> _pushHomeWidget(
       .take(3)
       .toList();
   final memorialHighlights = memorialItems
-      .map((item) => '${item.title} · 还有 ${item.daysRemaining} 天')
+      .map(
+        (item) =>
+            '${item.title} · ${I18n.tr('widget.days_remaining_prefix')}'
+            '${item.daysRemaining}${I18n.tr('widget.days_remaining_suffix')}',
+      )
       .toList();
   final memorialHighlightIds = memorialItems
       .map((item) => 'duoyi://anniversary/${Uri.encodeComponent(item.id)}')
@@ -2003,7 +2023,9 @@ Future<bool> _pushHomeWidget(
   final courseItems = c.todayCourses.take(3).toList();
   final courseHighlights = courseItems.map((course) {
     final location = course.location.isEmpty ? '' : ' · ${course.location}';
-    return '${course.startSection}-${course.endSection}节 ${course.name}$location';
+    return '${I18n.tr('widget.course_section_prefix')}'
+        '${course.startSection}-${course.endSection}'
+        '${I18n.tr('widget.course_section_suffix')}${course.name}$location';
   }).toList();
   final courseHighlightIds = courseItems
       .map((course) => 'duoyi://course/${Uri.encodeComponent(course.id)}')
@@ -2043,8 +2065,8 @@ Future<bool> _pushHomeWidget(
       .map(_homeWidgetEventDeepLink)
       .toList();
   final todayEventSummary = scheduleHighlights.isEmpty
-      ? '今日没有日程'
-      : '今日：${scheduleHighlights.first}';
+      ? I18n.tr('widget.no_schedule_today')
+      : "${I18n.tr('widget.today_prefix')}${scheduleHighlights.first}";
   final focusState = p.state;
   final focusTimerEndsAtMillis = focusState.isRunning && !focusState.isCountUp
       ? DateTime.now()
@@ -2052,9 +2074,12 @@ Future<bool> _pushHomeWidget(
             .millisecondsSinceEpoch
       : 0;
   final focusTimerLabel = switch (focusState.type) {
-    PomodoroType.focus => focusState.isCountUp ? '正计时专注中' : '专注倒计时',
-    PomodoroType.shortBreak => '短休息倒计时',
-    PomodoroType.longBreak => '长休息倒计时',
+    PomodoroType.focus =>
+      focusState.isCountUp
+          ? I18n.tr('widget.focus_counting_up')
+          : I18n.tr('widget.focus_countdown'),
+    PomodoroType.shortBreak => I18n.tr('widget.short_break_countdown'),
+    PomodoroType.longBreak => I18n.tr('widget.long_break_countdown'),
   };
   return HomeWidgetService.push(
     todoCount: activeTodayTodos,
@@ -2085,11 +2110,18 @@ Future<bool> _pushHomeWidget(
     scheduleHighlightIds: scheduleHighlightIds,
     todayEventSummary: todayEventSummary,
     focusSummary: p.sessionCountToday == 0
-        ? '今日还未专注'
-        : '今日专注 ${p.sessionCountToday} 次',
-    habitSummary: habitPercent >= 100 ? '习惯已全部完成' : '习惯完成 $habitPercent%',
-    streakSummary: '当前连续 ${h.longestCurrentStreak} 天',
-    nextFocusLabel: '${p.config.focusDuration ~/ 60} 分钟专注',
+        ? I18n.tr('widget.focus_not_started')
+        : "${I18n.tr('widget.focus_today_prefix')}${p.sessionCountToday}"
+              "${I18n.tr('widget.focus_today_suffix')}",
+    habitSummary: habitPercent >= 100
+        ? I18n.tr('widget.habit_all_done')
+        : "${I18n.tr('widget.habit_progress_prefix')}$habitPercent"
+              "${I18n.tr('widget.habit_progress_suffix')}",
+    streakSummary:
+        "${I18n.tr('widget.streak_prefix')}${h.longestCurrentStreak}"
+        "${I18n.tr('widget.streak_suffix')}",
+    nextFocusLabel:
+        "${p.config.focusDuration ~/ 60}${I18n.tr('widget.next_focus_suffix')}",
     focusTimerRunning: focusState.isRunning,
     focusTimerRemainingSeconds: focusState.remainingSeconds,
     focusTimerTotalSeconds: focusState.totalSeconds,
@@ -2097,8 +2129,8 @@ Future<bool> _pushHomeWidget(
     focusTimerLabel: focusTimerLabel,
     habitQuickCheckId: quickCheckHabit?.id ?? '',
     habitQuickCheckLabel: quickCheckHabit == null
-        ? '点击进入习惯打卡'
-        : '打卡：${quickCheckHabit.name}',
+        ? I18n.tr('widget.habit_quick_check_hint')
+        : "${I18n.tr('widget.habit_checkin_prefix')}${quickCheckHabit.name}",
     theme: HomeWidgetThemePayload.fromThemeProvider(tp),
   );
 }

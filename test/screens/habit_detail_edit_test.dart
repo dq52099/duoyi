@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/providers/habit_provider.dart';
@@ -55,6 +56,27 @@ void main() {
     final stored = provider.habits.firstWhere((h) => h.id == 'habit-1');
     expect(stored.name, '晨练');
     expect(stored.targetCount, 3);
+  });
+
+  testWidgets('HabitDetailScreen en 模式数字与单位间补空格且不残留紧拼', (tester) async {
+    I18n.setLocale(AppLocale.en);
+    addTearDown(() => I18n.setLocale(AppLocale.zh));
+    final provider = HabitProvider();
+    await provider.addHabit(
+      Habit(id: 'habit-en', name: 'Morning run', targetCount: 1),
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<HabitProvider>.value(
+        value: provider,
+        child: const MaterialApp(home: HabitDetailScreen(habitId: 'habit-en')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 连续/最佳统计 chip：zh 紧拼「0天」，en 必须为「0 days」。
+    expect(find.text('0 days'), findsWidgets);
+    expect(find.text('0days'), findsNothing);
   });
 
   testWidgets(

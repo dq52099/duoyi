@@ -33,9 +33,9 @@ void main() {
       expect(today, contains('icon: Icons.check_circle_outline'));
       expect(todo, contains('icon: Icons.check_circle_outline'));
       expect(mine, contains("unit: '%'"));
-      expect(mine, contains("unit: '天'"));
-      expect(mine, contains("unit: '分钟'"));
-      expect(mine, contains("title: '效率评分'"));
+      expect(mine, contains("unit: I18n.tr('unit.day')"));
+      expect(mine, contains("unit: I18n.tr('unit.minute')"));
+      expect(mine, contains("title: I18n.tr('mine.stats.productivity')"));
       expect(mine, isNot(contains("title: '综合评分'")));
     });
 
@@ -176,7 +176,7 @@ void main() {
       expect(mine, contains("key: const ValueKey('mine_avatar_row')"));
       expect(mine, contains('child: avatar'));
       expect(mine, contains('SizedBox(width: compact ? 10 : 12)'));
-      expect(mine, contains("label: '查看个人资料'"));
+      expect(mine, contains("label: I18n.tr('mine.view_profile_semantics')"));
       expect(mine, contains('onTap: () => _openProfileEditor(context)'));
       expect(mine, contains("key: const ValueKey('mine_user_info_row')"));
       expect(
@@ -205,8 +205,9 @@ void main() {
           ),
         ),
       );
-      expect(mine, contains("message: '查看头像'"));
-      expect(mine, contains("message: '修改头像'"));
+      expect(mine, contains("message: I18n.tr('mine.avatar.view')"));
+      expect(mine, contains("label: I18n.tr('mine.avatar.view')"));
+      expect(mine, contains("message: I18n.tr('mine.avatar.edit')"));
       expect(
         mine,
         contains("key: const ValueKey('mine_avatar_preview_button')"),
@@ -218,7 +219,7 @@ void main() {
       expect(mine, contains('size: 10'));
       expect(mine, contains('onTap: () => _pickAndSaveAvatar(context)'));
       expect(mine, contains("label: '@\$usernameText'"));
-      expect(mine, contains(r"label: '时光币 $coins'"));
+      expect(mine, contains(r"label: '${I18n.tr('profile.coins')} $coins'"));
       expect(mine, contains('activeAvatarFrame'));
       expect(mine, contains('defaultAvatarFrameId'));
       expect(mine, contains('onTap: () => _showAvatarPreview(context)'));
@@ -265,7 +266,7 @@ void main() {
         mine,
         isNot(contains('class _ProfileInfoRow extends StatelessWidget')),
       );
-      expect(mine, contains("message: '退出登录'"));
+      expect(mine, contains("message: I18n.tr('auth.logout')"));
       expect(mine, contains("key: const ValueKey('mine_top_logout_button')"));
       expect(mine, contains('onPressed: () => _confirmLogout(context)'));
       expect(
@@ -278,12 +279,12 @@ void main() {
       expect(mine, isNot(contains('photo_library_outlined')));
 
       final groups = [
-        "title: '行动计划'",
-        "title: '记录回顾'",
-        "title: '日程日期'",
-        "title: '个性安全'",
-        "title: '数据协作'",
-        "title: '通知支持'",
+        "title: I18n.tr('mine.group.action_plan')",
+        "title: I18n.tr('mine.group.review')",
+        "title: I18n.tr('mine.group.schedule')",
+        "title: I18n.tr('mine.group.personal')",
+        "title: I18n.tr('mine.group.data')",
+        "title: I18n.tr('mine.group.notifications')",
       ];
       for (final group in groups) {
         expect(mine, contains(group));
@@ -291,38 +292,41 @@ void main() {
       for (var i = 0; i < groups.length - 1; i++) {
         expect(mine.indexOf(groups[i]), lessThan(mine.indexOf(groups[i + 1])));
       }
-      expect(mine, contains("title: 'AI 助手'"));
+      expect(mine, contains("title: I18n.tr('mine.ai_assistant')"));
       expect(mine, isNot(contains("title: '智能分类'")));
       expect(mine, isNot(contains("title: '智能工具'")));
 
       for (final label in [
-        "label: '目标管理'",
-        "label: '番茄专注'",
-        "label: '课程表'",
-        "label: '纪念日'",
-        "label: '生日'",
-        "label: '倒数日'",
-        "label: '万年历'",
-        "label: '时间足迹'",
-        "label: '统计报表'",
-        "label: '日记'",
-        "label: '随手记'",
-        "label: '成就墙'",
-        "label: '个性设置'",
-        "label: '共享空间'",
-        "label: '扩展功能'",
-        "label: '导出为日历 (.ics)'",
-        "label: '同步冲突记录'",
-        "label: '备份'",
-        "label: '恢复数据'",
-        "label: '公告'",
-        "label: '许愿与反馈'",
-        "label: '更多应用'",
-        "label: '检查更新'",
+        "label: I18n.tr('goal.title')",
+        "label: I18n.tr('mine.tile.pomodoro')",
+        "label: I18n.tr('mine.tile.courses')",
+        "label: I18n.tr('anniversary.title')",
+        "label: I18n.tr('anniversary.birthday')",
+        "label: I18n.tr('countdown.title')",
+        "label: I18n.tr('today.almanac.title')",
+        "label: I18n.tr('time_audit.title')",
+        "label: I18n.tr('mine.tile.statistics')",
+        "label: I18n.tr('diary.title')",
+        "label: I18n.tr('note.title')",
+        "label: I18n.tr('mine.tile.achievements')",
+        "label: I18n.tr('preferences.title')",
+        "label: I18n.tr('share.title')",
+        "label: I18n.tr('mine.tile.integrations')",
+        "label: I18n.tr('export.title')",
+        "label: I18n.tr('sync_conflict.title')",
+        "label: I18n.tr('mine.tile.backup')",
+        "label: I18n.tr('mine.tile.restore')",
+        "label: I18n.tr('announcement.title')",
+        "label: I18n.tr('mine.tile.feedback')",
+        "label: I18n.tr('mine.tile.more_apps')",
+        "label: I18n.tr('mine.tile.check_updates')",
       ]) {
         expect(mine, contains(label));
       }
-      expect(mine, contains("subtitle: '查看隐藏功能'"));
+      expect(
+        mine,
+        contains("subtitle: I18n.tr('mine.tile.more_apps.subtitle')"),
+      );
       expect(mine, isNot(contains("label: '黄历'")));
       expect(
         mine,
@@ -333,11 +337,14 @@ void main() {
       expect(mine, contains('width: 8'));
       expect(mine, contains('constraints: const BoxConstraints(maxWidth: 96)'));
       expect(mine, contains('overflow: TextOverflow.ellipsis'));
-      expect(mine, contains("'有更新'"));
-      expect(mine, contains("'新版 \$version'"));
-      expect(mine, contains("title: '未配置安装包地址'"));
+      expect(mine, contains("I18n.tr('mine.update.badge')"));
+      expect(mine, contains("I18n.tr('mine.update.badge_version_prefix')"));
+      expect(
+        mine,
+        contains("title: I18n.tr('mine.update.package_missing_title')"),
+      );
       expect(mine, contains('updater.latestUrl == null'));
-      expect(mine, contains("tooltip: '全局搜索'"));
+      expect(mine, contains("tooltip: I18n.tr('quick.menu.search')"));
       expect(mine, isNot(contains("label: '全局搜索'")));
       expect(
         File('lib/screens/more_apps_screen.dart').readAsStringSync(),
@@ -350,11 +357,14 @@ void main() {
         File('lib/screens/more_apps_screen.dart').readAsStringSync(),
         contains('hiddenBottomNavApps'),
       );
-      expect(mine, contains("label: '更多应用'"));
+      expect(mine, contains("label: I18n.tr('mine.tile.more_apps')"));
       expect(mine, contains('final coins = auth.isLoggedIn'));
       expect(mine, contains('coinBalance'));
       expect(mine, contains('auth.coinBalance'));
-      expect(mine, contains("label: '通知设置'"));
+      expect(
+        mine,
+        contains("label: I18n.tr('mine.tile.notification_settings')"),
+      );
       expect(
         mine,
         contains(
@@ -388,11 +398,19 @@ void main() {
           '_openBrandedRoute(context, const NotificationSettingsScreen())',
         ),
       );
-      expect(mine, contains("subtitle: '提醒时间、权限、铃声、已注册提醒和记录保留'"));
+      expect(
+        mine,
+        contains(
+          "subtitle: I18n.tr('mine.tile.notification_settings.subtitle')",
+        ),
+      );
       expect(mine, contains("key: const ValueKey('mine_ai_review_toggle')"));
       expect(mine, contains("key: const ValueKey('mine_ai_review_content')"));
-      expect(mine, contains("tooltip: _reviewExpanded ? '收起回顾' : '展开回顾'"));
-      expect(mine, contains("label: const Text('展开完整回顾')"));
+      expect(
+        mine,
+        contains("_reviewExpanded ? 'mine.ai.collapse' : 'mine.ai.expand'"),
+      );
+      expect(mine, contains("label: Text(I18n.tr('mine.ai.expand_full'))"));
       expect(mine, isNot(contains("title: '智能工具'")));
       expect(mine, isNot(contains("label: '底部导航栏'")));
       expect(
@@ -408,8 +426,10 @@ void main() {
       expect(mine, isNot(contains("label: '问题反馈'")));
       expect(mine, isNot(contains("label: '许愿池'")));
 
+      // 功能入口文案已迁移 I18n.tr：同时扫描旧字面量与新 tr 键两种形态，
+      // 拒绝「·/／、&」组合入口的约束保持不变。
       final tileLabels = RegExp(
-        r"label: '([^']+)'",
+        r"label: (?:I18n\.tr\()?'([^']+)'",
       ).allMatches(mine).map((match) => match.group(1)!).toList();
       for (final label in tileLabels) {
         expect(
@@ -424,17 +444,17 @@ void main() {
       expect(mine, isNot(contains("label: '备份 · 恢复'")));
       expect(mine, isNot(contains("label: '反馈与许愿'")));
       expect(mine, isNot(contains('待办 · 习惯 · 日历 · 番茄专注')));
-      expect(mine, contains("Text('待办')"));
-      expect(mine, contains("Text('习惯')"));
-      expect(mine, contains("Text('日历')"));
-      expect(mine, contains("Text('番茄专注')"));
+      expect(mine, contains("Text(I18n.tr('nav.todo'))"));
+      expect(mine, contains("Text(I18n.tr('nav.habit'))"));
+      expect(mine, contains("Text(I18n.tr('nav.calendar'))"));
+      expect(mine, contains("Text(I18n.tr('mine.tile.pomodoro'))"));
     });
 
     test('全局搜索入口在我的顶部右上角，今日页不再放顶部搜索', () {
       final main = File('lib/main.dart').readAsStringSync();
       final mine = File('lib/screens/mine_screen.dart').readAsStringSync();
 
-      expect(mine, contains("tooltip: '全局搜索'"));
+      expect(mine, contains("tooltip: I18n.tr('quick.menu.search')"));
       expect(
         mine,
         contains('_openBrandedRoute(context, const SearchScreen())'),

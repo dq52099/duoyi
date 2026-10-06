@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/brand_strings.dart';
+import '../core/i18n.dart';
 import '../models/anniversary.dart';
 import '../models/countdown.dart';
 import '../models/goal.dart';
@@ -4123,8 +4124,10 @@ class ReminderScheduler {
     return switch (type) {
       ReminderRuleType.dailyTime ||
       ReminderRuleType.weeklyTime => _strings.notifTodoDueTitle,
-      ReminderRuleType.absolute ||
-      ReminderRuleType.relativeToDue => '提醒：${item.title}',
+      // 一次性/相对截止提醒标题走 I18n（语言跟随）：daily/weekly 分支读品牌
+      // 词条，本分支历史上为硬编码中文，会让 en 用户收到中文系统通知标题。
+      ReminderRuleType.absolute || ReminderRuleType.relativeToDue =>
+        '${I18n.tr('reminder.todo_title_prefix')}${item.title}',
     };
   }
 

@@ -4928,6 +4928,210 @@ abstract class AppLocalizations {
   /// **'关闭'**
   String get reminderKindOff;
 
+  /// No description provided for @reminderTodoTitlePrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒：'**
+  String get reminderTodoTitlePrefix;
+
+  /// No description provided for @widgetNoScheduleToday.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日没有日程'**
+  String get widgetNoScheduleToday;
+
+  /// No description provided for @widgetTodayPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日：'**
+  String get widgetTodayPrefix;
+
+  /// No description provided for @widgetFocusCountingUp.
+  ///
+  /// In zh, this message translates to:
+  /// **'正计时专注中'**
+  String get widgetFocusCountingUp;
+
+  /// No description provided for @widgetFocusCountdown.
+  ///
+  /// In zh, this message translates to:
+  /// **'专注倒计时'**
+  String get widgetFocusCountdown;
+
+  /// No description provided for @widgetShortBreakCountdown.
+  ///
+  /// In zh, this message translates to:
+  /// **'短休息倒计时'**
+  String get widgetShortBreakCountdown;
+
+  /// No description provided for @widgetLongBreakCountdown.
+  ///
+  /// In zh, this message translates to:
+  /// **'长休息倒计时'**
+  String get widgetLongBreakCountdown;
+
+  /// No description provided for @widgetFocusNotStarted.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日还未专注'**
+  String get widgetFocusNotStarted;
+
+  /// No description provided for @widgetFocusTodayPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日专注 '**
+  String get widgetFocusTodayPrefix;
+
+  /// No description provided for @widgetFocusTodaySuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 次'**
+  String get widgetFocusTodaySuffix;
+
+  /// No description provided for @widgetHabitAllDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'习惯已全部完成'**
+  String get widgetHabitAllDone;
+
+  /// No description provided for @widgetHabitProgressPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'习惯完成 '**
+  String get widgetHabitProgressPrefix;
+
+  /// No description provided for @widgetHabitProgressSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **'%'**
+  String get widgetHabitProgressSuffix;
+
+  /// No description provided for @widgetStreakPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前连续 '**
+  String get widgetStreakPrefix;
+
+  /// No description provided for @widgetStreakSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 天'**
+  String get widgetStreakSuffix;
+
+  /// No description provided for @widgetNextFocusSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 分钟专注'**
+  String get widgetNextFocusSuffix;
+
+  /// No description provided for @widgetHabitQuickCheckHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击进入习惯打卡'**
+  String get widgetHabitQuickCheckHint;
+
+  /// No description provided for @widgetHabitCheckinPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'打卡：'**
+  String get widgetHabitCheckinPrefix;
+
+  /// No description provided for @widgetDaysRemainingPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'还有 '**
+  String get widgetDaysRemainingPrefix;
+
+  /// No description provided for @widgetDaysRemainingSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 天'**
+  String get widgetDaysRemainingSuffix;
+
+  /// No description provided for @widgetCourseSectionPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **''**
+  String get widgetCourseSectionPrefix;
+
+  /// No description provided for @widgetCourseSectionSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **'节 '**
+  String get widgetCourseSectionSuffix;
+
+  /// No description provided for @widgetTodoTop3Empty.
+  ///
+  /// In zh, this message translates to:
+  /// **'今天没有未完成待办'**
+  String get widgetTodoTop3Empty;
+
+  /// No description provided for @widgetGoalEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无进行中目标'**
+  String get widgetGoalEmpty;
+
+  /// No description provided for @widgetGoalHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'本周目标保持推进'**
+  String get widgetGoalHint;
+
+  /// No description provided for @widgetAnniversaryEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无近期纪念日'**
+  String get widgetAnniversaryEmpty;
+
+  /// No description provided for @widgetCourseEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日暂无课程'**
+  String get widgetCourseEmpty;
+
+  /// No description provided for @widgetNoteEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无随手记'**
+  String get widgetNoteEmpty;
+
+  /// No description provided for @widgetDiaryEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无日记'**
+  String get widgetDiaryEmpty;
+
+  /// No description provided for @widgetScheduleOpenCalendar.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开日历查看完整安排'**
+  String get widgetScheduleOpenCalendar;
+
+  /// No description provided for @widgetScheduleTimezoneHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒会跟随系统时区'**
+  String get widgetScheduleTimezoneHint;
+
+  /// No description provided for @widgetCalendarMonthSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'本月日期 · 今日已标记'**
+  String get widgetCalendarMonthSummary;
+
+  /// No description provided for @widgetHabitPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日习惯待打卡'**
+  String get widgetHabitPending;
+
+  /// No description provided for @widgetStreakRecordPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'连续记录 '**
+  String get widgetStreakRecordPrefix;
+
   /// No description provided for @timeAuditTitle.
   ///
   /// In zh, this message translates to:
@@ -5311,6 +5515,684 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'将在后台自动重试'**
   String get syncStateAutoRetryHint;
+
+  /// No description provided for @greetingSeparator.
+  ///
+  /// In zh, this message translates to:
+  /// **'，'**
+  String get greetingSeparator;
+
+  /// No description provided for @todayNoDue.
+  ///
+  /// In zh, this message translates to:
+  /// **'无截止'**
+  String get todayNoDue;
+
+  /// No description provided for @todayNoDueDate.
+  ///
+  /// In zh, this message translates to:
+  /// **'无截止日期'**
+  String get todayNoDueDate;
+
+  /// No description provided for @todayTodosEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'今天暂无待办，点击查看或添加任务'**
+  String get todayTodosEmpty;
+
+  /// No description provided for @todoStatusOverdue.
+  ///
+  /// In zh, this message translates to:
+  /// **'逾期'**
+  String get todoStatusOverdue;
+
+  /// No description provided for @todoStatusDueSoon.
+  ///
+  /// In zh, this message translates to:
+  /// **'临期'**
+  String get todoStatusDueSoon;
+
+  /// No description provided for @todoStatusNormal.
+  ///
+  /// In zh, this message translates to:
+  /// **'正常'**
+  String get todoStatusNormal;
+
+  /// No description provided for @habitWeeklyTodayPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日 '**
+  String get habitWeeklyTodayPrefix;
+
+  /// No description provided for @habitWeeklyTodaySuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 达标'**
+  String get habitWeeklyTodaySuffix;
+
+  /// No description provided for @habitWeeklyProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'进度'**
+  String get habitWeeklyProgress;
+
+  /// No description provided for @habitWeekday1.
+  ///
+  /// In zh, this message translates to:
+  /// **'一'**
+  String get habitWeekday1;
+
+  /// No description provided for @habitWeekday2.
+  ///
+  /// In zh, this message translates to:
+  /// **'二'**
+  String get habitWeekday2;
+
+  /// No description provided for @habitWeekday3.
+  ///
+  /// In zh, this message translates to:
+  /// **'三'**
+  String get habitWeekday3;
+
+  /// No description provided for @habitWeekday4.
+  ///
+  /// In zh, this message translates to:
+  /// **'四'**
+  String get habitWeekday4;
+
+  /// No description provided for @habitWeekday5.
+  ///
+  /// In zh, this message translates to:
+  /// **'五'**
+  String get habitWeekday5;
+
+  /// No description provided for @habitWeekday6.
+  ///
+  /// In zh, this message translates to:
+  /// **'六'**
+  String get habitWeekday6;
+
+  /// No description provided for @habitWeekday7.
+  ///
+  /// In zh, this message translates to:
+  /// **'日'**
+  String get habitWeekday7;
+
+  /// No description provided for @habitGroupTodaySuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 今日达标'**
+  String get habitGroupTodaySuffix;
+
+  /// No description provided for @habitGroupMoreHabitsPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'还有 '**
+  String get habitGroupMoreHabitsPrefix;
+
+  /// No description provided for @habitGroupMoreHabitsSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 个习惯，请进入今日打卡或习惯详情查看'**
+  String get habitGroupMoreHabitsSuffix;
+
+  /// No description provided for @habitBestShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'最佳'**
+  String get habitBestShort;
+
+  /// No description provided for @todoKanbanNoPriority.
+  ///
+  /// In zh, this message translates to:
+  /// **'无优先级'**
+  String get todoKanbanNoPriority;
+
+  /// No description provided for @todoKanbanNoDue.
+  ///
+  /// In zh, this message translates to:
+  /// **'无截止日'**
+  String get todoKanbanNoDue;
+
+  /// No description provided for @todoKanbanOverdue.
+  ///
+  /// In zh, this message translates to:
+  /// **'已逾期'**
+  String get todoKanbanOverdue;
+
+  /// No description provided for @todoKanbanToday.
+  ///
+  /// In zh, this message translates to:
+  /// **'今天'**
+  String get todoKanbanToday;
+
+  /// No description provided for @todoKanbanWithin7Days.
+  ///
+  /// In zh, this message translates to:
+  /// **'7 天内'**
+  String get todoKanbanWithin7Days;
+
+  /// No description provided for @todoKanbanLater.
+  ///
+  /// In zh, this message translates to:
+  /// **'更晚'**
+  String get todoKanbanLater;
+
+  /// No description provided for @todoKanbanNoTag.
+  ///
+  /// In zh, this message translates to:
+  /// **'无标签'**
+  String get todoKanbanNoTag;
+
+  /// No description provided for @todoKanbanDefaultList.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认清单'**
+  String get todoKanbanDefaultList;
+
+  /// No description provided for @authLogout.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出登录'**
+  String get authLogout;
+
+  /// No description provided for @mineBadgeAdmin.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理员'**
+  String get mineBadgeAdmin;
+
+  /// No description provided for @mineViewProfileSemantics.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看个人资料'**
+  String get mineViewProfileSemantics;
+
+  /// No description provided for @mineAvatarView.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看头像'**
+  String get mineAvatarView;
+
+  /// No description provided for @mineAvatarEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'修改头像'**
+  String get mineAvatarEdit;
+
+  /// No description provided for @mineAvatarTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像'**
+  String get mineAvatarTitle;
+
+  /// No description provided for @mineMeFallback.
+  ///
+  /// In zh, this message translates to:
+  /// **'我'**
+  String get mineMeFallback;
+
+  /// No description provided for @mineStatsTodos.
+  ///
+  /// In zh, this message translates to:
+  /// **'待办完成'**
+  String get mineStatsTodos;
+
+  /// No description provided for @mineStatsStreak.
+  ///
+  /// In zh, this message translates to:
+  /// **'连续打卡'**
+  String get mineStatsStreak;
+
+  /// No description provided for @mineStatsFocus.
+  ///
+  /// In zh, this message translates to:
+  /// **'本周专注'**
+  String get mineStatsFocus;
+
+  /// No description provided for @mineStatsProductivity.
+  ///
+  /// In zh, this message translates to:
+  /// **'效率评分'**
+  String get mineStatsProductivity;
+
+  /// No description provided for @mineGroupActionPlan.
+  ///
+  /// In zh, this message translates to:
+  /// **'行动计划'**
+  String get mineGroupActionPlan;
+
+  /// No description provided for @mineGroupReview.
+  ///
+  /// In zh, this message translates to:
+  /// **'记录回顾'**
+  String get mineGroupReview;
+
+  /// No description provided for @mineGroupSchedule.
+  ///
+  /// In zh, this message translates to:
+  /// **'日程日期'**
+  String get mineGroupSchedule;
+
+  /// No description provided for @mineGroupPersonal.
+  ///
+  /// In zh, this message translates to:
+  /// **'个性安全'**
+  String get mineGroupPersonal;
+
+  /// No description provided for @mineGroupData.
+  ///
+  /// In zh, this message translates to:
+  /// **'数据协作'**
+  String get mineGroupData;
+
+  /// No description provided for @mineGroupNotifications.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知支持'**
+  String get mineGroupNotifications;
+
+  /// No description provided for @mineTilePomodoro.
+  ///
+  /// In zh, this message translates to:
+  /// **'番茄专注'**
+  String get mineTilePomodoro;
+
+  /// No description provided for @mineTileMoreApps.
+  ///
+  /// In zh, this message translates to:
+  /// **'更多应用'**
+  String get mineTileMoreApps;
+
+  /// No description provided for @mineTileMoreAppsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看隐藏功能'**
+  String get mineTileMoreAppsSubtitle;
+
+  /// No description provided for @mineTileStatistics.
+  ///
+  /// In zh, this message translates to:
+  /// **'统计报表'**
+  String get mineTileStatistics;
+
+  /// No description provided for @mineTileAchievements.
+  ///
+  /// In zh, this message translates to:
+  /// **'成就墙'**
+  String get mineTileAchievements;
+
+  /// No description provided for @mineTileCourses.
+  ///
+  /// In zh, this message translates to:
+  /// **'课程表'**
+  String get mineTileCourses;
+
+  /// No description provided for @mineTileIntegrations.
+  ///
+  /// In zh, this message translates to:
+  /// **'扩展功能'**
+  String get mineTileIntegrations;
+
+  /// No description provided for @mineTileBackup.
+  ///
+  /// In zh, this message translates to:
+  /// **'备份'**
+  String get mineTileBackup;
+
+  /// No description provided for @mineTileRestore.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复数据'**
+  String get mineTileRestore;
+
+  /// No description provided for @mineTileNotificationHistory.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知记录'**
+  String get mineTileNotificationHistory;
+
+  /// No description provided for @mineTileNotificationHistoryEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无通知记录'**
+  String get mineTileNotificationHistoryEmpty;
+
+  /// No description provided for @mineTileNotificationHistoryCountSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 条'**
+  String get mineTileNotificationHistoryCountSuffix;
+
+  /// No description provided for @mineTileNotificationSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知设置'**
+  String get mineTileNotificationSettings;
+
+  /// No description provided for @mineTileNotificationSettingsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒时间、权限、铃声、已注册提醒和记录保留'**
+  String get mineTileNotificationSettingsSubtitle;
+
+  /// No description provided for @mineTileAdmin.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理员后台'**
+  String get mineTileAdmin;
+
+  /// No description provided for @mineTileFeedback.
+  ///
+  /// In zh, this message translates to:
+  /// **'许愿与反馈'**
+  String get mineTileFeedback;
+
+  /// No description provided for @mineTileFeedbackSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'提交建议并分页查看处理记录'**
+  String get mineTileFeedbackSubtitle;
+
+  /// No description provided for @mineTileCheckUpdates.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查更新'**
+  String get mineTileCheckUpdates;
+
+  /// No description provided for @mineLogoutConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出登录？'**
+  String get mineLogoutConfirmTitle;
+
+  /// No description provided for @mineLogoutConfirmContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出后会清空本机账号数据（时光币、主题、习惯、待办等本地缓存），重新登录后再从当前账号同步。'**
+  String get mineLogoutConfirmContent;
+
+  /// No description provided for @mineLogoutDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'已退出登录，本机账号数据已清理'**
+  String get mineLogoutDone;
+
+  /// No description provided for @mineLogoutCleanupFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'已退出登录，本机数据清理失败，将在下次登录前重试'**
+  String get mineLogoutCleanupFailed;
+
+  /// No description provided for @profileAvatarFileEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像文件为空'**
+  String get profileAvatarFileEmpty;
+
+  /// No description provided for @profileAvatarSaveFailedPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像保存失败：'**
+  String get profileAvatarSaveFailedPrefix;
+
+  /// No description provided for @mineUpdateBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'有更新'**
+  String get mineUpdateBadge;
+
+  /// No description provided for @mineUpdateBadgeVersionPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'新版 '**
+  String get mineUpdateBadgeVersionPrefix;
+
+  /// No description provided for @mineUpdateRequiredTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'必须更新'**
+  String get mineUpdateRequiredTitle;
+
+  /// No description provided for @mineUpdateCheckTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查更新'**
+  String get mineUpdateCheckTitle;
+
+  /// No description provided for @mineUpdateCurrentVersionPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前版本: '**
+  String get mineUpdateCurrentVersionPrefix;
+
+  /// No description provided for @mineUpdateRemoteVersionPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'远端版本: '**
+  String get mineUpdateRemoteVersionPrefix;
+
+  /// No description provided for @mineUpdateMinSupportedPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'最低支持版本: '**
+  String get mineUpdateMinSupportedPrefix;
+
+  /// No description provided for @mineUpdateForceBannerTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'此版本需要强制更新'**
+  String get mineUpdateForceBannerTitle;
+
+  /// No description provided for @mineUpdateForceBannerMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前版本低于管理员设置的最低支持版本，或管理员已要求所有用户更新后继续使用。'**
+  String get mineUpdateForceBannerMessage;
+
+  /// No description provided for @mineUpdateAvailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'发现新版本'**
+  String get mineUpdateAvailable;
+
+  /// No description provided for @mineUpdateUpToDate.
+  ///
+  /// In zh, this message translates to:
+  /// **'已是最新版本'**
+  String get mineUpdateUpToDate;
+
+  /// No description provided for @mineUpdateNotes.
+  ///
+  /// In zh, this message translates to:
+  /// **'更新内容'**
+  String get mineUpdateNotes;
+
+  /// No description provided for @mineUpdatePackageMissingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'未配置安装包地址'**
+  String get mineUpdatePackageMissingTitle;
+
+  /// No description provided for @mineUpdatePackageMissingMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'更新策略已生效，但当前没有可下载的安装包地址。请管理员在发布通道补充安装包。'**
+  String get mineUpdatePackageMissingMessage;
+
+  /// No description provided for @mineUpdatePackageBrokenPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'更新策略已生效，但安装包不可用：'**
+  String get mineUpdatePackageBrokenPrefix;
+
+  /// No description provided for @mineUpdatePackageBrokenSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **'。请管理员在发布通道补充安装包。'**
+  String get mineUpdatePackageBrokenSuffix;
+
+  /// No description provided for @mineUpdateDownloading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在下载更新包'**
+  String get mineUpdateDownloading;
+
+  /// No description provided for @mineUpdateDownloadingProgressPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在下载 '**
+  String get mineUpdateDownloadingProgressPrefix;
+
+  /// No description provided for @mineUpdateInstalling.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在打开安装器'**
+  String get mineUpdateInstalling;
+
+  /// No description provided for @mineUpdateInstallDownloaded.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装已下载包'**
+  String get mineUpdateInstallDownloaded;
+
+  /// No description provided for @mineUpdateDownloadAndInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载并安装'**
+  String get mineUpdateDownloadAndInstall;
+
+  /// No description provided for @mineUpdatePackageLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装包'**
+  String get mineUpdatePackageLabel;
+
+  /// No description provided for @mineAboutTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'多仪'**
+  String get mineAboutTitle;
+
+  /// No description provided for @mineAboutVersionPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'版本: '**
+  String get mineAboutVersionPrefix;
+
+  /// No description provided for @mineAboutTagline.
+  ///
+  /// In zh, this message translates to:
+  /// **'Flutter 跨平台效率工具'**
+  String get mineAboutTagline;
+
+  /// No description provided for @mineAboutOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'好的'**
+  String get mineAboutOk;
+
+  /// No description provided for @mineAiAssistant.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 助手'**
+  String get mineAiAssistant;
+
+  /// No description provided for @mineAiAssistantDisabledMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理员后台配置 AI 后，这里会显示周回顾、任务拆解和建议生成入口。'**
+  String get mineAiAssistantDisabledMessage;
+
+  /// No description provided for @mineAiReviewTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 每周回顾'**
+  String get mineAiReviewTitle;
+
+  /// No description provided for @mineAiCollapse.
+  ///
+  /// In zh, this message translates to:
+  /// **'收起回顾'**
+  String get mineAiCollapse;
+
+  /// No description provided for @mineAiExpand.
+  ///
+  /// In zh, this message translates to:
+  /// **'展开回顾'**
+  String get mineAiExpand;
+
+  /// No description provided for @mineAiGenerate.
+  ///
+  /// In zh, this message translates to:
+  /// **'生成'**
+  String get mineAiGenerate;
+
+  /// No description provided for @mineAiGeneratedToday.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日已生成'**
+  String get mineAiGeneratedToday;
+
+  /// No description provided for @mineAiExpandFull.
+  ///
+  /// In zh, this message translates to:
+  /// **'展开完整回顾'**
+  String get mineAiExpandFull;
+
+  /// No description provided for @mineAiRangeThisWeek.
+  ///
+  /// In zh, this message translates to:
+  /// **'本周'**
+  String get mineAiRangeThisWeek;
+
+  /// No description provided for @mineAiRangeLastWeek.
+  ///
+  /// In zh, this message translates to:
+  /// **'上周'**
+  String get mineAiRangeLastWeek;
+
+  /// No description provided for @mineAiHintPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击\"生成\"让 AI 根据'**
+  String get mineAiHintPrefix;
+
+  /// No description provided for @mineAiHintSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **'完成数据写一段总结与建议，当天会保留结果'**
+  String get mineAiHintSuffix;
+
+  /// No description provided for @mineAiSummaryHeaderSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **'数据：完成 '**
+  String get mineAiSummaryHeaderSuffix;
+
+  /// No description provided for @mineAiSummaryTodosSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 项待办，专注 '**
+  String get mineAiSummaryTodosSuffix;
+
+  /// No description provided for @mineAiSummaryFocusSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 分钟，习惯连续打卡 '**
+  String get mineAiSummaryFocusSuffix;
+
+  /// No description provided for @mineAiSummaryStreakSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 天。'**
+  String get mineAiSummaryStreakSuffix;
+
+  /// No description provided for @appLockPinHintEnter.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入 PIN 解锁'**
+  String get appLockPinHintEnter;
 }
 
 class _AppLocalizationsDelegate

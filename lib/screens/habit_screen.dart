@@ -986,7 +986,7 @@ class _HabitTodaySummaryCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '$streakLabel $longestStreak 天',
+                    '$streakLabel $longestStreak ${I18n.tr('unit.day')}',
                     style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.58),
                       fontSize: 11,
@@ -1051,7 +1051,7 @@ class _HabitGroupSection extends StatelessWidget {
             ),
           ),
           subtitle: Text(
-            '${group.completedTodayCount}/${group.habits.length} 今日达标',
+            '${group.completedTodayCount}/${group.habits.length}${I18n.tr('habit.group.today_suffix')}',
             style: appSecondaryControlLabelStyle(
               context,
             ).copyWith(color: cs.onSurfaceVariant, fontSize: 10, height: 1.08),
@@ -1063,7 +1063,7 @@ class _HabitGroupSection extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
                 child: Text(
-                  '还有 $hiddenCount 个习惯，请进入今日打卡或习惯详情查看',
+                  "${I18n.tr('habit.group.more_habits_prefix')}$hiddenCount${I18n.tr('habit.group.more_habits_suffix')}",
                   style: appSecondaryControlLabelStyle(context).copyWith(
                     color: cs.onSurfaceVariant,
                     fontSize: DesignTokens.fontSizeCaption,
@@ -1230,7 +1230,7 @@ class _HabitSummaryTile extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '$streakLabel ${habit.currentStreak} $streakUnit · 最佳 ${habit.bestStreak} $streakUnit',
+                          '$streakLabel ${habit.currentStreak} $streakUnit · ${I18n.tr('habit.best_short')} ${habit.bestStreak} $streakUnit',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

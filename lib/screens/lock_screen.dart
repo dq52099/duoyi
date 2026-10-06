@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../core/i18n.dart';
 import '../providers/app_lock_provider.dart';
 import '../providers/theme_provider.dart';
 
@@ -38,7 +39,7 @@ class _LockScreenState extends State<LockScreen> {
       } else {
         HapticFeedback.heavyImpact();
         setState(() {
-          _error = 'PIN 错误';
+          _error = I18n.tr('app_lock.pin_wrong');
           _input = '';
         });
       }
@@ -48,53 +49,68 @@ class _LockScreenState extends State<LockScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final s = context.watch<ThemeProvider>().brand.strings;
-    final cs = Theme.of(context).colorScheme;
+    // LockScreen 以 const 实例挂在 home Stack 中（见 main.dart），语言切换时
+    // 父级不会下发新 widget；监听 I18n.localeListenable 让本页在语言热切换时
+    // 重建，品牌词条（s.appTitle）与 PIN 文案即时跟随。
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, child) {
+        final s = context.watch<ThemeProvider>().brand.strings;
+        final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      body: SafeArea(
-        child: Column(
-          children: [
-            const Spacer(),
-            Icon(Icons.lock, size: 48, color: cs.primary),
-            const SizedBox(height: 10),
-            Text(
-              s.appTitle,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text('输入 PIN 解锁', style: TextStyle(color: Colors.grey)),
-            const SizedBox(height: 22),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                _input.length.clamp(0, 8),
-                (i) => Container(
-                  width: 12,
-                  height: 12,
-                  margin: const EdgeInsets.symmetric(horizontal: 5),
-                  decoration: BoxDecoration(
-                    color: cs.primary,
-                    shape: BoxShape.circle,
+        return Scaffold(
+          backgroundColor: cs.surface,
+          body: SafeArea(
+            child: Column(
+              children: [
+                const Spacer(),
+                Icon(Icons.lock, size: 48, color: cs.primary),
+                const SizedBox(height: 10),
+                Text(
+                  s.appTitle,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
-              ),
+                const SizedBox(height: 6),
+                Text(
+                  I18n.tr('app_lock.pin_hint_enter'),
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    _input.length.clamp(0, 8),
+                    (i) => Container(
+                      width: 12,
+                      height: 12,
+                      margin: const EdgeInsets.symmetric(horizontal: 5),
+                      decoration: BoxDecoration(
+                        color: cs.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ),
+                const Spacer(),
+                child!,
+                const SizedBox(height: 24),
+              ],
             ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Text(_error!, style: const TextStyle(color: Colors.red)),
-              ),
-            const Spacer(),
-            _Keypad(onTap: _press),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
+      child: _Keypad(onTap: _press),
     );
   }
 }

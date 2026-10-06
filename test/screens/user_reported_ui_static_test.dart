@@ -45,12 +45,15 @@ void main() {
       expect(card, contains('_reviewExpanded = true;'));
       expect(card, contains("key: const ValueKey('mine_ai_review_toggle')"));
       expect(card, contains("key: const ValueKey('mine_ai_review_content')"));
-      expect(card, contains("tooltip: _reviewExpanded ? '收起回顾' : '展开回顾'"));
+      expect(
+        card,
+        contains("_reviewExpanded ? 'mine.ai.collapse' : 'mine.ai.expand'"),
+      );
       expect(card, contains('ClipRect('));
       expect(card, contains('AnimatedSize('));
       expect(card, contains('_reviewExpanded'));
       expect(card, contains('const SizedBox.shrink()'));
-      expect(card, contains("label: const Text('展开完整回顾')"));
+      expect(card, contains("label: Text(I18n.tr('mine.ai.expand_full'))"));
     });
 
     test('我的页保留固定顶部栏，资料统计和菜单作为内容整体滚动', () {

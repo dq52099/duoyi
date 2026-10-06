@@ -140,7 +140,7 @@ void main() {
     expect(mine, contains('child: anniversary.MemorialAnniversaryScreen()'));
     expect(mine, contains('child: anniversary.BirthdayScreen()'));
     expect(mine, contains('child: CountdownScreen()'));
-    expect(mine, contains("label: '倒数日'"));
+    expect(mine, contains("label: I18n.tr('countdown.title')"));
     expect(mine, isNot(contains('const AnniversaryScreen(initialTab: 3)')));
     expect(
       anniversary,

@@ -1,4 +1,24 @@
 import 'app_brand.dart';
+import 'brand_strings_en/botw.dart';
+import 'brand_strings_en/default_brand.dart';
+import 'brand_strings_en/genshin.dart';
+import 'brand_strings_en/liquid_glass.dart';
+import 'brand_strings_en/re0.dart';
+import 'brand_strings_en/star_rail.dart';
+import 'brand_strings_en/wuthering.dart';
+import 'brand_strings_en/yanyun.dart';
+import 'brand_strings_en/zzz.dart';
+import 'i18n.dart';
+
+export 'brand_strings_en/botw.dart';
+export 'brand_strings_en/default_brand.dart';
+export 'brand_strings_en/genshin.dart';
+export 'brand_strings_en/liquid_glass.dart';
+export 'brand_strings_en/re0.dart';
+export 'brand_strings_en/star_rail.dart';
+export 'brand_strings_en/wuthering.dart';
+export 'brand_strings_en/yanyun.dart';
+export 'brand_strings_en/zzz.dart';
 
 /// Brand-specific copy. Every screen pulls strings from here so changing the
 /// theme also changes wording (titles, tab labels, button text, empty
@@ -883,5 +903,33 @@ class BrandStrings {
       case BrandStyle.liquidGlass:
         return liquidGlass;
     }
+  }
+
+  /// 按语言分发主题文案：en 命中英文变体（lib/core/brand_strings_en/，
+  /// 值为已翻译的英文文案），其余语言走 zh 常量。
+  static BrandStrings forLocale(BrandStyle style, AppLocale locale) {
+    if (locale == AppLocale.en) {
+      switch (style) {
+        case BrandStyle.defaultBrand:
+          return enDefaultBrand;
+        case BrandStyle.re0:
+          return enRe0;
+        case BrandStyle.genshin:
+          return enGenshin;
+        case BrandStyle.starRail:
+          return enStarRail;
+        case BrandStyle.wuthering:
+          return enWuthering;
+        case BrandStyle.zzz:
+          return enZzz;
+        case BrandStyle.yanyun:
+          return enYanyun;
+        case BrandStyle.botw:
+          return enBotw;
+        case BrandStyle.liquidGlass:
+          return enLiquidGlass;
+      }
+    }
+    return forStyle(style);
   }
 }

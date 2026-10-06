@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/models/anniversary.dart';
 import 'package:duoyi/models/countdown.dart';
 import 'package:duoyi/models/goal.dart';
@@ -1177,6 +1178,63 @@ void main() {
         _idFor('todo:${todo.id}:absolute'),
       ]);
       expect(notif.scheduled.single['title'], '提醒：${todo.title}');
+    });
+
+    test('syncTodos 一次性/相对截止提醒标题跟随语言（en 下不再回退中文）', () async {
+      I18n.setLocale(AppLocale.en);
+      addTearDown(() => I18n.setLocale(AppLocale.zh));
+
+      final due = DateTime.now().add(const Duration(hours: 2));
+      final absoluteTodo = TodoItem(
+        id: 'absolute-title-en',
+        title: 'Submit report',
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'absolute',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.push,
+              hour: due.hour,
+              minute: due.minute,
+            ),
+          ],
+        ),
+      );
+      final relativeTodo = TodoItem(
+        id: 'relative-title-en',
+        title: 'Review draft',
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'relative',
+              type: ReminderRuleType.relativeToDue,
+              kind: ReminderKind.push,
+              hour: due.hour,
+              minute: due.minute,
+              offsetMinutes: 0,
+            ),
+          ],
+        ),
+      );
+
+      await scheduler.syncTodos([absoluteTodo, relativeTodo]);
+
+      expect(
+        notif.scheduled.singleWhere(
+          (entry) => entry['id'] == _idFor('todo:${absoluteTodo.id}:absolute'),
+        )['title'],
+        'Reminder: ${absoluteTodo.title}',
+      );
+      expect(
+        notif.scheduled.singleWhere(
+          (entry) => entry['id'] == _idFor('todo:${relativeTodo.id}:relative'),
+        )['title'],
+        'Reminder: ${relativeTodo.title}',
+      );
     });
 
     test('syncTodos 对重复的每日通知只注册第一条规则', () async {

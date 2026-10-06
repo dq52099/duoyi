@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/models/time_entry.dart';
@@ -157,6 +158,14 @@ void main() {
     expect(monthly.streakUnitLabel, '月');
     expect(daily.flexPeriodGoalLabel, isEmpty);
     expect(daily.streakUnitLabel, '天');
+
+    // en locale：streakUnitLabel 必须跟随语言，否则与 en 骨架的
+    // habitStreakLabel（'Streak'）拼出「Streak 5 天」式混搭。
+    I18n.setLocale(AppLocale.en);
+    addTearDown(() => I18n.setLocale(AppLocale.zh));
+    expect(weekly.streakUnitLabel, 'weeks');
+    expect(monthly.streakUnitLabel, 'months');
+    expect(daily.streakUnitLabel, 'days');
   });
 
   test(

@@ -133,7 +133,13 @@ class TodayScreen extends StatelessWidget {
         !reminderGroups.isEmpty || suggestions.isNotEmpty;
 
     // 问候语随主题品牌文案变化（BrandStrings.greetingFor 按时段取词）。
-    final greeting = '${s.greetingFor(now)}，${user.profile.username}';
+    // 分隔符与用户名兜底跟随 locale：en 下为 "Good afternoon, User"。
+    final rawUsername = user.profile.username.trim();
+    final displayUsername = rawUsername.isEmpty || rawUsername == '用户'
+        ? I18n.tr('profile.default_user')
+        : rawUsername;
+    final greeting =
+        '${s.greetingFor(now)}${I18n.tr('greeting.separator')}$displayUsername';
     final almanacCard = _TodayAlmanacCard(
       now: now,
       lunarText: lunar.chineseText,
@@ -296,7 +302,7 @@ class TodayScreen extends StatelessWidget {
       return _section(
         I18n.tr('today.todos'),
         subtitle:
-            '$todayTodosCount ${I18n.tr('today.unit.item')} · ${I18n.tr('today.completed')} $completedTodayCount · 无截止 ${noDueTodayTodos.length}',
+            "$todayTodosCount ${I18n.tr('today.unit.item')} · ${I18n.tr('today.completed')} $completedTodayCount · ${I18n.tr('today.no_due')} ${noDueTodayTodos.length}",
         onMore: () => TodayDetailRouter.open(context, TodaySectionKind.todos),
         child: todayTodos.isEmpty
             ? _TodayTodoEmptyState(
@@ -1907,7 +1913,7 @@ class _TodayTodoEmptyState extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '今天暂无待办，点击查看或添加任务',
+                  I18n.tr('today.todos.empty'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -1987,7 +1993,7 @@ class _TodayNoDueDateLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Text(
-      '无截止日期',
+      I18n.tr('today.no_due_date'),
       style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
     );
   }
@@ -2003,17 +2009,25 @@ class _TodayTodoStatusPill extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final (label, icon, color) = switch (visual) {
       TodoVisualState.completed => (
-        '已完成',
+        I18n.tr('today.completed'),
         Icons.check_circle_outline,
         cs.tertiary,
       ),
-      TodoVisualState.overdue => ('逾期', Icons.priority_high_rounded, cs.error),
+      TodoVisualState.overdue => (
+        I18n.tr('todo.status.overdue'),
+        Icons.priority_high_rounded,
+        cs.error,
+      ),
       TodoVisualState.dueSoon => (
-        '临期',
+        I18n.tr('todo.status.due_soon'),
         Icons.alarm_outlined,
         Colors.orange.shade700,
       ),
-      _ => ('正常', Icons.radio_button_unchecked, cs.onSurfaceVariant),
+      _ => (
+        I18n.tr('todo.status.normal'),
+        Icons.radio_button_unchecked,
+        cs.onSurfaceVariant,
+      ),
     };
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -3046,7 +3060,10 @@ class _OverdueReminderBadge extends StatelessWidget {
           children: [
             Icon(Icons.priority_high_rounded, size: 10, color: color),
             const SizedBox(width: 2),
-            Text('逾期', style: TextStyle(fontSize: 10, color: color)),
+            Text(
+              I18n.tr('todo.status.overdue'),
+              style: TextStyle(fontSize: 10, color: color),
+            ),
           ],
         ),
       ),

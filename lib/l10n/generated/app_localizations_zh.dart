@@ -2444,6 +2444,108 @@ class AppLocalizationsZh extends AppLocalizations {
   String get reminderKindOff => '关闭';
 
   @override
+  String get reminderTodoTitlePrefix => '提醒：';
+
+  @override
+  String get widgetNoScheduleToday => '今日没有日程';
+
+  @override
+  String get widgetTodayPrefix => '今日：';
+
+  @override
+  String get widgetFocusCountingUp => '正计时专注中';
+
+  @override
+  String get widgetFocusCountdown => '专注倒计时';
+
+  @override
+  String get widgetShortBreakCountdown => '短休息倒计时';
+
+  @override
+  String get widgetLongBreakCountdown => '长休息倒计时';
+
+  @override
+  String get widgetFocusNotStarted => '今日还未专注';
+
+  @override
+  String get widgetFocusTodayPrefix => '今日专注 ';
+
+  @override
+  String get widgetFocusTodaySuffix => ' 次';
+
+  @override
+  String get widgetHabitAllDone => '习惯已全部完成';
+
+  @override
+  String get widgetHabitProgressPrefix => '习惯完成 ';
+
+  @override
+  String get widgetHabitProgressSuffix => '%';
+
+  @override
+  String get widgetStreakPrefix => '当前连续 ';
+
+  @override
+  String get widgetStreakSuffix => ' 天';
+
+  @override
+  String get widgetNextFocusSuffix => ' 分钟专注';
+
+  @override
+  String get widgetHabitQuickCheckHint => '点击进入习惯打卡';
+
+  @override
+  String get widgetHabitCheckinPrefix => '打卡：';
+
+  @override
+  String get widgetDaysRemainingPrefix => '还有 ';
+
+  @override
+  String get widgetDaysRemainingSuffix => ' 天';
+
+  @override
+  String get widgetCourseSectionPrefix => '';
+
+  @override
+  String get widgetCourseSectionSuffix => '节 ';
+
+  @override
+  String get widgetTodoTop3Empty => '今天没有未完成待办';
+
+  @override
+  String get widgetGoalEmpty => '暂无进行中目标';
+
+  @override
+  String get widgetGoalHint => '本周目标保持推进';
+
+  @override
+  String get widgetAnniversaryEmpty => '暂无近期纪念日';
+
+  @override
+  String get widgetCourseEmpty => '今日暂无课程';
+
+  @override
+  String get widgetNoteEmpty => '暂无随手记';
+
+  @override
+  String get widgetDiaryEmpty => '暂无日记';
+
+  @override
+  String get widgetScheduleOpenCalendar => '打开日历查看完整安排';
+
+  @override
+  String get widgetScheduleTimezoneHint => '提醒会跟随系统时区';
+
+  @override
+  String get widgetCalendarMonthSummary => '本月日期 · 今日已标记';
+
+  @override
+  String get widgetHabitPending => '今日习惯待打卡';
+
+  @override
+  String get widgetStreakRecordPrefix => '连续记录 ';
+
+  @override
   String get timeAuditTitle => '时间足迹';
 
   @override
@@ -2634,4 +2736,347 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get syncStateAutoRetryHint => '将在后台自动重试';
+
+  @override
+  String get greetingSeparator => '，';
+
+  @override
+  String get todayNoDue => '无截止';
+
+  @override
+  String get todayNoDueDate => '无截止日期';
+
+  @override
+  String get todayTodosEmpty => '今天暂无待办，点击查看或添加任务';
+
+  @override
+  String get todoStatusOverdue => '逾期';
+
+  @override
+  String get todoStatusDueSoon => '临期';
+
+  @override
+  String get todoStatusNormal => '正常';
+
+  @override
+  String get habitWeeklyTodayPrefix => '今日 ';
+
+  @override
+  String get habitWeeklyTodaySuffix => ' 达标';
+
+  @override
+  String get habitWeeklyProgress => '进度';
+
+  @override
+  String get habitWeekday1 => '一';
+
+  @override
+  String get habitWeekday2 => '二';
+
+  @override
+  String get habitWeekday3 => '三';
+
+  @override
+  String get habitWeekday4 => '四';
+
+  @override
+  String get habitWeekday5 => '五';
+
+  @override
+  String get habitWeekday6 => '六';
+
+  @override
+  String get habitWeekday7 => '日';
+
+  @override
+  String get habitGroupTodaySuffix => ' 今日达标';
+
+  @override
+  String get habitGroupMoreHabitsPrefix => '还有 ';
+
+  @override
+  String get habitGroupMoreHabitsSuffix => ' 个习惯，请进入今日打卡或习惯详情查看';
+
+  @override
+  String get habitBestShort => '最佳';
+
+  @override
+  String get todoKanbanNoPriority => '无优先级';
+
+  @override
+  String get todoKanbanNoDue => '无截止日';
+
+  @override
+  String get todoKanbanOverdue => '已逾期';
+
+  @override
+  String get todoKanbanToday => '今天';
+
+  @override
+  String get todoKanbanWithin7Days => '7 天内';
+
+  @override
+  String get todoKanbanLater => '更晚';
+
+  @override
+  String get todoKanbanNoTag => '无标签';
+
+  @override
+  String get todoKanbanDefaultList => '默认清单';
+
+  @override
+  String get authLogout => '退出登录';
+
+  @override
+  String get mineBadgeAdmin => '管理员';
+
+  @override
+  String get mineViewProfileSemantics => '查看个人资料';
+
+  @override
+  String get mineAvatarView => '查看头像';
+
+  @override
+  String get mineAvatarEdit => '修改头像';
+
+  @override
+  String get mineAvatarTitle => '头像';
+
+  @override
+  String get mineMeFallback => '我';
+
+  @override
+  String get mineStatsTodos => '待办完成';
+
+  @override
+  String get mineStatsStreak => '连续打卡';
+
+  @override
+  String get mineStatsFocus => '本周专注';
+
+  @override
+  String get mineStatsProductivity => '效率评分';
+
+  @override
+  String get mineGroupActionPlan => '行动计划';
+
+  @override
+  String get mineGroupReview => '记录回顾';
+
+  @override
+  String get mineGroupSchedule => '日程日期';
+
+  @override
+  String get mineGroupPersonal => '个性安全';
+
+  @override
+  String get mineGroupData => '数据协作';
+
+  @override
+  String get mineGroupNotifications => '通知支持';
+
+  @override
+  String get mineTilePomodoro => '番茄专注';
+
+  @override
+  String get mineTileMoreApps => '更多应用';
+
+  @override
+  String get mineTileMoreAppsSubtitle => '查看隐藏功能';
+
+  @override
+  String get mineTileStatistics => '统计报表';
+
+  @override
+  String get mineTileAchievements => '成就墙';
+
+  @override
+  String get mineTileCourses => '课程表';
+
+  @override
+  String get mineTileIntegrations => '扩展功能';
+
+  @override
+  String get mineTileBackup => '备份';
+
+  @override
+  String get mineTileRestore => '恢复数据';
+
+  @override
+  String get mineTileNotificationHistory => '通知记录';
+
+  @override
+  String get mineTileNotificationHistoryEmpty => '暂无通知记录';
+
+  @override
+  String get mineTileNotificationHistoryCountSuffix => ' 条';
+
+  @override
+  String get mineTileNotificationSettings => '通知设置';
+
+  @override
+  String get mineTileNotificationSettingsSubtitle => '提醒时间、权限、铃声、已注册提醒和记录保留';
+
+  @override
+  String get mineTileAdmin => '管理员后台';
+
+  @override
+  String get mineTileFeedback => '许愿与反馈';
+
+  @override
+  String get mineTileFeedbackSubtitle => '提交建议并分页查看处理记录';
+
+  @override
+  String get mineTileCheckUpdates => '检查更新';
+
+  @override
+  String get mineLogoutConfirmTitle => '退出登录？';
+
+  @override
+  String get mineLogoutConfirmContent =>
+      '退出后会清空本机账号数据（时光币、主题、习惯、待办等本地缓存），重新登录后再从当前账号同步。';
+
+  @override
+  String get mineLogoutDone => '已退出登录，本机账号数据已清理';
+
+  @override
+  String get mineLogoutCleanupFailed => '已退出登录，本机数据清理失败，将在下次登录前重试';
+
+  @override
+  String get profileAvatarFileEmpty => '头像文件为空';
+
+  @override
+  String get profileAvatarSaveFailedPrefix => '头像保存失败：';
+
+  @override
+  String get mineUpdateBadge => '有更新';
+
+  @override
+  String get mineUpdateBadgeVersionPrefix => '新版 ';
+
+  @override
+  String get mineUpdateRequiredTitle => '必须更新';
+
+  @override
+  String get mineUpdateCheckTitle => '检查更新';
+
+  @override
+  String get mineUpdateCurrentVersionPrefix => '当前版本: ';
+
+  @override
+  String get mineUpdateRemoteVersionPrefix => '远端版本: ';
+
+  @override
+  String get mineUpdateMinSupportedPrefix => '最低支持版本: ';
+
+  @override
+  String get mineUpdateForceBannerTitle => '此版本需要强制更新';
+
+  @override
+  String get mineUpdateForceBannerMessage =>
+      '当前版本低于管理员设置的最低支持版本，或管理员已要求所有用户更新后继续使用。';
+
+  @override
+  String get mineUpdateAvailable => '发现新版本';
+
+  @override
+  String get mineUpdateUpToDate => '已是最新版本';
+
+  @override
+  String get mineUpdateNotes => '更新内容';
+
+  @override
+  String get mineUpdatePackageMissingTitle => '未配置安装包地址';
+
+  @override
+  String get mineUpdatePackageMissingMessage =>
+      '更新策略已生效，但当前没有可下载的安装包地址。请管理员在发布通道补充安装包。';
+
+  @override
+  String get mineUpdatePackageBrokenPrefix => '更新策略已生效，但安装包不可用：';
+
+  @override
+  String get mineUpdatePackageBrokenSuffix => '。请管理员在发布通道补充安装包。';
+
+  @override
+  String get mineUpdateDownloading => '正在下载更新包';
+
+  @override
+  String get mineUpdateDownloadingProgressPrefix => '正在下载 ';
+
+  @override
+  String get mineUpdateInstalling => '正在打开安装器';
+
+  @override
+  String get mineUpdateInstallDownloaded => '安装已下载包';
+
+  @override
+  String get mineUpdateDownloadAndInstall => '下载并安装';
+
+  @override
+  String get mineUpdatePackageLabel => '安装包';
+
+  @override
+  String get mineAboutTitle => '多仪';
+
+  @override
+  String get mineAboutVersionPrefix => '版本: ';
+
+  @override
+  String get mineAboutTagline => 'Flutter 跨平台效率工具';
+
+  @override
+  String get mineAboutOk => '好的';
+
+  @override
+  String get mineAiAssistant => 'AI 助手';
+
+  @override
+  String get mineAiAssistantDisabledMessage =>
+      '管理员后台配置 AI 后，这里会显示周回顾、任务拆解和建议生成入口。';
+
+  @override
+  String get mineAiReviewTitle => 'AI 每周回顾';
+
+  @override
+  String get mineAiCollapse => '收起回顾';
+
+  @override
+  String get mineAiExpand => '展开回顾';
+
+  @override
+  String get mineAiGenerate => '生成';
+
+  @override
+  String get mineAiGeneratedToday => '今日已生成';
+
+  @override
+  String get mineAiExpandFull => '展开完整回顾';
+
+  @override
+  String get mineAiRangeThisWeek => '本周';
+
+  @override
+  String get mineAiRangeLastWeek => '上周';
+
+  @override
+  String get mineAiHintPrefix => '点击\"生成\"让 AI 根据';
+
+  @override
+  String get mineAiHintSuffix => '完成数据写一段总结与建议，当天会保留结果';
+
+  @override
+  String get mineAiSummaryHeaderSuffix => '数据：完成 ';
+
+  @override
+  String get mineAiSummaryTodosSuffix => ' 项待办，专注 ';
+
+  @override
+  String get mineAiSummaryFocusSuffix => ' 分钟，习惯连续打卡 ';
+
+  @override
+  String get mineAiSummaryStreakSuffix => ' 天。';
+
+  @override
+  String get appLockPinHintEnter => '输入 PIN 解锁';
 }

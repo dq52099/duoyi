@@ -131,8 +131,13 @@ void main() {
 
   test('Mine notification history entry hides zero history count', () {
     final source = File('lib/screens/mine_screen.dart').readAsStringSync();
-    final start = source.indexOf("label: '通知记录'");
-    final end = source.indexOf("label: '通知设置'", start);
+    final start = source.indexOf(
+      "label: I18n.tr('mine.tile.notification_history')",
+    );
+    final end = source.indexOf(
+      "label: I18n.tr('mine.tile.notification_settings')",
+      start,
+    );
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
     final entry = source.substring(start, end);
@@ -141,50 +146,80 @@ void main() {
     expect(entry, contains('const _UnreadDot()'));
     expect(entry, contains('notificationHistoryCount == 0'));
     expect(entry, contains('? null'));
-    expect(entry, contains(r"'$notificationHistoryCount 条'"));
+    expect(
+      entry,
+      contains(
+        r"'$notificationHistoryCount${I18n.tr('mine.tile.notification_history.count_suffix')}'",
+      ),
+    );
   });
 
   test(
     'Mine notification history and reminder preferences are separate entries',
     () {
       final source = File('lib/screens/mine_screen.dart').readAsStringSync();
-      final groupStart = source.indexOf("title: '通知支持'");
-      final groupEnd = source.indexOf("label: '公告'", groupStart);
+      final groupStart = source.indexOf(
+        "title: I18n.tr('mine.group.notifications')",
+      );
+      final groupEnd = source.indexOf(
+        "label: I18n.tr('announcement.title')",
+        groupStart,
+      );
       expect(groupStart, greaterThanOrEqualTo(0));
       expect(groupEnd, greaterThan(groupStart));
       final group = source.substring(groupStart, groupEnd);
 
-      expect(group, contains("label: '通知记录'"));
+      expect(
+        group,
+        contains("label: I18n.tr('mine.tile.notification_history')"),
+      );
       expect(group, contains('onTap: () => _openNotificationHistory(context)'));
-      expect(group, contains("label: '通知设置'"));
-      expect(group, contains("subtitle: '提醒时间、权限、铃声、已注册提醒和记录保留'"));
+      expect(
+        group,
+        contains("label: I18n.tr('mine.tile.notification_settings')"),
+      );
+      expect(
+        group,
+        contains(
+          "subtitle: I18n.tr('mine.tile.notification_settings.subtitle')",
+        ),
+      );
       expect(
         group,
         contains('onTap: () => _openNotificationSettings(context)'),
       );
       expect(
-        group.indexOf("label: '通知记录'"),
-        lessThan(group.indexOf("label: '通知设置'")),
+        group.indexOf("label: I18n.tr('mine.tile.notification_history')"),
+        lessThan(
+          group.indexOf("label: I18n.tr('mine.tile.notification_settings')"),
+        ),
       );
       expect(
         group,
         contains('hasUnreadNotificationHistory'),
         reason: '通知记录入口展示未读红点。',
       );
-      final settingsEntry = group.substring(group.indexOf("label: '通知设置'"));
+      final settingsEntry = group.substring(
+        group.indexOf("label: I18n.tr('mine.tile.notification_settings')"),
+      );
       expect(
         settingsEntry,
         isNot(contains('trailing: hasUnreadNotificationHistory')),
         reason: '通知设置是配置入口，不应该因为通知记录未读而挂红点。',
       );
-      expect(group, isNot(contains("label: '更多应用'")));
+      expect(group, isNot(contains("label: I18n.tr('mine.tile.more_apps')")));
 
-      final actionStart = source.indexOf("title: '行动计划'");
-      final actionEnd = source.indexOf("title: '记录回顾'", actionStart);
+      final actionStart = source.indexOf(
+        "title: I18n.tr('mine.group.action_plan')",
+      );
+      final actionEnd = source.indexOf(
+        "title: I18n.tr('mine.group.review')",
+        actionStart,
+      );
       expect(actionStart, greaterThanOrEqualTo(0));
       expect(actionEnd, greaterThan(actionStart));
       final actionGroup = source.substring(actionStart, actionEnd);
-      expect(actionGroup, contains("label: '更多应用'"));
+      expect(actionGroup, contains("label: I18n.tr('mine.tile.more_apps')"));
       expect(
         actionGroup,
         contains('onTap: () => _openMoreApplications(context)'),
@@ -368,16 +403,27 @@ void main() {
     expect(settingsScreen, contains('this.markReadOnOpen = false'));
     expect(settingsScreen, isNot(contains('service.markHistorySeen()')));
 
-    final supportStart = mine.indexOf("title: '通知支持'");
-    final supportEnd = mine.indexOf("label: '管理员后台'", supportStart);
+    final supportStart = mine.indexOf(
+      "title: I18n.tr('mine.group.notifications')",
+    );
+    final supportEnd = mine.indexOf(
+      "label: I18n.tr('mine.tile.admin')",
+      supportStart,
+    );
     expect(supportStart, greaterThanOrEqualTo(0));
     expect(supportEnd, greaterThan(supportStart));
     final supportGroup = mine.substring(supportStart, supportEnd);
-    expect(supportGroup, contains("label: '通知记录'"));
-    expect(supportGroup, contains("label: '通知设置'"));
+    expect(
+      supportGroup,
+      contains("label: I18n.tr('mine.tile.notification_history')"),
+    );
+    expect(
+      supportGroup,
+      contains("label: I18n.tr('mine.tile.notification_settings')"),
+    );
     expect(supportGroup, contains('hasUnreadNotificationHistory'));
     final settingsEntry = supportGroup.substring(
-      supportGroup.indexOf("label: '通知设置'"),
+      supportGroup.indexOf("label: I18n.tr('mine.tile.notification_settings')"),
     );
     expect(
       settingsEntry,

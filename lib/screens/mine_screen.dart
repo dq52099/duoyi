@@ -167,7 +167,7 @@ class MineScreen extends StatelessWidget {
     final localDisplayName = _firstNonEmpty([
       profile.displayName,
       profile.username,
-      '用户',
+      I18n.tr('profile.default_user'),
     ]);
     final displayName = auth.isLoggedIn
         ? _firstNonEmpty([
@@ -205,10 +205,10 @@ class MineScreen extends StatelessWidget {
                   left: 0,
                   top: 0,
                   child: Tooltip(
-                    message: '查看头像',
+                    message: I18n.tr('mine.avatar.view'),
                     child: Semantics(
                       button: true,
-                      label: '查看头像',
+                      label: I18n.tr('mine.avatar.view'),
                       child: InkWell(
                         key: const ValueKey('mine_avatar_preview_button'),
                         customBorder: const CircleBorder(),
@@ -265,10 +265,10 @@ class MineScreen extends StatelessWidget {
                     key: const ValueKey('mine_avatar_edit_button'),
                     dimension: 44,
                     child: Tooltip(
-                      message: '修改头像',
+                      message: I18n.tr('mine.avatar.edit'),
                       child: Semantics(
                         button: true,
-                        label: '修改头像',
+                        label: I18n.tr('mine.avatar.edit'),
                         child: Material(
                           color: Colors.transparent,
                           shape: const CircleBorder(),
@@ -315,7 +315,7 @@ class MineScreen extends StatelessWidget {
             height: 30,
             child: auth.isLoggedIn
                 ? Tooltip(
-                    message: '退出登录',
+                    message: I18n.tr('auth.logout'),
                     child: IconButton.filledTonal(
                       key: const ValueKey('mine_top_logout_button'),
                       onPressed: () => _confirmLogout(context),
@@ -337,14 +337,14 @@ class MineScreen extends StatelessWidget {
                       MaterialPageRoute(builder: (_) => const LoginScreen()),
                     ),
                     style: appSecondaryFilledButtonStyle(context),
-                    child: const FittedBox(
+                    child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text('登录', maxLines: 1),
+                      child: Text(I18n.tr('auth.login'), maxLines: 1),
                     ),
                   ),
           );
           final nameText = displayName.trim().isEmpty
-              ? '用户'
+              ? I18n.tr('profile.default_user')
               : displayName.trim();
           final usernameText = username.trim();
           final identityChip = usernameText.isEmpty
@@ -356,12 +356,15 @@ class MineScreen extends StatelessWidget {
                 );
           final rewardChips = <Widget>[
             _MineUserLineChip(
-              label: '时光币 $coins',
+              label: '${I18n.tr('profile.coins')} $coins',
               icon: Icons.savings_outlined,
               color: cs.secondary,
             ),
             if (auth.isLoggedIn && auth.isAdmin)
-              _MineUserLineChip(label: '管理员', color: cs.primary),
+              _MineUserLineChip(
+                label: I18n.tr('mine.badge.admin'),
+                color: cs.primary,
+              ),
           ];
           return SizedBox(
             key: const ValueKey('mine_header_stable_box'),
@@ -377,7 +380,7 @@ class MineScreen extends StatelessWidget {
                     height: headerHeight,
                     child: Semantics(
                       button: true,
-                      label: '查看个人资料',
+                      label: I18n.tr('mine.view_profile_semantics'),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(
                           DesignTokens.radiusCard,
@@ -433,28 +436,28 @@ class MineScreen extends StatelessWidget {
       child: _MineStatsGrid(
         cards: [
           StatsOverviewCard(
-            title: '待办完成',
+            title: I18n.tr('mine.stats.todos'),
             value: '$todoCompletionRate',
             unit: '%',
             icon: Icons.check_circle_outline,
             color: cs.primary,
           ),
           StatsOverviewCard(
-            title: '连续打卡',
+            title: I18n.tr('mine.stats.streak'),
             value: '${profile.currentStreak}',
-            unit: '天',
+            unit: I18n.tr('unit.day'),
             icon: Icons.repeat,
             color: cs.tertiary,
           ),
           StatsOverviewCard(
-            title: '本周专注',
+            title: I18n.tr('mine.stats.focus'),
             value: '$weeklyFocus',
-            unit: '分钟',
+            unit: I18n.tr('unit.minute'),
             icon: Icons.timer,
             color: DesignTokens.defaultError,
           ),
           StatsOverviewCard(
-            title: '效率评分',
+            title: I18n.tr('mine.stats.productivity'),
             value: '${profile.productivityScore}',
             icon: Icons.auto_awesome,
             color: DesignTokens.defaultWarning,
@@ -473,8 +476,8 @@ class MineScreen extends StatelessWidget {
             )
           : AppInfoBanner(
               icon: Icons.auto_awesome,
-              title: 'AI 助手',
-              message: '管理员后台配置 AI 后，这里会显示周回顾、任务拆解和建议生成入口。',
+              title: I18n.tr('mine.ai_assistant'),
+              message: I18n.tr('mine.ai_assistant.disabled_message'),
               color: Colors.purple,
               onTap: auth.isAdmin
                   ? () => Navigator.push(
@@ -496,7 +499,7 @@ class MineScreen extends StatelessWidget {
         surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
-            tooltip: '全局搜索',
+            tooltip: I18n.tr('quick.menu.search'),
             icon: const Icon(Icons.search),
             onPressed: () => _openBrandedRoute(context, const SearchScreen()),
           ),
@@ -511,11 +514,11 @@ class MineScreen extends StatelessWidget {
           aiAssistant,
           const SizedBox(height: 12),
           _TileGroup(
-            title: '行动计划',
+            title: I18n.tr('mine.group.action_plan'),
             children: [
               _Tile(
                 icon: Icons.flag_circle_outlined,
-                label: '目标管理',
+                label: I18n.tr('goal.title'),
                 color: Colors.orange,
                 onTap: () => Navigator.push(
                   context,
@@ -527,7 +530,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.timer,
-                label: '番茄专注',
+                label: I18n.tr('mine.tile.pomodoro'),
                 color: Colors.red,
                 onTap: () => Navigator.push(
                   context,
@@ -540,19 +543,19 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.apps_outlined,
-                label: '更多应用',
-                subtitle: '查看隐藏功能',
+                label: I18n.tr('mine.tile.more_apps'),
+                subtitle: I18n.tr('mine.tile.more_apps.subtitle'),
                 color: Colors.blueGrey,
                 onTap: () => _openMoreApplications(context),
               ),
             ],
           ),
           _TileGroup(
-            title: '记录回顾',
+            title: I18n.tr('mine.group.review'),
             children: [
               _Tile(
                 icon: Icons.access_time,
-                label: '时间足迹',
+                label: I18n.tr('time_audit.title'),
                 color: Colors.teal,
                 onTap: () => Navigator.push(
                   context,
@@ -564,7 +567,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.pie_chart_outline,
-                label: '统计报表',
+                label: I18n.tr('mine.tile.statistics'),
                 color: Colors.indigo,
                 onTap: () => Navigator.push(
                   context,
@@ -576,7 +579,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.book_outlined,
-                label: '日记',
+                label: I18n.tr('diary.title'),
                 color: Colors.teal,
                 onTap: () => Navigator.push(
                   context,
@@ -588,7 +591,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.edit_note,
-                label: '随手记',
+                label: I18n.tr('note.title'),
                 color: Colors.amber.shade700,
                 onTap: () => Navigator.push(
                   context,
@@ -600,7 +603,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.emoji_events_outlined,
-                label: '成就墙',
+                label: I18n.tr('mine.tile.achievements'),
                 color: Colors.amber,
                 onTap: () => Navigator.push(
                   context,
@@ -613,7 +616,7 @@ class MineScreen extends StatelessWidget {
               if (aiEnabled)
                 _Tile(
                   icon: Icons.history,
-                  label: 'AI 周回顾历史',
+                  label: I18n.tr('ai_history.title'),
                   color: Colors.purple,
                   trailing: aiReviewHistoryCount == 0
                       ? null
@@ -632,11 +635,11 @@ class MineScreen extends StatelessWidget {
             ],
           ),
           _TileGroup(
-            title: '日程日期',
+            title: I18n.tr('mine.group.schedule'),
             children: [
               _Tile(
                 icon: Icons.school_outlined,
-                label: '课程表',
+                label: I18n.tr('mine.tile.courses'),
                 color: Colors.blue,
                 onTap: () => Navigator.push(
                   context,
@@ -648,7 +651,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.calendar_month_outlined,
-                label: '万年历',
+                label: I18n.tr('today.almanac.title'),
                 color: Colors.green,
                 onTap: () => Navigator.push(
                   context,
@@ -663,7 +666,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.hourglass_bottom_outlined,
-                label: '倒数日',
+                label: I18n.tr('countdown.title'),
                 color: Colors.deepOrange,
                 onTap: () => Navigator.push(
                   context,
@@ -675,7 +678,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.event_available_outlined,
-                label: '纪念日',
+                label: I18n.tr('anniversary.title'),
                 color: Colors.pink,
                 onTap: () => Navigator.push(
                   context,
@@ -688,7 +691,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.cake_outlined,
-                label: '生日',
+                label: I18n.tr('anniversary.birthday'),
                 color: Colors.purple,
                 onTap: () => Navigator.push(
                   context,
@@ -702,7 +705,7 @@ class MineScreen extends StatelessWidget {
             ],
           ),
           _TileGroup(
-            title: '个性安全',
+            title: I18n.tr('mine.group.personal'),
             children: [
               _Tile(
                 icon: Icons.palette,
@@ -722,7 +725,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.tune,
-                label: '个性设置',
+                label: I18n.tr('preferences.title'),
                 color: Colors.indigo,
                 onTap: () => Navigator.push(
                   context,
@@ -734,7 +737,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.lock_outline,
-                label: '应用锁',
+                label: I18n.tr('app_lock.title'),
                 color: Colors.red.shade400,
                 onTap: () => Navigator.push(
                   context,
@@ -750,11 +753,11 @@ class MineScreen extends StatelessWidget {
           // 与自动重试提示，紧贴"数据协作"分组（含同步冲突记录入口）上方。
           const SyncStatusCard(),
           _TileGroup(
-            title: '数据协作',
+            title: I18n.tr('mine.group.data'),
             children: [
               _Tile(
                 icon: Icons.groups_2_outlined,
-                label: '共享空间',
+                label: I18n.tr('share.title'),
                 color: Colors.cyan,
                 onTap: () => Navigator.push(
                   context,
@@ -766,7 +769,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.extension_outlined,
-                label: '扩展功能',
+                label: I18n.tr('mine.tile.integrations'),
                 color: Colors.deepPurple,
                 onTap: () => Navigator.push(
                   context,
@@ -778,7 +781,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.sync_problem_outlined,
-                label: '同步冲突记录',
+                label: I18n.tr('sync_conflict.title'),
                 color: Colors.orange,
                 onTap: () => Navigator.push(
                   context,
@@ -790,7 +793,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.event_note_outlined,
-                label: '导出为日历 (.ics)',
+                label: I18n.tr('export.title'),
                 color: Colors.lightBlue,
                 onTap: () => Navigator.push(
                   context,
@@ -802,7 +805,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.backup_outlined,
-                label: '备份',
+                label: I18n.tr('mine.tile.backup'),
                 color: Colors.brown,
                 onTap: () => Navigator.push(
                   context,
@@ -815,7 +818,7 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.restore_outlined,
-                label: '恢复数据',
+                label: I18n.tr('mine.tile.restore'),
                 color: Colors.blueGrey,
                 onTap: () => Navigator.push(
                   context,
@@ -829,14 +832,14 @@ class MineScreen extends StatelessWidget {
             ],
           ),
           _TileGroup(
-            title: '通知支持',
+            title: I18n.tr('mine.group.notifications'),
             children: [
               _Tile(
                 icon: Icons.history_toggle_off_outlined,
-                label: '通知记录',
+                label: I18n.tr('mine.tile.notification_history'),
                 subtitle: notificationHistoryCount == 0
-                    ? '暂无通知记录'
-                    : '$notificationHistoryCount 条',
+                    ? I18n.tr('mine.tile.notification_history.empty')
+                    : '$notificationHistoryCount${I18n.tr('mine.tile.notification_history.count_suffix')}',
                 color: Colors.blueGrey,
                 trailing: notificationHistoryCount == 0
                     ? null
@@ -847,15 +850,15 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.notifications_outlined,
-                label: '通知设置',
-                subtitle: '提醒时间、权限、铃声、已注册提醒和记录保留',
+                label: I18n.tr('mine.tile.notification_settings'),
+                subtitle: I18n.tr('mine.tile.notification_settings.subtitle'),
                 color: Colors.orange,
                 onTap: () => _openNotificationSettings(context),
               ),
               if (auth.isLoggedIn && auth.isAdmin)
                 _Tile(
                   icon: Icons.admin_panel_settings_outlined,
-                  label: '管理员后台',
+                  label: I18n.tr('mine.tile.admin'),
                   color: Colors.deepOrange,
                   onTap: () => Navigator.push(
                     context,
@@ -867,7 +870,7 @@ class MineScreen extends StatelessWidget {
                 ),
               _Tile(
                 icon: Icons.campaign_outlined,
-                label: '公告',
+                label: I18n.tr('announcement.title'),
                 color: Colors.cyan,
                 onTap: () => Navigator.push(
                   context,
@@ -879,14 +882,14 @@ class MineScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.forum_outlined,
-                label: '许愿与反馈',
-                subtitle: '提交建议并分页查看处理记录',
+                label: I18n.tr('mine.tile.feedback'),
+                subtitle: I18n.tr('mine.tile.feedback.subtitle'),
                 color: Colors.indigo,
                 onTap: () => _openFeedback(context, 'feature'),
               ),
               _Tile(
                 icon: Icons.system_update,
-                label: '检查更新',
+                label: I18n.tr('mine.tile.check_updates'),
                 color: Colors.teal,
                 trailing: updateChecking
                     ? const SizedBox(
@@ -953,17 +956,17 @@ class MineScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AppDialog(
         icon: const Icon(Icons.logout),
-        title: const Text('退出登录？'),
-        content: const Text('退出后会清空本机账号数据（时光币、主题、习惯、待办等本地缓存），重新登录后再从当前账号同步。'),
+        title: Text(I18n.tr('mine.logout.confirm_title')),
+        content: Text(I18n.tr('mine.logout.confirm_content')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: Text(I18n.tr('action.cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: appSecondaryFilledButtonStyle(ctx),
-            child: const Text('退出登录'),
+            child: Text(I18n.tr('auth.logout')),
           ),
         ],
       ),
@@ -979,7 +982,9 @@ class MineScreen extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          cleanupFailed ? '已退出登录，本机数据清理失败，将在下次登录前重试' : '已退出登录，本机账号数据已清理',
+          cleanupFailed
+              ? I18n.tr('mine.logout.cleanup_failed')
+              : I18n.tr('mine.logout.done'),
         ),
       ),
     );
@@ -1002,7 +1007,7 @@ class MineScreen extends StatelessWidget {
       if (auth.state.isLoggedIn) {
         final bytes = await file.readAsBytes();
         if (bytes.isEmpty) {
-          throw Exception('头像文件为空');
+          throw Exception(I18n.tr('profile.avatar.file_empty'));
         }
         if (bytes.length > 3 * 1024 * 1024) {
           throw Exception(I18n.tr('profile.avatar.too_large'));
@@ -1013,7 +1018,7 @@ class MineScreen extends StatelessWidget {
           username: _firstNonEmpty([
             state.username,
             userProvider.profile.username,
-            '用户',
+            I18n.tr('profile.default_user'),
           ]),
           displayName: state.displayName ?? '',
           email: state.email ?? '',
@@ -1037,11 +1042,15 @@ class MineScreen extends StatelessWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('头像已保存')));
+      ).showSnackBar(SnackBar(content: Text(I18n.tr('profile.avatar.saved'))));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('头像保存失败：${_avatarErrorMessage(e)}')),
+        SnackBar(
+          content: Text(
+            '${I18n.tr('profile.avatar.save_failed_prefix')}${_avatarErrorMessage(e)}',
+          ),
+        ),
       );
     }
   }
@@ -1056,9 +1065,13 @@ class MineScreen extends StatelessWidget {
             auth.state.username,
             profile.displayName,
             profile.username,
-            '我',
+            I18n.tr('mine.me_fallback'),
           ])
-        : _firstNonEmpty([profile.displayName, profile.username, '我']);
+        : _firstNonEmpty([
+            profile.displayName,
+            profile.username,
+            I18n.tr('mine.me_fallback'),
+          ]);
     final avatar = auth.state.isLoggedIn
         ? _firstNonEmpty([
             auth.state.avatar,
@@ -1090,23 +1103,35 @@ class MineScreen extends StatelessWidget {
           return PopScope(
             canPop: !updater.mustUpdate && !updater.busy,
             child: AppDialog(
-              title: Text(updater.mustUpdate ? '必须更新' : '检查更新'),
+              title: Text(
+                I18n.tr(
+                  updater.mustUpdate
+                      ? 'mine.update.required_title'
+                      : 'mine.update.check_title',
+                ),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('当前版本: ${updater.currentVersion}'),
-                  Text('远端版本: ${updater.latestVersion ?? '—'}'),
+                  Text(
+                    '${I18n.tr('mine.update.current_version_prefix')}${updater.currentVersion}',
+                  ),
+                  Text(
+                    "${I18n.tr('mine.update.remote_version_prefix')}${updater.latestVersion ?? '—'}",
+                  ),
                   if (updater.minimumSupportedVersion != null) ...[
                     const SizedBox(height: 4),
-                    Text('最低支持版本: ${updater.minimumSupportedVersion}'),
+                    Text(
+                      "${I18n.tr('mine.update.min_supported_prefix')}${updater.minimumSupportedVersion}",
+                    ),
                   ],
                   if (updater.mustUpdate) ...[
                     const SizedBox(height: 12),
                     AppInfoBanner(
                       icon: Icons.system_update_alt_outlined,
-                      title: '此版本需要强制更新',
-                      message: '当前版本低于管理员设置的最低支持版本，或管理员已要求所有用户更新后继续使用。',
+                      title: I18n.tr('mine.update.force_banner_title'),
+                      message: I18n.tr('mine.update.force_banner_message'),
                       color: Theme.of(context).colorScheme.error,
                       margin: EdgeInsets.zero,
                     ),
@@ -1120,19 +1145,19 @@ class MineScreen extends StatelessWidget {
                   ],
                   if (updater.hasUpdate) ...[
                     const SizedBox(height: 12),
-                    const Text(
-                      '发现新版本',
-                      style: TextStyle(fontWeight: FontWeight.normal),
+                    Text(
+                      I18n.tr('mine.update.available'),
+                      style: const TextStyle(fontWeight: FontWeight.normal),
                     ),
                   ] else if (updater.error == null && !updater.checking) ...[
                     const SizedBox(height: 12),
-                    const Text('已是最新版本'),
+                    Text(I18n.tr('mine.update.up_to_date')),
                   ],
                   if (notes.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    const Text(
-                      '更新内容',
-                      style: TextStyle(fontWeight: FontWeight.normal),
+                    Text(
+                      I18n.tr('mine.update.notes'),
+                      style: const TextStyle(fontWeight: FontWeight.normal),
                     ),
                     const SizedBox(height: 6),
                     ConstrainedBox(
@@ -1158,10 +1183,10 @@ class MineScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     AppInfoBanner(
                       icon: Icons.link_off_outlined,
-                      title: '未配置安装包地址',
+                      title: I18n.tr('mine.update.package_missing_title'),
                       message: updater.forceUpdateBlockedReason == null
-                          ? '更新策略已生效，但当前没有可下载的安装包地址。请管理员在发布通道补充安装包。'
-                          : '更新策略已生效，但安装包不可用：${updater.forceUpdateBlockedReason}。请管理员在发布通道补充安装包。',
+                          ? I18n.tr('mine.update.package_missing_message')
+                          : "${I18n.tr('mine.update.package_broken_prefix')}${updater.forceUpdateBlockedReason}${I18n.tr('mine.update.package_broken_suffix')}",
                       color: Theme.of(context).colorScheme.error,
                       margin: EdgeInsets.zero,
                     ),
@@ -1172,15 +1197,15 @@ class MineScreen extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       updater.downloadProgress == null
-                          ? '正在下载更新包'
-                          : '正在下载 ${(updater.downloadProgress! * 100).clamp(0, 100).toStringAsFixed(0)}%',
+                          ? I18n.tr('mine.update.downloading')
+                          : "${I18n.tr('mine.update.downloading_progress_prefix')}${(updater.downloadProgress! * 100).clamp(0, 100).toStringAsFixed(0)}%",
                       style: const TextStyle(fontSize: 12),
                     ),
                   ] else if (updater.hasUpdate && updater.installing) ...[
                     const SizedBox(height: 12),
                     const LinearProgressIndicator(),
                     const SizedBox(height: 6),
-                    const Text('正在打开安装器', style: TextStyle(fontSize: 12)),
+                    Text(I18n.tr('mine.update.installing')),
                   ],
                 ],
               ),
@@ -1188,7 +1213,7 @@ class MineScreen extends StatelessWidget {
                 if (!updater.mustUpdate)
                   TextButton(
                     onPressed: updater.busy ? null : () => Navigator.pop(ctx),
-                    child: const Text('关闭'),
+                    child: Text(I18n.tr('action.close')),
                   ),
                 if (updater.hasUpdate &&
                     (updater.latestUrl != null ||
@@ -1208,7 +1233,11 @@ class MineScreen extends StatelessWidget {
                           },
                     icon: const Icon(Icons.download_for_offline_outlined),
                     label: Text(
-                      updater.hasDownloadedInstaller ? '安装已下载包' : '下载并安装',
+                      I18n.tr(
+                        updater.hasDownloadedInstaller
+                            ? 'mine.update.install_downloaded'
+                            : 'mine.update.download_and_install',
+                      ),
                     ),
                   ),
               ],
@@ -1268,24 +1297,26 @@ class MineScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AppDialog(
-        title: const Text('多仪'),
-        content: const Column(
+        title: Text(I18n.tr('mine.about.title')),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('版本: ${AppVersion.display}'),
-            SizedBox(height: 4),
-            Text('Flutter 跨平台效率工具'),
-            SizedBox(height: 4),
-            Text('待办'),
-            Text('习惯'),
-            Text('日历'),
-            Text('番茄专注'),
+            Text(
+              "${I18n.tr('mine.about.version_prefix')}${AppVersion.display}",
+            ),
+            const SizedBox(height: 4),
+            Text(I18n.tr('mine.about.tagline')),
+            const SizedBox(height: 4),
+            Text(I18n.tr('nav.todo')),
+            Text(I18n.tr('nav.habit')),
+            Text(I18n.tr('nav.calendar')),
+            Text(I18n.tr('mine.tile.pomodoro')),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('好的'),
+            child: Text(I18n.tr('mine.about.ok')),
           ),
         ],
       ),
@@ -1320,7 +1351,10 @@ class _UpdatePackageInfo extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final label = Text('安装包', style: labelStyle);
+          final label = Text(
+            I18n.tr('mine.update.package_label'),
+            style: labelStyle,
+          );
           final value = Text(
             _breakableUpdateAssetName(assetName),
             softWrap: true,
@@ -1393,7 +1427,9 @@ class _ProfileAvatar extends StatelessWidget {
     final fallback = (networkUrl != null || localPath != null)
         ? displayName
         : (value.isNotEmpty ? value : displayName);
-    final letter = fallback.isNotEmpty ? fallback.characters.first : '我';
+    final letter = fallback.isNotEmpty
+        ? fallback.characters.first
+        : I18n.tr('mine.me_fallback');
 
     return CircleAvatar(
       radius: radius,
@@ -1571,11 +1607,11 @@ class _AvatarPreviewScreen extends StatelessWidget {
         titleTextStyle: appSecondaryRouteTitleTextStyle(
           context,
         ).copyWith(color: Colors.white),
-        title: const Text('头像'),
+        title: Text(I18n.tr('mine.avatar.title')),
         actions: [
           if (onEdit != null)
             IconButton(
-              tooltip: '修改头像',
+              tooltip: I18n.tr('mine.avatar.edit'),
               onPressed: () {
                 Navigator.of(context).pop();
                 WidgetsBinding.instance.addPostFrameCallback((_) => onEdit!());
@@ -1649,7 +1685,9 @@ class _ProfileAvatarFullImage extends StatelessWidget {
     final fallback = (networkUrl != null || localPath != null)
         ? displayName
         : (value.isNotEmpty ? value : displayName);
-    final letter = fallback.isNotEmpty ? fallback.characters.first : '我';
+    final letter = fallback.isNotEmpty
+        ? fallback.characters.first
+        : I18n.tr('mine.me_fallback');
     return CircleAvatar(
       radius: radius,
       backgroundColor: Theme.of(context).colorScheme.primary,
@@ -1733,10 +1771,10 @@ String _avatarCacheKey(String? avatarUrl, String? userId) {
 Future<String> _copyLocalAvatarFile(XFile file) async {
   final bytes = await file.readAsBytes();
   if (bytes.isEmpty) {
-    throw Exception('头像文件为空');
+    throw Exception(I18n.tr('profile.avatar.file_empty'));
   }
   if (bytes.length > 3 * 1024 * 1024) {
-    throw Exception('头像不能超过 3MB');
+    throw Exception(I18n.tr('profile.avatar.too_large'));
   }
   final root = await getApplicationDocumentsDirectory();
   final dir = Directory('${root.path}/profile_avatars');
@@ -1894,7 +1932,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
         periodLabel: label,
       );
       _summary =
-          '$label数据：完成 $completed / $total 项待办，专注 $focus 分钟，习惯连续打卡 $streak 天。';
+          '$label${I18n.tr('mine.ai.summary.header_suffix')}$completed / $total${I18n.tr('mine.ai.summary.todos_suffix')}$focus${I18n.tr('mine.ai.summary.focus_suffix')}$streak${I18n.tr('mine.ai.summary.streak_suffix')}';
       _generatedToday = true;
       _reviewExpanded = true;
     } on AiException catch (e) {
@@ -1915,8 +1953,11 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
     return (start: start, end: start.add(const Duration(days: 7)));
   }
 
-  String _reviewRangeLabel(DateTime now) =>
-      now.weekday == DateTime.monday ? '上周' : '本周';
+  String _reviewRangeLabel(DateTime now) => I18n.tr(
+    now.weekday == DateTime.monday
+        ? 'mine.ai.range.last_week'
+        : 'mine.ai.range.this_week',
+  );
 
   bool _inRange(DateTime at, ({DateTime start, DateTime end}) range) {
     return !at.isBefore(range.start) && at.isBefore(range.end);
@@ -1943,15 +1984,17 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
                 child: Icon(Icons.auto_awesome, color: cs.primary, size: 18),
               ),
               const SizedBox(width: 8),
-              const Text(
-                'AI 每周回顾',
-                style: TextStyle(fontWeight: FontWeight.normal),
+              Text(
+                I18n.tr('mine.ai.review_title'),
+                style: const TextStyle(fontWeight: FontWeight.normal),
               ),
               const Spacer(),
               if (hasReview)
                 IconButton(
                   key: const ValueKey('mine_ai_review_toggle'),
-                  tooltip: _reviewExpanded ? '收起回顾' : '展开回顾',
+                  tooltip: I18n.tr(
+                    _reviewExpanded ? 'mine.ai.collapse' : 'mine.ai.expand',
+                  ),
                   visualDensity: VisualDensity.compact,
                   onPressed: () =>
                       setState(() => _reviewExpanded = !_reviewExpanded),
@@ -1969,7 +2012,13 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(_generatedToday ? '今日已生成' : '生成'),
+                    : Text(
+                        I18n.tr(
+                          _generatedToday
+                              ? 'mine.ai.generated_today'
+                              : 'mine.ai.generate',
+                        ),
+                      ),
               ),
             ],
           ),
@@ -2019,7 +2068,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
                       ),
                       onPressed: () => setState(() => _reviewExpanded = true),
                       icon: const Icon(Icons.unfold_more, size: 15),
-                      label: const Text('展开完整回顾'),
+                      label: Text(I18n.tr('mine.ai.expand_full')),
                     ),
                 ],
               ),
@@ -2028,7 +2077,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
-                '点击"生成"让 AI 根据${_reviewRangeLabel(DateTime.now())}完成数据写一段总结与建议，当天会保留结果',
+                "${I18n.tr('mine.ai.hint_prefix')}${_reviewRangeLabel(DateTime.now())}${I18n.tr('mine.ai.hint_suffix')}",
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             ),
@@ -2095,8 +2144,8 @@ class _UpdateAvailableBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = version == null || version!.trim().isEmpty
-        ? '有更新'
-        : '新版 $version';
+        ? I18n.tr('mine.update.badge')
+        : "${I18n.tr('mine.update.badge_version_prefix')}$version";
     final cs = Theme.of(context).colorScheme;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 96),

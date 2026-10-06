@@ -974,15 +974,14 @@ class _TodoScreenState extends State<TodoScreen> {
                               },
                               // 长按拖动待办到目标象限，松手即换象限。
                               // 与 tile 级入口一致：只读成员不可拖拽换象限。
-                              canEditTodo: (todo) =>
-                                  context
-                                      .read<ShareProvider>()
-                                      .canEdit(todo.workspaceId),
+                              canEditTodo: (todo) => context
+                                  .read<ShareProvider>()
+                                  .canEdit(todo.workspaceId),
                               onTodoQuadrantChanged: (todo, target) {
                                 // 投放时点用最新权限复查，防止陈旧快照放行。
-                                if (!context
-                                    .read<ShareProvider>()
-                                    .canEdit(todo.workspaceId)) {
+                                if (!context.read<ShareProvider>().canEdit(
+                                  todo.workspaceId,
+                                )) {
                                   return;
                                 }
                                 context
@@ -2076,9 +2075,9 @@ _KanbanGroupKey _kanbanGroupKey(
   switch (mode) {
     case TodoKanbanGroupMode.priority:
       if (todo.priority == TodoPriority.none) {
-        return const _KanbanGroupKey(
+        return _KanbanGroupKey(
           id: 'priority_none',
-          label: '无优先级',
+          label: I18n.tr('todo.kanban.no_priority'),
           sortOrder: 50,
         );
       }
@@ -2090,44 +2089,48 @@ _KanbanGroupKey _kanbanGroupKey(
     case TodoKanbanGroupMode.dueDate:
       final due = todo.dueDate;
       if (due == null) {
-        return const _KanbanGroupKey(
+        return _KanbanGroupKey(
           id: 'due_none',
-          label: '无截止日',
+          label: I18n.tr('todo.kanban.no_due'),
           sortOrder: 50,
         );
       }
       final today = DateTime(now.year, now.month, now.day);
       final dueDay = DateTime(due.year, due.month, due.day);
       if (dueDay.isBefore(today)) {
-        return const _KanbanGroupKey(
+        return _KanbanGroupKey(
           id: 'due_overdue',
-          label: '已逾期',
+          label: I18n.tr('todo.kanban.overdue'),
           sortOrder: 0,
         );
       }
       if (dueDay == today) {
-        return const _KanbanGroupKey(
+        return _KanbanGroupKey(
           id: 'due_today',
-          label: '今天',
+          label: I18n.tr('todo.kanban.today'),
           sortOrder: 10,
         );
       }
       if (dueDay.isBefore(today.add(const Duration(days: 7)))) {
-        return const _KanbanGroupKey(
+        return _KanbanGroupKey(
           id: 'due_week',
-          label: '7 天内',
+          label: I18n.tr('todo.kanban.within_7_days'),
           sortOrder: 20,
         );
       }
-      return const _KanbanGroupKey(id: 'due_later', label: '更晚', sortOrder: 30);
+      return _KanbanGroupKey(
+        id: 'due_later',
+        label: I18n.tr('todo.kanban.later'),
+        sortOrder: 30,
+      );
     case TodoKanbanGroupMode.tag:
       final tag = todo.tags
           .map((item) => item.trim())
           .firstWhere((item) => item.isNotEmpty, orElse: () => '');
       if (tag.isEmpty) {
-        return const _KanbanGroupKey(
+        return _KanbanGroupKey(
           id: 'tag_none',
-          label: '无标签',
+          label: I18n.tr('todo.kanban.no_tag'),
           sortOrder: 9999,
         );
       }
@@ -2135,9 +2138,9 @@ _KanbanGroupKey _kanbanGroupKey(
     case TodoKanbanGroupMode.list:
       final listName = todo.listGroupName?.trim() ?? '';
       if (listName.isEmpty) {
-        return const _KanbanGroupKey(
+        return _KanbanGroupKey(
           id: 'list_default',
-          label: '默认清单',
+          label: I18n.tr('todo.kanban.default_list'),
           sortOrder: 9999,
         );
       }

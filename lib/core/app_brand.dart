@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'brand_strings.dart';
 import 'design_tokens.dart';
+import 'i18n.dart';
 
 const String _cnFontFamily = 'sans-serif';
 const List<String> _cnFontFallback = [
@@ -42,7 +43,10 @@ class AppBrand {
   });
 
   String get id => style.name;
-  BrandStrings get strings => BrandStrings.forStyle(style);
+
+  /// 主题文案按当前 locale 分发：zh 走中文常量，en 走英文变体骨架
+  /// （brand_strings_en/）。getter 签名不变，消费端（brand.strings）零改动。
+  BrandStrings get strings => BrandStrings.forLocale(style, I18n.current);
 }
 
 TextTheme _textTheme({

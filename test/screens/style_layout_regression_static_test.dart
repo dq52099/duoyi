@@ -410,10 +410,16 @@ void main() {
     );
     expect(routeSurface, contains('final routeBackground'));
     expect(routeSurface, contains('color: routeBackground'));
-    expect(routeSurface, contains('AppSecondaryControlTheme(child: child)'));
+    // 子树经 locale 键控的 KeyedSubtree 挂载：语言热切换时强制重挂 const 子页，
+    // 文案即时跟随（详见 BrandRouteSurface 内注释）。
+    expect(routeSurface, contains('AppSecondaryControlTheme('));
+    expect(routeSurface, contains('I18n.localeListenable'));
+    expect(routeSurface, contains('ValueKey<AppLocale>(locale)'));
     expect(
       routeSurface,
-      contains('BrandBackground(child: AppSecondaryControlTheme'),
+      contains(
+        'child: BrandBackground(\n            child: AppSecondaryControlTheme(',
+      ),
       reason: '跳转页统一套二级控件字号，避免从我的/更多应用进入后字号偏大。',
     );
     final brandScaffold = brandBackground.substring(
@@ -769,7 +775,7 @@ void main() {
     expect(
       routeSurface,
       contains(
-        'BrandBackground(child: AppSecondaryControlTheme(child: child))',
+        'child: BrandBackground(\n            child: AppSecondaryControlTheme(',
       ),
       reason:
           'Pushed routes must inherit the compact secondary text scale before painting their page content.',

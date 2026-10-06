@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:duoyi/core/app_brand.dart';
 import 'package:duoyi/core/brand_strings.dart';
+import 'package:duoyi/core/i18n.dart';
 
 void main() {
   group('BrandStrings 导航与问候词条（9 套主题）', () {
@@ -84,6 +85,55 @@ void main() {
       ]) {
         expect(value.trim(), isNotEmpty, reason: 'liquidGlass 词条不应为空');
       }
+    });
+
+    test('en 变体存在且与 zh 常量不同一（每套主题均有独立 en 变体）', () {
+      // 「与 zh 不同」按实例同一性断言：forLocale(en) 必须命中
+      // brand_strings_en/ 的独立 en 实例，而不是回退返回 zh 常量。
+      // en 变体声明为顶层 final（非 const）：若用 const，Dart 常量规范化
+      // 会把值全同的 const 实例合并为同一对象，en 分发将无法在运行时区分；
+      // final 保证 en 实例独立。en 值已填充为英文译文，与 zh 的值级差异
+      // 自然存在，本断言无需改动。
+      expect(AppBrands.all, hasLength(9), reason: '应有 9 套主题');
+      for (final brand in AppBrands.all) {
+        final zh = BrandStrings.forLocale(brand.style, AppLocale.zh);
+        final en = BrandStrings.forLocale(brand.style, AppLocale.en);
+        expect(en, isNot(same(zh)), reason: '${brand.id} 的 en 分发应命中独立 en 变体');
+        for (final value in <String>[
+          en.navToday,
+          en.navTodo,
+          en.navHabit,
+          en.navCalendar,
+          en.navFocus,
+          en.navWidget,
+          en.navMine,
+        ]) {
+          expect(value.trim(), isNotEmpty, reason: '${brand.id} en 导航标签不应为空');
+        }
+      }
+    });
+
+    test('AppBrand.strings 跟随 I18n 当前 locale：en 命中 en 变体，还原 zh 走原常量', () {
+      I18n.setLocale(AppLocale.en);
+      try {
+        expect(
+          AppBrands.defaultBrand.strings,
+          same(BrandStrings.forLocale(BrandStyle.defaultBrand, AppLocale.en)),
+          reason: 'en locale 下 default 的 strings 应为 en 变体',
+        );
+        expect(
+          AppBrands.liquidGlass.strings,
+          same(BrandStrings.forLocale(BrandStyle.liquidGlass, AppLocale.en)),
+          reason: 'en locale 下 liquidGlass 的 strings 应为 en 变体',
+        );
+      } finally {
+        I18n.setLocale(AppLocale.zh);
+      }
+      expect(
+        AppBrands.defaultBrand.strings,
+        same(BrandStrings.forStyle(BrandStyle.defaultBrand)),
+        reason: '还原 zh 后 strings 应回到 zh 常量',
+      );
     });
   });
 

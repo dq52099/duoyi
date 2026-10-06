@@ -244,9 +244,11 @@ void main() {
     final source = File(
       'lib/services/home_widget_service.dart',
     ).readAsStringSync();
+    // accountPayloadDefaults 已从 const map 改为取词 getter（登出兜底文案
+    // 随语言），键集合不变；锚点同步迁移为 getter 形态。
     final defaultBlock = _sourceBlock(
       source,
-      'accountPayloadDefaults = <String, Object>{',
+      'accountPayloadDefaults => <String, Object>{',
       '  };',
     );
     final savedKeys = RegExp(

@@ -712,11 +712,17 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                     children: [
                       _StatChip(
                         label: I18n.tr('habit.stat.current_streak'),
-                        value: '${habit.currentStreak}$streakUnit',
+                        value: _habitCountWithUnit(
+                          habit.currentStreak,
+                          streakUnit,
+                        ),
                       ),
                       _StatChip(
                         label: I18n.tr('habit.stat.best_streak'),
-                        value: '${habit.bestStreak}$streakUnit',
+                        value: _habitCountWithUnit(
+                          habit.bestStreak,
+                          streakUnit,
+                        ),
                       ),
                       _StatChip(
                         label: I18n.tr('habit.stat.today'),
@@ -1205,11 +1211,21 @@ String localizedHabitCountForDate(Habit habit, DateTime date) {
 
 String localizedHabitTrendWindowLabel(HabitTrendWindow window) {
   return switch (window) {
-    HabitTrendWindow.days14 => '14${I18n.tr('unit.day')}',
-    HabitTrendWindow.days30 => '30${I18n.tr('unit.day')}',
-    HabitTrendWindow.days90 => '90${I18n.tr('unit.day')}',
+    HabitTrendWindow.days14 => _habitCountWithUnit('14', I18n.tr('unit.day')),
+    HabitTrendWindow.days30 => _habitCountWithUnit('30', I18n.tr('unit.day')),
+    HabitTrendWindow.days90 => _habitCountWithUnit('90', I18n.tr('unit.day')),
     HabitTrendWindow.days365 => I18n.tr('habit.trend.one_year'),
   };
+}
+
+/// 数字与单位拼接：zh 习惯紧拼（「5天」「14天」），en 单位是独立单词需要
+/// 空格（「5 days」「14 days」）。共享 unit 词条（unit.day 等）同时服务
+/// 已带空格的拼接点（如 '${count} ${unit}'），不能在值里内置前导空格，
+/// 因此空格在此处按语言补齐。
+String _habitCountWithUnit(Object count, String unit) {
+  if (unit.isEmpty) return '$count';
+  final spaced = I18n.current == AppLocale.en && !unit.startsWith(' ');
+  return spaced ? '$count $unit' : '$count$unit';
 }
 
 String _localizedHabitStreakUnit(Habit habit) {

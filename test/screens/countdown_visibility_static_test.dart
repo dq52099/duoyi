@@ -18,7 +18,7 @@ void main() {
       'lib/providers/countdown_provider.dart',
     ).readAsStringSync();
 
-    expect(mine, contains("label: '倒数日'"));
+    expect(mine, contains("label: I18n.tr('countdown.title')"));
     expect(mine, contains('child: CountdownScreen()'));
     expect(moreApps, isNot(contains("label: '倒数日'")));
     expect(moreApps, isNot(contains('CountdownScreen')));

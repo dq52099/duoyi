@@ -1,3 +1,4 @@
+import '../core/i18n.dart';
 import 'goal.dart'
     show ReminderKind, ReminderPlan, ReminderRule, ReminderRuleType;
 
@@ -460,11 +461,14 @@ class Habit {
   int get effectiveFlexTarget =>
       (flexTarget ?? weeklyTarget).clamp(1, 9999).toInt();
 
+  /// 连续打卡计数单位（天 / 弹性周期为周、月）。
+  /// 经 I18n 取词：en 骨架 habitStreakLabel 已译为 'Streak'，单位若仍硬编码
+  /// 中文会拼出「Streak 5 天」式混搭。zh 取值与原硬编码逐字节一致。
   String get streakUnitLabel {
-    if (!hasFlexRule) return '天';
+    if (!hasFlexRule) return I18n.tr('unit.day');
     return switch (flexPeriod!) {
-      HabitFlexPeriod.week => '周',
-      HabitFlexPeriod.month => '月',
+      HabitFlexPeriod.week => I18n.tr('habit.unit.week'),
+      HabitFlexPeriod.month => I18n.tr('habit.unit.month'),
     };
   }
 

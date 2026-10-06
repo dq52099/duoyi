@@ -2560,6 +2560,110 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reminderKindOff => 'Off';
 
   @override
+  String get reminderTodoTitlePrefix => 'Reminder: ';
+
+  @override
+  String get widgetNoScheduleToday => 'No events today';
+
+  @override
+  String get widgetTodayPrefix => 'Today: ';
+
+  @override
+  String get widgetFocusCountingUp => 'Focus counting up';
+
+  @override
+  String get widgetFocusCountdown => 'Focus countdown';
+
+  @override
+  String get widgetShortBreakCountdown => 'Short break countdown';
+
+  @override
+  String get widgetLongBreakCountdown => 'Long break countdown';
+
+  @override
+  String get widgetFocusNotStarted => 'No focus today yet';
+
+  @override
+  String get widgetFocusTodayPrefix => '';
+
+  @override
+  String get widgetFocusTodaySuffix => ' focus sessions today';
+
+  @override
+  String get widgetHabitAllDone => 'All habits done';
+
+  @override
+  String get widgetHabitProgressPrefix => 'Habits ';
+
+  @override
+  String get widgetHabitProgressSuffix => '% done';
+
+  @override
+  String get widgetStreakPrefix => 'Current streak: ';
+
+  @override
+  String get widgetStreakSuffix => ' days';
+
+  @override
+  String get widgetNextFocusSuffix => '-min focus';
+
+  @override
+  String get widgetHabitQuickCheckHint => 'Tap to check in';
+
+  @override
+  String get widgetHabitCheckinPrefix => 'Check in: ';
+
+  @override
+  String get widgetDaysRemainingPrefix => 'in ';
+
+  @override
+  String get widgetDaysRemainingSuffix => ' days';
+
+  @override
+  String get widgetCourseSectionPrefix => 'Period ';
+
+  @override
+  String get widgetCourseSectionSuffix => ' ';
+
+  @override
+  String get widgetTodoTop3Empty => 'No open tasks today';
+
+  @override
+  String get widgetGoalEmpty => 'No active goals';
+
+  @override
+  String get widgetGoalHint => 'Keep this week\'s goals moving';
+
+  @override
+  String get widgetAnniversaryEmpty => 'No upcoming anniversaries';
+
+  @override
+  String get widgetCourseEmpty => 'No courses today';
+
+  @override
+  String get widgetNoteEmpty => 'No notes yet';
+
+  @override
+  String get widgetDiaryEmpty => 'No diary entries yet';
+
+  @override
+  String get widgetScheduleOpenCalendar =>
+      'Open the calendar for the full schedule';
+
+  @override
+  String get widgetScheduleTimezoneHint =>
+      'Reminders follow the system time zone';
+
+  @override
+  String get widgetCalendarMonthSummary => 'Month view · today is marked';
+
+  @override
+  String get widgetHabitPending => 'Habits to check in today';
+
+  @override
+  String get widgetStreakRecordPrefix => 'Streak: ';
+
+  @override
   String get timeAuditTitle => 'Time Tracking';
 
   @override
@@ -2754,4 +2858,355 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get syncStateAutoRetryHint =>
       'Will retry automatically in the background';
+
+  @override
+  String get greetingSeparator => ', ';
+
+  @override
+  String get todayNoDue => 'No due';
+
+  @override
+  String get todayNoDueDate => 'No due date';
+
+  @override
+  String get todayTodosEmpty => 'No tasks today. Tap to view or add one';
+
+  @override
+  String get todoStatusOverdue => 'Overdue';
+
+  @override
+  String get todoStatusDueSoon => 'Due soon';
+
+  @override
+  String get todoStatusNormal => 'Normal';
+
+  @override
+  String get habitWeeklyTodayPrefix => '';
+
+  @override
+  String get habitWeeklyTodaySuffix => ' done today';
+
+  @override
+  String get habitWeeklyProgress => 'Progress';
+
+  @override
+  String get habitWeekday1 => 'M';
+
+  @override
+  String get habitWeekday2 => 'T';
+
+  @override
+  String get habitWeekday3 => 'W';
+
+  @override
+  String get habitWeekday4 => 'T';
+
+  @override
+  String get habitWeekday5 => 'F';
+
+  @override
+  String get habitWeekday6 => 'S';
+
+  @override
+  String get habitWeekday7 => 'S';
+
+  @override
+  String get habitGroupTodaySuffix => ' done today';
+
+  @override
+  String get habitGroupMoreHabitsPrefix => '';
+
+  @override
+  String get habitGroupMoreHabitsSuffix =>
+      ' more habits. Use the Today tab or habit details to view them.';
+
+  @override
+  String get habitBestShort => 'Best';
+
+  @override
+  String get todoKanbanNoPriority => 'No priority';
+
+  @override
+  String get todoKanbanNoDue => 'No due date';
+
+  @override
+  String get todoKanbanOverdue => 'Overdue';
+
+  @override
+  String get todoKanbanToday => 'Today';
+
+  @override
+  String get todoKanbanWithin7Days => 'Within 7 days';
+
+  @override
+  String get todoKanbanLater => 'Later';
+
+  @override
+  String get todoKanbanNoTag => 'No tags';
+
+  @override
+  String get todoKanbanDefaultList => 'Default list';
+
+  @override
+  String get authLogout => 'Sign out';
+
+  @override
+  String get mineBadgeAdmin => 'Admin';
+
+  @override
+  String get mineViewProfileSemantics => 'View profile';
+
+  @override
+  String get mineAvatarView => 'View avatar';
+
+  @override
+  String get mineAvatarEdit => 'Edit avatar';
+
+  @override
+  String get mineAvatarTitle => 'Avatar';
+
+  @override
+  String get mineMeFallback => 'Me';
+
+  @override
+  String get mineStatsTodos => 'Tasks done';
+
+  @override
+  String get mineStatsStreak => 'Check-in streak';
+
+  @override
+  String get mineStatsFocus => 'Focus this week';
+
+  @override
+  String get mineStatsProductivity => 'Productivity';
+
+  @override
+  String get mineGroupActionPlan => 'Plan';
+
+  @override
+  String get mineGroupReview => 'Records';
+
+  @override
+  String get mineGroupSchedule => 'Dates';
+
+  @override
+  String get mineGroupPersonal => 'Personal & security';
+
+  @override
+  String get mineGroupData => 'Data';
+
+  @override
+  String get mineGroupNotifications => 'Notifications';
+
+  @override
+  String get mineTilePomodoro => 'Focus timer';
+
+  @override
+  String get mineTileMoreApps => 'More apps';
+
+  @override
+  String get mineTileMoreAppsSubtitle => 'See hidden features';
+
+  @override
+  String get mineTileStatistics => 'Statistics';
+
+  @override
+  String get mineTileAchievements => 'Achievements';
+
+  @override
+  String get mineTileCourses => 'Timetable';
+
+  @override
+  String get mineTileIntegrations => 'Extensions';
+
+  @override
+  String get mineTileBackup => 'Backup';
+
+  @override
+  String get mineTileRestore => 'Restore data';
+
+  @override
+  String get mineTileNotificationHistory => 'Notification log';
+
+  @override
+  String get mineTileNotificationHistoryEmpty => 'No notifications yet';
+
+  @override
+  String get mineTileNotificationHistoryCountSuffix => ' received';
+
+  @override
+  String get mineTileNotificationSettings => 'Notification settings';
+
+  @override
+  String get mineTileNotificationSettingsSubtitle =>
+      'Reminder times, permissions, sounds, registered reminders, and log retention';
+
+  @override
+  String get mineTileAdmin => 'Admin console';
+
+  @override
+  String get mineTileFeedback => 'Wishes & feedback';
+
+  @override
+  String get mineTileFeedbackSubtitle =>
+      'Submit suggestions and track responses';
+
+  @override
+  String get mineTileCheckUpdates => 'Check updates';
+
+  @override
+  String get mineLogoutConfirmTitle => 'Sign out?';
+
+  @override
+  String get mineLogoutConfirmContent =>
+      'Signing out clears local account data (coins, theme, habits, tasks, and other caches). Data re-syncs from the current account after you sign in again.';
+
+  @override
+  String get mineLogoutDone => 'Signed out. Local account data was cleared.';
+
+  @override
+  String get mineLogoutCleanupFailed =>
+      'Signed out, but local cleanup failed. It will retry before the next sign-in.';
+
+  @override
+  String get profileAvatarFileEmpty => 'Avatar file is empty';
+
+  @override
+  String get profileAvatarSaveFailedPrefix => 'Failed to save avatar: ';
+
+  @override
+  String get mineUpdateBadge => 'Update';
+
+  @override
+  String get mineUpdateBadgeVersionPrefix => 'New ';
+
+  @override
+  String get mineUpdateRequiredTitle => 'Update required';
+
+  @override
+  String get mineUpdateCheckTitle => 'Check for updates';
+
+  @override
+  String get mineUpdateCurrentVersionPrefix => 'Current version: ';
+
+  @override
+  String get mineUpdateRemoteVersionPrefix => 'Latest version: ';
+
+  @override
+  String get mineUpdateMinSupportedPrefix => 'Minimum supported: ';
+
+  @override
+  String get mineUpdateForceBannerTitle => 'This version must be updated';
+
+  @override
+  String get mineUpdateForceBannerMessage =>
+      'Your version is below the minimum supported version, or the admin requires all users to update before continuing.';
+
+  @override
+  String get mineUpdateAvailable => 'New version available';
+
+  @override
+  String get mineUpdateUpToDate => 'You are up to date';
+
+  @override
+  String get mineUpdateNotes => 'What\'s new';
+
+  @override
+  String get mineUpdatePackageMissingTitle => 'Installer URL not configured';
+
+  @override
+  String get mineUpdatePackageMissingMessage =>
+      'The update policy is active, but no downloadable installer is configured. Ask the admin to publish an installer.';
+
+  @override
+  String get mineUpdatePackageBrokenPrefix =>
+      'The update policy is active, but the installer is unavailable: ';
+
+  @override
+  String get mineUpdatePackageBrokenSuffix =>
+      '. Ask the admin to publish an installer.';
+
+  @override
+  String get mineUpdateDownloading => 'Downloading update';
+
+  @override
+  String get mineUpdateDownloadingProgressPrefix => 'Downloading ';
+
+  @override
+  String get mineUpdateInstalling => 'Opening installer';
+
+  @override
+  String get mineUpdateInstallDownloaded => 'Install downloaded package';
+
+  @override
+  String get mineUpdateDownloadAndInstall => 'Download and install';
+
+  @override
+  String get mineUpdatePackageLabel => 'Package';
+
+  @override
+  String get mineAboutTitle => 'Duoyi';
+
+  @override
+  String get mineAboutVersionPrefix => 'Version: ';
+
+  @override
+  String get mineAboutTagline =>
+      'Cross-platform productivity app built with Flutter';
+
+  @override
+  String get mineAboutOk => 'OK';
+
+  @override
+  String get mineAiAssistant => 'AI assistant';
+
+  @override
+  String get mineAiAssistantDisabledMessage =>
+      'Once AI is configured in the admin console, weekly reviews, task breakdowns, and suggestion tools appear here.';
+
+  @override
+  String get mineAiReviewTitle => 'AI weekly review';
+
+  @override
+  String get mineAiCollapse => 'Collapse review';
+
+  @override
+  String get mineAiExpand => 'Expand review';
+
+  @override
+  String get mineAiGenerate => 'Generate';
+
+  @override
+  String get mineAiGeneratedToday => 'Generated today';
+
+  @override
+  String get mineAiExpandFull => 'Show full review';
+
+  @override
+  String get mineAiRangeThisWeek => 'this week';
+
+  @override
+  String get mineAiRangeLastWeek => 'last week';
+
+  @override
+  String get mineAiHintPrefix =>
+      'Tap \"Generate\" and AI will write a summary and suggestions for ';
+
+  @override
+  String get mineAiHintSuffix => '. Results are kept for the day.';
+
+  @override
+  String get mineAiSummaryHeaderSuffix => ' summary: tasks done ';
+
+  @override
+  String get mineAiSummaryTodosSuffix => ', focus ';
+
+  @override
+  String get mineAiSummaryFocusSuffix => ' min, longest habit streak ';
+
+  @override
+  String get mineAiSummaryStreakSuffix => ' days.';
+
+  @override
+  String get appLockPinHintEnter => 'Enter PIN to unlock';
 }
