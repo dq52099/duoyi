@@ -6193,6 +6193,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'输入 PIN 解锁'**
   String get appLockPinHintEnter;
+
+  /// 覆盖导入/WebDAV 覆盖恢复确认弹窗：警告用户备份中不存在的本机数据将被删除
+  ///
+  /// In zh, this message translates to:
+  /// **'备份中不存在的本机数据将被删除。'**
+  String get backupOverwriteWillDeleteMissing;
 }
 
 class _AppLocalizationsDelegate

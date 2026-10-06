@@ -176,10 +176,27 @@ class _BackupScreenState extends State<BackupScreen> {
       context: context,
       builder: (ctx) => AppDialog(
         title: Text(merge ? '合并导入' : '覆盖导入'),
-        content: TextField(
-          controller: ctrl,
-          maxLines: 10,
-          decoration: const InputDecoration(hintText: '把之前导出的备份 JSON 粘贴进来'),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: ctrl,
+              maxLines: 10,
+              decoration: const InputDecoration(hintText: '把之前导出的备份 JSON 粘贴进来'),
+            ),
+            // 覆盖=真删数据：备份中不存在的本机数据会被删除，必须写明后果，
+            // 避免用户用旧备份覆盖后误以为"还原失败"。
+            if (!merge) ...[
+              const SizedBox(height: 8),
+              Text(
+                I18n.tr('backup.overwrite.will_delete_missing'),
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(ctx).colorScheme.error,
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -197,7 +214,13 @@ class _BackupScreenState extends State<BackupScreen> {
 
     setState(() => _busy = true);
     try {
-      final count = await BackupService.importAll(raw, merge: merge);
+      final count = await BackupService.importAll(
+        raw,
+        merge: merge,
+        // 覆盖=还原到备份快照：备份中不存在的本机数据一并删除，弹窗已警告。
+        // 服务层 `clearMissing && !merge` 守卫保证 merge 合并入口不受影响。
+        clearMissing: true,
+      );
       if (!mounted) return;
       await _reloadAll();
       if (!mounted) return;
@@ -228,6 +251,43 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   Future<void> _importBackupFile({required bool merge}) async {
+    // 覆盖=真删数据：文件覆盖与粘贴覆盖导入 / WebDAV 覆盖恢复一致，
+    // 必须先弹窗写明删除后果，防止误触一次即静默删除本机数据。
+    if (!merge) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AppDialog(
+          title: const Text('从文件覆盖导入?'),
+          content: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('会选择备份文件并覆盖本机可备份数据。'),
+              // 覆盖=真删数据：写明缺失数据将被删除的后果。
+              const SizedBox(height: 8),
+              Text(
+                I18n.tr('backup.overwrite.will_delete_missing'),
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(ctx).colorScheme.error,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('选择文件'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      if (!mounted) return;
+    }
     setState(() => _busy = true);
     try {
       final raw = await _pickImportTextFile();
@@ -236,7 +296,13 @@ class _BackupScreenState extends State<BackupScreen> {
         setState(() => _busy = false);
         return;
       }
-      final count = await BackupService.importAll(raw, merge: merge);
+      final count = await BackupService.importAll(
+        raw,
+        merge: merge,
+        // 覆盖=还原到备份快照：备份中不存在的本机数据一并删除，弹窗已警告。
+        // 服务层 `clearMissing && !merge` 守卫保证 merge 合并入口不受影响。
+        clearMissing: true,
+      );
       if (!mounted) return;
       await _reloadAll();
       if (!mounted) return;
@@ -1178,10 +1244,26 @@ class _BackupScreenState extends State<BackupScreen> {
       context: context,
       builder: (ctx) => AppDialog(
         title: Text(merge ? '从 WebDAV 合并恢复?' : '从 WebDAV 覆盖恢复?'),
-        content: Text(
-          merge
-              ? '会下载 ${_webDavConfig.filename} 并合并到本机数据。'
-              : '会下载 ${_webDavConfig.filename} 并覆盖本机可备份数据。',
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              merge
+                  ? '会下载 ${_webDavConfig.filename} 并合并到本机数据。'
+                  : '会下载 ${_webDavConfig.filename} 并覆盖本机可备份数据。',
+            ),
+            // 覆盖恢复同样真删数据：写明缺失数据将被删除的后果。
+            if (!merge) ...[
+              const SizedBox(height: 8),
+              Text(
+                I18n.tr('backup.overwrite.will_delete_missing'),
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(ctx).colorScheme.error,
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -1201,7 +1283,13 @@ class _BackupScreenState extends State<BackupScreen> {
       final raw = await WebDavBackupService().downloadLatestBackup(
         _webDavConfig,
       );
-      final count = await BackupService.importAll(raw, merge: merge);
+      final count = await BackupService.importAll(
+        raw,
+        merge: merge,
+        // 覆盖=还原到备份快照：备份中不存在的本机数据一并删除，弹窗已警告。
+        // 服务层 `clearMissing && !merge` 守卫保证 merge 合并入口不受影响。
+        clearMissing: true,
+      );
       if (!mounted) return;
       await _reloadAll();
       if (!mounted) return;

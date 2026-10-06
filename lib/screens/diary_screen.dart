@@ -129,7 +129,7 @@ class DiaryScreen extends StatelessWidget {
                   I18n.tr('diary.summary.this_month'),
                   '${provider.thisMonthCount}${I18n.tr('diary.entry.count_suffix')}',
                   Icons.calendar_month,
-                  Colors.green,
+                  cs.secondary,
                 ),
               ),
               _metricDivider(cs),
@@ -139,7 +139,7 @@ class DiaryScreen extends StatelessWidget {
                   I18n.tr('diary.summary.streak'),
                   '${provider.currentStreak} ${I18n.tr('unit.day')}',
                   Icons.bolt,
-                  Colors.orange,
+                  cs.tertiary,
                 ),
               ),
             ],
@@ -810,11 +810,12 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
             // Mood selector.
             Text(
               I18n.tr('diary.editor.mood_prompt'),
-              style: const TextStyle(fontSize: 13, color: Colors.grey),
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
               children: Mood.values.map((m) {
                 final selected = _mood == m;
                 return GestureDetector(
@@ -828,7 +829,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: selected ? cs.primary : Colors.grey.shade300,
+                        color: selected ? cs.primary : cs.outlineVariant,
                         width: 0.45,
                       ),
                     ),
@@ -850,7 +851,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
             // Weather selector.
             Text(
               I18n.tr('diary.editor.weather'),
-              style: const TextStyle(fontSize: 13, color: Colors.grey),
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 8),
             Wrap(

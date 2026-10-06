@@ -3209,4 +3209,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appLockPinHintEnter => 'Enter PIN to unlock';
+
+  @override
+  String get backupOverwriteWillDeleteMissing =>
+      'Local data that is missing from the backup will be deleted.';
 }

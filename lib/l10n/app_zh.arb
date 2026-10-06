@@ -1018,5 +1018,9 @@
   "mineAiSummaryTodosSuffix": " 项待办，专注 ",
   "mineAiSummaryFocusSuffix": " 分钟，习惯连续打卡 ",
   "mineAiSummaryStreakSuffix": " 天。",
-  "appLockPinHintEnter": "输入 PIN 解锁"
+  "appLockPinHintEnter": "输入 PIN 解锁",
+  "backupOverwriteWillDeleteMissing": "备份中不存在的本机数据将被删除。",
+  "@backupOverwriteWillDeleteMissing": {
+    "description": "覆盖导入/WebDAV 覆盖恢复确认弹窗：警告用户备份中不存在的本机数据将被删除"
+  }
 }

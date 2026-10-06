@@ -14,6 +14,10 @@ import 'notification_service.dart';
 import 'time_audit_provider.dart';
 
 class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
+  /// 运行态快照的持久化键：进程被杀重启后据此恢复进行中的专注。
+  /// Android 小组件的 `focus_timer_ends_at_millis` 与 `endsAtMs` 同源。
+  static const String runningSnapshotKey = 'pomodoro_running_snapshot';
+
   PomodoroState _state = PomodoroState(
     remainingSeconds: 1500,
     totalSeconds: 1500,
@@ -34,6 +38,19 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? _lastDate;
   NotificationService? _notifier;
   TimeAuditProvider? _timeAudit;
+
+  /// 运行态时间锚点（epoch ms）：倒计时 = 预计结束时刻 `endsAt`，
+  /// 正计时 = 本次累计的开始时刻。暂停/停止/完成/重置后置空。
+  int? _activeAnchorMs;
+
+  /// 上次写入的快照 payload（去重：锚点不变时 tick 重复调用零成本跳过）。
+  String? _lastSnapshotPayload;
+
+  /// 快照落盘串行队列：完成旧相位（删）与续跑新相位（写）在同一帧发生，
+  /// 按入队顺序 drain 保证 remove 先于新 setString 落盘。不用 Future 链——
+  /// 链首 future 的回调会固定在其创建 zone 调度，fakeAsync 测试驱动不到。
+  final List<Future<void> Function(SharedPreferences)> _snapshotOps = [];
+  bool _snapshotDraining = false;
 
   /// 真实白噪音服务。Task 16 接入：番茄钟状态 ↔ 音频播放。
   final FocusSoundService _sound = FocusSoundService.instance;
@@ -143,7 +160,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _sessionCountToday = prefs.getInt('pomodoro_count_today') ?? 0;
     _lastDate = prefs.getString('pomodoro_last_date');
+    // 先过跨天重置再恢复/结算，保证逾期补结算的当日计数归属恢复当天。
     _checkDayReset();
+    final snapshotHandled = await _restoreRunningFromSnapshot(prefs);
     if (_state.isRunning) {
       _state = _state.copyWith(
         whiteNoiseSound: _config.whiteNoiseSound,
@@ -153,7 +172,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       unawaited(_syncSoundToState());
       _syncDndToState();
       _syncDistractionMonitorToState();
-    } else {
+    } else if (!snapshotHandled) {
+      // 无快照且不在运行：重置为完整 focusDuration。
+      // 有快照但逾期且未续跑时，保留结算后的 break 相位，不重置。
       _initState();
     }
     _persistedRevision++;
@@ -163,6 +184,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   void resetLocalState() {
     _storageGeneration++;
     _cancelTimer();
+    _clearRunningSnapshot();
     _timerTicks.value = 0;
     _config = PomodoroConfig();
     _sessions = [];
@@ -272,6 +294,181 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
+  // --- 运行态快照（进程被杀重启后的恢复路径） ---
+
+  /// 串行执行快照落盘操作；失败静默降级，不影响计时主流程。
+  void _queueSnapshotOp(Future<void> Function(SharedPreferences) op) {
+    _snapshotOps.add(op);
+    if (_snapshotDraining) return;
+    _snapshotDraining = true;
+    unawaited(_drainSnapshotOps());
+  }
+
+  Future<void> _drainSnapshotOps() async {
+    try {
+      while (_snapshotOps.isNotEmpty) {
+        final op = _snapshotOps.removeAt(0);
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await op(prefs);
+        } catch (_) {
+          // 快照持久化失败可容忍：下次 tick / 退出运行态会重新同步。
+        }
+      }
+    } finally {
+      _snapshotDraining = false;
+    }
+  }
+
+  Map<String, dynamic> _runningSnapshot() => <String, dynamic>{
+    'isRunning': true,
+    'type': _state.type.index,
+    'isCountUp': _state.isCountUp,
+    'totalSeconds': _state.totalSeconds,
+    'endsAtMs': _activeAnchorMs,
+    'completedSessions': _state.completedSessions,
+    'taskName': _state.taskName,
+    'tag': _state.tag,
+  };
+
+  /// 把当前运行态写入快照。在启动与每个计时 tick 调用；锚点不变时
+  /// payload 相同，直接跳过落盘（快照内容与 `endsAt` 无关的秒级推进）。
+  void _persistRunningSnapshot() {
+    if (!_state.isRunning || _activeAnchorMs == null) return;
+    final payload = json.encode(_runningSnapshot());
+    if (payload == _lastSnapshotPayload) return;
+    _lastSnapshotPayload = payload;
+    _queueSnapshotOp((prefs) => prefs.setString(runningSnapshotKey, payload));
+  }
+
+  /// 离开运行态（暂停 / 手动停止 / 完成 / 重置 / 重置本地数据）时清快照。
+  void _clearRunningSnapshot() {
+    _activeAnchorMs = null;
+    _lastSnapshotPayload = null;
+    _queueSnapshotOp((prefs) => prefs.remove(runningSnapshotKey));
+  }
+
+  /// 启动时重建：进程被杀后唯一恢复路径（不做后台计时）。
+  ///
+  /// - 未逾期 → 按 `endsAt - now` 恢复 remainingSeconds 并重启 Timer；
+  ///   正计时按累计时长恢复。
+  /// - 逾期（elapsed ≥ total）→ 删除快照后走既有自然完成结算
+  ///   （写一条 session、当日计数 +1、autoStartBreaks），保证只结算一次。
+  ///
+  /// 返回是否处理过快照（恢复运行或完成结算）；调用方据此决定是否回退
+  /// 到 [_initState]（逾期结算后不续跑时，应保留 break 相位而非重置）。
+  Future<bool> _restoreRunningFromSnapshot(SharedPreferences prefs) async {
+    final raw = prefs.getString(runningSnapshotKey);
+    if (raw == null) return false;
+
+    Map<String, dynamic>? data;
+    try {
+      final decoded = json.decode(raw);
+      if (decoded is Map) data = Map<String, dynamic>.from(decoded);
+    } on FormatException {
+      data = null;
+    }
+    final anchorMs = data == null ? null : (data['endsAtMs'] as num?)?.toInt();
+    final totalSeconds = data == null
+        ? null
+        : (data['totalSeconds'] as num?)?.toInt();
+    final isCountUp = data?['isCountUp'] == true;
+    if (data == null ||
+        data['isRunning'] != true ||
+        anchorMs == null ||
+        totalSeconds == null ||
+        // 正计时运行态 totalSeconds 恒为 0（累计时长用 remainingSeconds 表达），
+        // 不能按损坏快照清除；只有倒计时才要求 totalSeconds > 0。
+        (!isCountUp && totalSeconds <= 0)) {
+      // 快照损坏 / 非运行态：清理后按无快照处理。
+      await prefs.remove(runningSnapshotKey);
+      return false;
+    }
+
+    final typeIndex = (data['type'] as num?)?.toInt() ?? 0;
+    final type = typeIndex >= 0 && typeIndex < PomodoroType.values.length
+        ? PomodoroType.values[typeIndex]
+        : PomodoroType.focus;
+    final completedSessions = (data['completedSessions'] as num?)?.toInt() ?? 0;
+    final taskName = data['taskName']?.toString();
+    final tag = data['tag']?.toString();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+
+    if (!isCountUp) {
+      // 倒计时：快照锚点即结束时刻，向上取整避免恢复瞬间吞掉不足 1 秒。
+      final remainingSeconds = ((anchorMs - nowMs) / 1000).ceil();
+      if (remainingSeconds <= 0) {
+        // 逾期：先删快照（结算只此一次），再走既有自然完成结算。
+        _activeAnchorMs = null;
+        _lastSnapshotPayload = null;
+        await prefs.remove(runningSnapshotKey);
+        _state = PomodoroState(
+          // 结算时长取 totalSeconds，与 remainingSeconds 无关；
+          // 置 1 表达「倒计时走完」的完成语义。
+          remainingSeconds: 1,
+          totalSeconds: totalSeconds,
+          isRunning: true,
+          type: type,
+          completedSessions: completedSessions,
+          taskName: taskName,
+          whiteNoiseSound: _config.whiteNoiseSound,
+          tag: tag,
+          focusRoomId: _config.focusRoomId,
+        );
+        _completeSession();
+        return true;
+      }
+      // 快照锚点异常超前（时钟回拨 / 写入异常值）：真实运行态剩余永远
+      // ≤ totalSeconds，remaining > total 只能是损坏，按损坏清键回退，
+      // 避免恢复出远超配置时长的倒计时（与正计时的 clamp 对称）。
+      if (remainingSeconds > totalSeconds) {
+        _activeAnchorMs = null;
+        _lastSnapshotPayload = null;
+        await prefs.remove(runningSnapshotKey);
+        return false;
+      }
+      _state = PomodoroState(
+        remainingSeconds: remainingSeconds,
+        totalSeconds: totalSeconds,
+        isRunning: true,
+        type: type,
+        completedSessions: completedSessions,
+        taskName: taskName,
+        whiteNoiseSound: _config.whiteNoiseSound,
+        tag: tag,
+        focusRoomId: _config.focusRoomId,
+      );
+      // 保留原锚点续跑：完成时刻仍对齐快照里的 endsAt，不白送时间。
+      _activeAnchorMs = anchorMs;
+      _lastSnapshotPayload = null;
+      _startTimer();
+      return true;
+    }
+
+    // 正计时：快照锚点为开始时刻，按累计时长恢复（上限对齐完成时的
+    // clamp(1, 24h) 语义）。
+    final elapsed = ((nowMs - anchorMs) / 1000).floor().clamp(
+      0,
+      _maxCountUpSnapshotSeconds,
+    );
+    _state = PomodoroState(
+      remainingSeconds: elapsed,
+      totalSeconds: totalSeconds,
+      isRunning: true,
+      isCountUp: true,
+      type: type,
+      completedSessions: completedSessions,
+      taskName: taskName,
+      whiteNoiseSound: _config.whiteNoiseSound,
+      tag: tag,
+      focusRoomId: _config.focusRoomId,
+    );
+    _activeAnchorMs = nowMs - elapsed * 1000;
+    _lastSnapshotPayload = null;
+    _startTimer();
+    return true;
+  }
+
   Future<bool> deleteSession(String id) async {
     final idx = _sessions.indexWhere((s) => s.id == id);
     if (idx < 0) return false;
@@ -372,6 +569,12 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       _state = _state.copyWith(isRunning: true);
       notifyListeners();
     }
+    // 新启动（含暂停续跑）计算锚点；崩溃恢复路径已带原锚点，不重算。
+    _activeAnchorMs ??= _state.isCountUp
+        ? DateTime.now().millisecondsSinceEpoch - _state.remainingSeconds * 1000
+        : DateTime.now().millisecondsSinceEpoch +
+              _state.remainingSeconds * 1000;
+    _persistRunningSnapshot();
     unawaited(_syncSoundToState());
     _syncDndToState();
     _syncDistractionMonitorToState();
@@ -379,6 +582,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (_state.isCountUp) {
         _state = _state.copyWith(remainingSeconds: _state.remainingSeconds + 1);
         _notifyTimerTick();
+        _persistRunningSnapshot();
         return;
       }
       if (_state.remainingSeconds <= 1) {
@@ -387,6 +591,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
       _state = _state.copyWith(remainingSeconds: _state.remainingSeconds - 1);
       _notifyTimerTick();
+      _persistRunningSnapshot();
     });
   }
 
@@ -401,6 +606,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void _pauseTimer() {
     _cancelTimer();
+    _clearRunningSnapshot();
     _state = _state.copyWith(isRunning: false);
     notifyListeners();
     _syncDndToState();
@@ -455,6 +661,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void _completeSession() {
     _cancelTimer();
+    // 结算即清旧快照（自然完成与崩溃后的逾期补结算共用）；若按
+    // autoStart 续跑，_startTimer 会以新相位锚点重新落盘。
+    _clearRunningSnapshot();
     final completedState = _state;
     final completedType = completedState.type;
     final durationSeconds = completedState.isCountUp
@@ -585,6 +794,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void skipSession() {
     _cancelTimer();
+    _clearRunningSnapshot();
     unawaited(_recordStrictFocusPenalty(FocusPenaltyReason.skip));
     if (_state.type == PomodoroType.focus) {
       _state = _state.copyWith(
@@ -610,6 +820,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void resetTimer() {
     _cancelTimer();
+    _clearRunningSnapshot();
     unawaited(_recordStrictFocusPenalty(FocusPenaltyReason.reset));
     _state = _state.copyWith(
       remainingSeconds: _state.isCountUp ? 0 : _config.focusDuration,
@@ -1049,6 +1260,9 @@ const int _isolateEncodeMinItems = 500;
 
 /// 会话记录保留上限（超出裁剪最旧记录）。
 const int _maxPomodoroSessions = 500;
+
+/// 正计时崩溃恢复的累计上限（对齐 _completeSession 的 clamp(1, 24h)）。
+const int _maxCountUpSnapshotSeconds = 24 * 60 * 60;
 
 String _encodePomodoroSessionsPayload(List<PomodoroSession> sessions) =>
     json.encode(sessions.map((e) => e.toJson()).toList());

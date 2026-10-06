@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -443,11 +444,7 @@ void main() {
       ]);
 
       expect(provider.sessions, hasLength(500));
-      expect(
-        provider.sessions.first.id,
-        'session-20',
-        reason: '最旧的 20 条应被丢弃',
-      );
+      expect(provider.sessions.first.id, 'session-20', reason: '最旧的 20 条应被丢弃');
       expect(provider.sessions.last.id, 'session-519');
 
       final prefs = await SharedPreferences.getInstance();
@@ -477,6 +474,443 @@ void main() {
       expect(stored, isNotNull);
       expect(jsonDecode(stored!) as List, hasLength(3));
       provider.dispose();
+    });
+  });
+
+  group('运行态快照落盘与进程被杀重启恢复', () {
+    Map<String, dynamic> snapshotPayload({
+      required int endsAtMs,
+      int totalSeconds = 1500,
+      PomodoroType type = PomodoroType.focus,
+      bool isCountUp = false,
+      int completedSessions = 0,
+      String? taskName,
+    }) => <String, dynamic>{
+      'isRunning': true,
+      'type': type.index,
+      'isCountUp': isCountUp,
+      'totalSeconds': totalSeconds,
+      'endsAtMs': endsAtMs,
+      'completedSessions': completedSessions,
+      'taskName': ?taskName,
+    };
+
+    test('计时启动即落盘运行快照，暂停后清除', () async {
+      final provider = PomodoroProvider();
+      await provider.setConfig(PomodoroConfig(focusDuration: 60));
+
+      fakeAsync((async) {
+        provider.startIfIdle();
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        Map<String, dynamic>? runningSnapshot;
+        SharedPreferences.getInstance().then((prefs) {
+          final raw = prefs.getString(PomodoroProvider.runningSnapshotKey);
+          if (raw != null) {
+            runningSnapshot = jsonDecode(raw) as Map<String, dynamic>;
+          }
+        });
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        expect(runningSnapshot, isNotNull, reason: '运行中快照应随计时落盘');
+        expect(runningSnapshot?['isRunning'], isTrue);
+        expect(runningSnapshot?['type'], PomodoroType.focus.index);
+        expect(runningSnapshot?['isCountUp'], isFalse);
+        expect(runningSnapshot?['totalSeconds'], 60);
+        final endsAtMs = runningSnapshot?['endsAtMs'] as int?;
+        expect(endsAtMs, isNotNull);
+        expect(
+          endsAtMs!,
+          greaterThan(DateTime.now().millisecondsSinceEpoch),
+          reason: '倒计时锚点应为未来的结束时刻',
+        );
+
+        provider.toggleTimer(); // 暂停 → 快照应被清除
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        String? afterPause;
+        SharedPreferences.getInstance().then((prefs) {
+          afterPause = prefs.getString(PomodoroProvider.runningSnapshotKey);
+        });
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        expect(afterPause, isNull, reason: '暂停后运行快照应被删除');
+
+        provider.dispose();
+      });
+    });
+
+    test('未逾期的进行中专注按剩余时间恢复计时', () async {
+      final endsAtMs = DateTime.now()
+          .add(const Duration(seconds: 10))
+          .millisecondsSinceEpoch;
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        PomodoroProvider.runningSnapshotKey: jsonEncode(
+          snapshotPayload(
+            endsAtMs: endsAtMs,
+            completedSessions: 2,
+            taskName: '写周报',
+          ),
+        ),
+      });
+
+      final provider = PomodoroProvider();
+      fakeAsync((async) {
+        unawaited(provider.loadFromStorage());
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        expect(provider.state.isRunning, isTrue, reason: '未逾期应静默恢复运行');
+        final restored = provider.state.remainingSeconds;
+        expect(restored, inInclusiveRange(8, 10), reason: '按 endsAt-now 恢复');
+        expect(provider.state.totalSeconds, 1500);
+        expect(provider.state.type, PomodoroType.focus);
+        expect(provider.state.isCountUp, isFalse);
+        expect(provider.state.completedSessions, 2);
+        expect(provider.state.taskName, '写周报');
+        expect(provider.sessions, isEmpty, reason: '恢复不产生新结算');
+        expect(async.periodicTimerCount, 1, reason: 'Timer 应已重启');
+
+        async.elapse(const Duration(seconds: 2));
+        expect(provider.state.remainingSeconds, restored - 2);
+
+        provider.dispose();
+      });
+    });
+
+    test('逾期恢复只结算一次：补一条 session 且不重复计次', () async {
+      final endsAtMs = DateTime.now()
+          .subtract(const Duration(seconds: 5))
+          .millisecondsSinceEpoch;
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        PomodoroProvider.runningSnapshotKey: jsonEncode(
+          snapshotPayload(endsAtMs: endsAtMs),
+        ),
+      });
+
+      final provider = PomodoroProvider();
+      fakeAsync((async) {
+        unawaited(provider.loadFromStorage());
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        expect(provider.sessions, hasLength(1), reason: '逾期应补一条自然完成');
+        expect(provider.sessions.single.type, PomodoroType.focus);
+        expect(provider.sessions.single.durationSeconds, 1500);
+        expect(provider.sessionCountToday, 1, reason: '当日计数 +1');
+        // autoStartBreaks 默认 false：结算后停在 break 相位等待手动开始。
+        expect(provider.state.type, PomodoroType.shortBreak);
+        expect(provider.state.isRunning, isFalse);
+        expect(async.periodicTimerCount, 0);
+
+        String? snapshotAfterSettle;
+        var persistedSessionCount = 0;
+        SharedPreferences.getInstance().then((prefs) {
+          snapshotAfterSettle = prefs.getString(
+            PomodoroProvider.runningSnapshotKey,
+          );
+          final raw = prefs.getString('pomodoro_sessions');
+          persistedSessionCount = raw == null
+              ? 0
+              : (jsonDecode(raw) as List).length;
+        });
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        expect(snapshotAfterSettle, isNull, reason: '结算后快照必须立即删除');
+        expect(persistedSessionCount, 1);
+
+        // 再次 loadFromStorage（等同又一次重启）：快照已删，不得重复结算。
+        unawaited(provider.loadFromStorage());
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        expect(provider.sessions, hasLength(1), reason: '只结算一次');
+        expect(provider.sessionCountToday, 1, reason: '不重复计次');
+
+        provider.dispose();
+      });
+    });
+
+    test('正计时运行快照按累计时长恢复（totalSeconds=0 不视为损坏）', () async {
+      // 正计时运行态 totalSeconds 恒为 0（累计时长用 remainingSeconds 表达），
+      // 快照必须按「开始锚点 + elapsed」恢复，而不是当损坏清掉。
+      final startMs = DateTime.now()
+          .subtract(const Duration(seconds: 30))
+          .millisecondsSinceEpoch;
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        PomodoroProvider.runningSnapshotKey: jsonEncode(
+          snapshotPayload(
+            endsAtMs: startMs,
+            totalSeconds: 0,
+            isCountUp: true,
+            completedSessions: 1,
+            taskName: '正计时任务',
+          ),
+        ),
+      });
+
+      final provider = PomodoroProvider();
+      fakeAsync((async) {
+        unawaited(provider.loadFromStorage());
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        expect(provider.state.isRunning, isTrue, reason: '正计时快照应恢复运行');
+        expect(provider.state.isCountUp, isTrue);
+        final elapsed = provider.state.remainingSeconds;
+        expect(elapsed, inInclusiveRange(28, 32), reason: '按开始锚点累计恢复');
+        expect(provider.state.totalSeconds, 0, reason: '正计时 totalSeconds 恒为 0');
+        expect(provider.state.type, PomodoroType.focus);
+        expect(provider.state.completedSessions, 1);
+        expect(provider.state.taskName, '正计时任务');
+        expect(provider.sessions, isEmpty, reason: '恢复不产生新结算');
+        expect(async.periodicTimerCount, 1, reason: 'Timer 应已重启');
+
+        async.elapse(const Duration(seconds: 2));
+        expect(provider.state.remainingSeconds, elapsed + 2, reason: '正计时向上累计');
+
+        provider.dispose();
+      });
+    });
+
+    test('正计时恢复 clamp 到 24h 上限，完成结算时长对齐', () async {
+      // 锚点在 25h 前：elapsed=90000s，恢复与结算都应被 clamp 到 86400s。
+      final startMs = DateTime.now()
+          .subtract(const Duration(hours: 25))
+          .millisecondsSinceEpoch;
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        PomodoroProvider.runningSnapshotKey: jsonEncode(
+          snapshotPayload(endsAtMs: startMs, totalSeconds: 0, isCountUp: true),
+        ),
+      });
+
+      final provider = PomodoroProvider();
+      fakeAsync((async) {
+        unawaited(provider.loadFromStorage());
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        expect(provider.state.isRunning, isTrue);
+        expect(provider.state.isCountUp, isTrue);
+        expect(
+          provider.state.remainingSeconds,
+          24 * 60 * 60,
+          reason: 'elapsed 超过 24h 应 clamp 到 86400s',
+        );
+        expect(provider.sessions, isEmpty, reason: '恢复不产生新结算');
+
+        provider.finishCurrentSession();
+        expect(provider.sessions, hasLength(1));
+        expect(
+          provider.sessions.single.durationSeconds,
+          24 * 60 * 60,
+          reason: '结算时长与恢复 clamp 对齐（clamp(1, 24h)）',
+        );
+
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        String? afterFinish;
+        SharedPreferences.getInstance().then((prefs) {
+          afterFinish = prefs.getString(PomodoroProvider.runningSnapshotKey);
+        });
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        expect(afterFinish, isNull, reason: '结算后快照应删除');
+
+        provider.dispose();
+      });
+    });
+
+    test('损坏/非运行态快照被清除并回退到空闲 focus 态，不误结算', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        PomodoroProvider.runningSnapshotKey: '{bad json',
+      });
+
+      final provider = PomodoroProvider();
+      fakeAsync((async) {
+        unawaited(provider.loadFromStorage());
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        expect(provider.state.isRunning, isFalse, reason: '损坏快照回退空闲态');
+        expect(provider.state.type, PomodoroType.focus);
+        expect(
+          provider.state.totalSeconds,
+          provider.config.focusDuration,
+          reason: '回退应重置为完整 focus 时长',
+        );
+        expect(provider.sessions, isEmpty, reason: '损坏快照不得触发结算');
+
+        String? after;
+        SharedPreferences.getInstance().then((prefs) {
+          after = prefs.getString(PomodoroProvider.runningSnapshotKey);
+        });
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        expect(after, isNull, reason: '损坏快照键应被清除');
+
+        // 第二轮：合法 JSON 但 isRunning != true，同样走清键回退分支。
+        SharedPreferences.getInstance().then((prefs) {
+          return prefs.setString(
+            PomodoroProvider.runningSnapshotKey,
+            jsonEncode(<String, dynamic>{'isRunning': false}),
+          );
+        });
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        unawaited(provider.loadFromStorage());
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        expect(provider.state.isRunning, isFalse);
+        SharedPreferences.getInstance().then((prefs) {
+          after = prefs.getString(PomodoroProvider.runningSnapshotKey);
+        });
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        expect(after, isNull, reason: '非运行态快照键应被清除');
+
+        provider.dispose();
+      });
+    });
+
+    test('resetTimer 与 skipSession 离开运行态时清除快照', () async {
+      final provider = PomodoroProvider();
+      await provider.setConfig(PomodoroConfig(focusDuration: 60));
+
+      fakeAsync((async) {
+        String? readSnapshot() {
+          String? snapshot;
+          SharedPreferences.getInstance().then((prefs) {
+            snapshot = prefs.getString(PomodoroProvider.runningSnapshotKey);
+          });
+          async.flushMicrotasks();
+          async.flushMicrotasks();
+          return snapshot;
+        }
+
+        provider.startIfIdle();
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        expect(readSnapshot(), isNotNull, reason: '运行中应有快照');
+
+        provider.resetTimer();
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        expect(readSnapshot(), isNull, reason: 'resetTimer 应清除运行快照');
+
+        provider.startIfIdle();
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        expect(readSnapshot(), isNotNull);
+
+        provider.skipSession();
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        expect(readSnapshot(), isNull, reason: 'skipSession 应清除运行快照');
+
+        provider.dispose();
+      });
+    });
+
+    test('resetLocalState 清除运行快照', () async {
+      final provider = PomodoroProvider();
+      await provider.setConfig(PomodoroConfig(focusDuration: 60));
+
+      fakeAsync((async) {
+        provider.startIfIdle();
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        String? snapshot;
+        SharedPreferences.getInstance().then((prefs) {
+          snapshot = prefs.getString(PomodoroProvider.runningSnapshotKey);
+        });
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        expect(snapshot, isNotNull);
+
+        provider.resetLocalState();
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        SharedPreferences.getInstance().then((prefs) {
+          snapshot = prefs.getString(PomodoroProvider.runningSnapshotKey);
+        });
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        expect(snapshot, isNull, reason: 'resetLocalState 应清除运行快照');
+
+        provider.dispose();
+      });
+    });
+
+    test('dispose 不清除运行快照：进程被杀后仍可恢复', () async {
+      final provider = PomodoroProvider();
+      await provider.setConfig(PomodoroConfig(focusDuration: 60));
+
+      fakeAsync((async) {
+        provider.startIfIdle();
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        provider.dispose();
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        String? snapshot;
+        SharedPreferences.getInstance().then((prefs) {
+          snapshot = prefs.getString(PomodoroProvider.runningSnapshotKey);
+        });
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        expect(snapshot, isNotNull, reason: 'dispose 不清快照是崩溃恢复的前提');
+      });
+    });
+
+    test('倒计时快照锚点异常超前（remaining > total）视为损坏清键回退', () async {
+      // 时钟回拨 / 快照写入异常值：remaining 会远超 totalSeconds，
+      // 必须按损坏清键回退，而不是恢复出超长倒计时。
+      final anchorMs = DateTime.now()
+          .add(const Duration(hours: 25))
+          .millisecondsSinceEpoch;
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        PomodoroProvider.runningSnapshotKey: jsonEncode(
+          snapshotPayload(endsAtMs: anchorMs),
+        ),
+      });
+
+      final provider = PomodoroProvider();
+      fakeAsync((async) {
+        unawaited(provider.loadFromStorage());
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+
+        expect(provider.state.isRunning, isFalse, reason: '锚点异常超前应回退空闲态');
+        expect(provider.state.type, PomodoroType.focus);
+        expect(
+          provider.state.totalSeconds,
+          provider.config.focusDuration,
+          reason: '回退应重置为完整 focus 时长',
+        );
+        expect(provider.sessions, isEmpty, reason: '不误结算');
+
+        String? after;
+        SharedPreferences.getInstance().then((prefs) {
+          after = prefs.getString(PomodoroProvider.runningSnapshotKey);
+        });
+        async.flushMicrotasks();
+        async.flushMicrotasks();
+        expect(after, isNull, reason: '异常快照键应被清除');
+
+        provider.dispose();
+      });
     });
   });
 }

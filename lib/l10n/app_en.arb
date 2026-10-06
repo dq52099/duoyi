@@ -1015,5 +1015,6 @@
   "mineAiSummaryTodosSuffix": ", focus ",
   "mineAiSummaryFocusSuffix": " min, longest habit streak ",
   "mineAiSummaryStreakSuffix": " days.",
-  "appLockPinHintEnter": "Enter PIN to unlock"
+  "appLockPinHintEnter": "Enter PIN to unlock",
+  "backupOverwriteWillDeleteMissing": "Local data that is missing from the backup will be deleted."
 }

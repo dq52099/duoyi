@@ -3079,4 +3079,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get appLockPinHintEnter => '输入 PIN 解锁';
+
+  @override
+  String get backupOverwriteWillDeleteMissing => '备份中不存在的本机数据将被删除。';
 }

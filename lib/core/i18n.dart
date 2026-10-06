@@ -1119,6 +1119,8 @@ const Map<String, String> _zh = <String, String>{
   'sync.state.auto_retry_hint': '将在后台自动重试',
   'sync.last_sync_prefix': '上次同步 ',
   'sync.pending_badge': '待同步',
+  // 备份/恢复页：覆盖导入 / WebDAV 覆盖恢复确认弹窗的删除警告
+  'backup.overwrite.will_delete_missing': '备份中不存在的本机数据将被删除。',
 };
 
 const Map<String, String> _en = <String, String>{
@@ -2133,6 +2135,9 @@ const Map<String, String> _en = <String, String>{
   'sync.state.auto_retry_hint': 'Will retry automatically in the background',
   'sync.last_sync_prefix': 'Last synced ',
   'sync.pending_badge': 'Pending',
+  // Backup screen: delete warning in overwrite-import / WebDAV overwrite-restore dialogs
+  'backup.overwrite.will_delete_missing':
+      'Local data that is missing from the backup will be deleted.',
   // Greeting separator (Today page: BrandStrings greeting + username)
   'greeting.separator': ', ',
   // Today page additions
