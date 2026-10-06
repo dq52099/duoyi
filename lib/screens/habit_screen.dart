@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../core/desktop_tokens.dart';
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../core/habit_grouping.dart';
@@ -681,6 +682,85 @@ class _HabitScreenState extends State<HabitScreen>
     final routeBackground = theme.brightness == Brightness.dark
         ? cs.surface
         : cs.surfaceContainerLowest;
+    // 宽屏桌面档（与 today 桌面仪表盘同款纯宽度判定）：打卡列与热力图
+    // 双栏并置，替代窄屏的 TabBar 切换；标记已构建，缩回窄屏时热力图
+    // 不再退回占位。
+    final isWidescreen =
+        MediaQuery.widthOf(context) >= DesktopTokens.breakpointTwoColumn;
+    if (isWidescreen) {
+      _heatmapTabBuilt = true;
+    }
+    final todayScrollView = CustomScrollView(
+      key: const ValueKey('habit_today_scroll_view'),
+      slivers: [
+        const SliverToBoxAdapter(child: HabitWeeklyCard()),
+        SliverToBoxAdapter(
+          key: const ValueKey('habit_insight_before_today_list'),
+          child: _HabitInsightSection(habits: provider.habits),
+        ),
+        if (activeHabits.isEmpty)
+          SliverToBoxAdapter(
+            key: const ValueKey('habit_today_empty_state_sliver'),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+              child: EmptyState(
+                icon: Icons.repeat,
+                message: s.habitEmpty,
+                actionLabel: s.habitAddAction,
+                onAction: _showAddDialog,
+              ),
+            ),
+          )
+        else ...[
+          SliverToBoxAdapter(
+            child: _HabitTodaySummaryCard(
+              completedCount: activeHabits
+                  .where((h) => h.isCompletedToday())
+                  .length,
+              totalCount: activeHabits.length,
+              progress: provider.todayOverallProgress,
+              longestStreak: provider.longestCurrentStreak,
+              doneLabel: s.habitTodayDone,
+              streakLabel: s.habitStreakLabel,
+            ),
+          ),
+          if (isWidescreen)
+            // 宽屏桌面档：今日打卡双列网格。仍走 builder 懒构建（与窄屏
+            // SliverList 同一 item 工厂），保留"一屏多卡"的宽屏利用率；
+            // 窄屏保持单列 SliverList 不变。
+            SliverGrid.builder(
+              key: const ValueKey('habit_today_checkin_sliver'),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: DesignTokens.spaceSm,
+                crossAxisSpacing: DesignTokens.spaceSm,
+                mainAxisExtent: _habitCheckinGridTileExtent,
+              ),
+              itemCount: activeHabits.length,
+              itemBuilder: (context, index) =>
+                  _HabitCheckinCard(habit: activeHabits[index]),
+            )
+          else
+            SliverList.builder(
+              key: const ValueKey('habit_today_checkin_sliver'),
+              itemCount: activeHabits.length,
+              itemBuilder: (context, index) =>
+                  _HabitCheckinCard(habit: activeHabits[index]),
+            ),
+        ],
+        SliverToBoxAdapter(
+          child: SizedBox(height: MediaQuery.paddingOf(context).bottom + 88),
+        ),
+      ],
+    );
+    final heatmapTab = _HabitHeatmapTab(
+      provider: provider,
+      heading: s.habitHeatmapHeading,
+      streakLabel: s.habitStreakLabel,
+      emptyMessage: s.habitEmpty,
+      actionLabel: s.habitAddAction,
+      onAdd: _showAddDialog,
+    );
 
     return BrandScaffold(
       paintBackground: false,
@@ -688,102 +768,63 @@ class _HabitScreenState extends State<HabitScreen>
         title: Text(s.habitTitle),
         backgroundColor: routeBackground.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
-        bottom: TabBar(
-          controller: _tabCtrl,
-          indicatorSize: TabBarIndicatorSize.tab,
-          dividerColor: Colors.transparent,
-          labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-          labelStyle: appSecondaryControlLabelStyle(context).copyWith(
-            fontSize: 12,
-            height: 1.1,
-            fontWeight: DesignTokens.fontWeightRegular,
-          ),
-          unselectedLabelStyle: appSecondaryControlLabelStyle(context).copyWith(
-            fontSize: 12,
-            height: 1.1,
-            fontWeight: DesignTokens.fontWeightRegular,
-          ),
-          labelColor: cs.onSurface,
-          unselectedLabelColor: cs.onSurfaceVariant,
-          indicator: BoxDecoration(
-            color: cs.primary.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: cs.primary.withValues(alpha: 0.16),
-              width: 0.55,
-            ),
-          ),
-          tabs: [
-            Tab(text: s.habitTabToday),
-            Tab(text: s.habitTabHeatmap),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabCtrl,
-        children: [
-          // Today check-in
-          CustomScrollView(
-            key: const ValueKey('habit_today_scroll_view'),
-            slivers: [
-              const SliverToBoxAdapter(child: HabitWeeklyCard()),
-              SliverToBoxAdapter(
-                key: const ValueKey('habit_insight_before_today_list'),
-                child: _HabitInsightSection(habits: provider.habits),
-              ),
-              if (activeHabits.isEmpty)
-                SliverToBoxAdapter(
-                  key: const ValueKey('habit_today_empty_state_sliver'),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-                    child: EmptyState(
-                      icon: Icons.repeat,
-                      message: s.habitEmpty,
-                      actionLabel: s.habitAddAction,
-                      onAction: _showAddDialog,
+        // 宽屏双栏并置时 TabBar 失去切换意义，顶栏不再挂载。
+        bottom: isWidescreen
+            ? null
+            : TabBar(
+                controller: _tabCtrl,
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+                labelStyle: appSecondaryControlLabelStyle(context).copyWith(
+                  fontSize: 12,
+                  height: 1.1,
+                  fontWeight: DesignTokens.fontWeightRegular,
+                ),
+                unselectedLabelStyle: appSecondaryControlLabelStyle(context)
+                    .copyWith(
+                      fontSize: 12,
+                      height: 1.1,
+                      fontWeight: DesignTokens.fontWeightRegular,
                     ),
-                  ),
-                )
-              else ...[
-                SliverToBoxAdapter(
-                  child: _HabitTodaySummaryCard(
-                    completedCount: activeHabits
-                        .where((h) => h.isCompletedToday())
-                        .length,
-                    totalCount: activeHabits.length,
-                    progress: provider.todayOverallProgress,
-                    longestStreak: provider.longestCurrentStreak,
-                    doneLabel: s.habitTodayDone,
-                    streakLabel: s.habitStreakLabel,
+                labelColor: cs.onSurface,
+                unselectedLabelColor: cs.onSurfaceVariant,
+                indicator: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: cs.primary.withValues(alpha: 0.16),
+                    width: 0.55,
                   ),
                 ),
-                SliverList.builder(
-                  key: const ValueKey('habit_today_checkin_sliver'),
-                  itemCount: activeHabits.length,
-                  itemBuilder: (context, index) =>
-                      _HabitCheckinCard(habit: activeHabits[index]),
-                ),
-              ],
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: MediaQuery.paddingOf(context).bottom + 88,
-                ),
+                tabs: [
+                  Tab(text: s.habitTabToday),
+                  Tab(text: s.habitTabHeatmap),
+                ],
               ),
-            ],
-          ),
-          // Heatmap
-          _heatmapTabBuilt
-              ? _HabitHeatmapTab(
-                  provider: provider,
-                  heading: s.habitHeatmapHeading,
-                  streakLabel: s.habitStreakLabel,
-                  emptyMessage: s.habitEmpty,
-                  actionLabel: s.habitAddAction,
-                  onAdd: _showAddDialog,
-                )
-              : const SizedBox.shrink(),
-        ],
       ),
+      body: isWidescreen
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: todayScrollView),
+                const VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  // 不传 color：走主题 dividerTheme 档位（outlineVariant@feel alpha）。
+                ),
+                Expanded(child: heatmapTab),
+              ],
+            )
+          : TabBarView(
+              controller: _tabCtrl,
+              children: [
+                // Today check-in
+                todayScrollView,
+                // Heatmap
+                _heatmapTabBuilt ? heatmapTab : const SizedBox.shrink(),
+              ],
+            ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddDialog,
         child: const Icon(Icons.add),
@@ -1253,6 +1294,11 @@ class _HabitSummaryTile extends StatelessWidget {
 }
 
 const double _habitCheckinCardBodyHeight = 38;
+
+/// 宽屏双列网格（SliverGrid）单格主轴高度：打卡卡总高 = 卡体 38 +
+/// 上下内边距 2×2 + 底部 margin 1（描边绘制在装饰盒内不加高），
+/// 再留 1px 容差吸收亚像素取整，避免任何一档出现卡体溢出。
+const double _habitCheckinGridTileExtent = _habitCheckinCardBodyHeight + 6;
 const double _habitTitleStatusHeight = 15;
 const double _habitCheckinButtonWidth = 52;
 const double _habitUndoButtonWidth = 28;

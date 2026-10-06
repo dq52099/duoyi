@@ -18,12 +18,18 @@ class EisenhowerMatrix extends StatelessWidget {
   /// 与 tile 级入口的 canEdit 闸保持一致。
   final bool Function(TodoItem todo)? canEditTodo;
 
+  /// 最宽桌面档（调用方按窗口宽度 ≥ DesktopTokens.breakpointThreeColumn
+  /// 传入）：四象限单行 4 列横排。false（默认）保持 2×2 竖排，
+  /// 紧迫/重要两轴语义不变。
+  final bool fourColumn;
+
   const EisenhowerMatrix({
     super.key,
     required this.quadrantGroups,
     required this.onQuadrantTap,
     this.onTodoQuadrantChanged,
     this.canEditTodo,
+    this.fourColumn = false,
   });
 
   @override
@@ -31,88 +37,74 @@ class EisenhowerMatrix extends StatelessWidget {
     final s = context.watch<ThemeProvider>().brand.strings;
     // 局部变量以获得空值提升，供四处 _QuadrantCard 接线使用。
     final onTodoChanged = onTodoQuadrantChanged;
+    _QuadrantCard quadrantCard(
+      EisenhowerQuadrant quadrant,
+      String label,
+      String sub,
+    ) {
+      return _QuadrantCard(
+        quadrant: quadrant,
+        label: label,
+        subLabel: sub,
+        items: quadrantGroups[quadrant] ?? [],
+        onTodoDropped: onTodoChanged == null
+            ? null
+            : (todo) => onTodoChanged(todo, quadrant),
+        canEditTodo: canEditTodo,
+        onTap: () => onQuadrantTap(quadrant),
+      );
+    }
+
+    final cards = <_QuadrantCard>[
+      quadrantCard(
+        EisenhowerQuadrant.urgentImportant,
+        s.quadrantQ1Label,
+        s.quadrantQ1Sub,
+      ),
+      quadrantCard(
+        EisenhowerQuadrant.notUrgentImportant,
+        s.quadrantQ2Label,
+        s.quadrantQ2Sub,
+      ),
+      quadrantCard(
+        EisenhowerQuadrant.urgentNotImportant,
+        s.quadrantQ3Label,
+        s.quadrantQ3Sub,
+      ),
+      quadrantCard(
+        EisenhowerQuadrant.notUrgentNotImportant,
+        s.quadrantQ4Label,
+        s.quadrantQ4Sub,
+      ),
+    ];
+    if (fourColumn) {
+      return Row(
+        children: [
+          Expanded(child: cards[0]),
+          const SizedBox(width: DesignTokens.spaceSm),
+          Expanded(child: cards[1]),
+          const SizedBox(width: DesignTokens.spaceSm),
+          Expanded(child: cards[2]),
+          const SizedBox(width: DesignTokens.spaceSm),
+          Expanded(child: cards[3]),
+        ],
+      );
+    }
     return Column(
       children: [
         Row(
           children: [
-            Expanded(
-              child: _QuadrantCard(
-                quadrant: EisenhowerQuadrant.urgentImportant,
-                label: s.quadrantQ1Label,
-                subLabel: s.quadrantQ1Sub,
-                items: quadrantGroups[EisenhowerQuadrant.urgentImportant] ?? [],
-                onTodoDropped: onTodoChanged == null
-                    ? null
-                    : (todo) => onTodoChanged(
-                        todo,
-                        EisenhowerQuadrant.urgentImportant,
-                      ),
-                canEditTodo: canEditTodo,
-                onTap: () => onQuadrantTap(EisenhowerQuadrant.urgentImportant),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _QuadrantCard(
-                quadrant: EisenhowerQuadrant.notUrgentImportant,
-                label: s.quadrantQ2Label,
-                subLabel: s.quadrantQ2Sub,
-                items:
-                    quadrantGroups[EisenhowerQuadrant.notUrgentImportant] ?? [],
-                onTodoDropped: onTodoChanged == null
-                    ? null
-                    : (todo) => onTodoChanged(
-                        todo,
-                        EisenhowerQuadrant.notUrgentImportant,
-                      ),
-                canEditTodo: canEditTodo,
-                onTap: () =>
-                    onQuadrantTap(EisenhowerQuadrant.notUrgentImportant),
-              ),
-            ),
+            Expanded(child: cards[0]),
+            const SizedBox(width: DesignTokens.spaceSm),
+            Expanded(child: cards[1]),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: DesignTokens.spaceSm),
         Row(
           children: [
-            Expanded(
-              child: _QuadrantCard(
-                quadrant: EisenhowerQuadrant.urgentNotImportant,
-                label: s.quadrantQ3Label,
-                subLabel: s.quadrantQ3Sub,
-                items:
-                    quadrantGroups[EisenhowerQuadrant.urgentNotImportant] ?? [],
-                onTodoDropped: onTodoChanged == null
-                    ? null
-                    : (todo) => onTodoChanged(
-                        todo,
-                        EisenhowerQuadrant.urgentNotImportant,
-                      ),
-                canEditTodo: canEditTodo,
-                onTap: () =>
-                    onQuadrantTap(EisenhowerQuadrant.urgentNotImportant),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _QuadrantCard(
-                quadrant: EisenhowerQuadrant.notUrgentNotImportant,
-                label: s.quadrantQ4Label,
-                subLabel: s.quadrantQ4Sub,
-                items:
-                    quadrantGroups[EisenhowerQuadrant.notUrgentNotImportant] ??
-                    [],
-                onTodoDropped: onTodoChanged == null
-                    ? null
-                    : (todo) => onTodoChanged(
-                        todo,
-                        EisenhowerQuadrant.notUrgentNotImportant,
-                      ),
-                canEditTodo: canEditTodo,
-                onTap: () =>
-                    onQuadrantTap(EisenhowerQuadrant.notUrgentNotImportant),
-              ),
-            ),
+            Expanded(child: cards[2]),
+            const SizedBox(width: DesignTokens.spaceSm),
+            Expanded(child: cards[3]),
           ],
         ),
       ],

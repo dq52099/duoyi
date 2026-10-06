@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/completion_visibility_policy.dart';
+import '../core/desktop_tokens.dart';
 import '../core/design_tokens.dart';
 import '../core/i18n_date_format.dart';
 import '../core/iterable_extensions.dart';
@@ -848,6 +849,143 @@ class _TodoScreenState extends State<TodoScreen> {
     final allVisibleSelected =
         editableVisibleIds.isNotEmpty &&
         editableVisibleIds.every(_selectedTodoIds.contains);
+    // 宽屏桌面档（与 today 桌面仪表盘同款纯宽度判定，不依赖编译期 web
+    // 档位）：左侧视图内容 + 右侧固定侧栏（今日概要 + 自定义视图筛选），
+    // 消除 1280 限宽内仍通栏拉伸的"手机感"；批量模式退回通栏列表，
+    // 便于横向扫选与底部批量操作条。
+    final isWidescreen =
+        MediaQuery.widthOf(context) >= DesktopTokens.breakpointTwoColumn;
+    // 最宽桌面档（调研锚点 1400 = DesktopTokens.breakpointThreeColumn，即
+    // docs/desktop-layout-optimization.md 的三栏布局档）：四象限单行 4 列
+    // 横排，避免限宽内容区内 2×2 卡片各占半宽被拉成过宽横条；窄档与
+    // 移动端保持 2×2 竖排（紧迫/重要两轴语义不变）。
+    final isWidestTier =
+        MediaQuery.widthOf(context) >= DesktopTokens.breakpointThreeColumn;
+    final viewContent = filteredTodos.isEmpty
+        ? _TodoNoMatches(
+            onClear: () {
+              setState(
+                () => _filter =
+                    const TodoFilterState<EisenhowerQuadrant, TodoPriority>(),
+              );
+            },
+          )
+        : switch (_viewMode) {
+            _TodoViewMode.matrix => SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: EisenhowerMatrix(
+                quadrantGroups: quadrantGroups,
+                fourColumn: isWidestTier,
+                onQuadrantTap: (q) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => QuadrantListScreen(
+                        quadrant: q,
+                        filter: _filter,
+                        onCreateTodo: (quadrant) =>
+                            _showAddDialog(initialQuadrant: quadrant),
+                      ),
+                    ),
+                  );
+                },
+                // 长按拖动待办到目标象限，松手即换象限。
+                // 与 tile 级入口一致：只读成员不可拖拽换象限。
+                canEditTodo: (todo) =>
+                    context.read<ShareProvider>().canEdit(todo.workspaceId),
+                onTodoQuadrantChanged: (todo, target) {
+                  // 投放时点用最新权限复查，防止陈旧快照放行。
+                  if (!context.read<ShareProvider>().canEdit(
+                    todo.workspaceId,
+                  )) {
+                    return;
+                  }
+                  context.read<TodoProvider>().updateTodosQuadrant([
+                    todo.id,
+                  ], target);
+                },
+              ),
+            ),
+            _TodoViewMode.list => NotificationListener<ScrollNotification>(
+              onNotification: _dismissSwipeActionsOnScroll,
+              child: ListView.builder(
+                // ignore: deprecated_member_use
+                cacheExtent: 640,
+                itemCount: listGroupEntries.length,
+                itemBuilder: (context, index) {
+                  final entry = listGroupEntries[index];
+                  return _ListGroupTile(
+                    groupName: entry.key,
+                    todos: entry.value,
+                    batchMode: _batchMode,
+                    selectedTodoIds: _selectedTodoIds,
+                    onToggleSelection: _toggleSelection,
+                    onEnterBatchMode: (id) => _enterBatchMode(todoId: id),
+                    swipeDismissSerial: _swipeDismissSerial,
+                  );
+                },
+              ),
+            ),
+            _TodoViewMode.kanban => _TodoKanbanView(
+              config: _kanbanConfig,
+              kanbanGroups: kanbanGroups,
+              batchMode: _batchMode,
+              selectedTodoIds: _selectedTodoIds,
+              onToggleSelection: _toggleSelection,
+              onEnterBatchMode: (id) => _enterBatchMode(todoId: id),
+              swipeDismissSerial: _swipeDismissSerial,
+              onScrollStart: _dismissSwipeActionsOnScroll,
+            ),
+          };
+    final widescreenBody = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            children: [
+              _TodoViewSwitcher(
+                selected: _viewMode,
+                onChanged: (mode) => setState(() => _viewMode = mode),
+              ),
+              Expanded(child: viewContent),
+            ],
+          ),
+        ),
+        const VerticalDivider(
+          width: 1,
+          thickness: 1,
+          // 不传 color：走主题 dividerTheme 档位（outlineVariant@feel alpha）。
+        ),
+        SizedBox(
+          width: DesktopTokens.rightSidebarWidth,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _TodoTodaySummaryCard(
+                todos: baseTodos,
+                habits: habitProvider.habits,
+                activeGoalCount: goalProvider.activeGoals.length,
+                now: now,
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: DesignTokens.spaceLg),
+                  child: _TodoFilterBar(
+                    filter: _filter,
+                    totalCount: baseTodos.length,
+                    filteredCount: filteredTodos.length,
+                    availableTags: availableTags,
+                    availableListGroups: availableListGroups,
+                    onChanged: _setFilter,
+                    onClear: _clearFilter,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -916,6 +1054,8 @@ class _TodoScreenState extends State<TodoScreen> {
               actionLabel: s.todoAddAction,
               onAction: _showAddDialog,
             )
+          : isWidescreen && !_batchMode
+          ? widescreenBody
           : Column(
               children: [
                 if (!_batchMode)
@@ -939,92 +1079,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   onChanged: _setFilter,
                   onClear: _clearFilter,
                 ),
-                Expanded(
-                  child: filteredTodos.isEmpty
-                      ? _TodoNoMatches(
-                          onClear: () {
-                            setState(
-                              () => _filter =
-                                  const TodoFilterState<
-                                    EisenhowerQuadrant,
-                                    TodoPriority
-                                  >(),
-                            );
-                          },
-                        )
-                      : switch (_viewMode) {
-                          _TodoViewMode.matrix => SingleChildScrollView(
-                            padding: const EdgeInsets.all(12),
-                            child: EisenhowerMatrix(
-                              quadrantGroups: quadrantGroups,
-                              onQuadrantTap: (q) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => QuadrantListScreen(
-                                      quadrant: q,
-                                      filter: _filter,
-                                      onCreateTodo: (quadrant) =>
-                                          _showAddDialog(
-                                            initialQuadrant: quadrant,
-                                          ),
-                                    ),
-                                  ),
-                                );
-                              },
-                              // 长按拖动待办到目标象限，松手即换象限。
-                              // 与 tile 级入口一致：只读成员不可拖拽换象限。
-                              canEditTodo: (todo) => context
-                                  .read<ShareProvider>()
-                                  .canEdit(todo.workspaceId),
-                              onTodoQuadrantChanged: (todo, target) {
-                                // 投放时点用最新权限复查，防止陈旧快照放行。
-                                if (!context.read<ShareProvider>().canEdit(
-                                  todo.workspaceId,
-                                )) {
-                                  return;
-                                }
-                                context
-                                    .read<TodoProvider>()
-                                    .updateTodosQuadrant([todo.id], target);
-                              },
-                            ),
-                          ),
-                          _TodoViewMode.list =>
-                            NotificationListener<ScrollNotification>(
-                              onNotification: _dismissSwipeActionsOnScroll,
-                              child: ListView.builder(
-                                // ignore: deprecated_member_use
-                                cacheExtent: 640,
-                                itemCount: listGroupEntries.length,
-                                itemBuilder: (context, index) {
-                                  final entry = listGroupEntries[index];
-                                  return _ListGroupTile(
-                                    groupName: entry.key,
-                                    todos: entry.value,
-                                    batchMode: _batchMode,
-                                    selectedTodoIds: _selectedTodoIds,
-                                    onToggleSelection: _toggleSelection,
-                                    onEnterBatchMode: (id) =>
-                                        _enterBatchMode(todoId: id),
-                                    swipeDismissSerial: _swipeDismissSerial,
-                                  );
-                                },
-                              ),
-                            ),
-                          _TodoViewMode.kanban => _TodoKanbanView(
-                            config: _kanbanConfig,
-                            kanbanGroups: kanbanGroups,
-                            batchMode: _batchMode,
-                            selectedTodoIds: _selectedTodoIds,
-                            onToggleSelection: _toggleSelection,
-                            onEnterBatchMode: (id) =>
-                                _enterBatchMode(todoId: id),
-                            swipeDismissSerial: _swipeDismissSerial,
-                            onScrollStart: _dismissSwipeActionsOnScroll,
-                          ),
-                        },
-                ),
+                Expanded(child: viewContent),
               ],
             ),
       bottomNavigationBar: _batchMode

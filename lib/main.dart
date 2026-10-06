@@ -4188,21 +4188,18 @@ class MainShellState extends State<MainShell> {
         })
         .toList(growable: false);
 
-    if (WebTarget.isDesktopWebBuild) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth >= 900) {
-            return _buildDesktopWebShell(
-              context: context,
-              prefs: prefs,
-              safeIndex: safeIndex,
-              safeVisibleTabs: safeVisibleTabs,
-              selectedNavIndex: selectedNavIndex,
-              showingHiddenTab: showingHiddenTab,
-              destinations: navDestinations,
-            );
-          }
-          return _buildMobileShell(
+    // 宽屏外壳分派不再吃编译期 DUOYI_WEB_TARGET 档位：此前只有 desktop
+    // 包能进 rail 壳，responsive 包、dev web 与 Linux 桌面端（kIsWeb=false）
+    // 永远走移动壳（底导航全宽拉伸），是宽屏"大号手机感"的根因。改为
+    // 无条件按运行时宽度分派：≥900 走 rail 壳，<900 原样落回移动壳——
+    // Android 手机视口恒 <900，行为零变化；平板/折叠屏展开 >900 与
+    // today 桌面档（纯宽度判定）同口径升级为 rail 壳。tab 集过滤（隐藏
+    // 小组件 tab）仍走编译期 WebTarget.isDesktopWebBuild，移动包不受影响。
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (WebTarget.isWidescreenLayout(constraints.maxWidth)) {
+          return _buildDesktopWebShell(
+            context: context,
             prefs: prefs,
             safeIndex: safeIndex,
             safeVisibleTabs: safeVisibleTabs,
@@ -4210,17 +4207,16 @@ class MainShellState extends State<MainShell> {
             showingHiddenTab: showingHiddenTab,
             destinations: navDestinations,
           );
-        },
-      );
-    }
-
-    return _buildMobileShell(
-      prefs: prefs,
-      safeIndex: safeIndex,
-      safeVisibleTabs: safeVisibleTabs,
-      selectedNavIndex: selectedNavIndex,
-      showingHiddenTab: showingHiddenTab,
-      destinations: navDestinations,
+        }
+        return _buildMobileShell(
+          prefs: prefs,
+          safeIndex: safeIndex,
+          safeVisibleTabs: safeVisibleTabs,
+          selectedNavIndex: selectedNavIndex,
+          showingHiddenTab: showingHiddenTab,
+          destinations: navDestinations,
+        );
+      },
     );
   }
 
@@ -4339,7 +4335,6 @@ class MainShellState extends State<MainShell> {
     required bool showingHiddenTab,
     required List<NavigationDestination> destinations,
   }) {
-    final cs = Theme.of(context).colorScheme;
     final appTitle = AppLocalizations.of(context).appTitle;
     final content = IndexedStack(
       index: safeIndex,
@@ -4368,84 +4363,105 @@ class MainShellState extends State<MainShell> {
           )
         : content;
 
+    // rail 几何一次算清（浮岛卡面四周各留 DesignTokens.spaceMd 一圈）：
+    // 内容列宽 = 窗口 - rail 卡宽 - 2×spaceMd，超过 maxContentWidth 后由
+    // Center 两侧留白；FAB 右距据此贴住内容列右缘。
+    final windowWidth = MediaQuery.widthOf(context);
+    final railExtended = windowWidth >= DesktopTokens.railExtendedBreakpoint;
+    final railWidth = railExtended
+        ? DesktopTokens.railExtendedWidth
+        : DesktopTokens.railCompactWidth;
+    final contentSpare =
+        windowWidth -
+        railWidth -
+        DesignTokens.spaceMd * 2 -
+        DesktopTokens.maxContentWidth;
+    // Scaffold endFloat 已自带 16px 右缘边距（kFloatingActionButtonMargin），
+    // FAB 右缘距窗右 = 16 + fabRightInset。宽屏下内容列距窗右 contentSpare/2，
+    // 贴缘即 fabRightInset = contentSpare/2 - 16；留白不足（≤16）时归零，
+    // 右距与移动壳一致（恰为 endFloat 的 16px）。
+    final double contentRightGap = contentSpare > 0 ? contentSpare / 2 : 0.0;
+    final double fabRightInset = contentRightGap > 16
+        ? contentRightGap - 16
+        : 0.0;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: BrandBackground(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final extended = constraints.maxWidth >= 1120;
-            return Row(
-              children: [
-                Material(
-                  color: cs.surface.withValues(alpha: 0.88),
-                  child: SafeArea(
-                    right: false,
-                    child: NavigationRail(
-                      selectedIndex: selectedNavIndex < 0
-                          ? null
-                          : selectedNavIndex,
-                      onDestinationSelected: (i) => setState(() {
-                        _currentIndex = safeVisibleTabs[i];
-                        _builtTabs.add(_currentIndex);
-                        _allowHiddenCurrentIndex = false;
-                        _hasExplicitNavigation = true;
-                      }),
-                      extended: extended,
-                      minExtendedWidth: 196,
-                      backgroundColor: Colors.transparent,
-                      leading: _DesktopRailHeader(
-                        appTitle: appTitle,
-                        extended: extended,
-                      ),
-                      destinations: destinations
-                          .map(
-                            (destination) => NavigationRailDestination(
-                              icon: Tooltip(
-                                message: destination.label,
-                                child: destination.icon,
-                              ),
-                              selectedIcon: Tooltip(
-                                message: destination.label,
-                                child: destination.selectedIcon,
-                              ),
-                              label: Text(
-                                destination.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(growable: false),
-                    ),
+        child: Row(
+          children: [
+            // 桌面侧栏走 iOS/液态玻璃语言的"浮岛"卡面：AppSurfaceCard
+            // 继承各主题卡面档（默认主题 16 圆角 + 极淡阴影、玻璃主题
+            // 半透明白高光描边、其余主题淡描边卡面），四周留缝透出
+            // BrandBackground，柔和分隔由留白与圆角承担，不再压一条
+            // 满高硬分隔线。
+            AppSurfaceCard(
+              margin: const EdgeInsets.all(DesignTokens.spaceMd),
+              padding: EdgeInsets.zero,
+              child: SafeArea(
+                right: false,
+                child: NavigationRail(
+                  selectedIndex: selectedNavIndex < 0 ? null : selectedNavIndex,
+                  onDestinationSelected: (i) => setState(() {
+                    _currentIndex = safeVisibleTabs[i];
+                    _builtTabs.add(_currentIndex);
+                    _allowHiddenCurrentIndex = false;
+                    _hasExplicitNavigation = true;
+                  }),
+                  extended: railExtended,
+                  minExtendedWidth: DesktopTokens.railExtendedWidth,
+                  backgroundColor: Colors.transparent,
+                  leading: _DesktopRailHeader(
+                    appTitle: appTitle,
+                    extended: railExtended,
                   ),
+                  destinations: destinations
+                      .map(
+                        (destination) => NavigationRailDestination(
+                          icon: Tooltip(
+                            message: destination.label,
+                            child: destination.icon,
+                          ),
+                          selectedIcon: Tooltip(
+                            message: destination.label,
+                            child: destination.selectedIcon,
+                          ),
+                          label: Text(
+                            destination.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
                 ),
-                VerticalDivider(
-                  width: 1,
-                  thickness: 1,
-                  color: cs.outlineVariant.withValues(alpha: 0.52),
-                ),
-                Expanded(
-                  // 宽屏内容限宽：todo/habit/calendar/mine 的 body 均为全幅
-                  // Column/ListView，玻璃/实底卡面在无限宽下拉成大平板；用
-                  // 今日页桌面档同款 maxContentWidth（DesktopTokens 既有档位，
-                  // 不新增档位）一处约束全部 tab，两侧留白透出 BrandBackground。
-                  child: Center(
-                    child: ConstrainedBox(
-                      key: const ValueKey('desktop_web_body_max_width'),
-                      constraints: BoxConstraints(
-                        maxWidth: DesktopTokens.maxContentWidth,
-                      ),
-                      child: body,
-                    ),
+              ),
+            ),
+            Expanded(
+              // 宽屏内容限宽：todo/habit/calendar/mine 的 body 均为全幅
+              // Column/ListView，玻璃/实底卡面在无限宽下拉成大平板；用
+              // 今日页桌面档同款 maxContentWidth（DesktopTokens 既有档位，
+              // 不新增档位）一处约束全部 tab，两侧留白透出 BrandBackground。
+              child: Center(
+                child: ConstrainedBox(
+                  key: const ValueKey('desktop_web_body_max_width'),
+                  constraints: BoxConstraints(
+                    maxWidth: DesktopTokens.maxContentWidth,
                   ),
+                  child: body,
                 ),
-              ],
-            );
-          },
+              ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: safeIndex == 0 && prefs.quickCaptureFab
-          ? const QuickCaptureFab()
+          ? Padding(
+              // 宽屏下快速捕获 FAB 贴限宽内容列右缘，不再悬在窗口右侧留白
+              // 里；留白不足时退回与移动壳一致的 16px 右距。
+              padding: EdgeInsets.only(right: fabRightInset),
+              child: const QuickCaptureFab(),
+            )
           : null,
     );
   }

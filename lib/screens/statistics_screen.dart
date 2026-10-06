@@ -11,6 +11,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../core/desktop_tokens.dart';
 import '../core/focus_tag_stats.dart';
 import '../core/i18n_date_format.dart';
 import '../core/project_efficiency.dart';
@@ -285,201 +286,226 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
-              final crossAxisCount = width >= 720
-                  ? 3
-                  : width < 360
-                  ? 1
-                  : 2;
-              final childAspectRatio = crossAxisCount == 1
-                  ? 4.2
-                  : width >= 720
-                  ? 2.8
-                  : 2.5;
-              // 系统大字号（如 font_scale 2.0）下，按固定 childAspectRatio
-              // 折算的瓦片高度装不下“标题+数值”两行文本，实测出现
-              // BOTTOM OVERFLOWED（1/2/3 列断点全部中招）。照搬
-              // today_screen 的兜底模式：按当前系统字号换算内容所需的
-              // 最小高度，通过 mainAxisExtent 取两者较大者。_Kpi 竖向
-              // 内容为标题 11×1.45 + 数值 16×1.45（各平台默认字体行高
-              // 系数实测 1.17～1.43 不等，取上限留裕度），与不随字号
-              // 缩放的图标盒 34 取大，外加卡内边距 20、描边 1、余量 6；
-              // 1.0 缩放下折算高度（68.15）低于最小断点的宽高比高度
-              // （320 宽单列 70.5），视觉完全不变；三个断点任意字号下
-              // 都不溢出。
-              final textScaler = MediaQuery.textScalerOf(context);
-              final minTileExtent =
-                  math.max(
-                    34.0,
-                    textScaler.scale(11 * 1.45) +
-                        textScaler.scale(16 * 1.45) +
-                        6,
-                  ) +
-                  23;
-              // GridView 撑满 LayoutBuilder 宽度，与框架内部折算公式
-              // （crossAxisExtent / aspectRatio）保持一致，1.0 缩放下
-              // 视觉不变。
-              final tileWidth =
-                  (width - (crossAxisCount - 1) * 8) / crossAxisCount;
-              final tileExtent = math.max(
-                tileWidth / childAspectRatio,
-                minTileExtent,
-              );
-              return GridView.count(
-                key: const ValueKey('statistics_kpi_grid'),
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: crossAxisCount,
-                childAspectRatio: childAspectRatio,
-                mainAxisExtent: tileExtent,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                children: [
-                  _Kpi(
-                    icon: Icons.check_circle,
-                    color: cs.primary,
-                    title: '待办完成',
-                    value: '${completedTodos.length}',
-                  ),
-                  _Kpi(
-                    icon: Icons.timer,
-                    color: Colors.redAccent,
-                    title: '深度专注',
-                    value: '$focusMinutes 分',
-                  ),
-                  _Kpi(
-                    icon: Icons.repeat,
-                    color: const Color(0xFF66BB6A),
-                    title: '习惯打卡',
-                    value: '$habitDoneInRange 次',
-                  ),
-                  _Kpi(
-                    icon: Icons.book_outlined,
-                    color: const Color(0xFF26A69A),
-                    title: '日记',
-                    value: '$diaryInRange 篇',
-                  ),
-                  _Kpi(
-                    icon: Icons.timelapse_outlined,
-                    color: const Color(0xFF78909C),
-                    title: '时间足迹',
-                    value: '$auditTotalMinutes 分',
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 14),
-          _PeriodReportDigestCard(
-            digest: digest,
-            cs: cs,
-            onCopy: () => _copyDigest(context, digest),
-            aiEnabled: ai.enabled,
-            aiBusy: _aiReportBusy,
-            aiReview: _aiReportReview,
-            aiError: _aiReportError,
-            onAiReview: () => _runDigestAiReview(context, digest),
-            onOpenAiHistory: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AiHistoryScreen()),
+      body: _widescreenReportBody(
+        isWidescreen:
+            MediaQuery.widthOf(context) >= DesktopTokens.breakpointTwoColumn,
+        child: ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final crossAxisCount = width >= 720
+                    ? 3
+                    : width < 360
+                    ? 1
+                    : 2;
+                final childAspectRatio = crossAxisCount == 1
+                    ? 4.2
+                    : width >= 720
+                    ? 2.8
+                    : 2.5;
+                // 系统大字号（如 font_scale 2.0）下，按固定 childAspectRatio
+                // 折算的瓦片高度装不下“标题+数值”两行文本，实测出现
+                // BOTTOM OVERFLOWED（1/2/3 列断点全部中招）。照搬
+                // today_screen 的兜底模式：按当前系统字号换算内容所需的
+                // 最小高度，通过 mainAxisExtent 取两者较大者。_Kpi 竖向
+                // 内容为标题 11×1.45 + 数值 16×1.45（各平台默认字体行高
+                // 系数实测 1.17～1.43 不等，取上限留裕度），与不随字号
+                // 缩放的图标盒 34 取大，外加卡内边距 20、描边 1、余量 6；
+                // 1.0 缩放下折算高度（68.15）低于最小断点的宽高比高度
+                // （320 宽单列 70.5），视觉完全不变；三个断点任意字号下
+                // 都不溢出。
+                final textScaler = MediaQuery.textScalerOf(context);
+                final minTileExtent =
+                    math.max(
+                      34.0,
+                      textScaler.scale(11 * 1.45) +
+                          textScaler.scale(16 * 1.45) +
+                          6,
+                    ) +
+                    23;
+                // GridView 撑满 LayoutBuilder 宽度，与框架内部折算公式
+                // （crossAxisExtent / aspectRatio）保持一致，1.0 缩放下
+                // 视觉不变。
+                final tileWidth =
+                    (width - (crossAxisCount - 1) * 8) / crossAxisCount;
+                final tileExtent = math.max(
+                  tileWidth / childAspectRatio,
+                  minTileExtent,
+                );
+                return GridView.count(
+                  key: const ValueKey('statistics_kpi_grid'),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: crossAxisCount,
+                  childAspectRatio: childAspectRatio,
+                  mainAxisExtent: tileExtent,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  children: [
+                    _Kpi(
+                      icon: Icons.check_circle,
+                      color: cs.primary,
+                      title: '待办完成',
+                      value: '${completedTodos.length}',
+                    ),
+                    _Kpi(
+                      icon: Icons.timer,
+                      color: Colors.redAccent,
+                      title: '深度专注',
+                      value: '$focusMinutes 分',
+                    ),
+                    _Kpi(
+                      icon: Icons.repeat,
+                      color: const Color(0xFF66BB6A),
+                      title: '习惯打卡',
+                      value: '$habitDoneInRange 次',
+                    ),
+                    _Kpi(
+                      icon: Icons.book_outlined,
+                      color: const Color(0xFF26A69A),
+                      title: '日记',
+                      value: '$diaryInRange 篇',
+                    ),
+                    _Kpi(
+                      icon: Icons.timelapse_outlined,
+                      color: const Color(0xFF78909C),
+                      title: '时间足迹',
+                      value: '$auditTotalMinutes 分',
+                    ),
+                  ],
+                );
+              },
             ),
-            onShareImage: () => _showReportShareCard(
-              context,
-              start: start,
-              end: end,
-              completedTodos: completedTodos,
-              focusMinutes: focusMinutes,
-              habitDoneInRange: habitDoneInRange,
-              diaryInRange: diaryInRange,
-              auditTotalMinutes: auditTotalMinutes,
-              auditCategorySeconds: auditCategorySeconds,
-              auditEntries: auditEntries,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _ProductivityComparisonCard(
-            comparison: comparison,
-            range: _range,
-            cs: cs,
-          ),
-          const SizedBox(height: 10),
-          _ProductivityTrendCard(points: productivityTrend, range: _range),
-          const SizedBox(height: 10),
-          _buildFocusTodoCorrelationCard(
-            correlation: crossAnalysis.focusTodo,
-            cs: cs,
-          ),
-          const SizedBox(height: 10),
-          _buildHabitTodoCorrelationCard(
-            correlation: crossAnalysis.habitTodo,
-            cs: cs,
-          ),
-          const SizedBox(height: 10),
-          _buildDiaryFocusCorrelationCard(
-            correlation: crossAnalysis.diaryFocus,
-            cs: cs,
-          ),
-          const SizedBox(height: 10),
-          _buildTimeCategoryShareTrendCard(
-            trend: crossAnalysis.timeCategoryTrend,
-            cs: cs,
-          ),
-          const SizedBox(height: 10),
-          _buildTimeOutputEfficiencyCard(
-            trend: crossAnalysis.timeOutputEfficiency,
-            cs: cs,
-          ),
-          const SizedBox(height: 10),
-          _buildProjectEfficiencyCard(breakdown: projectEfficiency, cs: cs),
-          const SizedBox(height: 10),
-          _ActivityHeatmapCard(heatmapData: activityHeatmap),
-          const SizedBox(height: 10),
-          _WeeklyTimeOverview(
-            weekTotalSeconds: weekTotalSeconds,
-            sourceSeconds: weekSourceSeconds,
-            daySeconds: weekDaySeconds,
-            weekMonday: weekMonday,
-            cs: cs,
-          ),
-          const SizedBox(height: 10),
-          _chartCard(
-            '时间投入分布',
-            SizedBox(
-              height: 180,
-              child: _buildAuditPie(
-                secondsByCategory: auditCategorySeconds,
-                cs: cs,
+            const SizedBox(height: 14),
+            _PeriodReportDigestCard(
+              digest: digest,
+              cs: cs,
+              onCopy: () => _copyDigest(context, digest),
+              aiEnabled: ai.enabled,
+              aiBusy: _aiReportBusy,
+              aiReview: _aiReportReview,
+              aiError: _aiReportError,
+              onAiReview: () => _runDigestAiReview(context, digest),
+              onOpenAiHistory: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AiHistoryScreen()),
               ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          _chartCard('时间线', _buildAuditTimeline(auditEntries, cs)),
-          const SizedBox(height: 10),
-          _chartCard(
-            _range == _Range.year ? '每月专注分钟数' : '每日专注分钟数',
-            SizedBox(
-              height: 180,
-              child: _buildFocusSeries(
-                sessions: focusSessions,
-                range: _range,
+              onShareImage: () => _showReportShareCard(
+                context,
                 start: start,
                 end: end,
-                cs: cs,
+                completedTodos: completedTodos,
+                focusMinutes: focusMinutes,
+                habitDoneInRange: habitDoneInRange,
+                diaryInRange: diaryInRange,
+                auditTotalMinutes: auditTotalMinutes,
+                auditCategorySeconds: auditCategorySeconds,
+                auditEntries: auditEntries,
               ),
             ),
-          ),
-          const SizedBox(height: 10),
-          _buildFocusTagRankingCard(stats: focusTagStats, cs: cs),
-          const SizedBox(height: 10),
-          _buildFocusTagTrendCard(series: focusTagTrend, range: _range, cs: cs),
-          const SizedBox(height: 10),
-          _QuadrantDistributionCard(stats: quadrantStats, cs: cs),
-        ],
+            const SizedBox(height: 10),
+            _ProductivityComparisonCard(
+              comparison: comparison,
+              range: _range,
+              cs: cs,
+            ),
+            const SizedBox(height: 10),
+            _ProductivityTrendCard(points: productivityTrend, range: _range),
+            const SizedBox(height: 10),
+            _buildFocusTodoCorrelationCard(
+              correlation: crossAnalysis.focusTodo,
+              cs: cs,
+            ),
+            const SizedBox(height: 10),
+            _buildHabitTodoCorrelationCard(
+              correlation: crossAnalysis.habitTodo,
+              cs: cs,
+            ),
+            const SizedBox(height: 10),
+            _buildDiaryFocusCorrelationCard(
+              correlation: crossAnalysis.diaryFocus,
+              cs: cs,
+            ),
+            const SizedBox(height: 10),
+            _buildTimeCategoryShareTrendCard(
+              trend: crossAnalysis.timeCategoryTrend,
+              cs: cs,
+            ),
+            const SizedBox(height: 10),
+            _buildTimeOutputEfficiencyCard(
+              trend: crossAnalysis.timeOutputEfficiency,
+              cs: cs,
+            ),
+            const SizedBox(height: 10),
+            _buildProjectEfficiencyCard(breakdown: projectEfficiency, cs: cs),
+            const SizedBox(height: 10),
+            _ActivityHeatmapCard(heatmapData: activityHeatmap),
+            const SizedBox(height: 10),
+            _WeeklyTimeOverview(
+              weekTotalSeconds: weekTotalSeconds,
+              sourceSeconds: weekSourceSeconds,
+              daySeconds: weekDaySeconds,
+              weekMonday: weekMonday,
+              cs: cs,
+            ),
+            const SizedBox(height: 10),
+            _chartCard(
+              '时间投入分布',
+              SizedBox(
+                height: 180,
+                child: _buildAuditPie(
+                  secondsByCategory: auditCategorySeconds,
+                  cs: cs,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            _chartCard('时间线', _buildAuditTimeline(auditEntries, cs)),
+            const SizedBox(height: 10),
+            _chartCard(
+              _range == _Range.year ? '每月专注分钟数' : '每日专注分钟数',
+              SizedBox(
+                height: 180,
+                child: _buildFocusSeries(
+                  sessions: focusSessions,
+                  range: _range,
+                  start: start,
+                  end: end,
+                  cs: cs,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            _buildFocusTagRankingCard(stats: focusTagStats, cs: cs),
+            const SizedBox(height: 10),
+            _buildFocusTagTrendCard(
+              series: focusTagTrend,
+              range: _range,
+              cs: cs,
+            ),
+            const SizedBox(height: 10),
+            _QuadrantDistributionCard(stats: quadrantStats, cs: cs),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 宽屏桌面档：报告内容限宽居中（KPI 网格在 ≥720 内宽保持 3 列所需
+  /// 最小外宽 960，见 [DesktopTokens.reportMaxContentWidth]）；窄屏原样。
+  Widget _widescreenReportBody({
+    required bool isWidescreen,
+    required Widget child,
+  }) {
+    if (!isWidescreen) return child;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: DesktopTokens.reportMaxContentWidth,
+        ),
+        child: child,
       ),
     );
   }

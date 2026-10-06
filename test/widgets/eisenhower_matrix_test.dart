@@ -264,4 +264,36 @@ void main() {
     );
     expect(find.textContaining('更多'), findsOneWidget);
   });
+
+  testWidgets('fourColumn：四象限单行横排，总高一排 160', (tester) async {
+    final s = ThemeProvider().brand.strings;
+    await tester.pumpWidget(
+      _wrap(
+        SingleChildScrollView(
+          child: EisenhowerMatrix(
+            quadrantGroups: const {},
+            onQuadrantTap: (_) {},
+            fourColumn: true,
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    // 单行横排：矩阵总高 = 一排卡高 160（默认 2×2 竖排为 328）。
+    expect(
+      tester.getSize(find.byType(EisenhowerMatrix)).height,
+      moreOrLessEquals(160),
+    );
+    final q1 = tester.getCenter(find.text(s.quadrantQ1Label));
+    final q2 = tester.getCenter(find.text(s.quadrantQ2Label));
+    final q3 = tester.getCenter(find.text(s.quadrantQ3Label));
+    final q4 = tester.getCenter(find.text(s.quadrantQ4Label));
+    expect(q1.dy, moreOrLessEquals(q2.dy));
+    expect(q1.dy, moreOrLessEquals(q3.dy));
+    expect(q1.dy, moreOrLessEquals(q4.dy));
+    expect(q2.dx, greaterThan(q1.dx));
+    expect(q3.dx, greaterThan(q2.dx));
+    expect(q4.dx, greaterThan(q3.dx));
+  });
 }

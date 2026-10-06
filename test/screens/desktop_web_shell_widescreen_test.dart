@@ -6,6 +6,7 @@ import 'package:duoyi/core/desktop_tokens.dart';
 import 'package:duoyi/core/web_target.dart';
 import 'package:duoyi/l10n/generated/app_localizations.dart';
 import 'package:duoyi/main.dart';
+import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/providers/achievement_provider.dart';
 import 'package:duoyi/providers/anniversary_provider.dart';
 import 'package:duoyi/providers/app_lock_provider.dart';
@@ -27,6 +28,7 @@ import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/providers/time_audit_provider.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/providers/user_provider.dart';
+import 'package:duoyi/screens/habit_screen.dart';
 import 'package:duoyi/screens/todo_screen.dart';
 import 'package:duoyi/screens/today_screen.dart';
 import 'package:duoyi/services/ai_service.dart';
@@ -37,19 +39,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// 桌面 web 外壳（NavigationRail）宽屏冒烟：
+/// 宽屏外壳（NavigationRail）冒烟：
 ///
-/// WebTarget.isDesktopWebBuild 依赖 kIsWeb（VM 上恒为 false），测试通过
-/// [WebTarget.debugDesktopWebBuild] 注入开启外壳分支；视口写法沿用
+/// 外壳分派自运行时宽度判定（WebTarget.isWidescreenLayout，≥900 rail 壳）
+/// 后不再依赖编译期档位；[WebTarget.debugDesktopWebBuild] 注入仅用于
+/// 对齐桌面包的 tab 集过滤（隐藏小组件 tab）。视口写法沿用
 /// today_mine_smoke_test 的 tester.view.physicalSize + devicePixelRatio。
 Finder get _maxWidthBox =>
     find.byKey(const ValueKey('desktop_web_body_max_width'));
 
-Widget _wrapShell(ThemeData theme) {
+Widget _wrapShell(ThemeData theme, {HabitProvider? habitProvider}) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider(create: (_) => TodoProvider()),
-      ChangeNotifierProvider(create: (_) => HabitProvider()),
+      ChangeNotifierProvider(create: (_) => habitProvider ?? HabitProvider()),
       ChangeNotifierProvider(create: (_) => PomodoroProvider()),
       ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ChangeNotifierProvider(create: (_) => CloudSyncProvider()),
@@ -92,12 +95,13 @@ Widget _wrapShell(ThemeData theme) {
 Future<void> _pumpShellAt(
   WidgetTester tester,
   ThemeData theme,
-  Size size,
-) async {
+  Size size, {
+  HabitProvider? habitProvider,
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(_wrapShell(theme));
+  await tester.pumpWidget(_wrapShell(theme, habitProvider: habitProvider));
   await tester.pumpAndSettle();
 }
 
@@ -153,6 +157,65 @@ void main() {
 
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(tester.getSize(_maxWidthBox).width, DesktopTokens.maxContentWidth);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('1280x800 未注入编译期档位（responsive 包）：宽度达阈值仍走 rail 壳', (tester) async {
+    WebTarget.debugDesktopWebBuild = null;
+    await _pumpShellAt(
+      tester,
+      AppBrands.defaultBrand.theme,
+      const Size(1280, 800),
+    );
+
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(TodayScreen), findsOneWidget);
+    expect(
+      tester.getSize(_maxWidthBox).width,
+      lessThanOrEqualTo(DesktopTokens.maxContentWidth),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('1280x800 宽屏习惯今日打卡走双列懒构建网格', (tester) async {
+    final habitProvider = HabitProvider();
+    for (final id in ['a', 'b', 'c']) {
+      await habitProvider.addHabit(
+        Habit(id: id, name: '习惯$id', icon: Icons.book.codePoint.toString()),
+      );
+    }
+    await _pumpShellAt(
+      tester,
+      AppBrands.defaultBrand.theme,
+      const Size(1280, 800),
+      habitProvider: habitProvider,
+    );
+
+    tester.state<MainShellState>(find.byType(MainShell)).navigateTo(2);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HabitScreen), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('habit_today_checkin_sliver')),
+      findsOneWidget,
+    );
+    expect(find.byType(SliverGrid), findsOneWidget);
+    expect(find.byKey(const ValueKey('habit_checkin_card_a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('habit_checkin_card_c')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('800x600 宽度不足阈值：注入 desktop 档也回落移动底导航壳', (tester) async {
+    await _pumpShellAt(
+      tester,
+      AppBrands.defaultBrand.theme,
+      const Size(800, 600),
+    );
+
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
+    expect(_maxWidthBox, findsNothing);
+    expect(find.byType(TodayScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
