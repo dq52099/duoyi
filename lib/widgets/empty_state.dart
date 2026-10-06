@@ -6,11 +6,14 @@ import '../core/design_tokens.dart';
 import 'surface_components.dart';
 
 class EmptyState extends StatelessWidget {
+  static const double defaultMinCardHeight = 240.0;
+
   final IconData icon;
   final Widget? iconWidget;
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final double? minCardHeight;
 
   const EmptyState({
     super.key,
@@ -19,6 +22,7 @@ class EmptyState extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
+    this.minCardHeight,
   });
 
   @override
@@ -43,22 +47,35 @@ class EmptyState extends StatelessWidget {
         final iconSize = compact ? 44.0 : 72.0;
         final iconGlyphSize = compact ? 24.0 : 36.0;
         final gap = compact ? 10.0 : 20.0;
-        final maxCardWidth = constraints.maxWidth.isFinite
+        final cardWidth = constraints.maxWidth.isFinite
             ? math.max(
                 0.0,
                 math.min(520.0, constraints.maxWidth - outerPadding * 2),
               )
             : 520.0;
+        final maxAvailableHeight = constraints.maxHeight.isFinite
+            ? math.max(0.0, constraints.maxHeight - outerPadding * 2)
+            : double.infinity;
+        final effectiveMinHeight = minCardHeight != null
+            ? (constraints.maxHeight.isFinite
+                ? math.max(0.0, math.min(minCardHeight!, maxAvailableHeight))
+                : math.max(0.0, minCardHeight!))
+            : 0.0;
         return Center(
           child: Padding(
             padding: EdgeInsets.all(outerPadding),
             child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxCardWidth),
+              constraints: BoxConstraints(
+                minWidth: cardWidth,
+                maxWidth: cardWidth,
+                minHeight: effectiveMinHeight,
+              ),
               child: AppSurfaceCard(
                 padding: cardPadding,
                 borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
                       width: iconSize,
@@ -95,6 +112,9 @@ class EmptyState extends StatelessWidget {
                             actionLabel!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.normal,
+                            ),
                           ),
                         ),
                       ),

@@ -775,14 +775,12 @@ class _HabitScreenState extends State<HabitScreen>
               if (activeHabits.isEmpty)
                 SliverToBoxAdapter(
                   key: const ValueKey('habit_today_empty_state_sliver'),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-                    child: EmptyState(
-                      icon: Icons.repeat,
-                      message: s.habitEmpty,
-                      actionLabel: s.habitAddAction,
-                      onAction: _showAddDialog,
-                    ),
+                  child: EmptyState(
+                    icon: Icons.repeat,
+                    message: s.habitEmpty,
+                    actionLabel: s.habitAddAction,
+                    onAction: _showAddDialog,
+                    minCardHeight: EmptyState.defaultMinCardHeight,
                   ),
                 )
               else ...[
@@ -882,15 +880,12 @@ class _HabitHeatmapTab extends StatelessWidget {
         ),
         if (provider.habits.isEmpty)
           SliverToBoxAdapter(
-            child: AppSurfaceCard(
-              margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-              padding: const EdgeInsets.all(16),
-              child: EmptyState(
-                icon: Icons.folder_open,
-                message: emptyMessage,
-                actionLabel: actionLabel,
-                onAction: onAdd,
-              ),
+            child: EmptyState(
+              icon: Icons.folder_open,
+              message: emptyMessage,
+              actionLabel: actionLabel,
+              onAction: onAdd,
+              minCardHeight: EmptyState.defaultMinCardHeight,
             ),
           )
         else ...[

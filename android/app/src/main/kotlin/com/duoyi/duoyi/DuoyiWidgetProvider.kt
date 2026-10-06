@@ -34,7 +34,7 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        val prefs: SharedPreferences = HomeWidgetPlugin.getData(context)
+        val prefs: SharedPreferences = DuoyiWidgetSnapshot.forDisplay(context, HomeWidgetPlugin.getData(context))
 
         appWidgetIds.forEach { id ->
             val views = RemoteViews(context.packageName, R.layout.duoyi_widget)
@@ -182,6 +182,7 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_quick_pomodoro, quickPomodoroIntent)
 
+            DuoyiWidgetSnapshot.finishRender(context, views, prefs, id)
             appWidgetManager.updateAppWidget(id, views)
         }
     }

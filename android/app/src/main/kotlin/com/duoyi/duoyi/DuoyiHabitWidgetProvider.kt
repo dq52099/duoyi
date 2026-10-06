@@ -30,7 +30,7 @@ open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        val prefs: SharedPreferences = HomeWidgetPlugin.getData(context)
+        val prefs: SharedPreferences = DuoyiWidgetSnapshot.forDisplay(context, HomeWidgetPlugin.getData(context))
 
         appWidgetIds.forEach { id ->
             DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)?.let { style ->
@@ -66,6 +66,8 @@ open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 ),
             )
 
+            DuoyiWidgetTheme.applyButtonSurfaces(views, prefs, secondaryIds = intArrayOf(R.id.widget_habit_hint))
+
             views.setTextViewText(
                 R.id.widget_habit_title,
                 prefs.getString("brand_app_title", "多仪") ?: "多仪"
@@ -96,7 +98,7 @@ open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
             )
             views.setViewVisibility(
                 R.id.widget_habit_hint,
-                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
+                android.view.View.VISIBLE
             )
 
             val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
@@ -124,7 +126,7 @@ open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 HomeWidgetLaunchIntent.getActivity(
                     context,
                     MainActivity::class.java,
-                    Uri.parse("duoyi://action/checkin_habit?id=${Uri.encode(habitQuickCheckId)}")
+                    DuoyiWidgetSnapshot.actionUri(prefs, Uri.parse("duoyi://action/checkin_habit?id=${Uri.encode(habitQuickCheckId)}"))
                 )
             } else {
                 openHabit
@@ -142,6 +144,7 @@ open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_habit_nav_calendar, openCalendar)
             views.setOnClickPendingIntent(R.id.widget_habit_nav_focus, openFocus)
 
+            DuoyiWidgetSnapshot.finishRender(context, views, prefs, id)
             appWidgetManager.updateAppWidget(id, views)
         }
     }

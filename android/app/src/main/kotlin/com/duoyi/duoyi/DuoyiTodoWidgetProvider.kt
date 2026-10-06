@@ -38,7 +38,7 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        val prefs: SharedPreferences = HomeWidgetPlugin.getData(context)
+        val prefs: SharedPreferences = DuoyiWidgetSnapshot.forDisplay(context, HomeWidgetPlugin.getData(context))
 
         appWidgetIds.forEach { id ->
             DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)?.let { style ->
@@ -181,6 +181,7 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
                 )
             )
 
+            DuoyiWidgetSnapshot.finishRender(context, views, prefs, id)
             appWidgetManager.updateAppWidget(id, views)
         }
     }
@@ -221,7 +222,7 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
             HomeWidgetLaunchIntent.getActivity(
                 context,
                 MainActivity::class.java,
-                Uri.parse("duoyi://action/complete_todo?id=$encodedTodoId")
+                DuoyiWidgetSnapshot.actionUri(prefs, Uri.parse("duoyi://action/complete_todo?id=$encodedTodoId"))
             )
         )
     }

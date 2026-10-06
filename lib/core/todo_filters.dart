@@ -13,6 +13,7 @@ class TodoFilterState<Q, P> {
   final TodoDueFilter due;
   final TodoCompletionFilter completion;
   final bool includeArchived;
+  final bool todayOverview;
 
   const TodoFilterState({
     this.quadrant,
@@ -22,6 +23,7 @@ class TodoFilterState<Q, P> {
     this.due = TodoDueFilter.all,
     this.completion = TodoCompletionFilter.all,
     this.includeArchived = false,
+    this.todayOverview = false,
   });
 
   bool get hasActiveFilters =>
@@ -31,7 +33,8 @@ class TodoFilterState<Q, P> {
       listGroupName != null ||
       due != TodoDueFilter.all ||
       completion != TodoCompletionFilter.all ||
-      includeArchived;
+      includeArchived ||
+      todayOverview;
 
   TodoFilterState<Q, P> copyWith({
     Object? quadrant = _unset,
@@ -41,6 +44,7 @@ class TodoFilterState<Q, P> {
     TodoDueFilter? due,
     TodoCompletionFilter? completion,
     bool? includeArchived,
+    bool? todayOverview,
   }) {
     return TodoFilterState<Q, P>(
       quadrant: identical(quadrant, _unset) ? this.quadrant : quadrant as Q?,
@@ -52,6 +56,7 @@ class TodoFilterState<Q, P> {
       due: due ?? this.due,
       completion: completion ?? this.completion,
       includeArchived: includeArchived ?? this.includeArchived,
+      todayOverview: todayOverview ?? this.todayOverview,
     );
   }
 }
@@ -67,6 +72,7 @@ List<T> filterTodos<T, Q, P>(
   required DateTime? Function(T todo) dueDateOf,
   required bool Function(T todo) isCompletedOf,
   required bool Function(T todo) isArchivedAfterRolloverOf,
+  bool Function(T todo, DateTime reference)? isInTodayOverviewOf,
 }) {
   final reference = now ?? DateTime.now();
   final today = _dateOnly(reference);
@@ -74,6 +80,10 @@ List<T> filterTodos<T, Q, P>(
 
   return todos.where((todo) {
     if (!filter.includeArchived && isArchivedAfterRolloverOf(todo)) {
+      return false;
+    }
+    if (filter.todayOverview &&
+        isInTodayOverviewOf?.call(todo, reference) != true) {
       return false;
     }
 

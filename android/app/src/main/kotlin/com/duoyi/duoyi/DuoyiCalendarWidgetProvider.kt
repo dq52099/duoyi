@@ -35,7 +35,7 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        val prefs: SharedPreferences = HomeWidgetPlugin.getData(context)
+        val prefs: SharedPreferences = DuoyiWidgetSnapshot.forDisplay(context, HomeWidgetPlugin.getData(context))
 
         appWidgetIds.forEach { id ->
             DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)?.let { style ->
@@ -73,8 +73,9 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
                 secondaryIds = intArrayOf(R.id.widget_calendar_today_button),
             )
             val now = Calendar.getInstance()
-            val compact = DuoyiWidgetDisplayMode.isCompact(prefs, id)
-            val detailed = DuoyiWidgetDisplayMode.isDetailed(prefs, id)
+            val height = appWidgetManager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+            val compact = DuoyiWidgetDisplayMode.isCompact(prefs, id) || height in 1..129
+            val detailed = DuoyiWidgetDisplayMode.isDetailed(prefs, id) && (height == 0 || height >= 180)
             val monthPattern = if (compact) "M月" else "yyyy年M月"
             val monthTitle = SimpleDateFormat(monthPattern, Locale.getDefault()).format(now.time)
 
@@ -139,6 +140,7 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_calendar_nav_calendar, openCalendar)
             views.setOnClickPendingIntent(R.id.widget_calendar_nav_focus, openFocus)
 
+            DuoyiWidgetSnapshot.finishRender(context, views, prefs, id)
             appWidgetManager.updateAppWidget(id, views)
         }
     }

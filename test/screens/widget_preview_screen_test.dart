@@ -6,15 +6,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/widget_polish_screenshot_font.dart';
+
 void main() {
   testWidgets('小组件预览覆盖待办 o、月历和目标三档尺寸', (tester) async {
+    if (Platform.environment['DUOYI_CAPTURE_WIDGET_SCREENSHOT'] == '1') {
+      await tester.runAsync(loadWidgetPolishScreenshotFonts);
+    }
     final screenshotKey = GlobalKey();
     await tester.binding.setSurfaceSize(const Size(390, 3000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: widgetPolishScreenshotTheme(),
         home: Scaffold(
+          backgroundColor: Colors.white,
           body: RepaintBoundary(
             key: screenshotKey,
             child: SingleChildScrollView(
@@ -75,18 +82,20 @@ void main() {
     expect(find.textContaining('4x3'), findsWidgets);
 
     if (Platform.environment['DUOYI_CAPTURE_WIDGET_SCREENSHOT'] == '1') {
-      final boundary =
-          screenshotKey.currentContext!.findRenderObject()
-              as RenderRepaintBoundary;
-      final image = await boundary.toImage();
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      final bytes = data!.buffer.asUint8List();
-      image.dispose();
-      final file = File(
-        '.playwright-mcp/ui-regression/widget_preview_todo_calendar.png',
-      );
-      file.parent.createSync(recursive: true);
-      file.writeAsBytesSync(bytes);
+      await tester.runAsync(() async {
+        final boundary =
+            screenshotKey.currentContext!.findRenderObject()
+                as RenderRepaintBoundary;
+        final image = await boundary.toImage();
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        final bytes = data!.buffer.asUint8List();
+        image.dispose();
+        final file = File(
+          'evidence/screenshots/widget-polish-20261006/widget-preview-todo-calendar.png',
+        );
+        file.parent.createSync(recursive: true);
+        file.writeAsBytesSync(bytes);
+      });
     }
   });
 

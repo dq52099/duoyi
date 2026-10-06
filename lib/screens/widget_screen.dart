@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/platform_info.dart';
 import '../core/web_target.dart';
 import '../providers/theme_provider.dart';
 import '../services/android_widget_manager.dart';
@@ -22,6 +23,7 @@ class _WidgetScreenState extends State<WidgetScreen>
   AndroidWidgetPinResult? _pinSupport;
   bool _checkingPinSupport = true;
   bool _canOpenWidgetSettings = false;
+  bool _refreshingData = false;
 
   @override
   void initState() {
@@ -103,6 +105,27 @@ class _WidgetScreenState extends State<WidgetScreen>
     });
   }
 
+  Future<void> _refreshWidgetData() async {
+    if (_refreshingData) return;
+    setState(() => _refreshingData = true);
+    try {
+      final success = await HomeWidgetService.refreshDashboardData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(success ? '小组件已刷新' : '刷新失败，请稍后重试')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('刷新失败，请稍后重试')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _refreshingData = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -116,6 +139,14 @@ class _WidgetScreenState extends State<WidgetScreen>
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
         backgroundColor: routeBackground.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
+        actions: [
+          if (PlatformInfo.isAndroid || PlatformInfo.isIOS)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: '刷新小组件',
+              onPressed: _refreshingData ? null : _refreshWidgetData,
+            ),
+        ],
       ),
       body: AppSecondaryControlTheme(
         child: WebTarget.isDesktopWebBuild
@@ -1129,6 +1160,16 @@ class WidgetPreviewCard extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.normal,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '↻',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.normal,
                                   ),
                                 ),
                               ],
@@ -1364,7 +1405,11 @@ class _WidgetPreviewFocusBody extends StatelessWidget {
                   '开始 25 分钟专注',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.white, fontSize: 12),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.normal,
+                  ),
                 ),
               ),
             ),
@@ -1421,6 +1466,35 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
                 value: '12',
                 label: '连续',
                 color: Colors.green,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.28),
+                    width: 0.45,
+                  ),
+                ),
+                child: const Text(
+                  '点击进入习惯打卡',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontSize: 12,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
               ),
             ),
           ],
@@ -1484,7 +1558,11 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
                 '2026年5月',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.normal,
+                ),
               ),
             ),
             Container(
@@ -1545,7 +1623,11 @@ class _WidgetPreviewCalendarGrid extends StatelessWidget {
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.clip,
-                  style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.normal,
+                  ),
                 ),
               ),
           ],
@@ -1789,7 +1871,11 @@ class _WidgetPreviewLine extends StatelessWidget {
               text,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: 11,
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.normal,
+              ),
             ),
           ),
         ],
@@ -1837,7 +1923,11 @@ class _WidgetPreviewTodoRow extends StatelessWidget {
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12, color: cs.onSurface),
+            style: TextStyle(
+              fontSize: 12,
+              color: cs.onSurface,
+              fontWeight: FontWeight.normal,
+            ),
           ),
         ),
       ],
@@ -1875,7 +1965,11 @@ class _WidgetPreviewMetric extends StatelessWidget {
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+          style: TextStyle(
+            fontSize: 10,
+            color: cs.onSurfaceVariant,
+            fontWeight: FontWeight.normal,
+          ),
         ),
       ],
     );

@@ -2,6 +2,10 @@ package com.duoyi.duoyi
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
+import android.app.AlarmManager
+import android.os.Build
+import android.os.SystemClock
+import android.view.View
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -18,7 +22,7 @@ import java.util.Locale
 open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED || intent.action == timerFinishedAction) {
             requestUpdate(context)
         }
     }
@@ -34,7 +38,7 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        val prefs: SharedPreferences = HomeWidgetPlugin.getData(context)
+        val prefs: SharedPreferences = DuoyiWidgetSnapshot.forDisplay(context, HomeWidgetPlugin.getData(context))
 
         appWidgetIds.forEach { id ->
             DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)?.let { style ->
@@ -88,17 +92,50 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
             val pomodoroToday = prefs.getInt("pomodoro_today", 0)
             val focusMinutesToday = prefs.getInt("focus_minutes_today", pomodoroToday * 25)
             val nextFocusLabel = prefs.getString("next_focus_label", "25 分钟专注") ?: "25 分钟专注"
-            val timerRunning = getBooleanCompat(prefs, "focus_timer_running")
-            val timerRemainingSeconds = currentTimerRemainingSeconds(prefs, timerRunning)
+            val sessionTrusted = DuoyiWidgetSnapshot.hasPublishedSession(prefs)
+            val countUp = getBooleanCompat(prefs, "focus_timer_count_up")
+            val storedRunning = getBooleanCompat(prefs, "focus_timer_running")
+            val endsAt = getLongCompat(prefs, "focus_timer_ends_at_millis")
+            val startedAt = getLongCompat(prefs, "focus_timer_started_at_millis")
+            val now = System.currentTimeMillis()
+            val expired = storedRunning && !countUp && endsAt > 0L && endsAt <= now
+            val timerRunning = storedRunning && !expired
+            val storedRemaining = getIntCompat(prefs, "focus_timer_remaining_seconds")
+            val totalSeconds = getIntCompat(prefs, "focus_timer_total_seconds")
+            val paused = sessionTrusted && !storedRunning && storedRemaining > 0 &&
+                (countUp || storedRemaining != totalSeconds)
+            val exactFinish = canScheduleExactTimerFinish(context)
+            val showEndTime = timerRunning && !countUp && !exactFinish && endsAt > 0L
+            val timerRemainingSeconds = if (countUp && timerRunning && startedAt > 0L) {
+                ((now - startedAt).coerceAtLeast(0L) / 1000L).toInt()
+            } else currentTimerRemainingSeconds(prefs, timerRunning)
             val timerLabel = prefs.getString("focus_timer_label", "专注倒计时") ?: "专注倒计时"
-            val timerText = if (timerRunning) {
+            val timerText = if (!sessionTrusted) "—" else if (showEndTime) {
+                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(endsAt))
+            } else if (timerRunning || paused) {
                 formatTimer(timerRemainingSeconds)
-            } else {
+            } else if (expired) "00:00" else {
                 extractFirstNumber(nextFocusLabel)
             }
-            val timerCaption = if (timerRunning) "倒计时" else "下一轮"
-            val timerSummary = if (timerRunning) {
+            val timerCaption = when {
+                !sessionTrusted -> "待刷新"
+                expired -> "已结束"
+                paused -> "已暂停"
+                showEndTime -> "结束时间"
+                timerRunning && countUp -> "正计时"
+                timerRunning -> "倒计时"
+                else -> "下一轮"
+            }
+            val timerSummary = if (!sessionTrusted) {
+                "数据待刷新，打开多仪更新"
+            } else if (showEndTime) {
+                "预计 ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(endsAt))} 结束"
+            } else if (timerRunning) {
                 "$timerLabel：${formatTimer(timerRemainingSeconds)}"
+            } else if (paused) {
+                "已暂停：${formatTimer(storedRemaining)}"
+            } else if (expired) {
+                "计时已结束，打开多仪同步"
             } else {
                 "下一轮：$nextFocusLabel"
             }
@@ -109,10 +146,19 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 } else {
                     "正在专注中"
                 }
+            } else if (expired) {
+                "打开应用查看本轮记录"
             } else {
                 "结束后提醒休息"
             }
-            val quickStartText = if (timerRunning) "查看倒计时" else "开始$nextFocusLabel"
+            val quickStartText = when {
+                !sessionTrusted -> "打开专注刷新"
+                expired -> "查看本轮记录"
+                paused -> "继续专注"
+                timerRunning && countUp -> "查看正计时"
+                timerRunning -> "查看倒计时"
+                else -> "开始$nextFocusLabel"
+            }
             views.setTextViewText(
                 R.id.widget_focus_count,
                 pomodoroToday.toString()
@@ -125,6 +171,22 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 R.id.widget_focus_streak_count,
                 timerText
             )
+            val liveSupported = countUp || Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+            val live = sessionTrusted && timerRunning && liveSupported && !showEndTime
+            views.setViewVisibility(R.id.widget_focus_live_timer, if (live) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.widget_focus_streak_count, if (live) View.GONE else View.VISIBLE)
+            views.setTextColor(R.id.widget_focus_live_timer, DuoyiWidgetTheme.read(prefs).primary)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                views.setChronometerCountDown(R.id.widget_focus_live_timer, !countUp)
+            }
+            val base = SystemClock.elapsedRealtime() + if (countUp) -timerRemainingSeconds * 1000L
+                else (endsAt - now).coerceAtLeast(0L)
+            views.setChronometer(R.id.widget_focus_live_timer, base, null, live)
+            // During an invalidated/partial payload, preserve any existing alarm.
+            if (sessionTrusted) scheduleTimerFinish(context, if (timerRunning && !countUp) endsAt else 0L)
+            val timerOnly = DuoyiWidgetDisplayMode.isCompact(prefs, id) || timerRunning || paused || expired
+            views.setViewVisibility(R.id.widget_focus_count_column, if (timerOnly) View.GONE else View.VISIBLE)
+            views.setViewVisibility(R.id.widget_focus_minutes_column, if (timerOnly) View.GONE else View.VISIBLE)
             views.setTextViewText(
                 R.id.widget_focus_timer_caption,
                 timerCaption
@@ -186,7 +248,7 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
             val startFocus: PendingIntent = HomeWidgetLaunchIntent.getActivity(
                 context,
                 MainActivity::class.java,
-                Uri.parse("duoyi://action/start_pomodoro")
+                DuoyiWidgetSnapshot.actionUri(prefs, Uri.parse("duoyi://action/start_pomodoro"))
             )
 
             views.setOnClickPendingIntent(R.id.widget_focus_habit_root, openFocus)
@@ -194,9 +256,10 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_focus_habit_date, openFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_count, openFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_summary, openFocus)
-            views.setOnClickPendingIntent(R.id.widget_focus_quick_start, startFocus)
+            views.setOnClickPendingIntent(R.id.widget_focus_quick_start, if (storedRunning || !sessionTrusted) openFocus else startFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_habit_progress, openFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_streak_count, openFocus)
+            views.setOnClickPendingIntent(R.id.widget_focus_live_timer, openFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_timer_caption, openFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_habit_summary, openFocus)
             views.setOnClickPendingIntent(R.id.widget_focus_streak_summary, openFocus)
@@ -205,6 +268,7 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_focus_nav_calendar, openCalendar)
             views.setOnClickPendingIntent(R.id.widget_focus_nav_focus, openFocus)
 
+            DuoyiWidgetSnapshot.finishRender(context, views, prefs, id)
             appWidgetManager.updateAppWidget(id, views)
         }
     }
@@ -262,6 +326,26 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
     }
 
     companion object {
+        private const val timerFinishedAction = "com.duoyi.duoyi.WIDGET_FOCUS_TIMER_FINISHED"
+        private fun canScheduleExactTimerFinish(context: Context): Boolean {
+            val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            return Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
+        }
+        private fun scheduleTimerFinish(context: Context, endsAt: Long) {
+            val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(context, DuoyiFocusHabitWidgetProvider::class.java).setAction(timerFinishedAction)
+            val pending = PendingIntent.getBroadcast(context, 14101, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            if (endsAt <= System.currentTimeMillis()) { manager.cancel(pending); return }
+            try {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
+                    manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endsAt, pending)
+                } else manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endsAt, pending)
+            } catch (_: SecurityException) {
+                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endsAt, pending)
+            }
+        }
+
         /** Trigger update from Flutter via HomeWidget.updateWidget or package upgrade. */
         fun requestUpdate(context: Context) {
             DuoyiWidgetProviderRegistry.requestUpdateForKind(context, "focus")

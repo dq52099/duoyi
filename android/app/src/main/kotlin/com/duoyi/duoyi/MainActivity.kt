@@ -30,6 +30,7 @@ import java.util.concurrent.Executors
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
+import es.antonborri.home_widget.HomeWidgetLaunchIntent
 
 class MainActivity : FlutterActivity() {
     private val platformInfoChannel = "duoyi/platform_info"
@@ -569,6 +570,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun duoyiDeepLinkFrom(intent: Intent?): String? {
+        // HomeWidget owns this launch in both cold-start and onNewIntent paths.
+        if (intent?.action == HomeWidgetLaunchIntent.HOME_WIDGET_LAUNCH_ACTION) return null
         val uri = intent?.data ?: return null
         if (uri.scheme != "duoyi") return null
         return uri.toString()

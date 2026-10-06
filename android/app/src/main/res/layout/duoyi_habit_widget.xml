@@ -44,8 +44,7 @@
             android:maxLines="1"
             android:text="多仪"
             android:textColor="#43A047"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/widget_habit_percent"
@@ -56,8 +55,20 @@
             android:maxLines="1"
             android:text="0%"
             android:textColor="#43A047"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/widget_refresh"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginLeft="4dp"
+            android:gravity="center"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="↻"
+            android:contentDescription="刷新小组件"
+            android:textColor="#888888"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <TextView
@@ -102,12 +113,15 @@
         <TextView
             android:id="@+id/widget_habit_hint"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="32dp"
+            android:minHeight="32dp"
             android:layout_marginTop="6dp"
+            android:background="@drawable/widget_btn_secondary"
+            android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
             android:text="点击进入习惯打卡"
-            android:textColor="#666666"
+            android:textColor="#43A047"
             android:textSize="11sp" />
     </LinearLayout>
 
@@ -145,8 +159,7 @@
             android:maxLines="1"
             android:text="习惯"
             android:textColor="#43A047"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+            android:textSize="10sp" />
 
         <TextView
             android:id="@+id/widget_habit_nav_calendar"

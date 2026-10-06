@@ -44,8 +44,7 @@
             android:maxLines="1"
             android:text="专注"
             android:textColor="#7E57C2"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/widget_focus_habit_date"
@@ -57,17 +56,30 @@
             android:text="--/--"
             android:textColor="#888888"
             android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_refresh"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:gravity="center"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="↻"
+            android:contentDescription="刷新小组件"
+            android:textColor="#888888"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <LinearLayout
+        android:id="@+id/widget_focus_metrics_row"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:orientation="horizontal"
-        android:layout_marginTop="8dp"
-        android:weightSum="3">
+        android:layout_marginTop="8dp">
 
         <LinearLayout
+            android:id="@+id/widget_focus_count_column"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -82,8 +94,7 @@
                 android:maxLines="1"
                 android:text="0"
                 android:textColor="#E53935"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+                android:textSize="22sp" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -96,6 +107,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/widget_focus_minutes_column"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -110,8 +122,7 @@
                 android:maxLines="1"
                 android:text="0"
                 android:textColor="#43A047"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+                android:textSize="22sp" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -124,22 +135,43 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/widget_focus_timer_column"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
             android:orientation="vertical">
 
+            <Chronometer
+                android:id="@+id/widget_focus_live_timer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#7E57C2"
+                android:textSize="20sp"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="12sp"
+                android:autoSizeMaxTextSize="20sp"
+                android:autoSizeStepGranularity="1sp"
+                android:includeFontPadding="false"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/widget_focus_streak_count"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:gravity="center"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:text="0"
                 android:textColor="#7E57C2"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+                android:textSize="20sp"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="12sp"
+                android:autoSizeMaxTextSize="20sp"
+                android:autoSizeStepGranularity="1sp" />
 
             <TextView
                 android:id="@+id/widget_focus_timer_caption"
@@ -175,7 +207,7 @@
         android:maxLines="1"
         android:text="今日还未专注"
         android:textColor="#666666"
-        android:textSize="10sp" />
+        android:textSize="11sp" />
 
     <TextView
         android:id="@+id/widget_focus_habit_summary"
@@ -186,7 +218,7 @@
         android:maxLines="1"
         android:text="下一轮：25 分钟专注"
         android:textColor="#666666"
-        android:textSize="10sp" />
+        android:textSize="11sp" />
 
     <TextView
         android:id="@+id/widget_focus_streak_summary"
@@ -197,7 +229,7 @@
         android:maxLines="1"
         android:text="结束后提醒休息"
         android:textColor="#666666"
-        android:textSize="10sp" />
+        android:textSize="11sp" />
 
     <LinearLayout
         android:id="@+id/widget_focus_habit_bottom_nav"
@@ -257,8 +289,7 @@
             android:maxLines="1"
             android:text="专注"
             android:textColor="#7E57C2"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+            android:textSize="10sp" />
     </LinearLayout>
     </LinearLayout>
 </FrameLayout>

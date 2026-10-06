@@ -30,7 +30,7 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        val prefs: SharedPreferences = HomeWidgetPlugin.getData(context)
+        val prefs: SharedPreferences = DuoyiWidgetSnapshot.forDisplay(context, HomeWidgetPlugin.getData(context))
 
         appWidgetIds.forEach { id ->
             DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)?.let { style ->
@@ -145,6 +145,7 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_anniversary_nav_calendar, openCalendar)
             views.setOnClickPendingIntent(R.id.widget_anniversary_nav_focus, openFocus)
 
+            DuoyiWidgetSnapshot.finishRender(context, views, prefs, id)
             appWidgetManager.updateAppWidget(id, views)
         }
     }

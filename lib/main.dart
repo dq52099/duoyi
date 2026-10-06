@@ -41,7 +41,7 @@ import 'providers/focus_room_provider.dart';
 import 'providers/share_provider.dart';
 import 'providers/location_reminder_provider.dart';
 import 'models/goal.dart' show GoalStatus, ReminderKind, ReminderPlan;
-import 'models/habit.dart' show HabitKind;
+import 'models/habit.dart' show Habit, HabitKind;
 import 'models/calendar_event.dart'
     show CalendarEvent, CalendarEventType, CalendarEventTypeX;
 import 'models/note.dart' show NoteItem;
@@ -187,6 +187,8 @@ String _pomodoroSessionsSignature(PomodoroProvider provider) {
   }
   return buffer.toString();
 }
+
+Future<void> Function()? _ensureHomeWidgetDataReady;
 
 String _pomodoroHomeWidgetSignature(PomodoroProvider provider) {
   final state = provider.state;
@@ -836,6 +838,12 @@ void main() async {
       });
 
       HomeWidgetService.resetAccountCache();
+      final widgetCleared = await HomeWidgetService.waitForAccountClear();
+      if (!widgetCleared) {
+        throw const AccountLocalDataCleanupBlockedException(
+          '小组件账号数据清除失败，请重试切换账号',
+        );
+      }
       unawaited(() async {
         await Future<void>.delayed(const Duration(seconds: 8));
         await guarded('home widget refresh', () async {
@@ -1089,6 +1097,8 @@ void main() async {
   }
 
   Future<void>? deferredPlatformStartup;
+
+  _ensureHomeWidgetDataReady = ensureDeferredLocalStorageStartup;
 
   Future<void>? homeWidgetLaunchStartup;
   Future<void> ensureHomeWidgetLaunchStartup() {
@@ -2250,6 +2260,30 @@ void main() async {
     themeProvider,
   );
 
+  HomeWidgetService.dashboardDataRefresher = () async {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    await ensureDeferredLocalStorageStartup();
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation) ||
+        _widgetAccountUnavailable(authProvider)) {
+      return false;
+    }
+    return _pushHomeWidget(
+      todoProvider,
+      habitProvider,
+      pomodoroProvider,
+      calendarProvider,
+      countdownProvider,
+      timeAuditProvider,
+      goalProvider,
+      anniversaryProvider,
+      courseProvider,
+      noteProvider,
+      diaryProvider,
+      themeProvider,
+      force: true,
+    );
+  };
+
   Timer? homeWidgetPushDebounce;
   Timer? homeWidgetThemeDebounce;
   const homeWidgetPushDebounceDelay = Duration(milliseconds: 2200);
@@ -2396,6 +2430,7 @@ void main() async {
   courseProvider.addListener(onDataChange);
   noteProvider.addListener(onDataChange);
   diaryProvider.addListener(onDataChange);
+  calendarProvider.addListener(onDataChange);
 
   try {
     HomeWidgetService.widgetClickedStream.listen((uri) {
@@ -2476,6 +2511,7 @@ void main() async {
           () => HomeWidgetService.initialLaunchUri(),
         );
         if (initial != null) {
+          await ensureDeferredLocalStorageStartup();
           _handleWidgetUri(initial, pomodoroProvider);
         }
       }, delay: const Duration(seconds: 8)),
@@ -2619,8 +2655,9 @@ Future<bool> _pushHomeWidget(
   CourseProvider c,
   NoteProvider n,
   DiaryProvider d,
-  ThemeProvider tp,
-) async {
+  ThemeProvider tp, {
+  bool force = false,
+}) async {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final activeToday = t.visibleTodayTodos(now)
@@ -2735,6 +2772,8 @@ Future<bool> _pushHomeWidget(
     PomodoroType.longBreak => '长休息倒计时',
   };
   return HomeWidgetService.push(
+    force: force,
+    snapshotAt: now,
     todoCount: activeTodayTodos,
     habitPercent: habitPercent,
     pomodoroToday: p.sessionCountToday,
@@ -2768,6 +2807,12 @@ Future<bool> _pushHomeWidget(
     habitSummary: habitPercent >= 100 ? '习惯已全部完成' : '习惯完成 $habitPercent%',
     streakSummary: '当前连续 ${h.longestCurrentStreak} 天',
     nextFocusLabel: '${p.config.focusDuration ~/ 60} 分钟专注',
+    focusTimerCountUp: focusState.isCountUp,
+    focusTimerStartedAtMillis: focusState.isCountUp
+        ? now
+              .subtract(Duration(seconds: focusState.remainingSeconds))
+              .millisecondsSinceEpoch
+        : 0,
     focusTimerRunning: focusState.isRunning,
     focusTimerRemainingSeconds: focusState.remainingSeconds,
     focusTimerTotalSeconds: focusState.totalSeconds,
@@ -3715,12 +3760,31 @@ void _handleWidgetUri(
   PomodoroProvider pomodoro, {
   int retry = 0,
   bool allowQueue = true,
+  bool dataReady = false,
 }) {
   if (uri == null) return;
   if (uri.scheme != 'duoyi') return;
+  if (!dataReady &&
+      const {
+        'todo',
+        'habit',
+        'course',
+        'note',
+        'diary',
+        'goal',
+        'anniversary',
+        'calendar',
+        'action',
+      }.contains(uri.host)) {
+    unawaited(_dispatchWidgetUriAfterHydration(uri, pomodoro));
+    return;
+  }
 
   final state = mainShellKey.currentState;
   final ctx = mainShellKey.currentContext;
+  if (ctx != null && _widgetAccountUnavailable(ctx.read<AuthProvider>())) {
+    return;
+  }
   if (state == null && retry < 8) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleWidgetUri(uri, pomodoro, retry: retry + 1);
@@ -3883,6 +3947,10 @@ void _handleWidgetUri(
     ns.handleSnoozeDeepLink(uri);
   } else if (uri.host == 'action') {
     final action = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
+    if (uri.queryParameters['source'] == 'widget') {
+      unawaited(_handleBoundWidgetAction(uri));
+      return;
+    }
     if (!_reserveWidgetActionUri(uri)) return;
     if (action == 'start_pomodoro') {
       state.navigateTo(4, allowHidden: true);
@@ -3892,6 +3960,8 @@ void _handleWidgetUri(
         pomodoro.startIfIdle();
         if (ctx != null) _showWidgetActionFeedback(ctx, '已开始专注');
       }
+    } else if (action == 'refresh_widgets' && ctx != null) {
+      unawaited(_refreshWidgetsFromAction(ctx));
     } else if (action == 'quick_todo' && ctx != null) {
       final text = uri.queryParameters['text']?.trim();
       state.navigateTo(1, allowHidden: true);
@@ -3940,11 +4010,7 @@ void _handleWidgetUri(
         _showWidgetActionFeedback(ctx, '“${target.name}”今天已经完成');
         return;
       }
-      unawaited(
-        habits.incrementHabit(id).then((_) {
-          _showWidgetActionFeedbackFromShell('已打卡：${target.name}');
-        }),
-      );
+      unawaited(_checkInHabitFromWidgetAction(habits, target));
     }
   } else {
     debugPrint('[DeepLink] unknown duoyi host: ${uri.host} uri=$uri');
@@ -4039,17 +4105,150 @@ Future<void> _createQuickTodoFromAction(
   }
 }
 
+bool _widgetAccountUnavailable(AuthProvider auth) =>
+    auth.isLocalAccountDataBlocked || auth.isAccountTransitionInProgress;
+
+Future<void> _dispatchWidgetUriAfterHydration(
+  Uri uri,
+  PomodoroProvider pomodoro,
+) async {
+  final generation = AccountLocalDataCleaner.accountDataGeneration;
+  try {
+    await _ensureHomeWidgetDataReady?.call();
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
+    final context = mainShellKey.currentContext;
+    if (context != null &&
+        context.mounted &&
+        _widgetAccountUnavailable(context.read<AuthProvider>())) {
+      return;
+    }
+    _handleWidgetUri(uri, pomodoro, dataReady: true);
+  } catch (e, st) {
+    debugPrint('[WidgetAction] data preparation failed: $e\n$st');
+    _showWidgetActionFeedbackFromShell('内容加载失败，请重新打开多仪');
+  }
+}
+
+Future<void> _handleBoundWidgetAction(Uri uri) async {
+  final generation = AccountLocalDataCleaner.accountDataGeneration;
+  try {
+    await _ensureHomeWidgetDataReady?.call();
+    final current = await HomeWidgetService.isCurrentWidgetAction(uri);
+    final context = mainShellKey.currentContext;
+    if (!current ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation) ||
+        context == null ||
+        !context.mounted ||
+        _widgetAccountUnavailable(context.read<AuthProvider>())) {
+      _showWidgetActionFeedbackFromShell('小组件内容已过期，请刷新后再操作');
+      return;
+    }
+    final parameters = Map<String, String>.from(uri.queryParameters)
+      ..remove('source');
+    _handleWidgetUri(
+      uri.replace(queryParameters: parameters),
+      context.read<PomodoroProvider>(),
+      dataReady: true,
+    );
+  } catch (e, st) {
+    debugPrint('[WidgetAction] validation failed: $e\n$st');
+    _showWidgetActionFeedbackFromShell('内容加载失败，请刷新小组件');
+  }
+}
+
+Future<void> _refreshWidgetsFromAction(
+  BuildContext context, {
+  bool showFeedback = true,
+}) async {
+  final generation = AccountLocalDataCleaner.accountDataGeneration;
+  try {
+    await _ensureHomeWidgetDataReady?.call();
+    if (!context.mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation) ||
+        _widgetAccountUnavailable(context.read<AuthProvider>())) {
+      return;
+    }
+    final ok = await _pushHomeWidget(
+      context.read<TodoProvider>(),
+      context.read<HabitProvider>(),
+      context.read<PomodoroProvider>(),
+      context.read<CalendarProvider>(),
+      context.read<CountdownProvider>(),
+      context.read<TimeAuditProvider>(),
+      context.read<GoalProvider>(),
+      context.read<AnniversaryProvider>(),
+      context.read<CourseProvider>(),
+      context.read<NoteProvider>(),
+      context.read<DiaryProvider>(),
+      context.read<ThemeProvider>(),
+      force: true,
+    );
+    if (showFeedback) {
+      _showWidgetActionFeedbackFromShell(ok ? '小组件已刷新' : '刷新失败，请稍后重试');
+    }
+  } catch (e, st) {
+    debugPrint('[WidgetAction] refresh failed: $e\n$st');
+    if (showFeedback) _showWidgetActionFeedbackFromShell('刷新失败，请稍后重试');
+  }
+}
+
+Future<void> _checkInHabitFromWidgetAction(
+  HabitProvider habits,
+  Habit target,
+) async {
+  final generation = AccountLocalDataCleaner.accountDataGeneration;
+  final today = DateTime.now();
+  final id = target.id;
+  final before = target.countForDate(today);
+  try {
+    await habits.incrementHabit(id);
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
+    final latest = habits.habits
+        .where((habit) => habit.id == target.id)
+        .firstOrNull;
+    _showWidgetActionFeedbackFromShell(
+      latest != null && latest.countForDate(today) > before
+          ? '已打卡：${latest.name}'
+          : '习惯正在保存中，请稍后重试',
+    );
+    final context = mainShellKey.currentContext;
+    if (context != null && context.mounted) {
+      unawaited(_refreshWidgetsFromAction(context, showFeedback: false));
+    }
+  } catch (e, st) {
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
+    debugPrint('[WidgetAction] habit check-in failed: $e\n$st');
+    _showWidgetActionFeedbackFromShell('打卡失败，请稍后重试');
+  }
+}
+
 Future<void> _completeTodoFromWidgetAction(
   BuildContext context,
   TodoProvider todos,
   TodoItem target,
 ) async {
+  final generation = AccountLocalDataCleaner.accountDataGeneration;
   final title = target.title;
   try {
     final changed = await todos.completeTodos([target.id]);
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
     if (!context.mounted && mainShellKey.currentContext == null) return;
     if (changed > 0) {
       _showWidgetActionFeedbackFromShell('已完成：$title');
+      final latestContext = mainShellKey.currentContext;
+      if (latestContext != null && latestContext.mounted) {
+        unawaited(
+          _refreshWidgetsFromAction(latestContext, showFeedback: false),
+        );
+      }
       return;
     }
     final latest = todos.todos
@@ -4059,6 +4258,9 @@ Future<void> _completeTodoFromWidgetAction(
       latest?.isCompleted == true ? '“$title”已经完成' : '待办正在保存中，请稍后重试',
     );
   } catch (e, st) {
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
     debugPrint('[WidgetAction] complete todo failed: $e\n$st');
     _showWidgetActionFeedbackFromShell('待办完成失败，请稍后重试');
   }
@@ -4747,6 +4949,7 @@ class _DuoyiAppState extends State<DuoyiApp> with WidgetsBindingObserver {
       _maybeRunDailyRolloverOnResume();
       _refreshNotificationProgressOnResume();
       _refreshNotificationPermissionsOnResume();
+      unawaited(_refreshWidgetsFromAction(context, showFeedback: false));
     }
   }
 

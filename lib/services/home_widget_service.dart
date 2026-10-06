@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
@@ -36,6 +38,9 @@ class HomeWidgetService {
   static const String _appGroupId = 'group.com.duoyi.duoyi';
   @visibleForTesting
   static const accountPayloadDefaults = <String, Object>{
+    'widget_account_nonce': '',
+    'widget_snapshot_day': '',
+    'widget_snapshot_utc_offset_minutes': 0,
     'todo_count': 0,
     'habit_percent': 0,
     'pomodoro_today': 0,
@@ -98,6 +103,8 @@ class HomeWidgetService {
     'habit_summary': '今日习惯待打卡',
     'streak_summary': '连续记录 0 天',
     'next_focus_label': '25 分钟专注',
+    'focus_timer_count_up': false,
+    'focus_timer_started_at_millis': 0,
     'focus_timer_running': false,
     'focus_timer_remaining_seconds': 0,
     'focus_timer_total_seconds': 0,
@@ -123,12 +130,86 @@ class HomeWidgetService {
     'widget_theme_control_radius_dp': 8,
     'widget_theme_border_width_dp': 0,
   };
+  static Future<bool> Function()? dashboardDataRefresher;
+
+  static Future<bool> refreshDashboardData() async {
+    if (!_supported) return false;
+    final refresh = dashboardDataRefresher;
+    return refresh == null ? false : await refresh();
+  }
+
+  @visibleForTesting
+  static bool? supportedForTesting;
+
   static String _lastThemeSignature = '';
   static String _lastPushSignature = '';
   static final Map<String, Object> _lastSavedPayloadValues = <String, Object>{};
   static Future<bool>? _accountPayloadClearInFlight;
+  static Future<void> _payloadQueue = Future<void>.value();
+  static int _accountGeneration = 0;
+  static bool _refreshPending = false;
+  static bool _accountPayloadStorageCleared = true;
+  static String? _accountActionNonce;
+  static Future<void>? _nonceInitialization;
+
+  static String _newActionNonce() {
+    final random = Random.secure();
+    return List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+  }
+
+  static Future<void> _ensureActionNonce() async {
+    if (_accountActionNonce != null) return;
+    final existing = _nonceInitialization;
+    if (existing != null) return existing;
+    final generation = _accountGeneration;
+    final pending = () async {
+      final stored = await HomeWidget.getWidgetData<String>(
+        'widget_account_nonce',
+      );
+      if (generation != _accountGeneration) return;
+      final nonce = stored?.isNotEmpty == true ? stored! : _newActionNonce();
+      // Persist only with the serialized payload. Independent init calls must
+      // never race account clearing by publishing an old nonce afterwards.
+      if (generation == _accountGeneration) _accountActionNonce = nonce;
+    }();
+    _nonceInitialization = pending;
+    try {
+      await pending;
+    } finally {
+      if (identical(_nonceInitialization, pending)) _nonceInitialization = null;
+    }
+  }
+
+  static Future<bool> isCurrentWidgetAction(Uri uri) async {
+    if (uri.queryParameters['source'] != 'widget') return true;
+    final generation = _accountGeneration;
+    if (!await init() || generation != _accountGeneration) return false;
+    final now = DateTime.now();
+    final day =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    return uri.queryParameters['widget_day'] == day &&
+        uri.queryParameters['widget_account'] == _accountActionNonce &&
+        uri.queryParameters['widget_offset'] ==
+            now.timeZoneOffset.inMinutes.toString();
+  }
+
+  // All payload writers share one queue. Account resets invalidate old work
+  // immediately, including a push already waiting for the clear to finish.
+  static Future<bool> _serializePayload(Future<bool> Function() operation) {
+    final result = _payloadQueue.then((_) => operation());
+    _payloadQueue = result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {},
+    );
+    return result;
+  }
 
   static bool get _supported {
+    final override = supportedForTesting;
+    if (override != null) return override;
     if (kIsWeb) return false;
     return PlatformInfo.isAndroid || PlatformInfo.isIOS;
   }
@@ -137,6 +218,7 @@ class HomeWidgetService {
     if (!_supported) return true;
     try {
       await HomeWidget.setAppGroupId(_appGroupId);
+      await _ensureActionNonce();
       return true;
     } catch (e, st) {
       debugPrint('[HomeWidget] init failed: $e\n$st');
@@ -157,26 +239,38 @@ class HomeWidgetService {
 
   static Future<bool> updateTheme(HomeWidgetThemePayload theme) async {
     if (!_supported) return true;
+    final generation = _accountGeneration;
     await _drainPendingAccountClear();
-    final signature = theme.signature;
-    if (signature == _lastThemeSignature) return true;
-    try {
-      final saveResult = await _saveWidgetPayload(theme.payloadValues);
-      if (!saveResult.ok) return false;
-      if (!saveResult.changed) {
-        _lastThemeSignature = signature;
-        return true;
+    return _serializePayload(() async {
+      if (generation != _accountGeneration) return false;
+      final signature = theme.signature;
+      if (signature == _lastThemeSignature && !_refreshPending) return true;
+      try {
+        final saveResult = await _saveWidgetPayload(theme.payloadValues);
+        if (!saveResult.ok || generation != _accountGeneration) return false;
+        _refreshPending |= saveResult.changed;
+        if (!_refreshPending) {
+          _lastThemeSignature = signature;
+          return true;
+        }
+        final ok = await _updateAllWidgets();
+        if (ok && generation == _accountGeneration) {
+          _lastThemeSignature = signature;
+          _refreshPending = false;
+        }
+        return ok;
+      } catch (e, st) {
+        debugPrint('[HomeWidget] updateTheme failed: $e\n$st');
+        return false;
       }
-      final ok = await _updateAllWidgets();
-      if (ok) _lastThemeSignature = signature;
-      return ok;
-    } catch (e, st) {
-      debugPrint('[HomeWidget] updateTheme failed: $e\n$st');
-      return false;
-    }
+    });
   }
 
   static void resetAccountCache() {
+    _accountGeneration++;
+    _accountPayloadStorageCleared = !_supported;
+    _accountActionNonce = _newActionNonce();
+    _refreshPending = true;
     _lastThemeSignature = '';
     _lastPushSignature = '';
     _lastSavedPayloadValues.clear();
@@ -186,21 +280,39 @@ class HomeWidgetService {
         );
   }
 
+  static Future<bool> waitForAccountClear() async {
+    final pending = _accountPayloadClearInFlight;
+    if (pending != null) await pending;
+    return _accountPayloadStorageCleared;
+  }
+
   static Future<bool> clearAccountWidgetData() async {
     if (!_supported) return true;
-    try {
-      final initialized = await init();
-      if (!initialized) return false;
-      final saveResult = await _saveWidgetPayload(
-        accountPayloadDefaults,
-        force: true,
-      );
-      if (!saveResult.ok) return false;
-      return await _updateAllWidgets();
-    } catch (e, st) {
-      debugPrint('[HomeWidget] clear account widget data failed: $e\n$st');
-      return false;
-    }
+    return _serializePayload(() async {
+      try {
+        final initialized = await init();
+        if (!initialized) return false;
+        _lastThemeSignature = '';
+        _lastPushSignature = '';
+        _lastSavedPayloadValues.clear();
+        if (!await _saveWidgetPayloadValue('widget_snapshot_day', '')) {
+          return false;
+        }
+        final saveResult = await _saveWidgetPayload({
+          ...accountPayloadDefaults,
+          'widget_account_nonce': _accountActionNonce ?? '',
+        }, force: true);
+        if (!saveResult.ok) return false;
+        _accountPayloadStorageCleared = true;
+        _refreshPending = true;
+        final ok = await _updateAllWidgets();
+        if (ok) _refreshPending = false;
+        return ok;
+      } catch (e, st) {
+        debugPrint('[HomeWidget] clear account widget data failed: $e\n$st');
+        return false;
+      }
+    });
   }
 
   static Future<void> _drainPendingAccountClear() async {
@@ -279,6 +391,8 @@ class HomeWidgetService {
     String habitSummary = '今日习惯待打卡',
     String streakSummary = '连续记录 0 天',
     String nextFocusLabel = '25 分钟专注',
+    bool focusTimerCountUp = false,
+    int focusTimerStartedAtMillis = 0,
     bool focusTimerRunning = false,
     int focusTimerRemainingSeconds = 0,
     int focusTimerTotalSeconds = 0,
@@ -287,215 +401,256 @@ class HomeWidgetService {
     String habitQuickCheckId = '',
     String habitQuickCheckLabel = '点击进入习惯打卡',
     required HomeWidgetThemePayload theme,
+    bool force = false,
+    DateTime? snapshotAt,
   }) async {
     if (!_supported) return true;
+    final capturedAt = snapshotAt ?? DateTime.now();
+    final generation = _accountGeneration;
     await _drainPendingAccountClear();
-    final signature = _pushSignature(
-      todoCount: todoCount,
-      habitPercent: habitPercent,
-      pomodoroToday: pomodoroToday,
-      focusMinutesToday: focusMinutesToday,
-      strings: strings,
-      todoTop3: todoTop3,
-      todoTop3Ids: todoTop3Ids,
-      goalHighlights: goalHighlights,
-      goalHighlightIds: goalHighlightIds,
-      anniversaryHighlights: anniversaryHighlights,
-      anniversaryHighlightIds: anniversaryHighlightIds,
-      courseHighlights: courseHighlights,
-      courseHighlightIds: courseHighlightIds,
-      noteHighlights: noteHighlights,
-      noteHighlightIds: noteHighlightIds,
-      memorialHighlights: memorialHighlights,
-      memorialHighlightIds: memorialHighlightIds,
-      diaryHighlights: diaryHighlights,
-      diaryHighlightIds: diaryHighlightIds,
-      scheduleHighlights: scheduleHighlights,
-      scheduleHighlightIds: scheduleHighlightIds,
-      todayEventSummary: todayEventSummary,
-      focusSummary: focusSummary,
-      habitSummary: habitSummary,
-      streakSummary: streakSummary,
-      nextFocusLabel: nextFocusLabel,
-      focusTimerRunning: focusTimerRunning,
-      focusTimerRemainingSeconds: focusTimerRemainingSeconds,
-      focusTimerTotalSeconds: focusTimerTotalSeconds,
-      focusTimerEndsAtMillis: focusTimerEndsAtMillis,
-      focusTimerLabel: focusTimerLabel,
-      habitQuickCheckId: habitQuickCheckId,
-      habitQuickCheckLabel: habitQuickCheckLabel,
-      theme: theme,
-    );
-    if (signature == _lastPushSignature) return true;
-    try {
-      final saveResult = await _saveWidgetPayload({
-        'todo_count': todoCount,
-        'habit_percent': habitPercent,
-        'pomodoro_today': pomodoroToday,
-        'focus_minutes_today': focusMinutesToday,
-        'brand_app_title': strings.appTitle,
-        'nav_todo': strings.navTodo,
-        'nav_habit': strings.navHabit,
-        'nav_calendar': strings.navCalendar,
-        'nav_focus': strings.navFocus,
-        'todo_top3_count': todoCount,
-        'todo_top3_1': todoTop3.isNotEmpty ? '· ${todoTop3[0]}' : '今天没有未完成待办',
-        'todo_top3_1_id': todoTop3Ids.isNotEmpty ? todoTop3Ids[0] : '',
-        'todo_top3_2': todoTop3.length > 1 ? '· ${todoTop3[1]}' : '',
-        'todo_top3_2_id': todoTop3Ids.length > 1 ? todoTop3Ids[1] : '',
-        'todo_top3_3': todoTop3.length > 2 ? '· ${todoTop3[2]}' : '',
-        'todo_top3_3_id': todoTop3Ids.length > 2 ? todoTop3Ids[2] : '',
-        'goal_highlight_1': goalHighlights.isNotEmpty
-            ? '· ${goalHighlights[0]}'
-            : '暂无进行中目标',
-        'goal_highlight_1_id': goalHighlightIds.isNotEmpty
-            ? goalHighlightIds[0]
-            : '',
-        'goal_highlight_2': goalHighlights.length > 1
-            ? '· ${goalHighlights[1]}'
-            : '',
-        'goal_highlight_2_id': goalHighlightIds.length > 1
-            ? goalHighlightIds[1]
-            : '',
-        'goal_highlight_3': goalHighlights.length > 2
-            ? '· ${goalHighlights[2]}'
-            : '本周目标保持推进',
-        'goal_highlight_3_id': goalHighlightIds.length > 2
-            ? goalHighlightIds[2]
-            : '',
-        'anniversary_highlight_1': anniversaryHighlights.isNotEmpty
-            ? '· ${anniversaryHighlights[0]}'
-            : '暂无近期纪念日',
-        'anniversary_highlight_1_id': anniversaryHighlightIds.isNotEmpty
-            ? anniversaryHighlightIds[0]
-            : '',
-        'anniversary_highlight_2': anniversaryHighlights.length > 1
-            ? '· ${anniversaryHighlights[1]}'
-            : '',
-        'anniversary_highlight_2_id': anniversaryHighlightIds.length > 1
-            ? anniversaryHighlightIds[1]
-            : '',
-        'course_highlight_1': courseHighlights.isNotEmpty
-            ? '· ${courseHighlights[0]}'
-            : '今日暂无课程',
-        'course_highlight_1_id': courseHighlightIds.isNotEmpty
-            ? courseHighlightIds[0]
-            : '',
-        'course_highlight_2': courseHighlights.length > 1
-            ? '· ${courseHighlights[1]}'
-            : '',
-        'course_highlight_2_id': courseHighlightIds.length > 1
-            ? courseHighlightIds[1]
-            : '',
-        'course_highlight_3': courseHighlights.length > 2
-            ? '· ${courseHighlights[2]}'
-            : '',
-        'course_highlight_3_id': courseHighlightIds.length > 2
-            ? courseHighlightIds[2]
-            : '',
-        'note_highlight_1': noteHighlights.isNotEmpty
-            ? '· ${noteHighlights[0]}'
-            : '暂无随手记',
-        'note_highlight_1_id': noteHighlightIds.isNotEmpty
-            ? noteHighlightIds[0]
-            : '',
-        'note_highlight_2': noteHighlights.length > 1
-            ? '· ${noteHighlights[1]}'
-            : '',
-        'note_highlight_2_id': noteHighlightIds.length > 1
-            ? noteHighlightIds[1]
-            : '',
-        'note_highlight_3': noteHighlights.length > 2
-            ? '· ${noteHighlights[2]}'
-            : '',
-        'note_highlight_3_id': noteHighlightIds.length > 2
-            ? noteHighlightIds[2]
-            : '',
-        'memorial_highlight_1': memorialHighlights.isNotEmpty
-            ? '· ${memorialHighlights[0]}'
-            : '暂无近期纪念日',
-        'memorial_highlight_1_id': memorialHighlightIds.isNotEmpty
-            ? memorialHighlightIds[0]
-            : '',
-        'memorial_highlight_2': memorialHighlights.length > 1
-            ? '· ${memorialHighlights[1]}'
-            : '',
-        'memorial_highlight_2_id': memorialHighlightIds.length > 1
-            ? memorialHighlightIds[1]
-            : '',
-        'memorial_highlight_3': memorialHighlights.length > 2
-            ? '· ${memorialHighlights[2]}'
-            : '',
-        'memorial_highlight_3_id': memorialHighlightIds.length > 2
-            ? memorialHighlightIds[2]
-            : '',
-        'diary_highlight_1': diaryHighlights.isNotEmpty
-            ? '· ${diaryHighlights[0]}'
-            : '暂无日记',
-        'diary_highlight_1_id': diaryHighlightIds.isNotEmpty
-            ? diaryHighlightIds[0]
-            : '',
-        'diary_highlight_2': diaryHighlights.length > 1
-            ? '· ${diaryHighlights[1]}'
-            : '',
-        'diary_highlight_2_id': diaryHighlightIds.length > 1
-            ? diaryHighlightIds[1]
-            : '',
-        'diary_highlight_3': diaryHighlights.length > 2
-            ? '· ${diaryHighlights[2]}'
-            : '',
-        'diary_highlight_3_id': diaryHighlightIds.length > 2
-            ? diaryHighlightIds[2]
-            : '',
-        'today_event_summary': todayEventSummary,
-        'schedule_highlight_1': scheduleHighlights.isNotEmpty
-            ? '· ${scheduleHighlights[0]}'
-            : '· $todayEventSummary',
-        'schedule_highlight_1_id': scheduleHighlightIds.isNotEmpty
-            ? scheduleHighlightIds[0]
-            : '',
-        'schedule_highlight_2': scheduleHighlights.length > 1
-            ? '· ${scheduleHighlights[1]}'
-            : '· 打开日历查看完整安排',
-        'schedule_highlight_2_id': scheduleHighlightIds.length > 1
-            ? scheduleHighlightIds[1]
-            : '',
-        'schedule_highlight_3': scheduleHighlights.length > 2
-            ? '· ${scheduleHighlights[2]}'
-            : '提醒会跟随系统时区',
-        'schedule_highlight_3_id': scheduleHighlightIds.length > 2
-            ? scheduleHighlightIds[2]
-            : '',
-        'calendar_month_summary': '本月日期 · 今日已标记',
-        'focus_summary': focusSummary,
-        'habit_summary': habitSummary,
-        'streak_summary': streakSummary,
-        'next_focus_label': nextFocusLabel,
-        'focus_timer_running': focusTimerRunning,
-        'focus_timer_remaining_seconds': focusTimerRemainingSeconds,
-        'focus_timer_total_seconds': focusTimerTotalSeconds,
-        'focus_timer_ends_at_millis': focusTimerEndsAtMillis,
-        'focus_timer_label': focusTimerLabel,
-        'habit_quick_check_id': habitQuickCheckId,
-        'habit_quick_check_label': habitQuickCheckLabel,
-        ...theme.payloadValues,
-      });
-      if (!saveResult.ok) return false;
-      if (!saveResult.changed) {
-        _lastPushSignature = signature;
-        _lastThemeSignature = theme.signature;
+    return _serializePayload(() async {
+      if (generation != _accountGeneration) return false;
+      if (!await init() || generation != _accountGeneration) return false;
+      final now = capturedAt;
+      final day =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final offset = now.timeZoneOffset.inMinutes;
+      final signature = _pushSignature(
+        todoCount: todoCount,
+        habitPercent: habitPercent,
+        pomodoroToday: pomodoroToday,
+        focusMinutesToday: focusMinutesToday,
+        strings: strings,
+        todoTop3: todoTop3,
+        todoTop3Ids: todoTop3Ids,
+        goalHighlights: goalHighlights,
+        goalHighlightIds: goalHighlightIds,
+        anniversaryHighlights: anniversaryHighlights,
+        anniversaryHighlightIds: anniversaryHighlightIds,
+        courseHighlights: courseHighlights,
+        courseHighlightIds: courseHighlightIds,
+        noteHighlights: noteHighlights,
+        noteHighlightIds: noteHighlightIds,
+        memorialHighlights: memorialHighlights,
+        memorialHighlightIds: memorialHighlightIds,
+        diaryHighlights: diaryHighlights,
+        diaryHighlightIds: diaryHighlightIds,
+        scheduleHighlights: scheduleHighlights,
+        scheduleHighlightIds: scheduleHighlightIds,
+        todayEventSummary: todayEventSummary,
+        focusSummary: focusSummary,
+        habitSummary: habitSummary,
+        streakSummary: streakSummary,
+        nextFocusLabel: nextFocusLabel,
+        focusTimerCountUp: focusTimerCountUp,
+        focusTimerStartedAtMillis: focusTimerStartedAtMillis,
+        focusTimerRunning: focusTimerRunning,
+        focusTimerRemainingSeconds: focusTimerRemainingSeconds,
+        focusTimerTotalSeconds: focusTimerTotalSeconds,
+        focusTimerEndsAtMillis: focusTimerEndsAtMillis,
+        focusTimerLabel: focusTimerLabel,
+        habitQuickCheckId: habitQuickCheckId,
+        habitQuickCheckLabel: habitQuickCheckLabel,
+        theme: theme,
+      );
+      final datedSignature = '$day|$offset|$signature';
+      if (!force && datedSignature == _lastPushSignature && !_refreshPending) {
         return true;
       }
-      final ok = await _updateAllWidgets();
-      if (ok) {
-        _lastPushSignature = signature;
-        _lastThemeSignature = theme.signature;
+      try {
+        // A reader must never treat a partially written snapshot as today's data.
+        _refreshPending = true;
+        _lastPushSignature = '';
+        if (!await _saveWidgetPayloadValue('widget_snapshot_day', '')) {
+          return false;
+        }
+        final saveResult = await _saveWidgetPayload({
+          'widget_account_nonce': _accountActionNonce ?? '',
+          'todo_count': todoCount,
+          'habit_percent': habitPercent,
+          'pomodoro_today': pomodoroToday,
+          'focus_minutes_today': focusMinutesToday,
+          'brand_app_title': strings.appTitle,
+          'nav_todo': strings.navTodo,
+          'nav_habit': strings.navHabit,
+          'nav_calendar': strings.navCalendar,
+          'nav_focus': strings.navFocus,
+          'todo_top3_count': todoCount,
+          'todo_top3_1': todoTop3.isNotEmpty ? '· ${todoTop3[0]}' : '今天没有未完成待办',
+          'todo_top3_1_id': todoTop3Ids.isNotEmpty ? todoTop3Ids[0] : '',
+          'todo_top3_2': todoTop3.length > 1 ? '· ${todoTop3[1]}' : '',
+          'todo_top3_2_id': todoTop3Ids.length > 1 ? todoTop3Ids[1] : '',
+          'todo_top3_3': todoTop3.length > 2 ? '· ${todoTop3[2]}' : '',
+          'todo_top3_3_id': todoTop3Ids.length > 2 ? todoTop3Ids[2] : '',
+          'goal_highlight_1': goalHighlights.isNotEmpty
+              ? '· ${goalHighlights[0]}'
+              : '暂无进行中目标',
+          'goal_highlight_1_id': goalHighlightIds.isNotEmpty
+              ? goalHighlightIds[0]
+              : '',
+          'goal_highlight_2': goalHighlights.length > 1
+              ? '· ${goalHighlights[1]}'
+              : '',
+          'goal_highlight_2_id': goalHighlightIds.length > 1
+              ? goalHighlightIds[1]
+              : '',
+          'goal_highlight_3': goalHighlights.length > 2
+              ? '· ${goalHighlights[2]}'
+              : '本周目标保持推进',
+          'goal_highlight_3_id': goalHighlightIds.length > 2
+              ? goalHighlightIds[2]
+              : '',
+          'anniversary_highlight_1': anniversaryHighlights.isNotEmpty
+              ? '· ${anniversaryHighlights[0]}'
+              : '暂无近期纪念日',
+          'anniversary_highlight_1_id': anniversaryHighlightIds.isNotEmpty
+              ? anniversaryHighlightIds[0]
+              : '',
+          'anniversary_highlight_2': anniversaryHighlights.length > 1
+              ? '· ${anniversaryHighlights[1]}'
+              : '',
+          'anniversary_highlight_2_id': anniversaryHighlightIds.length > 1
+              ? anniversaryHighlightIds[1]
+              : '',
+          'course_highlight_1': courseHighlights.isNotEmpty
+              ? '· ${courseHighlights[0]}'
+              : '今日暂无课程',
+          'course_highlight_1_id': courseHighlightIds.isNotEmpty
+              ? courseHighlightIds[0]
+              : '',
+          'course_highlight_2': courseHighlights.length > 1
+              ? '· ${courseHighlights[1]}'
+              : '',
+          'course_highlight_2_id': courseHighlightIds.length > 1
+              ? courseHighlightIds[1]
+              : '',
+          'course_highlight_3': courseHighlights.length > 2
+              ? '· ${courseHighlights[2]}'
+              : '',
+          'course_highlight_3_id': courseHighlightIds.length > 2
+              ? courseHighlightIds[2]
+              : '',
+          'note_highlight_1': noteHighlights.isNotEmpty
+              ? '· ${noteHighlights[0]}'
+              : '暂无随手记',
+          'note_highlight_1_id': noteHighlightIds.isNotEmpty
+              ? noteHighlightIds[0]
+              : '',
+          'note_highlight_2': noteHighlights.length > 1
+              ? '· ${noteHighlights[1]}'
+              : '',
+          'note_highlight_2_id': noteHighlightIds.length > 1
+              ? noteHighlightIds[1]
+              : '',
+          'note_highlight_3': noteHighlights.length > 2
+              ? '· ${noteHighlights[2]}'
+              : '',
+          'note_highlight_3_id': noteHighlightIds.length > 2
+              ? noteHighlightIds[2]
+              : '',
+          'memorial_highlight_1': memorialHighlights.isNotEmpty
+              ? '· ${memorialHighlights[0]}'
+              : '暂无近期纪念日',
+          'memorial_highlight_1_id': memorialHighlightIds.isNotEmpty
+              ? memorialHighlightIds[0]
+              : '',
+          'memorial_highlight_2': memorialHighlights.length > 1
+              ? '· ${memorialHighlights[1]}'
+              : '',
+          'memorial_highlight_2_id': memorialHighlightIds.length > 1
+              ? memorialHighlightIds[1]
+              : '',
+          'memorial_highlight_3': memorialHighlights.length > 2
+              ? '· ${memorialHighlights[2]}'
+              : '',
+          'memorial_highlight_3_id': memorialHighlightIds.length > 2
+              ? memorialHighlightIds[2]
+              : '',
+          'diary_highlight_1': diaryHighlights.isNotEmpty
+              ? '· ${diaryHighlights[0]}'
+              : '暂无日记',
+          'diary_highlight_1_id': diaryHighlightIds.isNotEmpty
+              ? diaryHighlightIds[0]
+              : '',
+          'diary_highlight_2': diaryHighlights.length > 1
+              ? '· ${diaryHighlights[1]}'
+              : '',
+          'diary_highlight_2_id': diaryHighlightIds.length > 1
+              ? diaryHighlightIds[1]
+              : '',
+          'diary_highlight_3': diaryHighlights.length > 2
+              ? '· ${diaryHighlights[2]}'
+              : '',
+          'diary_highlight_3_id': diaryHighlightIds.length > 2
+              ? diaryHighlightIds[2]
+              : '',
+          'today_event_summary': todayEventSummary,
+          'schedule_highlight_1': scheduleHighlights.isNotEmpty
+              ? '· ${scheduleHighlights[0]}'
+              : '· $todayEventSummary',
+          'schedule_highlight_1_id': scheduleHighlightIds.isNotEmpty
+              ? scheduleHighlightIds[0]
+              : '',
+          'schedule_highlight_2': scheduleHighlights.length > 1
+              ? '· ${scheduleHighlights[1]}'
+              : '· 打开日历查看完整安排',
+          'schedule_highlight_2_id': scheduleHighlightIds.length > 1
+              ? scheduleHighlightIds[1]
+              : '',
+          'schedule_highlight_3': scheduleHighlights.length > 2
+              ? '· ${scheduleHighlights[2]}'
+              : '提醒会跟随系统时区',
+          'schedule_highlight_3_id': scheduleHighlightIds.length > 2
+              ? scheduleHighlightIds[2]
+              : '',
+          'calendar_month_summary': '本月日期 · 今日已标记',
+          'focus_summary': focusSummary,
+          'habit_summary': habitSummary,
+          'streak_summary': streakSummary,
+          'next_focus_label': nextFocusLabel,
+          'focus_timer_count_up': focusTimerCountUp,
+          'focus_timer_started_at_millis': focusTimerStartedAtMillis,
+          'focus_timer_running': focusTimerRunning,
+          'focus_timer_remaining_seconds': focusTimerRemainingSeconds,
+          'focus_timer_total_seconds': focusTimerTotalSeconds,
+          'focus_timer_ends_at_millis': focusTimerEndsAtMillis,
+          'focus_timer_label': focusTimerLabel,
+          'habit_quick_check_id': habitQuickCheckId,
+          'habit_quick_check_label': habitQuickCheckLabel,
+          ...theme.payloadValues,
+        });
+        if (!saveResult.ok || generation != _accountGeneration) return false;
+        if (!await _saveWidgetPayloadValue(
+          'widget_snapshot_utc_offset_minutes',
+          offset,
+        )) {
+          return false;
+        }
+        if (generation != _accountGeneration) return false;
+        final current = DateTime.now();
+        if (current.year != now.year ||
+            current.month != now.month ||
+            current.day != now.day ||
+            current.timeZoneOffset != now.timeZoneOffset) {
+          return false;
+        }
+        if (!await _saveWidgetPayloadValue('widget_snapshot_day', day)) {
+          return false;
+        }
+        if (generation != _accountGeneration) return false;
+        _refreshPending = true;
+        final ok = await _updateAllWidgets();
+        if (ok && generation == _accountGeneration) {
+          _refreshPending = false;
+          _lastPushSignature = datedSignature;
+          _lastThemeSignature = theme.signature;
+        }
+        return ok;
+      } catch (e, st) {
+        debugPrint('[HomeWidget] push failed: $e\n$st');
+        return false;
       }
-      return ok;
-    } catch (e, st) {
-      debugPrint('[HomeWidget] push failed: $e\n$st');
-      return false;
-    }
+    });
   }
 
   static Future<bool> _updateAllWidgets() async {
@@ -584,6 +739,8 @@ class HomeWidgetService {
     required String habitSummary,
     required String streakSummary,
     required String nextFocusLabel,
+    required bool focusTimerCountUp,
+    required int focusTimerStartedAtMillis,
     required bool focusTimerRunning,
     required int focusTimerRemainingSeconds,
     required int focusTimerTotalSeconds,
@@ -624,6 +781,8 @@ class HomeWidgetService {
       habitSummary,
       streakSummary,
       nextFocusLabel,
+      focusTimerCountUp,
+      focusTimerStartedAtMillis,
       focusTimerRunning,
       focusTimerRemainingSeconds,
       focusTimerTotalSeconds,

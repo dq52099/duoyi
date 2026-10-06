@@ -26,6 +26,15 @@ enum TodoVisualState { normal, dueSoon, overdue, completed, archived }
 class CompletionVisibilityPolicy {
   CompletionVisibilityPolicy._();
 
+  /// Same set as the daily overview: visible pending or completed today.
+  static bool isInTodayOverview(TodoItem todo, DateTime now) {
+    if (shouldShowInToday(todo, now)) return true;
+    final completedAt = todo.completedAt;
+    return todo.isCompleted &&
+        completedAt != null &&
+        dateOnly(completedAt) == dateOnly(now);
+  }
+
   /// 判断一条 Todo 是否应该出现在"今日待办"视图。
   ///
   /// 规则：

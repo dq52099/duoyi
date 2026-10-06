@@ -44,8 +44,7 @@
             android:maxLines="1"
             android:text="多仪"
             android:textColor="#FF6B6B"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/widget_calendar_month"
@@ -61,7 +60,8 @@
         <TextView
             android:id="@+id/widget_calendar_today_button"
             android:layout_width="40dp"
-            android:layout_height="24dp"
+            android:layout_height="32dp"
+            android:minHeight="32dp"
             android:layout_marginLeft="6dp"
             android:background="@drawable/widget_nav_bg"
             android:gravity="center"
@@ -69,8 +69,20 @@
             android:maxLines="1"
             android:text="今天"
             android:textColor="#1E88E5"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_refresh"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginLeft="4dp"
+            android:gravity="center"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="↻"
+            android:contentDescription="刷新小组件"
+            android:textColor="#888888"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <TextView
@@ -96,7 +108,7 @@
         android:maxLines="1"
         android:text="本月日期 · 今日已标记"
         android:textColor="#1E88E5"
-        android:textSize="10sp" />
+        android:textSize="11sp" />
 
     <LinearLayout
         android:id="@+id/widget_calendar_bottom_nav"
@@ -144,8 +156,7 @@
             android:maxLines="1"
             android:text="日历"
             android:textColor="#1E88E5"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+            android:textSize="10sp" />
 
         <TextView
             android:id="@+id/widget_calendar_nav_focus"

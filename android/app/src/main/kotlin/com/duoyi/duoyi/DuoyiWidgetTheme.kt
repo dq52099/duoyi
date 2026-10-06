@@ -1,6 +1,8 @@
 package com.duoyi.duoyi
 
 import android.content.Context
+import android.net.Uri
+import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
@@ -91,6 +93,9 @@ object DuoyiWidgetTheme {
         appWidgetId: Int? = null,
     ) {
         val theme = read(prefs)
+        views.setTextColor(R.id.widget_refresh, theme.mutedText)
+        views.setOnClickPendingIntent(R.id.widget_refresh, HomeWidgetLaunchIntent.getActivity(
+            context, MainActivity::class.java, Uri.parse("duoyi://action/refresh_widgets")))
         val imageResource = backgroundImageResource(theme.backgroundAssetKey)
         if (imageResource != 0) {
             applyImageBackedSurface(

@@ -62,187 +62,419 @@ class _AdminScreenState extends State<AdminScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+    final baseTheme = Theme.of(context);
+    final theme = isMobile ? _buildAdminMobileTheme(baseTheme) : baseTheme;
     final auth = context.watch<AuthProvider>();
-    final cs = Theme.of(context).colorScheme;
-    final routeBackground = Theme.of(context).brightness == Brightness.dark
+    final cs = theme.colorScheme;
+    final routeBackground = theme.brightness == Brightness.dark
         ? cs.surface
         : cs.surfaceContainerLowest;
     if (!auth.state.isAdmin) {
-      return Scaffold(
+      return Theme(
+        data: theme,
+        child: Scaffold(
+          backgroundColor: routeBackground,
+          appBar: AppBar(
+            title: const Text('管理员后台'),
+            titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+            backgroundColor: routeBackground.withValues(alpha: 0.96),
+            surfaceTintColor: Colors.transparent,
+          ),
+          body: const EmptyState(icon: Icons.lock, message: '仅管理员可访问'),
+        ),
+      );
+    }
+    final api = AdminApi(auth.client);
+
+    return Theme(
+      data: theme,
+      child: Scaffold(
         backgroundColor: routeBackground,
         appBar: AppBar(
           title: const Text('管理员后台'),
           titleTextStyle: appSecondaryRouteTitleTextStyle(context),
           backgroundColor: routeBackground.withValues(alpha: 0.96),
           surfaceTintColor: Colors.transparent,
-        ),
-        body: const EmptyState(icon: Icons.lock, message: '仅管理员可访问'),
-      );
-    }
-    final api = AdminApi(auth.client);
-
-    return Scaffold(
-      backgroundColor: routeBackground,
-      appBar: AppBar(
-        title: const Text('管理员后台'),
-        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
-        backgroundColor: routeBackground.withValues(alpha: 0.96),
-        surfaceTintColor: Colors.transparent,
-        actions: [
-          IconButton(
-            tooltip: '刷新当前页',
-            onPressed: () {
-              final index = _tabs.index.clamp(0, _tabRefreshSerials.length - 1);
-              setState(() => _tabRefreshSerials[index]++);
-            },
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabs,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-          labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-          indicatorSize: TabBarIndicatorSize.tab,
-          dividerColor: Colors.transparent,
-          labelStyle: appSecondaryMenuItemTextStyle(context),
-          unselectedLabelStyle: appSecondaryMenuItemTextStyle(context),
-          indicator: BoxDecoration(
-            color: Color.alphaBlend(
-              cs.primary.withValues(alpha: 0.10),
-              cs.surface,
+          actions: [
+            IconButton(
+              tooltip: '刷新当前页',
+              onPressed: () {
+                final index = _tabs.index.clamp(
+                  0,
+                  _tabRefreshSerials.length - 1,
+                );
+                setState(() => _tabRefreshSerials[index]++);
+              },
+              icon: const Icon(Icons.refresh),
             ),
-            borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
-            border: Border.all(
-              color: cs.primary.withValues(alpha: 0.20),
-              width: 0.45,
-            ),
-          ),
-          labelColor: cs.onSurface,
-          unselectedLabelColor: cs.onSurfaceVariant,
-          tabs: const [
-            Tab(
-              height: 34,
-              child: _AdminTabLabel(icon: Icons.dashboard_outlined, text: '概览'),
-            ),
-            Tab(
-              height: 34,
-              child: _AdminTabLabel(icon: Icons.tune, text: '全站设置'),
-            ),
-            Tab(
-              height: 34,
-              child: _AdminTabLabel(icon: Icons.auto_awesome, text: 'AI 配置'),
-            ),
-            Tab(
-              height: 34,
-              child: _AdminTabLabel(icon: Icons.cloud_outlined, text: '云端备份'),
-            ),
-            Tab(
-              height: 34,
-              child: _AdminTabLabel(icon: Icons.people_outline, text: '用户'),
-            ),
-            Tab(
-              height: 34,
-              child: _AdminTabLabel(icon: Icons.groups_2_outlined, text: '用户组'),
-            ),
-            Tab(
-              height: 34,
-              child: _AdminTabLabel(icon: Icons.campaign_outlined, text: '公告'),
-            ),
-            Tab(
-              height: 34,
-              child: _AdminTabLabel(
-                icon: Icons.feedback_outlined,
-                text: '许愿与反馈',
+          ],
+          bottom: TabBar(
+            controller: _tabs,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+            indicatorSize: TabBarIndicatorSize.tab,
+            dividerColor: Colors.transparent,
+            labelStyle: appSecondaryMenuItemTextStyle(context),
+            unselectedLabelStyle: appSecondaryMenuItemTextStyle(context),
+            indicator: BoxDecoration(
+              color: Color.alphaBlend(
+                cs.primary.withValues(alpha: 0.10),
+                cs.surface,
+              ),
+              borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+              border: Border.all(
+                color: cs.primary.withValues(alpha: 0.20),
+                width: 0.45,
               ),
             ),
-            Tab(
-              height: 34,
-              child: _AdminTabLabel(icon: Icons.vpn_key_outlined, text: '邀请码'),
+            labelColor: cs.onSurface,
+            unselectedLabelColor: cs.onSurfaceVariant,
+            tabs: const [
+              Tab(
+                height: 34,
+                child: _AdminTabLabel(
+                  icon: Icons.dashboard_outlined,
+                  text: '概览',
+                ),
+              ),
+              Tab(
+                height: 34,
+                child: _AdminTabLabel(icon: Icons.tune, text: '全站设置'),
+              ),
+              Tab(
+                height: 34,
+                child: _AdminTabLabel(icon: Icons.auto_awesome, text: 'AI 配置'),
+              ),
+              Tab(
+                height: 34,
+                child: _AdminTabLabel(icon: Icons.cloud_outlined, text: '云端备份'),
+              ),
+              Tab(
+                height: 34,
+                child: _AdminTabLabel(icon: Icons.people_outline, text: '用户'),
+              ),
+              Tab(
+                height: 34,
+                child: _AdminTabLabel(
+                  icon: Icons.groups_2_outlined,
+                  text: '用户组',
+                ),
+              ),
+              Tab(
+                height: 34,
+                child: _AdminTabLabel(
+                  icon: Icons.campaign_outlined,
+                  text: '公告',
+                ),
+              ),
+              Tab(
+                height: 34,
+                child: _AdminTabLabel(
+                  icon: Icons.feedback_outlined,
+                  text: '许愿与反馈',
+                ),
+              ),
+              Tab(
+                height: 34,
+                child: _AdminTabLabel(
+                  icon: Icons.vpn_key_outlined,
+                  text: '邀请码',
+                ),
+              ),
+              Tab(
+                height: 34,
+                child: _AdminTabLabel(
+                  icon: Icons.receipt_long_outlined,
+                  text: '日志',
+                ),
+              ),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          controller: _tabs,
+          children: [
+            _AdminTabContent(
+              child: _DashboardTab(
+                key: ValueKey('admin-dashboard-${_tabRefreshSerials[0]}'),
+                api: api,
+              ),
             ),
-            Tab(
-              height: 34,
-              child: _AdminTabLabel(
-                icon: Icons.receipt_long_outlined,
-                text: '日志',
+            _AdminTabContent(
+              child: _SettingsTab(
+                key: ValueKey('admin-settings-${_tabRefreshSerials[1]}'),
+                api: api,
+                selfAdminPermissions: auth.state.adminPermissions,
+              ),
+            ),
+            _AdminTabContent(
+              child: _AiSettingsTab(
+                key: ValueKey('admin-ai-${_tabRefreshSerials[2]}'),
+                api: api,
+              ),
+            ),
+            _AdminTabContent(
+              child: _BackupSettingsTab(
+                key: ValueKey('admin-backup-${_tabRefreshSerials[3]}'),
+                api: api,
+              ),
+            ),
+            _AdminTabContent(
+              child: _UsersTab(
+                key: ValueKey('admin-users-${_tabRefreshSerials[4]}'),
+                api: api,
+                selfId: auth.state.userId,
+                selfAdminPermissions: auth.state.adminPermissions,
+                isActive: _activeTabIndex == 4,
+              ),
+            ),
+            _AdminTabContent(
+              child: _GroupsTab(
+                key: ValueKey('admin-groups-${_tabRefreshSerials[5]}'),
+                api: api,
+                selfAdminPermissions: auth.state.adminPermissions,
+              ),
+            ),
+            _AdminTabContent(
+              child: _AnnouncementsTab(
+                key: ValueKey('admin-announcements-${_tabRefreshSerials[6]}'),
+                api: api,
+              ),
+            ),
+            _AdminTabContent(
+              child: _FeedbackTab(
+                key: ValueKey('admin-feedback-${_tabRefreshSerials[7]}'),
+                api: api,
+              ),
+            ),
+            _AdminTabContent(
+              child: _InvitesTab(
+                key: ValueKey('admin-invites-${_tabRefreshSerials[8]}'),
+                api: api,
+              ),
+            ),
+            _AdminTabContent(
+              child: _AuditLogTab(
+                key: ValueKey('admin-audit-${_tabRefreshSerials[9]}'),
+                api: api,
               ),
             ),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabs,
-        children: [
-          _AdminTabContent(
-            child: _DashboardTab(
-              key: ValueKey('admin-dashboard-${_tabRefreshSerials[0]}'),
-              api: api,
-            ),
-          ),
-          _AdminTabContent(
-            child: _SettingsTab(
-              key: ValueKey('admin-settings-${_tabRefreshSerials[1]}'),
-              api: api,
-              selfAdminPermissions: auth.state.adminPermissions,
-            ),
-          ),
-          _AdminTabContent(
-            child: _AiSettingsTab(
-              key: ValueKey('admin-ai-${_tabRefreshSerials[2]}'),
-              api: api,
-            ),
-          ),
-          _AdminTabContent(
-            child: _BackupSettingsTab(
-              key: ValueKey('admin-backup-${_tabRefreshSerials[3]}'),
-              api: api,
-            ),
-          ),
-          _AdminTabContent(
-            child: _UsersTab(
-              key: ValueKey('admin-users-${_tabRefreshSerials[4]}'),
-              api: api,
-              selfId: auth.state.userId,
-              selfAdminPermissions: auth.state.adminPermissions,
-              isActive: _activeTabIndex == 4,
-            ),
-          ),
-          _AdminTabContent(
-            child: _GroupsTab(
-              key: ValueKey('admin-groups-${_tabRefreshSerials[5]}'),
-              api: api,
-              selfAdminPermissions: auth.state.adminPermissions,
-            ),
-          ),
-          _AdminTabContent(
-            child: _AnnouncementsTab(
-              key: ValueKey('admin-announcements-${_tabRefreshSerials[6]}'),
-              api: api,
-            ),
-          ),
-          _AdminTabContent(
-            child: _FeedbackTab(
-              key: ValueKey('admin-feedback-${_tabRefreshSerials[7]}'),
-              api: api,
-            ),
-          ),
-          _AdminTabContent(
-            child: _InvitesTab(
-              key: ValueKey('admin-invites-${_tabRefreshSerials[8]}'),
-              api: api,
-            ),
-          ),
-          _AdminTabContent(
-            child: _AuditLogTab(
-              key: ValueKey('admin-audit-${_tabRefreshSerials[9]}'),
-              api: api,
-            ),
-          ),
-        ],
-      ),
     );
   }
+}
+
+ThemeData _buildAdminMobileTheme(ThemeData baseTheme) {
+  final baseText = baseTheme.textTheme;
+
+  final mobileTextTheme = baseText.copyWith(
+    // Page title: restrained 16-18
+    titleLarge: (baseText.titleLarge ?? const TextStyle()).copyWith(
+      fontSize: 17,
+      fontWeight: FontWeight.normal,
+    ),
+    // Standard titleMedium: 14 normal400
+    titleMedium: (baseText.titleMedium ?? const TextStyle()).copyWith(
+      fontSize: 14,
+      fontWeight: FontWeight.normal,
+    ),
+    // Section title: 14-15
+    titleSmall: (baseText.titleSmall ?? const TextStyle()).copyWith(
+      fontSize: 14.5,
+      fontWeight: FontWeight.normal,
+    ),
+    // Body: 13-14
+    bodyLarge: (baseText.bodyLarge ?? const TextStyle()).copyWith(
+      fontSize: 14,
+      fontWeight: FontWeight.normal,
+    ),
+    bodyMedium: (baseText.bodyMedium ?? const TextStyle()).copyWith(
+      fontSize: 13.5,
+      fontWeight: FontWeight.normal,
+    ),
+    // Supporting: 12-13
+    bodySmall: (baseText.bodySmall ?? const TextStyle()).copyWith(
+      fontSize: 12.5,
+      fontWeight: FontWeight.normal,
+    ),
+    // Form labels / Buttons / Chips
+    labelLarge: (baseText.labelLarge ?? const TextStyle()).copyWith(
+      fontSize: 13.5,
+      fontWeight: FontWeight.normal,
+    ),
+    labelMedium: (baseText.labelMedium ?? const TextStyle()).copyWith(
+      fontSize: 12,
+      fontWeight: FontWeight.normal,
+    ),
+    labelSmall: (baseText.labelSmall ?? const TextStyle()).copyWith(
+      fontSize: 12,
+      fontWeight: FontWeight.normal,
+    ),
+    headlineSmall: (baseText.headlineSmall ?? const TextStyle()).copyWith(
+      fontSize: 20,
+      fontWeight: FontWeight.normal,
+    ),
+    headlineMedium: (baseText.headlineMedium ?? const TextStyle()).copyWith(
+      fontSize: 22,
+      fontWeight: FontWeight.normal,
+    ),
+  );
+
+  return baseTheme.copyWith(
+    textTheme: mobileTextTheme,
+    listTileTheme: baseTheme.listTileTheme.copyWith(
+      titleTextStyle:
+          (baseTheme.listTileTheme.titleTextStyle ??
+                  mobileTextTheme.titleSmall ??
+                  const TextStyle())
+              .copyWith(fontSize: 14, fontWeight: FontWeight.normal),
+      subtitleTextStyle:
+          (baseTheme.listTileTheme.subtitleTextStyle ??
+                  mobileTextTheme.bodySmall ??
+                  const TextStyle())
+              .copyWith(fontSize: 12.5, fontWeight: FontWeight.normal),
+      leadingAndTrailingTextStyle:
+          (baseTheme.listTileTheme.leadingAndTrailingTextStyle ??
+                  mobileTextTheme.labelSmall ??
+                  const TextStyle())
+              .copyWith(fontSize: 12, fontWeight: FontWeight.normal),
+    ),
+    dataTableTheme: baseTheme.dataTableTheme.copyWith(
+      headingTextStyle:
+          (baseTheme.dataTableTheme.headingTextStyle ??
+                  mobileTextTheme.titleSmall ??
+                  const TextStyle())
+              .copyWith(fontSize: 13, fontWeight: FontWeight.normal),
+      dataTextStyle:
+          (baseTheme.dataTableTheme.dataTextStyle ??
+                  mobileTextTheme.bodyMedium ??
+                  const TextStyle())
+              .copyWith(fontSize: 13, fontWeight: FontWeight.normal),
+    ),
+    inputDecorationTheme: baseTheme.inputDecorationTheme.copyWith(
+      labelStyle:
+          (baseTheme.inputDecorationTheme.labelStyle ??
+                  mobileTextTheme.bodyMedium ??
+                  const TextStyle())
+              .copyWith(fontSize: 13.5, fontWeight: FontWeight.normal),
+      floatingLabelStyle:
+          (baseTheme.inputDecorationTheme.floatingLabelStyle ??
+                  mobileTextTheme.bodySmall ??
+                  const TextStyle())
+              .copyWith(fontSize: 12.5, fontWeight: FontWeight.normal),
+      hintStyle:
+          (baseTheme.inputDecorationTheme.hintStyle ??
+                  mobileTextTheme.bodyMedium ??
+                  const TextStyle())
+              .copyWith(fontSize: 13.5, fontWeight: FontWeight.normal),
+      helperStyle:
+          (baseTheme.inputDecorationTheme.helperStyle ??
+                  mobileTextTheme.bodySmall ??
+                  const TextStyle())
+              .copyWith(fontSize: 12, fontWeight: FontWeight.normal),
+      errorStyle:
+          (baseTheme.inputDecorationTheme.errorStyle ??
+                  mobileTextTheme.bodySmall ??
+                  const TextStyle())
+              .copyWith(fontSize: 12, fontWeight: FontWeight.normal),
+      prefixStyle:
+          (baseTheme.inputDecorationTheme.prefixStyle ??
+                  mobileTextTheme.bodyMedium ??
+                  const TextStyle())
+              .copyWith(fontSize: 13, fontWeight: FontWeight.normal),
+      suffixStyle:
+          (baseTheme.inputDecorationTheme.suffixStyle ??
+                  mobileTextTheme.bodyMedium ??
+                  const TextStyle())
+              .copyWith(fontSize: 13, fontWeight: FontWeight.normal),
+    ),
+    dialogTheme: baseTheme.dialogTheme.copyWith(
+      titleTextStyle:
+          (baseTheme.dialogTheme.titleTextStyle ??
+                  mobileTextTheme.titleLarge ??
+                  const TextStyle())
+              .copyWith(fontSize: 16, fontWeight: FontWeight.normal),
+      contentTextStyle:
+          (baseTheme.dialogTheme.contentTextStyle ??
+                  mobileTextTheme.bodyMedium ??
+                  const TextStyle())
+              .copyWith(fontSize: 13.5, fontWeight: FontWeight.normal),
+    ),
+    appBarTheme: baseTheme.appBarTheme.copyWith(
+      titleTextStyle:
+          (baseTheme.appBarTheme.titleTextStyle ??
+                  mobileTextTheme.titleLarge ??
+                  const TextStyle())
+              .copyWith(fontSize: 17, fontWeight: FontWeight.normal),
+    ),
+    tabBarTheme: baseTheme.tabBarTheme.copyWith(
+      labelStyle:
+          (baseTheme.tabBarTheme.labelStyle ??
+                  mobileTextTheme.titleSmall ??
+                  const TextStyle())
+              .copyWith(fontSize: 13, fontWeight: FontWeight.normal),
+      unselectedLabelStyle:
+          (baseTheme.tabBarTheme.unselectedLabelStyle ??
+                  mobileTextTheme.titleSmall ??
+                  const TextStyle())
+              .copyWith(fontSize: 13, fontWeight: FontWeight.normal),
+    ),
+    chipTheme: baseTheme.chipTheme.copyWith(
+      labelStyle:
+          (baseTheme.chipTheme.labelStyle ??
+                  mobileTextTheme.labelMedium ??
+                  const TextStyle())
+              .copyWith(fontSize: 12, fontWeight: FontWeight.normal),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: (baseTheme.textButtonTheme.style ?? const ButtonStyle()).copyWith(
+        textStyle: WidgetStatePropertyAll(
+          (mobileTextTheme.labelLarge ?? const TextStyle()).copyWith(
+            fontSize: 13.5,
+            fontWeight: FontWeight.normal,
+          ),
+        ),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: (baseTheme.outlinedButtonTheme.style ?? const ButtonStyle())
+          .copyWith(
+            textStyle: WidgetStatePropertyAll(
+              (mobileTextTheme.labelLarge ?? const TextStyle()).copyWith(
+                fontSize: 13.5,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: (baseTheme.filledButtonTheme.style ?? const ButtonStyle())
+          .copyWith(
+            textStyle: WidgetStatePropertyAll(
+              (mobileTextTheme.labelLarge ?? const TextStyle()).copyWith(
+                fontSize: 13.5,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: (baseTheme.elevatedButtonTheme.style ?? const ButtonStyle())
+          .copyWith(
+            textStyle: WidgetStatePropertyAll(
+              (mobileTextTheme.labelLarge ?? const TextStyle()).copyWith(
+                fontSize: 13.5,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ),
+    ),
+  );
 }
 
 class _AdminTabContent extends StatelessWidget {
@@ -1046,70 +1278,106 @@ class _Kpi {
 class _GridCards extends StatelessWidget {
   final List<_Kpi> items;
   const _GridCards(this.items);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = Theme.of(context).colorScheme;
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      childAspectRatio: 2.4,
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      children: items
-          .map(
-            (k) => AppSurfaceCard(
-              padding: const EdgeInsets.all(12),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: k.color.withValues(alpha: 0.16),
-                width: 0.45,
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+
+    Widget buildCard(_Kpi k) {
+      return AppSurfaceCard(
+        padding: const EdgeInsets.all(12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: k.color.withValues(alpha: 0.16), width: 0.45),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: k.color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
+              child: Icon(k.icon, color: k.color, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: k.color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
+                  Text(
+                    k.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurface.withValues(alpha: 0.62),
+                      fontWeight: FontWeight.normal,
                     ),
-                    child: Icon(k.icon, color: k.color, size: 20),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          k.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onSurface.withValues(alpha: 0.62),
-                            fontWeight: FontWeight.normal,
-                          ),
-                        ),
-                        Text(
-                          k.value,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: cs.onSurface,
-                            fontWeight: FontWeight.normal,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    k.value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                 ],
               ),
             ),
-          )
-          .toList(),
+          ],
+        ),
+      );
+    }
+
+    if (!isMobile) {
+      return GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 2,
+        childAspectRatio: 2.4,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        children: items.map(buildCard).toList(),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScaler = MediaQuery.textScalerOf(context);
+        final bodySmall = theme.textTheme.bodySmall;
+        final titleMedium = theme.textTheme.titleMedium;
+        final titleHeight =
+            textScaler.scale(bodySmall?.fontSize ?? 12.5) *
+            (bodySmall?.height ?? 1.5);
+        final valueHeight =
+            textScaler.scale(titleMedium?.fontSize ?? 14.0) *
+            (titleMedium?.height ?? 1.28);
+        final textHeight = titleHeight + valueHeight;
+        final contentHeight = textHeight > 38.0 ? textHeight : 38.0;
+        final computedExtent = (24.0 + contentHeight).ceilToDouble() + 2.0;
+        final baseExtent = constraints.maxWidth < 340 ? 82.0 : 80.0;
+        final mainAxisExtent = computedExtent > baseExtent
+            ? computedExtent
+            : baseExtent;
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            mainAxisExtent: mainAxisExtent,
+          ),
+          itemCount: items.length,
+          itemBuilder: (context, index) => buildCard(items[index]),
+        );
+      },
     );
   }
 }

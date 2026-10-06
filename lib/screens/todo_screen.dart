@@ -107,6 +107,7 @@ class _TodoScreenState extends State<TodoScreen> {
       dueDateOf: (todo) => todo.dueDate,
       isCompletedOf: (todo) => todo.isCompleted,
       isArchivedAfterRolloverOf: (todo) => todo.isArchivedAfterRollover,
+      isInTodayOverviewOf: CompletionVisibilityPolicy.isInTodayOverview,
     );
     final quadrantGroups = groupTodosByQuadrant(
       filteredTodos,
@@ -802,7 +803,7 @@ class _TodoScreenState extends State<TodoScreen> {
                                       todoProvider.lastReminderScheduleIssue;
                                   final reminderSyncIssue = waitForReminderSync
                                       ? (reminderSyncResult?.issue ??
-                                          scheduleIssue)
+                                            scheduleIssue)
                                       : null;
                                   if (!mounted || !ctx.mounted) return;
                                   final localSaveMessage =
@@ -993,6 +994,7 @@ class _TodoScreenState extends State<TodoScreen> {
                     message: s.todoEmpty,
                     actionLabel: s.todoAddAction,
                     onAction: _showAddDialog,
+                    minCardHeight: EmptyState.defaultMinCardHeight,
                   ),
                 ),
               ],
@@ -1010,6 +1012,18 @@ class _TodoScreenState extends State<TodoScreen> {
                     habits: habitProvider.habits,
                     activeGoalCount: goalProvider.activeGoals.length,
                     now: now,
+                    onTodayTap: () => _setFilter(
+                      const TodoFilterState(
+                        todayOverview: true,
+                        completion: TodoCompletionFilter.all,
+                      ),
+                    ),
+                    onOverdueTap: () => _setFilter(
+                      const TodoFilterState(
+                        due: TodoDueFilter.overdue,
+                        completion: TodoCompletionFilter.active,
+                      ),
+                    ),
                   ),
                 if (!_batchMode && cloudSyncNotice != null)
                   _TodoCloudSyncNoticeBanner(notice: cloudSyncNotice),
@@ -1057,15 +1071,14 @@ class _TodoScreenState extends State<TodoScreen> {
                               },
                               // 长按拖动待办到目标象限，松手即换象限。
                               // 与 tile 级入口一致：只读成员不可拖拽换象限。
-                              canEditTodo: (todo) =>
-                                  context
-                                      .read<ShareProvider>()
-                                      .canEdit(todo.workspaceId),
+                              canEditTodo: (todo) => context
+                                  .read<ShareProvider>()
+                                  .canEdit(todo.workspaceId),
                               onTodoQuadrantChanged: (todo, target) {
                                 // 投放时点用最新权限复查，防止陈旧快照放行。
-                                if (!context
-                                    .read<ShareProvider>()
-                                    .canEdit(todo.workspaceId)) {
+                                if (!context.read<ShareProvider>().canEdit(
+                                  todo.workspaceId,
+                                )) {
                                   return;
                                 }
                                 context
@@ -1322,12 +1335,16 @@ class _TodoTodaySummaryCard extends StatelessWidget {
   final List<Habit> habits;
   final int activeGoalCount;
   final DateTime now;
+  final VoidCallback? onTodayTap;
+  final VoidCallback? onOverdueTap;
 
   const _TodoTodaySummaryCard({
     required this.todos,
     required this.habits,
     required this.activeGoalCount,
     required this.now,
+    this.onTodayTap,
+    this.onOverdueTap,
   });
 
   @override
@@ -1369,6 +1386,8 @@ class _TodoTodaySummaryCard extends StatelessWidget {
         label: '今日',
         value: '$todayDone/$todayTotal',
         color: cs.primary,
+        onTap: onTodayTap,
+        tooltip: '筛选今日待办',
       ),
       _TodoSummaryChipData(
         icon: Icons.priority_high_outlined,
@@ -1381,6 +1400,8 @@ class _TodoTodaySummaryCard extends StatelessWidget {
         label: '逾期',
         value: '$overdueCount',
         color: cs.error,
+        onTap: onOverdueTap,
+        tooltip: '筛选逾期待办',
       ),
     ];
 
@@ -1534,12 +1555,16 @@ class _TodoSummaryChipData {
   final String label;
   final String value;
   final Color color;
+  final VoidCallback? onTap;
+  final String? tooltip;
 
   const _TodoSummaryChipData({
     required this.icon,
     required this.label,
     required this.value,
     required this.color,
+    this.onTap,
+    this.tooltip,
   });
 }
 
@@ -1551,17 +1576,18 @@ class _TodoSummaryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return ConstrainedBox(
+    final isInteractive = data.onTap != null;
+    final borderRadius = BorderRadius.circular(12);
+
+    final chipContent = ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 86, maxWidth: 118),
       child: Container(
+        constraints: BoxConstraints(minHeight: isInteractive ? 44.0 : 0.0),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: data.color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: data.color.withValues(alpha: 0.16)),
-        ),
+        alignment: Alignment.center,
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(data.icon, size: 15, color: data.color),
             const SizedBox(width: 6),
@@ -1587,6 +1613,42 @@ class _TodoSummaryChip extends StatelessWidget {
         ),
       ),
     );
+
+    if (!isInteractive) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: data.color.withValues(alpha: 0.1),
+          borderRadius: borderRadius,
+          border: Border.all(color: data.color.withValues(alpha: 0.16)),
+        ),
+        child: chipContent,
+      );
+    }
+
+    final interactiveChip = Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          color: data.color.withValues(alpha: 0.1),
+          borderRadius: borderRadius,
+          border: Border.all(color: data.color.withValues(alpha: 0.16)),
+        ),
+        child: InkWell(
+          onTap: data.onTap,
+          borderRadius: borderRadius,
+          child: Semantics(
+            button: true,
+            label: '${data.label}待办 ${data.value}',
+            child: chipContent,
+          ),
+        ),
+      ),
+    );
+
+    if (data.tooltip != null) {
+      return Tooltip(message: data.tooltip!, child: interactiveChip);
+    }
+    return interactiveChip;
   }
 }
 
@@ -1652,12 +1714,27 @@ class _TodoFilterBar extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
+                if (filter.todayOverview) ...[
+                  FilterChip(
+                    selected: true,
+                    showCheckmark: false,
+                    avatar: const Icon(Icons.today_outlined, size: 16),
+                    label: const Text('今日概览'),
+                    onSelected: (_) =>
+                        onChanged(filter.copyWith(todayOverview: false)),
+                    onDeleted: () =>
+                        onChanged(filter.copyWith(todayOverview: false)),
+                    deleteIcon: const Icon(Icons.close, size: 14),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 _TodoQuickFilterChip(
                   label: '今日',
                   icon: Icons.today_outlined,
                   selected: filter.due == TodoDueFilter.dueToday,
                   onPressed: () => onChanged(
                     filter.copyWith(
+                      todayOverview: false,
                       due: filter.due == TodoDueFilter.dueToday
                           ? TodoDueFilter.all
                           : TodoDueFilter.dueToday,
@@ -1671,6 +1748,7 @@ class _TodoFilterBar extends StatelessWidget {
                   selected: filter.due == TodoDueFilter.overdue,
                   onPressed: () => onChanged(
                     filter.copyWith(
+                      todayOverview: false,
                       due: filter.due == TodoDueFilter.overdue
                           ? TodoDueFilter.all
                           : TodoDueFilter.overdue,
@@ -1684,6 +1762,7 @@ class _TodoFilterBar extends StatelessWidget {
                   selected: filter.due == TodoDueFilter.next7Days,
                   onPressed: () => onChanged(
                     filter.copyWith(
+                      todayOverview: false,
                       due: filter.due == TodoDueFilter.next7Days
                           ? TodoDueFilter.all
                           : TodoDueFilter.next7Days,
@@ -1754,7 +1833,9 @@ class _TodoFilterBar extends StatelessWidget {
                         value: due,
                       ),
                   ],
-                  onSelected: (value) => onChanged(filter.copyWith(due: value)),
+                  onSelected: (value) => onChanged(
+                    filter.copyWith(todayOverview: false, due: value),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 _TodoFilterMenu<TodoCompletionFilter>(
@@ -4673,6 +4754,7 @@ class _QuadrantListScreenState extends State<QuadrantListScreen> {
       dueDateOf: (todo) => todo.dueDate,
       isCompletedOf: (todo) => todo.isCompleted,
       isArchivedAfterRolloverOf: (todo) => todo.isArchivedAfterRollover,
+      isInTodayOverviewOf: CompletionVisibilityPolicy.isInTodayOverview,
     );
 
     return Scaffold(
