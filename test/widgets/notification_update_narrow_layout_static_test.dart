@@ -1,6 +1,8 @@
 import 'dart:io';
 
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:duoyi/core/i18n.dart';
 
 void main() {
   test('通知设置铃声和音量控制在窄屏下仍保持同行紧凑布局', () {
@@ -40,7 +42,8 @@ void main() {
     expect(source, contains('class _UpdatePackageInfo'));
     expect(source, contains('_breakableUpdateAssetName'));
     expect(source, contains('softWrap: true'));
-    expect(source, contains("Text('安装包', style: labelStyle)"));
+    // 安装包标签已迁移 I18n（key 语义与旧字面量一致）。
+    expect(source, contains("I18n.tr('mine.update.package_label')"));
     expect(source, isNot(contains("'安装包：\${updater.latestAssetName}'")));
   });
 
@@ -97,9 +100,19 @@ void main() {
     expect(logoutEnd, greaterThan(logoutStart));
     final logout = source.substring(logoutStart, logoutEnd);
 
-    expect(logout, contains('退出后会清空本机账号数据'));
-    expect(logout, contains('时光币、主题、习惯、待办'));
-    expect(logout, contains('本机账号数据已清理'));
-    expect(logout, contains('本机数据清理失败，将在下次登录前重试'));
+    // 退出登录文案迁移 I18n：确认弹窗仍明确提示本机数据清理（key 语义）。
+    expect(logout, contains("I18n.tr('mine.logout.confirm_content')"));
+    expect(logout, contains("I18n.tr('mine.logout.done')"));
+    expect(logout, contains("I18n.tr('mine.logout.cleanup_failed')"));
+    expect(
+      I18n.tr('mine.logout.confirm_content'),
+      contains('时光币、主题、习惯、待办'),
+      reason: '退出确认必须列出会被清空的账号数据类型',
+    );
+    expect(I18n.tr('mine.logout.done'), contains('本机账号数据已清理'));
+    expect(
+      I18n.tr('mine.logout.cleanup_failed'),
+      contains('本机数据清理失败，将在下次登录前重试'),
+    );
   });
 }

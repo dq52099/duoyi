@@ -270,18 +270,18 @@ void main() {
       ),
     );
     expect(mine, contains('final compact = constraints.maxWidth < 360'));
-    expect(mine, contains("label: '目标管理'"));
-    expect(mine, contains("label: '生日'"));
-    expect(mine, contains("label: '纪念日'"));
+    expect(mine, contains("label: I18n.tr('goal.title')"));
+    expect(mine, contains("label: I18n.tr('anniversary.birthday')"));
+    expect(mine, contains("label: I18n.tr('anniversary.title')"));
     expect(mine, contains('child: anniversary.MemorialAnniversaryScreen()'));
     expect(mine, contains('child: anniversary.BirthdayScreen()'));
-    expect(mine, contains("label: '倒数日'"));
+    expect(mine, contains("label: I18n.tr('countdown.title')"));
     expect(mine, contains('child: CountdownScreen()'));
-    expect(mine, contains("label: '备份'"));
-    expect(mine, contains("label: '恢复数据'"));
-    expect(mine, contains("label: '许愿与反馈'"));
+    expect(mine, contains("label: I18n.tr('mine.tile.backup')"));
+    expect(mine, contains("label: I18n.tr('mine.tile.restore')"));
+    expect(mine, contains("label: I18n.tr('mine.tile.feedback')"));
     expect(mine, contains('FeedbackScreen(initialCategory: category)'));
-    expect(mine, contains("label: '扩展功能'"));
+    expect(mine, contains("label: I18n.tr('mine.tile.integrations')"));
     expect(mine, isNot(contains('AlmanacEntryMode.almanac')));
     expect(mine, contains('AlmanacEntryMode.calendar'));
     expect(mine, contains('BackupEntryMode.backup'));
@@ -298,16 +298,16 @@ void main() {
     // 的真实视觉位置。改以子组件注入锚点 const _MineRecordReviewGroup() 比较，
     // 仍保留"行动计划 → 记录回顾 → 日程日期"的主 build 视觉先后这一约束意图。
     expect(
-      mine.indexOf("title: '行动计划'"),
+      mine.indexOf("title: I18n.tr('mine.group.action_plan')"),
       lessThan(mine.indexOf("const _MineRecordReviewGroup()")),
     );
     expect(
       mine.indexOf("const _MineRecordReviewGroup()"),
-      lessThan(mine.indexOf("title: '日程日期'")),
+      lessThan(mine.indexOf("title: I18n.tr('mine.group.schedule')")),
     );
     expect(
-      mine.indexOf("title: '个性安全'"),
-      lessThan(mine.indexOf("title: '数据协作'")),
+      mine.indexOf("title: I18n.tr('mine.group.personal')"),
+      lessThan(mine.indexOf("title: I18n.tr('mine.group.data')")),
     );
   });
 

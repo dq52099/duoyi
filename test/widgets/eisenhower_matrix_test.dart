@@ -6,10 +6,17 @@ import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/widgets/eisenhower_matrix.dart';
 
-Widget _wrap(Widget child) {
+Widget _wrap(Widget child, {TextScaler textScaler = TextScaler.noScaling}) {
   return MultiProvider(
     providers: [ChangeNotifierProvider(create: (_) => ThemeProvider())],
-    child: MaterialApp(home: Scaffold(body: child)),
+    child: MaterialApp(
+      home: Builder(
+        builder: (context) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: Scaffold(body: child),
+        ),
+      ),
+    ),
   );
 }
 
@@ -177,5 +184,84 @@ void main() {
 
     expect(moves, hasLength(1));
     expect(moves.single.$2, EisenhowerQuadrant.urgentNotImportant);
+  });
+
+  testWidgets('textScaler 2.0：卡高按 1.6 倍封顶放大，预览不再底部溢出', (tester) async {
+    // 4 条任务覆盖「+N 更多」分支：曾因固定行高 24 在大字号下
+    // 低估实际行高，预览列底部溢出渲染黄黑警示条。
+    final todos = List.generate(
+      4,
+      (i) => _todo('t$i', EisenhowerQuadrant.notUrgentImportant),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        SingleChildScrollView(
+          child: EisenhowerMatrix(
+            quadrantGroups: {
+              EisenhowerQuadrant.notUrgentImportant: todos,
+              EisenhowerQuadrant.urgentImportant: [
+                _todo('a', EisenhowerQuadrant.urgentImportant),
+              ],
+            },
+            onQuadrantTap: (_) {},
+          ),
+        ),
+        textScaler: TextScaler.linear(2.0),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    // 卡高 160 × 封顶倍率 1.6 = 256；仍钉在 160 时大字号即溢出。
+    expect(
+      tester.getSize(find.byType(GestureDetector).first).height,
+      moreOrLessEquals(256),
+    );
+    // 预览行高随字号放大后仍按行数推导，未览部分进「更多」标签。
+    expect(find.textContaining('更多'), findsOneWidget);
+  });
+
+  testWidgets('textScaler 2.0：空象限空态在 Expanded 内自适应，不溢出', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        SingleChildScrollView(
+          child: EisenhowerMatrix(
+            quadrantGroups: const {},
+            onQuadrantTap: (_) {},
+          ),
+        ),
+        textScaler: TextScaler.linear(2.0),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('暂无任务'), findsNWidgets(4));
+    expect(
+      tester.getSize(find.byType(GestureDetector).first).height,
+      moreOrLessEquals(256),
+    );
+  });
+
+  testWidgets('textScaler 1.0：卡高保持 160，与基线一致无回归', (tester) async {
+    final todos = List.generate(
+      4,
+      (i) => _todo('t$i', EisenhowerQuadrant.notUrgentImportant),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        SingleChildScrollView(
+          child: EisenhowerMatrix(
+            quadrantGroups: {EisenhowerQuadrant.notUrgentImportant: todos},
+            onQuadrantTap: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(
+      tester.getSize(find.byType(GestureDetector).first).height,
+      moreOrLessEquals(160),
+    );
+    expect(find.textContaining('更多'), findsOneWidget);
   });
 }

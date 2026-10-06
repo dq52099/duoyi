@@ -60,7 +60,14 @@ class DiaryScreen extends StatelessWidget {
               onAction: () => _openEdit(context),
             )
           : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+              // 底部 padding 计入 Android 手势条 inset + FAB 余量，
+              // 避免“写日记”按钮滚动到底时压住最后一张日记卡。
+              padding: EdgeInsets.fromLTRB(
+                12,
+                12,
+                12,
+                MediaQuery.paddingOf(context).bottom + 88,
+              ),
               // 虚拟化：index 0 摘要头卡，随后（可选）洞察卡与列表头，
               // 其余索引按 entries 快照懒构建卡片，避免全量构建。
               itemCount: 2 + (insights.isNotEmpty ? 1 : 0) + entries.length,
@@ -122,7 +129,7 @@ class DiaryScreen extends StatelessWidget {
                   I18n.tr('diary.summary.this_month'),
                   '${provider.thisMonthCount}${I18n.tr('diary.entry.count_suffix')}',
                   Icons.calendar_month,
-                  Colors.green,
+                  cs.secondary,
                 ),
               ),
               _metricDivider(cs),
@@ -132,7 +139,7 @@ class DiaryScreen extends StatelessWidget {
                   I18n.tr('diary.summary.streak'),
                   '${provider.currentStreak} ${I18n.tr('unit.day')}',
                   Icons.bolt,
-                  Colors.orange,
+                  cs.tertiary,
                 ),
               ),
             ],
@@ -215,61 +222,69 @@ class DiaryScreen extends StatelessWidget {
     final total = dist.values.fold(0, (s, v) => s + v);
     showAppModalSheet(
       context: context,
-      builder: (_) => AppModalSheet(
-        title: I18n.tr('diary.mood.stats.title'),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (total == 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: Text(I18n.tr('diary.no_data'))),
-              )
-            else
-              ...Mood.values.map((m) {
-                final c = dist[m] ?? 0;
-                final pct = total == 0 ? 0.0 : c / total;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 52,
-                        child: Text(
-                          '${m.emoji} ${_moodLabel(m)}',
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      ),
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: pct,
-                            minHeight: 10,
-                            backgroundColor: Colors.grey.shade200,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final cs = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
+        return AppModalSheet(
+          title: I18n.tr('diary.mood.stats.title'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (total == 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: Text(I18n.tr('diary.no_data'))),
+                )
+              else
+                ...Mood.values.map((m) {
+                  final c = dist[m] ?? 0;
+                  final pct = total == 0 ? 0.0 : c / total;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 52,
+                          child: Text(
+                            '${m.emoji} ${_moodLabel(m)}',
+                            style: const TextStyle(fontSize: 13),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 40,
-                        child: Text(
-                          '$c${I18n.tr('diary.entry.count_suffix')}',
-                          textAlign: TextAlign.end,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: pct,
+                              minHeight: 10,
+                              backgroundColor:
+                                  cs.surfaceContainerHighest.withValues(
+                                    alpha: isDark ? 0.12 : 0.22,
+                                  ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-          ],
-        ),
-      ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 40,
+                          child: Text(
+                            '$c${I18n.tr('diary.entry.count_suffix')}',
+                            textAlign: TextAlign.end,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurface.withValues(alpha: 0.55),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -795,11 +810,12 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
             // Mood selector.
             Text(
               I18n.tr('diary.editor.mood_prompt'),
-              style: const TextStyle(fontSize: 13, color: Colors.grey),
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
               children: Mood.values.map((m) {
                 final selected = _mood == m;
                 return GestureDetector(
@@ -813,7 +829,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: selected ? cs.primary : Colors.grey.shade300,
+                        color: selected ? cs.primary : cs.outlineVariant,
                         width: 0.45,
                       ),
                     ),
@@ -835,7 +851,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
             // Weather selector.
             Text(
               I18n.tr('diary.editor.weather'),
-              style: const TextStyle(fontSize: 13, color: Colors.grey),
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 8),
             Wrap(

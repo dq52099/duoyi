@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../core/design_tokens.dart';
 import '../core/habit_icons.dart';
+import '../core/i18n.dart';
 import '../models/habit.dart';
 import '../providers/habit_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/account_local_data_cleaner.dart';
 import 'surface_components.dart';
 
@@ -27,8 +29,17 @@ class HabitWeeklyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<HabitProvider>();
+    final s = context.watch<ThemeProvider>().brand.strings;
     final data = provider.currentWeekProgress();
-    final labels = _weekdayLabels;
+    final labels = [
+      I18n.tr('habit.weekday.1'),
+      I18n.tr('habit.weekday.2'),
+      I18n.tr('habit.weekday.3'),
+      I18n.tr('habit.weekday.4'),
+      I18n.tr('habit.weekday.5'),
+      I18n.tr('habit.weekday.6'),
+      I18n.tr('habit.weekday.7'),
+    ];
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final todayDOW = now.weekday - 1;
@@ -100,7 +111,7 @@ class HabitWeeklyCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '本周概述',
+                      s.habitWeekOverview,
                       style: appSecondaryRouteTitleTextStyle(context).copyWith(
                         fontSize: 13,
                         fontWeight: DesignTokens.fontWeightRegular,
@@ -109,7 +120,7 @@ class HabitWeeklyCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '今日 $completedToday/$activeToday 达标',
+                      "${I18n.tr('habit.weekly.today_prefix')}$completedToday/$activeToday${I18n.tr('habit.weekly.today_suffix')}",
                       style: appSecondaryControlLabelStyle(context).copyWith(
                         fontSize: DesignTokens.fontSizeCaption,
                         color: cs.onSurface.withValues(alpha: 0.58),
@@ -145,7 +156,7 @@ class HabitWeeklyCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '进度',
+                      I18n.tr('habit.weekly.progress'),
                       style: appSecondaryControlLabelStyle(context).copyWith(
                         fontSize: 10,
                         color: cs.onSurface.withValues(alpha: 0.62),

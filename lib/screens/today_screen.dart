@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/completion_visibility_policy.dart';
@@ -131,7 +133,13 @@ class TodayScreen extends StatelessWidget {
         !reminderGroups.isEmpty || suggestions.isNotEmpty;
 
     // 问候语随主题品牌文案变化（BrandStrings.greetingFor 按时段取词）。
-    final greeting = '${s.greetingFor(now)}，${user.profile.username}';
+    // 分隔符与用户名兜底跟随 locale：en 下为 "Good afternoon, User"。
+    final rawUsername = user.profile.username.trim();
+    final displayUsername = rawUsername.isEmpty || rawUsername == '用户'
+        ? I18n.tr('profile.default_user')
+        : rawUsername;
+    final greeting =
+        '${s.greetingFor(now)}${I18n.tr('greeting.separator')}$displayUsername';
     final almanacCard = _TodayAlmanacCard(
       now: now,
       lunarText: lunar.chineseText,
@@ -155,6 +163,25 @@ class TodayScreen extends StatelessWidget {
           final aspectRatio = desktop
               ? (useTwoColumns ? 2.75 : 2.85)
               : (useTwoColumns ? 2.55 : 3.65);
+          // 数值行默认字号已提升到 DesignTokens.fontSizeMd，移动端 4 列在
+          // 中段宽度下按 3.65 宽高比算出的瓦片高度不足以容纳“标题+数值”
+          // 两行（还要扣掉卡片 0.5 描边内缩）。这里按当前系统字号缩放换算
+          // 内容所需高度给瓦片兜底：AppMetricCard 默认竖向内容为标题
+          // 11×1.1 + 间距 2 + 数值 fontSizeMd×1.1，外加卡内边距 20、描边
+          // 1、余量 2；宽裕时仍按宽高比走，任意字号下都不溢出。
+          final textScaler = MediaQuery.textScalerOf(context);
+          final minTileExtent =
+              textScaler.scale(11 * 1.1) +
+              2 +
+              textScaler.scale(DesignTokens.fontSizeMd * 1.1) +
+              23;
+          final tileExtent = desktop || useTwoColumns
+              ? null
+              : math.max(
+                  ((constraints.maxWidth - 3 * 8) / crossAxisCount) /
+                      aspectRatio,
+                  minTileExtent,
+                );
 
           // 桌面端使用更大的字体和图标
           final titleStyle = desktop
@@ -201,6 +228,7 @@ class TodayScreen extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: crossAxisCount,
             childAspectRatio: aspectRatio,
+            mainAxisExtent: tileExtent,
             mainAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
             crossAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
             children: [
@@ -274,7 +302,7 @@ class TodayScreen extends StatelessWidget {
       return _section(
         I18n.tr('today.todos'),
         subtitle:
-            '$todayTodosCount ${I18n.tr('today.unit.item')} · ${I18n.tr('today.completed')} $completedTodayCount · 无截止 ${noDueTodayTodos.length}',
+            "$todayTodosCount ${I18n.tr('today.unit.item')} · ${I18n.tr('today.completed')} $completedTodayCount · ${I18n.tr('today.no_due')} ${noDueTodayTodos.length}",
         onMore: () => TodayDetailRouter.open(context, TodaySectionKind.todos),
         child: todayTodos.isEmpty
             ? _TodayTodoEmptyState(
@@ -1947,7 +1975,7 @@ class _TodayTodoEmptyState extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '今天暂无待办，点击查看或添加任务',
+                      I18n.tr('today.todos.empty'),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -2044,7 +2072,7 @@ class _TodayNoDueDateLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Text(
-      '无截止日期',
+      I18n.tr('today.no_due_date'),
       style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
     );
   }
@@ -2060,17 +2088,25 @@ class _TodayTodoStatusPill extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final (label, icon, color) = switch (visual) {
       TodoVisualState.completed => (
-        '已完成',
+        I18n.tr('today.completed'),
         Icons.check_circle_outline,
         cs.tertiary,
       ),
-      TodoVisualState.overdue => ('逾期', Icons.priority_high_rounded, cs.error),
+      TodoVisualState.overdue => (
+        I18n.tr('todo.status.overdue'),
+        Icons.priority_high_rounded,
+        cs.error,
+      ),
       TodoVisualState.dueSoon => (
-        '临期',
+        I18n.tr('todo.status.due_soon'),
         Icons.alarm_outlined,
         Colors.orange.shade700,
       ),
-      _ => ('正常', Icons.radio_button_unchecked, cs.onSurfaceVariant),
+      _ => (
+        I18n.tr('todo.status.normal'),
+        Icons.radio_button_unchecked,
+        cs.onSurfaceVariant,
+      ),
     };
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -3103,7 +3139,10 @@ class _OverdueReminderBadge extends StatelessWidget {
           children: [
             Icon(Icons.priority_high_rounded, size: 10, color: color),
             const SizedBox(width: 2),
-            Text('逾期', style: TextStyle(fontSize: 10, color: color)),
+            Text(
+              I18n.tr('todo.status.overdue'),
+              style: TextStyle(fontSize: 10, color: color),
+            ),
           ],
         ),
       ),

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:duoyi/core/app_brand.dart';
+import 'package:duoyi/core/design_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,6 +29,42 @@ Color _resolveSelectedColor(
 }
 
 void main() {
+  test('三类卡面（Material Card / AppSurfaceCard / AppMetricCard）共用玻璃档', () {
+    for (final brand in [AppBrands.defaultBrand, AppBrands.liquidGlass]) {
+      final theme = brand.theme;
+      final style = theme.extension<AppSurfaceStyle>();
+      expect(style, isNotNull, reason: '${brand.id} 必须注册 AppSurfaceStyle');
+
+      // 填充：Material Card cardTheme.color 与玻璃档 cardFillColor 同源
+      // （AppSurfaceCard / AppMetricCard 直接读取 cardFillColor）。
+      expect(
+        theme.cardTheme.color,
+        style!.cardFillColor,
+        reason: '${brand.id} Material Card 填充须与玻璃档同源',
+      );
+
+      // 描边：Material Card cardTheme.shape.side 与玻璃档 cardBorder 同源。
+      final shape = theme.cardTheme.shape;
+      expect(shape, isA<RoundedRectangleBorder>());
+      final side = (shape! as RoundedRectangleBorder).side;
+      final glassBorder = style.cardBorder!;
+      expect(
+        side.color,
+        glassBorder.top.color,
+        reason: '${brand.id} Material Card 描边色须与玻璃档同源',
+      );
+      expect(
+        side.width,
+        glassBorder.top.width,
+        reason: '${brand.id} Material Card 描边宽须与玻璃档同源',
+      );
+
+      // 阴影：三类卡面统一 shadowXs（SurfaceCard / MetricCard 读取
+      // cardShadow；Material Card 经 cardTheme elevation 0 保持无立体）。
+      expect(style.cardShadow, DesignTokens.shadowXs);
+    }
+  });
+
   test('default brand uses Duoyi name', () {
     final source = File('lib/core/app_brand.dart').readAsStringSync();
     final strings = File('lib/core/brand_strings.dart').readAsStringSync();
@@ -108,6 +145,11 @@ void main() {
       final outlined = theme.outlinedButtonTheme.style;
       final text = theme.textButtonTheme.style;
       final segmented = theme.segmentedButtonTheme.style;
+      // 默认主题与液态玻璃主题走 iOS 档（44pt 触达），其余主题保持既有 38pt 档。
+      final usesIosFeel =
+          brand.style == BrandStyle.defaultBrand ||
+          brand.style == BrandStyle.liquidGlass;
+      final primaryButtonMinHeight = usesIosFeel ? 44 : 38;
 
       expect(filled, isNotNull, reason: '${brand.id} filled button theme');
       expect(elevated, isNotNull, reason: '${brand.id} elevated button theme');
@@ -128,7 +170,10 @@ void main() {
         greaterThanOrEqualTo(4.5),
         reason: '${brand.id} filled button foreground must stay readable.',
       );
-      expect(filled.minimumSize?.resolve(const <WidgetState>{})?.height, 38);
+      expect(
+        filled.minimumSize?.resolve(const <WidgetState>{})?.height,
+        primaryButtonMinHeight,
+      );
 
       final elevatedBg = _resolveColor(
         elevated!.backgroundColor,
@@ -143,7 +188,10 @@ void main() {
         greaterThanOrEqualTo(4.5),
         reason: '${brand.id} elevated button foreground must stay readable.',
       );
-      expect(elevated.minimumSize?.resolve(const <WidgetState>{})?.height, 38);
+      expect(
+        elevated.minimumSize?.resolve(const <WidgetState>{})?.height,
+        primaryButtonMinHeight,
+      );
 
       final outlinedFg = _resolveColor(
         outlined!.foregroundColor,

@@ -155,10 +155,17 @@ class _QuadrantCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = _bgColor();
+    // 系统大字号（textScaler 2.0）下固定卡高 160 与固定预览行高 24 不随字号
+    // 缩放，卡片底部溢出渲染黄黑警示条。参照 today_screen.dart 的兜底模式：
+    // 按 MediaQuery.textScalerOf 换算倍率放大并封顶 1.6 倍；空态分支在
+    // Expanded 内自适应，不受影响。
+    final fontScale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1.0).clamp(1.0, 1.6).toDouble();
     final card = GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 160,
+        height: 160 * fontScale,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
@@ -243,8 +250,10 @@ class _QuadrantCard extends StatelessWidget {
                         Expanded(
                           child: LayoutBuilder(
                             builder: (context, constraints) {
-                              const previewRowHeight = 24.0;
-                              const moreLabelHeight = 17.0;
+                              // 预览行高与「更多」标签预留高按同一倍率放大，
+                              // 保证行数推导在任何字号下都不超出实际可容行高。
+                              final previewRowHeight = 24.0 * fontScale;
+                              final moreLabelHeight = 17.0 * fontScale;
                               final reserveMoreLabel = items.length > 3;
                               final availableForRows =
                                   constraints.maxHeight -

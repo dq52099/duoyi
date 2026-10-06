@@ -151,10 +151,15 @@ void main() {
   test('我的页中个性设置是菜单入口，底部导航栏只在设置页出现', () {
     final source = File('lib/screens/mine_screen.dart').readAsStringSync();
 
-    final preferencesStart = source.indexOf("label: '个性设置'");
+    final preferencesStart = source.indexOf(
+      "label: I18n.tr('preferences.title')",
+    );
     expect(preferencesStart, greaterThanOrEqualTo(0));
 
-    final preferencesEnd = source.indexOf("label: '应用锁'", preferencesStart);
+    final preferencesEnd = source.indexOf(
+      "label: I18n.tr('app_lock.title')",
+      preferencesStart,
+    );
     expect(preferencesEnd, greaterThan(preferencesStart));
     final preferencesEntry = source.substring(preferencesStart, preferencesEnd);
 

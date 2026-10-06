@@ -46,6 +46,60 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'width=${scenario.width}');
     }
   });
+
+  testWidgets('系统大字号（2.0）下 KPI 卡随字号放大兜底，三断点不溢出', (tester) async {
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+
+    final overflowErrors = <FlutterErrorDetails>[];
+    final originalOnError = FlutterError.onError;
+    addTearDown(() => FlutterError.onError = originalOnError);
+    FlutterError.onError = (details) {
+      final exception = details.exception;
+      if (exception is FlutterError &&
+          exception.toString().contains('RenderFlex')) {
+        overflowErrors.add(details);
+      } else {
+        originalOnError?.call(details);
+      }
+    };
+
+    for (final scenario in const [
+      (width: 320.0, expectedColumns: 1),
+      (width: 390.0, expectedColumns: 2),
+      (width: 900.0, expectedColumns: 3),
+    ]) {
+      overflowErrors.clear();
+      tester.view.physicalSize = Size(scenario.width, 760);
+      tester.view.devicePixelRatio = 1;
+
+      await tester.pumpWidget(_wrapStatistics());
+      await tester.pump();
+
+      final grid = tester.widget<GridView>(
+        find.byKey(const ValueKey('statistics_kpi_grid')),
+      );
+      final delegate =
+          grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+      expect(
+        delegate.crossAxisCount,
+        scenario.expectedColumns,
+        reason: 'width=${scenario.width}',
+      );
+      expect(
+        delegate.mainAxisExtent,
+        isNotNull,
+        reason: 'width=${scenario.width} 大字号下必须提供随字号放大的瓦片高度兜底',
+      );
+      expect(
+        overflowErrors,
+        isEmpty,
+        reason: 'width=${scenario.width} textScale=2.0 不应出现 RenderFlex 溢出',
+      );
+    }
+  });
 }
 
 Widget _wrapStatistics() {

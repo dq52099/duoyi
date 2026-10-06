@@ -270,6 +270,10 @@ void main() {
             textScale: textScale,
           );
 
+          expect(
+            MediaQuery.sizeOf(tester.element(find.byType(AdminScreen))).width,
+            width,
+          );
           expect(find.text('总用户'), findsOneWidget);
           expect(find.text('12345'), findsOneWidget);
           expect(find.text('近 7 天注册'), findsOneWidget);
@@ -288,8 +292,9 @@ Future<void> _pumpAdminDashboard(
   required double width,
   required double textScale,
 }) async {
-  await tester.binding.setSurfaceSize(Size(width, 820));
-  addTearDown(() => tester.binding.setSurfaceSize(null));
+  tester.view.physicalSize = Size(width, 820);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
 
   if (Platform.environment['DUOYI_CAPTURE_WIDGET_POLISH_SCREENSHOT'] == '1') {
     await tester.runAsync(loadWidgetPolishScreenshotFonts);
@@ -331,8 +336,9 @@ Future<void> _pumpWeeklyCard(
   double textScale = 1,
   NavigatorObserver? observer,
 }) async {
-  await tester.binding.setSurfaceSize(Size(width, 820));
-  addTearDown(() => tester.binding.setSurfaceSize(null));
+  tester.view.physicalSize = Size(width, 820);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
 
   if (Platform.environment['DUOYI_CAPTURE_WIDGET_POLISH_SCREENSHOT'] == '1') {
     await tester.runAsync(loadWidgetPolishScreenshotFonts);

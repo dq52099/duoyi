@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/app_brand.dart';
+import '../core/i18n.dart';
 import '../providers/theme_provider.dart';
 import 'surface_components.dart';
 
@@ -69,14 +70,30 @@ class BrandRouteSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 路由页常以 `const BrandRouteSurface(child: XxxScreen())` 推入 Navigator：
+    // 语言热切换时父级不下发新实例，子树不会重建。这里监听 I18n.localeListenable
+    //（挂在 I18n 静态层，不依赖 Provider 作用域），并以 locale 作 KeyedSubtree
+    // 键强制子树重新挂载，const 子页内的 I18n/品牌文案才能即时跟随新语言。
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final routeBackground = theme.brightness == Brightness.dark
         ? cs.surface
         : cs.surfaceContainerLowest;
-    return Material(
-      color: routeBackground,
-      child: BrandBackground(child: AppSecondaryControlTheme(child: child)),
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        return Material(
+          color: routeBackground,
+          child: BrandBackground(
+            child: AppSecondaryControlTheme(
+              child: KeyedSubtree(
+                key: ValueKey<AppLocale>(locale),
+                child: child,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

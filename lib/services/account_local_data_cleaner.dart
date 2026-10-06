@@ -38,6 +38,7 @@ class AccountLocalDataCleaner {
     'todos',
     'habits',
     'pomodoro_sessions',
+    'pomodoro_running_snapshot',
     'pomodoro_focus_penalties',
     'pomodoro_config',
     'pomodoro_count_today',

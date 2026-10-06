@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,8 @@ import 'core/app_version.dart';
 import 'core/achievements.dart';
 import 'core/completion_visibility_policy.dart';
 import 'core/crash_guard.dart';
+import 'core/design_tokens.dart';
+import 'core/desktop_tokens.dart';
 import 'core/i18n.dart';
 import 'core/iterable_extensions.dart';
 import 'core/local_timezone_resolver.dart';
@@ -764,6 +767,11 @@ void main() async {
         guardedSync('todos', todoProvider.resetLocalState);
         guardedSync('habits', habitProvider.resetLocalState);
         guardedSync('pomodoro', pomodoroProvider.resetLocalState);
+        await guarded('pomodoro running snapshot', () async {
+          if (!await pomodoroProvider.waitForSnapshotWrites()) {
+            throw StateError('专注运行状态清理失败');
+          }
+        }, critical: true);
         guardedSync('countdowns', countdownProvider.resetLocalState);
         await _yieldForNextFrame(const Duration(milliseconds: 16));
         guardedSync('anniversaries', anniversaryProvider.resetLocalState);
@@ -2395,12 +2403,24 @@ void main() async {
 
   // 预约提醒（scheduler 派发）与即时通知共用品牌标题：启动注入一次，
   // 主题切换跟随，避免非 default 主题下两路通知标题不一致。
-  reminderScheduler.setStrings(themeProvider.brand.strings);
-  notificationService.setStrings(themeProvider.brand.strings);
-  themeProvider.addListener(() {
+  // 语言切换也会改变 AppBrand.strings（BrandStrings.forLocale 按 I18n 分发），
+  // 因此 localeProvider 变更时同样需要重推，通知/提醒文案才能跟随语言。
+  void pushBrandStringsToNotifiers() {
     reminderScheduler.setStrings(themeProvider.brand.strings);
     notificationService.setStrings(themeProvider.brand.strings);
+  }
+
+  pushBrandStringsToNotifiers();
+  themeProvider.addListener(() {
+    pushBrandStringsToNotifiers();
     queueHomeWidgetThemeUpdate(reason: 'theme provider changed');
+    queueHomeWidgetPush();
+  });
+  localeProvider.addListener(() {
+    pushBrandStringsToNotifiers();
+    // 语言切换同样改变小组件 payload 文案（_pushHomeWidget 走 I18n）与
+    // 品牌词条（brand.strings），必须重推小组件数据；主题 payload 与语言
+    // 无关，updateHomeWidgetThemeNow 的签名去重会自然跳过写入。
     queueHomeWidgetPush();
   });
   unawaited(updateHomeWidgetThemeNow(reason: 'startup theme loaded'));
@@ -2700,7 +2720,11 @@ Future<bool> _pushHomeWidget(
       .take(2)
       .toList();
   final anniversaryHighlights = anniversaryItems
-      .map((item) => '${item.title} · 还有 ${item.daysRemaining} 天')
+      .map(
+        (item) =>
+            '${item.title} · ${I18n.tr('widget.days_remaining_prefix')}'
+            '${item.daysRemaining}${I18n.tr('widget.days_remaining_suffix')}',
+      )
       .toList();
   final anniversaryHighlightIds = anniversaryItems
       .map((item) => 'duoyi://anniversary/${Uri.encodeComponent(item.id)}')
@@ -2710,7 +2734,11 @@ Future<bool> _pushHomeWidget(
       .take(3)
       .toList();
   final memorialHighlights = memorialItems
-      .map((item) => '${item.title} · 还有 ${item.daysRemaining} 天')
+      .map(
+        (item) =>
+            '${item.title} · ${I18n.tr('widget.days_remaining_prefix')}'
+            '${item.daysRemaining}${I18n.tr('widget.days_remaining_suffix')}',
+      )
       .toList();
   final memorialHighlightIds = memorialItems
       .map((item) => 'duoyi://anniversary/${Uri.encodeComponent(item.id)}')
@@ -2718,7 +2746,9 @@ Future<bool> _pushHomeWidget(
   final courseItems = c.todayCourses.take(3).toList();
   final courseHighlights = courseItems.map((course) {
     final location = course.location.isEmpty ? '' : ' · ${course.location}';
-    return '${course.startSection}-${course.endSection}节 ${course.name}$location';
+    return '${I18n.tr('widget.course_section_prefix')}'
+        '${course.startSection}-${course.endSection}'
+        '${I18n.tr('widget.course_section_suffix')}${course.name}$location';
   }).toList();
   final courseHighlightIds = courseItems
       .map((course) => 'duoyi://course/${Uri.encodeComponent(course.id)}')
@@ -2758,18 +2788,17 @@ Future<bool> _pushHomeWidget(
       .map(_homeWidgetEventDeepLink)
       .toList();
   final todayEventSummary = scheduleHighlights.isEmpty
-      ? '今日没有日程'
-      : '今日：${scheduleHighlights.first}';
+      ? I18n.tr('widget.no_schedule_today')
+      : "${I18n.tr('widget.today_prefix')}${scheduleHighlights.first}";
   final focusState = p.state;
-  final focusTimerEndsAtMillis = focusState.isRunning && !focusState.isCountUp
-      ? DateTime.now()
-            .add(Duration(seconds: focusState.remainingSeconds))
-            .millisecondsSinceEpoch
-      : 0;
+  final focusTimerEndsAtMillis = p.focusTimerEndsAtMillis;
   final focusTimerLabel = switch (focusState.type) {
-    PomodoroType.focus => focusState.isCountUp ? '正计时专注中' : '专注倒计时',
-    PomodoroType.shortBreak => '短休息倒计时',
-    PomodoroType.longBreak => '长休息倒计时',
+    PomodoroType.focus =>
+      focusState.isCountUp
+          ? I18n.tr('widget.focus_counting_up')
+          : I18n.tr('widget.focus_countdown'),
+    PomodoroType.shortBreak => I18n.tr('widget.short_break_countdown'),
+    PomodoroType.longBreak => I18n.tr('widget.long_break_countdown'),
   };
   return HomeWidgetService.push(
     force: force,
@@ -2802,17 +2831,20 @@ Future<bool> _pushHomeWidget(
     scheduleHighlightIds: scheduleHighlightIds,
     todayEventSummary: todayEventSummary,
     focusSummary: p.sessionCountToday == 0
-        ? '今日还未专注'
-        : '今日专注 ${p.sessionCountToday} 次',
-    habitSummary: habitPercent >= 100 ? '习惯已全部完成' : '习惯完成 $habitPercent%',
-    streakSummary: '当前连续 ${h.longestCurrentStreak} 天',
-    nextFocusLabel: '${p.config.focusDuration ~/ 60} 分钟专注',
+        ? I18n.tr('widget.focus_not_started')
+        : "${I18n.tr('widget.focus_today_prefix')}${p.sessionCountToday}"
+              "${I18n.tr('widget.focus_today_suffix')}",
+    habitSummary: habitPercent >= 100
+        ? I18n.tr('widget.habit_all_done')
+        : "${I18n.tr('widget.habit_progress_prefix')}$habitPercent"
+              "${I18n.tr('widget.habit_progress_suffix')}",
+    streakSummary:
+        "${I18n.tr('widget.streak_prefix')}${h.longestCurrentStreak}"
+        "${I18n.tr('widget.streak_suffix')}",
+    nextFocusLabel:
+        "${p.config.focusDuration ~/ 60}${I18n.tr('widget.next_focus_suffix')}",
     focusTimerCountUp: focusState.isCountUp,
-    focusTimerStartedAtMillis: focusState.isCountUp
-        ? now
-              .subtract(Duration(seconds: focusState.remainingSeconds))
-              .millisecondsSinceEpoch
-        : 0,
+    focusTimerStartedAtMillis: p.focusTimerStartedAtMillis,
     focusTimerRunning: focusState.isRunning,
     focusTimerRemainingSeconds: focusState.remainingSeconds,
     focusTimerTotalSeconds: focusState.totalSeconds,
@@ -2820,8 +2852,8 @@ Future<bool> _pushHomeWidget(
     focusTimerLabel: focusTimerLabel,
     habitQuickCheckId: quickCheckHabit?.id ?? '',
     habitQuickCheckLabel: quickCheckHabit == null
-        ? '点击进入习惯打卡'
-        : '打卡：${quickCheckHabit.name}',
+        ? I18n.tr('widget.habit_quick_check_hint')
+        : "${I18n.tr('widget.habit_checkin_prefix')}${quickCheckHabit.name}",
     theme: HomeWidgetThemePayload.fromThemeProvider(tp),
   );
 }
@@ -5179,7 +5211,7 @@ class MainShellState extends State<MainShell> {
   static const _fallbackVisibleTabs = <int>[0, 1, 2, 6];
   static const _desktopShellBreakpoint = 900.0;
   static const _desktopWideBreakpoint = 1200.0;
-  static const _desktopWideContentMaxWidth = 1200.0;
+  static const _desktopWideContentMaxWidth = DesktopTokens.maxContentWidth;
 
   int _currentIndex = 0; // Today first
   bool _allowHiddenCurrentIndex = false;
@@ -5425,19 +5457,76 @@ class MainShellState extends State<MainShell> {
     required bool showingHiddenTab,
     required List<NavigationDestination> destinations,
   }) {
+    // 底部导航"液态玻璃"：仅注册了 AppSurfaceStyle（默认主题）时启用——
+    // 半透明底色由 navigationBarTheme 档位控制，模糊在此包 BackdropFilter，
+    // 其余 7 套主题（navBarBlurSigma=0）保持原样，不引入模糊开销。
+    final navBarBlurSigma = appSurfaceStyleOf(context)?.navBarBlurSigma ?? 0;
+    final navBar = NavigationBar(
+      selectedIndex: selectedNavIndex < 0 ? 0 : selectedNavIndex,
+      onDestinationSelected: (i) => setState(() {
+        _currentIndex = safeVisibleTabs[i];
+        _builtTabs.add(_currentIndex);
+        _allowHiddenCurrentIndex = false;
+        _hasExplicitNavigation = true;
+      }),
+      destinations: destinations,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+    );
+    // 液态玻璃需要真实内容垫在导航条下：Scaffold 默认（extendBody=false）
+    // 的 body 不延伸到 bottomNavigationBar 之下，BackdropFilter 无内容可
+    // 模糊，半透明白底色只能合成在根背景上呈灰条。仅对玻璃主题开启
+    // extendBody，让 BrandBackground 铺到条下；页面内容用与导航条等高的
+    // 内层 Padding 避让，并把 Scaffold 因 extendBody 对 body 提升的
+    // MediaQuery bottom padding/viewInsets 归零——不延伸时 Scaffold 对 body
+    // 的基线本就是移除这两个 bottom 值（bottomNavigationBar 槽位
+    // removeBottomPadding、resizeToAvoidBottomInset 时 removeBottomInset），
+    // 归零后屏内 SafeArea/滚动尾部 padding/键盘消费者与 7 套非玻璃主题一致。
+    // 隐藏页返回条（不透明）与其余 7 套主题不延伸，观感不变。
+    final glassNavBarActive = navBarBlurSigma > 0 && !showingHiddenTab;
+    // web 渲染器下 BackdropFilter 逐帧回读像素、开销显著高于原生：模糊
+    // 降到轻量档（毛玻璃观感保留、像素回读量减半），原生保持全档。
+    final navBarBlurEffectiveSigma =
+        WebTarget.shouldReduceNavBarBlur &&
+            navBarBlurSigma > DesignTokens.navBarWebBlurSigma
+        ? DesignTokens.navBarWebBlurSigma
+        : navBarBlurSigma;
+    final rootMediaQuery = MediaQuery.of(context);
+    // NavigationBar 结构为 Material > SafeArea > SizedBox(height)，
+    // 总高 = navigationBarTheme.height + 系统底部 inset。
+    final navBarTotalHeight =
+        (NavigationBarTheme.of(context).height ?? 80.0) +
+        rootMediaQuery.padding.bottom;
+    final tabStack = IndexedStack(
+      index: safeIndex,
+      children: List.generate(
+        _tabCount,
+        (tab) => _builtTabs.contains(tab)
+            ? _buildTab(tab, safeVisibleTabs)
+            : _LazyTabPlaceholder(tab: tab),
+      ),
+    );
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: BrandBackground(
-        child: IndexedStack(
-          index: safeIndex,
-          children: List.generate(
-            _tabCount,
-            (tab) => _builtTabs.contains(tab)
-                ? _buildTab(tab, safeVisibleTabs)
-                : _LazyTabPlaceholder(tab: tab),
-          ),
-        ),
-      ),
+      extendBody: glassNavBarActive,
+      body: glassNavBarActive
+          ? MediaQuery(
+              // 对齐不延伸时的 Scaffold body 基线：两个 bottom 值归零，而非
+              // 还原为系统原值。系统 inset 已由导航条内部 SafeArea 消费
+              // （条高 = height + inset），也含在内层 Padding 里；若还原成
+              // 系统原值，屏内 SafeArea/滚动尾部 padding 会在其上再多避让
+              // 一次 inset（如批量操作条与导航条之间露出背景空条）。
+              data: rootMediaQuery.copyWith(
+                padding: rootMediaQuery.padding.copyWith(bottom: 0),
+                viewInsets: rootMediaQuery.viewInsets.copyWith(bottom: 0),
+              ),
+              child: BrandBackground(
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: navBarTotalHeight),
+                  child: tabStack,
+                ),
+              ),
+            )
+          : BrandBackground(child: tabStack),
       floatingActionButton:
           safeIndex == 0 &&
               quickCaptureFab &&
@@ -5455,17 +5544,17 @@ class MainShellState extends State<MainShell> {
                 _hasExplicitNavigation = true;
               }),
             )
-          : NavigationBar(
-              selectedIndex: selectedNavIndex < 0 ? 0 : selectedNavIndex,
-              onDestinationSelected: (i) => setState(() {
-                _currentIndex = safeVisibleTabs[i];
-                _builtTabs.add(_currentIndex);
-                _allowHiddenCurrentIndex = false;
-                _hasExplicitNavigation = true;
-              }),
-              destinations: destinations,
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            ),
+          : glassNavBarActive
+          ? ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: navBarBlurEffectiveSigma,
+                  sigmaY: navBarBlurEffectiveSigma,
+                ),
+                child: navBar,
+              ),
+            )
+          : navBar,
     );
   }
 
@@ -5516,6 +5605,7 @@ class MainShellState extends State<MainShell> {
             final shellBody = wide
                 ? Center(
                     child: ConstrainedBox(
+                      key: const ValueKey('desktop_web_body_max_width'),
                       constraints: const BoxConstraints(
                         maxWidth: _desktopWideContentMaxWidth,
                       ),

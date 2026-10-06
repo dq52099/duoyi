@@ -27,7 +27,7 @@ void main() {
     expect(today, contains("title: '已逾期事项'"));
     expect(today, contains('overdue: true'));
     expect(today, contains('class _OverdueReminderBadge'));
-    expect(today, contains("Text('逾期'"));
+    expect(today, contains("I18n.tr('todo.status.overdue')"));
     expect(today, contains('Icons.priority_high_rounded'));
     expect(today, contains('cs.error.withValues(alpha: 0.10)'));
     expect(today, contains('cs.error.withValues(alpha: 0.38)'));

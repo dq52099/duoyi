@@ -62,6 +62,48 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
     _page = 0;
   }
 
+  /// 通知类型 → 可跳转详情页的 section 映射。
+  ///
+  /// 只有 todo / habit / anniversary 关联到可打开的详情页；
+  /// pomodoro / general / location 没有对应详情页，点击保持"只切换已读"。
+  static TodaySectionKind? _relatedSectionKind(NotificationType type) {
+    switch (type) {
+      case NotificationType.todo:
+        return TodaySectionKind.todos;
+      case NotificationType.habit:
+        return TodaySectionKind.habits;
+      case NotificationType.anniversary:
+        return TodaySectionKind.anniversaries;
+      case NotificationType.pomodoro:
+      case NotificationType.general:
+      case NotificationType.location:
+        return null;
+    }
+  }
+
+  /// 点击卡片打开关联对象详情：先把这条记录标为已读，再跳转。
+  ///
+  /// - 关联对象已被删除时由 [TodayDetailRouter] 的空态兜底页承接，不会黑屏；
+  /// - 已读记录同样可以点击跳转（[NotificationService.markHistoryItemRead]
+  ///   对已读记录是幂等空操作）；
+  /// - 记录标为已读的 await 前后通过 [AccountLocalDataCleaner.accountDataGeneration]
+  ///   防护账号切换，切号后丢弃失效的跳转请求，防止跨账号串门打开上一个账号的对象。
+  Future<void> _openRelatedItem(NotificationItem item) async {
+    final kind = _relatedSectionKind(item.type);
+    final relatedId = item.relatedId;
+    if (kind == null || relatedId == null || relatedId.trim().isEmpty) return;
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    await context.read<NotificationService>().markHistoryItemRead(
+      item.id,
+      read: true,
+    );
+    if (!mounted) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
+    await TodayDetailRouter.open(context, kind, id: relatedId);
+  }
+
   List<NotificationItem> _filteredHistory(List<NotificationItem> history) {
     final query = _searchCtrl.text.trim().toLowerCase();
     return history
@@ -215,6 +257,12 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
                                 const SizedBox(height: 8),
                             itemBuilder: (context, index) {
                               final item = visibleHistory[index];
+                              final relatedKind = _relatedSectionKind(
+                                item.type,
+                              );
+                              final hasRelatedTarget =
+                                  relatedKind != null &&
+                                  (item.relatedId?.trim().isNotEmpty ?? false);
                               return _NotificationRecordCard(
                                 key: ValueKey('notification_record_${item.id}'),
                                 item: item,
@@ -224,6 +272,9 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
                                   item.id,
                                   read: !item.isRead,
                                 ),
+                                onOpenRelated: hasRelatedTarget
+                                    ? () => _openRelatedItem(item)
+                                    : null,
                               );
                             },
                           ),
@@ -399,14 +450,19 @@ class _NotificationHistoryFilters extends StatelessWidget {
 
 class _NotificationRecordCard extends StatelessWidget {
   final NotificationItem item;
-  final VoidCallback onShowDetails;
+  final VoidCallback? onShowDetails;
   final VoidCallback onToggleRead;
+
+  /// 非空时点击卡片跳到关联对象详情（todo / habit / anniversary）；
+  /// 为空时回退为原有的"点击只切换已读"。
+  final VoidCallback? onOpenRelated;
 
   const _NotificationRecordCard({
     super.key,
     required this.item,
-    required this.onShowDetails,
+    this.onShowDetails,
     required this.onToggleRead,
+    this.onOpenRelated,
   });
 
   @override
@@ -419,7 +475,7 @@ class _NotificationRecordCard extends StatelessWidget {
       border: item.isRead
           ? null
           : Border.all(color: cs.primary.withValues(alpha: 0.22), width: 0.45),
-      onTap: onShowDetails,
+      onTap: onOpenRelated ?? (item.isRead ? null : onToggleRead),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -508,14 +564,43 @@ class _NotificationRecordCard extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            tooltip: item.isRead ? '标为未读' : '标为已读',
-            onPressed: onToggleRead,
-            icon: Icon(
-              item.isRead
-                  ? Icons.mark_email_unread_outlined
-                  : Icons.mark_email_read_outlined,
-            ),
+          const SizedBox(width: 8),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (onShowDetails != null)
+                IconButton(
+                  key: ValueKey('notification_record_detail_button_${item.id}'),
+                  tooltip: '查看详情',
+                  onPressed: onShowDetails,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 32,
+                  ),
+                  icon: Icon(
+                    Icons.info_outline,
+                    size: 19,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              IconButton(
+                key: ValueKey('notification_record_toggle_read_${item.id}'),
+                tooltip: item.isRead ? '标为未读' : '标为已读',
+                onPressed: onToggleRead,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 32),
+                icon: Icon(
+                  item.isRead
+                      ? Icons.mark_email_unread_outlined
+                      : Icons.mark_email_read_outlined,
+                  size: 19,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ],
       ),

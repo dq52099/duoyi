@@ -143,8 +143,13 @@ void main() {
 
   test('Mine notification history entry hides zero history count', () {
     final source = File('lib/screens/mine_screen.dart').readAsStringSync();
-    final start = source.indexOf("label: '通知记录'");
-    final end = source.indexOf("label: '通知设置'", start);
+    final start = source.indexOf(
+      "label: I18n.tr('mine.tile.notification_history')",
+    );
+    final end = source.indexOf(
+      "label: I18n.tr('mine.tile.notification_settings')",
+      start,
+    );
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
     final entry = source.substring(start, end);
@@ -153,20 +158,33 @@ void main() {
     expect(entry, contains('const _UnreadDot()'));
     expect(entry, contains('notificationHistoryCount == 0'));
     expect(entry, contains('? null'));
-    expect(entry, contains(r"'$notificationHistoryCount 条'"));
+    expect(
+      entry,
+      contains(
+        r"'$notificationHistoryCount${I18n.tr('mine.tile.notification_history.count_suffix')}'",
+      ),
+    );
   });
 
   test(
     'Mine notification history and reminder preferences are separate entries',
     () {
       final source = File('lib/screens/mine_screen.dart').readAsStringSync();
-      final groupStart = source.indexOf("title: '通知支持'");
-      final groupEnd = source.indexOf("label: '公告'", groupStart);
+      final groupStart = source.indexOf(
+        "title: I18n.tr('mine.group.notifications')",
+      );
+      final groupEnd = source.indexOf(
+        "label: I18n.tr('announcement.title')",
+        groupStart,
+      );
       expect(groupStart, greaterThanOrEqualTo(0));
       expect(groupEnd, greaterThan(groupStart));
       final group = source.substring(groupStart, groupEnd);
 
-      expect(group, contains("label: '通知记录'"));
+      expect(
+        group,
+        contains("label: I18n.tr('mine.tile.notification_history')"),
+      );
       // 通知支持组经 _MineNotificationSupportGroup 子组件封装：tile 的 onTap
       // 通过 onOpenNotificationHistory 字段回调触发，而非内联私有方法。
       // 字段回调由调用方注入真实私有方法（见下方独立断言），因此这里只断言
@@ -175,8 +193,16 @@ void main() {
         group,
         contains('onTap: () => onOpenNotificationHistory(context)'),
       );
-      expect(group, contains("label: '通知设置'"));
-      expect(group, contains("subtitle: '提醒时间、权限、铃声、已注册提醒和记录保留'"));
+      expect(
+        group,
+        contains("label: I18n.tr('mine.tile.notification_settings')"),
+      );
+      expect(
+        group,
+        contains(
+          "subtitle: I18n.tr('mine.tile.notification_settings.subtitle')",
+        ),
+      );
       expect(
         group,
         contains('onTap: () => onOpenNotificationSettings(context)'),
@@ -203,28 +229,37 @@ void main() {
         ),
       );
       expect(
-        group.indexOf("label: '通知记录'"),
-        lessThan(group.indexOf("label: '通知设置'")),
+        group.indexOf("label: I18n.tr('mine.tile.notification_history')"),
+        lessThan(
+          group.indexOf("label: I18n.tr('mine.tile.notification_settings')"),
+        ),
       );
       expect(
         group,
         contains('hasUnreadNotificationHistory'),
         reason: '通知记录入口展示未读红点。',
       );
-      final settingsEntry = group.substring(group.indexOf("label: '通知设置'"));
+      final settingsEntry = group.substring(
+        group.indexOf("label: I18n.tr('mine.tile.notification_settings')"),
+      );
       expect(
         settingsEntry,
         isNot(contains('trailing: hasUnreadNotificationHistory')),
         reason: '通知设置是配置入口，不应该因为通知记录未读而挂红点。',
       );
-      expect(group, isNot(contains("label: '更多应用'")));
+      expect(group, isNot(contains("label: I18n.tr('mine.tile.more_apps')")));
 
-      final actionStart = source.indexOf("title: '行动计划'");
-      final actionEnd = source.indexOf("title: '记录回顾'", actionStart);
+      final actionStart = source.indexOf(
+        "title: I18n.tr('mine.group.action_plan')",
+      );
+      final actionEnd = source.indexOf(
+        "title: I18n.tr('mine.group.review')",
+        actionStart,
+      );
       expect(actionStart, greaterThanOrEqualTo(0));
       expect(actionEnd, greaterThan(actionStart));
       final actionGroup = source.substring(actionStart, actionEnd);
-      expect(actionGroup, contains("label: '更多应用'"));
+      expect(actionGroup, contains("label: I18n.tr('mine.tile.more_apps')"));
       expect(
         actionGroup,
         contains('onTap: () => _openMoreApplications(context)'),
@@ -414,16 +449,27 @@ void main() {
     expect(settingsScreen, contains('this.markReadOnOpen = false'));
     expect(settingsScreen, isNot(contains('service.markHistorySeen()')));
 
-    final supportStart = mine.indexOf("title: '通知支持'");
-    final supportEnd = mine.indexOf("label: '管理员后台'", supportStart);
+    final supportStart = mine.indexOf(
+      "title: I18n.tr('mine.group.notifications')",
+    );
+    final supportEnd = mine.indexOf(
+      "label: I18n.tr('mine.tile.admin')",
+      supportStart,
+    );
     expect(supportStart, greaterThanOrEqualTo(0));
     expect(supportEnd, greaterThan(supportStart));
     final supportGroup = mine.substring(supportStart, supportEnd);
-    expect(supportGroup, contains("label: '通知记录'"));
-    expect(supportGroup, contains("label: '通知设置'"));
+    expect(
+      supportGroup,
+      contains("label: I18n.tr('mine.tile.notification_history')"),
+    );
+    expect(
+      supportGroup,
+      contains("label: I18n.tr('mine.tile.notification_settings')"),
+    );
     expect(supportGroup, contains('hasUnreadNotificationHistory'));
     final settingsEntry = supportGroup.substring(
-      supportGroup.indexOf("label: '通知设置'"),
+      supportGroup.indexOf("label: I18n.tr('mine.tile.notification_settings')"),
     );
     expect(
       settingsEntry,
@@ -1231,6 +1277,82 @@ void main() {
     },
   );
 
+  test('scheduled history records infer todo/habit type from payload', () {
+    final source = File(
+      'lib/providers/notification_service.dart',
+    ).readAsStringSync();
+
+    void expectPayloadTypedHistory(String startNeedle, String endNeedle) {
+      final start = source.indexOf(startNeedle);
+      final end = source.indexOf(endNeedle, start);
+      expect(start, greaterThanOrEqualTo(0), reason: startNeedle);
+      expect(end, greaterThan(start), reason: endNeedle);
+      final method = source.substring(start, end);
+      final historyIndex = method.indexOf('_addScheduledToHistory(');
+      expect(historyIndex, greaterThanOrEqualTo(0), reason: startNeedle);
+      expect(
+        method.substring(historyIndex),
+        contains('type: _historyTypeFromPayload(payload)'),
+        reason:
+            '$startNeedle 的调度历史必须按 payload 推断类型，'
+            '否则通知记录页“点卡片跳详情”动线在真机上是断的。',
+      );
+    }
+
+    // 通用 push 出口（ReminderScheduler 待办/习惯提醒的真实路径）：
+    expectPayloadTypedHistory(
+      'Future<bool> scheduleOnceWithResult({',
+      '/// 上层（通知中心、深链处理或通知 action）调用此通用方法重新调度提醒。',
+    );
+    expectPayloadTypedHistory(
+      'Future<void> scheduleOnce({',
+      'Future<void> scheduleCalendarReminder({',
+    );
+    expectPayloadTypedHistory(
+      'Future<bool> scheduleDailyWithResult({',
+      '/// 每日固定时间的 push 通知',
+    );
+    expectPayloadTypedHistory(
+      'Future<void> scheduleDaily({',
+      '/// 取消某个已调度的通知。',
+    );
+    // “稍后提醒”沿用原 payload，应保持同样的类型标注。
+    expectPayloadTypedHistory(
+      'Future<void> snooze({',
+      '/// 通过 deep-link `duoyi://snooze/{id}?delay={minutes}` 触发的快捷路径。',
+    );
+
+    // snooze / scheduleOnce / scheduleDaily 三处原本不带 relatedId，
+    // 必须从 payload 补齐，否则跳详情拿不到对象 id。
+    for (final needle in [
+      'Future<void> snooze({',
+      'Future<void> scheduleOnce({',
+      'Future<void> scheduleDaily({',
+    ]) {
+      final start = source.indexOf(needle);
+      expect(start, greaterThanOrEqualTo(0), reason: needle);
+      final method = source.substring(start);
+      expect(
+        method.substring(method.indexOf('_addScheduledToHistory(')),
+        contains('relatedId: _relatedIdFromPayload(payload)'),
+        reason: needle,
+      );
+    }
+
+    // 推断规则：todo/habit deep-link 分别落到对应类型，其余保持 general。
+    expect(
+      source,
+      contains("'todo' => NotificationType.todo"),
+      reason: '缺少 todo payload 的类型推断',
+    );
+    expect(
+      source,
+      contains("'habit' => NotificationType.habit"),
+      reason: '缺少 habit payload 的类型推断',
+    );
+    expect(source, contains('_ => NotificationType.general'));
+  });
+
   test(
     'schedule helper records permission and plugin failures without crashing callers',
     () {
@@ -2020,10 +2142,7 @@ void main() {
       'lib/providers/notification_service.dart',
     ).readAsStringSync();
     final start = source.indexOf('Future<bool> _ensureChannelReadyOrRecord');
-    final end = source.indexOf(
-      'Future<bool> _scheduleOnceOrRecord',
-      start,
-    );
+    final end = source.indexOf('Future<bool> _scheduleOnceOrRecord', start);
     final helper = source.substring(start, end);
 
     expect(helper, contains('if (!PlatformInfo.isAndroid) return true;'));

@@ -36,6 +36,8 @@ class ThemePickerScreen extends StatelessWidget {
         return I18n.tr('theme.style.yanyun.description');
       case BrandStyle.botw:
         return I18n.tr('theme.style.botw.description');
+      case BrandStyle.liquidGlass:
+        return I18n.tr('theme.style.liquid_glass.description');
     }
   }
 
@@ -49,6 +51,7 @@ class ThemePickerScreen extends StatelessWidget {
       BrandStyle.zzz => I18n.tr('theme.style.zzz.name'),
       BrandStyle.yanyun => I18n.tr('theme.style.yanyun.name'),
       BrandStyle.botw => I18n.tr('theme.style.botw.name'),
+      BrandStyle.liquidGlass => I18n.tr('theme.style.liquid_glass.name'),
     };
   }
 

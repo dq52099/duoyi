@@ -48,15 +48,43 @@ void main() {
 
     test('main.dart 启动与主题切换均向 scheduler 注入品牌文案（接线锚点）', () {
       final source = File('lib/main.dart').readAsStringSync();
-      final injections = 'reminderScheduler.setStrings('
-          'themeProvider.brand.strings);'.allMatches(source).length;
+      // 注入逻辑收敛为共享函数 pushBrandStringsToNotifiers：启动、
+      // themeProvider.addListener 与 localeProvider.addListener 三处都必须
+      // 经过它——语言切换同样会改变 AppBrand.strings（BrandStrings.forLocale
+      // 按 I18n 分发），缺失任一处，非 default 主题或英文语言下预约提醒
+      // 标题将回退 default 中文文案（死代码回归）。
+      const fnName = 'pushBrandStringsToNotifiers';
+      final anchor = source.indexOf('void $fnName() {');
+      expect(anchor, greaterThanOrEqualTo(0), reason: '缺少品牌文案注入共享函数 $fnName');
+      final bodyEnd = source.indexOf('themeProvider.addListener', anchor);
+      expect(bodyEnd, greaterThan(anchor));
+      final body = source.substring(anchor, bodyEnd);
       expect(
-        injections,
-        2,
-        reason: 'reminderScheduler.setStrings 必须在启动与 '
-            'themeProvider.addListener 回调中各注入一次；缺失任一处，'
-            '非 default 主题下预约提醒标题将回退 default 文案（死代码回归）',
+        body,
+        contains('reminderScheduler.setStrings(themeProvider.brand.strings)'),
+        reason: '$fnName 必须向 scheduler 注入品牌文案',
       );
+      expect(
+        body,
+        contains('notificationService.setStrings(themeProvider.brand.strings)'),
+        reason: '$fnName 必须向 notificationService 注入品牌文案',
+      );
+      final calls = '$fnName();'.allMatches(source).length;
+      expect(
+        calls,
+        3,
+        reason:
+            '$fnName 必须在启动、themeProvider.addListener 与 '
+            'localeProvider.addListener 三处各直调一次',
+      );
+      // locale 监听除重推文案外，还需重推小组件数据（payload 文案随语言）。
+      final localeAnchor = source.indexOf('localeProvider.addListener(() {');
+      expect(localeAnchor, greaterThan(anchor), reason: '语言切换必须重推品牌文案并刷新小组件');
+      final localeBlockEnd = source.indexOf('});', localeAnchor);
+      expect(localeBlockEnd, greaterThan(localeAnchor));
+      final localeBlock = source.substring(localeAnchor, localeBlockEnd);
+      expect(localeBlock, contains('$fnName();'));
+      expect(localeBlock, contains('queueHomeWidgetPush();'));
     });
   });
 }

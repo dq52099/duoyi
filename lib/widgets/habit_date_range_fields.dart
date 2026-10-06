@@ -21,9 +21,22 @@ String habitDateRangeLabel(DateTime? startDate, DateTime? endDate) {
     return '${I18nDateFormat.date(startDate)} - ${I18nDateFormat.date(endDate)}';
   }
   if (startDate != null) {
-    return '${I18nDateFormat.date(startDate)} ${I18n.tr('habit.date_range.from_suffix')}';
+    return _dateWithRangeSuffix(
+      I18nDateFormat.date(startDate),
+      'habit.date_range.from_suffix',
+    );
   }
-  return '${I18nDateFormat.date(endDate!)} ${I18n.tr('habit.date_range.until_suffix')}';
+  return _dateWithRangeSuffix(
+    I18nDateFormat.date(endDate!),
+    'habit.date_range.until_suffix',
+  );
+}
+
+/// 单日期 + 起/止标记：zh 为后缀（「2026-01-01 起」）；en 的 from/until 是
+/// 前置介词，suffix 键结构无法表达，按语言调整语序（「from 2026-01-01」）。
+String _dateWithRangeSuffix(String date, String suffixKey) {
+  final suffix = I18n.tr(suffixKey);
+  return I18n.current == AppLocale.en ? '$suffix $date' : '$date $suffix';
 }
 
 class HabitDateRangeFields extends StatelessWidget {

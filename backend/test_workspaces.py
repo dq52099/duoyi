@@ -14,6 +14,9 @@ import main as api
 
 
 class WorkspaceApiTest(unittest.TestCase):
+    def test_liquid_glass_theme_catalog_matches_client_cost(self):
+        self.assertEqual(api.THEME_SHOP_CATALOG["brand"]["liquidGlass"], 280)
+
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self._old_db_path = api.DB_PATH

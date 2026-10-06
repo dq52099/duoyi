@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:duoyi/core/app_update_policy.dart';
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/services/api_client.dart';
 import 'package:duoyi/services/app_update_service.dart';
 import 'package:http/http.dart' as http;
@@ -799,7 +800,12 @@ void main() {
     expect(source, contains('_sanitizeDownloadUrlForVersion('));
     expect(source, contains('_downloadUrlLooksStaleForVersion'));
     expect(mineScreen, contains('updater.forceUpdateBlockedReason'));
-    expect(mineScreen, contains('安装包不可用'));
+    // 安装包不可用文案迁移 I18n：源码走 key，zh 词条语义保持不变。
+    expect(
+      mineScreen,
+      contains("I18n.tr('mine.update.package_broken_prefix')"),
+    );
+    expect(I18n.tr('mine.update.package_broken_prefix'), contains('安装包不可用'));
     expect(source, contains('hasDownloadedInstaller'));
     expect(source, contains('_restoreDownloadedInstaller'));
     expect(source, contains('_rememberDownloadedInstaller'));

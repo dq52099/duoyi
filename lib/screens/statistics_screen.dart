@@ -1,4 +1,5 @@
 import 'dart:io' show File;
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -300,12 +301,42 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   : width >= 720
                   ? 2.8
                   : 2.5;
+              // 系统大字号（如 font_scale 2.0）下，按固定 childAspectRatio
+              // 折算的瓦片高度装不下“标题+数值”两行文本，实测出现
+              // BOTTOM OVERFLOWED（1/2/3 列断点全部中招）。照搬
+              // today_screen 的兜底模式：按当前系统字号换算内容所需的
+              // 最小高度，通过 mainAxisExtent 取两者较大者。_Kpi 竖向
+              // 内容为标题 11×1.45 + 数值 16×1.45（各平台默认字体行高
+              // 系数实测 1.17～1.43 不等，取上限留裕度），与不随字号
+              // 缩放的图标盒 34 取大，外加卡内边距 20、描边 1、余量 6；
+              // 1.0 缩放下折算高度（68.15）低于最小断点的宽高比高度
+              // （320 宽单列 70.5），视觉完全不变；三个断点任意字号下
+              // 都不溢出。
+              final textScaler = MediaQuery.textScalerOf(context);
+              final minTileExtent =
+                  math.max(
+                    34.0,
+                    textScaler.scale(11 * 1.45) +
+                        textScaler.scale(16 * 1.45) +
+                        6,
+                  ) +
+                  23;
+              // GridView 撑满 LayoutBuilder 宽度，与框架内部折算公式
+              // （crossAxisExtent / aspectRatio）保持一致，1.0 缩放下
+              // 视觉不变。
+              final tileWidth =
+                  (width - (crossAxisCount - 1) * 8) / crossAxisCount;
+              final tileExtent = math.max(
+                tileWidth / childAspectRatio,
+                minTileExtent,
+              );
               return GridView.count(
                 key: const ValueKey('statistics_kpi_grid'),
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: crossAxisCount,
                 childAspectRatio: childAspectRatio,
+                mainAxisExtent: tileExtent,
                 mainAxisSpacing: 8,
                 crossAxisSpacing: 8,
                 children: [

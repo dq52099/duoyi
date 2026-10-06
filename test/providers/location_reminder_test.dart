@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:duoyi/models/location_reminder.dart';
 import 'package:duoyi/providers/location_reminder_provider.dart';
@@ -142,6 +145,77 @@ void main() {
       expect(decoded.trigger, r.trigger);
       expect(decoded.oneShot, r.oneShot);
       expect(decoded.updatedAt, updatedAt);
+    });
+  });
+
+  group('LocationReminderProvider.loadFromStorage 清空语义', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+
+    const storageKey = 'duoyi_location_reminders_v1';
+
+    String encodeOne(String id) => jsonEncode([
+      {
+        'id': id,
+        'title': '到家提醒',
+        'latitude': 39.9042,
+        'longitude': 116.4074,
+        'radiusMeters': 200,
+        'trigger': 'enter',
+        'oneShot': false,
+        'createdAt': '2026-05-15T10:00:00.000',
+        'updatedAt': '2026-05-15T10:00:00.000',
+      },
+    ]);
+
+    test('存储键被 wipe 后重载，内存旧提醒清空并通知 UI', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        storageKey: encodeOne('r1'),
+      });
+      final provider = LocationReminderProvider();
+      addTearDown(provider.dispose);
+      await provider.loadFromStorage();
+      expect(provider.reminders.length, 1);
+
+      // 模拟 BackupService.wipeAll：删除存储键后调用 loadFromStorage。
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(storageKey);
+
+      var notified = 0;
+      provider.addListener(() => notified++);
+      await provider.loadFromStorage();
+
+      expect(provider.reminders, isEmpty);
+      expect(provider.isLoaded, isTrue);
+      expect(notified, greaterThan(0));
+    });
+
+    test('wipe 后重载再写入，不会把旧数据复活持久化', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        storageKey: encodeOne('old-1'),
+      });
+      final provider = LocationReminderProvider();
+      addTearDown(provider.dispose);
+      await provider.loadFromStorage();
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(storageKey);
+      await provider.loadFromStorage();
+      expect(provider.reminders, isEmpty);
+
+      await provider.add(
+        LocationReminder(
+          id: 'new-1',
+          title: '到公司提醒',
+          latitude: 31.2304,
+          longitude: 121.4737,
+        ),
+      );
+
+      final raw = prefs.getString(storageKey);
+      expect(raw, isNotNull);
+      final list = jsonDecode(raw!) as List;
+      expect(list, hasLength(1));
+      expect((list.single as Map)['id'], 'new-1');
     });
   });
 }

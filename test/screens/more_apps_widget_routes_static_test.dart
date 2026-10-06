@@ -10,9 +10,11 @@ void main() {
       'lib/screens/more_apps_screen.dart',
     ).readAsStringSync();
 
-    final actionPlanStart = mine.indexOf("title: '行动计划'");
-    final reviewStart = mine.indexOf("title: '记录回顾'");
-    final moreAppsTile = mine.indexOf("label: '更多应用'");
+    final actionPlanStart = mine.indexOf(
+      "title: I18n.tr('mine.group.action_plan')",
+    );
+    final reviewStart = mine.indexOf("title: I18n.tr('mine.group.review')");
+    final moreAppsTile = mine.indexOf("label: I18n.tr('mine.tile.more_apps')");
     expect(actionPlanStart, greaterThanOrEqualTo(0));
     expect(reviewStart, greaterThan(actionPlanStart));
     expect(moreAppsTile, inInclusiveRange(actionPlanStart, reviewStart));

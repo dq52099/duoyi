@@ -316,11 +316,11 @@ ThemeData _buildAdminMobileTheme(ThemeData baseTheme) {
       fontWeight: FontWeight.normal,
     ),
     headlineSmall: (baseText.headlineSmall ?? const TextStyle()).copyWith(
-      fontSize: 20,
+      fontSize: 17,
       fontWeight: FontWeight.normal,
     ),
     headlineMedium: (baseText.headlineMedium ?? const TextStyle()).copyWith(
-      fontSize: 22,
+      fontSize: 18,
       fontWeight: FontWeight.normal,
     ),
   );

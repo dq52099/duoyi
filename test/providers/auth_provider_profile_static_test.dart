@@ -155,7 +155,7 @@ void main() {
       expect(mine, contains('void _showAvatarPreview(BuildContext context)'));
       expect(mine, contains('uploadAvatarBytes('));
       expect(mine, contains('_copyLocalAvatarFile(file)'));
-      expect(mine, contains("message: '修改头像'"));
+      expect(mine, contains("message: I18n.tr('mine.avatar.edit')"));
       expect(mine, contains('onPickAndSaveAvatar: _pickAndSaveAvatar'));
       expect(mine, contains('onTap: () => onPickAndSaveAvatar(context)'));
       expect(mine, isNot(contains("label: '个人资料'")));
@@ -396,13 +396,13 @@ void main() {
       "key: const ValueKey('mine_avatar_row')",
       'child: avatar',
       'SizedBox(width: compact ? 10 : 12)',
-      "label: '查看个人资料'",
+      "label: I18n.tr('mine.view_profile_semantics')",
       "key: const ValueKey('mine_user_info_row')",
       'Wrap(',
       'runSpacing: 4',
       'class _MineUserLineChip extends StatelessWidget',
       "label: '@\$usernameText'",
-      "label: '时光币 \$coins'",
+      r"label: '${I18n.tr('profile.coins')} $coins'",
       'Image.file(',
       'String? _localAvatarPath(String value)',
     ]) {

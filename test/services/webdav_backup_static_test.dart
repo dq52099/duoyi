@@ -47,7 +47,31 @@ void main() {
     expect(screen, contains('上传备份'));
     expect(screen, contains('云端合并'));
     expect(screen, contains('云端覆盖'));
-    expect(screen, contains('BackupService.importAll(raw, merge: merge)'));
+    // 4 处调用：粘贴导入(:_import)、文件导入(:_importBackupFile)、
+    // WebDAV 恢复(:_restoreFromWebDav) + 竞品导入回滚路径。
+    expect(
+      screen.split('await BackupService.importAll(').length - 1,
+      4,
+      reason: '备份屏应有 4 处 importAll 调用（3 个数据入口 + 竞品导入回滚）',
+    );
+    // 覆盖入口必须补传 clearMissing: true，让"覆盖"名副其实：备份中
+    // 不存在的本机数据将被删除（服务层 `clearMissing && !merge` 保证
+    // merge 合并入口不受影响；弹窗同步警告该后果）。
+    expect(
+      screen.split('clearMissing: true').length - 1,
+      4,
+      reason: '3 个覆盖入口 + 竞品导入回滚都应显式传 clearMissing: true',
+    );
+    // merge 维度钉死：3 个数据入口必须把入口的 merge 变量透传给服务层。
+    // 丢失透传会让"合并导入"静默变成 clearMissing: true 的覆盖导入
+    // （真删备份中不存在的本机数据），必须有守卫拦截；竞品导入回滚
+    // 是固定 merge: false，不计入。
+    expect(
+      screen.split('merge: merge,').length - 1,
+      3,
+      reason: '粘贴导入 / 文件导入 / WebDAV 恢复都应透传 merge: merge',
+    );
+    expect(screen, contains('backup.overwrite.will_delete_missing'));
     expect(screen, contains('await _reloadAll()'));
   });
 
@@ -60,7 +84,31 @@ void main() {
     expect(screen, contains("extensions: ['json', 'csv', 'txt']"));
     expect(screen, contains('file?.readAsString()'));
     expect(screen, contains('Future<void> _importBackupFile'));
-    expect(screen, contains('BackupService.importAll(raw, merge: merge)'));
+    // 4 处调用：粘贴导入(:_import)、文件导入(:_importBackupFile)、
+    // WebDAV 恢复(:_restoreFromWebDav) + 竞品导入回滚路径。
+    expect(
+      screen.split('await BackupService.importAll(').length - 1,
+      4,
+      reason: '备份屏应有 4 处 importAll 调用（3 个数据入口 + 竞品导入回滚）',
+    );
+    // 覆盖入口必须补传 clearMissing: true，让"覆盖"名副其实：备份中
+    // 不存在的本机数据将被删除（服务层 `clearMissing && !merge` 保证
+    // merge 合并入口不受影响；弹窗同步警告该后果）。
+    expect(
+      screen.split('clearMissing: true').length - 1,
+      4,
+      reason: '3 个覆盖入口 + 竞品导入回滚都应显式传 clearMissing: true',
+    );
+    // merge 维度钉死：3 个数据入口必须把入口的 merge 变量透传给服务层。
+    // 丢失透传会让"合并导入"静默变成 clearMissing: true 的覆盖导入
+    // （真删备份中不存在的本机数据），必须有守卫拦截；竞品导入回滚
+    // 是固定 merge: false，不计入。
+    expect(
+      screen.split('merge: merge,').length - 1,
+      3,
+      reason: '粘贴导入 / 文件导入 / WebDAV 恢复都应透传 merge: merge',
+    );
+    expect(screen, contains('backup.overwrite.will_delete_missing'));
     expect(screen, contains('文件合并'));
     expect(screen, contains('文件覆盖'));
     expect(screen, contains('从文件导入其他 App 数据'));
