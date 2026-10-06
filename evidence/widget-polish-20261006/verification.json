@@ -1,0 +1,77 @@
+{
+  "recorded_at_utc": "2026-10-06T10:58:42.471686+00:00",
+  "merge_commit": "0e8c4edd95113266c9385768effc3d23c0cd318b",
+  "upstream_commit": "0921b033c6d64a812a5e13d674653009fd89a48a",
+  "target_version": "1.1.44+140010",
+  "verification": {
+    "flutter_affected_files": 44,
+    "flutter_unique_cases_passed_in_batches": 521,
+    "flutter_full_repository_pass_claimed": false,
+    "widget_core_cases_passed": 88,
+    "widget_core_included_in_affected_count": true,
+    "backend_cases_passed": 154,
+    "dart_analyze_files": 22,
+    "viewport_fixture_analyze_clean": true,
+    "physical_device_verified": false
+  },
+  "android": {
+    "package": "com.duoyi.duoyi",
+    "version": "1.1.44",
+    "version_code": 140010,
+    "channel": "debug-verification-only",
+    "bytes": 149190999,
+    "sha256": "d97440a2e7df637e59011d8681f8580ba6ee6c04961b605ec1991cf497d1094c",
+    "signature_verified": true,
+    "signing_certificate_sha256": "909e3be9598683126ce5fb618babbcee632b84d587970a43a63ea54129282fdf",
+    "existing_debug_download_same_certificate": true,
+    "flutter_runtime_abis": [
+      "arm64-v8a"
+    ],
+    "widget_receivers_verified": 33,
+    "released_to_downloads": false
+  },
+  "web": {
+    "version": {
+      "app_name": "duoyi",
+      "version": "1.1.44",
+      "build_number": "140010",
+      "package_name": "duoyi"
+    },
+    "existing_downloads_preserved": 1,
+    "requests": [
+      {
+        "url": "http://127.0.0.1:8099/duoyi/version.json",
+        "status": 200
+      },
+      {
+        "url": "http://6688667.xyz/duoyi/version.json",
+        "status": 200
+      },
+      {
+        "url": "https://work.6688667.xyz/duoyi/version.json",
+        "status": 401
+      }
+    ],
+    "main.dart.js": {
+      "bytes": 9412210,
+      "sha256": "e1aef12799cb9774b8fb8c37c6ac8fca851a1ab58a6f4735ccd0311c9b33d9e4"
+    },
+    "flutter_bootstrap.js": {
+      "bytes": 10039,
+      "sha256": "951df4635310328c1b4fe0cbd6f43d1a57cc149e7a4688c41abf9d6c3cfb665e"
+    }
+  },
+  "backend": {
+    "service": "active",
+    "health_status": 200,
+    "native_policy": {
+      "current_version": "1.1.43",
+      "current_version_code": 140009,
+      "latest_version": "1.1.43",
+      "latest_version_code": 140009,
+      "minimum_supported_version": "1.1.43"
+    },
+    "source_commit": "0e8c4edd95113266c9385768effc3d23c0cd318b"
+  },
+  "release_signing_available": false
+}
