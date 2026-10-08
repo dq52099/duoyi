@@ -1,4 +1,4 @@
-import 'account_local_data_cleaner.dart';
+import 'widget_action_scope.dart';
 
 /// The receiver must check [isCurrent] again when deferred feedback is shown.
 typedef WidgetActionFeedback =
@@ -14,10 +14,8 @@ Future<void> runWidgetQuickTodoAction({
   required String failureMessage,
   void Function(Object error, StackTrace stack)? logError,
 }) async {
-  final generation = AccountLocalDataCleaner.accountDataGeneration;
-  bool isCurrent() =>
-      AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation) &&
-      isCallerAvailable();
+  final scope = WidgetActionScope(isCallerAvailable: isCallerAvailable);
+  bool isCurrent() => scope.isCurrent;
   void guardedFeedback(String message) {
     if (isCurrent()) feedback(message, isCurrent);
   }

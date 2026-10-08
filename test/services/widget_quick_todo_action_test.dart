@@ -473,40 +473,80 @@ void main() {
         ),
       );
 
-      final feedbackStart = source.indexOf(
+      final localFeedbackStart = source.indexOf(
+        'void _showWidgetActionFeedback(BuildContext context, String message)',
+      );
+      final shellFeedbackStart = source.indexOf(
         'void _showWidgetActionFeedbackFromShell(',
       );
-      final feedbackEnd = source.indexOf(
-        '\nFuture<void> _createQuickTodoFromAction',
-        feedbackStart,
+      final createActionStart = source.indexOf(
+        'Future<void> _createQuickTodoFromAction(',
       );
-      expect(feedbackStart, greaterThanOrEqualTo(0));
-      expect(feedbackEnd, greaterThan(feedbackStart));
-      final feedbackSource = source.substring(feedbackStart, feedbackEnd);
-      final generationCapture = feedbackSource.indexOf(
-        'final generation = AccountLocalDataCleaner.accountDataGeneration;',
+      expect(localFeedbackStart, greaterThanOrEqualTo(0));
+      expect(shellFeedbackStart, greaterThan(localFeedbackStart));
+      expect(createActionStart, greaterThan(shellFeedbackStart));
+      final localFeedbackSource = source.substring(
+        localFeedbackStart,
+        shellFeedbackStart,
       );
-      final postFrame = feedbackSource.indexOf(
-        'WidgetsBinding.instance.addPostFrameCallback',
+      final shellFeedbackSource = source.substring(
+        shellFeedbackStart,
+        createActionStart,
       );
-      final generationGuard = feedbackSource.indexOf(
-        'if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation))',
+      expect(localFeedbackSource, contains('WidgetActionScope().afterFrame'));
+      expect(
+        shellFeedbackSource,
+        contains('WidgetActionScope(isCallerAvailable: isCurrentAction)'),
       );
-      final predicate = feedbackSource.indexOf(
-        'if (isCurrentAction != null && !isCurrentAction()) return;',
-      );
-      final messenger = feedbackSource.indexOf(
-        'ScaffoldMessenger.of(latestContext)',
+      expect(shellFeedbackSource, contains('.afterFrame(() {'));
+      expect(
+        shellFeedbackSource,
+        contains('ScaffoldMessenger.of(latestContext)'),
       );
 
-      expect(generationCapture, greaterThanOrEqualTo(0));
-      expect(postFrame, greaterThanOrEqualTo(0));
-      expect(generationCapture, lessThan(postFrame));
-      expect(generationGuard, greaterThan(postFrame));
-      expect(generationGuard, lessThan(predicate));
-      expect(predicate, greaterThan(postFrame));
-      expect(messenger, greaterThan(predicate));
-      expect(messenger, greaterThan(generationGuard));
+      String functionSource(String startMarker, String endMarker) {
+        final start = source.indexOf(startMarker);
+        final end = source.indexOf(endMarker, start);
+        expect(start, greaterThanOrEqualTo(0));
+        expect(end, greaterThan(start));
+        return source.substring(start, end);
+      }
+
+      final hydrationSource = functionSource(
+        'Future<void> _dispatchWidgetUriAfterHydration(',
+        '\nFuture<void> _handleBoundWidgetAction',
+      );
+      final boundSource = functionSource(
+        'Future<void> _handleBoundWidgetAction(',
+        '\nFuture<void> _refreshWidgetsFromAction',
+      );
+      final refreshSource = functionSource(
+        'Future<void> _refreshWidgetsFromAction(',
+        '\nFuture<void> _checkInHabitFromWidgetAction',
+      );
+
+      for (final (name, function) in <(String, String)>[
+        ('hydration', hydrationSource),
+        ('bound action', boundSource),
+        ('refresh', refreshSource),
+      ]) {
+        final scope = function.indexOf('final scope = WidgetActionScope');
+        final firstAwait = function.indexOf('await _ensureHomeWidgetDataReady');
+        final guardedFeedback = function.indexOf(
+          'isCurrentAction: () => scope.isCurrent',
+        );
+        expect(scope, greaterThanOrEqualTo(0), reason: name);
+        expect(firstAwait, greaterThan(scope), reason: name);
+        expect(guardedFeedback, greaterThan(scope), reason: name);
+      }
+      expect(
+        refreshSource,
+        contains(
+          RegExp(
+            r'context\.mounted\s*&&\s*!_widgetAccountUnavailable\(context\.read<AuthProvider>\(\)\)',
+          ),
+        ),
+      );
     },
   );
 }

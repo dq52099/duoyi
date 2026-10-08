@@ -1,0 +1,105 @@
+{
+  "base_commit": "976f6dacf1dc625de6a4e93cb83019906d2852c6",
+  "recorded_at": "2026-10-08T03:13:50.331817+00:00",
+  "verification": {
+    "regression": {
+      "started": "2026-10-08T03:07:32.605626+00:00",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/widgets/widget_action_scope_test.dart",
+        "test/services/widget_quick_todo_action_test.dart",
+        "test/services/widget_quick_todo_persistence_test.dart",
+        "test/services/home_widget_cold_start_test.dart",
+        "test/services/home_widget_snapshot_test.dart",
+        "test/services/ios_widget_resources_test.dart",
+        "test/services/android_widget_resources_test.dart",
+        "test/providers/notification_service_test.dart",
+        "test/providers/todo_storage_safety_test.dart",
+        "test/screens/desktop_web_shell_widescreen_test.dart"
+      ],
+      "cwd": "/tmp/duoyi-update-deploy-20261005-isvisjkp/source",
+      "source_sha256": {
+        "lib/main.dart": "9a69ae16cd6103ab98ecd5d9a867f58f01bf853cccdfa0de1ecbaefe93351673",
+        "lib/services/widget_action_scope.dart": "caaf1b0f6d4d2c3e0a369b38cddced1c29bf2fa78d53f657a6abbb2d4d446ead",
+        "lib/services/widget_quick_todo_action.dart": "23655f11ea4aa89d791a29a1ea3adf00cc33a8c67a364657e650add07471f5b9",
+        "test/widgets/widget_action_scope_test.dart": "f0f6698748a2f97e6f0d8dfb95b00dda82d61f73d44c04584135cc8f017e592f",
+        "test/services/widget_quick_todo_action_test.dart": "5d68aad56e4b2dc6d0ae63bb70c0bfa9eea898725d75cada0578082093c9c9bc",
+        "test/services/widget_quick_todo_persistence_test.dart": "799b5b1d18c29fb57a370d5de23a0b41676549620201b8e91b2a7ee88db583e6",
+        "lib/services/home_widget_service.dart": "a0f27c6994ab53ffd476847498d7c32ef35dc1597619ec93f90c8313d24d9f88",
+        "lib/providers/todo_provider.dart": "933e150ff316a45a498726f1d2f3596ad9ea99253636c0455757a88e887ef1b1",
+        "ios/DuoyiWidgets/DuoyiWidgets.swift": "afd5837be51e5d234836c66de54021fca3c4d35c14c85d29bda8a291093698ef"
+      },
+      "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/widget-frame-scope-regression-oct8.log",
+      "pid": 2475327,
+      "exit_code": 0,
+      "finished": "2026-10-08T03:09:58.232394+00:00",
+      "source_sha256_after": {
+        "lib/main.dart": "9a69ae16cd6103ab98ecd5d9a867f58f01bf853cccdfa0de1ecbaefe93351673",
+        "lib/services/widget_action_scope.dart": "caaf1b0f6d4d2c3e0a369b38cddced1c29bf2fa78d53f657a6abbb2d4d446ead",
+        "lib/services/widget_quick_todo_action.dart": "23655f11ea4aa89d791a29a1ea3adf00cc33a8c67a364657e650add07471f5b9",
+        "test/widgets/widget_action_scope_test.dart": "f0f6698748a2f97e6f0d8dfb95b00dda82d61f73d44c04584135cc8f017e592f",
+        "test/services/widget_quick_todo_action_test.dart": "5d68aad56e4b2dc6d0ae63bb70c0bfa9eea898725d75cada0578082093c9c9bc",
+        "test/services/widget_quick_todo_persistence_test.dart": "799b5b1d18c29fb57a370d5de23a0b41676549620201b8e91b2a7ee88db583e6",
+        "lib/services/home_widget_service.dart": "a0f27c6994ab53ffd476847498d7c32ef35dc1597619ec93f90c8313d24d9f88",
+        "lib/providers/todo_provider.dart": "933e150ff316a45a498726f1d2f3596ad9ea99253636c0455757a88e887ef1b1",
+        "ios/DuoyiWidgets/DuoyiWidgets.swift": "afd5837be51e5d234836c66de54021fca3c4d35c14c85d29bda8a291093698ef"
+      },
+      "log_sha256": "08361e84b39346724257d93fd91ad35e45b0eb70add83098982d5c55e5728d04",
+      "source_unchanged": true,
+      "case_count": 140
+    },
+    "analyze": {
+      "started": "2026-10-08T03:10:15.094222+00:00",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "analyze",
+        "--no-pub",
+        "lib/main.dart",
+        "lib/services/widget_action_scope.dart",
+        "lib/services/widget_quick_todo_action.dart",
+        "test/widgets/widget_action_scope_test.dart",
+        "test/services/widget_quick_todo_action_test.dart",
+        "test/services/widget_quick_todo_persistence_test.dart"
+      ],
+      "cwd": "/tmp/duoyi-update-deploy-20261005-isvisjkp/source",
+      "source_sha256": {
+        "lib/main.dart": "9a69ae16cd6103ab98ecd5d9a867f58f01bf853cccdfa0de1ecbaefe93351673",
+        "lib/services/widget_action_scope.dart": "caaf1b0f6d4d2c3e0a369b38cddced1c29bf2fa78d53f657a6abbb2d4d446ead",
+        "lib/services/widget_quick_todo_action.dart": "23655f11ea4aa89d791a29a1ea3adf00cc33a8c67a364657e650add07471f5b9",
+        "test/widgets/widget_action_scope_test.dart": "f0f6698748a2f97e6f0d8dfb95b00dda82d61f73d44c04584135cc8f017e592f",
+        "test/services/widget_quick_todo_action_test.dart": "5d68aad56e4b2dc6d0ae63bb70c0bfa9eea898725d75cada0578082093c9c9bc",
+        "test/services/widget_quick_todo_persistence_test.dart": "799b5b1d18c29fb57a370d5de23a0b41676549620201b8e91b2a7ee88db583e6",
+        "lib/services/home_widget_service.dart": "a0f27c6994ab53ffd476847498d7c32ef35dc1597619ec93f90c8313d24d9f88",
+        "lib/providers/todo_provider.dart": "933e150ff316a45a498726f1d2f3596ad9ea99253636c0455757a88e887ef1b1",
+        "ios/DuoyiWidgets/DuoyiWidgets.swift": "afd5837be51e5d234836c66de54021fca3c4d35c14c85d29bda8a291093698ef"
+      },
+      "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/widget-frame-scope-analyze-oct8.log",
+      "pid": 2480732,
+      "exit_code": 0,
+      "finished": "2026-10-08T03:13:12.992227+00:00",
+      "source_sha256_after": {
+        "lib/main.dart": "9a69ae16cd6103ab98ecd5d9a867f58f01bf853cccdfa0de1ecbaefe93351673",
+        "lib/services/widget_action_scope.dart": "caaf1b0f6d4d2c3e0a369b38cddced1c29bf2fa78d53f657a6abbb2d4d446ead",
+        "lib/services/widget_quick_todo_action.dart": "23655f11ea4aa89d791a29a1ea3adf00cc33a8c67a364657e650add07471f5b9",
+        "test/widgets/widget_action_scope_test.dart": "f0f6698748a2f97e6f0d8dfb95b00dda82d61f73d44c04584135cc8f017e592f",
+        "test/services/widget_quick_todo_action_test.dart": "5d68aad56e4b2dc6d0ae63bb70c0bfa9eea898725d75cada0578082093c9c9bc",
+        "test/services/widget_quick_todo_persistence_test.dart": "799b5b1d18c29fb57a370d5de23a0b41676549620201b8e91b2a7ee88db583e6",
+        "lib/services/home_widget_service.dart": "a0f27c6994ab53ffd476847498d7c32ef35dc1597619ec93f90c8313d24d9f88",
+        "lib/providers/todo_provider.dart": "933e150ff316a45a498726f1d2f3596ad9ea99253636c0455757a88e887ef1b1",
+        "ios/DuoyiWidgets/DuoyiWidgets.swift": "afd5837be51e5d234836c66de54021fca3c4d35c14c85d29bda8a291093698ef"
+      },
+      "log_sha256": "d9c8b0c8fe5bedf57f03c183aab694977a32853f766d591822d2de9d82c4efc4",
+      "source_unchanged": true
+    }
+  },
+  "unique_flutter_cases": 140,
+  "added_actual_frame_cases": 11,
+  "main_deep_link_flows_executed": false,
+  "native_permission_ui_verified": false,
+  "new_deployment": false,
+  "goal_complete": false
+}

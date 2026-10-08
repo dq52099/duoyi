@@ -58,6 +58,7 @@ import 'services/daily_digest_reminder_sync.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/widget_quick_todo_action.dart';
+import 'services/widget_action_scope.dart';
 import 'services/ai_service.dart';
 import 'services/app_update_service.dart';
 import 'services/backend_reminder_email_sink.dart';
@@ -4074,11 +4075,7 @@ void _pushHiddenWidgetFallbackRoute(BuildContext context, Widget child) {
 }
 
 void _showWidgetActionFeedback(BuildContext context, String message) {
-  final generation = AccountLocalDataCleaner.accountDataGeneration;
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
-      return;
-    }
+  WidgetActionScope().afterFrame(() {
     final latestContext = mainShellKey.currentContext ?? context;
     if (!latestContext.mounted) return;
     ScaffoldMessenger.of(latestContext)
@@ -4097,12 +4094,7 @@ void _showWidgetActionFeedbackFromShell(
   String message, {
   bool Function()? isCurrentAction,
 }) {
-  final generation = AccountLocalDataCleaner.accountDataGeneration;
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
-      return;
-    }
-    if (isCurrentAction != null && !isCurrentAction()) return;
+  WidgetActionScope(isCallerAvailable: isCurrentAction).afterFrame(() {
     final latestContext = mainShellKey.currentContext;
     if (latestContext == null || !latestContext.mounted) return;
     ScaffoldMessenger.of(latestContext)
@@ -4168,6 +4160,7 @@ Future<void> _dispatchWidgetUriAfterHydration(
   PomodoroProvider pomodoro,
 ) async {
   final generation = AccountLocalDataCleaner.accountDataGeneration;
+  final scope = WidgetActionScope();
   try {
     await _ensureHomeWidgetDataReady?.call();
     if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
@@ -4182,12 +4175,16 @@ Future<void> _dispatchWidgetUriAfterHydration(
     _handleWidgetUri(uri, pomodoro, dataReady: true);
   } catch (e, st) {
     debugPrint('[WidgetAction] data preparation failed: $e\n$st');
-    _showWidgetActionFeedbackFromShell('内容加载失败，请重新打开多仪');
+    _showWidgetActionFeedbackFromShell(
+      '内容加载失败，请重新打开多仪',
+      isCurrentAction: () => scope.isCurrent,
+    );
   }
 }
 
 Future<void> _handleBoundWidgetAction(Uri uri) async {
   final generation = AccountLocalDataCleaner.accountDataGeneration;
+  final scope = WidgetActionScope();
   try {
     await _ensureHomeWidgetDataReady?.call();
     final current = await HomeWidgetService.isCurrentWidgetAction(uri);
@@ -4197,7 +4194,10 @@ Future<void> _handleBoundWidgetAction(Uri uri) async {
         context == null ||
         !context.mounted ||
         _widgetAccountUnavailable(context.read<AuthProvider>())) {
-      _showWidgetActionFeedbackFromShell('小组件内容已过期，请刷新后再操作');
+      _showWidgetActionFeedbackFromShell(
+        '小组件内容已过期，请刷新后再操作',
+        isCurrentAction: () => scope.isCurrent,
+      );
       return;
     }
     final parameters = Map<String, String>.from(uri.queryParameters)
@@ -4209,7 +4209,10 @@ Future<void> _handleBoundWidgetAction(Uri uri) async {
     );
   } catch (e, st) {
     debugPrint('[WidgetAction] validation failed: $e\n$st');
-    _showWidgetActionFeedbackFromShell('内容加载失败，请刷新小组件');
+    _showWidgetActionFeedbackFromShell(
+      '内容加载失败，请刷新小组件',
+      isCurrentAction: () => scope.isCurrent,
+    );
   }
 }
 
@@ -4218,6 +4221,11 @@ Future<void> _refreshWidgetsFromAction(
   bool showFeedback = true,
 }) async {
   final generation = AccountLocalDataCleaner.accountDataGeneration;
+  final scope = WidgetActionScope(
+    isCallerAvailable: () =>
+        context.mounted &&
+        !_widgetAccountUnavailable(context.read<AuthProvider>()),
+  );
   try {
     await _ensureHomeWidgetDataReady?.call();
     if (!context.mounted ||
@@ -4241,11 +4249,19 @@ Future<void> _refreshWidgetsFromAction(
       force: true,
     );
     if (showFeedback) {
-      _showWidgetActionFeedbackFromShell(ok ? '小组件已刷新' : '刷新失败，请稍后重试');
+      _showWidgetActionFeedbackFromShell(
+        ok ? '小组件已刷新' : '刷新失败，请稍后重试',
+        isCurrentAction: () => scope.isCurrent,
+      );
     }
   } catch (e, st) {
     debugPrint('[WidgetAction] refresh failed: $e\n$st');
-    if (showFeedback) _showWidgetActionFeedbackFromShell('刷新失败，请稍后重试');
+    if (showFeedback) {
+      _showWidgetActionFeedbackFromShell(
+        '刷新失败，请稍后重试',
+        isCurrentAction: () => scope.isCurrent,
+      );
+    }
   }
 }
 
