@@ -1,0 +1,56 @@
+{
+  "recorded_at_utc": "2026-10-08T02:01:33.392257+00:00",
+  "base_commit": "68f2f32f46e972bcf436bae11371316cd18c09ef",
+  "source_sha256": {
+    "lib/providers/auth_provider.dart": "d695f7e8bf227a2167bc8ffce4a00f741175ff1e117cc0ee431e14f71055083a",
+    "test/providers/auth_session_lease_test.dart": "36f5b1e2211b693f2d4eb3d22bf2aa8abe25370e025871bbe3514a8b9c834bdb",
+    "docs/profile-session-actions.md": "cc7f124141e9e90bb200a1645a37172bdb9521a34c200c345671e89037b43eb6"
+  },
+  "profile_ui_unchanged_sha256": "d46a74879479dcdc86668ef8d6f1ec8fa32bc0a511276f015c47aac39b624063",
+  "profile_ui_consumes_session_lease": false,
+  "regression": {
+    "total_cases_passed": 66,
+    "existing_profile_cases": 51,
+    "new_session_contract_cases": 15,
+    "exit_code": 0,
+    "finished_at_utc": "2026-10-08T02:00:21.349430+00:00",
+    "command": [
+      "/home/ubuntu/flutter/bin/flutter",
+      "test",
+      "--no-pub",
+      "--concurrency=1",
+      "--reporter=expanded",
+      "test/providers/auth_provider_profile_test.dart",
+      "test/providers/auth_session_lease_test.dart"
+    ],
+    "log_sha256": "c8d53a3b20024ca1ec8d03f33d2c188643f2906d6447a4b7d6ff2cb9c54fd35c",
+    "negative_cleanup_dispose_logs_expected": true
+  },
+  "source_review": {
+    "production_hash_matches_report": true,
+    "confirmed_core_blockers_remaining": 0,
+    "review_type": "read-only; not runtime evidence"
+  },
+  "new_deployment_performed": false,
+  "pending": [
+    "Profile and Mine avatar file-selection preflight must capture and consume the original lease",
+    "Password/email dialogs must bind their opening session and reject later submissions after account change",
+    "Dirty profile drafts must bind account lifecycle and preserve same-account edits and locale changes",
+    "WidgetKit phase/intent view integration, global route localization and full settings acceptance",
+    "Android/iOS device notification/widget/startup/frame timing evidence"
+  ],
+  "analyzer": {
+    "exit_code": 0,
+    "result": "No issues found",
+    "finished_at_utc": "2026-10-08T02:01:32.627956+00:00",
+    "command": [
+      "/home/ubuntu/flutter/bin/flutter",
+      "analyze",
+      "--no-pub",
+      "lib/providers/auth_provider.dart",
+      "test/providers/auth_session_lease_test.dart"
+    ],
+    "log_sha256": "dbb302ea6f49963e1d6f0cb4efd384eb24babdee453f0b21cedb78d4090c64ba"
+  },
+  "git_diff_check_exit_code": 0
+}

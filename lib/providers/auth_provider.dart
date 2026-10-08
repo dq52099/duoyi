@@ -107,6 +107,23 @@ class AccountLocalDataCleanupBlockedException implements Exception {
   String toString() => message;
 }
 
+/// Binds a form or local asynchronous action to its originating login session.
+///
+/// Obtain it before opening a picker/dialog and pass it to account mutations.
+/// Profile refreshes keep it valid; account lifecycle changes invalidate it.
+/// It does not replace a view's mounted check or cancel a dispatched request.
+final class AuthSessionLease {
+  final AuthProvider _owner;
+  final ApiClient _client;
+  final int _epoch;
+  final String? _userId;
+  final String? _token;
+
+  AuthSessionLease._(this._owner, this._client, this._epoch, AuthState state)
+    : _userId = state.userId,
+      _token = state.token;
+}
+
 /// 登录态 + 连接到服务器的 ApiClient。
 ///
 /// 服务器地址完全由 [AppConfig.bakedServerUrl] 决定，不可在运行时修改。
@@ -117,6 +134,8 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic> _serverConfig = const {};
   late ApiClient _client;
   int _stateMutationSerial = 0;
+  int _sessionEpoch = 0;
+  bool _isDisposed = false;
   bool _accountTransitionInProgress = false;
   bool _localAccountDataBlocked = false;
   Future<void> _accountWritebackTail = Future<void>.value();
@@ -158,6 +177,57 @@ class AuthProvider extends ChangeNotifier {
       (_serverConfig['maintenance_message'] ?? '').toString();
   ApiClient get client => _client;
 
+  AuthSessionLease captureSessionLease() {
+    if (_isDisposed ||
+        _accountTransitionInProgress ||
+        _localAccountDataBlocked) {
+      throw const ApiException('账号已发生变化，请在当前账号重试操作。');
+    }
+    if (!_state.isLoggedIn) {
+      throw const ApiException('请先登录后再操作。');
+    }
+    return AuthSessionLease._(this, _client, _sessionEpoch, _state);
+  }
+
+  bool isSessionLeaseCurrent(AuthSessionLease lease) {
+    return !_isDisposed &&
+        !_accountTransitionInProgress &&
+        !_localAccountDataBlocked &&
+        _state.isLoggedIn &&
+        identical(lease._owner, this) &&
+        identical(lease._client, _client) &&
+        lease._epoch == _sessionEpoch &&
+        lease._token == _state.token &&
+        // Legacy sessions may acquire their user ID during the first refresh.
+        (lease._userId == null || lease._userId == _state.userId);
+  }
+
+  void requireCurrentSessionLease(AuthSessionLease lease) {
+    if (!isSessionLeaseCurrent(lease)) {
+      throw const ApiException('账号已发生变化，请在当前账号重试操作。');
+    }
+  }
+
+  void _guardSessionLease(AuthSessionLease? lease) {
+    if (lease != null) requireCurrentSessionLease(lease);
+  }
+
+  void _requireNotDisposed() {
+    if (_isDisposed) {
+      throw const ApiException('账号已发生变化，请在当前账号重试操作。');
+    }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _sessionEpoch++;
+    _stateMutationSerial++;
+    _refreshMeInFlight = null;
+    _serverConfigRefreshInFlight = null;
+    super.dispose();
+  }
+
   AuthProvider({
     ApiClient? client,
     AuthState initialState = const AuthState(),
@@ -169,19 +239,20 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage({bool refreshServerConfig = true}) async {
-    if (_accountTransitionInProgress) {
+    if (_isDisposed || _accountTransitionInProgress) {
       throw const ApiException('账号正在切换，请稍后重试。');
     }
     // Remain closed if hydration or its cleanup barrier fails or times out.
     _localAccountDataBlocked = true;
     _accountTransitionInProgress = true;
+    _sessionEpoch++;
     _markAccountMutation('storage_hydration');
     notifyListeners();
     try {
       await _queueAccountWriteback(_loadFromStorageNow);
     } finally {
       _accountTransitionInProgress = false;
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
     }
     if (refreshServerConfig) {
       await refreshServerConfigFromServer();
@@ -190,9 +261,12 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _loadFromStorageNow() async {
     final prefs = await SharedPreferences.getInstance();
+    if (_isDisposed) return;
     // 清理旧版本可能遗留的本地服务器覆盖；当前策略不允许 APP 内改地址。
     await prefs.remove('auth_base_url');
+    _requireNotDisposed();
     await prefs.remove('auth_base_url_admin');
+    _requireNotDisposed();
 
     _baseUrl = AppConfig.bakedServerUrl;
 
@@ -208,13 +282,16 @@ class AuthProvider extends ChangeNotifier {
     } else {
       await _clearResidualAccountDataIfSignedOut(prefs);
     }
+    if (_isDisposed) return;
     _state = loadedState;
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
     await _persistAccountDataOwner(prefs, _state);
+    _requireNotDisposed();
     _localAccountDataBlocked = false;
   }
 
   Future<void> refreshServerConfigFromServer({bool force = false}) {
+    if (_isDisposed) return Future<void>.value();
     final inFlight = _serverConfigRefreshInFlight;
     if (inFlight != null) return inFlight;
     final lastRefreshAt = _lastServerConfigRefreshAt;
@@ -239,11 +316,12 @@ class AuthProvider extends ChangeNotifier {
     }
     try {
       final cfg = await _client.get('/api/config');
+      if (_isDisposed) return;
       _lastServerConfigRefreshAt = DateTime.now();
       if (jsonEncode(_serverConfig) == jsonEncode(cfg)) return;
       _serverConfig = cfg;
       onServerConfigChanged?.call(cfg);
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
     } catch (_) {
       // offline or server down — 保留旧配置
     }
@@ -274,7 +352,8 @@ class AuthProvider extends ChangeNotifier {
     int generation, {
     bool allowTransition = false,
   }) {
-    return (allowTransition || !_accountTransitionInProgress) &&
+    return !_isDisposed &&
+        (allowTransition || !_accountTransitionInProgress) &&
         generation == _stateMutationSerial &&
         state.token == _state.token &&
         state.userId == _state.userId;
@@ -335,23 +414,26 @@ class AuthProvider extends ChangeNotifier {
     // Claim the transition before queuing. A cloud writeback must never queue
     // a refresh behind this transition while cleanup waits for that writeback.
     _accountTransitionInProgress = true;
+    _sessionEpoch++;
     _markAccountMutation(reason);
     notifyListeners();
     try {
       await _queueAccountWriteback(() async {
+        _requireNotDisposed();
         final previousState = _state;
         final nextState = _stateFromAuthResponse(
           payload,
           fallbackState: const AuthState(),
         );
         await _notifyAccountIdentityChanging(previousState, nextState);
+        _requireNotDisposed();
         _state = nextState;
         _client = ApiClient(baseUrl: _baseUrl, token: nextState.token);
         await _persistAndNotifyAccount(payload, allowTransition: true);
       });
     } finally {
       _accountTransitionInProgress = false;
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
     }
   }
 
@@ -442,7 +524,9 @@ class AuthProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>> sendBindEmailCode({
     required String email,
+    AuthSessionLease? sessionLease,
   }) async {
+    _guardSessionLease(sessionLease);
     final result = await _postFirstAvailable(
       const [
         '/api/me/email-code',
@@ -482,6 +566,7 @@ class AuthProvider extends ChangeNotifier {
       ],
       {'email': email, 'purpose': 'bind'},
     );
+    _guardSessionLease(sessionLease);
     _throwIfEmailCodeNotDelivered(result);
     return result;
   }
@@ -548,6 +633,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    if (_isDisposed) return;
     if (_accountTransitionInProgress) return;
     if (!_state.isLoggedIn) {
       await _clearLocalSession();
@@ -558,21 +644,32 @@ class AuthProvider extends ChangeNotifier {
     // revoke this token. A blocked cleanup must leave the still-valid session
     // intact so the user can retry later.
     final tokenAtStart = _state.token;
+    final clientAtStart = _client;
+    final sessionEpochAtStart = _sessionEpoch;
     await _notifyBeforeAccountLogout();
-    if (_accountTransitionInProgress || _state.token != tokenAtStart) return;
+    if (_isDisposed ||
+        _accountTransitionInProgress ||
+        _state.token != tokenAtStart ||
+        !identical(clientAtStart, _client) ||
+        _sessionEpoch != sessionEpochAtStart) {
+      return;
+    }
     _accountTransitionInProgress = true;
+    _sessionEpoch++;
     _markAccountMutation('logout_cleanup');
     notifyListeners();
     try {
       await _accountWritebackTail;
+      _requireNotDisposed();
       await _logoutAfterCleanup();
     } finally {
       _accountTransitionInProgress = false;
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
     }
   }
 
   Future<void> _logoutAfterCleanup() async {
+    _requireNotDisposed();
     final logoutClient = _client;
     Object? cleanupError;
     StackTrace? cleanupStackTrace;
@@ -587,6 +684,7 @@ class AuthProvider extends ChangeNotifier {
       cleanupStackTrace = st;
       await _clearAccountScopedPreferencesAfterLogoutCleanupFailure();
     }
+    _requireNotDisposed();
     try {
       await _sendFirstAvailable(
         const ['POST'],
@@ -612,20 +710,23 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _clearLocalSession() async {
-    if (_accountTransitionInProgress) return;
+    if (_isDisposed || _accountTransitionInProgress) return;
     _accountTransitionInProgress = true;
+    _sessionEpoch++;
     _markAccountMutation('session_cleanup');
     notifyListeners();
     try {
       await _accountWritebackTail;
+      _requireNotDisposed();
       await _clearLocalSessionAfterCleanup();
     } finally {
       _accountTransitionInProgress = false;
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
     }
   }
 
   Future<void> _clearLocalSessionAfterCleanup() async {
+    _requireNotDisposed();
     Object? cleanupError;
     StackTrace? cleanupStackTrace;
     try {
@@ -639,6 +740,7 @@ class AuthProvider extends ChangeNotifier {
       cleanupStackTrace = st;
       await _clearAccountScopedPreferencesAfterLogoutCleanupFailure();
     }
+    _requireNotDisposed();
     await _resetLocalSession();
     if (cleanupError != null) {
       Error.throwWithStackTrace(cleanupError, cleanupStackTrace!);
@@ -646,13 +748,16 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _resetLocalSession() async {
+    if (_isDisposed) return;
     _state = const AuthState();
     _markAccountMutation('logout');
     _client = ApiClient(baseUrl: _baseUrl);
     final prefs = await SharedPreferences.getInstance();
+    if (_isDisposed) return;
     await prefs.remove('auth_state');
+    _requireNotDisposed();
     await prefs.remove(AccountLocalDataCleaner.accountDataOwnerKey);
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
   }
 
   Future<void> _notifyBeforeAccountLogout() async {
@@ -667,6 +772,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _clearAccountScopedPreferencesAfterLogoutCleanupFailure() async {
+    _requireNotDisposed();
     try {
       await AccountLocalDataCleaner.clearSharedPreferences();
     } catch (e, st) {
@@ -834,7 +940,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> refreshMe({String reason = 'manual', bool force = false}) {
-    if (!_state.isLoggedIn || _accountTransitionInProgress) {
+    if (_isDisposed || !_state.isLoggedIn || _accountTransitionInProgress) {
       return Future<void>.value();
     }
     final inFlight = _refreshMeInFlight;
@@ -875,12 +981,14 @@ class AuthProvider extends ChangeNotifier {
       _lastRefreshMeMutationSerial = mutationSerialAtStart;
       // Cloud sync may await this refresh while a transition drains sync.
       // Do not enqueue behind that transition, even if the HTTP already ended.
-      if (_accountTransitionInProgress ||
+      if (_isDisposed ||
+          _accountTransitionInProgress ||
           _state.token != tokenAtStart ||
           _stateMutationSerial != mutationSerialAtStart) {
         return;
       }
       await _queueAccountWriteback(() async {
+        if (_isDisposed) return;
         if (requestId != _refreshMeRequestSerial ||
             requestId < _lastAppliedRefreshMeRequestSerial) {
           debugPrint(
@@ -924,7 +1032,8 @@ class AuthProvider extends ChangeNotifier {
         }
       });
     } on ApiException catch (e) {
-      if (_accountTransitionInProgress ||
+      if (_isDisposed ||
+          _accountTransitionInProgress ||
           !_state.isLoggedIn ||
           _state.token != tokenAtStart ||
           _stateMutationSerial != mutationSerialAtStart ||
@@ -949,11 +1058,14 @@ class AuthProvider extends ChangeNotifier {
     String? expectedToken,
     String? expectedUserId,
   }) async {
-    if (!_state.isLoggedIn || _accountTransitionInProgress) return;
+    if (_isDisposed || !_state.isLoggedIn || _accountTransitionInProgress) {
+      return;
+    }
     final requestClient = _client;
     final generation = _stateMutationSerial;
     await _queueAccountWriteback(() async {
-      if (_accountTransitionInProgress ||
+      if (_isDisposed ||
+          _accountTransitionInProgress ||
           !identical(requestClient, _client) ||
           generation != _stateMutationSerial ||
           !_state.isLoggedIn) {
@@ -1027,7 +1139,12 @@ class AuthProvider extends ChangeNotifier {
     return res;
   }
 
-  Future<void> updateProfile({String? displayName, String? bio}) async {
+  Future<void> updateProfile({
+    String? displayName,
+    String? bio,
+    AuthSessionLease? sessionLease,
+  }) async {
+    _guardSessionLease(sessionLease);
     final requestClient = _client;
     final generation = _stateMutationSerial;
     _guardAccountRequest(requestClient, generation);
@@ -1055,9 +1172,15 @@ class AuthProvider extends ChangeNotifier {
       generation: generation,
       reason: 'update_profile',
     );
+    _guardSessionLease(sessionLease);
   }
 
-  Future<void> bindEmail({required String email, required String code}) async {
+  Future<void> bindEmail({
+    required String email,
+    required String code,
+    AuthSessionLease? sessionLease,
+  }) async {
+    _guardSessionLease(sessionLease);
     final requestClient = _client;
     final generation = _stateMutationSerial;
     _guardAccountRequest(requestClient, generation);
@@ -1094,12 +1217,15 @@ class AuthProvider extends ChangeNotifier {
       generation: generation,
       reason: 'bind_email',
     );
+    _guardSessionLease(sessionLease);
   }
 
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
+    AuthSessionLease? sessionLease,
   }) async {
+    _guardSessionLease(sessionLease);
     final requestClient = _client;
     final generation = _stateMutationSerial;
     _guardAccountRequest(requestClient, generation);
@@ -1117,13 +1243,16 @@ class AuthProvider extends ChangeNotifier {
       featureName: '密码修改',
     );
     _guardAccountRequest(requestClient, generation);
+    _guardSessionLease(sessionLease);
     await _clearLocalSession();
   }
 
   Future<void> uploadAvatarBytes({
     required String filename,
     required Uint8List bytes,
+    AuthSessionLease? sessionLease,
   }) async {
+    _guardSessionLease(sessionLease);
     final requestClient = _client;
     final generation = _stateMutationSerial;
     _guardAccountRequest(requestClient, generation);
@@ -1152,6 +1281,7 @@ class AuthProvider extends ChangeNotifier {
       generation: generation,
       reason: 'upload_avatar',
     );
+    _guardSessionLease(sessionLease);
   }
 
   Future<Map<String, dynamic>> requestPasswordReset({required String account}) {
@@ -1433,6 +1563,7 @@ class AuthProvider extends ChangeNotifier {
     for (final path in paths) {
       for (final method in methods) {
         try {
+          _requireNotDisposed();
           if (client == null) _guardAccountRequest(requestClient, generation);
           final result = switch (method) {
             'POST' => await requestClient.requestWithoutRouteDiagnosis(
@@ -1456,6 +1587,7 @@ class AuthProvider extends ChangeNotifier {
               body,
             ),
           };
+          _requireNotDisposed();
           if (client == null) _guardAccountRequest(requestClient, generation);
           return result;
         } on ApiException catch (e) {
@@ -1464,6 +1596,7 @@ class AuthProvider extends ChangeNotifier {
         }
       }
     }
+    _requireNotDisposed();
     throw await requestClient.missingRoutesException(
       featureName: featureName,
       paths: paths,
@@ -1472,7 +1605,8 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _guardAccountRequest(ApiClient requestClient, int generation) {
-    if (_accountTransitionInProgress ||
+    if (_isDisposed ||
+        _accountTransitionInProgress ||
         !identical(requestClient, _client) ||
         generation != _stateMutationSerial) {
       throw const ApiException('账号已发生变化，请在当前账号重试操作。');
@@ -1567,7 +1701,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _notifyAccountProfileChanged(AuthState state) async {
-    if (!state.isLoggedIn) return;
+    if (_isDisposed || !state.isLoggedIn) return;
     final callback = onAccountProfileChanged;
     if (callback == null) return;
     try {
@@ -1580,7 +1714,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _notifyAccountPayloadChanged(
     Map<String, dynamic> payload,
   ) async {
-    if (!_state.isLoggedIn) return;
+    if (_isDisposed || !_state.isLoggedIn) return;
     final callback = onAccountPayloadChanged;
     if (callback == null) return;
     try {
@@ -1595,16 +1729,19 @@ class AuthProvider extends ChangeNotifier {
     AuthState next, {
     bool force = false,
   }) async {
+    _requireNotDisposed();
     if (!force &&
         !await _shouldClearLocalAccountDataBeforeApplying(previous, next)) {
       return;
     }
+    _requireNotDisposed();
     final callback = onAccountIdentityChanging;
     try {
       if (callback == null) {
         await AccountLocalDataCleaner.clearSharedPreferences();
       } else {
         await callback(previous, next);
+        _requireNotDisposed();
         // The app-level callback resets provider memory and native schedulers.
         // Run a final prefs pass here as a hard account boundary in case an
         // in-flight account-scoped write raced with that cleanup.
@@ -1617,12 +1754,14 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _notifyAccountLoggedOut() async {
+    _requireNotDisposed();
     final callback = onAccountLoggedOut;
     try {
       if (callback == null) {
         await AccountLocalDataCleaner.clearSharedPreferences();
       } else {
         await callback();
+        _requireNotDisposed();
         await AccountLocalDataCleaner.clearSharedPreferences();
       }
     } catch (e, st) {
