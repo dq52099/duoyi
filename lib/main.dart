@@ -57,6 +57,7 @@ import 'services/deep_link_service.dart';
 import 'services/daily_digest_reminder_sync.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
+import 'services/widget_quick_todo_action.dart';
 import 'services/ai_service.dart';
 import 'services/app_update_service.dart';
 import 'services/backend_reminder_email_sink.dart';
@@ -4073,7 +4074,11 @@ void _pushHiddenWidgetFallbackRoute(BuildContext context, Widget child) {
 }
 
 void _showWidgetActionFeedback(BuildContext context, String message) {
+  final generation = AccountLocalDataCleaner.accountDataGeneration;
   WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
     final latestContext = mainShellKey.currentContext ?? context;
     if (!latestContext.mounted) return;
     ScaffoldMessenger.of(latestContext)
@@ -4088,8 +4093,16 @@ void _showWidgetActionFeedback(BuildContext context, String message) {
   });
 }
 
-void _showWidgetActionFeedbackFromShell(String message) {
+void _showWidgetActionFeedbackFromShell(
+  String message, {
+  bool Function()? isCurrentAction,
+}) {
+  final generation = AccountLocalDataCleaner.accountDataGeneration;
   WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
+    if (isCurrentAction != null && !isCurrentAction()) return;
     final latestContext = mainShellKey.currentContext;
     if (latestContext == null || !latestContext.mounted) return;
     ScaffoldMessenger.of(latestContext)
@@ -4108,41 +4121,43 @@ Future<void> _createQuickTodoFromAction(
   BuildContext context,
   TodoItem todo,
 ) async {
-  try {
-    if (!await _preflightQuickTodoReminder(
-      context,
-      todo,
-      feedback: _showWidgetActionFeedbackFromShell,
-    )) {
-      return;
-    }
-    final latestContext = mainShellKey.currentContext ?? context;
-    if (!latestContext.mounted) return;
-    final todos = Provider.of<TodoProvider?>(latestContext, listen: false);
-    if (todos == null) {
-      debugPrint(
-        '[QuickTodoAction] TodoProvider unavailable for action create',
+  if (!context.mounted) return;
+  // Bind before permission/preflight awaits. Looking up a provider afterwards
+  // could dispatch this old draft into the newly selected account.
+  final auth = context.read<AuthProvider>();
+  final todos = Provider.of<TodoProvider?>(context, listen: false);
+  await runWidgetQuickTodoAction(
+    isCallerAvailable: () =>
+        context.mounted && !_widgetAccountUnavailable(auth),
+    preflight: (feedback) async {
+      if (todos == null) {
+        debugPrint(
+          '[QuickTodoAction] TodoProvider unavailable for action create',
+        );
+        feedback('快捷待办暂不可用，请打开待办页后重试');
+        return false;
+      }
+      return _preflightQuickTodoReminder(context, todo, feedback: feedback);
+    },
+    create: () async {
+      final waitForReminderSync = _todoNeedsReminderSync(todo);
+      final reminderSyncResult = await todos!.addTodoWithResult(
+        todo,
+        waitForReminderSync: waitForReminderSync,
       );
-      _showWidgetActionFeedbackFromShell('快捷待办暂不可用，请打开待办页后重试');
-      return;
-    }
-    final waitForReminderSync = _todoNeedsReminderSync(todo);
-    final reminderSyncResult = await todos.addTodoWithResult(
-      todo,
-      waitForReminderSync: waitForReminderSync,
-    );
-    final reminderSyncIssue = waitForReminderSync
-        ? reminderSyncResult?.issue
-        : null;
-    _showWidgetActionFeedbackFromShell(
-      reminderSyncIssue == null
+      final reminderSyncIssue = waitForReminderSync
+          ? reminderSyncResult?.issue
+          : null;
+      return reminderSyncIssue == null
           ? _quickTodoCreatedMessage(todo)
-          : '快捷待办已保存到本机，但提醒未注册：$reminderSyncIssue',
-    );
-  } catch (e, st) {
-    debugPrint('[QuickTodoAction] create failed: $e\n$st');
-    _showWidgetActionFeedbackFromShell('快捷待办创建失败，请稍后重试');
-  }
+          : '快捷待办已保存到本机，但提醒未注册：$reminderSyncIssue';
+    },
+    feedback: (message, isCurrent) =>
+        _showWidgetActionFeedbackFromShell(message, isCurrentAction: isCurrent),
+    failureMessage: '快捷待办创建失败，请稍后重试',
+    logError: (error, stack) =>
+        debugPrint('[QuickTodoAction] create failed: $error\n$stack'),
+  );
 }
 
 bool _widgetAccountUnavailable(AuthProvider auth) =>

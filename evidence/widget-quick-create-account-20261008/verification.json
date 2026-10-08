@@ -1,0 +1,94 @@
+{
+  "base_commit": "cd623a223372c9b1e9d7fa05ef521f90265d7438",
+  "recorded_at": "2026-10-08T02:53:54.855850+00:00",
+  "source_sha256": {
+    "lib/main.dart": "a81af64124230909739b2da00c30395fc1c7f06e49278edb3c6a4325601882f7",
+    "lib/services/widget_quick_todo_action.dart": "87f3cd206a772ea8155151ec606fbf0993239a9596fd60632ce97b189d345500",
+    "test/services/widget_quick_todo_action_test.dart": "39f8eb40724fc820b79555dff8178e1b2505ed3bc02527caa2fd1c9e99b4bb74",
+    "test/services/widget_quick_todo_persistence_test.dart": "799b5b1d18c29fb57a370d5de23a0b41676549620201b8e91b2a7ee88db583e6",
+    "docs/widget-quick-actions.md": "eef00a92000778244219709533b96ec6bb139e4201bfc714fa2e3e996c3f751b"
+  },
+  "verification": {
+    "regression": {
+      "started": "2026-10-08T02:31:59.482589+00:00",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/widget_quick_todo_action_test.dart",
+        "test/services/home_widget_cold_start_test.dart",
+        "test/services/home_widget_snapshot_test.dart",
+        "test/services/ios_widget_resources_test.dart",
+        "test/services/android_widget_resources_test.dart",
+        "test/providers/notification_service_test.dart",
+        "test/providers/todo_storage_safety_test.dart",
+        "test/screens/desktop_web_shell_widescreen_test.dart"
+      ],
+      "cwd": "/tmp/duoyi-update-deploy-20261005-isvisjkp/source",
+      "source_sha256": {
+        "lib/main.dart": "a81af64124230909739b2da00c30395fc1c7f06e49278edb3c6a4325601882f7",
+        "lib/services/widget_quick_todo_action.dart": "87f3cd206a772ea8155151ec606fbf0993239a9596fd60632ce97b189d345500",
+        "test/services/widget_quick_todo_action_test.dart": "39f8eb40724fc820b79555dff8178e1b2505ed3bc02527caa2fd1c9e99b4bb74",
+        "lib/services/home_widget_service.dart": "a0f27c6994ab53ffd476847498d7c32ef35dc1597619ec93f90c8313d24d9f88",
+        "ios/DuoyiWidgets/DuoyiWidgets.swift": "afd5837be51e5d234836c66de54021fca3c4d35c14c85d29bda8a291093698ef"
+      },
+      "exit_code": 0,
+      "finished": "2026-10-08T02:37:19.578917+00:00",
+      "log_sha256": "0e734072c3c9f5e0ffa8b06500a1c1b73f331ec3337122963399a72fce78e032",
+      "case_count": 127
+    },
+    "analyze": {
+      "started": "2026-10-08T02:37:20.508182+00:00",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "analyze",
+        "--no-pub",
+        "lib/main.dart",
+        "lib/services/widget_quick_todo_action.dart",
+        "test/services/widget_quick_todo_action_test.dart"
+      ],
+      "cwd": "/tmp/duoyi-update-deploy-20261005-isvisjkp/source",
+      "source_sha256": {
+        "lib/main.dart": "a81af64124230909739b2da00c30395fc1c7f06e49278edb3c6a4325601882f7",
+        "lib/services/widget_quick_todo_action.dart": "87f3cd206a772ea8155151ec606fbf0993239a9596fd60632ce97b189d345500",
+        "test/services/widget_quick_todo_action_test.dart": "39f8eb40724fc820b79555dff8178e1b2505ed3bc02527caa2fd1c9e99b4bb74",
+        "lib/services/home_widget_service.dart": "a0f27c6994ab53ffd476847498d7c32ef35dc1597619ec93f90c8313d24d9f88",
+        "ios/DuoyiWidgets/DuoyiWidgets.swift": "afd5837be51e5d234836c66de54021fca3c4d35c14c85d29bda8a291093698ef"
+      },
+      "exit_code": 0,
+      "finished": "2026-10-08T02:49:36.022414+00:00",
+      "log_sha256": "dd771d11c3046ba4aecd1180b148fae564e14518636617e146be7af1bafd6342"
+    },
+    "persistence": {
+      "started": "2026-10-08T02:51:00.728856+00:00",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/widget_quick_todo_persistence_test.dart"
+      ],
+      "cwd": "/tmp/duoyi-update-deploy-20261005-isvisjkp/source",
+      "source_sha256": {
+        "lib/main.dart": "a81af64124230909739b2da00c30395fc1c7f06e49278edb3c6a4325601882f7",
+        "lib/services/widget_quick_todo_action.dart": "87f3cd206a772ea8155151ec606fbf0993239a9596fd60632ce97b189d345500",
+        "lib/providers/todo_provider.dart": "933e150ff316a45a498726f1d2f3596ad9ea99253636c0455757a88e887ef1b1",
+        "test/services/widget_quick_todo_persistence_test.dart": "799b5b1d18c29fb57a370d5de23a0b41676549620201b8e91b2a7ee88db583e6"
+      },
+      "exit_code": 0,
+      "finished": "2026-10-08T02:52:25.275005+00:00",
+      "log_sha256": "f3c42d4bed58cafea9e871ab532016718fa91cd563e168025eb14f1384c7bdb2",
+      "case_count": 2
+    }
+  },
+  "unique_flutter_cases": 129,
+  "added_coordinator_runtime_cases": 11,
+  "added_provider_persistence_cases": 2,
+  "added_source_wiring_checks": 1,
+  "persistence_backend": "mocked SharedPreferences; real TodoProvider",
+  "new_deployment": false,
+  "goal_complete": false
+}
