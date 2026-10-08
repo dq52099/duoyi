@@ -16,6 +16,7 @@ import 'notification_permission_exception.dart';
 import 'reminder_sinks.dart';
 import 'reminder_notification_id.dart';
 import 'todo_reminder_preflight_copy.dart';
+import 'reminder_issue_copy.dart';
 
 const Duration _sameMinuteReminderGrace = Duration(seconds: 70);
 
@@ -2150,6 +2151,20 @@ class ReminderScheduler {
         blocking ?? (preflight.issues.isEmpty ? null : preflight.issues.first);
     if (issue == null) return;
     _todoScheduleFailures[todo.id] = issue.message;
+    final copySink = notif is ReminderScheduleIssueCopySink
+        ? notif as ReminderScheduleIssueCopySink
+        : null;
+    if (copySink != null && issue.copy != null) {
+      copySink.recordReminderScheduleIssueWithCopy(
+        title: issue.title,
+        message: issue.message,
+        copy: ReminderIssueCopy.preflight(issue.copy!),
+        scheduledTime: issue.scheduledTime,
+        relatedId: todo.id,
+        blocking: issue.blocking,
+      );
+      return;
+    }
     final issueSink = notif is ReminderScheduleIssueSink
         ? notif as ReminderScheduleIssueSink
         : null;

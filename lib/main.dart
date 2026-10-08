@@ -60,6 +60,7 @@ import 'services/home_widget_service.dart';
 import 'services/widget_quick_todo_action.dart';
 import 'services/widget_action_scope.dart';
 import 'services/widget_action_message.dart';
+import 'services/reminder_issue_copy.dart';
 import 'services/ai_service.dart';
 import 'services/app_update_service.dart';
 import 'services/backend_reminder_email_sink.dart';
@@ -4484,6 +4485,9 @@ Future<bool> _preflightWidgetTodoReminder(
               (I18n.current == AppLocale.zh
                   ? '待办提醒注册失败'
                   : 'Task reminder not registered'),
+          issueTitleCode: issueTitle == null
+              ? NotificationIssueTitle.taskRegistrationFailed
+              : null,
           relatedId: todo.id,
         )
         .catchError((Object e, StackTrace st) {
@@ -4504,6 +4508,7 @@ Future<bool> _preflightWidgetTodoReminder(
               WidgetActionNotice.reminderIssue,
               subject: issue.title,
               detail: issue.message,
+              issueCopy: issue.copy,
             ),
     );
     return false;

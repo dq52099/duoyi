@@ -11,6 +11,8 @@
 /// 只依赖这两个接口。
 library;
 
+import 'reminder_issue_copy.dart';
+
 /// Push 通道出口（对应 `duoyi_general` / `Importance.high`）。
 ///
 /// 仅罗列 `ReminderScheduler` 真实用到的方法；其他 `NotificationService` 的
@@ -160,6 +162,18 @@ abstract class ReminderScheduleIssueSink {
 
 abstract class ReminderScheduleIssueClearSink {
   void clearReminderScheduleIssue();
+}
+
+/// Optional presentation metadata; legacy sinks keep their String contract.
+abstract interface class ReminderScheduleIssueCopySink {
+  void recordReminderScheduleIssueWithCopy({
+    required String title,
+    required String message,
+    required ReminderIssueCopy copy,
+    DateTime? scheduledTime,
+    String? relatedId,
+    bool blocking = true,
+  });
 }
 
 /// 邮件提醒出口。

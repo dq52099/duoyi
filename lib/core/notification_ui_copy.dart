@@ -560,6 +560,11 @@ class NotificationUiCopy {
     required String fallback,
   }) {
     if (issue == null) return fallback;
+    if (issue.copy != null) {
+      final locale = I18n.current;
+      final separator = locale == AppLocale.zh ? '：' : ': ';
+      return '${issue.renderTitle(locale: locale)}$separator${issue.renderMessage(locale: locale)}';
+    }
     if (!isEn) return '${issue.title}：${issue.message}';
     final title = formatIssueText(issue.title);
     final msg = formatIssueText(issue.message);

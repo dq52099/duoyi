@@ -1,0 +1,1191 @@
+00:00 +0: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_issue_copy_test.dart
+00:00 +0: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_issue_copy_test.dart: all notification notices match canonical bilingual producer copy
+00:00 +1: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_issue_copy_test.dart: all title codes render their canonical Chinese and English titles
+00:00 +2: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_issue_copy_test.dart: all check-state notices use neutral localized titles
+00:00 +3: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_issue_copy_test.dart: raw exception details keep mixed text, empty text, and whitespace
+00:00 +4: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_issue_copy_test.dart: custom fallback titles stay literal without a title code
+00:00 +5: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_issue_copy_test.dart: alarm reason labels are literal unless an owned label code is set
+00:00 +6: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_issue_copy_test.dart: preflight copy bridge forwards both localized title and message
+00:00 +7: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_issue_copy_test.dart: explicit locale rendering does not mutate global I18n locale
+00:00 +8: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_issue_copy_test.dart: unconfirmed, failed, and channel warning copy stay distinct
+00:00 +9: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/notification_issue_copy_service_test.dart
+00:01 +9: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/notification_issue_copy_service_test.dart: NotificationService issue copy ensureReady records an expired-time issue before permission or channel calls
+[NotificationService] 提醒注册失败: 提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。
+00:01 +10: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/notification_issue_copy_service_test.dart: NotificationService issue copy omitted, null, default, empty, whitespace, custom, and coded titles keep ownership
+[NotificationService] 提醒注册失败: 提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。
+[NotificationService] 提醒注册失败: 提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。
+[NotificationService] 提醒注册失败: 提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。
+[NotificationService] : 提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。
+[NotificationService]    : 提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。
+[NotificationService] Custom reminder label: 提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。
+[NotificationService] Caller-owned literal title: 提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。
+00:01 +11: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/notification_issue_copy_service_test.dart: NotificationService issue copy typed records preserve raw fields and duplicate updates replace copy without notifying twice
+[NotificationService] raw notification title: raw service diagnostic
+[NotificationService] duplicate schedule issue skipped
+00:01 +12: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/notification_issue_copy_service_test.dart: NotificationService issue copy legacy issue recording preserves literals and leaves copy absent
+[NotificationService]   upstream title  : raw upstream reason: 502 <body>
+00:01 +13: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/notification_issue_copy_service_test.dart: NotificationService issue copy past scheduleOnce throws with issue copy while retaining legacy exception text
+[NotificationService] 提醒注册失败: 提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。
+00:01 +14: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/notification_issue_copy_service_test.dart: ReminderScheduler unresolved preflight issue typed notification sink records one coded issue and keeps raw failure
+00:01 +15: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/notification_issue_copy_service_test.dart: ReminderScheduler unresolved preflight issue legacy notification sink records one raw issue and unchanged failure
+00:01 +16: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/core/notification_issue_ui_copy_test.dart
+00:03 +16: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/core/notification_issue_ui_copy_test.dart: typed schedule issues render localized meaning and preserve details
+00:03 +17: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/core/notification_issue_ui_copy_test.dart: typed notification issue keeps custom and empty fallback titles literal
+00:03 +18: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/core/notification_issue_ui_copy_test.dart: preflight copy bridges into schedule issue formatting
+00:03 +19: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/core/notification_issue_ui_copy_test.dart: issues without typed copy keep the legacy formatter behavior
+00:03 +20: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/todo_reminder_preflight_copy_test.dart
+00:04 +20: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/todo_reminder_preflight_copy_test.dart: all five copy codes have canonical bilingual title and message
+00:04 +21: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/todo_reminder_preflight_copy_test.dart: coded and raw preflight issues preserve their distinct payloads
+00:04 +22: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/todo_reminder_preflight_copy_test.dart: each reachable preflight producer attaches its code and canonical copy
+00:04 +23: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/todo_reminder_preflight_copy_test.dart: preflight prefers valid enabled plans and filters disabled rules
+00:04 +24: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/todo_reminder_preflight_copy_test.dart: explicit locale renders typed preflight copy without changing I18n
+00:04 +25: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_action_message_test.dart
+00:05 +25: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_action_message_test.dart: every widget action notice has distinct non-empty bilingual copy
+00:05 +26: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_action_message_test.dart: task and habit names remain literal message parameters
+00:05 +27: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_action_message_test.dart: reminder service title, issue text, and custom issue title are retained
+00:05 +28: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_action_message_test.dart: sync facts honor precedence and preserve all nine states
+00:05 +29: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_action_message_test.dart: saved todo reminder hints cover none, settings, and details
+00:05 +30: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_action_message_test.dart: rendering an explicit locale does not change I18n global locale
+00:05 +31: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_message_delivery_test.dart
+00:08 +31: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_message_delivery_test.dart: a delayed preflight failure renders the locale selected before feedback
+00:10 +32: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_message_delivery_test.dart: a delayed successful create renders locale changed after frame scheduling
+00:10 +33: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_message_delivery_test.dart: a delayed create failure is localized at delivery time
+00:10 +34: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_message_delivery_test.dart: an account switch suppresses A feedback and delivers B
+00:10 +35: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_message_delivery_test.dart: a stable guest action delivers its successful descriptor
+00:10 +36: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_message_delivery_test.dart: typed preflight feedback localizes after a delayed failure
+00:11 +37: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_message_delivery_test.dart: account A typed preflight descriptor is suppressed while B is current
+00:11 +38: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_message_delivery_test.dart: typed notification issue renders the locale selected after feedback is queued
+00:11 +39: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_message_delivery_test.dart: account A typed notification issue is suppressed while B is current
+00:11 +40: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart
+00:13 +40: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart: a new guest scope is current by default
+00:14 +41: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart: account switch invalidates the old scope only
+00:14 +42: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart: caller availability is checked dynamically
+00:14 +43: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart: a stale generation short-circuits the unavailable caller predicate
+00:14 +44: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart: idle afterFrame requests and delivers on a frame
+00:14 +45: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart: afterFrame registered during post-frame requests the next frame once
+00:14 +46: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart: afterFrame registered during persistent callbacks runs in this frame
+00:14 +47: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart: generation switch before the frame suppresses callback and snackbar
+00:15 +48: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart: caller disposal before the frame suppresses callback
+00:15 +49: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart: an old queued callback cannot hide the next account snackbar
+00:15 +50: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/widgets/widget_action_scope_test.dart: a current scoped snackbar is displayed
+00:16 +51: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart
+00:18 +51: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: runWidgetQuickTodoAction same-account success forwards the reminder warning unchanged
+00:18 +52: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: runWidgetQuickTodoAction a failed reminder preflight forwards its current warning and skips create
+00:18 +53: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: runWidgetQuickTodoAction an unavailable guest caller returns before preflight or create
+00:18 +54: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: runWidgetQuickTodoAction an account-generation switch during preflight prevents create
+00:18 +55: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: runWidgetQuickTodoAction a transition or disposal predicate change alone prevents create
+00:18 +56: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: runWidgetQuickTodoAction stale preflight feedback is suppressed after an account switch
+00:18 +57: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: runWidgetQuickTodoAction a stale preflight error is logged but its failure feedback is suppressed
+00:18 +58: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: runWidgetQuickTodoAction an account switch during create suppresses its success message
+00:18 +59: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: runWidgetQuickTodoAction an account switch during create suppresses its failure feedback
+00:18 +60: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: runWidgetQuickTodoAction current preflight and create errors forward the failure message
+00:18 +61: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: runWidgetQuickTodoAction delayed feedback checks isCurrent again before delivery
+00:18 +62: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_action_test.dart: source wiring: quick widget draft binds providers and guarded feedback
+00:18 +63: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_persistence_test.dart
+00:21 +63: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_persistence_test.dart: guest quick todo is persisted by the original provider
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:21 +64: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/widget_quick_todo_persistence_test.dart: quick todo preflight cannot write into the next account
+00:21 +65: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_cold_start_test.dart
+00:22 +65: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_cold_start_test.dart: cold start replaces a blank stored nonce before publishing
+00:23 +66: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart
+00:24 +66: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart: empty highlights contain no invented rows and follow language changes
+00:24 +67: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart: account clearing preserves the selected widget language
+00:24 +68: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart: a language change during native refresh invalidates success
+00:25 +69: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart: language changes invalidate an in-flight snapshot without translating user content
+00:25 +70: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart: active habit count invalidates deduplication and clears with account
+00:25 +71: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart: snapshot day is published last and widget actions bind to day, offset and account
+00:25 +72: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart: same payload retries a failed refresh and force always repaints
+[HomeWidget] updateWidget(DuoyiTodoWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:690:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:240:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiFocusHabitWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:690:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:240:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiHabitWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:690:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:240:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiCalendarWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:690:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:240:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiScheduleWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:690:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:240:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiGoalWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:690:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:240:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiCourseWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:690:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:240:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiNoteWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:690:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:240:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiAnniversaryWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:690:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:240:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiDiaryWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:690:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:240:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] one or more widget providers failed to update
+00:25 +73: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart: old-date snapshot never gets published as today
+00:25 +74: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart: reset invalidates an in-flight payload and queued previous-account push
+00:25 +75: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart: storage-clear failure is separate from a cleared snapshot refresh failure
+[HomeWidget] updateWidget(DuoyiTodoWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:320:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:297:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:290:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiFocusHabitWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:320:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:297:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:290:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiHabitWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:320:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:297:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:290:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiCalendarWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:320:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:297:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:290:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiScheduleWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:320:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:297:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:290:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiGoalWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:320:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:297:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:290:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiCourseWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:320:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:297:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:290:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiNoteWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:320:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:297:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:290:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiAnniversaryWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:320:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:297:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:290:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiDiaryWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:741:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:752:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:722:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:320:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:297:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/home_widget_snapshot_test.dart:290:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] one or more widget providers failed to update
+00:25 +76: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart
+00:27 +76: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources declares 10 visible independent WidgetKit kinds
+00:27 +77: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources shares the same app group and WidgetKit extension point
+00:27 +78: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources Xcode project embeds the WidgetKit extension target
+00:27 +79: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources uses the same payload keys written by HomeWidgetService
+00:27 +80: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources focus widget renders the shared timer contract
+00:27 +81: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources binds widget mutations to the captured snapshot contract
+00:27 +82: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources refreshes daily data at midnight and focus timers at their end
+00:27 +83: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources supports home screen and lock screen WidgetKit families
+00:27 +84: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources keeps WidgetKit text compatible with iOS 14 and clipped in bounds
+00:27 +85: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources Flutter side enables iOS home_widget updates
+00:27 +86: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources exposes WidgetKit deep links for quick actions and footer navigation
+00:27 +87: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/ios_widget_resources_test.dart: iOS WidgetKit resources Runner forwards WidgetKit and OAuth deep links into Flutter
+00:27 +88: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart
+00:29 +88: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 今日待办小组件声明底部导航和 PNG 预览
+00:29 +89: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 专注小组件声明底部导航和 PNG 预览
+00:29 +90: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 习惯小组件声明底部导航和 PNG 预览
+00:29 +91: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 月历小组件声明底部导航和 PNG 预览
+00:29 +92: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 今日日程小组件声明底部导航和 PNG 预览
+00:29 +93: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 目标小组件声明底部导航和 PNG 预览
+00:29 +94: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 课程表小组件声明底部导航和 PNG 预览
+00:29 +95: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 随手记小组件声明底部导航和 PNG 预览
+00:29 +96: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 纪念日小组件声明底部导航和 PNG 预览
+00:29 +97: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 日记小组件声明底部导航和 PNG 预览
+00:29 +98: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 Android 小组件中英文字符串资源具有相同 key
+00:29 +99: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 小组件界面和 Android provider 从共享 copy 层读取本地化文案
+00:29 +100: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 所有桌面小组件单行文本都声明截断边界
+00:29 +101: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 桌面小组件动态短文本使用 wrap_content 时声明最大宽度
+00:29 +102: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 桌面小组件圆角背景和按钮跟随主题且不被纯色背景覆盖
+00:29 +103: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 历史兼容主小组件保留注册用于升级前旧实例刷新
+00:29 +104: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 升级或重启后恢复旧桌面小组件并延后启动期恢复任务
+00:29 +105: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 专注、习惯、月历、今日日程、目标保持独立，不再暴露组合入口
+00:29 +106: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 应用内添加失败提示区分 launcher、权限、弹窗拦截和迟到回执
+00:29 +107: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 底部导航每个入口都绑定到对应深链
+00:29 +108: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 待办小组件未完成任务使用空心圆并保留交互按钮
+00:29 +109: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 月历小组件按尺寸裁剪网格并提供今天交互按钮
+00:29 +110: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 小组件样式密度设置同步预览、新增固定请求和系统添加默认值
+00:30 +111: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 小组件数据和样式刷新覆盖紧凑、标准和详细 provider
+00:30 +112: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 桌面快捷创建失败会返回明确原因并接入成功回调
+00:30 +113: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 应用内固定小组件按样式请求尺寸并按需保持 variant provider 可用
+00:30 +114: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 每个小组件三种样式声明为不同桌面尺寸
+00:30 +115: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 应用内小组件添加按样式选择真实 provider，标准入口仍独立
+00:31 +116: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 10 个标准 provider 统一继承、清理实例样式且三样式映射一致
+00:31 +117: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 小组件 Android iOS 和 Flutter 清单保持 10 类 exact set 对齐
+00:31 +118: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 全部小组件 provider XML 只引用对应三档 preview layout
+00:31 +119: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 options changed 只保存样式并触发 update 广播，避免递归修改 options/provider
+00:31 +120: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 升级后刷新已有小组件，避免旧布局继续留在桌面
+00:31 +121: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 应用内小组件页展示 10 个可见独立预览并接入底部导航
+00:31 +122: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 桌面小组件 deep link 跳转隐藏底部页时允许打开隐藏 tab
+00:31 +123: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 隐藏页小组件内容行都绑定详情 deep link，空 id 回退到对应页面
+00:31 +124: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 桌面快捷创建只支持 10 种可见独立小组件
+00:31 +125: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 10 种可见独立小组件都通过配置入口初始化对应 provider
+00:31 +126: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/android_widget_resources_test.dart: Android 小组件资源 10 种可见独立小组件标准入口默认 3x2 且可调整到 2x2-4x3
+00:32 +127: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart
+00:33 +127: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: clearHistory only clears notification history and refreshes UI
+00:33 +128: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: cancel decrements pending notification count and refreshes UI
+00:33 +129: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: LocalNotifications cancel initializes before clearing system queues
+00:33 +130: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: NotificationService cancelAll documents global queue cleanup
+00:33 +131: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: Mine notification history entry hides zero history count
+00:33 +132: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: Mine notification history and reminder preferences are separate entries
+00:33 +133: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: Mine notification settings opens independent notification settings
+00:33 +134: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: profile route exposes account password change and dialogs can opt into scoped keyboard shifting
+00:33 +135: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: notification service tracks unread history for red dot badges
+00:33 +136: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: opening notification history keeps unread until manual action
+00:33 +137: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: individual notification records can toggle read state statically
+00:33 +138: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: notification history is a dedicated scrollable page
+00:33 +139: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: notification settings has an independent settings screen
+00:33 +140: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: notification history keeps enough records for the dedicated list
+00:33 +141: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: all normal notification paths are recorded in history
+00:33 +142: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: diagnostic test notification history stays read and does not light badge
+00:33 +143: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: notification settings screen is independent from preferences
+00:34 +144: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: scheduled diagnostic test supports reminder mode routing
+00:34 +145: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: scheduled notifications require permission before registering
+00:34 +146: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: daily reminders require permission before registering
+00:34 +147: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: local notification schedules log pending queue verification after enqueue
+00:34 +148: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: local notification permission probes Android app switch and pending IDs initialize plugin
+00:34 +149: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: failed scheduler notification sink attempts throw and are not counted as pending or history
+00:34 +150: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: scheduled history records infer todo/habit type from payload
+00:34 +151: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: schedule helper records permission and plugin failures without crashing callers
+00:34 +152: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: alarm push fallback records a visible diagnostic on successful push registration
+00:34 +153: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: daily digest reminders use repeating schedule unless holiday pause is on
+00:34 +154: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: immediate diagnostic test uses ordinary notification path
+00:34 +155: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: strong reminder diagnostic is wired outside ordinary notification test
+00:34 +156: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: diagnostic scheduled tests use fixed reserved ids per channel
+00:34 +157: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: location reminders use local notification, history and deep link
+00:34 +158: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: immediate notifications use one local notification outlet only
+00:34 +159: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: scheduled push reminders clear native alarm leftovers before enqueue
+00:34 +160: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: location notification deep link opens integrations center
+00:34 +161: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: todo completion deep link completes directly with feedback
+00:34 +162: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: snooze deep link and todo action path reuse the same reminder payload
+00:34 +163: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: scheduled notifications keep registering when Android reminder channel is muted
+00:34 +164: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: Android null channel probe is recorded as non-blocking unknown
+00:34 +165: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: todo reminder save preflight blocks alarm reminders without exact and fullscreen permissions
+00:34 +166: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: AlarmService keeps native alarm ringtone when notification permission is denied
+00:34 +167: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: ReminderScheduler bridges AlarmService diagnostics into notification issue sink
+00:34 +168: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/notification_service_test.dart: generic schedule APIs derive issue relatedId from duoyi payloads
+00:34 +169: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/todo_storage_safety_test.dart
+00:36 +169: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/todo_storage_safety_test.dart: TodoProvider skips corrupt persisted records and rewrites storage
+[TodoProvider] skipped invalid todo[0]: not a map
+[TodoProvider] skipped invalid todo[1]: not a map
+00:36 +170: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/todo_storage_safety_test.dart: TodoProvider hydrates storage before first write
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:36 +171: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/todo_storage_safety_test.dart: TodoProvider force reload refreshes in-memory todos after cloud pull
+00:36 +172: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/todo_storage_safety_test.dart: forced loadFromStorage picks up cloud-synced todos and keeps them
+[TodoProvider] reminder sync skipped: scheduler missing
+00:36 +173: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/todo_storage_safety_test.dart: loadFromStorage collapses duplicate ids keeping the newest record
+00:36 +174: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/todo_storage_safety_test.dart: forced loadFromStorage on rewrite-needed storage completes without deadlock
+[TodoProvider] skipped invalid todo[2]: not a map
+[TodoProvider] reminder sync skipped: scheduler missing
+00:36 +175: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/providers/todo_storage_safety_test.dart: large corrupt storage decodes off the main isolate and keeps valid records
+00:37 +176: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/screens/desktop_web_shell_widescreen_test.dart
+00:39 +176: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/screens/desktop_web_shell_widescreen_test.dart: 1280x800 默认主题：桌面壳渲染今日主 tab，无溢出且内容限宽
+00:42 +177: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/screens/desktop_web_shell_widescreen_test.dart: 1280x800 液态玻璃主题：切到待办主 tab，无溢出且卡片限宽
+00:43 +178: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/screens/desktop_web_shell_widescreen_test.dart: 1600x900 默认主题：内容宽度钉在 maxContentWidth
+00:44 +179: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/screens/desktop_web_shell_widescreen_test.dart: web 底导航模糊降级档低于原生档（VM 上 kIsWeb=false 不降级）
+00:44 +180: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart
+00:45 +180: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 账号切换会冻结云同步并阻断旧账号异步回写
+00:45 +181: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: resetForAccountChange 后旧账号 sync 响应不会写回本地
+00:45 +182: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: resetForAccountChange 后旧账号本地同步元数据不会重新载入内存
+00:45 +183: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: resetForAccountChange 会等待进行中的同步回调退出
+00:45 +184: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 未登录 syncNow 不写 lastError 且不伪装本地 pending
+00:45 +185: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 管理员关闭备份不写 lastError 且不伪装本地 pending
+00:45 +186: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 本机保存提示按云同步可用性区分是否已上传服务器
+00:45 +187: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 账号切换恢复后备份关闭状态不再吞本地 dirty mark
+00:45 +188: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 账号切换恢复后未登录状态不再吞本地 dirty mark
+00:45 +189: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 账号切换暂停期间真实本地 dirty mark 会保留到恢复后同步
+00:45 +190: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 用户本地变更 pending 不会被 dirty 抑制窗口吞掉
+00:45 +191: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 用户本地变更 durable pending 返回时已经持久化
+00:45 +192: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 基线同步失败只标记同步重试不标记本地 pending
+[CloudSync] 500: baseline failed
+00:45 +193: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 真实本地 pending 同步失败保留 pending 和 lastError
+[CloudSync] 500: local upload failed
+00:45 +194: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 本地 pending 上传收到缺确认字段的 200 响应时保留重试
+[CloudSync] Bad state: 服务器同步响应缺少确认字段：server_updated_at、server_version、collection_hashes。本机改动已保留，稍后会自动重试上传。
+00:45 +195: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 账号清理前 pending 本地改动未上传时阻止继续清理
+00:45 +196: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 显式 syncNow 忙时会等待排队同步真正完成
+00:45 +197: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 本地改动会后台自动同步，不需要手动入口
+00:46 +198: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 云同步错误镜像不会反向标记本地待提交改动
+00:46 +199: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 待办保存成功不展示旧云同步错误为本次提交异常
+00:46 +200: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 离线本地改动的待同步状态会持久化并在失败后保留重试
+00:46 +201: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 登录后启用远端轮询拉取，登出或关闭自动同步会停止轮询
+00:46 +202: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 同步回写不会用旧主题或旧时光币对象覆盖本地新状态
+00:46 +203: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 同步事件流收到新版本后即时拉取，轮询仍作为兜底
+00:46 +204: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 远端轮询使用轻量版本探针，未变化时跳过全量同步
+00:46 +205: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 远端变化拉取使用集合 hash 增量接口，避免无本地改动时整包同步
+00:46 +206: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 本地改动上传使用集合 hash delta，避免每次整包上传
+00:46 +207: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 有条目 hash 基线时优先按条目 delta 上传
+00:46 +208: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 倒数日集合参与云同步 pull、delta 和删除墓碑
+00:46 +209: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 旧周年表 type=0 记录不会被 Flutter 同步过滤删除
+00:46 +210: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 云端回写后会刷新本地个人资料且不触发二次脏标记
+00:46 +211: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 同步回调携带实际变更集合，main 只刷新命中的 provider
+00:46 +212: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 同步回写内容相同时跳过 SharedPreferences 写入，降低无效 IO
+00:46 +213: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 个人资料仍可同步但统计重算不会刷新资料更新时间
+00:46 +214: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 屏幕和组件层不暴露手动云同步入口
+00:46 +215: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 共享空间合并保留可解释的冲突决策记录
+00:46 +216: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 冲突决策序列化保留字段级差异说明
+00:46 +217: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 同步删除墓碑会上传并保存，避免云端旧列表复活本地删除
+00:46 +218: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 共享空间删除墓碑独立持久化并随空数据桶上传
+00:46 +219: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 共享删除墓碑只删对应空间副本且跨重启保留
+00:46 +220: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 私有待办变更与共享墓碑同批使用集合 delta
+00:46 +221: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 账号代次变化后旧删除墓碑不会写入新账号本地缓存
+00:46 +222: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 本地模块删除都会记录同步删除墓碑
+00:46 +223: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 偏好、位置提醒和共享空间漏项纳入同步链路
+00:46 +224: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 课表、纪念日和位置提醒携带 updatedAt 防止旧同步覆盖
+00:46 +225: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/cloud_sync_provider_test.dart: 会触发云同步的本地修改必须先落盘再通知监听
+00:46 +226: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart
+00:48 +226: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 registeredRemindersSnapshot exposes sorted registry details
+00:48 +227: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 resetInMemoryState clears cached popup rules before account rebuild
+00:48 +228: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 account reset keeps failed cancellation owners and registry for retry
+[ReminderScheduler] cancel failed for todo popup registry:reset-cancel-failure-owner (2124866890): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2024:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:815:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for todo popup registry:reset-cancel-failure-owner (2124866890): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for todo popup registry:reset-cancel-failure-owner (1179107316): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2024:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:815:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for todo popup registry:reset-cancel-failure-owner (1179107316): Bad state: forced popup cancel failure
+00:48 +229: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 account reset cancels persisted owners after scheduler cold start
+00:48 +230: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 account suspension invalidates queued snapshots and resume accepts new data
+00:49 +231: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 suspended multi-rule habit batch retains every popup id for cold-start retry
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1446097921): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2026:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:993:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1446097921): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (108558069): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2026:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:993:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (108558069): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1576077323): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2026:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:993:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1576077323): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (58225212): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2026:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:993:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (58225212): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1576077324): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+00:49 +232: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 修改提醒时旧清理失败仍注册当前提醒
+00:49 +233: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 preflight blocks enabled one-shot todo reminders in the past
+00:49 +234: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 preflight accepts just-missed same-minute one-shot reminders
+00:49 +235: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 preflight prefers reminderAt over date-only dueDate for absolute todo reminders
+00:49 +236: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos registers absolute todo reminderAt when dueDate is date-only midnight
+00:49 +237: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 startup resync does not re-arm just-missed same-minute one-shot reminders
+00:49 +238: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 write-side sync still accepts just-missed same-minute one-shot reminders
+00:49 +239: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos fails visibly when enabled reminder resolves empty
+00:49 +240: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 并发触发时串行化，避免同一提醒重复下发
+00:49 +241: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 对完全相同的多条规则只下发一次
+00:49 +242: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 对同一时间同一内容的不同规则类型只下发一次
+00:49 +243: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性/相对截止提醒标题跟随语言（en 下不再回退中文）
+00:49 +244: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 对重复的每日通知只注册第一条规则
+00:49 +245: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 同一时间同时配置通知和闹钟时只保留闹钟
+00:49 +246: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 同一时间同时配置通知和弹出框时只保留通知
+00:49 +247: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 同一时间同时配置弹出框和闹钟时只保留闹钟
+00:49 +248: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每周部分重叠时只替换冲突日期
+00:49 +249: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每日和每周全选同时间只保留更高优先级
+00:49 +250: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 不合并不同时间的提醒规则
+00:49 +251: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 刚错过同一分钟不会因秒级漂移重复下发
+00:49 +252: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos surfaces swallowed one-shot notification failures by todo id
+00:49 +253: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos does not record issue when reminders are disabled
+00:49 +254: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 preflight accepts future one-shot todo reminders and reports kind
+00:49 +255: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 preflight blocks relative reminders without an anchor date
+00:49 +256: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 对已完成待办不调度
+00:49 +257: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 把旧字段习惯默认调度成弹出框提醒
+00:49 +258: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟通知权限异常时注册兜底但返回可见失败
+00:49 +259: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 旧注册清理失败时仍注册当前提醒并保留债务
+00:49 +260: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟插件异常时注册兜底但返回可见失败
+00:49 +261: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟半注册后异常时不降级普通通知避免双弹
+00:49 +262: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟权限异常但已入队时不降级普通通知避免双弹
+00:49 +263: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:49 +264: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟交接失败时不降级普通通知避免双弹
+00:49 +265: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits kind=push 走普通通知而不是闹钟
+00:49 +266: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits kind=popup 走应用内弹窗提醒
+00:49 +267: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 多提醒时间逐条注册到独立 id（每天 8 杯水场景）
+00:49 +268: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 删除其中一个提醒时间会取消对应通知
+00:49 +269: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 多提醒时间部分调度失败时，已成功的派生 id 仍入册，禁用后能被清理
+00:49 +270: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 未注入 popup sink 时，习惯 popup 会注册系统通知兜底
+00:49 +271: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟插件异常时注册一次性兜底但返回可见失败
+00:49 +272: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性闹钟降级通知后仍返回可见失败
+00:49 +273: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟降级通知后 pending 查询失败时记录兜底诊断
+00:49 +274: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性闹钟半注册后异常时不降级普通通知避免双弹
+00:49 +275: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性闹钟异常且 pending 查询失败时不降级普通通知避免双弹
+00:49 +276: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性闹钟权限异常但已入队时不降级普通通知避免双弹
+00:49 +277: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:49 +278: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 未注入 popup sink 时，待办 popup 会注册系统通知兜底
+00:49 +279: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 显式 Noop popup sink 不会把 popup 待办缓存为已调度
+00:49 +280: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟和一次性 push 都失败时不记为已调度，权限恢复后重试
+00:49 +281: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟通知权限失败时不记为已调度，权限恢复后重试
+00:49 +282: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 精准闹钟权限失败且 push 插件异常时抛出可见同步异常
+00:49 +283: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟插件异常时注册兜底但返回可见失败
+00:49 +284: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟降级通知后仍返回可见失败
+00:49 +285: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟半注册后异常时不降级普通通知避免双弹
+00:49 +286: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟异常且 pending 查询失败时不降级普通通知避免双弹
+00:49 +287: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟权限异常但已入队时不降级普通通知避免双弹
+00:49 +288: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:49 +289: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟和重复 push 都失败时不记为已调度，权限恢复后重试
+00:49 +290: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟权限失败且 push 插件异常时抛出可见同步异常
+00:49 +291: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟和 push 都失败时不记为已调度，权限恢复后会重试
+00:49 +292: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟降级通知后仍返回可见失败
+00:49 +293: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 关闭提醒后清理上一轮调度
+00:49 +294: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 冷启动关闭提醒会清理已持久化的旧提醒
+00:49 +295: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 同一提醒重复同步不会取消重放
+00:49 +296: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 每周原生闹钟 base id pending 时不会重复重注册
+00:49 +297: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 每周闹钟规则未变时会清理旧版普通通知子 id，避免双弹
+00:49 +298: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 规则未变但 push pending 丢失时会重新注册
+00:49 +299: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 修改时间后取消旧调度并重新下发
+00:49 +300: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 默认走 push 通道
+00:49 +301: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries kind=alarm 走全屏闹钟
+00:49 +302: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries kind=popup 走弹出框提醒
+00:49 +303: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries popup 调度失败时不缓存成功状态，恢复后会重试
+00:49 +304: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries kind=off 会清理旧提醒且不重新注册
+00:49 +305: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries alarm 失败时即使 push fallback 成功也记录异常且可重试
+00:49 +306: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 闹钟降级通知不会缓存为成功状态
+00:49 +307: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 闹钟交接失败时不降级普通通知避免双弹
+00:49 +308: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 闹钟半注册后异常时不降级普通通知避免双弹
+00:49 +309: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 闹钟权限异常但已入队时不降级普通通知避免双弹
+00:49 +310: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:50 +311: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 同一提醒重复同步不会重复注册
+00:50 +312: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 规则未变但 push pending 丢失时会重新注册
+00:50 +313: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries push 切到 alarm 时双通道清理旧提醒
+00:50 +314: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries alarm 切到 push 时清理旧闹钟提醒
+00:50 +315: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 resyncAll 会清理并重放纪念日闹钟提醒
+00:50 +316: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 resyncAll 取消某个通道失败时继续清理且不重放失败对象
+00:50 +317: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns 按提醒方式路由到通知、弹出框和闹钟
+00:50 +318: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns skips reminder kind off even when remind is true
+00:50 +319: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns popup 调度失败时不缓存成功状态，恢复后会重试
+00:50 +320: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns 弹出框规则未变时会清理残留通知和闹钟，避免双弹
+00:50 +321: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns 通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:50 +322: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 未注入 popup sink 时，倒数 popup 会注册系统通知兜底
+00:50 +323: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns push 插件异常时不缓存成功状态，恢复后会重试
+00:50 +324: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns 规则未变但 push pending 丢失时会重新注册
+00:50 +325: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns 切换提醒方式会取消旧通道后重新注册
+00:50 +326: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 按通知、弹出框、闹钟、邮件和关闭五种提醒方式分支调度
+00:50 +327: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 通知、弹窗和闹钟都可切换为关闭并清理旧通道
+00:50 +328: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每周重复提醒按通知、弹出框、闹钟和关闭分支路由
+00:50 +329: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 同一 rule 在通知、弹出框和闹钟之间切换只保留当前通道
+00:50 +330: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 规则未变但 push pending 丢失时会重新注册
+00:50 +331: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 规则未变但 push pending 查询失败时会重新注册并记录诊断
+00:50 +332: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 冷启动同步前清理当前 rule id，避免旧队列并存
+00:50 +333: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 冷启动旧队列清理失败时仍注册当前提醒
+00:50 +334: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 suspended multi-rule habit batch retains every popup id for cold-start retry
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+00:50 +334: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 冷启动会清理已持久化的旧 rule id
+00:50 +334: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 suspended multi-rule habit batch retains every popup id for cold-start retry
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2026:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:993:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1576077324): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (75002831): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2026:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:993:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (75002831): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1576077325): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2026:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:993:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1576077325): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (24669974): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2026:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:993:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (24669974): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1576077326): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2026:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:993:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1576077326): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (41447593): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1969:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2026:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:993:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (41447593): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1576077327): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:428:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4131:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4203:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4129:17)
+00:50 +335: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 冷启动旧 rule id 清理失败时保留 registry 债务并注册新提醒
+00:50 +336: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 冷启动同 rule 跨通道取消失败时仍注册当前闹钟
+00:50 +337: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 改规则时取消失败仍注册新提醒并记录债务
+00:50 +338: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每周原生闹钟 base id pending 时不会重复重注册
+00:50 +339: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 规则未变但每周闹钟 pending 丢失时会重新注册
+00:50 +340: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟规则未变时会清理残留普通通知，避免双弹
+00:50 +341: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟已在队列但残留通知清理失败时不重排当前闹钟
+00:50 +342: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每周闹钟规则未变时会清理旧版普通通知子 id，避免双弹
+00:50 +343: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每周闹钟规则未变时会清理当前普通通知子 id，避免双弹
+00:50 +344: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 普通通知规则未变时会清理残留闹钟，避免双弹
+00:50 +345: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 普通通知已在队列但残留闹钟清理失败时不重排当前通知
+00:50 +346: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 弹出框规则未变时会清理残留通知和闹钟并重建前台计时器
+00:50 +347: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 邮件一次性调度失败时不缓存成功状态，恢复后重试
+00:50 +348: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 邮件重复调度失败时不缓存成功状态，恢复后重试
+00:50 +349: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 邮件调度失败时不缓存成功状态，恢复后重试
+00:50 +350: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 邮件取消失败不会中断其他通道清理
+00:50 +351: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 对非 active 状态不调度
+00:50 +352: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 同一时间重复提醒只保留最高优先级通道
+00:50 +353: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 同一时间通知和闹钟只保留闹钟
+00:50 +354: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 按弹出框和关闭提醒分支调度
+00:50 +355: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 从 popup 切到 off 会清理旧弹窗提醒
+00:50 +356: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 无目标日期时不把开始日期当相对截止日提醒
+00:50 +357: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:50 +358: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart
+00:53 +358: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: relative API path on mobile/desktop returns friendly configuration error
+00:53 +359: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: base URL trailing slash is trimmed before joining API paths
+00:53 +360: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: base URL joining also handles paths without leading slash
+00:53 +361: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: base URL joining accepts server URL accidentally ending with /api
+00:53 +362: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: map and list helpers fail loudly on wrong response shape
+00:53 +363: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: upload helper fails loudly when successful response is not an object
+00:53 +364: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: upload helper sends image content type for avatar files
+00:53 +365: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: successful API helpers wrap invalid JSON in ApiException
+00:53 +366: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: missing current backend route explains stale server contract
+00:53 +367: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: business 404 does not get stale backend route diagnosis
+00:53 +368: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: user visible API error hides backend compatibility diagnostics only
+00:53 +369: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: unexpected errors use the caller fallback without exposing details
+00:53 +370: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: presentation errors hide transport details but preserve action feedback
+00:53 +371: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: upload avatar 404 also explains stale server contract
+00:53 +372: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: missing current backend route also diagnoses required route hash mismatch
+00:53 +373: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: text and event stream helpers also diagnose stale backend routes
+00:53 +374: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: fallback route failure can diagnose stale backend or api proxy
+00:53 +375: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: html proxy 404 is also diagnosed as stale backend route
+00:53 +376: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: stale backend diagnosis includes concrete server for admin coin 404
+00:53 +377: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: admin pagination still accepts legacy list responses through getRaw
+00:53 +378: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: admin pagination fails loudly when items is not a list
+00:53 +379: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: admin feedback detail uses current item route
+00:53 +380: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: admin coin adjustment uses current primary route only
+00:53 +381: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: admin coin adjustment missing route does not try legacy fallbacks
+00:53 +382: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: admin update settings sends force update payload to settings route
+00:53 +383: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: admin update settings falls back to compatible settings routes
+00:53 +384: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: admin system settings fallback normalizes legacy settings payload
+00:53 +385: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/api_client_error_test.dart: admin system settings update falls back to admin settings then refetches normalized payload
+00:53 +386: All tests passed!

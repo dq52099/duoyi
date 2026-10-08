@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/achievements.dart';
 import '../core/brand_strings.dart';
+import '../core/i18n.dart';
 import '../core/notification_history_policy.dart';
 import '../core/platform_info.dart';
 import '../models/location_reminder.dart';
@@ -14,6 +15,7 @@ import '../services/local_notifications.dart';
 import '../services/notification_permission_exception.dart';
 import '../services/notification_settings.dart';
 import '../services/reminder_sinks.dart';
+import '../services/reminder_issue_copy.dart';
 
 class NotificationItem {
   final String id;
@@ -76,6 +78,7 @@ class NotificationScheduleIssue {
   final DateTime? scheduledTime;
   final String? relatedId;
   final bool blocking;
+  final ReminderIssueCopy? copy;
 
   const NotificationScheduleIssue({
     required this.title,
@@ -84,7 +87,14 @@ class NotificationScheduleIssue {
     this.scheduledTime,
     this.relatedId,
     this.blocking = true,
+    this.copy,
   });
+
+  String renderTitle({AppLocale? locale}) =>
+      copy?.renderTitle(fallback: title, locale: locale) ?? title;
+
+  String renderMessage({AppLocale? locale}) =>
+      copy?.renderMessage(fallback: message, locale: locale) ?? message;
 }
 
 /// NotificationService —— 推送通道（`duoyi_general_alerts_v18`，`Importance.high`）。
@@ -109,6 +119,7 @@ class NotificationService extends ChangeNotifier
         ReminderNotificationScheduleResultSink,
         ReminderPendingSink,
         ReminderScheduleIssueSink,
+        ReminderScheduleIssueCopySink,
         ReminderScheduleIssueClearSink {
   static const _kHistoryKey = 'duoyi_notif_history';
   static const _kHistorySeenKey = 'duoyi_notif_history_seen_at';
@@ -180,9 +191,15 @@ class NotificationService extends ChangeNotifier
       debugPrint(
         '[NotificationService] local notification init failed: $e\n$st',
       );
+      final issueDetail = e.toString();
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.initializationFailed,
+          titleCode: NotificationIssueTitle.initializationFailed,
+          detail: issueDetail,
+        ),
         title: '提醒注册初始化失败',
-        message: '系统通知初始化失败，提醒暂时无法注册。请检查通知权限、通知渠道和系统后台限制后重新保存提醒。($e)',
+        message: '系统通知初始化失败，提醒暂时无法注册。请检查通知权限、通知渠道和系统后台限制后重新保存提醒。($issueDetail)',
       );
     }
     await _loadHistory();
@@ -500,6 +517,7 @@ class NotificationService extends ChangeNotifier
     DateTime? scheduledTime,
     String? relatedId,
     bool blocking = true,
+    ReminderIssueCopy? copy,
   }) {
     final now = DateTime.now();
     final normalizedRelatedId = _normalizeScheduleIssueRelatedId(relatedId);
@@ -519,6 +537,7 @@ class NotificationService extends ChangeNotifier
         scheduledTime: scheduledTime,
         relatedId: normalizedRelatedId,
         blocking: blocking,
+        copy: copy,
       );
       return;
     }
@@ -531,6 +550,7 @@ class NotificationService extends ChangeNotifier
       scheduledTime: scheduledTime,
       relatedId: normalizedRelatedId,
       blocking: blocking,
+      copy: copy,
     );
     debugPrint('[NotificationService] $title: $message');
     _notifyListenersBatched();
@@ -548,6 +568,7 @@ class NotificationService extends ChangeNotifier
       message: issue?.message ?? fallbackMessage,
       scheduledTime: issue?.scheduledTime ?? scheduledTime,
       relatedId: issue?.relatedId ?? relatedId,
+      copy: issue?.copy,
     );
   }
 
@@ -568,8 +589,28 @@ class NotificationService extends ChangeNotifier
     );
   }
 
+  @override
+  void recordReminderScheduleIssueWithCopy({
+    required String title,
+    required String message,
+    required ReminderIssueCopy copy,
+    DateTime? scheduledTime,
+    String? relatedId,
+    bool blocking = true,
+  }) {
+    _recordScheduleIssue(
+      title: title,
+      message: message,
+      copy: copy,
+      scheduledTime: scheduledTime,
+      relatedId: relatedId,
+      blocking: blocking,
+    );
+  }
+
   Future<bool> _ensureChannelReadyOrRecord({
     required String issueTitle,
+    NotificationIssueTitle? issueTitleCode,
     DateTime? scheduledTime,
     String? relatedId,
   }) async {
@@ -585,6 +626,10 @@ class NotificationService extends ChangeNotifier
           status.importance == null ||
           status.hasSound == null) {
         _recordScheduleIssue(
+          copy: ReminderIssueCopy.notification(
+            NotificationIssueNotice.channelUnknown,
+            titleCode: issueTitleCode,
+          ),
           title: issueTitle,
           message: '普通提醒渠道状态无法确认，提醒会继续注册，但到点显示或声音可能受系统设置影响。请检查系统通知设置后重新保存提醒。',
           scheduledTime: scheduledTime,
@@ -595,6 +640,10 @@ class NotificationService extends ChangeNotifier
       }
       if (status.isBlocked) {
         _recordScheduleIssue(
+          copy: ReminderIssueCopy.notification(
+            NotificationIssueNotice.channelBlocked,
+            titleCode: issueTitleCode,
+          ),
           title: issueTitle,
           message: '普通提醒渠道已关闭，提醒已注册但到点可能不会显示。请在系统通知设置里开启“多仪 · 通知提醒”。',
           scheduledTime: scheduledTime,
@@ -605,6 +654,10 @@ class NotificationService extends ChangeNotifier
       }
       if (status.isSilent) {
         _recordScheduleIssue(
+          copy: ReminderIssueCopy.notification(
+            NotificationIssueNotice.channelSilent,
+            titleCode: issueTitleCode,
+          ),
           title: issueTitle,
           message: '普通提醒渠道声音已关闭，提醒已注册但到点可能无声。请在系统通知设置里恢复“多仪 · 通知提醒”的声音。',
           scheduledTime: scheduledTime,
@@ -617,9 +670,16 @@ class NotificationService extends ChangeNotifier
       debugPrint(
         '[NotificationService] channel readiness probe failed: $e\n$st',
       );
+      final issueDetail = e.toString();
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.channelProbeFailed,
+          titleCode: issueTitleCode,
+          detail: issueDetail,
+        ),
         title: issueTitle,
-        message: '普通提醒渠道状态无法确认，提醒会继续注册，但到点显示或声音可能受系统设置影响。请检查系统通知设置后重新保存提醒。($e)',
+        message:
+            '普通提醒渠道状态无法确认，提醒会继续注册，但到点显示或声音可能受系统设置影响。请检查系统通知设置后重新保存提醒。($issueDetail)',
         scheduledTime: scheduledTime,
         relatedId: relatedId,
         blocking: false,
@@ -634,6 +694,7 @@ class NotificationService extends ChangeNotifier
     required String body,
     required DateTime when,
     required String issueTitle,
+    NotificationIssueTitle? issueTitleCode,
     String? payload,
     String? relatedId,
     bool requestIfNeeded = false,
@@ -641,6 +702,10 @@ class NotificationService extends ChangeNotifier
     final now = DateTime.now();
     if (!when.isAfter(now)) {
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.timePassed,
+          titleCode: issueTitleCode,
+        ),
         title: issueTitle,
         message: '提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。',
         scheduledTime: when,
@@ -651,6 +716,7 @@ class NotificationService extends ChangeNotifier
     final priorIssue = _lastScheduleIssue;
     if (!await _ensureChannelReadyOrRecord(
       issueTitle: issueTitle,
+      issueTitleCode: issueTitleCode,
       scheduledTime: when,
       relatedId: relatedId,
     )) {
@@ -672,6 +738,10 @@ class NotificationService extends ChangeNotifier
       final granted = await LocalNotifications.instance.refreshPermission();
       if (!granted) {
         _recordScheduleIssue(
+          copy: ReminderIssueCopy.notification(
+            NotificationIssueNotice.oncePermissionUnconfirmed,
+            titleCode: issueTitleCode,
+          ),
           title: issueTitle,
           message: '系统通知权限未开启，提醒未确认注册成功。请开启通知权限后重新保存提醒。',
           scheduledTime: when,
@@ -685,6 +755,10 @@ class NotificationService extends ChangeNotifier
       return true;
     } on NotificationPermissionDeniedException {
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.oncePermissionDenied,
+          titleCode: issueTitleCode,
+        ),
         title: issueTitle,
         message: '系统通知权限未开启，提醒未注册。请开启通知权限后重新保存提醒。',
         scheduledTime: when,
@@ -693,9 +767,15 @@ class NotificationService extends ChangeNotifier
       return false;
     } catch (e, st) {
       debugPrint('[NotificationService] scheduleOnce failed: $e\n$st');
+      final issueDetail = e.toString();
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.onceScheduleFailed,
+          titleCode: issueTitleCode,
+          detail: issueDetail,
+        ),
         title: issueTitle,
-        message: '系统通知注册失败，请检查通知权限、精确闹钟权限和系统通知渠道设置后重新保存提醒。($e)',
+        message: '系统通知注册失败，请检查通知权限、精确闹钟权限和系统通知渠道设置后重新保存提醒。($issueDetail)',
         scheduledTime: when,
         relatedId: relatedId,
       );
@@ -710,6 +790,7 @@ class NotificationService extends ChangeNotifier
     required int hour,
     required int minute,
     required String issueTitle,
+    NotificationIssueTitle? issueTitleCode,
     List<int>? weekdays,
     String? payload,
     String? relatedId,
@@ -717,6 +798,7 @@ class NotificationService extends ChangeNotifier
     final priorIssue = _lastScheduleIssue;
     if (!await _ensureChannelReadyOrRecord(
       issueTitle: issueTitle,
+      issueTitleCode: issueTitleCode,
       relatedId: relatedId,
     )) {
       return false;
@@ -738,6 +820,10 @@ class NotificationService extends ChangeNotifier
       final granted = await LocalNotifications.instance.refreshPermission();
       if (!granted) {
         _recordScheduleIssue(
+          copy: ReminderIssueCopy.notification(
+            NotificationIssueNotice.repeatPermissionUnconfirmed,
+            titleCode: issueTitleCode,
+          ),
           title: issueTitle,
           message: '系统通知权限未开启，重复提醒未确认注册成功。请开启通知权限后重新保存提醒。',
           relatedId: relatedId,
@@ -750,6 +836,10 @@ class NotificationService extends ChangeNotifier
       return true;
     } on NotificationPermissionDeniedException {
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.repeatPermissionDenied,
+          titleCode: issueTitleCode,
+        ),
         title: issueTitle,
         message: '系统通知权限未开启，重复提醒未注册。请开启通知权限后重新保存提醒。',
         relatedId: relatedId,
@@ -757,9 +847,15 @@ class NotificationService extends ChangeNotifier
       return false;
     } catch (e, st) {
       debugPrint('[NotificationService] scheduleDaily failed: $e\n$st');
+      final issueDetail = e.toString();
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.repeatScheduleFailed,
+          titleCode: issueTitleCode,
+          detail: issueDetail,
+        ),
         title: issueTitle,
-        message: '重复提醒注册失败，请检查通知权限、精确闹钟权限和系统通知渠道设置后重新保存提醒。($e)',
+        message: '重复提醒注册失败，请检查通知权限、精确闹钟权限和系统通知渠道设置后重新保存提醒。($issueDetail)',
         relatedId: relatedId,
       );
       return false;
@@ -812,10 +908,17 @@ class NotificationService extends ChangeNotifier
 
   void _recordAlarmPushFallback({
     required String issueTitle,
+    NotificationIssueTitle? issueTitleCode,
     DateTime? scheduledTime,
     String? relatedId,
   }) {
     _recordScheduleIssue(
+      copy: ReminderIssueCopy.notification(
+        NotificationIssueNotice.alarmDegraded,
+        titleCode: NotificationIssueTitle.alarmDegraded,
+        label: issueTitle,
+        labelCode: issueTitleCode,
+      ),
       title: '闹钟提醒已降级为普通通知',
       message:
           '$issueTitle：强提醒或内置铃声注册失败，已改用普通通知提醒；到点不会弹出强提醒。请检查精准闹钟权限、强提醒渠道、后台限制和普通提醒渠道声音。',
@@ -843,9 +946,15 @@ class NotificationService extends ChangeNotifier
           debugPrint(
             '[NotificationService] immediate notification failed: $e\n$st',
           );
+          final issueDetail = e.toString();
           _recordScheduleIssue(
+            copy: ReminderIssueCopy.notification(
+              NotificationIssueNotice.sendFailed,
+              titleCode: NotificationIssueTitle.sendFailed,
+              detail: issueDetail,
+            ),
             title: '通知发送失败',
-            message: '系统通知发送失败，请检查通知权限和通知渠道设置后重试。($e)',
+            message: '系统通知发送失败，请检查通知权限和通知渠道设置后重试。($issueDetail)',
             blocking: false,
           );
         });
@@ -871,12 +980,21 @@ class NotificationService extends ChangeNotifier
 
   Future<bool> ensureReadyForReminder({
     DateTime? scheduledTime,
-    String issueTitle = '提醒注册失败',
+    String? issueTitle,
+    NotificationIssueTitle? issueTitleCode,
     String? relatedId,
   }) async {
+    final rawIssueTitle = issueTitle ?? '提醒注册失败';
+    final effectiveTitleCode =
+        issueTitleCode ??
+        (issueTitle == null ? NotificationIssueTitle.registrationFailed : null);
     if (scheduledTime != null && !scheduledTime.isAfter(DateTime.now())) {
       _recordScheduleIssue(
-        title: issueTitle,
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.timePassed,
+          titleCode: effectiveTitleCode,
+        ),
+        title: rawIssueTitle,
         message: '提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。',
         scheduledTime: scheduledTime,
         relatedId: relatedId,
@@ -886,7 +1004,11 @@ class NotificationService extends ChangeNotifier
     final granted = await requestPermission();
     if (!granted) {
       _recordScheduleIssue(
-        title: issueTitle,
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.oncePermissionDenied,
+          titleCode: effectiveTitleCode,
+        ),
+        title: rawIssueTitle,
         message: '系统通知权限未开启，提醒未注册。请开启通知权限后重新保存提醒。',
         scheduledTime: scheduledTime,
         relatedId: relatedId,
@@ -894,7 +1016,8 @@ class NotificationService extends ChangeNotifier
       return false;
     }
     if (!await _ensureChannelReadyOrRecord(
-      issueTitle: issueTitle,
+      issueTitle: rawIssueTitle,
+      issueTitleCode: effectiveTitleCode,
       scheduledTime: scheduledTime,
       relatedId: relatedId,
     )) {
@@ -927,15 +1050,25 @@ class NotificationService extends ChangeNotifier
       );
     } on NotificationPermissionDeniedException {
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.sendPermissionDenied,
+          titleCode: NotificationIssueTitle.sendFailed,
+        ),
         title: '通知发送失败',
         message: '系统通知权限未开启，通知未发送。请开启通知权限后重试。',
       );
       return;
     } catch (e, st) {
       debugPrint('[NotificationService] show failed: $e\n$st');
+      final issueDetail = e.toString();
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.sendFailed,
+          titleCode: NotificationIssueTitle.sendFailed,
+          detail: issueDetail,
+        ),
         title: '通知发送失败',
-        message: '系统通知发送失败，请检查通知权限和通知渠道设置后重试。($e)',
+        message: '系统通知发送失败，请检查通知权限和通知渠道设置后重试。($issueDetail)',
       );
       return;
     }
@@ -968,9 +1101,15 @@ class NotificationService extends ChangeNotifier
       await LocalNotifications.instance.cancel(id);
     } catch (e, st) {
       debugPrint('[NotificationService] snooze cancel failed: $e\n$st');
+      final issueDetail = e.toString();
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.snoozeCancelFailed,
+          titleCode: NotificationIssueTitle.snoozeWarning,
+          detail: issueDetail,
+        ),
         title: '稍后提醒注册异常',
-        message: '旧提醒取消失败，仍会尝试重新注册稍后提醒。若稍后收到重复提醒，请重新保存原提醒。($e)',
+        message: '旧提醒取消失败，仍会尝试重新注册稍后提醒。若稍后收到重复提醒，请重新保存原提醒。($issueDetail)',
         scheduledTime: when,
         blocking: false,
       );
@@ -982,6 +1121,7 @@ class NotificationService extends ChangeNotifier
       when: when,
       payload: payload,
       issueTitle: '稍后提醒注册失败',
+      issueTitleCode: NotificationIssueTitle.snoozeRegistrationFailed,
       relatedId: relatedId,
     );
     if (!scheduled) {
@@ -995,6 +1135,7 @@ class NotificationService extends ChangeNotifier
     if (_isAlarmPushFallbackPayload(payload)) {
       _recordAlarmPushFallback(
         issueTitle: '提醒注册降级',
+        issueTitleCode: NotificationIssueTitle.registrationDegraded,
         scheduledTime: when,
         relatedId: relatedId,
       );
@@ -1049,12 +1190,14 @@ class NotificationService extends ChangeNotifier
       when: when,
       payload: payload,
       issueTitle: '提醒注册失败',
+      issueTitleCode: NotificationIssueTitle.registrationFailed,
       relatedId: relatedId,
     );
     if (!scheduled) return false;
     if (_isAlarmPushFallbackPayload(payload)) {
       _recordAlarmPushFallback(
         issueTitle: '提醒注册降级',
+        issueTitleCode: NotificationIssueTitle.registrationDegraded,
         scheduledTime: when,
         relatedId: _relatedIdFromPayload(payload),
       );
@@ -1095,6 +1238,7 @@ class NotificationService extends ChangeNotifier
       when: when,
       payload: payload,
       issueTitle: '提醒注册失败',
+      issueTitleCode: NotificationIssueTitle.registrationFailed,
       relatedId: relatedId,
     );
     if (!scheduled) {
@@ -1108,6 +1252,7 @@ class NotificationService extends ChangeNotifier
     if (_isAlarmPushFallbackPayload(payload)) {
       _recordAlarmPushFallback(
         issueTitle: '提醒注册降级',
+        issueTitleCode: NotificationIssueTitle.registrationDegraded,
         scheduledTime: when,
         relatedId: relatedId,
       );
@@ -1142,6 +1287,7 @@ class NotificationService extends ChangeNotifier
       when: when,
       payload: payload,
       issueTitle: 'AI 日程提醒注册失败',
+      issueTitleCode: NotificationIssueTitle.aiRegistrationFailed,
       relatedId: calendarEventId,
     );
     if (!scheduled) {
@@ -1193,12 +1339,14 @@ class NotificationService extends ChangeNotifier
       weekdays: weekdays,
       payload: payload,
       issueTitle: '重复提醒注册失败',
+      issueTitleCode: NotificationIssueTitle.repeatingRegistrationFailed,
       relatedId: relatedId,
     );
     if (!scheduled) return false;
     if (_isAlarmPushFallbackPayload(payload)) {
       _recordAlarmPushFallback(
         issueTitle: '重复提醒注册降级',
+        issueTitleCode: NotificationIssueTitle.repeatingRegistrationDegraded,
         relatedId: _relatedIdFromPayload(payload),
       );
     }
@@ -1239,6 +1387,7 @@ class NotificationService extends ChangeNotifier
       weekdays: weekdays,
       payload: payload,
       issueTitle: '重复提醒注册失败',
+      issueTitleCode: NotificationIssueTitle.repeatingRegistrationFailed,
       relatedId: relatedId,
     );
     if (!scheduled) {
@@ -1249,7 +1398,11 @@ class NotificationService extends ChangeNotifier
       );
     }
     if (_isAlarmPushFallbackPayload(payload)) {
-      _recordAlarmPushFallback(issueTitle: '重复提醒注册降级', relatedId: relatedId);
+      _recordAlarmPushFallback(
+        issueTitle: '重复提醒注册降级',
+        issueTitleCode: NotificationIssueTitle.repeatingRegistrationDegraded,
+        relatedId: relatedId,
+      );
     }
     _pendingNotifications++;
     _addScheduledToHistory(
@@ -1355,6 +1508,7 @@ class NotificationService extends ChangeNotifier
       when: when,
       payload: 'duoyi://todo/$todoId',
       issueTitle: '待办提醒注册失败',
+      issueTitleCode: NotificationIssueTitle.taskRegistrationFailed,
       relatedId: todoId,
     );
     if (!scheduled) {
@@ -1406,6 +1560,7 @@ class NotificationService extends ChangeNotifier
       weekdays: weekdays,
       payload: 'duoyi://habit/$habitId?confirm=1',
       issueTitle: '习惯提醒注册失败',
+      issueTitleCode: NotificationIssueTitle.habitRegistrationFailed,
       relatedId: habitId,
     );
     if (!scheduled) {
@@ -1462,6 +1617,7 @@ class NotificationService extends ChangeNotifier
       when: remindAt,
       payload: 'duoyi://tab/calendar',
       issueTitle: '纪念日提醒注册失败',
+      issueTitleCode: NotificationIssueTitle.anniversaryRegistrationFailed,
       relatedId: annId,
     );
     if (!scheduled) {
@@ -1543,7 +1699,10 @@ class NotificationService extends ChangeNotifier
   /// 必须由用户在提醒规则中明确选择，避免误触后突然全屏响铃。
   Future<bool> sendTest() async {
     final priorIssue = _lastScheduleIssue;
-    await _ensureChannelReadyOrRecord(issueTitle: '普通通知测试异常');
+    await _ensureChannelReadyOrRecord(
+      issueTitle: '普通通知测试异常',
+      issueTitleCode: NotificationIssueTitle.testWarning,
+    );
     final channelWarningRecorded =
         !identical(priorIssue, _lastScheduleIssue) &&
         _lastScheduleIssue?.blocking == false;
@@ -1559,6 +1718,10 @@ class NotificationService extends ChangeNotifier
       final granted = await LocalNotifications.instance.refreshPermission();
       if (!granted) {
         _recordScheduleIssue(
+          copy: ReminderIssueCopy.notification(
+            NotificationIssueNotice.testPermissionUnconfirmed,
+            titleCode: NotificationIssueTitle.testWarning,
+          ),
           title: '普通通知测试异常',
           message: '测试通知已请求发送，但系统通知权限未开启，真机可能看不到通知或没有声音。请开启系统通知权限后再测试。',
           blocking: false,
@@ -1569,15 +1732,25 @@ class NotificationService extends ChangeNotifier
       }
     } on NotificationPermissionDeniedException {
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.testPermissionDenied,
+          titleCode: NotificationIssueTitle.testWarning,
+        ),
         title: '普通通知测试异常',
         message: '系统通知权限未开启，测试通知未发送。请开启系统通知权限后再测试。',
       );
       return false;
     } catch (e, st) {
       debugPrint('[NotificationService] test notification failed: $e\n$st');
+      final issueDetail = e.toString();
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.testSendFailed,
+          titleCode: NotificationIssueTitle.testWarning,
+          detail: issueDetail,
+        ),
         title: '普通通知测试异常',
-        message: '测试通知发送失败，请检查系统通知权限和通知渠道设置。($e)',
+        message: '测试通知发送失败，请检查系统通知权限和通知渠道设置。($issueDetail)',
       );
       return false;
     }
@@ -1639,6 +1812,7 @@ class NotificationService extends ChangeNotifier
         when: when,
         payload: payload,
         issueTitle: '定时通知测试注册失败',
+        issueTitleCode: NotificationIssueTitle.scheduledTestFailed,
         requestIfNeeded: true,
       ),
       ReminderKind.popup => await _schedulePopupDiagnosticOrRecord(
@@ -1775,6 +1949,12 @@ class NotificationService extends ChangeNotifier
   }) async {
     if (popup == null) {
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          inAppOnly
+              ? NotificationIssueNotice.inAppPopupUnavailable
+              : NotificationIssueNotice.popupFallbackUnavailable,
+          titleCode: NotificationIssueTitle.popupTestFailed,
+        ),
         title: '定时弹出测试注册失败',
         message: inAppOnly
             ? '应用内弹出通道未初始化，未注册普通通知兜底。请保持应用前台后重试。'
@@ -1804,11 +1984,19 @@ class NotificationService extends ChangeNotifier
       return true;
     } catch (e, st) {
       debugPrint('[NotificationService] scheduled popup test failed: $e\n$st');
+      final issueDetail = e.toString();
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          inAppOnly
+              ? NotificationIssueNotice.inAppPopupFailed
+              : NotificationIssueNotice.popupFallbackFailed,
+          titleCode: NotificationIssueTitle.popupTestFailed,
+          detail: issueDetail,
+        ),
         title: '定时弹出测试注册失败',
         message: inAppOnly
-            ? '应用内弹出测试未注册，且不会退回普通通知。请保持应用前台后重试。($e)'
-            : '弹出兜底测试未注册，普通通知兜底也不可用。请检查通知权限和通知渠道后重试。($e)',
+            ? '应用内弹出测试未注册，且不会退回普通通知。请保持应用前台后重试。($issueDetail)'
+            : '弹出兜底测试未注册，普通通知兜底也不可用。请检查通知权限和通知渠道后重试。($issueDetail)',
         scheduledTime: when,
       );
       return false;
@@ -1826,6 +2014,10 @@ class NotificationService extends ChangeNotifier
   }) async {
     if (alarm == null) {
       _recordScheduleIssue(
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.alarmUnavailable,
+          titleCode: NotificationIssueTitle.alarmTestFailed,
+        ),
         title: '定时闹钟测试注册失败',
         message: '闹钟通道未初始化，未注册普通通知兜底。请重启应用后再测试，或重新保存提醒触发提醒服务初始化。',
         scheduledTime: when,
@@ -1860,9 +2052,15 @@ class NotificationService extends ChangeNotifier
         fallbackScheduledTime: when,
         blocking: true,
       )) {
+        final issueDetail = e.toString();
         _recordScheduleIssue(
+          copy: ReminderIssueCopy.notification(
+            NotificationIssueNotice.alarmScheduleFailed,
+            titleCode: NotificationIssueTitle.alarmTestFailed,
+            detail: issueDetail,
+          ),
           title: '定时闹钟测试注册失败',
-          message: '闹钟提醒注册失败，请检查通知权限、精准闹钟权限和强提醒渠道设置。($e)',
+          message: '闹钟提醒注册失败，请检查通知权限、精准闹钟权限和强提醒渠道设置。($issueDetail)',
           scheduledTime: when,
         );
       }

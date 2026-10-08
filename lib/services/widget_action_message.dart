@@ -1,5 +1,6 @@
 import '../core/i18n.dart';
 import 'todo_reminder_preflight_copy.dart';
+import 'reminder_issue_copy.dart';
 
 enum WidgetActionNotice {
   focusRunning,
@@ -97,6 +98,7 @@ final class WidgetActionMessage {
     this.detail = '',
     this.issueTitle,
     this.preflightCopy,
+    this.issueCopy,
     this.syncState = WidgetActionSyncState.unknown,
     this.syncReason = '',
     this.reminderHint = WidgetActionReminderHint.none,
@@ -107,6 +109,7 @@ final class WidgetActionMessage {
   final String detail;
   final String? issueTitle;
   final TodoReminderPreflightCopy? preflightCopy;
+  final ReminderIssueCopy? issueCopy;
   final WidgetActionSyncState syncState;
   final String syncReason;
   final WidgetActionReminderHint reminderHint;
@@ -119,9 +122,13 @@ final class WidgetActionMessage {
     final issueLabel =
         issueTitle ?? pick('待办提醒注册失败', 'Task reminder not registered');
     final reminderSubject =
-        preflightCopy?.title(locale: effectiveLocale) ?? subject;
+        issueCopy?.renderTitle(fallback: subject, locale: effectiveLocale) ??
+        preflightCopy?.title(locale: effectiveLocale) ??
+        subject;
     final reminderDetail =
-        preflightCopy?.message(locale: effectiveLocale) ?? detail;
+        issueCopy?.renderMessage(fallback: detail, locale: effectiveLocale) ??
+        preflightCopy?.message(locale: effectiveLocale) ??
+        detail;
     return switch (notice) {
       WidgetActionNotice.focusRunning => pick(
         '专注计时正在进行',

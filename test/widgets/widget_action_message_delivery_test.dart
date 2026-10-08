@@ -4,6 +4,7 @@ import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/services/account_local_data_cleaner.dart';
 import 'package:duoyi/services/reminder_scheduler.dart'
     show TodoReminderPreflightIssue;
+import 'package:duoyi/services/reminder_issue_copy.dart';
 import 'package:duoyi/services/todo_reminder_preflight_copy.dart';
 import 'package:duoyi/services/widget_action_message.dart';
 import 'package:duoyi/services/widget_action_scope.dart';
@@ -324,6 +325,128 @@ void main() {
         TodoReminderPreflightNotice.timeInPast,
       );
       final accountBMessage = descriptorFor(accountBIssue);
+      final accountBQueued = Completer<WidgetActionMessage>();
+      final accountBPending = _runAction(
+        messengerKey: messengerKey,
+        feedbackQueued: accountBQueued,
+        preflight: (showFeedback) async {
+          showFeedback(accountBMessage);
+          return false;
+        },
+        create: () async {
+          createCalls++;
+          return const WidgetActionMessage(WidgetActionNotice.todoCompleted);
+        },
+      );
+      await accountBQueued.future;
+      await accountBPending;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(createCalls, 0);
+      expect(
+        find.text(accountAMessage.render(locale: AppLocale.en)),
+        findsNothing,
+      );
+      expect(
+        find.text(accountBMessage.render(locale: AppLocale.en)),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'typed notification issue renders the locale selected after feedback is queued',
+    (tester) async {
+      final messengerKey = GlobalKey<ScaffoldMessengerState>();
+      await _pumpMessenger(tester, messengerKey);
+      const diagnostic = 'POST_NOTIFICATIONS 未授权 / platform result=0xD3';
+      final descriptor = WidgetActionMessage(
+        WidgetActionNotice.reminderIssue,
+        subject: '待办提醒注册失败',
+        detail: diagnostic,
+        issueCopy: const ReminderIssueCopy.notification(
+          NotificationIssueNotice.oncePermissionUnconfirmed,
+          titleCode: NotificationIssueTitle.taskRegistrationFailed,
+          detail: diagnostic,
+        ),
+      );
+      final feedbackQueued = Completer<WidgetActionMessage>();
+      var createCalls = 0;
+
+      final pending = _runAction(
+        messengerKey: messengerKey,
+        feedbackQueued: feedbackQueued,
+        preflight: (showFeedback) async {
+          showFeedback(descriptor);
+          return false;
+        },
+        create: () async {
+          createCalls++;
+          return const WidgetActionMessage(WidgetActionNotice.todoCompleted);
+        },
+      );
+
+      final delivered = await feedbackQueued.future;
+      I18n.setLocale(AppLocale.en);
+      await pending;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(createCalls, 0);
+      expect(delivered, same(descriptor));
+      expect(
+        find.text(
+          'Reminder status needs attention: Check task reminder: Notifications are disabled, so reminder registration is unconfirmed. Enable notifications and save the reminder again.($diagnostic)',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'account A typed notification issue is suppressed while B is current',
+    (tester) async {
+      final messengerKey = GlobalKey<ScaffoldMessengerState>();
+      await _pumpMessenger(tester, messengerKey);
+      I18n.setLocale(AppLocale.en);
+      var createCalls = 0;
+
+      WidgetActionMessage notificationIssue(String detail) =>
+          WidgetActionMessage(
+            WidgetActionNotice.reminderIssue,
+            subject: '待办提醒注册失败',
+            detail: detail,
+            issueCopy: ReminderIssueCopy.notification(
+              NotificationIssueNotice.channelProbeFailed,
+              titleCode: NotificationIssueTitle.taskRegistrationFailed,
+              detail: detail,
+            ),
+          );
+
+      final accountAMessage = notificationIssue(
+        '渠道查询异常 / account A diagnostic',
+      );
+      final accountAQueued = Completer<WidgetActionMessage>();
+      final accountAPending = _runAction(
+        messengerKey: messengerKey,
+        feedbackQueued: accountAQueued,
+        preflight: (showFeedback) async {
+          showFeedback(accountAMessage);
+          return false;
+        },
+        create: () async {
+          createCalls++;
+          return const WidgetActionMessage(WidgetActionNotice.todoCompleted);
+        },
+      );
+      await accountAQueued.future;
+      await accountAPending;
+
+      AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+      final accountBMessage = notificationIssue(
+        '渠道查询异常 / account B diagnostic',
+      );
       final accountBQueued = Completer<WidgetActionMessage>();
       final accountBPending = _runAction(
         messengerKey: messengerKey,

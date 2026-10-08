@@ -1515,7 +1515,12 @@ void main() {
     expect(method, contains('LocalNotifications.instance.show'));
     expect(
       method,
-      contains("_ensureChannelReadyOrRecord(issueTitle: '普通通知测试异常')"),
+      matches(
+        RegExp(
+          r"_ensureChannelReadyOrRecord\(\s*issueTitle: '普通通知测试异常',\s*"
+          r'issueTitleCode: NotificationIssueTitle.testWarning,\s*\)',
+        ),
+      ),
     );
     expect(method, contains('LocalNotifications.instance.refreshPermission()'));
     expect(method, contains('系统通知权限未开启，测试通知未发送'));
