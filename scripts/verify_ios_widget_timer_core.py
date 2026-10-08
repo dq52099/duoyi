@@ -43,18 +43,22 @@ def _resolve_executable(value: str) -> str | None:
 
 
 def _extract_core(source: str) -> str:
-    start = source.find(BEGIN_MARKER)
-    end = source.find(END_MARKER)
+    return _extract_marked_core(source, BEGIN_MARKER, END_MARKER)
+
+
+def _extract_marked_core(source: str, begin_marker: str, end_marker: str) -> str:
+    start = source.find(begin_marker)
+    end = source.find(end_marker)
     if start < 0 or end < 0 or end <= start:
         raise ValueError(
-            f"missing or misordered production markers: {BEGIN_MARKER!r}, "
-            f"{END_MARKER!r}"
+            f"missing or misordered production markers: {begin_marker!r}, "
+            f"{end_marker!r}"
         )
-    if source.find(BEGIN_MARKER, start + len(BEGIN_MARKER)) >= 0:
-        raise ValueError(f"multiple {BEGIN_MARKER!r} markers")
-    if source.find(END_MARKER, end + len(END_MARKER)) >= 0:
-        raise ValueError(f"multiple {END_MARKER!r} markers")
-    core = source[start + len(BEGIN_MARKER) : end].strip()
+    if source.find(begin_marker, start + len(begin_marker)) >= 0:
+        raise ValueError(f"multiple {begin_marker!r} markers")
+    if source.find(end_marker, end + len(end_marker)) >= 0:
+        raise ValueError(f"multiple {end_marker!r} markers")
+    core = source[start + len(begin_marker) : end].strip()
     production_imports = source[:start]
     for required_import in ("import Foundation", "import CoreFoundation"):
         if required_import not in production_imports:
@@ -64,9 +68,9 @@ def _extract_core(source: str) -> str:
     return core
 
 
-def _private_run_directory(base: Path) -> Path:
+def _private_run_directory(base: Path, prefix: str = "ios-widget-timer-core-") -> Path:
     base.mkdir(parents=True, exist_ok=True)
-    run_dir = Path(tempfile.mkdtemp(prefix="ios-widget-timer-core-", dir=base))
+    run_dir = Path(tempfile.mkdtemp(prefix=prefix, dir=base))
     run_dir.chmod(stat.S_IRWXU)
     return run_dir
 

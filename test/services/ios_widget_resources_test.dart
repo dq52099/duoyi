@@ -395,12 +395,12 @@ void main() {
       );
       expect(snapshot, contains('values["widget_account_nonce"]'));
       expect(snapshot, contains('var hasPublishedSession: Bool'));
-      expect(
-        snapshot,
-        contains(
-          '!day.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty',
-        ),
-      );
+      expect(snapshot, contains('Self.isValidDay(day)'));
+      expect(snapshot, contains('utcOffsetMinutes != nil'));
+      expect(snapshot, contains('CFBooleanGetTypeID()'));
+      expect(snapshot, contains('Int(exactly: raw)'));
+      expect(snapshot, contains('offset.multipliedReportingOverflow(by: 60)'));
+      expect(snapshot, isNot(contains('number.intValue')));
       expect(
         snapshot,
         contains(
@@ -417,7 +417,7 @@ void main() {
       expect(
         snapshot,
         contains(
-          'utcOffsetMinutes == TimeZone.current.secondsFromGMT(for: date) / 60',
+          'utcOffsetMinutes == gregorian.timeZone.secondsFromGMT(for: date) / 60',
         ),
       );
 
@@ -531,17 +531,18 @@ void main() {
       );
       expect(
         actionURL,
-        contains(
-          'guard components.host == "action" else { return components.url }',
-        ),
+        contains('guard components.scheme?.lowercased() == "duoyi"'),
       );
       expect(
         actionURL,
         contains(
-          'guard isFresh(at: Date()), let offset = utcOffsetMinutes '
+          'guard isFresh(at: date, calendar: calendar), let offset = utcOffsetMinutes '
           'else { return nil }',
         ),
       );
+      expect(actionURL, contains('components.percentEncodedPath'));
+      expect(actionURL, contains('encodedAction.removingPercentEncoding'));
+      expect(actionURL, contains('omittingEmptySubsequences: false'));
       expect(actionURL, contains('name == "text"'));
       expect(
         actionURL,

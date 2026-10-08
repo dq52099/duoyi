@@ -241,6 +241,7 @@ private enum DuoyiWidgetLocale: String {
 
 // Freeze metadata with the payload; an old timeline must never borrow a newer
 // account nonce when constructing a mutation link.
+// BEGIN DUOYI_WIDGET_SNAPSHOT_CORE
 private struct DuoyiWidgetSnapshot {
     let day: String
     let utcOffsetMinutes: Int?
@@ -251,13 +252,7 @@ private struct DuoyiWidgetSnapshot {
     init(values: [String: Any]) {
         day = values["widget_snapshot_day"] as? String ?? ""
         accountNonce = values["widget_account_nonce"] as? String ?? ""
-        if let number = values["widget_snapshot_utc_offset_minutes"] as? NSNumber {
-            utcOffsetMinutes = number.intValue
-        } else if let text = values["widget_snapshot_utc_offset_minutes"] as? String {
-            utcOffsetMinutes = Int(text)
-        } else {
-            utcOffsetMinutes = nil
-        }
+        utcOffsetMinutes = Self.offset(values["widget_snapshot_utc_offset_minutes"])
     }
 
     private init(day: String, utcOffsetMinutes: Int?, accountNonce: String) {
@@ -267,26 +262,86 @@ private struct DuoyiWidgetSnapshot {
     }
 
     var hasPublishedSession: Bool {
-        !day.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        Self.isValidDay(day) && utcOffsetMinutes != nil &&
             !accountNonce.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private static func offset(_ value: Any?) -> Int? {
+        let offset: Int
+        if let text = value as? String {
+            guard let exact = Int(text) else { return nil }
+            offset = exact
+        } else if let number = value as? NSNumber {
+            guard CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+            if let exact = Int(number.stringValue) {
+                offset = exact
+            } else {
+                let raw = number.doubleValue
+                guard raw.isFinite, let exact = Int(exactly: raw),
+                      number.compare(NSNumber(value: exact)) == .orderedSame else { return nil }
+                offset = exact
+            }
+        } else {
+            return nil
+        }
+        let seconds = offset.multipliedReportingOverflow(by: 60)
+        guard !seconds.overflow, TimeZone(secondsFromGMT: seconds.partialValue) != nil else { return nil }
+        return offset
+    }
+
+    private static func isValidDay(_ day: String) -> Bool {
+        let bytes = Array(day.utf8)
+        guard bytes.count == 10, bytes[4] == 45, bytes[7] == 45 else { return false }
+        for index in [0, 1, 2, 3, 5, 6, 8, 9] {
+            guard bytes[index] >= 48, bytes[index] <= 57 else { return false }
+        }
+        let fields = day.split(separator: "-")
+        guard fields.count == 3,
+              let year = Int(fields[0]), let month = Int(fields[1]), let dateDay = Int(fields[2]),
+              year > 0, (1...12).contains(month), (1...31).contains(dateDay) else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        guard let date = calendar.date(from: DateComponents(year: year, month: month, day: dateDay, hour: 12)) else { return false }
+        let resolved = calendar.dateComponents([.year, .month, .day], from: date)
+        return resolved.year == year && resolved.month == month && resolved.day == dateDay
     }
 
     func isFresh(at date: Date) -> Bool {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = .current
-        let fields = calendar.dateComponents([.year, .month, .day], from: date)
+        return isFresh(at: date, calendar: calendar)
+    }
+
+    func isFresh(at date: Date, calendar: Calendar) -> Bool {
+        guard hasPublishedSession, date.timeIntervalSince1970.isFinite else { return false }
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = calendar.timeZone
+        let fields = gregorian.dateComponents([.year, .month, .day], from: date)
         guard let year = fields.year, let month = fields.month, let dateDay = fields.day else {
             return false
         }
         let localDay = String(format: "%04d-%02d-%02d", year, month, dateDay)
-        return hasPublishedSession && day == localDay &&
-            utcOffsetMinutes == TimeZone.current.secondsFromGMT(for: date) / 60
+        return day == localDay &&
+            utcOffsetMinutes == gregorian.timeZone.secondsFromGMT(for: date) / 60
     }
 
     func actionURL(_ components: URLComponents?) -> URL? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        return actionURL(components, at: Date(), calendar: calendar)
+    }
+
+    func actionURL(_ components: URLComponents?, at date: Date, calendar: Calendar) -> URL? {
         guard var components = components else { return nil }
-        guard components.host == "action" else { return components.url }
-        let action = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard components.scheme?.lowercased() == "duoyi",
+              components.host?.lowercased() == "action" else { return components.url }
+        // Flutter dispatches the first decoded path segment, including when
+        // extra trailing segments are present. Decode after splitting so an
+        // encoded slash does not create a different action.
+        let encodedPath = components.percentEncodedPath
+        let path = encodedPath.hasPrefix("/") ? String(encodedPath.dropFirst()) : encodedPath
+        let encodedAction = path.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
+        let action = encodedAction.removingPercentEncoding ?? ""
         let hasQuickText = components.queryItems?.contains {
             $0.name == "text" && !($0.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         } ?? false
@@ -294,7 +349,7 @@ private struct DuoyiWidgetSnapshot {
         let mutates = ["complete_todo", "checkin_habit", "start_pomodoro"].contains(action) ||
             (action == "quick_todo" && hasQuickText)
         guard mutates else { return components.url }
-        guard isFresh(at: Date()), let offset = utcOffsetMinutes else { return nil }
+        guard isFresh(at: date, calendar: calendar), let offset = utcOffsetMinutes else { return nil }
         let bindingKeys = Set(["source", "widget_day", "widget_offset", "widget_account"])
         var items = (components.queryItems ?? []).filter { !bindingKeys.contains($0.name) }
         items.append(contentsOf: [
@@ -307,6 +362,7 @@ private struct DuoyiWidgetSnapshot {
         return components.url
     }
 }
+// END DUOYI_WIDGET_SNAPSHOT_CORE
 
 private struct DuoyiWidgetConfig {
     let kind: String
