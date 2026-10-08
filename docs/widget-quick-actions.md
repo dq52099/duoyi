@@ -86,9 +86,24 @@ not change severity, duplicate identity, permission clearing or history.
 The widget permission/channel preflight captures this metadata and renders it
 at guarded frame delivery. Unresolved todo rules deliver preflight metadata
 once through an optional sink capability; existing sinks still receive their
-original raw issue. Other pages, scheduler aggregates and native alarm/popup
+original raw issue. Other pages and native alarm/popup
 producers still require their own migration. Adding a formatter alone does not
 connect those consumers.
+
+Saved-widget reminder feedback now carries an ordered `ReminderSyncIssue`
+through `TodoReminderSyncResult`. Target feedback retains its message-only or
+exception projection; full-list feedback retains the existing aggregate order
+and throw precedence. Unknown reasons remain literal. Rule summaries localize
+only owned labels and hints, leaving the original task text unchanged.
+
+The existing virtual `syncTodosAndGetTodoFailure` still returns `Future<String?>`.
+Its base implementation offers metadata on that returned operation; plain
+override futures continue to work without scheduling again. Metadata is captured
+inside serialization, so later operations cannot replace an earlier result.
+Timeout retains an unconfirmed result, and late metadata uses the same pending
+operation plus the original account, storage and request-generation guards.
+The widget renderer reads the selected language at guarded delivery. This does
+not add late toast replay or turn an unconfirmed result into confirmed success.
 
 ## Acceptance scope
 

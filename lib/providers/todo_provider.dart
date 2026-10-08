@@ -9,6 +9,7 @@ import '../models/time_entry.dart';
 import '../models/todo.dart';
 import '../services/account_local_data_cleaner.dart';
 import '../services/reminder_scheduler.dart';
+import '../services/reminder_sync_issue.dart';
 import 'cloud_sync_provider.dart';
 import 'time_audit_provider.dart';
 
@@ -27,6 +28,7 @@ class TodoImportSummary {
 class TodoReminderSyncResult {
   final int generation;
   final String? issue;
+  final ReminderSyncIssue? issueCopy;
   final DateTime attemptedAt;
   final DateTime? succeededAt;
 
@@ -35,6 +37,7 @@ class TodoReminderSyncResult {
     required this.issue,
     required this.attemptedAt,
     this.succeededAt,
+    this.issueCopy,
   });
 
   bool get hasIssue => issue != null;
@@ -118,7 +121,9 @@ class TodoProvider extends ChangeNotifier {
   TimeAuditProvider? _timeAudit;
   FutureOr<void> Function()? onLocalMutationPersisted;
   String? _lastReminderSyncIssue;
+  ReminderSyncIssue? _lastReminderSyncIssueCopy;
   String? _lastReminderScheduleIssue;
+  ReminderSyncIssue? _lastReminderScheduleIssueCopy;
   DateTime? _lastReminderScheduleIssueAt;
   DateTime? _lastReminderSyncAttemptAt;
   DateTime? _lastReminderSyncSucceededAt;
@@ -136,6 +141,7 @@ class TodoProvider extends ChangeNotifier {
     _scheduler = s;
     if (s != null && _lastReminderSyncIssue == 'reminder_scheduler_missing') {
       _lastReminderSyncIssue = null;
+      _lastReminderSyncIssueCopy = null;
     }
   }
 
@@ -167,10 +173,14 @@ class TodoProvider extends ChangeNotifier {
   List<TodoItem> get todos => _todos;
   int get mineCompletionRate => _mineCompletionRate;
   String? get lastReminderSyncIssue => _lastReminderSyncIssue;
+  ReminderSyncIssue? get lastReminderSyncIssueCopy =>
+      _lastReminderSyncIssueCopy;
   TodoCloudSyncNotice? get cloudSyncNotice => _cloudSyncNotice;
   String? get lastCloudSyncError =>
       _cloudSyncNotice?.isError == true ? _cloudSyncNotice!.message : null;
   String? get lastReminderScheduleIssue => _lastReminderScheduleIssue;
+  ReminderSyncIssue? get lastReminderScheduleIssueCopy =>
+      _lastReminderScheduleIssueCopy;
   DateTime? get lastReminderScheduleIssueAt => _lastReminderScheduleIssueAt;
   DateTime? get lastReminderSyncAttemptAt => _lastReminderSyncAttemptAt;
   DateTime? get lastReminderSyncSucceededAt => _lastReminderSyncSucceededAt;
@@ -356,7 +366,9 @@ class TodoProvider extends ChangeNotifier {
     _storageLoaded = false;
     _storageLoadFuture = null;
     _lastReminderSyncIssue = null;
+    _lastReminderSyncIssueCopy = null;
     _lastReminderScheduleIssue = null;
+    _lastReminderScheduleIssueCopy = null;
     _lastReminderScheduleIssueAt = null;
     _lastReminderSyncAttemptAt = null;
     _lastReminderSyncSucceededAt = null;
@@ -551,21 +563,34 @@ class TodoProvider extends ChangeNotifier {
       if (!isCurrent()) return;
       if (reportTodoId != null) {
         _lastReminderScheduleIssue = result.issue;
+        _lastReminderScheduleIssueCopy = result.issueCopy;
         _lastReminderScheduleIssueAt = result.hasIssue ? attemptedAt : null;
       }
       _applyReminderSyncResult(result);
     }
 
-    TodoReminderSyncResult resultFor(String? issue, {bool confirmed = true}) =>
-        TodoReminderSyncResult(
-          generation: generation,
-          issue: issue,
-          attemptedAt: attemptedAt,
-          succeededAt: confirmed && issue == null ? DateTime.now() : null,
-        );
+    TodoReminderSyncResult resultFor(
+      String? issue, {
+      ReminderSyncIssue? issueCopy,
+      bool confirmed = true,
+    }) => TodoReminderSyncResult(
+      generation: generation,
+      issue: issue,
+      issueCopy: issueCopy,
+      attemptedAt: attemptedAt,
+      succeededAt: confirmed && issue == null ? DateTime.now() : null,
+    );
     final scheduler = _scheduler;
     if (scheduler == null) {
-      final result = resultFor('reminder_scheduler_missing');
+      final result = resultFor(
+        'reminder_scheduler_missing',
+        issueCopy: ReminderSyncIssue([
+          const ReminderSyncIssueEntry(
+            'reminder_scheduler_missing',
+            notice: ReminderSyncIssueNotice.schedulerMissing,
+          ),
+        ]),
+      );
       if (_lastReminderSyncIssue != result.issue) {
         debugPrint('[TodoProvider] reminder sync skipped: scheduler missing');
       }
@@ -574,14 +599,27 @@ class TodoProvider extends ChangeNotifier {
     }
     if (isCurrent()) {
       _lastReminderScheduleIssue = null;
+      _lastReminderScheduleIssueCopy = null;
       _lastReminderScheduleIssueAt = null;
     }
-    final Future<String?> pending = reportTodoId == null
-        ? scheduler.syncTodos(List.of(_todos)).then((_) => null)
-        : scheduler.syncTodosAndGetTodoFailure(List.of(_todos), reportTodoId);
+    final Future<ReminderSyncIssue?> pending;
+    if (reportTodoId == null) {
+      pending = scheduler.syncTodos(List.of(_todos)).then((_) => null);
+    } else {
+      final legacy = scheduler.syncTodosAndGetTodoFailure(
+        List.of(_todos),
+        reportTodoId,
+      );
+      pending = legacy is ReminderTodoFailureResultFuture
+          ? (legacy as ReminderTodoFailureResultFuture).issueResult
+          : legacy.then(
+              (failure) =>
+                  failure == null ? null : ReminderSyncIssue.literal(failure),
+            );
+    }
     try {
       final failure = await pending.timeout(reminderSyncTimeout);
-      final result = resultFor(failure);
+      final result = resultFor(failure?.raw, issueCopy: failure);
       apply(result);
       return result;
     } on TimeoutException {
@@ -592,7 +630,7 @@ class TodoProvider extends ChangeNotifier {
         pending.then(
           (failure) {
             if (!isCurrent()) return;
-            apply(resultFor(failure));
+            apply(resultFor(failure?.raw, issueCopy: failure));
             notifyListeners();
           },
           onError: (Object error, StackTrace stackTrace) {
@@ -600,7 +638,14 @@ class TodoProvider extends ChangeNotifier {
             final issue = error is ReminderScheduleSyncException
                 ? error.failures.join('；')
                 : error.toString();
-            apply(resultFor(issue));
+            apply(
+              resultFor(
+                issue,
+                issueCopy: error is ReminderScheduleSyncException
+                    ? error.issueCopy
+                    : null,
+              ),
+            );
             debugPrint(
               '[TodoProvider] reminder sync failed late: $error\n$stackTrace',
             );
@@ -613,7 +658,15 @@ class TodoProvider extends ChangeNotifier {
       final issue = error.failures.isEmpty
           ? '提醒未注册成功，请检查通知权限、提醒方式和提醒时间。'
           : error.failures.join('；');
-      final result = resultFor(issue);
+      final copy = error.failures.isEmpty
+          ? ReminderSyncIssue([
+              ReminderSyncIssueEntry(
+                issue,
+                notice: ReminderSyncIssueNotice.genericFailure,
+              ),
+            ])
+          : error.issueCopy;
+      final result = resultFor(issue, issueCopy: copy);
       apply(result);
       debugPrint('[TodoProvider] reminder sync failed: $error\n$stackTrace');
       return result;
@@ -633,6 +686,7 @@ class TodoProvider extends ChangeNotifier {
     _lastAppliedReminderSyncGeneration = result.generation;
     _lastReminderSyncAttemptAt = result.attemptedAt;
     _lastReminderSyncIssue = result.issue;
+    _lastReminderSyncIssueCopy = result.issueCopy;
     if (result.succeededAt != null) {
       _lastReminderSyncSucceededAt = result.succeededAt;
     }

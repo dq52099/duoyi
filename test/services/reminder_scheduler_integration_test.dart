@@ -10,6 +10,8 @@ import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/services/alarm_service.dart';
 import 'package:duoyi/services/notification_permission_exception.dart';
+import 'package:duoyi/services/reminder_issue_copy.dart';
+import 'package:duoyi/services/reminder_sync_issue.dart';
 import 'package:duoyi/services/reminder_scheduler.dart';
 import 'package:duoyi/services/reminder_sinks.dart';
 import 'package:duoyi/services/reminder_notification_id.dart';
@@ -696,6 +698,292 @@ void main() {
       popup: popup,
       email: email,
       registry: registry,
+    );
+  });
+
+  group('operation-owned reminder sync copy', () {
+    TodoItem missingDate(String id) => TodoItem(
+      id: id,
+      title: 'Literal task title',
+      reminderPlan: ReminderPlan(
+        enabled: true,
+        rules: [
+          ReminderRule(
+            id: 'once',
+            type: ReminderRuleType.absolute,
+            kind: ReminderKind.push,
+            hour: 9,
+            minute: 0,
+          ),
+        ],
+      ),
+    );
+    TodoItem futurePush(String id, String title) {
+      final due = DateTime.now().add(const Duration(hours: 2));
+      return TodoItem(
+        id: id,
+        title: title,
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'once',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.push,
+              hour: due.hour,
+              minute: due.minute,
+            ),
+          ],
+        ),
+      );
+    }
+
+    Future<ReminderSyncIssue?> issueOf(Future<String?> future) {
+      expect(future, isA<ReminderTodoFailureResultFuture>());
+      return (future as ReminderTodoFailureResultFuture).issueResult;
+    }
+
+    test(
+      'unresolved target is message-only while all-list keeps titles',
+      () async {
+        final todo = missingDate('missing-target');
+        final future = scheduler.syncTodosAndGetTodoFailure([todo], todo.id);
+        final issue = (await issueOf(future))!;
+        expect(await future, '一次性提醒需要截止日期或提醒日期。请先设置未来的日期。');
+        expect(issue.raw, await future);
+        expect(issue.entries.single.includeTitle, isFalse);
+        expect(
+          issue.render(locale: AppLocale.en),
+          'A one-time reminder needs a due date or reminder date. Set a future date first.',
+        );
+        try {
+          await scheduler.syncTodos([todo]);
+          fail('Expected preflight failure');
+        } on ReminderScheduleSyncException catch (error) {
+          expect(error.failures, ['待办提醒注册失败：${issue.raw}']);
+          expect(error.issueCopy!.raw, error.failures.join('；'));
+          expect(error.issueCopy!.entries.single.includeTitle, isTrue);
+          expect(
+            error.issueCopy!.render(locale: AppLocale.en),
+            startsWith('Task reminder not registered: '),
+          );
+          expect(
+            error.toString(),
+            'ReminderScheduleSyncException: ${error.failures.single}',
+          );
+        }
+        expect(notif.scheduled, isEmpty);
+      },
+    );
+
+    test('target-only reporting excludes other-object failures', () async {
+      final target = TodoItem(id: 'no-reminder', title: 'No reminder');
+      final future = scheduler.syncTodosAndGetTodoFailure([
+        target,
+        missingDate('other-task'),
+      ], target.id);
+      expect(await issueOf(future), isNull);
+      expect(await future, isNull);
+      expect(notif.issues.single['relatedId'], 'other-task');
+    });
+
+    test(
+      'serialized operations keep each returned copy after map replacement',
+      () async {
+        final first = missingDate('same-id');
+        final second = TodoItem(
+          id: first.id,
+          title: 'Second task',
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'daily',
+                type: ReminderRuleType.dailyTime,
+                kind: ReminderKind.push,
+                hour: 25,
+                minute: 0,
+              ),
+            ],
+          ),
+        );
+        final firstFuture = scheduler.syncTodosAndGetTodoFailure([
+          first,
+        ], first.id);
+        final secondFuture = scheduler.syncTodosAndGetTodoFailure([
+          second,
+        ], second.id);
+        final secondIssue = (await issueOf(secondFuture))!;
+        final firstIssue = (await issueOf(firstFuture))!;
+        expect(firstIssue.raw, '一次性提醒需要截止日期或提醒日期。请先设置未来的日期。');
+        expect(secondIssue.raw, '重复提醒缺少有效时间，请重新选择提醒时间。');
+        expect(await firstFuture, firstIssue.raw);
+        expect(await secondFuture, secondIssue.raw);
+        expect(
+          firstIssue.render(locale: AppLocale.en),
+          startsWith('A one-time reminder'),
+        );
+        expect(
+          secondIssue.render(locale: AppLocale.en),
+          startsWith('The repeating reminder'),
+        );
+      },
+    );
+
+    test(
+      'all-list unresolved collector preserves source order and raw join',
+      () async {
+        final first = missingDate('first');
+        final second = TodoItem(
+          id: 'second',
+          title: 'Invalid daily',
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'daily',
+                type: ReminderRuleType.dailyTime,
+                kind: ReminderKind.push,
+                hour: 25,
+                minute: 0,
+              ),
+            ],
+          ),
+        );
+        try {
+          await scheduler.syncTodos([first, second]);
+          fail('Expected aggregate failure');
+        } on ReminderScheduleSyncException catch (error) {
+          expect(error.failures, [
+            '待办提醒注册失败：一次性提醒需要截止日期或提醒日期。请先设置未来的日期。',
+            '重复提醒注册失败：重复提醒缺少有效时间，请重新选择提醒时间。',
+          ]);
+          final copy = error.issueCopy!;
+          expect(copy.raw, error.failures.join('；'));
+          expect(copy.entries.map((entry) => entry.raw), error.failures);
+          expect(
+            copy.render(locale: AppLocale.en),
+            contains('; Repeating reminder not registered: '),
+          );
+        }
+      },
+    );
+
+    test(
+      'rule aggregate still takes precedence over earlier unresolved collector',
+      () async {
+        notif.returnFalseScheduleOnce = true;
+        final failing = futurePush('dispatch', '系统通知权限未开启 / user text');
+        try {
+          await scheduler.syncTodos([missingDate('unresolved'), failing]);
+          fail('Expected rule aggregate failure');
+        } on ReminderScheduleSyncException catch (error) {
+          expect(error.failures, hasLength(1));
+          expect(error.failures.single, contains('系统通知权限未开启 / user text'));
+          expect(error.failures.single, isNot(contains('一次性提醒需要')));
+          final copy = error.issueCopy!;
+          expect(
+            copy.entries.single.notice,
+            ReminderSyncIssueNotice.ruleNotRegistered,
+          );
+          expect(copy.entries.single.target, failing.title);
+          expect(copy.entries.single.kind, ReminderKind.push);
+          expect(copy.raw, error.failures.single);
+          expect(copy.render(locale: AppLocale.zh), error.failures.single);
+          expect(
+            copy.render(locale: AppLocale.en),
+            contains('系统通知权限未开启 / user text'),
+          );
+          expect(
+            copy.render(locale: AppLocale.en),
+            contains('notification reminder not registered'),
+          );
+        }
+      },
+    );
+
+    test(
+      'false push result keeps StateError raw and explicit owned reason',
+      () async {
+        notif.returnFalseScheduleOnce = true;
+        final todo = futurePush('false-push-copy', 'Task');
+        final future = scheduler.syncTodosAndGetTodoFailure([todo], todo.id);
+        final issue = (await issueOf(future))!;
+        expect(await future, StateError('系统通知服务返回未注册').toString());
+        expect(issue.raw, await future);
+        expect(
+          issue.entries.single.notice,
+          ReminderSyncIssueNotice.pushNotRegistered,
+        );
+        expect(
+          issue.render(locale: AppLocale.en),
+          'The system notification service reported no registration.',
+        );
+        expect(notif.issues, hasLength(1));
+      },
+    );
+
+    test(
+      'typed dispatch exception retains copy and exact raw projection',
+      () async {
+        const failure = NotificationScheduleUnavailableException(
+          title: '待办提醒注册失败',
+          message: '原始注册失败(native literal)',
+          copy: ReminderIssueCopy.notification(
+            NotificationIssueNotice.onceScheduleFailed,
+            titleCode: NotificationIssueTitle.taskRegistrationFailed,
+            detail: 'native literal',
+          ),
+        );
+        final sink = _SyncCopyFailingNotif(failure);
+        final local = ReminderScheduler(
+          sink,
+          alarm: alarm,
+          popup: popup,
+          email: email,
+          registry: registry,
+        );
+        final todo = futurePush('typed-dispatch', 'Typed task');
+        final future = local.syncTodosAndGetTodoFailure([todo], todo.id);
+        final issue = (await issueOf(future))!;
+        expect(await future, failure.toString());
+        expect(issue.raw, failure.toString());
+        expect(issue.entries.single.copy, same(failure.copy));
+        expect(issue.entries.single.includeTitle, isTrue);
+        expect(
+          issue.render(locale: AppLocale.en),
+          startsWith('Task reminder not registered: '),
+        );
+        expect(
+          issue.render(locale: AppLocale.en),
+          endsWith('(native literal)'),
+        );
+        expect(sink.calls, 1);
+      },
+    );
+
+    test(
+      'unknown dispatch exception remains literal despite permission words',
+      () async {
+        final error = StateError('系统通知权限未开启 / custom opaque diagnostic');
+        final sink = _SyncCopyFailingNotif(error);
+        final local = ReminderScheduler(
+          sink,
+          alarm: alarm,
+          popup: popup,
+          email: email,
+          registry: registry,
+        );
+        final todo = futurePush('literal-dispatch', 'Literal task');
+        final future = local.syncTodosAndGetTodoFailure([todo], todo.id);
+        final issue = (await issueOf(future))!;
+        expect(await future, error.toString());
+        expect(issue.entries.single.copy, isNull);
+        expect(issue.entries.single.notice, isNull);
+        expect(issue.render(locale: AppLocale.en), error.toString());
+        expect(sink.calls, 1);
+      },
     );
   });
 
@@ -5208,4 +5496,22 @@ void main() {
       expect(alarm.pending, contains(expectedId));
     });
   });
+}
+
+class _SyncCopyFailingNotif extends _FakeNotifSink {
+  _SyncCopyFailingNotif(this.error);
+  final Object error;
+  int calls = 0;
+
+  @override
+  Future<bool> scheduleOnceWithResult({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+  }) async {
+    calls++;
+    throw error;
+  }
 }

@@ -17,6 +17,7 @@ import 'reminder_sinks.dart';
 import 'reminder_notification_id.dart';
 import 'todo_reminder_preflight_copy.dart';
 import 'reminder_issue_copy.dart';
+import 'reminder_sync_issue.dart';
 
 const Duration _sameMinuteReminderGrace = Duration(seconds: 70);
 
@@ -381,7 +382,9 @@ enum _DispatchMode { once, repeating }
 class ReminderScheduleSyncException implements Exception {
   final List<String> failures;
 
-  const ReminderScheduleSyncException(this.failures);
+  final ReminderSyncIssue? issueCopy;
+
+  const ReminderScheduleSyncException(this.failures, {this.issueCopy});
 
   @override
   String toString() {
@@ -1322,7 +1325,7 @@ class ReminderScheduler {
   final Map<String, String> _scheduledCountdownScopes = {};
   final Map<String, ReminderScheduleDisplayInfo> _registeredReminderDisplay =
       {};
-  final Map<String, String> _todoScheduleFailures = <String, String>{};
+  final Map<String, ReminderSyncIssueEntry> _todoScheduleFailures = {};
   Future<void> _syncQueue = Future<void>.value();
   ReminderReconciliationBatch? _activeBatch;
   ReminderReconciliationBatchMetrics? _lastBatchMetrics;
@@ -2076,11 +2079,23 @@ class ReminderScheduler {
     Iterable<TodoItem> todos,
     String todoId, {
     bool allowJustMissedOneShotReminders = true,
+  }) => ReminderTodoFailureFuture(
+    _syncTodosAndGetTodoIssue(
+      todos,
+      todoId,
+      allowJustMissedOneShotReminders: allowJustMissedOneShotReminders,
+    ),
+  );
+
+  Future<ReminderSyncIssue?> _syncTodosAndGetTodoIssue(
+    Iterable<TodoItem> todos,
+    String todoId, {
+    required bool allowJustMissedOneShotReminders,
   }) async {
     final generation = _accountChangeGeneration;
     if (!_canRunAccountGeneration(generation)) return null;
     final snapshot = todos.toList(growable: false);
-    String? failure;
+    ReminderSyncIssue? failure;
     await _runSerializedForAccountGeneration(generation, () async {
       _todoScheduleFailures.remove(todoId);
       try {
@@ -2092,7 +2107,8 @@ class ReminderScheduler {
         // 单对象反馈只报告目标待办；其他规则的失败已写入诊断。
       }
       if (_canRunAccountGeneration(generation)) {
-        failure = _todoScheduleFailures[todoId];
+        final entry = _todoScheduleFailures[todoId];
+        failure = entry == null ? null : ReminderSyncIssue([entry]);
       }
     });
     return failure;
@@ -2104,7 +2120,7 @@ class ReminderScheduler {
   }) async {
     final todoSnapshot = todos.toList(growable: false);
     final wanted = <String, Map<String, _ResolvedRule>>{};
-    final scheduleFailures = <String>[];
+    final scheduleFailures = <ReminderSyncIssueEntry>[];
     for (final t in todoSnapshot) {
       if (t.isCompleted) {
         await _cancelCurrentTodoPlan(t);
@@ -2138,7 +2154,8 @@ class ReminderScheduler {
     );
     if (scheduleFailures.isNotEmpty) {
       throw ReminderScheduleSyncException(
-        List<String>.unmodifiable(scheduleFailures),
+        List<String>.unmodifiable(scheduleFailures.map((entry) => entry.raw)),
+        issueCopy: ReminderSyncIssue(scheduleFailures),
       );
     }
   }
@@ -2150,7 +2167,14 @@ class ReminderScheduler {
     final issue =
         blocking ?? (preflight.issues.isEmpty ? null : preflight.issues.first);
     if (issue == null) return;
-    _todoScheduleFailures[todo.id] = issue.message;
+    _todoScheduleFailures[todo.id] = ReminderSyncIssueEntry(
+      issue.message,
+      copy: issue.copy == null
+          ? null
+          : ReminderIssueCopy.preflight(issue.copy!),
+      rawTitle: issue.title,
+      rawMessage: issue.message,
+    );
     final copySink = notif is ReminderScheduleIssueCopySink
         ? notif as ReminderScheduleIssueCopySink
         : null;
@@ -2178,14 +2202,22 @@ class ReminderScheduler {
     );
   }
 
-  String? _unresolvedTodoReminderFailureSummary(TodoItem todo) {
+  ReminderSyncIssueEntry? _unresolvedTodoReminderFailureSummary(TodoItem todo) {
     final preflight = preflightTodoReminderPlan(todo);
     if (!preflight.hasEnabledPlan || preflight.ok) return null;
     final blocking = preflight.blockingIssue;
     final issue =
         blocking ?? (preflight.issues.isEmpty ? null : preflight.issues.first);
     if (issue == null) return null;
-    return '${issue.title}：${issue.message}';
+    return ReminderSyncIssueEntry(
+      '${issue.title}：${issue.message}',
+      copy: issue.copy == null
+          ? null
+          : ReminderIssueCopy.preflight(issue.copy!),
+      includeTitle: true,
+      rawTitle: issue.title,
+      rawMessage: issue.message,
+    );
   }
 
   bool _recordAlarmScheduleIssue({
@@ -2313,6 +2345,19 @@ class ReminderScheduler {
   String _ruleScheduleFailureSummary(_ResolvedRule rule) {
     return '${_ruleScheduleFailureTitle(rule)}：${_ruleScheduleFailureMessage(rule)}';
   }
+
+  ReminderSyncIssueEntry _ruleScheduleFailureEntry(_ResolvedRule rule) =>
+      ReminderSyncIssueEntry(
+        _ruleScheduleFailureSummary(rule),
+        notice: ReminderSyncIssueNotice.ruleNotRegistered,
+        kind: rule.kind,
+        target: rule.body,
+        object: switch (rule.objectType) {
+          'todo' => ReminderSyncObject.task,
+          'goal' => ReminderSyncObject.goal,
+          _ => ReminderSyncObject.reminder,
+        },
+      );
 
   void _recordSingleScheduleFailure({
     required String title,
@@ -3261,18 +3306,35 @@ class ReminderScheduler {
     _DispatchPayload payload,
     Object error, {
     required bool blocking,
+    ReminderSyncIssueNotice? notice,
   }) {
     final relatedId =
         _relatedIdFromPayload(payload.payload) ?? payload.id.toString();
     if (blocking && payload.payload?.startsWith('duoyi://todo/') == true) {
-      _todoScheduleFailures[relatedId] = error.toString();
+      final typed = error is NotificationScheduleUnavailableException
+          ? error
+          : null;
+      _todoScheduleFailures[relatedId] = ReminderSyncIssueEntry(
+        error.toString(),
+        copy: typed?.copy,
+        includeTitle: true,
+        rawTitle: typed?.title ?? '',
+        rawMessage: typed?.message ?? '',
+        notice: notice,
+      );
     }
     // 规则重排统一写入既有诊断；此处只保留单待办的精确失败结果。
   }
 
   void _recordTodoRuleDispatchFailure(_ResolvedRule rule) {
     if (rule.objectType != 'todo') return;
-    _todoScheduleFailures.putIfAbsent(rule.objectId, () => '提醒调度器未能确认规则已注册到系统');
+    _todoScheduleFailures.putIfAbsent(
+      rule.objectId,
+      () => const ReminderSyncIssueEntry(
+        '提醒调度器未能确认规则已注册到系统',
+        notice: ReminderSyncIssueNotice.registrationUnconfirmed,
+      ),
+    );
   }
 
   String? _relatedIdFromPayload(String? payload) {
@@ -3313,6 +3375,7 @@ class ReminderScheduler {
           ),
           StateError('系统通知服务返回未注册'),
           blocking: true,
+          notice: ReminderSyncIssueNotice.pushNotRegistered,
         );
       }
       return scheduled;
@@ -3392,6 +3455,7 @@ class ReminderScheduler {
           ),
           StateError('系统重复通知服务返回未注册'),
           blocking: true,
+          notice: ReminderSyncIssueNotice.repeatingPushNotRegistered,
         );
       }
       return scheduled;
@@ -4240,7 +4304,7 @@ class ReminderScheduler {
     required Map<String, Set<int>> blockedRegistryIdsByObject,
   }) async {
     final nextScheduled = <String, Map<String, _ScheduledRule>>{};
-    final scheduleFailures = <String>[];
+    final scheduleFailures = <ReminderSyncIssueEntry>[];
     final persistedRegistryIdsByObject = await registry.idsByObject(objectType);
 
     for (final objectId in scheduled.keys.toList()) {
@@ -4363,7 +4427,7 @@ class ReminderScheduler {
         }
         if (!registered) {
           _recordRuleScheduleFailure(nextRule);
-          scheduleFailures.add(_ruleScheduleFailureSummary(nextRule));
+          scheduleFailures.add(_ruleScheduleFailureEntry(nextRule));
         }
       }
 
@@ -4429,7 +4493,7 @@ class ReminderScheduler {
           kept[nextRule.ruleId] = _scheduledFromResolved(nextRule);
         } else {
           _recordRuleScheduleFailure(nextRule);
-          scheduleFailures.add(_ruleScheduleFailureSummary(nextRule));
+          scheduleFailures.add(_ruleScheduleFailureEntry(nextRule));
           _recordTodoRuleDispatchFailure(nextRule);
         }
       }
@@ -4470,7 +4534,8 @@ class ReminderScheduler {
 
     if (scheduleFailures.isNotEmpty) {
       throw ReminderScheduleSyncException(
-        List<String>.unmodifiable(scheduleFailures),
+        List<String>.unmodifiable(scheduleFailures.map((entry) => entry.raw)),
+        issueCopy: ReminderSyncIssue(scheduleFailures),
       );
     }
   }

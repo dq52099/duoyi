@@ -5,6 +5,7 @@ import 'package:duoyi/services/account_local_data_cleaner.dart';
 import 'package:duoyi/services/reminder_scheduler.dart'
     show TodoReminderPreflightIssue;
 import 'package:duoyi/services/reminder_issue_copy.dart';
+import 'package:duoyi/services/reminder_sync_issue.dart';
 import 'package:duoyi/services/todo_reminder_preflight_copy.dart';
 import 'package:duoyi/services/widget_action_message.dart';
 import 'package:duoyi/services/widget_action_scope.dart';
@@ -447,6 +448,128 @@ void main() {
       final accountBMessage = notificationIssue(
         '渠道查询异常 / account B diagnostic',
       );
+      final accountBQueued = Completer<WidgetActionMessage>();
+      final accountBPending = _runAction(
+        messengerKey: messengerKey,
+        feedbackQueued: accountBQueued,
+        preflight: (showFeedback) async {
+          showFeedback(accountBMessage);
+          return false;
+        },
+        create: () async {
+          createCalls++;
+          return const WidgetActionMessage(WidgetActionNotice.todoCompleted);
+        },
+      );
+      await accountBQueued.future;
+      await accountBPending;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(createCalls, 0);
+      expect(
+        find.text(accountAMessage.render(locale: AppLocale.en)),
+        findsNothing,
+      );
+      expect(
+        find.text(accountBMessage.render(locale: AppLocale.en)),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'saved reminder sync issue uses the locale selected before frame delivery',
+    (tester) async {
+      final messengerKey = GlobalKey<ScaffoldMessengerState>();
+      await _pumpMessenger(tester, messengerKey);
+      const diagnostic = 'channel probe failed / 渠道状态=未知';
+      final syncIssue = ReminderSyncIssue([
+        const ReminderSyncIssueEntry(
+          'legacy channel warning',
+          copy: ReminderIssueCopy.notification(
+            NotificationIssueNotice.channelProbeFailed,
+            titleCode: NotificationIssueTitle.taskRegistrationFailed,
+            detail: diagnostic,
+          ),
+          includeTitle: true,
+          rawTitle: '待办提醒注册失败',
+          rawMessage: 'legacy warning message',
+        ),
+        const ReminderSyncIssueEntry('opaque scheduler log: item=17'),
+      ]);
+      final descriptor = WidgetActionMessage(
+        WidgetActionNotice.savedReminderIssue,
+        detail: 'legacy detail should not replace the typed issue',
+        syncIssueCopy: syncIssue,
+      );
+      final feedbackQueued = Completer<WidgetActionMessage>();
+      final pending = _runAction(
+        messengerKey: messengerKey,
+        feedbackQueued: feedbackQueued,
+        preflight: (_) async => true,
+        create: () async => descriptor,
+      );
+
+      final delivered = await feedbackQueued.future;
+      I18n.setLocale(AppLocale.en);
+      await pending;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(delivered, same(descriptor));
+      expect(
+        find.text(
+          'Task saved on this device. Check reminder status: Check task reminder: The regular reminder channel could not be verified. Registration will continue, but system settings may affect display or sound. Check system notification settings, then save the reminder again.($diagnostic); opaque scheduler log: item=17',
+        ),
+        findsOneWidget,
+      );
+      const legacy = WidgetActionMessage(
+        WidgetActionNotice.savedReminderIssue,
+        detail: '自定义原始诊断 / keep verbatim',
+      );
+      expect(
+        legacy.render(locale: AppLocale.en),
+        'Task saved on this device. Check reminder status: 自定义原始诊断 / keep verbatim',
+      );
+    },
+  );
+
+  testWidgets(
+    'account A saved reminder sync feedback is suppressed while B is current',
+    (tester) async {
+      final messengerKey = GlobalKey<ScaffoldMessengerState>();
+      await _pumpMessenger(tester, messengerKey);
+      I18n.setLocale(AppLocale.en);
+      var createCalls = 0;
+
+      WidgetActionMessage descriptorFor(String account) => WidgetActionMessage(
+        WidgetActionNotice.savedReminderIssue,
+        detail: 'legacy detail for $account',
+        syncIssueCopy: ReminderSyncIssue.literal(
+          'scheduler sync diagnostic for $account',
+        ),
+      );
+
+      final accountAMessage = descriptorFor('account A');
+      final accountAQueued = Completer<WidgetActionMessage>();
+      final accountAPending = _runAction(
+        messengerKey: messengerKey,
+        feedbackQueued: accountAQueued,
+        preflight: (showFeedback) async {
+          showFeedback(accountAMessage);
+          return false;
+        },
+        create: () async {
+          createCalls++;
+          return const WidgetActionMessage(WidgetActionNotice.todoCompleted);
+        },
+      );
+      await accountAQueued.future;
+      await accountAPending;
+
+      AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+      final accountBMessage = descriptorFor('account B');
       final accountBQueued = Completer<WidgetActionMessage>();
       final accountBPending = _runAction(
         messengerKey: messengerKey,

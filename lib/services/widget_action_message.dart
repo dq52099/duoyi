@@ -1,6 +1,7 @@
 import '../core/i18n.dart';
 import 'todo_reminder_preflight_copy.dart';
 import 'reminder_issue_copy.dart';
+import 'reminder_sync_issue.dart';
 
 enum WidgetActionNotice {
   focusRunning,
@@ -99,6 +100,7 @@ final class WidgetActionMessage {
     this.issueTitle,
     this.preflightCopy,
     this.issueCopy,
+    this.syncIssueCopy,
     this.syncState = WidgetActionSyncState.unknown,
     this.syncReason = '',
     this.reminderHint = WidgetActionReminderHint.none,
@@ -110,6 +112,7 @@ final class WidgetActionMessage {
   final String? issueTitle;
   final TodoReminderPreflightCopy? preflightCopy;
   final ReminderIssueCopy? issueCopy;
+  final ReminderSyncIssue? syncIssueCopy;
   final WidgetActionSyncState syncState;
   final String syncReason;
   final WidgetActionReminderHint reminderHint;
@@ -232,8 +235,8 @@ final class WidgetActionMessage {
         'Reminder status needs attention: $reminderSubject: $reminderDetail',
       ),
       WidgetActionNotice.savedReminderIssue => pick(
-        '快捷待办已保存到本机，提醒状态需检查：$detail',
-        'Task saved on this device. Check reminder status: $detail',
+        '快捷待办已保存到本机，提醒状态需检查：${syncIssueCopy?.render(locale: effectiveLocale) ?? detail}',
+        'Task saved on this device. Check reminder status: ${syncIssueCopy?.render(locale: effectiveLocale) ?? detail}',
       ),
       WidgetActionNotice.todoSaved => _savedMessage(isZh),
     };

@@ -4192,6 +4192,7 @@ Future<void> _createQuickTodoFromAction(
           : WidgetActionMessage(
               WidgetActionNotice.savedReminderIssue,
               detail: reminderSyncIssue,
+              syncIssueCopy: reminderSyncResult?.issueCopy,
             );
     },
     feedback: (message, isCurrent) =>
