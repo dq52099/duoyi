@@ -65,22 +65,23 @@ open class DuoyiGoalWidgetProvider : DuoyiStyledWidgetProvider() {
                 ),
             )
 
+            val isZh = DuoyiWidgetCopy.isZh(prefs)
             views.setTextViewText(
                 R.id.widget_goal_title,
-                prefs.getString("brand_app_title", "多仪") ?: "多仪"
+                DuoyiWidgetCopy.appTitle(prefs, isZh)
             )
-            views.setTextViewText(R.id.widget_goal_subtitle, "目标")
+            views.setTextViewText(R.id.widget_goal_subtitle, DuoyiWidgetCopy.goalSubtitle(isZh))
             views.setTextViewText(
                 R.id.widget_goal_1,
-                prefs.getString("goal_highlight_1", "· 暂无进行中目标") ?: "· 暂无进行中目标"
+                DuoyiWidgetCopy.goalHighlight1(prefs.getString("goal_highlight_1", null), isZh)
             )
             views.setTextViewText(
                 R.id.widget_goal_2,
-                prefs.getString("goal_highlight_2", "· 打开今日查看目标进度") ?: "· 打开今日查看目标进度"
+                DuoyiWidgetCopy.goalHighlight2(prefs.getString("goal_highlight_2", null), isZh)
             )
             views.setTextViewText(
                 R.id.widget_goal_3,
-                prefs.getString("goal_highlight_3", "本周目标保持推进") ?: "本周目标保持推进"
+                DuoyiWidgetCopy.goalHighlight3(prefs.getString("goal_highlight_3", null), isZh)
             )
             views.setViewVisibility(
                 R.id.widget_goal_2,
@@ -95,10 +96,10 @@ open class DuoyiGoalWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
             )
 
-            val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
-            val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
-            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
-            val tabFocus = prefs.getString("nav_focus", "专注") ?: "专注"
+            val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
+            val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
+            val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
+            val tabFocus = DuoyiWidgetCopy.navFocus(prefs, isZh)
             views.setTextViewText(R.id.widget_goal_nav_todo, tabTodo)
             views.setTextViewText(R.id.widget_goal_nav_habit, tabHabit)
             views.setTextViewText(R.id.widget_goal_nav_calendar, tabCalendar)

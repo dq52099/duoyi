@@ -24,6 +24,7 @@ object DuoyiWidgetSnapshot {
     fun forDisplay(context: Context, backing: SharedPreferences): SharedPreferences {
         val fresh = isFresh(backing)
         val sessionTrusted = hasPublishedSession(backing)
+        val isZh = DuoyiWidgetCopy.isZh(backing)
         return object : SharedPreferences by backing {
             override fun getAll(): Map<String, *> = if (sessionTrusted) backing.all else
                 backing.all.filterKeys { !it.startsWith("focus_timer_") }
@@ -34,7 +35,8 @@ object DuoyiWidgetSnapshot {
                     if (id != null) return effectiveMode(context, backing, id)
                 }
                 if (!fresh && key != null) {
-                    if (key in staleMessages) return staleMessages[key]
+                    val stale = DuoyiWidgetCopy.staleMessage(key, isZh)
+                    if (stale != null) return stale
                     if (key.startsWith("todo_top3_") && key.endsWith("_id")) return ""
                     if (key == "habit_quick_check_id" || key.endsWith("_id")) return ""
                     if ((key.startsWith("course_highlight_") ||
@@ -144,8 +146,9 @@ object DuoyiWidgetSnapshot {
                 views.setViewVisibility(viewId, View.GONE)
             }
         }
+        val isZh = DuoyiWidgetCopy.isZh(prefs)
         views.setContentDescription(R.id.widget_refresh,
-            if (isFresh(prefs)) "刷新小组件" else "数据待刷新，点按更新")
+            DuoyiWidgetCopy.refreshContentDescription(isFresh(prefs), isZh))
         if (isFresh(prefs)) return
         val numericIds = when (views.layoutId) {
             R.layout.duoyi_todo_widget -> intArrayOf(R.id.widget_todo_count)
@@ -161,19 +164,4 @@ object DuoyiWidgetSnapshot {
 
     private val staleCounters = setOf("todo_count", "todo_top3_count", "habit_percent",
         "pomodoro_today", "focus_minutes_today")
-    private val staleMessages = mapOf(
-        "todo_top3_1" to "数据待刷新，打开多仪更新",
-        "todo_top3_2" to "", "todo_top3_3" to "",
-        "habit_summary" to "数据待刷新，打开多仪更新",
-        "habit_quick_check_label" to "打开习惯刷新", "streak_summary" to "",
-        "focus_summary" to "今日数据待刷新",
-        "goal_highlight_1" to "数据待刷新", "goal_highlight_2" to "", "goal_highlight_3" to "",
-        "note_highlight_1" to "数据待刷新", "note_highlight_2" to "", "note_highlight_3" to "",
-        "diary_highlight_1" to "数据待刷新", "diary_highlight_2" to "", "diary_highlight_3" to "",
-        "today_event_summary" to "今日数据待刷新",
-        "course_highlight_1" to "今日课程待刷新", "course_highlight_2" to "", "course_highlight_3" to "",
-        "schedule_highlight_1" to "今日日程待刷新", "schedule_highlight_2" to "", "schedule_highlight_3" to "",
-        "anniversary_highlight_1" to "日期数据待刷新", "anniversary_highlight_2" to "",
-        "memorial_highlight_1" to "日期数据待刷新", "memorial_highlight_2" to "", "memorial_highlight_3" to "",
-    )
 }

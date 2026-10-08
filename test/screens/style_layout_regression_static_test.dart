@@ -1069,8 +1069,14 @@ void main() {
     expect(integrations, contains('SingleChildScrollView('));
     expect(integrations, contains('scrollDirection: Axis.horizontal'));
     expect(integrations, contains('mainAxisAlignment: MainAxisAlignment.end'));
-    expect(integrations, contains('AppSecondaryMenuText(account.enabled'));
-    expect(integrations, contains('AppSecondaryMenuText(sub.enabled'));
+    expect(
+      integrations,
+      matches(RegExp(r'AppSecondaryMenuText\(\s*account\.enabled')),
+    );
+    expect(
+      integrations,
+      matches(RegExp(r'AppSecondaryMenuText\(\s*sub\.enabled')),
+    );
 
     final moreApps = File(
       'lib/screens/more_apps_screen.dart',

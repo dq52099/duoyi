@@ -65,6 +65,9 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
                 ),
                 mutedIds = intArrayOf(
                     R.id.widget_date,
+                    R.id.widget_overview_todo_label,
+                    R.id.widget_overview_habit_label,
+                    R.id.widget_overview_pomodoro_label,
                     R.id.widget_nav_todo,
                     R.id.widget_nav_habit,
                     R.id.widget_nav_focus,
@@ -77,28 +80,33 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
                 primaryIds = intArrayOf(R.id.widget_quick_pomodoro),
                 secondaryIds = intArrayOf(R.id.widget_quick_open),
             )
-            val today = SimpleDateFormat("MM/dd", Locale.getDefault()).format(Date())
+            val isZh = DuoyiWidgetCopy.isZh(prefs)
+            val appLocale = DuoyiWidgetCopy.resolveLocale(prefs)
+            val today = SimpleDateFormat("MM/dd", appLocale).format(Date())
 
-            views.setTextViewText(R.id.widget_title, prefs.getString("brand_app_title", "多仪"))
+            views.setTextViewText(R.id.widget_title, DuoyiWidgetCopy.appTitle(prefs, isZh))
             views.setTextViewText(R.id.widget_date, today)
             views.setTextViewText(R.id.widget_todo_count, prefs.getInt("todo_count", 0).toString())
+            views.setTextViewText(R.id.widget_overview_todo_label, DuoyiWidgetCopy.navTodo(prefs, isZh))
             views.setTextViewText(R.id.widget_habit_progress, "${prefs.getInt("habit_percent", 0)}%")
+            views.setTextViewText(R.id.widget_overview_habit_label, DuoyiWidgetCopy.navHabit(prefs, isZh))
             views.setTextViewText(R.id.widget_pomodoro_count, prefs.getInt("pomodoro_today", 0).toString())
+            views.setTextViewText(R.id.widget_overview_pomodoro_label, DuoyiWidgetCopy.navPomodoro(prefs, isZh))
             views.setTextViewText(
                 R.id.widget_today_event,
-                prefs.getString("today_event_summary", "今日没有日程") ?: "今日没有日程"
+                DuoyiWidgetCopy.todayEventSummary(prefs.getString("today_event_summary", null), isZh)
             )
             views.setTextViewText(
                 R.id.widget_goal_summary,
-                prefs.getString("goal_highlight_1", "暂无进行中目标") ?: "暂无进行中目标"
+                DuoyiWidgetCopy.goalHighlight1(prefs.getString("goal_highlight_1", null), isZh)
             )
             views.setTextViewText(
                 R.id.widget_anniversary_summary,
-                prefs.getString("anniversary_highlight_1", "暂无近期纪念日") ?: "暂无近期纪念日"
+                DuoyiWidgetCopy.anniversaryHighlight1(prefs.getString("anniversary_highlight_1", null), isZh)
             )
             views.setTextViewText(
                 R.id.widget_course_summary,
-                prefs.getString("course_highlight_1", "今日暂无课程") ?: "今日暂无课程"
+                DuoyiWidgetCopy.courseHighlight1(prefs.getString("course_highlight_1", null), isZh)
             )
             views.setViewVisibility(
                 R.id.widget_quick_row,
@@ -121,12 +129,12 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
                 DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
             )
 
-            val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
-            val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
-            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
-            val tabFocus = prefs.getString("nav_focus", "番茄") ?: "番茄"
-            views.setTextViewText(R.id.widget_quick_pomodoro, "开始$tabFocus")
-            views.setTextViewText(R.id.widget_quick_open, "打开 App")
+            val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
+            val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
+            val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
+            val tabFocus = DuoyiWidgetCopy.navPomodoro(prefs, isZh)
+            views.setTextViewText(R.id.widget_quick_pomodoro, DuoyiWidgetCopy.quickPomodoro(isZh))
+            views.setTextViewText(R.id.widget_quick_open, DuoyiWidgetCopy.quickOpen(isZh))
             views.setTextViewText(R.id.widget_nav_todo, tabTodo)
             views.setTextViewText(R.id.widget_nav_habit, tabHabit)
             views.setTextViewText(R.id.widget_nav_calendar, tabCalendar)

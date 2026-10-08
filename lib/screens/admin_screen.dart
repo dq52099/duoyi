@@ -1230,7 +1230,10 @@ class _DashboardTabState extends State<_DashboardTab> {
           if (_error != null)
             AppSurfaceCard(
               color: cs.errorContainer.withValues(alpha: 0.35),
-              border: Border.all(color: cs.error.withValues(alpha: 0.5)),
+              border: Border.all(
+                color: cs.error.withValues(alpha: 0.5),
+                width: 0.55,
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               margin: const EdgeInsets.only(bottom: 12),
               child: Row(

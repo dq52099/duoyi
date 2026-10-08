@@ -68,7 +68,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:text="↻"
-            android:contentDescription="刷新小组件"
+            android:contentDescription="@string/widget_refresh_description"
             android:textColor="#888888"
             android:textSize="14sp" />
     </LinearLayout>
@@ -80,7 +80,7 @@
         android:layout_marginTop="2dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="今日习惯"
+        android:text="@string/widget_habit_subtitle"
         android:textColor="#666666"
         android:textSize="11sp" />
 
@@ -97,7 +97,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="· 今日习惯待打卡"
+            android:text="@string/widget_habit_empty_default"
             android:textColor="#333333"
             android:textSize="12sp" />
 
@@ -108,7 +108,7 @@
             android:layout_marginTop="6dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="· 连续记录 0 天"
+            android:text="@string/widget_habit_streak_default"
             android:textColor="#333333"
             android:textSize="12sp"
             android:visibility="gone" />
@@ -123,7 +123,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="点击进入习惯打卡"
+            android:text="@string/widget_habit_hint_default"
             android:textColor="#43A047"
             android:textSize="11sp" />
     </LinearLayout>
@@ -149,7 +149,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="待办"
+            android:text="@string/widget_tab_todo"
             android:textColor="#333333"
             android:textSize="10sp" />
 
@@ -161,7 +161,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="习惯"
+            android:text="@string/widget_tab_habit"
             android:textColor="#43A047"
             android:textSize="10sp" />
 
@@ -173,7 +173,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="日历"
+            android:text="@string/widget_tab_calendar"
             android:textColor="#333333"
             android:textSize="10sp" />
 
@@ -185,7 +185,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="专注"
+            android:text="@string/widget_tab_focus"
             android:textColor="#333333"
             android:textSize="10sp" />
     </LinearLayout>

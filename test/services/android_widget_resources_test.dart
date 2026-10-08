@@ -258,6 +258,236 @@ void main() {
       });
     }
 
+    test('Android 小组件中英文字符串资源具有相同 key', () {
+      final chinese = File(
+        'android/app/src/main/res/values/strings.xml',
+      ).readAsStringSync();
+      final english = File(
+        'android/app/src/main/res/values-en/strings.xml',
+      ).readAsStringSync();
+
+      Set<String> resourceKeys(String xml) => RegExp(
+        r'<string\s+name="([^"]+)"',
+      ).allMatches(xml).map((match) => match.group(1)!).toSet();
+
+      final chineseKeys = resourceKeys(chinese);
+      final englishKeys = resourceKeys(english);
+      expect(chineseKeys, isNotEmpty);
+      expect(englishKeys, chineseKeys);
+    });
+
+    test('小组件界面和 Android provider 从共享 copy 层读取本地化文案', () {
+      final widgetScreen = File(
+        'lib/screens/widget_screen.dart',
+      ).readAsStringSync();
+      final uiCopy = File('lib/core/widget_ui_copy.dart').readAsStringSync();
+      final androidCopy = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetCopy.kt',
+      ).readAsStringSync();
+      final focusProvider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/'
+        'DuoyiFocusHabitWidgetProvider.kt',
+      ).readAsStringSync();
+      final calendarProvider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/'
+        'DuoyiCalendarWidgetProvider.kt',
+      ).readAsStringSync();
+
+      expect(widgetScreen, contains('WidgetUiCopy.previewTitle(kind)'));
+      expect(widgetScreen, contains('WidgetUiCopy.catalogTitle(kind)'));
+      expect(widgetScreen, contains('WidgetUiCopy.catalogSubtitle(kind)'));
+      final previewTitleCopy = uiCopy.substring(
+        uiCopy.indexOf('static String previewTitle('),
+        uiCopy.indexOf('static String previewSampleBadge('),
+      );
+      expect(previewTitleCopy, contains('AppLocale.en => switch (kind)'));
+      expect(previewTitleCopy, contains('AppLocale.zh => switch (kind)'));
+      for (final kind in [
+        'todo',
+        'focus',
+        'habit',
+        'calendar',
+        'schedule',
+        'goal',
+        'course',
+        'note',
+        'anniversary',
+        'diary',
+      ]) {
+        expect(previewTitleCopy, contains('WidgetPreviewKind.$kind =>'));
+      }
+
+      expect(widgetScreen, contains('WidgetUiCopy.styleSyncFailed'));
+      expect(widgetScreen, contains('WidgetUiCopy.actionRetry'));
+      expect(
+        widgetScreen,
+        contains('WidgetUiCopy.styleSyncSuccess(mode.label)'),
+      );
+      expect(uiCopy, contains('static String get styleSyncFailed'));
+      expect(uiCopy, contains('static String get actionRetry'));
+      expect(
+        uiCopy,
+        contains('static String styleSyncSuccess(String modeLabel)'),
+      );
+
+      expect(widgetScreen, contains('WidgetUiCopy.pinHelpMessage('));
+      expect(widgetScreen, contains('WidgetUiCopy.actionOpenPermissions'));
+      expect(widgetScreen, contains('WidgetUiCopy.actionGotIt'));
+      final pinHelpCopy = uiCopy.substring(
+        uiCopy.indexOf('static String pinHelpMessage('),
+        uiCopy.indexOf('// Pin confirmation failures'),
+      );
+      expect(pinHelpCopy, contains('AppLocale.en => switch (result)'));
+      expect(pinHelpCopy, contains('AppLocale.zh => switch (result)'));
+      for (final result in [
+        'unsupported',
+        'unsupportedPlatform',
+        'unsupportedLauncher',
+        'permissionDenied',
+        'confirmationBlocked',
+        'invalidKind',
+        'unavailable',
+        'requested',
+      ]) {
+        expect(pinHelpCopy, contains('AndroidWidgetPinResult.$result =>'));
+      }
+      expect(uiCopy, contains('static String get actionOpenPermissions'));
+      expect(uiCopy, contains('static String get actionGotIt'));
+
+      expect(widgetScreen, contains('WidgetUiCopy.pinConfirmationFailure('));
+      final pinConfirmationCopy = uiCopy.substring(
+        uiCopy.indexOf(
+          'static (String title, String message) pinConfirmationFailure(',
+        ),
+        uiCopy.indexOf('// Add button labels'),
+      );
+      expect(pinConfirmationCopy, contains('AppLocale.en => switch (status)'));
+      expect(pinConfirmationCopy, contains('AppLocale.zh => switch (status)'));
+      for (final status in [
+        'invalidWidgetId',
+        'timeout',
+        'unavailable',
+        'success',
+      ]) {
+        expect(
+          pinConfirmationCopy,
+          contains('AndroidWidgetPinFinalStatus.$status =>'),
+        );
+      }
+
+      expect(widgetScreen, contains('WidgetUiCopy.pinSupportCheckingTitle'));
+      expect(widgetScreen, contains('WidgetUiCopy.pinSupportSupportedTitle'));
+      expect(
+        widgetScreen,
+        contains('WidgetUiCopy.pinSupportResultTitle(support)'),
+      );
+      expect(
+        widgetScreen,
+        contains('WidgetUiCopy.pinSupportResultMessage(support)'),
+      );
+      final pinSupportTitleCopy = uiCopy.substring(
+        uiCopy.indexOf('static String pinSupportResultTitle('),
+        uiCopy.indexOf('static String pinSupportResultMessage('),
+      );
+      final pinSupportMessageCopy = uiCopy.substring(
+        uiCopy.indexOf('static String pinSupportResultMessage('),
+        uiCopy.indexOf('static String get actionAppSettings'),
+      );
+      for (final copy in [pinSupportTitleCopy, pinSupportMessageCopy]) {
+        expect(copy, contains('AppLocale.en => switch (support)'));
+        expect(copy, contains('AppLocale.zh => switch (support)'));
+        for (final result in [
+          'unsupportedPlatform',
+          'unsupportedLauncher',
+          'permissionDenied',
+          'confirmationBlocked',
+          'invalidKind',
+        ]) {
+          expect(copy, contains('AndroidWidgetPinResult.$result =>'));
+        }
+      }
+      expect(widgetScreen, contains('WidgetUiCopy.requestingAdd'));
+      expect(widgetScreen, contains('WidgetUiCopy.addWidgetButtonLabel('));
+      expect(uiCopy, contains('static String get requestingAdd'));
+      expect(uiCopy, contains('static String addWidgetButtonLabel({'));
+
+      expect(widgetScreen, contains('WidgetUiCopy.calendarToday'));
+      expect(
+        uiCopy,
+        contains("static String get calendarToday => isZh ? '今天' : 'Today'"),
+      );
+
+      expect(
+        focusProvider,
+        contains('DuoyiWidgetCopy.focusMetricSessions(isZh)'),
+      );
+      expect(
+        focusProvider,
+        contains('DuoyiWidgetCopy.focusMetricDuration(isZh)'),
+      );
+      expect(
+        focusProvider,
+        contains(
+          'R.id.widget_focus_count_label,\n'
+          '                DuoyiWidgetCopy.focusMetricSessions(isZh)',
+        ),
+      );
+      expect(
+        focusProvider,
+        contains(
+          'R.id.widget_focus_minutes_label,\n'
+          '                DuoyiWidgetCopy.focusMetricDuration(isZh)',
+        ),
+      );
+      expect(focusProvider, contains('DuoyiWidgetCopy.focusTimerCaption('));
+      expect(
+        androidCopy,
+        contains(
+          'fun focusMetricSessions(isZh: Boolean): String = '
+          'if (isZh) "次数" else "Sessions"',
+        ),
+      );
+      expect(
+        androidCopy,
+        contains(
+          'fun focusMetricDuration(isZh: Boolean): String = '
+          'if (isZh) "分钟" else "Min"',
+        ),
+      );
+      expect(androidCopy, contains('fun focusTimerCaption('));
+      expect(androidCopy, contains('if (isZh) "倒计时" else "Timer"'));
+      expect(androidCopy, contains('if (isZh) "正计时" else "Count Up"'));
+
+      expect(
+        calendarProvider,
+        contains('DuoyiWidgetCopy.calendarMonthTitle(now, compact, isZh)'),
+      );
+      expect(
+        calendarProvider,
+        contains('buildMonthGrid(now, compact, detailed, isZh)'),
+      );
+      expect(
+        calendarProvider,
+        contains('DuoyiWidgetCopy.calendarTodayButton(isZh)'),
+      );
+      expect(
+        androidCopy,
+        contains(
+          'fun calendarMonthTitle(now: Calendar, compact: Boolean, '
+          'isZh: Boolean)',
+        ),
+      );
+      expect(androidCopy, contains('if (compact) "M月" else "yyyy年M月"'));
+      expect(androidCopy, contains('if (compact) "MMM" else "MMM yyyy"'));
+      expect(
+        androidCopy,
+        contains(
+          'fun calendarTodayButton(isZh: Boolean): String = '
+          'if (isZh) "今天" else "Today"',
+        ),
+      );
+    });
+
     test('所有桌面小组件单行文本都声明截断边界', () {
       final layoutFiles =
           Directory(
@@ -624,6 +854,7 @@ void main() {
       final widgetScreen = File(
         'lib/screens/widget_screen.dart',
       ).readAsStringSync();
+      final uiCopy = File('lib/core/widget_ui_copy.dart').readAsStringSync();
       final focusLayout = File(
         'android/app/src/main/res/layout/duoyi_focus_habit_widget.xml',
       ).readAsStringSync();
@@ -641,11 +872,12 @@ void main() {
       ).readAsStringSync();
       expect(widgetScreen, isNot(contains('专注与习惯预览')));
       expect(widgetScreen, isNot(contains('月历日程预览')));
-      expect(widgetScreen, contains('专注预览'));
-      expect(widgetScreen, contains('习惯预览'));
-      expect(widgetScreen, contains('月历预览'));
-      expect(widgetScreen, contains('今日日程预览'));
-      expect(widgetScreen, contains('目标预览'));
+      expect(widgetScreen, contains('WidgetUiCopy.previewTitle(kind)'));
+      expect(uiCopy, contains('WidgetPreviewKind.focus =>'));
+      expect(uiCopy, contains('WidgetPreviewKind.habit =>'));
+      expect(uiCopy, contains('WidgetPreviewKind.calendar =>'));
+      expect(uiCopy, contains('WidgetPreviewKind.schedule =>'));
+      expect(uiCopy, contains('WidgetPreviewKind.goal =>'));
       expect(widgetScreen, contains('WidgetPreviewCard.focus'));
       expect(widgetScreen, contains('WidgetPreviewCard.habit'));
       expect(widgetScreen, contains('WidgetPreviewCard.schedule'));
@@ -706,23 +938,14 @@ void main() {
         confirmationHelpStart,
         settingsStart,
       );
-      for (final result in [
-        'AndroidWidgetPinResult.unsupportedLauncher =>',
-        'AndroidWidgetPinResult.permissionDenied =>',
-        'AndroidWidgetPinResult.confirmationBlocked =>',
-      ]) {
-        expect(pinHelp, contains(result));
-      }
-      expect(pinHelp, contains('系统小组件列表'));
-      expect(pinHelp, contains('权限'));
-      expect(pinHelp, contains('确认'));
+      expect(pinHelp, contains('WidgetUiCopy.pinHelpMessage(result)'));
       expect(
         confirmationHelp,
-        contains('AndroidWidgetPinFinalStatus.timeout =>'),
+        contains('WidgetUiCopy.pinConfirmationFailure('),
       );
       expect(widgetScreen, contains('if (widget.canOpenWidgetSettings)'));
       expect(widgetScreen, contains('if (canOpenSettings)'));
-      expect(widgetScreen, contains('打开权限设置'));
+      expect(widgetScreen, contains('WidgetUiCopy.actionOpenPermissions'));
       expect(mainActivity, contains('miui.intent.action.APP_PERM_EDITOR'));
       expect(
         mainActivity,
@@ -834,7 +1057,10 @@ void main() {
       );
       expect(providerSources['focus'], contains('focus_timer_ends_at_millis'));
       expect(providerSources['focus'], contains('formatTimer'));
-      expect(providerSources['focus'], contains('查看倒计时'));
+      expect(
+        providerSources['focus'],
+        contains('DuoyiWidgetCopy.focusQuickStartText('),
+      );
       expect(
         providerSources['habit'],
         contains('duoyi://action/checkin_habit?id='),
@@ -1043,10 +1269,16 @@ void main() {
         provider,
         contains('DuoyiWidgetDisplayMode.isDetailed(prefs, id)'),
       );
-      expect(provider, contains('buildMonthGrid(now, compact, detailed)'));
+      expect(
+        provider,
+        contains('DuoyiWidgetCopy.calendarMonthTitle(now, compact, isZh)'),
+      );
+      expect(
+        provider,
+        contains('buildMonthGrid(now, compact, detailed, isZh)'),
+      );
       expect(provider, contains('views.setTextViewTextSize('));
       expect(provider, contains('TypedValue.COMPLEX_UNIT_SP'));
-      expect(provider, contains('if (compact) "M月" else "yyyy年M月"'));
       expect(provider, contains('if (compact) View.GONE else View.VISIBLE'));
       expect(
         provider,
@@ -1059,10 +1291,7 @@ void main() {
       expect(provider, contains('currentWeek - 1'));
       expect(widgetScreen, contains('class _WidgetPreviewCalendarGrid'));
       expect(widgetScreen, contains('class _WidgetPreviewCalendarCell'));
-      expect(
-        widgetScreen,
-        contains("child: const Text(\n                '今天',"),
-      );
+      expect(widgetScreen, contains('WidgetUiCopy.calendarToday'));
     });
 
     test('小组件样式密度设置同步预览、新增固定请求和系统添加默认值', () {
@@ -1078,12 +1307,15 @@ void main() {
 
       expect(service, contains('setDisplayMode'));
       expect(service, contains('widget_display_mode'));
-      expect(widgetScreen, contains('小组件样式已设为'));
+      expect(
+        widgetScreen,
+        contains('WidgetUiCopy.styleSyncSuccess(mode.label)'),
+      );
       expect(
         widgetScreen,
         contains('final nativeSynced = isWeb || appliedCount != null'),
       );
-      expect(widgetScreen, contains('桌面小组件样式同步失败'));
+      expect(widgetScreen, contains('WidgetUiCopy.styleSyncFailed'));
       expect(widgetScreen, contains('if (_isUpdatingDisplayMode) return'));
       expect(widgetScreen, contains('enabled: !_isUpdatingDisplayMode'));
       expect(widgetScreen, contains('_userChangedDisplayMode = true'));
@@ -1091,10 +1323,7 @@ void main() {
         widgetScreen,
         contains('setState(() => _isUpdatingDisplayMode = false)'),
       );
-      expect(
-        widgetScreen,
-        contains("SnackBarAction(\n            label: '重试'"),
-      );
+      expect(widgetScreen, contains('label: WidgetUiCopy.actionRetry'));
       expect(widgetScreen, contains('SegmentedButton<WidgetDisplayMode>'));
       expect(
         widgetScreen,
@@ -1402,23 +1631,16 @@ void main() {
       expect(manager, contains("'style': style.id"));
       expect(manager, contains('invokeMethod<String>'));
       expect(manager, contains("'requestPinWidget'"));
-      expect(widgetScreen, contains('AndroidWidgetPinResult.unsupported'));
-      expect(
-        widgetScreen,
-        contains('AndroidWidgetPinResult.unsupportedPlatform'),
-      );
-      expect(
-        widgetScreen,
-        contains('AndroidWidgetPinResult.unsupportedLauncher'),
-      );
-      expect(widgetScreen, contains('AndroidWidgetPinResult.permissionDenied'));
       expect(widgetScreen, contains('_WidgetPinSupportBanner'));
-      expect(widgetScreen, contains('正在检查桌面小组件支持'));
-      expect(widgetScreen, contains('当前桌面支持应用内添加'));
-      expect(widgetScreen, contains('AndroidWidgetPinFinalStatus.timeout'));
+      expect(widgetScreen, contains('WidgetUiCopy.pinSupportCheckingTitle'));
+      expect(widgetScreen, contains('WidgetUiCopy.pinSupportSupportedTitle'));
       expect(
         widgetScreen,
-        contains('AndroidWidgetPinFinalStatus.invalidWidgetId'),
+        contains('WidgetUiCopy.pinSupportResultTitle(support)'),
+      );
+      expect(
+        widgetScreen,
+        contains('WidgetUiCopy.pinSupportResultMessage(support)'),
       );
       expect(
         widgetScreen,
@@ -1448,7 +1670,7 @@ void main() {
       expect(widgetScreen, contains('Icons.help_outline'));
       expect(widgetScreen, contains('if (_requesting) return'));
       expect(widgetScreen, contains('CircularProgressIndicator'));
-      expect(widgetScreen, contains('正在请求添加'));
+      expect(widgetScreen, contains('WidgetUiCopy.requestingAdd'));
       expect(widgetScreen, contains('requestPinWidgetDetailed'));
       expect(widgetScreen, contains('final requestedKind = widget.kind'));
       expect(
@@ -1854,21 +2076,22 @@ void main() {
       expect(pinStyle, contains('targetCellHeight = 2'));
       expect(pinStyle, contains('targetCellHeight = 3'));
       expect(widgetScreen, contains('previewCellLabel'));
-      expect(
-        widgetScreen,
-        contains('AndroidWidgetPinResult.permissionDenied =>'),
-      );
       expect(widgetScreen, contains('previewAspectRatio'));
       expect(widgetScreen, contains('previewMaxWidth'));
       expect(widgetScreen, contains("'2x2'"));
       expect(widgetScreen, contains("'3x2'"));
       expect(widgetScreen, contains("'4x3'"));
-      expect(widgetScreen, contains('小组件样式已设为'));
-      expect(widgetScreen, contains('label: Text('));
-      expect(widgetScreen, contains("'添加\${widget.displayMode.label} "));
       expect(
         widgetScreen,
-        contains("\${widget.displayMode.launcherRequestLabel}'"),
+        contains('WidgetUiCopy.styleSyncSuccess(mode.label)'),
+      );
+      expect(widgetScreen, contains('label: Text('));
+      expect(widgetScreen, contains('WidgetUiCopy.addWidgetButtonLabel('));
+      expect(
+        widgetScreen,
+        contains(
+          'launcherRequestLabel: widget.displayMode.launcherRequestLabel',
+        ),
       );
       expect(widgetScreen, contains('AspectRatio('));
       expect(widgetScreen, contains('displayMode.previewAspectRatio'));

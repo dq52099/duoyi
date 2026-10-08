@@ -6,7 +6,6 @@ import android.app.AlarmManager
 import android.os.Build
 import android.os.SystemClock
 import android.view.View
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -71,6 +70,8 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 mutedIds = intArrayOf(
                     R.id.widget_focus_habit_date,
                     R.id.widget_focus_timer_caption,
+                    R.id.widget_focus_count_label,
+                    R.id.widget_focus_minutes_label,
                     R.id.widget_focus_nav_todo,
                     R.id.widget_focus_nav_habit,
                     R.id.widget_focus_nav_calendar,
@@ -82,16 +83,27 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 prefs,
                 primaryIds = intArrayOf(R.id.widget_focus_quick_start),
             )
-            val today = SimpleDateFormat("MM/dd", Locale.getDefault()).format(Date())
+            val isZh = DuoyiWidgetCopy.isZh(prefs)
+            val appLocale = DuoyiWidgetCopy.resolveLocale(prefs)
+            val today = SimpleDateFormat("MM/dd", appLocale).format(Date())
 
             views.setTextViewText(
                 R.id.widget_focus_habit_title,
-                "专注"
+                DuoyiWidgetCopy.focusTitle(isZh)
             )
             views.setTextViewText(R.id.widget_focus_habit_date, today)
+            views.setTextViewText(
+                R.id.widget_focus_count_label,
+                DuoyiWidgetCopy.focusMetricSessions(isZh)
+            )
+            views.setTextViewText(
+                R.id.widget_focus_minutes_label,
+                DuoyiWidgetCopy.focusMetricDuration(isZh)
+            )
             val pomodoroToday = prefs.getInt("pomodoro_today", 0)
             val focusMinutesToday = prefs.getInt("focus_minutes_today", pomodoroToday * 25)
-            val nextFocusLabel = prefs.getString("next_focus_label", "25 分钟专注") ?: "25 分钟专注"
+            val nextFocusLabel = prefs.getString("next_focus_label", if (isZh) "25 分钟专注" else "25-min focus")
+                ?: if (isZh) "25 分钟专注" else "25-min focus"
             val sessionTrusted = DuoyiWidgetSnapshot.hasPublishedSession(prefs)
             val countUp = getBooleanCompat(prefs, "focus_timer_count_up")
             val storedRunning = getBooleanCompat(prefs, "focus_timer_running")
@@ -109,56 +121,57 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
             val timerRemainingSeconds = if (countUp && timerRunning && startedAt > 0L) {
                 ((now - startedAt).coerceAtLeast(0L) / 1000L).toInt()
             } else currentTimerRemainingSeconds(prefs, timerRunning)
-            val timerLabel = prefs.getString("focus_timer_label", "专注倒计时") ?: "专注倒计时"
+            val timerLabel = DuoyiWidgetCopy.localizeTimerLabel(
+                prefs.getString("focus_timer_label", if (isZh) "专注倒计时" else "Focus countdown")
+                    ?: if (isZh) "专注倒计时" else "Focus countdown",
+                isZh
+            )
             val timerText = if (!sessionTrusted) "—" else if (showEndTime) {
-                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(endsAt))
+                SimpleDateFormat("HH:mm", appLocale).format(Date(endsAt))
             } else if (timerRunning || paused) {
-                formatTimer(timerRemainingSeconds)
+                DuoyiWidgetCopy.formatTimer(timerRemainingSeconds, appLocale)
             } else if (expired) "00:00" else {
                 extractFirstNumber(nextFocusLabel)
             }
-            val timerCaption = when {
-                !sessionTrusted -> "待刷新"
-                expired -> "已结束"
-                paused -> "已暂停"
-                showEndTime -> "结束时间"
-                timerRunning && countUp -> "正计时"
-                timerRunning -> "倒计时"
-                else -> "下一轮"
-            }
-            val timerSummary = if (!sessionTrusted) {
-                "数据待刷新，打开多仪更新"
-            } else if (showEndTime) {
-                "预计 ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(endsAt))} 结束"
-            } else if (timerRunning) {
-                "$timerLabel：${formatTimer(timerRemainingSeconds)}"
-            } else if (paused) {
-                "已暂停：${formatTimer(storedRemaining)}"
-            } else if (expired) {
-                "计时已结束，打开多仪同步"
-            } else {
-                "下一轮：$nextFocusLabel"
-            }
-            val timerHint = if (timerRunning) {
-                val endsAtMillis = getLongCompat(prefs, "focus_timer_ends_at_millis")
-                if (endsAtMillis > 0L) {
-                    "预计 ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(endsAtMillis))} 结束"
-                } else {
-                    "正在专注中"
-                }
-            } else if (expired) {
-                "打开应用查看本轮记录"
-            } else {
-                "结束后提醒休息"
-            }
-            val quickStartText = when {
-                !sessionTrusted -> "打开专注刷新"
-                expired -> "查看本轮记录"
-                paused -> "继续专注"
-                timerRunning && countUp -> "查看正计时"
-                timerRunning -> "查看倒计时"
-                else -> "开始$nextFocusLabel"
-            }
+            val timerCaption = DuoyiWidgetCopy.focusTimerCaption(
+                sessionTrusted = sessionTrusted,
+                expired = expired,
+                paused = paused,
+                showEndTime = showEndTime,
+                timerRunning = timerRunning,
+                countUp = countUp,
+                isZh = isZh
+            )
+            val timerSummary = DuoyiWidgetCopy.focusTimerSummary(
+                sessionTrusted = sessionTrusted,
+                showEndTime = showEndTime,
+                endsAt = endsAt,
+                timerRunning = timerRunning,
+                timerLabel = timerLabel,
+                remainingSeconds = timerRemainingSeconds,
+                paused = paused,
+                storedRemaining = storedRemaining,
+                expired = expired,
+                nextFocusLabel = nextFocusLabel,
+                appLocale = appLocale,
+                isZh = isZh
+            )
+            val timerHint = DuoyiWidgetCopy.focusTimerHint(
+                timerRunning = timerRunning,
+                endsAtMillis = getLongCompat(prefs, "focus_timer_ends_at_millis"),
+                expired = expired,
+                appLocale = appLocale,
+                isZh = isZh
+            )
+            val quickStartText = DuoyiWidgetCopy.focusQuickStartText(
+                sessionTrusted = sessionTrusted,
+                expired = expired,
+                paused = paused,
+                timerRunning = timerRunning,
+                countUp = countUp,
+                nextFocusLabel = nextFocusLabel,
+                isZh = isZh
+            )
             views.setTextViewText(
                 R.id.widget_focus_count,
                 pomodoroToday.toString()
@@ -193,7 +206,7 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
             )
             views.setTextViewText(
                 R.id.widget_focus_summary,
-                prefs.getString("focus_summary", "今日还未专注") ?: "今日还未专注"
+                DuoyiWidgetCopy.focusSummary(prefs.getString("focus_summary", null), isZh)
             )
             views.setTextViewText(
                 R.id.widget_focus_habit_summary,
@@ -224,10 +237,10 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
             )
 
-            val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
-            val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
-            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
-            val tabFocus = prefs.getString("nav_focus", "专注") ?: "专注"
+            val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
+            val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
+            val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
+            val tabFocus = DuoyiWidgetCopy.navFocus(prefs, isZh)
             views.setTextViewText(R.id.widget_focus_nav_todo, tabTodo)
             views.setTextViewText(R.id.widget_focus_nav_habit, tabHabit)
             views.setTextViewText(R.id.widget_focus_nav_calendar, tabCalendar)
@@ -284,18 +297,6 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
         if (endsAtMillis <= 0L) return storedRemaining
         val secondsUntilEnd = ((endsAtMillis - System.currentTimeMillis()) / 1000L).coerceAtLeast(0L)
         return secondsUntilEnd.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-    }
-
-    private fun formatTimer(totalSeconds: Int): String {
-        val safeSeconds = totalSeconds.coerceAtLeast(0)
-        val hours = safeSeconds / 3600
-        val minutes = (safeSeconds % 3600) / 60
-        val seconds = safeSeconds % 60
-        return if (hours > 0) {
-            "%d:%02d:%02d".format(Locale.getDefault(), hours, minutes, seconds)
-        } else {
-            "%02d:%02d".format(Locale.getDefault(), minutes, seconds)
-        }
     }
 
     private fun getBooleanCompat(prefs: SharedPreferences, key: String): Boolean {

@@ -130,8 +130,46 @@ void main() {
         project,
         contains('PRODUCT_BUNDLE_IDENTIFIER = com.duoyi.duoyi.DuoyiWidgets;'),
       );
-      expect(project, contains('MARKETING_VERSION = 1.1.11;'));
-      expect(project, contains('CURRENT_PROJECT_VERSION = 110011;'));
+      for (final config in {
+        'E0000000000000000000000C': 'Debug',
+        'E0000000000000000000000D': 'Release',
+        'E0000000000000000000000E': 'Profile',
+      }.entries) {
+        final start = project.indexOf(
+          '${config.key} /* ${config.value} */ = {',
+        );
+        expect(start, greaterThanOrEqualTo(0));
+        final block = project.substring(
+          start,
+          project.indexOf('\n\t\t};', start),
+        );
+        expect(
+          block,
+          contains(
+            'baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;',
+          ),
+        );
+        expect(
+          block,
+          contains(r'CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";'),
+        );
+        expect(
+          block,
+          contains(r'MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";'),
+        );
+        expect(block, isNot(contains('110011')));
+        expect(block, isNot(contains('1.1.11')));
+      }
+      final evidenceScript = File(
+        'scripts/ios_device_evidence.sh',
+      ).readAsStringSync();
+      final refresh = evidenceScript.indexOf(
+        'build ios --config-only --no-codesign --debug --no-pub',
+      );
+      final signedBuild = evidenceScript.indexOf('xcodebuild \\');
+      expect(refresh, greaterThanOrEqualTo(0));
+      expect(signedBuild, greaterThan(refresh));
+      expect(evidenceScript, contains('generated_build_version.txt'));
       expect(project, contains('APPLICATION_EXTENSION_API_ONLY = YES;'));
       expect(project, contains('INFOPLIST_FILE = DuoyiWidgets/Info.plist;'));
     });
@@ -243,7 +281,8 @@ void main() {
       expect(swift, contains('primaryTarget'));
       expect(swift, contains('readPrimary'));
       expect(swift, contains('config.kind == "DuoyiAnniversaryWidget"'));
-      expect(swift, contains('trimmedTitle == config.fallback'));
+      final knownFallback = _swiftFunctionBlock(swift, 'isKnownFallback');
+      expect(knownFallback, contains('if trimmed == entry.config.fallback {'));
       expect(swift, contains('key: "memorial_highlight_1", fallback: ""'));
       expect(swift, contains('key: "memorial_highlight_1_id"'));
       expect(swift, contains('sourceKey = "memorial_highlight_1"'));
@@ -301,6 +340,299 @@ void main() {
       expect(main, contains('focusTimerTotalSeconds: focusState.totalSeconds'));
       expect(main, contains('focusTimerEndsAtMillis: focusTimerEndsAtMillis'));
       expect(main, contains('focusTimerLabel: focusTimerLabel'));
+    });
+
+    test('binds widget mutations to the captured snapshot contract', () {
+      final snapshotStart = swift.indexOf(
+        'private struct DuoyiWidgetSnapshot {',
+      );
+      final snapshotEnd = swift.indexOf(
+        'private struct DuoyiWidgetConfig {',
+        snapshotStart,
+      );
+      final snapshot = swift.substring(snapshotStart, snapshotEnd);
+      final actionURLStart = snapshot.indexOf('    func actionURL(');
+      final actionURL = snapshot.substring(actionURLStart);
+      final entry = _swiftFunctionBlock(swift, 'entry');
+      final readTodoRows = _swiftFunctionBlock(swift, 'readTodoRows');
+      final todoRowStart = swift.indexOf('private struct DuoyiTodoRow:');
+      final todoRowEnd = swift.indexOf(
+        'private struct DuoyiWidgetRow:',
+        todoRowStart,
+      );
+      final todoRow = swift.substring(todoRowStart, todoRowEnd);
+      final quickURLStart = swift.indexOf('    private var quickURL: URL? {');
+      final quickURLEnd = swift.indexOf(
+        '\n}\n\nprivate let todoConfig',
+        quickURLStart,
+      );
+      final quickURL = swift.substring(quickURLStart, quickURLEnd);
+      final pushStart = service.indexOf('static Future<bool> push({');
+      final pushEnd = service.indexOf(
+        'static Future<bool> _updateAllWidgets()',
+        pushStart,
+      );
+      final push = service.substring(pushStart, pushEnd);
+
+      expect(snapshot, contains('let day: String'));
+      expect(snapshot, contains('let utcOffsetMinutes: Int?'));
+      expect(snapshot, contains('let accountNonce: String'));
+      expect(snapshot, contains('values["widget_snapshot_day"]'));
+      expect(
+        snapshot,
+        contains('values["widget_snapshot_utc_offset_minutes"]'),
+      );
+      expect(snapshot, contains('values["widget_account_nonce"]'));
+      expect(snapshot, contains('var hasPublishedSession: Bool'));
+      expect(
+        snapshot,
+        contains(
+          '!day.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty',
+        ),
+      );
+      expect(
+        snapshot,
+        contains(
+          '!accountNonce.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty',
+        ),
+      );
+      final metadataInit = snapshot.substring(
+        snapshot.indexOf('    init(values:'),
+        snapshot.indexOf('    private init('),
+      );
+      expect(metadataInit, isNot(contains('.trimmingCharacters')));
+      expect(snapshot, contains('func isFresh(at date: Date) -> Bool'));
+      expect(snapshot, contains('day == localDay'));
+      expect(
+        snapshot,
+        contains(
+          'utcOffsetMinutes == TimeZone.current.secondsFromGMT(for: date) / 60',
+        ),
+      );
+
+      expect(
+        entry,
+        contains(
+          'let defaults = UserDefaults(suiteName: appGroupId)?.'
+          'dictionaryRepresentation() ?? [:]',
+        ),
+      );
+      expect(
+        RegExp(r'dictionaryRepresentation\(\)').allMatches(entry),
+        hasLength(1),
+      );
+      expect(
+        entry,
+        contains('let snapshot = DuoyiWidgetSnapshot(values: defaults)'),
+      );
+      expect(entry, contains('snapshot: snapshot,'));
+      expect(entry, contains('let fresh = snapshot.isFresh(at: now)'));
+      expect(readTodoRows, contains('snapshot: DuoyiWidgetSnapshot'));
+      expect(readTodoRows, contains('snapshot: snapshot'));
+      expect(
+        entry,
+        contains(
+          'let todoRows = fresh ? readTodoRows(defaults, locale: locale, '
+          'snapshot: snapshot) : []',
+        ),
+      );
+      expect(entry, contains('if !fresh {'));
+      expect(entry, contains('habitQuickCheckId: fresh ?'));
+      expect(
+        push,
+        contains('final capturedAt = snapshotAt ?? DateTime.now();'),
+      );
+      expect(push, contains('final now = capturedAt;'));
+      expect(push, contains('final offset = now.timeZoneOffset.inMinutes;'));
+      expect(
+        push,
+        contains("'widget_account_nonce': _accountActionNonce ?? ''"),
+      );
+      expect(push, contains("'widget_snapshot_utc_offset_minutes'"));
+      expect(
+        push,
+        contains("_saveWidgetPayloadValue('widget_snapshot_day', day)"),
+      );
+      final dayInvalidated = push.indexOf(
+        "_saveWidgetPayloadValue('widget_snapshot_day', '')",
+      );
+      final noncePublished = push.indexOf(
+        "'widget_account_nonce': _accountActionNonce ?? ''",
+      );
+      final offsetPublished = push.indexOf(
+        "'widget_snapshot_utc_offset_minutes'",
+      );
+      final dayPublished = push.indexOf(
+        "_saveWidgetPayloadValue('widget_snapshot_day', day)",
+      );
+      expect(dayInvalidated, greaterThanOrEqualTo(0));
+      expect(noncePublished, greaterThanOrEqualTo(0));
+      expect(offsetPublished, greaterThanOrEqualTo(0));
+      expect(dayPublished, greaterThanOrEqualTo(0));
+      expect(dayInvalidated, lessThan(noncePublished));
+      expect(noncePublished, lessThan(offsetPublished));
+      expect(offsetPublished, lessThan(dayPublished));
+
+      for (final timerField in [
+        'focusTimerRunning',
+        'focusTimerRemainingSeconds',
+        'focusTimerTotalSeconds',
+        'focusTimerEndsAtMillis',
+      ]) {
+        expect(entry, contains('$timerField: snapshot.hasPublishedSession ?'));
+      }
+      expect(
+        entry,
+        contains(
+          'focusTimerRunning: snapshot.hasPublishedSession ? '
+          'readBool(defaults, key: "focus_timer_running") : false',
+        ),
+      );
+      expect(
+        entry,
+        contains(
+          'focusTimerRemainingSeconds: snapshot.hasPublishedSession ? '
+          'readInt(defaults, key: "focus_timer_remaining_seconds") : 0',
+        ),
+      );
+      expect(
+        entry,
+        contains(
+          'focusTimerTotalSeconds: snapshot.hasPublishedSession ? '
+          'readInt(defaults, key: "focus_timer_total_seconds") : 0',
+        ),
+      );
+      expect(
+        entry,
+        contains(
+          'focusTimerEndsAtMillis: snapshot.hasPublishedSession ? '
+          'readInt64(defaults, key: "focus_timer_ends_at_millis") : 0',
+        ),
+      );
+
+      expect(
+        actionURL,
+        contains(
+          'let mutates = ["complete_todo", "checkin_habit", '
+          '"start_pomodoro"].contains(action)',
+        ),
+      );
+      expect(actionURL, contains('(action == "quick_todo" && hasQuickText)'));
+      expect(
+        actionURL,
+        contains('guard mutates else { return components.url }'),
+      );
+      expect(
+        actionURL,
+        contains(
+          'guard components.host == "action" else { return components.url }',
+        ),
+      );
+      expect(
+        actionURL,
+        contains(
+          'guard isFresh(at: Date()), let offset = utcOffsetMinutes '
+          'else { return nil }',
+        ),
+      );
+      expect(actionURL, contains('name == "text"'));
+      expect(
+        actionURL,
+        contains(
+          r'!($0.value ?? "").trimmingCharacters(in: '
+          r'.whitespacesAndNewlines).isEmpty',
+        ),
+      );
+      expect(
+        actionURL,
+        contains(
+          'let bindingKeys = Set(["source", "widget_day", "widget_offset", '
+          '"widget_account"])',
+        ),
+      );
+      expect(
+        actionURL,
+        contains('URLQueryItem(name: "source", value: "widget")'),
+      );
+      expect(
+        actionURL,
+        contains('URLQueryItem(name: "widget_day", value: day)'),
+      );
+      expect(
+        actionURL,
+        contains('URLQueryItem(name: "widget_offset", value: String(offset))'),
+      );
+      expect(
+        actionURL,
+        contains('URLQueryItem(name: "widget_account", value: accountNonce)'),
+      );
+      expect(actionURL, isNot(contains('UserDefaults')));
+      expect(actionURL, isNot(contains('UUID')));
+
+      expect(todoRow, contains('let snapshot: DuoyiWidgetSnapshot'));
+      expect(
+        todoRow,
+        contains('URLComponents(string: "duoyi://action/complete_todo")'),
+      );
+      expect(todoRow, contains('return snapshot.actionURL(components)'));
+      expect(
+        quickURL,
+        contains('URLComponents(string: "duoyi://action/checkin_habit")'),
+      );
+      expect(quickURL, contains('entry.snapshot.actionURL(components)'));
+      expect(
+        quickURL,
+        contains(
+          'entry.snapshot.actionURL(URLComponents(string: '
+          'entry.config.quickActionLink))',
+        ),
+      );
+      expect(
+        swift,
+        contains(
+          'if let url = entry.snapshot.actionURL('
+          'URLComponents(string: target))',
+        ),
+      );
+      expect(
+        _swiftConfigBlock(swift, 'todoConfig'),
+        contains('quickActionLink: "duoyi://action/quick_todo"'),
+      );
+      expect(
+        _swiftConfigBlock(swift, 'focusConfig'),
+        contains('deepLink: "duoyi://focus"'),
+      );
+      expect(
+        _swiftConfigBlock(swift, 'focusConfig'),
+        contains('quickActionLink: "duoyi://action/start_pomodoro"'),
+      );
+    });
+
+    test('refreshes daily data at midnight and focus timers at their end', () {
+      final timelineStart = swift.indexOf('    func getTimeline(');
+      final timelineEnd = swift.indexOf(
+        '    private func entry()',
+        timelineStart,
+      );
+      final timeline = swift.substring(timelineStart, timelineEnd);
+
+      expect(timeline, contains('current.focusTimerRunning ? 1 : 15'));
+      expect(
+        timeline,
+        contains(
+          'Calendar.current.date(byAdding: .day, value: 1, to: '
+          'Calendar.current.startOfDay(for: now))',
+        ),
+      );
+      expect(timeline, contains('nextRefresh = min(nextRefresh, midnight)'));
+      expect(
+        timeline,
+        contains(
+          'if current.focusTimerRunning, let end = current.focusTimerEndDate, '
+          'end > now',
+        ),
+      );
+      expect(timeline, contains('nextRefresh = min(nextRefresh, end)'));
     });
 
     test('supports home screen and lock screen WidgetKit families', () {
@@ -376,7 +708,7 @@ void main() {
       () {
         const deepLinksByKind = {
           'DuoyiTodoWidget': 'duoyi://todo',
-          'DuoyiFocusWidget': 'duoyi://action/start_pomodoro',
+          'DuoyiFocusWidget': 'duoyi://focus',
           'DuoyiHabitWidget': 'duoyi://habit',
           'DuoyiCalendarWidget': 'duoyi://calendar',
           'DuoyiScheduleWidget': 'duoyi://calendar',
@@ -458,22 +790,28 @@ void main() {
           contains('navLink(entry.navCalendar, "duoyi://calendar")'),
         );
         expect(swift, contains('navLink(entry.navFocus, "duoyi://focus")'));
-        expect(
-          swift,
-          contains('navTodo: readString(defaults, key: "nav_todo"'),
-        );
-        expect(
-          swift,
-          contains('navHabit: readString(defaults, key: "nav_habit"'),
-        );
-        expect(
-          swift,
-          contains('navCalendar: readString(defaults, key: "nav_calendar"'),
-        );
-        expect(
-          swift,
-          contains('navFocus: readString(defaults, key: "nav_focus"'),
-        );
+        final entryBlock = _swiftFunctionBlock(swift, 'entry');
+        const navPayloadFields = {
+          'navTodo': 'nav_todo',
+          'navHabit': 'nav_habit',
+          'navCalendar': 'nav_calendar',
+          'navFocus': 'nav_focus',
+        };
+        for (final mapping in navPayloadFields.entries) {
+          final rawName =
+              'raw${mapping.key[0].toUpperCase()}${mapping.key.substring(1)}';
+          expect(
+            entryBlock,
+            contains(
+              'let $rawName = readString(defaults, key: "${mapping.value}"',
+            ),
+          );
+          expect(
+            entryBlock,
+            contains('let ${mapping.key} = (locale == .en && $rawName =='),
+          );
+          expect(entryBlock, contains('${mapping.key}: ${mapping.key},'));
+        }
 
         for (final kind in widgetKinds) {
           final configBlock = _swiftConfigBlock(swift, _configName(kind));

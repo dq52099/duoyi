@@ -74,8 +74,7 @@ const Map<String, String> _zh = <String, String>{
   'settings.language': '界面语言',
   'settings.language.zh': '简体中文',
   'settings.language.en': 'English',
-  'settings.language.description':
-      '说明：当前 v2 阶段已迁移高频公共词条（按钮、导航、提醒、共享）。剩余页面文案随后续迭代逐步翻译，未翻译部分会回退到中文显示。',
+  'settings.language.description': '选择界面语言。你的待办、笔记和其他记录会保留原文。',
   // 单位/日期
   'unit.minute': '分钟',
   'unit.min': '分',
@@ -1155,7 +1154,7 @@ const Map<String, String> _en = <String, String>{
   'settings.language.zh': 'Simplified Chinese',
   'settings.language.en': 'English',
   'settings.language.description':
-      'In v2, common terms such as actions, navigation, reminders, and sharing have English translations. Untranslated page copy falls back to Chinese while coverage expands.',
+      'Choose the interface language. Your tasks, notes, and other records keep their original text.',
   'unit.minute': 'minutes',
   'unit.min': 'min',
   'unit.hour': 'hours',
@@ -2313,6 +2312,8 @@ class LocaleProvider extends ChangeNotifier {
   static const _key = 'duoyi_locale_v1';
 
   AppLocale _locale = AppLocale.zh;
+  int _choiceRevision = 0;
+  Future<void> _pendingPersistence = Future<void>.value();
 
   AppLocale get locale => _locale;
 
@@ -2325,21 +2326,46 @@ class LocaleProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    final revision = ++_choiceRevision;
     final prefs = await SharedPreferences.getInstance();
+    if (revision != _choiceRevision) return;
     final raw = prefs.getString(_key);
-    _locale = AppLocaleX.fromStorageValue(raw) ?? defaultLocaleForPlatform();
+    final next = AppLocaleX.fromStorageValue(raw) ?? defaultLocaleForPlatform();
+    final changed = _locale != next;
+    _locale = next;
+    Future<void>? migration;
     if (raw != null && raw != _locale.storageValue) {
-      await prefs.setString(_key, _locale.storageValue);
+      migration = _persistLocale(next);
     }
-    I18n.setLocale(_locale);
+    I18n.setLocale(next);
+    if (changed) notifyListeners();
+    if (migration != null) await migration;
   }
 
-  Future<void> setLocale(AppLocale locale) async {
-    if (_locale == locale) return;
+  Future<void> setLocale(AppLocale locale) {
+    // An explicit choice also wins over a pending initial load when the user
+    // selects the currently displayed default language.
+    _choiceRevision++;
+    final changed = _locale != locale;
     _locale = locale;
+    final persistence = _persistLocale(locale);
     I18n.setLocale(locale);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, locale.storageValue);
-    notifyListeners();
+    if (changed) notifyListeners();
+    return persistence;
+  }
+
+  Future<void> _persistLocale(AppLocale locale) {
+    final persistence = _pendingPersistence.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      if (!await prefs.setString(_key, locale.storageValue)) {
+        throw StateError('Locale preference was not saved');
+      }
+    });
+    // A failed write must not prevent a later explicit choice from saving.
+    _pendingPersistence = persistence.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return persistence;
   }
 }

@@ -45,6 +45,7 @@ class HomeWidgetService {
     'widget_account_nonce': '',
     'widget_snapshot_day': '',
     'widget_snapshot_utc_offset_minutes': 0,
+    'widget_locale': I18n.current.name,
     'todo_count': 0,
     'habit_percent': 0,
     'habit_active_count': 0,
@@ -394,31 +395,53 @@ class HomeWidgetService {
     List<String> diaryHighlightIds = const [],
     List<String> scheduleHighlights = const [],
     List<String> scheduleHighlightIds = const [],
-    String todayEventSummary = '今日没有日程',
-    String focusSummary = '今日还未专注',
-    String habitSummary = '今日习惯待打卡',
-    String streakSummary = '连续记录 0 天',
-    String nextFocusLabel = '25 分钟专注',
+    String? todayEventSummary,
+    String? focusSummary,
+    String? habitSummary,
+    String? streakSummary,
+    String? nextFocusLabel,
     bool focusTimerCountUp = false,
     int focusTimerStartedAtMillis = 0,
     bool focusTimerRunning = false,
     int focusTimerRemainingSeconds = 0,
     int focusTimerTotalSeconds = 0,
     int focusTimerEndsAtMillis = 0,
-    String focusTimerLabel = '专注倒计时',
+    String? focusTimerLabel,
     String habitQuickCheckId = '',
-    String habitQuickCheckLabel = '点击进入习惯打卡',
+    String? habitQuickCheckLabel,
     required HomeWidgetThemePayload theme,
     bool force = false,
     DateTime? snapshotAt,
   }) async {
     if (!_supported) return true;
+    final locale = I18n.current;
+    final resolvedTodayEventSummary =
+        todayEventSummary ?? I18n.tr('widget.no_schedule_today');
+    final resolvedFocusSummary =
+        focusSummary ?? I18n.tr('widget.focus_not_started');
+    final resolvedHabitSummary =
+        habitSummary ?? I18n.tr('widget.habit_pending');
+    final resolvedStreakSummary =
+        streakSummary ??
+        '${I18n.tr('widget.streak_record_prefix')}0${I18n.tr('widget.streak_suffix')}';
+    final resolvedNextFocusLabel =
+        nextFocusLabel ?? '25${I18n.tr('widget.next_focus_suffix')}';
+    final resolvedFocusTimerLabel =
+        focusTimerLabel ?? I18n.tr('widget.focus_countdown');
+    final resolvedHabitQuickCheckLabel =
+        habitQuickCheckLabel ?? I18n.tr('widget.habit_quick_check_hint');
     final capturedAt = snapshotAt ?? DateTime.now();
     final generation = _accountGeneration;
     await _drainPendingAccountClear();
     return _serializePayload(() async {
-      if (generation != _accountGeneration) return false;
-      if (!await init() || generation != _accountGeneration) return false;
+      if (generation != _accountGeneration || locale != I18n.current) {
+        return false;
+      }
+      if (!await init() ||
+          generation != _accountGeneration ||
+          locale != I18n.current) {
+        return false;
+      }
       final now = capturedAt;
       final day =
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -445,24 +468,24 @@ class HomeWidgetService {
         diaryHighlightIds: diaryHighlightIds,
         scheduleHighlights: scheduleHighlights,
         scheduleHighlightIds: scheduleHighlightIds,
-        todayEventSummary: todayEventSummary,
-        focusSummary: focusSummary,
-        habitSummary: habitSummary,
-        streakSummary: streakSummary,
-        nextFocusLabel: nextFocusLabel,
+        todayEventSummary: resolvedTodayEventSummary,
+        focusSummary: resolvedFocusSummary,
+        habitSummary: resolvedHabitSummary,
+        streakSummary: resolvedStreakSummary,
+        nextFocusLabel: resolvedNextFocusLabel,
         focusTimerCountUp: focusTimerCountUp,
         focusTimerStartedAtMillis: focusTimerStartedAtMillis,
         focusTimerRunning: focusTimerRunning,
         focusTimerRemainingSeconds: focusTimerRemainingSeconds,
         focusTimerTotalSeconds: focusTimerTotalSeconds,
         focusTimerEndsAtMillis: focusTimerEndsAtMillis,
-        focusTimerLabel: focusTimerLabel,
+        focusTimerLabel: resolvedFocusTimerLabel,
         habitQuickCheckId: habitQuickCheckId,
-        habitQuickCheckLabel: habitQuickCheckLabel,
+        habitQuickCheckLabel: resolvedHabitQuickCheckLabel,
         theme: theme,
       );
       final datedSignature =
-          '$day|$offset|${I18n.current.name}|$habitActiveCount|$signature';
+          '$day|$offset|${locale.name}|$habitActiveCount|$signature';
       if (!force && datedSignature == _lastPushSignature && !_refreshPending) {
         return true;
       }
@@ -475,6 +498,7 @@ class HomeWidgetService {
         }
         final saveResult = await _saveWidgetPayload({
           'widget_account_nonce': _accountActionNonce ?? '',
+          'widget_locale': locale.name,
           'todo_count': todoCount,
           'habit_percent': habitPercent.clamp(0, 100),
           'habit_active_count': habitActiveCount,
@@ -596,10 +620,10 @@ class HomeWidgetService {
           'diary_highlight_3_id': diaryHighlightIds.length > 2
               ? diaryHighlightIds[2]
               : '',
-          'today_event_summary': todayEventSummary,
+          'today_event_summary': resolvedTodayEventSummary,
           'schedule_highlight_1': scheduleHighlights.isNotEmpty
               ? '· ${scheduleHighlights[0]}'
-              : '· $todayEventSummary',
+              : '· $resolvedTodayEventSummary',
           'schedule_highlight_1_id': scheduleHighlightIds.isNotEmpty
               ? scheduleHighlightIds[0]
               : '',
@@ -616,29 +640,35 @@ class HomeWidgetService {
               ? scheduleHighlightIds[2]
               : '',
           'calendar_month_summary': I18n.tr('widget.calendar_month_summary'),
-          'focus_summary': focusSummary,
-          'habit_summary': habitSummary,
-          'streak_summary': streakSummary,
-          'next_focus_label': nextFocusLabel,
+          'focus_summary': resolvedFocusSummary,
+          'habit_summary': resolvedHabitSummary,
+          'streak_summary': resolvedStreakSummary,
+          'next_focus_label': resolvedNextFocusLabel,
           'focus_timer_count_up': focusTimerCountUp,
           'focus_timer_started_at_millis': focusTimerStartedAtMillis,
           'focus_timer_running': focusTimerRunning,
           'focus_timer_remaining_seconds': focusTimerRemainingSeconds,
           'focus_timer_total_seconds': focusTimerTotalSeconds,
           'focus_timer_ends_at_millis': focusTimerEndsAtMillis,
-          'focus_timer_label': focusTimerLabel,
+          'focus_timer_label': resolvedFocusTimerLabel,
           'habit_quick_check_id': habitQuickCheckId,
-          'habit_quick_check_label': habitQuickCheckLabel,
+          'habit_quick_check_label': resolvedHabitQuickCheckLabel,
           ...theme.payloadValues,
         });
-        if (!saveResult.ok || generation != _accountGeneration) return false;
+        if (!saveResult.ok ||
+            generation != _accountGeneration ||
+            locale != I18n.current) {
+          return false;
+        }
         if (!await _saveWidgetPayloadValue(
           'widget_snapshot_utc_offset_minutes',
           offset,
         )) {
           return false;
         }
-        if (generation != _accountGeneration) return false;
+        if (generation != _accountGeneration || locale != I18n.current) {
+          return false;
+        }
         final current = DateTime.now();
         if (current.year != now.year ||
             current.month != now.month ||
@@ -649,10 +679,15 @@ class HomeWidgetService {
         if (!await _saveWidgetPayloadValue('widget_snapshot_day', day)) {
           return false;
         }
-        if (generation != _accountGeneration) return false;
+        if (generation != _accountGeneration || locale != I18n.current) {
+          return false;
+        }
         _refreshPending = true;
         final ok = await _updateAllWidgets();
-        if (ok && generation == _accountGeneration) {
+        if (generation != _accountGeneration || locale != I18n.current) {
+          return false;
+        }
+        if (ok) {
           _refreshPending = false;
           _lastPushSignature = datedSignature;
           _lastThemeSignature = theme.signature;

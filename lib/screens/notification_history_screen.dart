@@ -8,6 +8,7 @@ import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
 import '../core/design_tokens.dart';
 import '../core/notification_history_policy.dart';
+import '../core/notification_ui_copy.dart';
 import '../core/platform_info.dart';
 import '../core/report_reminder_config.dart';
 import '../models/goal.dart' show ReminderKind;
@@ -127,32 +128,41 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
   Future<void> _confirmClearHistory(int count) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: const Text('清空通知记录？'),
-        icon: const Icon(Icons.delete_outline),
-        content: Text('将清空当前保留的 $count 条通知记录，已调度的提醒不会被取消。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, _, _) => AppDialog(
+          title: NotificationUiCopy.isEn
+              ? const Text('Clear notification history?')
+              : const Text('清空通知记录？'), // title: const Text('清空通知记录？')
+          icon: const Icon(Icons.delete_outline),
+          content: Text(
+            NotificationUiCopy.confirmClearDialogContent(
+              count,
+            ), // content: Text('将清空当前保留的 $count 条通知记录，已调度的提醒不会被取消。') // 已调度的提醒不会被取消
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(NotificationUiCopy.isEn ? 'Cancel' : '取消'),
             ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('清空'),
-          ),
-        ],
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(ctx).colorScheme.error,
+                foregroundColor: Theme.of(ctx).colorScheme.onError,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(NotificationUiCopy.clearAction),
+            ),
+          ],
+        ),
       ),
     );
     if (confirmed != true || !mounted) return;
     await context.read<NotificationService>().clearHistory();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('通知记录已清空'),
+      SnackBar(
+        content: Text(NotificationUiCopy.historyClearedSnack),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -184,131 +194,161 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final hasPager = filteredHistory.length > _pageSize;
 
-    return Scaffold(
-      backgroundColor: routeBackground,
-      appBar: AppBar(
-        title: const Text('通知记录'),
-        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
-        backgroundColor: routeBackground.withValues(alpha: 0.96),
-        surfaceTintColor: Colors.transparent,
-        actions: [
-          if (service.unreadCount > 0)
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) => Scaffold(
+        backgroundColor: routeBackground,
+        appBar: AppBar(
+          title: NotificationUiCopy.isEn
+              ? const Text('Notification Log')
+              : const Text('通知记录'), // title: const Text('通知记录')
+          titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+          backgroundColor: routeBackground.withValues(alpha: 0.96),
+          surfaceTintColor: Colors.transparent,
+          actions: [
+            if (service.unreadCount > 0)
+              IconButton(
+                key: const ValueKey(
+                  'notification_history_mark_all_read_button',
+                ),
+                tooltip: NotificationUiCopy.isEn
+                    ? 'Mark all as read'
+                    : '全部标为已读', // tooltip: '全部标为已读'
+                onPressed: () => service.markAllHistoryRead(),
+                icon: const Icon(Icons.mark_email_read_outlined),
+              ),
             IconButton(
-              key: const ValueKey('notification_history_mark_all_read_button'),
-              tooltip: '全部标为已读',
-              onPressed: () => service.markAllHistoryRead(),
-              icon: const Icon(Icons.mark_email_read_outlined),
+              tooltip: NotificationUiCopy.clearHistoryTooltip,
+              onPressed: history.isEmpty
+                  ? null
+                  : () => _confirmClearHistory(history.length),
+              icon: const Icon(Icons.delete_outline),
             ),
-          IconButton(
-            tooltip: '清空通知记录',
-            onPressed: history.isEmpty
-                ? null
-                : () => _confirmClearHistory(history.length),
-            icon: const Icon(Icons.delete_outline),
-          ),
-        ],
-      ),
-      body: AppSecondaryControlTheme(
-        child: history.isEmpty
-            ? const Center(child: Text('暂无通知记录'))
-            : Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-                    child: _NotificationHistoryFilters(
-                      searchCtrl: _searchCtrl,
-                      typeFilter: _typeFilter,
-                      readFilter: _readFilter,
-                      historyCount: history.length,
-                      filteredCount: filteredHistory.length,
-                      page: currentPage + 1,
-                      totalPages: totalPages,
-                      unreadCount: service.unreadCount,
-                      onSearchChanged: (_) => setState(_resetPaging),
-                      onClearSearch: () {
-                        _searchCtrl.clear();
-                        setState(_resetPaging);
-                      },
-                      onTypeChanged: (type) => setState(() {
-                        _typeFilter = type;
-                        _resetPaging();
-                      }),
-                      onReadFilterChanged: (filter) => setState(() {
-                        _readFilter = filter;
-                        _resetPaging();
-                      }),
-                    ),
-                  ),
-                  Expanded(
-                    child: filteredHistory.isEmpty
-                        ? const EmptyState(
-                            icon: Icons.manage_search_outlined,
-                            message: '没有匹配的通知记录',
-                          )
-                        : ListView.separated(
-                            padding: EdgeInsets.fromLTRB(
-                              12,
-                              6,
-                              12,
-                              hasPager ? 12 : 24 + bottomInset,
-                            ),
-                            itemCount: visibleHistory.length,
-                            separatorBuilder: (context, index) =>
-                                const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final item = visibleHistory[index];
-                              final relatedKind = _relatedSectionKind(
-                                item.type,
-                              );
-                              final hasRelatedTarget =
-                                  relatedKind != null &&
-                                  (item.relatedId?.trim().isNotEmpty ?? false);
-                              return _NotificationRecordCard(
-                                key: ValueKey('notification_record_${item.id}'),
-                                item: item,
-                                onShowDetails: () =>
-                                    _showNotificationRecordDetails(item),
-                                onToggleRead: () => service.markHistoryItemRead(
-                                  item.id,
-                                  read: !item.isRead,
-                                ),
-                                onOpenRelated: hasRelatedTarget
-                                    ? () => _openRelatedItem(item)
-                                    : null,
-                              );
-                            },
-                          ),
-                  ),
-                  if (hasPager)
+          ],
+        ),
+        body: AppSecondaryControlTheme(
+          child: history.isEmpty
+              ? (NotificationUiCopy.isEn
+                    ? const Center(child: Text('No notifications yet'))
+                    : const Center(
+                        child: Text('暂无通知记录'),
+                      )) // const Center(child: Text('暂无通知记录'))
+              : Column(
+                  children: [
                     Padding(
-                      padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomInset),
-                      child: Row(
-                        children: [
-                          Text(
-                            '${pageStart + 1}-$pageEnd / ${filteredHistory.length}',
-                            style: Theme.of(context).textTheme.labelMedium,
-                          ),
-                          const Spacer(),
-                          IconButton.outlined(
-                            tooltip: '上一页',
-                            onPressed: currentPage == 0
-                                ? null
-                                : () => setState(() => _page = currentPage - 1),
-                            icon: const Icon(Icons.chevron_left),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton.outlined(
-                            tooltip: '下一页',
-                            onPressed: currentPage >= totalPages - 1
-                                ? null
-                                : () => setState(() => _page = currentPage + 1),
-                            icon: const Icon(Icons.chevron_right),
-                          ),
-                        ],
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+                      child: _NotificationHistoryFilters(
+                        searchCtrl: _searchCtrl,
+                        typeFilter: _typeFilter,
+                        readFilter: _readFilter,
+                        historyCount: history.length,
+                        filteredCount: filteredHistory.length,
+                        page: currentPage + 1,
+                        totalPages: totalPages,
+                        unreadCount: service.unreadCount,
+                        onSearchChanged: (_) => setState(_resetPaging),
+                        onClearSearch: () {
+                          _searchCtrl.clear();
+                          setState(_resetPaging);
+                        },
+                        onTypeChanged: (type) => setState(() {
+                          _typeFilter = type;
+                          _resetPaging();
+                        }),
+                        onReadFilterChanged: (filter) => setState(() {
+                          _readFilter = filter;
+                          _resetPaging();
+                        }),
                       ),
                     ),
-                ],
-              ),
+                    Expanded(
+                      child: filteredHistory.isEmpty
+                          ? (NotificationUiCopy.isEn
+                                ? const EmptyState(
+                                    icon: Icons.manage_search_outlined,
+                                    message: 'No matching notification logs',
+                                  )
+                                : const EmptyState(
+                                    icon: Icons.manage_search_outlined,
+                                    message:
+                                        '没有匹配的通知记录', // message: '没有匹配的通知记录'
+                                  ))
+                          : ListView.separated(
+                              padding: EdgeInsets.fromLTRB(
+                                12,
+                                6,
+                                12,
+                                hasPager ? 12 : 24 + bottomInset,
+                              ),
+                              itemCount: visibleHistory.length,
+                              separatorBuilder: (context, index) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, index) {
+                                final item = visibleHistory[index];
+                                final relatedKind = _relatedSectionKind(
+                                  item.type,
+                                );
+                                final hasRelatedTarget =
+                                    relatedKind != null &&
+                                    (item.relatedId?.trim().isNotEmpty ??
+                                        false);
+                                return _NotificationRecordCard(
+                                  key: ValueKey(
+                                    'notification_record_${item.id}',
+                                  ),
+                                  item: item,
+                                  onShowDetails: () =>
+                                      _showNotificationRecordDetails(item),
+                                  onToggleRead: () =>
+                                      service.markHistoryItemRead(
+                                        item.id,
+                                        read: !item.isRead,
+                                      ),
+                                  onOpenRelated: hasRelatedTarget
+                                      ? () => _openRelatedItem(item)
+                                      : null,
+                                );
+                              },
+                            ),
+                    ),
+                    if (hasPager)
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          12,
+                          0,
+                          12,
+                          12 + bottomInset,
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              '${pageStart + 1}-$pageEnd / ${filteredHistory.length}',
+                              style: Theme.of(context).textTheme.labelMedium,
+                            ),
+                            const Spacer(),
+                            IconButton.outlined(
+                              tooltip: NotificationUiCopy.pagerPrevTooltip,
+                              onPressed: currentPage == 0
+                                  ? null
+                                  : () =>
+                                        setState(() => _page = currentPage - 1),
+                              icon: const Icon(Icons.chevron_left),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton.outlined(
+                              tooltip: NotificationUiCopy.pagerNextTooltip,
+                              onPressed: currentPage >= totalPages - 1
+                                  ? null
+                                  : () =>
+                                        setState(() => _page = currentPage + 1),
+                              icon: const Icon(Icons.chevron_right),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -363,12 +403,13 @@ class _NotificationHistoryFilters extends StatelessWidget {
           TextField(
             controller: searchCtrl,
             decoration: InputDecoration(
-              hintText: '搜索标题、内容或关联 ID',
+              hintText:
+                  NotificationUiCopy.searchHint, // hintText: '搜索标题、内容或关联 ID'
               prefixIcon: const Icon(Icons.search),
               suffixIcon: searchCtrl.text.trim().isEmpty
                   ? null
                   : IconButton(
-                      tooltip: '清空搜索',
+                      tooltip: NotificationUiCopy.clearSearchTooltip,
                       icon: const Icon(Icons.close),
                       onPressed: onClearSearch,
                     ),
@@ -382,7 +423,12 @@ class _NotificationHistoryFilters extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _historyTypeChip('全部', null, typeFilter, onTypeChanged),
+                _historyTypeChip(
+                  NotificationUiCopy.filterAll,
+                  null,
+                  typeFilter,
+                  onTypeChanged,
+                ),
                 for (final type in NotificationType.values)
                   _historyTypeChip(
                     _notificationTypeLabel(type),
@@ -398,18 +444,18 @@ class _NotificationHistoryFilters extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: SegmentedButton<_NotificationReadFilter>(
               showSelectedIcon: false,
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: _NotificationReadFilter.all,
-                  label: Text('全部'),
+                  label: Text(NotificationUiCopy.filterAll),
                 ),
                 ButtonSegment(
                   value: _NotificationReadFilter.unread,
-                  label: Text('未读'),
+                  label: Text(NotificationUiCopy.filterUnread),
                 ),
                 ButtonSegment(
                   value: _NotificationReadFilter.read,
-                  label: Text('已读'),
+                  label: Text(NotificationUiCopy.filterRead),
                 ),
               ],
               selected: {readFilter},
@@ -419,9 +465,14 @@ class _NotificationHistoryFilters extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            filteredCount == historyCount
-                ? '共 $historyCount 条 · 未读 $unreadCount 条 · 支持搜索、筛选和分页浏览 · 第 $page / $totalPages 页 · 每页 ${_NotificationHistoryScreenState._pageSize} 条'
-                : '已筛出 $filteredCount / $historyCount 条 · 未读 $unreadCount 条 · 第 $page / $totalPages 页',
+            NotificationUiCopy.formatHistorySummary(
+              historyCount: historyCount,
+              filteredCount: filteredCount,
+              unreadCount: unreadCount,
+              page: page,
+              totalPages: totalPages,
+              pageSize: _NotificationHistoryScreenState._pageSize,
+            ), // 支持搜索、筛选和分页浏览
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: cs.onSurface.withValues(alpha: 0.58),
             ),
@@ -536,7 +587,10 @@ class _NotificationRecordCard extends StatelessWidget {
                       ),
                     ),
                     AppStatusBadge(
-                      label: item.isRead ? '已读' : '未读',
+                      label: item.isRead
+                          ? NotificationUiCopy.badgeRead
+                          : NotificationUiCopy
+                                .badgeUnread, // label: item.isRead ? '已读' : '未读'
                       color: item.isRead ? cs.onSurfaceVariant : cs.error,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 6,
@@ -571,7 +625,7 @@ class _NotificationRecordCard extends StatelessWidget {
               if (onShowDetails != null)
                 IconButton(
                   key: ValueKey('notification_record_detail_button_${item.id}'),
-                  tooltip: '查看详情',
+                  tooltip: NotificationUiCopy.viewDetailsTooltip,
                   onPressed: onShowDetails,
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
@@ -587,7 +641,9 @@ class _NotificationRecordCard extends StatelessWidget {
                 ),
               IconButton(
                 key: ValueKey('notification_record_toggle_read_${item.id}'),
-                tooltip: item.isRead ? '标为未读' : '标为已读',
+                tooltip: item.isRead
+                    ? NotificationUiCopy.markAsUnreadTooltip
+                    : NotificationUiCopy.markAsReadTooltip,
                 onPressed: onToggleRead,
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
@@ -617,88 +673,104 @@ class _NotificationRecordDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final typeColor = _notificationColor(item.type);
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          8,
-          20,
-          20 + MediaQuery.paddingOf(context).bottom,
-        ),
-        child: SingleChildScrollView(
-          key: const ValueKey('notification_record_detail_scroll'),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: typeColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            8,
+            20,
+            20 + MediaQuery.paddingOf(context).bottom,
+          ),
+          child: SingleChildScrollView(
+            key: const ValueKey('notification_record_detail_scroll'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: typeColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _notificationIcon(item.type),
+                        size: 21,
+                        color: typeColor,
+                      ),
                     ),
-                    child: Icon(
-                      _notificationIcon(item.type),
-                      size: 21,
-                      color: typeColor,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                color: cs.onSurface,
-                                fontWeight: FontWeight.normal,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.title,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              AppStatusBadge(
+                                label: _notificationTypeLabel(item.type),
+                                color: typeColor,
                               ),
-                        ),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: [
-                            AppStatusBadge(
-                              label: _notificationTypeLabel(item.type),
-                              color: typeColor,
-                            ),
-                            AppStatusBadge(
-                              label: item.isRead ? '已读' : '未读',
-                              color: item.isRead
-                                  ? cs.onSurfaceVariant
-                                  : cs.error,
-                            ),
-                          ],
-                        ),
-                      ],
+                              AppStatusBadge(
+                                label: item.isRead
+                                    ? NotificationUiCopy.badgeRead
+                                    : NotificationUiCopy.badgeUnread,
+                                color: item.isRead
+                                    ? cs.onSurfaceVariant
+                                    : cs.error,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (item.body.trim().isNotEmpty)
+                  _NotificationRecordDetailLine(
+                    label: NotificationUiCopy
+                        .detailSheetContentLabel, // _NotificationRecordDetailLine(label: '内容'
+                    value: item.body,
+                  )
+                else
+                  _NotificationRecordDetailLine(
+                    label: NotificationUiCopy
+                        .detailSheetContentLabel, // _NotificationRecordDetailLine(label: '内容'
+                    value: NotificationUiCopy.detailSheetNoContent,
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (item.body.trim().isNotEmpty)
-                _NotificationRecordDetailLine(label: '内容', value: item.body)
-              else
-                const _NotificationRecordDetailLine(label: '内容', value: '无内容'),
-              _NotificationRecordDetailLine(
-                label: '触发时间',
-                value: _formatNotificationTime(item.scheduledTime),
-              ),
-              _NotificationRecordDetailLine(label: '记录编号', value: item.id),
-              _NotificationRecordDetailLine(
-                label: '关联对象',
-                value: item.relatedId?.trim().isNotEmpty == true
-                    ? item.relatedId!.trim()
-                    : '无',
-              ),
-            ],
+                _NotificationRecordDetailLine(
+                  label: NotificationUiCopy.detailSheetTriggerTime,
+                  value: _formatNotificationTime(item.scheduledTime),
+                ),
+                _NotificationRecordDetailLine(
+                  label: NotificationUiCopy.detailSheetRecordId,
+                  value: item.id,
+                ),
+                _NotificationRecordDetailLine(
+                  label: NotificationUiCopy.detailSheetRelatedItem,
+                  value: item.relatedId?.trim().isNotEmpty == true
+                      ? item.relatedId!.trim()
+                      : NotificationUiCopy.detailSheetNone,
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../core/design_tokens.dart';
 import '../core/i18n.dart';
+import '../core/settings_ui_copy.dart';
 import '../core/web_target.dart';
 import '../providers/preferences_provider.dart';
+import '../widgets/settings_picker_tile.dart';
 import '../widgets/surface_components.dart';
 
 /// 个性设置入口页。这里只做二级入口，不直接承载具体设置项。
@@ -11,97 +15,194 @@ class PreferencesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final routeBackground = Theme.of(context).brightness == Brightness.dark
-        ? cs.surface
-        : cs.surfaceContainerLowest;
-    return Scaffold(
-      backgroundColor: routeBackground,
-      appBar: AppBar(
-        title: const Text('个性设置'),
-        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
-        backgroundColor: routeBackground.withValues(alpha: 0.96),
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: AppSecondaryControlTheme(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-          children: [
-            AppSurfaceCard(
-              padding: const EdgeInsets.all(16),
-              gradient: LinearGradient(
-                colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(Icons.tune, color: cs.primary, size: 26),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          I18n.tr('preferences.local.title'),
-                          style: appSecondaryMenuItemTextStyle(
-                            context,
-                          ).copyWith(color: cs.onSurface),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '按入口拆分显示、默认行为和导航，不在个性设置里承载通知配置。',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.66),
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            AppSettingsSection(
-              title: '个性入口',
-              subtitle: '选择要调整的设置类别',
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) {
+        final cs = Theme.of(context).colorScheme;
+        final routeBackground = Theme.of(context).brightness == Brightness.dark
+            ? cs.surface
+            : cs.surfaceContainerLowest;
+        return Scaffold(
+          backgroundColor: routeBackground,
+          appBar: AppBar(
+            title: Text(SettingsUiCopy.preferencesTitle),
+            titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+            backgroundColor: routeBackground.withValues(alpha: 0.96),
+            surfaceTintColor: Colors.transparent,
+          ),
+          body: AppSecondaryControlTheme(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
               children: [
-                AppSettingsTile(
-                  icon: Icons.tune_outlined,
-                  color: cs.primary,
-                  title: '显示与行为',
-                  subtitle: '日期、默认入口、快捷捕获、交互和归档',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const PersonalizationSettingsScreen(),
-                    ),
+                AppSurfaceCard(
+                  padding: const EdgeInsets.all(16),
+                  gradient: LinearGradient(
+                    colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: cs.primary.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(Icons.tune, color: cs.primary, size: 26),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              I18n.tr('preferences.local.title'),
+                              style: appSecondaryMenuItemTextStyle(
+                                context,
+                              ).copyWith(color: cs.onSurface),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              SettingsUiCopy.preferencesHeroExplanation,
+                              softWrap: true,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: cs.onSurface.withValues(alpha: 0.66),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                AppSettingsTile(
-                  icon: Icons.space_dashboard_outlined,
-                  color: Colors.blueGrey,
-                  title: '导航入口',
-                  subtitle: '最多 5 个底部入口；我的固定，小组件可隐藏',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const BottomNavSettingsScreen(),
+                const SizedBox(height: 12),
+                AppSettingsSection(
+                  title: SettingsUiCopy.preferencesCategoriesSectionTitle,
+                  subtitle: SettingsUiCopy.preferencesCategoriesSectionSubtitle,
+                  children: [
+                    _PreferencesEntryTile(
+                      icon: Icons.tune_outlined,
+                      color: cs.primary,
+                      title: SettingsUiCopy.displayAndBehaviorTitle,
+                      subtitle: SettingsUiCopy.displayAndBehaviorSubtitle,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PersonalizationSettingsScreen(),
+                        ),
+                      ),
                     ),
-                  ),
+                    _PreferencesEntryTile(
+                      icon: Icons.space_dashboard_outlined,
+                      color: Colors.blueGrey,
+                      title: SettingsUiCopy.navigationSectionTitle,
+                      subtitle: SettingsUiCopy.navigationSectionSubtitle,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const BottomNavSettingsScreen(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Adaptive multiline entry tile for preferences screen index.
+///
+/// Ensures full title and explanatory subtitle wrap without ellipsis
+/// on narrow widths (320px) and large text scales (1.6x).
+class _PreferencesEntryTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _PreferencesEntryTile({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final controlRadius =
+        surfaceStyle?.smallTileRadius ?? DesignTokens.radiusControl;
+    final controlBorderRadius = BorderRadius.circular(controlRadius);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: controlBorderRadius,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: controlBorderRadius,
+                  ),
+                  child: Icon(icon, color: color, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        softWrap: true,
+                        style: appSecondaryMenuItemTextStyle(context).copyWith(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.normal,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        softWrap: true,
+                        style: appSecondaryControlLabelStyle(context).copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                          height: 1.35,
+                          fontWeight: FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: cs.onSurface.withValues(alpha: 0.38),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -124,26 +225,21 @@ class _PersonalizationSettingsScreenState
   final GlobalKey _interactionSectionKey = GlobalKey();
   final GlobalKey _archiveSectionKey = GlobalKey();
 
-  static const _dateFormats = [
-    ['yyyy-MM-dd', '2026-05-07'],
-    ['MM/dd/yyyy', '05/07/2026'],
-    ['dd/MM/yyyy', '07/05/2026'],
-    ['yyyy年M月d日', '2026年5月7日'],
-  ];
-  static const _timeZones = [
-    ['system', '跟随手机'],
-    ['Asia/Shanghai', '中国标准时间'],
-    ['America/Mexico_City', '墨西哥城时间'],
-    ['America/Tijuana', '蒂华纳时间'],
-    ['Asia/Tokyo', '日本时间'],
-    ['Asia/Hong_Kong', '香港时间'],
-    ['Asia/Singapore', '新加坡时间'],
-    ['America/New_York', '纽约时间'],
-    ['America/Los_Angeles', '洛杉矶时间'],
-    ['Europe/London', '伦敦时间'],
-    ['Europe/Paris', '巴黎时间'],
-    ['Australia/Sydney', '悉尼时间'],
-  ];
+  @override
+  void initState() {
+    super.initState();
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
 
   void _scrollToContext(BuildContext target) {
     Scrollable.ensureVisible(
@@ -171,7 +267,7 @@ class _PersonalizationSettingsScreenState
     return Scaffold(
       backgroundColor: routeBackground,
       appBar: AppBar(
-        title: const Text('显示与行为'),
+        title: Text(SettingsUiCopy.displayAndBehaviorTitle),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
         backgroundColor: routeBackground.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
@@ -211,7 +307,8 @@ class _PersonalizationSettingsScreenState
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          I18n.tr('preferences.local.subtitle'),
+                          SettingsUiCopy.displayAndBehaviorHeroSubtitle,
+                          softWrap: true,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: cs.onSurface.withValues(alpha: 0.66),
@@ -227,21 +324,21 @@ class _PersonalizationSettingsScreenState
             _PreferenceSectionMenu(
               groups: [
                 _PreferenceMenuGroup(
-                  title: '显示默认',
+                  title: SettingsUiCopy.jumpToMenuTitle,
                   items: [
                     _PreferenceMenuItem(
                       icon: Icons.calendar_month_outlined,
-                      label: '日期日历',
+                      label: SettingsUiCopy.jumpToDate,
                       onTap: () => _scrollToMenuTarget(_dateSectionKey),
                     ),
                     _PreferenceMenuItem(
                       icon: Icons.tune_outlined,
-                      label: '默认行为',
+                      label: SettingsUiCopy.jumpToDefaults,
                       onTap: () => _scrollToMenuTarget(_defaultsSectionKey),
                     ),
                     _PreferenceMenuItem(
                       icon: Icons.touch_app_outlined,
-                      label: '交互归档',
+                      label: SettingsUiCopy.jumpToInteraction,
                       onTap: () => _scrollToMenuTarget(_interactionSectionKey),
                     ),
                   ],
@@ -255,92 +352,88 @@ class _PersonalizationSettingsScreenState
                 title: I18n.tr('preferences.section.date'),
                 subtitle: I18n.tr('preferences.section.date.subtitle'),
                 children: [
-                  AppSettingsTile(
+                  SettingsPickerTile<int>(
                     icon: Icons.calendar_view_week_outlined,
                     color: cs.primary,
-                    title: I18n.tr('preferences.first_day.title'),
-                    subtitle: p.firstDayOfWeek == 1
+                    titleBuilder: () => I18n.tr('preferences.first_day.title'),
+                    subtitleBuilder: () => p.firstDayOfWeek == 1
                         ? I18n.tr('preferences.first_day.current_monday')
                         : I18n.tr('preferences.first_day.current_sunday'),
-                    trailing: _compactDropdown<int>(
-                      value: p.firstDayOfWeek,
-                      items: [
-                        DropdownMenuItem(
-                          value: 1,
-                          child: Text(
-                            I18n.tr('weekday.mon'),
-                            style: appSecondaryControlTextStyle(context),
-                          ),
+                    pickerTitleBuilder: () => SettingsUiCopy.selectFirstDay,
+                    currentValue: p.firstDayOfWeek,
+                    displayLabelBuilder: () => p.firstDayOfWeek == 1
+                        ? I18n.tr('weekday.mon')
+                        : I18n.tr('weekday.sun'),
+                    optionsBuilder: () => [
+                      SettingsPickerOption<int>(
+                        value: 1,
+                        title: I18n.tr('weekday.mon'),
+                        subtitle: I18n.tr(
+                          'preferences.first_day.current_monday',
                         ),
-                        DropdownMenuItem(
-                          value: 7,
-                          child: Text(
-                            I18n.tr('weekday.sun'),
-                            style: appSecondaryControlTextStyle(context),
-                          ),
+                      ),
+                      SettingsPickerOption<int>(
+                        value: 7,
+                        title: I18n.tr('weekday.sun'),
+                        subtitle: I18n.tr(
+                          'preferences.first_day.current_sunday',
                         ),
-                      ],
-                      onChanged: (v) => v == null
-                          ? null
-                          : context
-                                .read<PreferencesProvider>()
-                                .setFirstDayOfWeek(v),
-                    ),
+                      ),
+                    ],
+                    onSelected: (v) {
+                      context.read<PreferencesProvider>().setFirstDayOfWeek(v);
+                    },
                   ),
-                  AppSettingsTile(
+                  SettingsPickerTile<String>(
                     icon: Icons.date_range_outlined,
                     color: Colors.teal,
-                    title: I18n.tr('preferences.date_format.title'),
-                    subtitle: _dateFormats.firstWhere(
-                      (f) => f[0] == p.dateFormat,
-                      orElse: () => _dateFormats.first,
-                    )[1],
-                    trailing: _compactDropdown<String>(
-                      width: 138,
-                      value: p.dateFormat,
-                      items: [
-                        for (final f in _dateFormats)
-                          DropdownMenuItem(
-                            value: f[0],
-                            child: Text(
-                              f[1],
-                              style: appSecondaryControlTextStyle(context),
-                            ),
-                          ),
-                      ],
-                      onChanged: (v) => v == null
-                          ? null
-                          : context.read<PreferencesProvider>().setDateFormat(
-                              v,
-                            ),
-                    ),
+                    titleBuilder: () =>
+                        I18n.tr('preferences.date_format.title'),
+                    subtitleBuilder: () =>
+                        SettingsUiCopy.dateFormatSample(p.dateFormat),
+                    pickerTitleBuilder: () => SettingsUiCopy.selectDateFormat,
+                    currentValue: p.dateFormat,
+                    displayLabelBuilder: () =>
+                        SettingsUiCopy.dateFormatSample(p.dateFormat),
+                    optionsBuilder: () => [
+                      for (final pattern
+                          in SettingsUiCopy.supportedDateFormatPatterns)
+                        SettingsPickerOption<String>(
+                          value: pattern,
+                          title: SettingsUiCopy.dateFormatLabel(pattern),
+                          subtitle: SettingsUiCopy.dateFormatSample(pattern),
+                        ),
+                    ],
+                    onSelected: (v) {
+                      context.read<PreferencesProvider>().setDateFormat(v);
+                    },
                   ),
-                  AppSettingsTile(
+                  SettingsPickerTile<String>(
                     icon: Icons.public_outlined,
                     color: Colors.deepOrange,
-                    title: I18n.tr('preferences.timezone.title'),
-                    subtitle: p.followSystemTimeZone
-                        ? '${I18n.tr('preferences.timezone.follow_system')}：${p.appTimeZone}'
-                        : p.appTimeZone,
-                    trailing: _compactDropdown<String>(
-                      width: 156,
-                      value: p.appTimeZoneSelection,
-                      items: [
-                        for (final z in _timeZones)
-                          DropdownMenuItem(
-                            value: z[0],
-                            child: Text(
-                              z[1],
-                              style: appSecondaryControlTextStyle(context),
-                            ),
-                          ),
-                      ],
-                      onChanged: (v) => v == null
-                          ? null
-                          : context.read<PreferencesProvider>().setAppTimeZone(
-                              v,
-                            ),
-                    ),
+                    titleBuilder: () => I18n.tr('preferences.timezone.title'),
+                    subtitleBuilder: () => p.followSystemTimeZone
+                        ? '${I18n.tr('preferences.timezone.follow_system')}：${SettingsUiCopy.timeZoneDisplayName(p.appTimeZone)}'
+                        : SettingsUiCopy.timeZoneDisplayName(p.appTimeZone),
+                    pickerTitleBuilder: () => SettingsUiCopy.selectTimeZone,
+                    currentValue: p.appTimeZoneSelection,
+                    displayLabelBuilder: () =>
+                        SettingsUiCopy.timeZoneDisplayName(
+                          p.appTimeZoneSelection,
+                        ),
+                    optionsBuilder: () => [
+                      for (final id in SettingsUiCopy.supportedTimeZoneIds)
+                        SettingsPickerOption<String>(
+                          value: id,
+                          title: SettingsUiCopy.timeZoneDisplayName(id),
+                          subtitle: id == 'system'
+                              ? I18n.tr('preferences.timezone.follow_system')
+                              : id,
+                        ),
+                    ],
+                    onSelected: (v) {
+                      context.read<PreferencesProvider>().setAppTimeZone(v);
+                    },
                   ),
                   AppSwitchTile(
                     icon: Icons.brightness_2_outlined,
@@ -361,30 +454,26 @@ class _PersonalizationSettingsScreenState
                 title: I18n.tr('preferences.section.defaults'),
                 subtitle: I18n.tr('preferences.section.defaults.subtitle'),
                 children: [
-                  AppSettingsTile(
+                  SettingsPickerTile<int>(
                     icon: Icons.open_in_new,
                     color: Colors.blue,
-                    title: I18n.tr('preferences.default_tab.title'),
-                    subtitle: _tabLabel(p.defaultTab),
-                    trailing: _compactDropdown<int>(
-                      value: p.defaultTab,
-                      items: [
-                        for (var tab = 0; tab <= 6; tab++)
-                          if (PreferencesProvider.isBottomNavTabSupported(tab))
-                            DropdownMenuItem(
-                              value: tab,
-                              child: Text(
-                                _tabLabel(tab),
-                                style: appSecondaryControlTextStyle(context),
-                              ),
-                            ),
-                      ],
-                      onChanged: (v) => v == null
-                          ? null
-                          : context.read<PreferencesProvider>().setDefaultTab(
-                              v,
-                            ),
-                    ),
+                    titleBuilder: () =>
+                        I18n.tr('preferences.default_tab.title'),
+                    subtitleBuilder: () => _tabLabel(p.defaultTab),
+                    pickerTitleBuilder: () => SettingsUiCopy.selectDefaultTab,
+                    currentValue: p.defaultTab,
+                    displayLabelBuilder: () => _tabLabel(p.defaultTab),
+                    optionsBuilder: () => [
+                      for (var tab = 0; tab <= 6; tab++)
+                        if (PreferencesProvider.isBottomNavTabSupported(tab))
+                          SettingsPickerOption<int>(
+                            value: tab,
+                            title: _tabLabel(tab),
+                          ),
+                    ],
+                    onSelected: (v) {
+                      context.read<PreferencesProvider>().setDefaultTab(v);
+                    },
                   ),
                   AppSwitchTile(
                     icon: Icons.add_circle_outline,
@@ -484,20 +573,6 @@ class _PersonalizationSettingsScreenState
       ),
     );
   }
-
-  Widget _compactDropdown<T>({
-    required T value,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
-    double width = 92,
-  }) {
-    return AppCompactDropdown<T>(
-      value: value,
-      items: items,
-      onChanged: onChanged,
-      width: width,
-    );
-  }
 }
 
 class BottomNavSettingsScreen extends StatelessWidget {
@@ -505,34 +580,39 @@ class BottomNavSettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final routeBackground = Theme.of(context).brightness == Brightness.dark
-        ? cs.surface
-        : cs.surfaceContainerLowest;
-    return Scaffold(
-      backgroundColor: routeBackground,
-      appBar: AppBar(
-        title: Text(I18n.tr('preferences.section.bottom_nav')),
-        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
-        backgroundColor: routeBackground.withValues(alpha: 0.96),
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: AppSecondaryControlTheme(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-          children: [
-            AppInfoBanner(
-              icon: Icons.space_dashboard_outlined,
-              title: I18n.tr('preferences.section.bottom_nav'),
-              message: '底部导航最多显示 5 个入口，我的固定显示；小组件可以隐藏，隐藏入口会出现在我的“更多应用”。',
-              color: cs.primary,
-              margin: EdgeInsets.zero,
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) {
+        final cs = Theme.of(context).colorScheme;
+        final routeBackground = Theme.of(context).brightness == Brightness.dark
+            ? cs.surface
+            : cs.surfaceContainerLowest;
+        return Scaffold(
+          backgroundColor: routeBackground,
+          appBar: AppBar(
+            title: Text(I18n.tr('preferences.section.bottom_nav')),
+            titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+            backgroundColor: routeBackground.withValues(alpha: 0.96),
+            surfaceTintColor: Colors.transparent,
+          ),
+          body: AppSecondaryControlTheme(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+              children: [
+                AppInfoBanner(
+                  icon: Icons.space_dashboard_outlined,
+                  title: I18n.tr('preferences.section.bottom_nav'),
+                  message: SettingsUiCopy.navigationBannerMessage,
+                  color: cs.primary,
+                  margin: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 12),
+                const _BottomNavSettingsSection(),
+              ],
             ),
-            const SizedBox(height: 12),
-            const _BottomNavSettingsSection(),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -616,7 +696,6 @@ class _PreferenceSectionMenu extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-      borderRadius: BorderRadius.circular(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -690,25 +769,111 @@ class _NavConfigTile extends StatelessWidget {
     final visibleCount = p.bottomNavVisible.length;
     final reachedLimit =
         !visible && visibleCount >= PreferencesProvider.maxBottomNavTabs;
-    return AppSettingsTile(
-      icon: _icon,
-      color: Theme.of(context).colorScheme.primary,
-      title: label,
-      subtitle: lockedVisible
-          ? I18n.tr('preferences.nav.fixed')
-          : reachedLimit
-          ? '最多显示 ${PreferencesProvider.maxBottomNavTabs} 个入口'
-          : visible
-          ? I18n.tr('preferences.nav.visible')
-          : I18n.tr('preferences.nav.hidden'),
-      trailing: _NavConfigActions(
-        tab: tab,
-        visible: visible,
-        lockedVisible: lockedVisible,
-        reachedLimit: reachedLimit,
-        canMoveUp: canMoveUp,
-        canMoveDown: canMoveDown,
-      ),
+    final subtitle = lockedVisible
+        ? I18n.tr('preferences.nav.fixed')
+        : reachedLimit
+        ? SettingsUiCopy.maxTabsConstraint(PreferencesProvider.maxBottomNavTabs)
+        : visible
+        ? I18n.tr('preferences.nav.visible')
+        : I18n.tr('preferences.nav.hidden');
+
+    final cs = Theme.of(context).colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final controlRadius =
+        surfaceStyle?.smallTileRadius ?? DesignTokens.radiusControl;
+    final controlBorderRadius = BorderRadius.circular(controlRadius);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final media = MediaQuery.of(context);
+        final textScale = media.textScaler.scale(1.0);
+        final shouldStack = constraints.maxWidth < 320 || textScale >= 1.25;
+
+        final iconWidget = Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.12),
+            borderRadius: controlBorderRadius,
+          ),
+          child: Icon(_icon, color: cs.primary, size: 18),
+        );
+
+        final textColumn = Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              softWrap: true,
+              style: appSecondaryMenuItemTextStyle(
+                context,
+              ).copyWith(color: cs.onSurface, fontWeight: FontWeight.normal),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              softWrap: true,
+              style: appSecondaryControlLabelStyle(context).copyWith(
+                color: cs.onSurface.withValues(alpha: 0.62),
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        );
+
+        final actionsWidget = _NavConfigActions(
+          tab: tab,
+          visible: visible,
+          lockedVisible: lockedVisible,
+          reachedLimit: reachedLimit,
+          canMoveUp: canMoveUp,
+          canMoveDown: canMoveDown,
+        );
+
+        return Material(
+          color: Colors.transparent,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: shouldStack
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          iconWidget,
+                          const SizedBox(width: 10),
+                          Expanded(child: textColumn),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: EdgeInsets.only(
+                          left: constraints.maxWidth < 260 ? 0 : 44,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [actionsWidget],
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      iconWidget,
+                      const SizedBox(width: 10),
+                      Expanded(child: textColumn),
+                      const SizedBox(width: 8),
+                      actionsWidget,
+                    ],
+                  ),
+          ),
+        );
+      },
     );
   }
 }
@@ -743,53 +908,48 @@ class _NavConfigActions extends StatelessWidget {
         icon: Icon(icon, size: 20),
         visualDensity: VisualDensity.compact,
         padding: EdgeInsets.zero,
-        constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+        constraints: const BoxConstraints.tightFor(width: 44, height: 44),
       );
     }
 
-    return SizedBox(
+    return Row(
       key: ValueKey('bottom_nav_actions_$tab'),
-      width: 138,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          compactIconButton(
-            tooltip: I18n.tr('action.move_up'),
-            onPressed: canMoveUp
-                ? () => context.read<PreferencesProvider>().moveBottomNavTab(
-                    tab,
-                    -1,
-                  )
-                : null,
-            icon: Icons.keyboard_arrow_up_rounded,
-          ),
-          compactIconButton(
-            tooltip: I18n.tr('action.move_down'),
-            onPressed: canMoveDown
-                ? () => context.read<PreferencesProvider>().moveBottomNavTab(
-                    tab,
-                    1,
-                  )
-                : null,
-            icon: Icons.keyboard_arrow_down_rounded,
-          ),
-          SizedBox(
-            width: 56,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Switch(
-                value: visible,
-                onChanged: lockedVisible || reachedLimit
-                    ? null
-                    : (v) => context
-                          .read<PreferencesProvider>()
-                          .setBottomNavVisible(tab, v),
-              ),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        compactIconButton(
+          tooltip: I18n.tr('action.move_up'),
+          onPressed: canMoveUp
+              ? () => context.read<PreferencesProvider>().moveBottomNavTab(
+                  tab,
+                  -1,
+                )
+              : null,
+          icon: Icons.keyboard_arrow_up_rounded,
+        ),
+        compactIconButton(
+          tooltip: I18n.tr('action.move_down'),
+          onPressed: canMoveDown
+              ? () =>
+                    context.read<PreferencesProvider>().moveBottomNavTab(tab, 1)
+              : null,
+          icon: Icons.keyboard_arrow_down_rounded,
+        ),
+        const SizedBox(width: 4),
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Switch(
+              value: visible,
+              onChanged: lockedVisible || reachedLimit
+                  ? null
+                  : (v) => context
+                        .read<PreferencesProvider>()
+                        .setBottomNavVisible(tab, v),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -845,8 +1005,7 @@ class _SliderSetting extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: cs.onSurface,
                         fontWeight: FontWeight.normal,
@@ -855,6 +1014,7 @@ class _SliderSetting extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
+                      softWrap: true,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.62),
                       ),

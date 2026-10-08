@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/data_settings_ui_copy.dart';
 import '../core/i18n.dart';
 import 'package:flutter/services.dart';
 import 'package:file_selector/file_selector.dart';
@@ -26,8 +27,25 @@ import '../services/ics_exporter.dart';
 import '../services/reminder_ringtone_settings.dart';
 import '../services/webdav_backup_service.dart';
 import '../widgets/surface_components.dart';
+import '../widgets/controller_dialog.dart';
 
 enum BackupEntryMode { backup, restore }
+
+enum _ExportKind {
+  fullJson,
+  todosCsv,
+  todosMd,
+  habitsCsv,
+  timeEntriesCsv,
+  notesCsv,
+  notesMd,
+  diaryMd,
+  diaryCsv,
+  anniversariesCsv,
+  anniversariesMd,
+  goalsCsv,
+  goalsMd,
+}
 
 enum _CompetitorImportSource { zhijianTime, ticktick, todoist, generic }
 
@@ -124,6 +142,7 @@ class BackupScreen extends StatefulWidget {
 class _BackupScreenState extends State<BackupScreen> {
   String? _exported;
   String? _exportedTitle;
+  _ExportKind? _currentExportKind;
   bool _busy = false;
   WebDavBackupConfig _webDavConfig = WebDavBackupConfig.empty();
 
@@ -146,72 +165,101 @@ class _BackupScreenState extends State<BackupScreen> {
       if (!mounted) return;
       setState(() {
         _exported = text;
-        _exportedTitle = '全量备份 (JSON)';
+        _currentExportKind = _ExportKind.fullJson;
+        _exportedTitle = DataSettingsUiCopy.fullBackupJsonTitle;
         _busy = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('导出失败: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.formatExportError(e))),
+      );
     }
   }
 
-  void _showExport(String title, String text) {
+  void _showExport(_ExportKind kind, String text) {
     setState(() {
-      _exportedTitle = title;
+      _currentExportKind = kind;
+      _exportedTitle = null;
       _exported = text;
     });
+  }
+
+  String _activeExportedTitle() {
+    return switch (_currentExportKind) {
+      _ExportKind.fullJson => DataSettingsUiCopy.fullBackupJsonTitle,
+      _ExportKind.todosCsv => DataSettingsUiCopy.exportTitleTodoCsv,
+      _ExportKind.todosMd => DataSettingsUiCopy.exportTitleTodoMd,
+      _ExportKind.habitsCsv => DataSettingsUiCopy.exportTitleHabitCsv,
+      _ExportKind.timeEntriesCsv => DataSettingsUiCopy.exportTitleTimeEntryCsv,
+      _ExportKind.notesCsv => DataSettingsUiCopy.exportTitleNoteCsv,
+      _ExportKind.notesMd => DataSettingsUiCopy.exportTitleNoteMd,
+      _ExportKind.diaryMd => DataSettingsUiCopy.exportTitleDiaryMd,
+      _ExportKind.diaryCsv => DataSettingsUiCopy.exportTitleDiaryCsv,
+      _ExportKind.anniversariesCsv =>
+        DataSettingsUiCopy.exportTitleAnniversaryCsv,
+      _ExportKind.anniversariesMd =>
+        DataSettingsUiCopy.exportTitleAnniversaryMd,
+      _ExportKind.goalsCsv => DataSettingsUiCopy.exportTitleGoalCsv,
+      _ExportKind.goalsMd => DataSettingsUiCopy.exportTitleGoalMd,
+      null => _exportedTitle ?? DataSettingsUiCopy.exportContent,
+    };
   }
 
   Future<void> _copy() async {
     if (_exported == null) return;
     await Clipboard.setData(ClipboardData(text: _exported!));
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(DataSettingsUiCopy.copiedToClipboard)),
+    );
   }
 
   Future<void> _import({bool merge = false}) async {
     final ctrl = TextEditingController();
-    final raw = await showDialog<String>(
+    final raw = await showControllerDialog<String>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: Text(merge ? '合并导入' : '覆盖导入'),
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: ctrl,
-              maxLines: 10,
-              decoration: const InputDecoration(hintText: '把之前导出的备份 JSON 粘贴进来'),
-            ),
-            // 覆盖=真删数据：备份中不存在的本机数据会被删除，必须写明后果，
-            // 避免用户用旧备份覆盖后误以为"还原失败"。
-            if (!merge) ...[
-              const SizedBox(height: 8),
-              Text(
-                I18n.tr('backup.overwrite.will_delete_missing'),
-                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(ctx).colorScheme.error,
+      controllers: [ctrl],
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => AppDialog(
+          title: Text(DataSettingsUiCopy.importDialogTitle(merge)),
+          content: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: ctrl,
+                maxLines: 10,
+                decoration: InputDecoration(
+                  hintText: DataSettingsUiCopy.importDialogPasteHint,
                 ),
               ),
+              // 覆盖=真删数据：备份中不存在的本机数据会被删除，必须写明后果，
+              // 避免用户用旧备份覆盖后误以为"还原失败"。
+              if (!merge) ...[
+                const SizedBox(height: 8),
+                Text(
+                  I18n.tr('backup.overwrite.will_delete_missing'),
+                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(ctx).colorScheme.error,
+                  ),
+                ),
+              ],
             ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text),
+              child: Text(DataSettingsUiCopy.confirmImport),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(I18n.tr('action.cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text),
-            child: const Text('确认导入'),
-          ),
-        ],
       ),
     );
     if (raw == null || raw.trim().isEmpty) return;
@@ -230,14 +278,14 @@ class _BackupScreenState extends State<BackupScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('成功${merge ? '合并' : '导入'} $count 项数据')),
+        SnackBar(content: Text(DataSettingsUiCopy.importSuccess(merge, count))),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('导入失败: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.formatImportError(e))),
+      );
     }
   }
 
@@ -260,33 +308,36 @@ class _BackupScreenState extends State<BackupScreen> {
     if (!merge) {
       final ok = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AppDialog(
-          title: const Text('从文件覆盖导入?'),
-          content: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('会选择备份文件并覆盖本机可备份数据。'),
-              // 覆盖=真删数据：写明缺失数据将被删除的后果。
-              const SizedBox(height: 8),
-              Text(
-                I18n.tr('backup.overwrite.will_delete_missing'),
-                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(ctx).colorScheme.error,
+        builder: (ctx) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => AppDialog(
+            title: Text(DataSettingsUiCopy.importFileOverwriteDialogTitle),
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(DataSettingsUiCopy.importFileOverwriteExplanation),
+                // 覆盖=真删数据：写明缺失数据将被删除的后果。
+                const SizedBox(height: 8),
+                Text(
+                  I18n.tr('backup.overwrite.will_delete_missing'),
+                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(ctx).colorScheme.error,
+                  ),
                 ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(I18n.tr('action.cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(DataSettingsUiCopy.selectFile),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('选择文件'),
-            ),
-          ],
         ),
       );
       if (ok != true) return;
@@ -312,34 +363,27 @@ class _BackupScreenState extends State<BackupScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已从文件${merge ? '合并' : '导入'} $count 项数据')),
+        SnackBar(
+          content: Text(DataSettingsUiCopy.importFileSuccess(merge, count)),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('文件导入失败: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.formatFileImportError(e))),
+      );
     }
   }
 
   Future<void> _importTasksFromOtherApps() async {
-    final draft = await _askCompetitorImportText(
-      title: '导入其他 App 待办',
-      actionLabel: '预览待办',
-      hintText: '粘贴 Todoist、滴答清单或指尖时光风格的 CSV / JSON 任务导出',
-    );
+    final draft = await _askCompetitorImportText(tasksOnly: true);
     if (draft == null) return;
     await _previewAndImportCompetitorData(draft, tasksOnly: true);
   }
 
   Future<void> _importProductivityDataFromOtherApps() async {
-    final draft = await _askCompetitorImportText(
-      title: '导入其他 App 数据',
-      actionLabel: '预览数据',
-      hintText:
-          '粘贴 Todoist、滴答清单或指尖时光风格 CSV / JSON；支持 type=task/habit/note/event/birthday/anniversary/countdown/time_entry',
-    );
+    final draft = await _askCompetitorImportText(tasksOnly: false);
     if (draft == null) return;
     await _previewAndImportCompetitorData(draft, tasksOnly: false);
   }
@@ -348,10 +392,7 @@ class _BackupScreenState extends State<BackupScreen> {
     try {
       final raw = await _pickImportTextFile();
       if (raw == null || raw.trim().isEmpty) return;
-      final config = await _selectCompetitorImportSource(
-        title: '选择文件来源',
-        actionLabel: '继续预览',
-      );
+      final config = await _selectCompetitorImportSource();
       if (config == null) return;
       await _previewAndImportCompetitorData(
         _CompetitorImportDraft(
@@ -364,37 +405,147 @@ class _BackupScreenState extends State<BackupScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('文件迁移失败: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.formatFileMigrationError(e))),
+      );
     }
   }
 
   Future<_CompetitorImportDraft?> _askCompetitorImportText({
-    required String title,
-    required String actionLabel,
-    required String hintText,
+    required bool tasksOnly,
   }) async {
     final ctrl = TextEditingController();
     var source = _CompetitorImportSource.zhijianTime;
     var fieldMapping = const CompetitorFieldMapping();
-    final draft = await showDialog<_CompetitorImportDraft>(
+    final draft = await showControllerDialog<_CompetitorImportDraft>(
+      context: context,
+      controllers: [ctrl],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => AppDialog(
+            title: Text(
+              DataSettingsUiCopy.competitorImportDialogTitle(tasksOnly),
+            ),
+            maxWidth: 560,
+            content: AppSecondaryControlTheme(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppDropdownField<_CompetitorImportSource>(
+                      initialValue: source,
+                      decoration: InputDecoration(
+                        labelText: DataSettingsUiCopy.sourceLabel,
+                        prefixIcon: const Icon(Icons.source_outlined),
+                      ),
+                      items: _CompetitorImportSource.values
+                          .map(
+                            (value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(_competitorSourceLabel(value)),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setDialogState(() => source = value);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _competitorSourceHint(source),
+                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(
+                          ctx,
+                        ).colorScheme.onSurface.withValues(alpha: 0.62),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final updated = await _editCompetitorFieldMapping(
+                          fieldMapping,
+                        );
+                        if (updated == null) return;
+                        setDialogState(() => fieldMapping = updated);
+                      },
+                      icon: const Icon(Icons.schema_outlined),
+                      label: Text(DataSettingsUiCopy.advancedFieldMapping),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _fieldMappingSummary(fieldMapping),
+                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(
+                          ctx,
+                        ).colorScheme.onSurface.withValues(alpha: 0.62),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: ctrl,
+                      maxLines: 12,
+                      decoration: InputDecoration(
+                        hintText: DataSettingsUiCopy.competitorImportPasteHint(
+                          tasksOnly,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(I18n.tr('action.cancel')),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final raw = ctrl.text.trim();
+                  if (raw.isEmpty) return;
+                  Navigator.pop(
+                    ctx,
+                    _CompetitorImportDraft(
+                      raw: raw,
+                      source: source,
+                      fieldMapping: fieldMapping,
+                    ),
+                  );
+                },
+                child: Text(
+                  DataSettingsUiCopy.competitorImportPreviewAction(tasksOnly),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return draft;
+  }
+
+  Future<_CompetitorImportConfig?> _selectCompetitorImportSource() {
+    var source = _CompetitorImportSource.zhijianTime;
+    var fieldMapping = const CompetitorFieldMapping();
+    return showDialog<_CompetitorImportConfig>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AppDialog(
-          title: Text(title),
-          maxWidth: 560,
-          content: AppSecondaryControlTheme(
-            child: SingleChildScrollView(
+        builder: (ctx, setDialogState) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => AppDialog(
+            title: Text(DataSettingsUiCopy.importCompetitorFileSourceTitle),
+            content: AppSecondaryControlTheme(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   AppDropdownField<_CompetitorImportSource>(
                     initialValue: source,
-                    decoration: const InputDecoration(
-                      labelText: '来源',
-                      prefixIcon: Icon(Icons.source_outlined),
+                    decoration: InputDecoration(
+                      labelText: DataSettingsUiCopy.sourceLabel,
+                      prefixIcon: const Icon(Icons.source_outlined),
                     ),
                     items: _CompetitorImportSource.values
                         .map(
@@ -428,7 +579,7 @@ class _BackupScreenState extends State<BackupScreen> {
                       setDialogState(() => fieldMapping = updated);
                     },
                     icon: const Icon(Icons.schema_outlined),
-                    label: const Text('高级字段映射'),
+                    label: Text(DataSettingsUiCopy.advancedFieldMapping),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -439,127 +590,28 @@ class _BackupScreenState extends State<BackupScreen> {
                       ).colorScheme.onSurface.withValues(alpha: 0.62),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: ctrl,
-                    maxLines: 12,
-                    decoration: InputDecoration(hintText: hintText),
-                  ),
                 ],
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: () {
-                final raw = ctrl.text.trim();
-                if (raw.isEmpty) return;
-                Navigator.pop(
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(I18n.tr('action.cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(
                   ctx,
-                  _CompetitorImportDraft(
-                    raw: raw,
+                  _CompetitorImportConfig(
                     source: source,
                     fieldMapping: fieldMapping,
                   ),
-                );
-              },
-              child: Text(actionLabel),
-            ),
-          ],
-        ),
-      ),
-    );
-    ctrl.dispose();
-    return draft;
-  }
-
-  Future<_CompetitorImportConfig?> _selectCompetitorImportSource({
-    required String title,
-    required String actionLabel,
-  }) {
-    var source = _CompetitorImportSource.zhijianTime;
-    var fieldMapping = const CompetitorFieldMapping();
-    return showDialog<_CompetitorImportConfig>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AppDialog(
-          title: Text(title),
-          content: AppSecondaryControlTheme(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AppDropdownField<_CompetitorImportSource>(
-                  initialValue: source,
-                  decoration: const InputDecoration(
-                    labelText: '来源',
-                    prefixIcon: Icon(Icons.source_outlined),
-                  ),
-                  items: _CompetitorImportSource.values
-                      .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(_competitorSourceLabel(value)),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setDialogState(() => source = value);
-                  },
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  _competitorSourceHint(source),
-                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(
-                      ctx,
-                    ).colorScheme.onSurface.withValues(alpha: 0.62),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final updated = await _editCompetitorFieldMapping(
-                      fieldMapping,
-                    );
-                    if (updated == null) return;
-                    setDialogState(() => fieldMapping = updated);
-                  },
-                  icon: const Icon(Icons.schema_outlined),
-                  label: const Text('高级字段映射'),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _fieldMappingSummary(fieldMapping),
-                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(
-                      ctx,
-                    ).colorScheme.onSurface.withValues(alpha: 0.62),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(
-                ctx,
-                _CompetitorImportConfig(
-                  source: source,
-                  fieldMapping: fieldMapping,
+                child: Text(
+                  DataSettingsUiCopy.importCompetitorFileSourceAction,
                 ),
               ),
-              child: Text(actionLabel),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -576,11 +628,18 @@ class _BackupScreenState extends State<BackupScreen> {
     final recognized = tasksOnly ? parsed.todos.length : parsed.totalImported;
     if (recognized == 0) {
       if (!mounted) return;
+      final separator = DataSettingsUiCopy.isEn ? '; ' : '；';
       final warning = parsed.warnings.isEmpty
           ? ''
-          : '：${parsed.warnings.take(2).join('；')}';
+          : (DataSettingsUiCopy.isEn
+                ? ': ${parsed.warnings.take(2).join(separator)}'
+                : '：${parsed.warnings.take(2).join(separator)}');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('未识别到可导入${tasksOnly ? '待办' : '数据'}$warning')),
+        SnackBar(
+          content: Text(
+            DataSettingsUiCopy.noDataRecognized(tasksOnly, warning),
+          ),
+        ),
       );
       return;
     }
@@ -644,16 +703,16 @@ class _BackupScreenState extends State<BackupScreen> {
         reminderSyncIssues: [
           if (_nonEmptyImportReminderIssue(todoSummary.reminderSyncIssue)
               case final issue?)
-            '待办：$issue',
+            '${DataSettingsUiCopy.moduleTodo}: $issue',
           if (_nonEmptyImportReminderIssue(habitSummary.reminderSyncIssue)
               case final issue?)
-            '习惯：$issue',
+            '${DataSettingsUiCopy.moduleHabit}: $issue',
           if (_nonEmptyImportReminderIssue(anniversarySummary.reminderSyncIssue)
               case final issue?)
-            '纪念日：$issue',
+            '${DataSettingsUiCopy.moduleAnniversary}: $issue',
           if (_nonEmptyImportReminderIssue(countdownSummary.reminderSyncIssue)
               case final issue?)
-            '倒数日：$issue',
+            '${DataSettingsUiCopy.moduleCountdown}: $issue',
         ],
       );
       final undo = await _showCompetitorImportResult(
@@ -668,12 +727,17 @@ class _BackupScreenState extends State<BackupScreen> {
         await _rollbackCompetitorImport(rollbackSnapshot);
       } else {
         final reminderIssueSuffix = summary.hasReminderSyncIssues
-            ? '；部分提醒未注册，请打开对应事项重新保存'
+            ? DataSettingsUiCopy.partialRemindersSuffix
             : '';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '已从 ${_competitorSourceLabel(draft.source)} 导入 ${summary.inserted} 项，跳过 ${summary.skipped} 项$reminderIssueSuffix',
+              DataSettingsUiCopy.importSuccessBanner(
+                _competitorSourceLabel(draft.source),
+                summary.inserted,
+                summary.skipped,
+                reminderIssueSuffix,
+              ),
             ),
           ),
         );
@@ -681,9 +745,9 @@ class _BackupScreenState extends State<BackupScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('数据迁移失败: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.formatDataMigrationError(e))),
+      );
     }
   }
 
@@ -694,117 +758,160 @@ class _BackupScreenState extends State<BackupScreen> {
   }) async {
     var confirmed = false;
     final otherModuleCount = parsed.totalImported - parsed.todos.length;
-    final samples = _competitorPreviewSamples(parsed, tasksOnly: tasksOnly);
     return await showDialog<bool>(
           context: context,
           builder: (ctx) => StatefulBuilder(
-            builder: (ctx, setDialogState) => AppDialog(
-              title: const Text('导入预览'),
-              maxWidth: 600,
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '来源：${_competitorSourceLabel(draft.source)} · 格式：${parsed.sourceLabel}',
-                    ),
-                    if (!draft.fieldMapping.isEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        '字段映射：${_fieldMappingSummary(draft.fieldMapping)}',
-                        style: Theme.of(ctx).textTheme.bodySmall,
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+            builder: (ctx, setDialogState) => ValueListenableBuilder<AppLocale>(
+              valueListenable: I18n.localeListenable,
+              builder: (ctx, locale, _) {
+                final samples = _competitorPreviewSamples(
+                  parsed,
+                  tasksOnly: tasksOnly,
+                );
+                return AppDialog(
+                  title: Text(DataSettingsUiCopy.importPreviewTitle),
+                  maxWidth: 600,
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _importPreviewChip('待办', parsed.todos.length),
-                        _importPreviewChip('习惯', parsed.habits.length),
-                        _importPreviewChip('笔记', parsed.notes.length),
-                        _importPreviewChip('日程', parsed.calendarEvents.length),
-                        _importPreviewChip('纪念日', parsed.anniversaries.length),
-                        _importPreviewChip('倒数日', parsed.countdowns.length),
-                        _importPreviewChip('时间足迹', parsed.timeEntries.length),
-                        if (parsed.skippedRows > 0)
-                          _importPreviewChip('解析跳过', parsed.skippedRows),
+                        Text(
+                          DataSettingsUiCopy.importPreviewSource(
+                            _competitorSourceLabel(draft.source),
+                            parsed.sourceLabel,
+                          ),
+                        ),
+                        if (!draft.fieldMapping.isEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            DataSettingsUiCopy.importPreviewMapping(
+                              _fieldMappingSummary(draft.fieldMapping),
+                            ),
+                            style: Theme.of(ctx).textTheme.bodySmall,
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _importPreviewChip(
+                              DataSettingsUiCopy.moduleTodo,
+                              parsed.todos.length,
+                            ),
+                            _importPreviewChip(
+                              DataSettingsUiCopy.moduleHabit,
+                              parsed.habits.length,
+                            ),
+                            _importPreviewChip(
+                              DataSettingsUiCopy.moduleNote,
+                              parsed.notes.length,
+                            ),
+                            _importPreviewChip(
+                              DataSettingsUiCopy.moduleEvent,
+                              parsed.calendarEvents.length,
+                            ),
+                            _importPreviewChip(
+                              DataSettingsUiCopy.moduleAnniversary,
+                              parsed.anniversaries.length,
+                            ),
+                            _importPreviewChip(
+                              DataSettingsUiCopy.moduleCountdown,
+                              parsed.countdowns.length,
+                            ),
+                            _importPreviewChip(
+                              DataSettingsUiCopy.moduleTimeEntry,
+                              parsed.timeEntries.length,
+                            ),
+                            if (parsed.skippedRows > 0)
+                              _importPreviewChip(
+                                DataSettingsUiCopy.moduleSkippedRows,
+                                parsed.skippedRows,
+                              ),
+                          ],
+                        ),
+                        if (tasksOnly && otherModuleCount > 0) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            DataSettingsUiCopy.tasksOnlyNotice(
+                              otherModuleCount,
+                            ),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        Text(
+                          DataSettingsUiCopy.duplicatePolicyNotice,
+                          style: Theme.of(ctx).textTheme.bodySmall,
+                        ),
+                        if (samples.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            DataSettingsUiCopy.sampleHeader,
+                            style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          ...samples
+                              .take(6)
+                              .map(
+                                (line) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text('· $line'),
+                                ),
+                              ),
+                        ],
+                        if (parsed.warnings.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            DataSettingsUiCopy.warningHeader,
+                            style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          ...parsed.warnings
+                              .take(4)
+                              .map(
+                                (line) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text('· $line'),
+                                ),
+                              ),
+                        ],
+                        const SizedBox(height: 8),
+                        CheckboxListTile(
+                          value: confirmed,
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(
+                            DataSettingsUiCopy.confirmImportPolicyCheckbox,
+                          ),
+                          onChanged: (value) {
+                            setDialogState(() => confirmed = value == true);
+                          },
+                        ),
                       ],
                     ),
-                    if (tasksOnly && otherModuleCount > 0) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        '当前入口只导入待办；解析出的 $otherModuleCount 条其它模块数据不会写入。',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    Text(
-                      '重复项策略：导入时会按本机已有标题、日期、内容等字段自动去重；重复项会跳过，不覆盖本机数据。',
-                      style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: Text(I18n.tr('action.cancel')),
                     ),
-                    if (samples.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        '样例',
-                        style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      ...samples
-                          .take(6)
-                          .map(
-                            (line) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text('· $line'),
-                            ),
-                          ),
-                    ],
-                    if (parsed.warnings.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        '解析提示',
-                        style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      ...parsed.warnings
-                          .take(4)
-                          .map(
-                            (line) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text('· $line'),
-                            ),
-                          ),
-                    ],
-                    const SizedBox(height: 8),
-                    CheckboxListTile(
-                      value: confirmed,
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      title: const Text('我已确认预览和重复项处理策略'),
-                      onChanged: (value) {
-                        setDialogState(() => confirmed = value == true);
-                      },
+                    FilledButton(
+                      onPressed: confirmed
+                          ? () => Navigator.pop(ctx, true)
+                          : null,
+                      child: Text(DataSettingsUiCopy.confirmImport),
                     ),
                   ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: Text(I18n.tr('action.cancel')),
-                ),
-                FilledButton(
-                  onPressed: confirmed ? () => Navigator.pop(ctx, true) : null,
-                  child: const Text('确认导入'),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ) ??
@@ -819,74 +926,108 @@ class _BackupScreenState extends State<BackupScreen> {
     required String rollbackSnapshot,
   }) async {
     assert(rollbackSnapshot.isNotEmpty);
+    final separator = DataSettingsUiCopy.isEn ? '; ' : '；';
     return await showDialog<bool>(
           context: context,
-          builder: (ctx) => AppDialog(
-            title: const Text('导入完成'),
-            maxWidth: 560,
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${_competitorSourceLabel(draft.source)} · ${parsed.sourceLabel}',
-                ),
-                const SizedBox(height: 12),
-                _importResultLine('待办', summary.todoInserted),
-                if (!tasksOnly) ...[
-                  _importResultLine('习惯', summary.habitInserted),
-                  _importResultLine('笔记', summary.noteInserted),
-                  _importResultLine('日程', summary.eventInserted),
-                  _importResultLine('纪念日', summary.anniversaryInserted),
-                  _importResultLine('倒数日', summary.countdownInserted),
-                  _importResultLine('时间足迹', summary.timeEntryInserted),
-                ],
-                const SizedBox(height: 8),
-                Text(
-                  '跳过：解析无效 ${summary.skippedRows}，重复 ${summary.skippedDuplicates}',
-                ),
-                if (tasksOnly &&
-                    parsed.totalImported > parsed.todos.length) ...[
-                  const SizedBox(height: 8),
-                  Text('本次使用待办入口，其它模块仅预览未写入。'),
-                ],
-                if (parsed.warnings.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text('提示：${parsed.warnings.take(2).join('；')}'),
-                ],
-                if (summary.hasReminderSyncIssues) ...[
+          builder: (ctx) => ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (ctx, locale, _) => AppDialog(
+              title: Text(DataSettingsUiCopy.importCompletedTitle),
+              maxWidth: 560,
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_competitorSourceLabel(draft.source)} · ${parsed.sourceLabel}',
+                  ),
+                  const SizedBox(height: 12),
+                  _importResultLine(
+                    DataSettingsUiCopy.moduleTodo,
+                    summary.todoInserted,
+                  ),
+                  if (!tasksOnly) ...[
+                    _importResultLine(
+                      DataSettingsUiCopy.moduleHabit,
+                      summary.habitInserted,
+                    ),
+                    _importResultLine(
+                      DataSettingsUiCopy.moduleNote,
+                      summary.noteInserted,
+                    ),
+                    _importResultLine(
+                      DataSettingsUiCopy.moduleEvent,
+                      summary.eventInserted,
+                    ),
+                    _importResultLine(
+                      DataSettingsUiCopy.moduleAnniversary,
+                      summary.anniversaryInserted,
+                    ),
+                    _importResultLine(
+                      DataSettingsUiCopy.moduleCountdown,
+                      summary.countdownInserted,
+                    ),
+                    _importResultLine(
+                      DataSettingsUiCopy.moduleTimeEntry,
+                      summary.timeEntryInserted,
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Text(
-                    '提醒未完全注册：${summary.reminderSyncIssues.take(2).join('；')}',
-                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(ctx).colorScheme.error,
+                    DataSettingsUiCopy.skippedSummary(
+                      summary.skippedRows,
+                      summary.skippedDuplicates,
                     ),
                   ),
-                  if (summary.reminderSyncIssues.length > 2)
+                  if (tasksOnly &&
+                      parsed.totalImported > parsed.todos.length) ...[
+                    const SizedBox(height: 8),
+                    Text(DataSettingsUiCopy.tasksOnlyResultNotice),
+                  ],
+                  if (parsed.warnings.isNotEmpty) ...[
+                    const SizedBox(height: 8),
                     Text(
-                      '另有 ${summary.reminderSyncIssues.length - 2} 类提醒需要重新保存。',
+                      '${DataSettingsUiCopy.warningsPrefix}${parsed.warnings.take(2).join(separator)}',
+                    ),
+                  ],
+                  if (summary.hasReminderSyncIssues) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      DataSettingsUiCopy.reminderNotFullyRegistered(
+                        summary.reminderSyncIssues.take(2).join(separator),
+                      ),
                       style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                         color: Theme.of(ctx).colorScheme.error,
                       ),
                     ),
+                    if (summary.reminderSyncIssues.length > 2)
+                      Text(
+                        DataSettingsUiCopy.reminderMoreNeedResaving(
+                          summary.reminderSyncIssues.length - 2,
+                        ),
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(ctx).colorScheme.error,
+                        ),
+                      ),
+                  ],
+                  const SizedBox(height: 8),
+                  Text(
+                    DataSettingsUiCopy.rollbackHint,
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
                 ],
-                const SizedBox(height: 8),
-                Text(
-                  '如发现导入结果不符合预期，可撤销本次导入并恢复到导入前的本地快照。',
-                  style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(DataSettingsUiCopy.undoImport),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(DataSettingsUiCopy.gotIt),
                 ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('撤销本次导入'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('知道了'),
-              ),
-            ],
           ),
         ) ??
         false;
@@ -905,41 +1046,41 @@ class _BackupScreenState extends State<BackupScreen> {
       await _reloadAll();
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已撤销本次导入')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.undoImportSuccess)),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('撤销导入失败: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.formatRollbackError(e))),
+      );
     }
   }
 
   String _competitorSourceLabel(_CompetitorImportSource source) {
     switch (source) {
       case _CompetitorImportSource.zhijianTime:
-        return '指尖时光';
+        return DataSettingsUiCopy.sourceZhijianTime;
       case _CompetitorImportSource.ticktick:
-        return '滴答清单';
+        return DataSettingsUiCopy.sourceTickTick;
       case _CompetitorImportSource.todoist:
-        return 'Todoist';
+        return DataSettingsUiCopy.sourceTodoist;
       case _CompetitorImportSource.generic:
-        return '通用 CSV / JSON';
+        return DataSettingsUiCopy.sourceGeneric;
     }
   }
 
   String _competitorSourceHint(_CompetitorImportSource source) {
     switch (source) {
       case _CompetitorImportSource.zhijianTime:
-        return '适合指尖时光导出的计划、打卡、备忘录、日程、生日、纪念日和倒数日数据。';
+        return DataSettingsUiCopy.hintZhijianTime;
       case _CompetitorImportSource.ticktick:
-        return '适合滴答清单导出的任务、清单、标签、截止时间、重复和完成状态。';
+        return DataSettingsUiCopy.hintTickTick;
       case _CompetitorImportSource.todoist:
-        return '适合 Todoist 导出的任务、项目、标签、优先级、截止日期和备注字段。';
+        return DataSettingsUiCopy.hintTodoist;
       case _CompetitorImportSource.generic:
-        return '适合手工整理的 CSV / JSON。可用 type 字段指定 task、habit、note、event、birthday、anniversary、countdown、time_entry。';
+        return DataSettingsUiCopy.hintGeneric;
     }
   }
 
@@ -950,21 +1091,23 @@ class _BackupScreenState extends State<BackupScreen> {
       for (final target in _competitorFieldMappingTargets)
         target.$1: TextEditingController(text: initial.sourceFor(target.$1)),
     };
-    try {
-      return await showDialog<CompetitorFieldMapping>(
-        context: context,
-        builder: (ctx) => AppDialog(
-          title: const Text('高级字段映射'),
+    return await showControllerDialog<CompetitorFieldMapping>(
+      context: context,
+      controllers: [...controllers.values],
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => AppDialog(
+          title: Text(DataSettingsUiCopy.advancedFieldMapping),
           maxWidth: 680,
-          content: SizedBox(
-            width: 620,
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '把非标准导出字段映射到多仪字段。留空的字段继续使用自动识别。',
+                    DataSettingsUiCopy.advancedFieldMappingHint,
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
@@ -972,9 +1115,13 @@ class _BackupScreenState extends State<BackupScreen> {
                     TextField(
                       controller: controllers[target.$1],
                       decoration: InputDecoration(
-                        labelText: target.$2,
-                        hintText: '来源字段名',
-                        helperText: '标准字段：${target.$1}',
+                        labelText: DataSettingsUiCopy.fieldTargetLabel(
+                          target.$1,
+                        ),
+                        hintText: DataSettingsUiCopy.sourceFieldNameHint,
+                        helperText: DataSettingsUiCopy.standardFieldHelper(
+                          target.$1,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -990,7 +1137,7 @@ class _BackupScreenState extends State<BackupScreen> {
                   controller.clear();
                 }
               },
-              child: const Text('清空'),
+              child: Text(I18n.tr('action.clear')),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -1007,16 +1154,12 @@ class _BackupScreenState extends State<BackupScreen> {
                   }),
                 );
               },
-              child: const Text('保存'),
+              child: Text(I18n.tr('action.save')),
             ),
           ],
         ),
-      );
-    } finally {
-      for (final controller in controllers.values) {
-        controller.dispose();
-      }
-    }
+      ),
+    );
   }
 
   String _fieldMappingSummary(CompetitorFieldMapping fieldMapping) {
@@ -1026,22 +1169,20 @@ class _BackupScreenState extends State<BackupScreen> {
               entry.key.trim().isNotEmpty && entry.value.trim().isNotEmpty,
         )
         .toList();
-    if (entries.isEmpty) return '未设置字段映射，使用自动识别';
+    if (entries.isEmpty) return DataSettingsUiCopy.fieldMappingNone;
+    final separator = DataSettingsUiCopy.isEn ? ', ' : '，';
     final preview = entries
         .take(3)
         .map(
           (entry) => '${_fieldMappingTargetLabel(entry.key)} <- ${entry.value}',
         )
-        .join('，');
+        .join(separator);
     if (entries.length <= 3) return preview;
-    return '$preview，另 ${entries.length - 3} 项';
+    return '$preview${DataSettingsUiCopy.fieldMappingMoreItems(entries.length - 3)}';
   }
 
   String _fieldMappingTargetLabel(String key) {
-    for (final target in _competitorFieldMappingTargets) {
-      if (target.$1 == key) return target.$2;
-    }
-    return key;
+    return DataSettingsUiCopy.fieldTargetLabel(key);
   }
 
   Widget _importPreviewChip(String label, int count) {
@@ -1065,7 +1206,7 @@ class _BackupScreenState extends State<BackupScreen> {
       child: Row(
         children: [
           Expanded(child: Text(label)),
-          Text('$count 项'),
+          Text(DataSettingsUiCopy.itemCount(count)),
         ],
       ),
     );
@@ -1082,41 +1223,66 @@ class _BackupScreenState extends State<BackupScreen> {
   }) {
     final samples = <String>[];
     samples.addAll(
-      parsed.todos.take(3).map((todo) => '待办：${_shortImportText(todo.title)}'),
+      parsed.todos
+          .take(3)
+          .map(
+            (todo) =>
+                '${DataSettingsUiCopy.moduleTodo}: ${_shortImportText(todo.title)}',
+          ),
     );
     if (!tasksOnly) {
       samples.addAll(
         parsed.habits
             .take(2)
-            .map((habit) => '习惯：${_shortImportText(habit.name)}'),
+            .map(
+              (habit) =>
+                  '${DataSettingsUiCopy.moduleHabit}: ${_shortImportText(habit.name)}',
+            ),
       );
       samples.addAll(
         parsed.notes
             .take(2)
-            .map((note) => '笔记：${_shortImportText(note.content)}'),
+            .map(
+              (note) =>
+                  '${DataSettingsUiCopy.moduleNote}: ${_shortImportText(note.content)}',
+            ),
       );
       samples.addAll(
         parsed.calendarEvents
             .take(2)
-            .map((event) => '日程：${_shortImportText(event.title)}'),
+            .map(
+              (event) =>
+                  '${DataSettingsUiCopy.moduleEvent}: ${_shortImportText(event.title)}',
+            ),
       );
       samples.addAll(
         parsed.anniversaries
             .take(2)
-            .map((item) => '纪念日：${_shortImportText(item.title)}'),
+            .map(
+              (item) =>
+                  '${DataSettingsUiCopy.moduleAnniversary}: ${_shortImportText(item.title)}',
+            ),
       );
       samples.addAll(
         parsed.countdowns
             .take(2)
-            .map((item) => '倒数日：${_shortImportText(item.title)}'),
+            .map(
+              (item) =>
+                  '${DataSettingsUiCopy.moduleCountdown}: ${_shortImportText(item.title)}',
+            ),
       );
       samples.addAll(
         parsed.timeEntries
             .take(2)
-            .map((entry) => '时间足迹：${_shortImportText(entry.title)}'),
+            .map(
+              (entry) =>
+                  '${DataSettingsUiCopy.moduleTimeEntry}: ${_shortImportText(entry.title)}',
+            ),
       );
     }
-    return samples.where((line) => !line.endsWith('：')).toList();
+    return samples
+        .where((line) => !line.endsWith(': ') && !line.endsWith('：'))
+        .toList();
   }
 
   String _shortImportText(String value) {
@@ -1128,23 +1294,26 @@ class _BackupScreenState extends State<BackupScreen> {
   Future<void> _wipe() async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: const Text('清空全部数据?'),
-        content: const Text('将删除本机所有待办/习惯/笔记/日记等，登录账号不会删除。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(I18n.tr('action.cancel')),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => AppDialog(
+          title: Text(DataSettingsUiCopy.wipeDialogTitle),
+          content: Text(DataSettingsUiCopy.wipeDialogContent),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(I18n.tr('action.cancel')),
             ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('清空'),
-          ),
-        ],
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(ctx).colorScheme.error,
+                foregroundColor: Theme.of(ctx).colorScheme.onError,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(DataSettingsUiCopy.wipeButton),
+            ),
+          ],
+        ),
       ),
     );
     if (ok != true) return;
@@ -1154,7 +1323,7 @@ class _BackupScreenState extends State<BackupScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('已清空本地数据')));
+    ).showSnackBar(SnackBar(content: Text(DataSettingsUiCopy.wipeSuccess)));
   }
 
   Future<void> _configureWebDavBackup() async {
@@ -1163,61 +1332,69 @@ class _BackupScreenState extends State<BackupScreen> {
     final passwordCtrl = TextEditingController(text: _webDavConfig.password);
     final pathCtrl = TextEditingController(text: _webDavConfig.remotePath);
     final fileCtrl = TextEditingController(text: _webDavConfig.filename);
-    final saved = await showDialog<bool>(
+    final saved = await showControllerDialog<bool>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: const Text('WebDAV 云盘备份'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: baseCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'WebDAV URL',
-                  hintText: 'https://dav.example.com/dav',
+      controllers: [baseCtrl, userCtrl, passwordCtrl, pathCtrl, fileCtrl],
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => AppDialog(
+          title: Text(DataSettingsUiCopy.webDavDialogTitle),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: baseCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'WebDAV URL',
+                    hintText: 'https://dav.example.com/dav',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: userCtrl,
-                decoration: const InputDecoration(labelText: '用户名'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: passwordCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '密码 / Token'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: pathCtrl,
-                decoration: const InputDecoration(
-                  labelText: '远端目录',
-                  hintText: '/duoyi-backups',
+                const SizedBox(height: 8),
+                TextField(
+                  controller: userCtrl,
+                  decoration: InputDecoration(
+                    labelText: DataSettingsUiCopy.webDavUsername,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: fileCtrl,
-                decoration: const InputDecoration(
-                  labelText: '文件名',
-                  hintText: 'duoyi-latest.json',
+                const SizedBox(height: 8),
+                TextField(
+                  controller: passwordCtrl,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: DataSettingsUiCopy.webDavPassword,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                TextField(
+                  controller: pathCtrl,
+                  decoration: InputDecoration(
+                    labelText: DataSettingsUiCopy.webDavRemotePath,
+                    hintText: '/duoyi-backups',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: fileCtrl,
+                  decoration: InputDecoration(
+                    labelText: DataSettingsUiCopy.webDavFilename,
+                    hintText: 'duoyi-latest.json',
+                  ),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(I18n.tr('action.save')),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(I18n.tr('action.cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(I18n.tr('action.save')),
-          ),
-        ],
       ),
     );
     if (saved != true) return;
@@ -1236,14 +1413,14 @@ class _BackupScreenState extends State<BackupScreen> {
       await WebDavBackupService.saveConfig(config);
       if (!mounted) return;
       setState(() => _webDavConfig = config);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('WebDAV 配置已保存')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.webDavConfigSaved)),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('保存失败: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.formatWebDavSaveError(e))),
+      );
     }
   }
 
@@ -1260,20 +1437,41 @@ class _BackupScreenState extends State<BackupScreen> {
       );
       if (!mounted) return;
       setState(() => _busy = false);
+      final sanitizedUri = _sanitizeUriForDisplay(result.uri);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '已上传到 WebDAV：${(result.bytes / 1024).toStringAsFixed(1)} KB · ${result.uri}',
+            DataSettingsUiCopy.webDavUploadSuccess(
+              result.bytes / 1024,
+              sanitizedUri,
+            ),
           ),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('WebDAV 上传失败: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.formatWebDavUploadError(e))),
+      );
     }
+  }
+
+  String _sanitizeUriForDisplay(Uri uri) {
+    if (uri.userInfo.isNotEmpty) {
+      return uri.replace(userInfo: '').toString();
+    }
+    return uri.toString();
+  }
+
+  String _sanitizeUrlString(String raw) {
+    try {
+      final parsed = Uri.parse(raw);
+      if (parsed.userInfo.isNotEmpty) {
+        return parsed.replace(userInfo: '').toString();
+      }
+    } catch (_) {}
+    return raw;
   }
 
   Future<void> _restoreFromWebDav({required bool merge}) async {
@@ -1284,39 +1482,43 @@ class _BackupScreenState extends State<BackupScreen> {
     }
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: Text(merge ? '从 WebDAV 合并恢复?' : '从 WebDAV 覆盖恢复?'),
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              merge
-                  ? '会下载 ${_webDavConfig.filename} 并合并到本机数据。'
-                  : '会下载 ${_webDavConfig.filename} 并覆盖本机可备份数据。',
-            ),
-            // 覆盖恢复同样真删数据：写明缺失数据将被删除的后果。
-            if (!merge) ...[
-              const SizedBox(height: 8),
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => AppDialog(
+          title: Text(DataSettingsUiCopy.webDavRestoreDialogTitle(merge)),
+          content: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Text(
-                I18n.tr('backup.overwrite.will_delete_missing'),
-                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(ctx).colorScheme.error,
+                DataSettingsUiCopy.webDavRestoreDesc(
+                  merge,
+                  _webDavConfig.filename,
                 ),
               ),
+              // 覆盖恢复同样真删数据：写明缺失数据将被删除的后果。
+              if (!merge) ...[
+                const SizedBox(height: 8),
+                Text(
+                  I18n.tr('backup.overwrite.will_delete_missing'),
+                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(ctx).colorScheme.error,
+                  ),
+                ),
+              ],
             ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(DataSettingsUiCopy.startRestore),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(I18n.tr('action.cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('开始恢复'),
-          ),
-        ],
       ),
     );
     if (ok != true) return;
@@ -1337,14 +1539,16 @@ class _BackupScreenState extends State<BackupScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已从 WebDAV ${merge ? '合并' : '恢复'} $count 项数据')),
+        SnackBar(
+          content: Text(DataSettingsUiCopy.webDavRestoreSuccess(merge, count)),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('WebDAV 恢复失败: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.formatWebDavRestoreError(e))),
+      );
     }
   }
 
@@ -1380,241 +1584,267 @@ class _BackupScreenState extends State<BackupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final routeBackground = Theme.of(context).brightness == Brightness.dark
-        ? cs.surface
-        : cs.surfaceContainerLowest;
-    final restoreFirst = widget.initialMode == BackupEntryMode.restore;
-    final pageTitle = restoreFirst ? '恢复数据' : '备份';
-    return Scaffold(
-      backgroundColor: routeBackground,
-      appBar: AppBar(
-        title: Text(pageTitle),
-        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
-        backgroundColor: routeBackground.withValues(alpha: 0.96),
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: AppSecondaryControlTheme(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-          children: [
-            AppSurfaceCard(
-              padding: const EdgeInsets.all(16),
-              gradient: LinearGradient(
-                colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      Icons.backup_outlined,
-                      color: cs.primary,
-                      size: 28,
-                    ),
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final cs = Theme.of(context).colorScheme;
+        final routeBackground = Theme.of(context).brightness == Brightness.dark
+            ? cs.surface
+            : cs.surfaceContainerLowest;
+        final restoreFirst = widget.initialMode == BackupEntryMode.restore;
+        final pageTitle = DataSettingsUiCopy.backupHeroTitle(restoreFirst);
+        return Scaffold(
+          backgroundColor: routeBackground,
+          appBar: AppBar(
+            title: Text(pageTitle),
+            titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+            backgroundColor: routeBackground.withValues(alpha: 0.96),
+            surfaceTintColor: Colors.transparent,
+          ),
+          body: AppSecondaryControlTheme(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+              children: [
+                AppSurfaceCard(
+                  padding: const EdgeInsets.all(16),
+                  gradient: LinearGradient(
+                    colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: cs.primary.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          Icons.backup_outlined,
+                          color: cs.primary,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              pageTitle,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.normal,
+                                    color: cs.onSurface,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              DataSettingsUiCopy.backupHeroSubtitle(
+                                restoreFirst,
+                              ),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: cs.onSurface.withValues(alpha: 0.66),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (restoreFirst) ...[
+                  _restoreSection(),
+                  const SizedBox(height: 12),
+                  _backupSection(),
+                ] else ...[
+                  _backupSection(),
+                  const SizedBox(height: 12),
+                  _restoreSection(),
+                ],
+                const SizedBox(height: 12),
+                _webDavBackupSection(),
+                const SizedBox(height: 12),
+                AppSettingsSection(
+                  title: DataSettingsUiCopy.singleModuleExportTitle,
+                  subtitle: DataSettingsUiCopy.singleModuleExportSubtitle,
+                  children: [
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _chip(DataSettingsUiCopy.exportChipTodoCsv, () {
+                          final todos = context.read<TodoProvider>().todos;
+                          _showExport(
+                            _ExportKind.todosCsv,
+                            ModuleExporter.todosCsv(todos),
+                          );
+                        }),
+                        _chip(DataSettingsUiCopy.exportChipTodoMd, () {
+                          final todos = context.read<TodoProvider>().todos;
+                          _showExport(
+                            _ExportKind.todosMd,
+                            ModuleExporter.todosMarkdown(todos),
+                          );
+                        }),
+                        _chip(DataSettingsUiCopy.exportChipHabitCsv, () {
+                          final hs = context.read<HabitProvider>().habits;
+                          _showExport(
+                            _ExportKind.habitsCsv,
+                            ModuleExporter.habitsCsv(hs),
+                          );
+                        }),
+                        _chip(DataSettingsUiCopy.exportChipTimeEntryCsv, () {
+                          final entries = context
+                              .read<TimeAuditProvider>()
+                              .entries;
+                          _showExport(
+                            _ExportKind.timeEntriesCsv,
+                            ModuleExporter.timeEntriesCsv(entries),
+                          );
+                        }),
+                        _chip(DataSettingsUiCopy.exportChipNoteCsv, () {
+                          final ns = context.read<NoteProvider>().notes;
+                          _showExport(
+                            _ExportKind.notesCsv,
+                            ModuleExporter.notesCsv(ns),
+                          );
+                        }),
+                        _chip(DataSettingsUiCopy.exportChipNoteMd, () {
+                          final ns = context.read<NoteProvider>().notes;
+                          _showExport(
+                            _ExportKind.notesMd,
+                            ModuleExporter.notesMarkdown(ns),
+                          );
+                        }),
+                        _chip(DataSettingsUiCopy.exportChipDiaryMd, () {
+                          final ds = context.read<DiaryProvider>().entries;
+                          _showExport(
+                            _ExportKind.diaryMd,
+                            ModuleExporter.diaryMarkdown(ds),
+                          );
+                        }),
+                        _chip(DataSettingsUiCopy.exportChipDiaryCsv, () {
+                          final ds = context.read<DiaryProvider>().entries;
+                          _showExport(
+                            _ExportKind.diaryCsv,
+                            ModuleExporter.diaryCsv(ds),
+                          );
+                        }),
+                        _chip(DataSettingsUiCopy.exportChipAnniversaryCsv, () {
+                          final list = context
+                              .read<AnniversaryProvider>()
+                              .items;
+                          _showExport(
+                            _ExportKind.anniversariesCsv,
+                            ModuleExporter.anniversariesCsv(list),
+                          );
+                        }),
+                        _chip(DataSettingsUiCopy.exportChipAnniversaryMd, () {
+                          final list = context
+                              .read<AnniversaryProvider>()
+                              .items;
+                          _showExport(
+                            _ExportKind.anniversariesMd,
+                            ModuleExporter.anniversariesMarkdown(list),
+                          );
+                        }),
+                        _chip(DataSettingsUiCopy.exportChipGoalCsv, () {
+                          final list = context.read<GoalProvider>().goals;
+                          _showExport(
+                            _ExportKind.goalsCsv,
+                            ModuleExporter.goalsCsv(list),
+                          );
+                        }),
+                        _chip(DataSettingsUiCopy.exportChipGoalMd, () {
+                          final list = context.read<GoalProvider>().goals;
+                          _showExport(
+                            _ExportKind.goalsMd,
+                            ModuleExporter.goalsMarkdown(list),
+                          );
+                        }),
+                      ],
+                    ),
+                  ],
+                ),
+                if (_exported != null) ...[
+                  const SizedBox(height: 12),
+                  AppSurfaceCard(
+                    padding: const EdgeInsets.all(14),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          pageTitle,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.normal,
-                                color: cs.onSurface,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _activeExportedTitle(),
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.normal,
+                                      color: cs.onSurface,
+                                    ),
                               ),
+                            ),
+                            TextButton.icon(
+                              onPressed: _copy,
+                              icon: const Icon(Icons.copy, size: 14),
+                              label: Text(DataSettingsUiCopy.copyButton),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          restoreFirst
-                              ? '把之前导出的 JSON 粘贴回来，可以合并到当前数据或覆盖本机数据。'
-                              : '把本机所有数据打包成一段 JSON 文本，可以复制、发给自己，或者保存到另一台设备。',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.66),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerHighest.withValues(
+                              alpha: 0.5,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          height: 200,
+                          width: double.infinity,
+                          child: SingleChildScrollView(
+                            child: SelectableText(
+                              _exported!,
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 11,
                               ),
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            if (restoreFirst) ...[
-              _restoreSection(),
-              const SizedBox(height: 12),
-              _backupSection(),
-            ] else ...[
-              _backupSection(),
-              const SizedBox(height: 12),
-              _restoreSection(),
-            ],
-            const SizedBox(height: 12),
-            _webDavBackupSection(),
-            const SizedBox(height: 12),
-            AppSettingsSection(
-              title: '单模块导出',
-              subtitle: 'CSV / Markdown 格式',
-              children: [
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+                const SizedBox(height: 12),
+                AppSettingsSection(
+                  title: DataSettingsUiCopy.dangerZoneTitle,
+                  subtitle: DataSettingsUiCopy.dangerZoneSubtitle,
                   children: [
-                    _chip('待办 · CSV', () {
-                      final todos = context.read<TodoProvider>().todos;
-                      _showExport('待办 CSV', ModuleExporter.todosCsv(todos));
-                    }),
-                    _chip('待办 · Markdown', () {
-                      final todos = context.read<TodoProvider>().todos;
-                      _showExport(
-                        '待办 Markdown',
-                        ModuleExporter.todosMarkdown(todos),
-                      );
-                    }),
-                    _chip('习惯 · CSV', () {
-                      final hs = context.read<HabitProvider>().habits;
-                      _showExport('习惯 CSV', ModuleExporter.habitsCsv(hs));
-                    }),
-                    _chip('时间足迹 · CSV', () {
-                      final entries = context.read<TimeAuditProvider>().entries;
-                      _showExport(
-                        '时间足迹 CSV',
-                        ModuleExporter.timeEntriesCsv(entries),
-                      );
-                    }),
-                    _chip('笔记 · CSV', () {
-                      final ns = context.read<NoteProvider>().notes;
-                      _showExport('笔记 CSV', ModuleExporter.notesCsv(ns));
-                    }),
-                    _chip('笔记 · Markdown', () {
-                      final ns = context.read<NoteProvider>().notes;
-                      _showExport(
-                        '笔记 Markdown',
-                        ModuleExporter.notesMarkdown(ns),
-                      );
-                    }),
-                    _chip('日记 · Markdown', () {
-                      final ds = context.read<DiaryProvider>().entries;
-                      _showExport(
-                        '日记 Markdown',
-                        ModuleExporter.diaryMarkdown(ds),
-                      );
-                    }),
-                    _chip('日记 · CSV', () {
-                      final ds = context.read<DiaryProvider>().entries;
-                      _showExport('日记 CSV', ModuleExporter.diaryCsv(ds));
-                    }),
-                    _chip('纪念日 · CSV', () {
-                      final list = context.read<AnniversaryProvider>().items;
-                      _showExport(
-                        '纪念日 CSV',
-                        ModuleExporter.anniversariesCsv(list),
-                      );
-                    }),
-                    _chip('纪念日 · Markdown', () {
-                      final list = context.read<AnniversaryProvider>().items;
-                      _showExport(
-                        '纪念日 Markdown',
-                        ModuleExporter.anniversariesMarkdown(list),
-                      );
-                    }),
-                    _chip('目标 · CSV', () {
-                      final list = context.read<GoalProvider>().goals;
-                      _showExport('目标 CSV', ModuleExporter.goalsCsv(list));
-                    }),
-                    _chip('目标 · Markdown', () {
-                      final list = context.read<GoalProvider>().goals;
-                      _showExport(
-                        '目标 Markdown',
-                        ModuleExporter.goalsMarkdown(list),
-                      );
-                    }),
-                  ],
-                ),
-              ],
-            ),
-            if (_exported != null) ...[
-              const SizedBox(height: 12),
-              AppSurfaceCard(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _exportedTitle ?? '导出内容',
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(
-                                  fontWeight: FontWeight.normal,
-                                  color: cs.onSurface,
-                                ),
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed: _copy,
-                          icon: const Icon(Icons.copy, size: 14),
-                          label: const Text('复制'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest.withValues(
-                          alpha: 0.5,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _wipe,
+                      icon: const Icon(Icons.delete_forever, color: Colors.red),
+                      label: Text(
+                        DataSettingsUiCopy.wipeButton,
+                        style: const TextStyle(color: Colors.red),
                       ),
-                      height: 200,
-                      width: double.infinity,
-                      child: SingleChildScrollView(
-                        child: SelectableText(
-                          _exported!,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 11,
-                          ),
-                        ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.red.shade300),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            AppSettingsSection(
-              title: '危险操作',
-              subtitle: '清空本机数据会删除本地内容',
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : _wipe,
-                  icon: const Icon(Icons.delete_forever, color: Colors.red),
-                  label: const Text(
-                    '清空本机数据',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.red.shade300),
-                  ),
-                ),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -1628,15 +1858,15 @@ class _BackupScreenState extends State<BackupScreen> {
 
   Widget _backupSection() {
     return AppSettingsSection(
-      title: '生成备份',
-      subtitle: '导出本机全部数据为 JSON',
+      title: DataSettingsUiCopy.backupSectionTitle,
+      subtitle: DataSettingsUiCopy.backupSectionSubtitle,
       children: [
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
             onPressed: _busy ? null : _exportAll,
             icon: const Icon(Icons.download_outlined, size: 18),
-            label: const Text('生成 JSON'),
+            label: Text(DataSettingsUiCopy.generateJsonButton),
           ),
         ),
       ],
@@ -1645,53 +1875,85 @@ class _BackupScreenState extends State<BackupScreen> {
 
   Widget _webDavBackupSection() {
     final configured = _webDavConfig.isConfigured;
+    final sanitizedBase = _sanitizeUrlString(_webDavConfig.baseUrl);
     final subtitle = configured
-        ? '${_webDavConfig.baseUrl} · ${_webDavConfig.remotePath}/${_webDavConfig.filename}'
-        : '备份到 OpenList、坚果云、NAS 等兼容 WebDAV 的云盘';
+        ? '$sanitizedBase · ${_webDavConfig.remotePath}/${_webDavConfig.filename}'
+        : DataSettingsUiCopy.webDavSubtitleNotConfigured;
     return AppSettingsSection(
-      title: 'WebDAV 云盘备份',
+      title: DataSettingsUiCopy.webDavSectionTitle,
       subtitle: subtitle,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy ? null : _configureWebDavBackup,
-                icon: const Icon(Icons.settings_outlined, size: 18),
-                label: Text(configured ? '修改配置' : '配置云盘'),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow =
+                constraints.maxWidth < 340 ||
+                MediaQuery.textScalerOf(context).scale(14) > 17;
+            final configBtn = OutlinedButton.icon(
+              onPressed: _busy ? null : _configureWebDavBackup,
+              icon: const Icon(Icons.settings_outlined, size: 18),
+              label: Text(
+                DataSettingsUiCopy.webDavConfigureButton(configured),
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: _busy ? null : _uploadWebDavBackup,
-                icon: const Icon(Icons.cloud_upload_outlined, size: 18),
-                label: const Text('上传备份'),
+            );
+            final uploadBtn = FilledButton.icon(
+              onPressed: _busy ? null : _uploadWebDavBackup,
+              icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+              label: Text(
+                DataSettingsUiCopy.webDavUploadButton,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy ? null : () => _restoreFromWebDav(merge: true),
-                icon: const Icon(Icons.cloud_sync_outlined, size: 18),
-                label: const Text('云端合并'),
+            );
+            final mergeBtn = OutlinedButton.icon(
+              onPressed: _busy ? null : () => _restoreFromWebDav(merge: true),
+              icon: const Icon(Icons.cloud_sync_outlined, size: 18),
+              label: Text(
+                DataSettingsUiCopy.webDavMergeButton,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy
-                    ? null
-                    : () => _restoreFromWebDav(merge: false),
-                icon: const Icon(Icons.cloud_download_outlined, size: 18),
-                label: const Text('云端覆盖'),
+            );
+            final overwriteBtn = OutlinedButton.icon(
+              onPressed: _busy ? null : () => _restoreFromWebDav(merge: false),
+              icon: const Icon(Icons.cloud_download_outlined, size: 18),
+              label: Text(
+                DataSettingsUiCopy.webDavOverwriteButton,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+            );
+
+            if (isNarrow) {
+              return Column(
+                children: [
+                  SizedBox(width: double.infinity, child: configBtn),
+                  const SizedBox(height: 8),
+                  SizedBox(width: double.infinity, child: uploadBtn),
+                  const SizedBox(height: 8),
+                  SizedBox(width: double.infinity, child: mergeBtn),
+                  const SizedBox(height: 8),
+                  SizedBox(width: double.infinity, child: overwriteBtn),
+                ],
+              );
+            }
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: configBtn),
+                    const SizedBox(width: 8),
+                    Expanded(child: uploadBtn),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(child: mergeBtn),
+                    const SizedBox(width: 8),
+                    Expanded(child: overwriteBtn),
+                  ],
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -1699,74 +1961,140 @@ class _BackupScreenState extends State<BackupScreen> {
 
   Widget _restoreSection() {
     return AppSettingsSection(
-      title: '恢复数据',
-      subtitle: '粘贴备份 JSON，或从其他 App 的 CSV / JSON 迁移待办、习惯、笔记、日程、纪念日、倒数日和时间足迹',
+      title: DataSettingsUiCopy.restoreSectionTitle,
+      subtitle: DataSettingsUiCopy.restoreSectionSubtitle,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy ? null : () => _import(merge: true),
-                icon: const Icon(Icons.merge, size: 18),
-                label: const Text('合并导入'),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow =
+                constraints.maxWidth < 340 ||
+                MediaQuery.textScalerOf(context).scale(14) > 17;
+            final mergeBtn = OutlinedButton.icon(
+              onPressed: _busy ? null : () => _import(merge: true),
+              icon: const Icon(Icons.merge, size: 18),
+              label: Text(
+                DataSettingsUiCopy.mergeImportButton,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy ? null : () => _import(merge: false),
-                icon: const Icon(Icons.upload, size: 18),
-                label: const Text('覆盖导入'),
+            );
+            final overwriteBtn = OutlinedButton.icon(
+              onPressed: _busy ? null : () => _import(merge: false),
+              icon: const Icon(Icons.upload, size: 18),
+              label: Text(
+                DataSettingsUiCopy.overwriteImportButton,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy ? null : () => _importBackupFile(merge: true),
-                icon: const Icon(Icons.file_open_outlined, size: 18),
-                label: const Text('文件合并'),
+            );
+            final fileMergeBtn = OutlinedButton.icon(
+              onPressed: _busy ? null : () => _importBackupFile(merge: true),
+              icon: const Icon(Icons.file_open_outlined, size: 18),
+              label: Text(
+                DataSettingsUiCopy.fileMergeButton,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy ? null : () => _importBackupFile(merge: false),
-                icon: const Icon(Icons.file_upload_outlined, size: 18),
-                label: const Text('文件覆盖'),
+            );
+            final fileOverwriteBtn = OutlinedButton.icon(
+              onPressed: _busy ? null : () => _importBackupFile(merge: false),
+              icon: const Icon(Icons.file_upload_outlined, size: 18),
+              label: Text(
+                DataSettingsUiCopy.fileOverwriteButton,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _busy ? null : _importTasksFromOtherApps,
-            icon: const Icon(Icons.move_to_inbox_outlined, size: 18),
-            label: const Text('从其他 App 导入待办'),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _busy ? null : _importProductivityDataFromOtherApps,
-            icon: const Icon(Icons.input_outlined, size: 18),
-            label: const Text('从其他 App 导入待办/习惯/笔记/日程/纪念日/倒数日/时间足迹'),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _busy ? null : _importProductivityDataFile,
-            icon: const Icon(Icons.upload_file_outlined, size: 18),
-            label: const Text('从文件导入其他 App 数据'),
-          ),
+            );
+
+            return Column(
+              children: [
+                if (isNarrow) ...[
+                  SizedBox(width: double.infinity, child: mergeBtn),
+                  const SizedBox(height: 8),
+                  SizedBox(width: double.infinity, child: overwriteBtn),
+                  const SizedBox(height: 8),
+                  SizedBox(width: double.infinity, child: fileMergeBtn),
+                  const SizedBox(height: 8),
+                  SizedBox(width: double.infinity, child: fileOverwriteBtn),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(child: mergeBtn),
+                      const SizedBox(width: 8),
+                      Expanded(child: overwriteBtn),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: fileMergeBtn),
+                      const SizedBox(width: 8),
+                      Expanded(child: fileOverwriteBtn),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: _busy ? null : _importTasksFromOtherApps,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.move_to_inbox_outlined, size: 18),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            DataSettingsUiCopy.importTasksFromOtherAppsButton,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: _busy
+                        ? null
+                        : _importProductivityDataFromOtherApps,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.input_outlined, size: 18),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            DataSettingsUiCopy
+                                .importProductivityFromOtherAppsButton,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: _busy ? null : _importProductivityDataFile,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.upload_file_outlined, size: 18),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            DataSettingsUiCopy.importProductivityFileButton,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );

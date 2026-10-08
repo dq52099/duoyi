@@ -20,6 +20,8 @@ void main() {
   String? failSave;
   Completer<void>? saveEntered;
   Completer<void>? saveRelease;
+  Completer<void>? refreshEntered;
+  Completer<void>? refreshRelease;
   late HomeWidgetThemePayload theme;
 
   Future<bool> push({
@@ -48,6 +50,8 @@ void main() {
     failSave = null;
     saveEntered = null;
     saveRelease = null;
+    refreshEntered = null;
+    refreshRelease = null;
     theme = HomeWidgetThemePayload.fromThemeProvider(ThemeProvider());
     HomeWidgetService.supportedForTesting = true;
     messenger.setMockMethodCallHandler(channel, (call) async {
@@ -70,6 +74,11 @@ void main() {
           return true;
         case 'updateWidget':
           refreshes++;
+          if (refreshRelease != null) {
+            refreshEntered!.complete();
+            await refreshRelease!.future;
+            refreshRelease = null;
+          }
           if (failRefresh) throw PlatformException(code: 'refresh_failed');
           return true;
         default:
@@ -101,6 +110,7 @@ void main() {
         theme: theme,
       );
       expect(await pushEmpty(), isTrue);
+      expect(stored['widget_locale'], 'zh');
       expect(stored['todo_top3_1'], '今天没有未完成待办');
       expect(stored['goal_highlight_3'], isEmpty);
       expect(stored['schedule_highlight_2'], isEmpty);
@@ -108,9 +118,59 @@ void main() {
       final previousRefreshes = refreshes;
       I18n.setLocale(AppLocale.en);
       expect(await pushEmpty(), isTrue);
+      expect(stored['widget_locale'], 'en');
       expect(stored['todo_top3_1'], 'No open tasks today');
       expect(stored['note_highlight_1'], 'No notes yet');
+      expect(
+        stored['today_event_summary'],
+        I18n.tr('widget.no_schedule_today'),
+      );
+      expect(stored['focus_summary'], I18n.tr('widget.focus_not_started'));
+      expect(stored['habit_summary'], I18n.tr('widget.habit_pending'));
+      expect(stored['focus_timer_label'], I18n.tr('widget.focus_countdown'));
       expect(refreshes, greaterThan(previousRefreshes));
+    },
+  );
+
+  test('account clearing preserves the selected widget language', () async {
+    I18n.setLocale(AppLocale.en);
+    HomeWidgetService.resetAccountCache();
+    expect(await HomeWidgetService.waitForAccountClear(), isTrue);
+    expect(stored['widget_locale'], 'en');
+    expect(stored['todo_top3_1'], 'No open tasks today');
+  });
+
+  test('a language change during native refresh invalidates success', () async {
+    refreshEntered = Completer<void>();
+    refreshRelease = Completer<void>();
+    final pending = push();
+    await refreshEntered!.future;
+    I18n.setLocale(AppLocale.en);
+    refreshRelease!.complete();
+    expect(await pending, isFalse);
+    final previousRefreshes = refreshes;
+    expect(await push(), isTrue);
+    expect(stored['widget_locale'], 'en');
+    expect(refreshes, greaterThan(previousRefreshes));
+  });
+
+  test(
+    'language changes invalidate an in-flight snapshot without translating user content',
+    () async {
+      saveEntered = Completer<void>();
+      saveRelease = Completer<void>();
+      final old = push(title: '用户原始内容');
+      await saveEntered!.future;
+      I18n.setLocale(AppLocale.en);
+      saveRelease!.complete();
+      expect(await old, isFalse);
+      expect(stored['widget_snapshot_day'], '');
+      expect(refreshes, 0);
+
+      expect(await push(title: '用户原始内容'), isTrue);
+      expect(stored['widget_locale'], 'en');
+      expect(stored['todo_top3_1'], '· 用户原始内容');
+      expect(stored['widget_snapshot_day'], isNotEmpty);
     },
   );
 

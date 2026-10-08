@@ -58,11 +58,12 @@
             android:textSize="14sp" />
 
         <TextView
+            android:id="@+id/widget_todo_unit"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text=" 项"
+            android:text="@string/widget_todo_unit"
             android:textColor="#888888"
             android:textSize="11sp" />
 
@@ -79,7 +80,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="+ 添加"
+            android:text="@string/widget_todo_quick_add"
             android:textColor="#1E88E5"
             android:textSize="11sp" />
 
@@ -94,7 +95,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:text="↻"
-            android:contentDescription="刷新小组件"
+            android:contentDescription="@string/widget_refresh_description"
             android:textColor="#888888"
             android:textSize="14sp" />
     </LinearLayout>
@@ -130,7 +131,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:text="○"
-            android:contentDescription="完成待办"
+            android:contentDescription="@string/widget_todo_complete"
             android:textColor="#1E88E5"
             android:textSize="14sp" />
     </LinearLayout>
@@ -167,7 +168,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:text="○"
-            android:contentDescription="完成待办"
+            android:contentDescription="@string/widget_todo_complete"
             android:textColor="#1E88E5"
             android:textSize="14sp"
             android:visibility="gone" />
@@ -205,7 +206,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:text="○"
-            android:contentDescription="完成待办"
+            android:contentDescription="@string/widget_todo_complete"
             android:textColor="#1E88E5"
             android:textSize="14sp"
             android:visibility="gone" />
@@ -232,7 +233,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="待办"
+            android:text="@string/widget_tab_todo"
             android:textColor="#FF6B6B"
             android:textSize="10sp" />
 
@@ -244,7 +245,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="习惯"
+            android:text="@string/widget_tab_habit"
             android:textColor="#333333"
             android:textSize="10sp" />
 
@@ -256,7 +257,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="日历"
+            android:text="@string/widget_tab_calendar"
             android:textColor="#333333"
             android:textSize="10sp" />
 
@@ -268,7 +269,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="专注"
+            android:text="@string/widget_tab_focus"
             android:textColor="#333333"
             android:textSize="10sp" />
     </LinearLayout>
@@ -280,7 +281,7 @@
         android:layout_marginTop="4dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="今日待办 · 5 项"
+        android:text="@string/widget_todo_summary_default"
         android:textColor="#666666"
         android:textSize="11sp"
         android:visibility="gone" />

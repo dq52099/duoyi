@@ -9,6 +9,102 @@ private let duoyiPathSegmentAllowed: CharacterSet = {
     return allowed
 }()
 
+private enum DuoyiWidgetLocale: String {
+    case zh
+    case en
+
+    private static func language(_ value: String?) -> String {
+        (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased().replacingOccurrences(of: "-", with: "_")
+            .components(separatedBy: "_").first ?? ""
+    }
+
+    static func resolve(_ defaults: UserDefaults?) -> DuoyiWidgetLocale {
+        resolve(saved: defaults?.string(forKey: "widget_locale"))
+    }
+
+    static func resolve(saved: String?) -> DuoyiWidgetLocale {
+        switch language(saved) {
+        case "en": return .en
+        case "zh": return .zh
+        default:
+            let system = Locale.preferredLanguages.first ?? Locale.current.languageCode
+            return language(system) == "en" ? .en : .zh
+        }
+    }
+
+}
+
+
+// Freeze metadata with the payload; an old timeline must never borrow a newer
+// account nonce when constructing a mutation link.
+private struct DuoyiWidgetSnapshot {
+    let day: String
+    let utcOffsetMinutes: Int?
+    let accountNonce: String
+
+    static let empty = DuoyiWidgetSnapshot(day: "", utcOffsetMinutes: nil, accountNonce: "")
+
+    init(values: [String: Any]) {
+        day = values["widget_snapshot_day"] as? String ?? ""
+        accountNonce = values["widget_account_nonce"] as? String ?? ""
+        if let number = values["widget_snapshot_utc_offset_minutes"] as? NSNumber {
+            utcOffsetMinutes = number.intValue
+        } else if let text = values["widget_snapshot_utc_offset_minutes"] as? String {
+            utcOffsetMinutes = Int(text)
+        } else {
+            utcOffsetMinutes = nil
+        }
+    }
+
+    private init(day: String, utcOffsetMinutes: Int?, accountNonce: String) {
+        self.day = day
+        self.utcOffsetMinutes = utcOffsetMinutes
+        self.accountNonce = accountNonce
+    }
+
+    var hasPublishedSession: Bool {
+        !day.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !accountNonce.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    func isFresh(at date: Date) -> Bool {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let fields = calendar.dateComponents([.year, .month, .day], from: date)
+        guard let year = fields.year, let month = fields.month, let dateDay = fields.day else {
+            return false
+        }
+        let localDay = String(format: "%04d-%02d-%02d", year, month, dateDay)
+        return hasPublishedSession && day == localDay &&
+            utcOffsetMinutes == TimeZone.current.secondsFromGMT(for: date) / 60
+    }
+
+    func actionURL(_ components: URLComponents?) -> URL? {
+        guard var components = components else { return nil }
+        guard components.host == "action" else { return components.url }
+        let action = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let hasQuickText = components.queryItems?.contains {
+            $0.name == "text" && !($0.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        } ?? false
+        // Opening quick entry and requesting refresh are recoverable navigation.
+        let mutates = ["complete_todo", "checkin_habit", "start_pomodoro"].contains(action) ||
+            (action == "quick_todo" && hasQuickText)
+        guard mutates else { return components.url }
+        guard isFresh(at: Date()), let offset = utcOffsetMinutes else { return nil }
+        let bindingKeys = Set(["source", "widget_day", "widget_offset", "widget_account"])
+        var items = (components.queryItems ?? []).filter { !bindingKeys.contains($0.name) }
+        items.append(contentsOf: [
+            URLQueryItem(name: "source", value: "widget"),
+            URLQueryItem(name: "widget_day", value: day),
+            URLQueryItem(name: "widget_offset", value: String(offset)),
+            URLQueryItem(name: "widget_account", value: accountNonce)
+        ])
+        components.queryItems = items
+        return components.url
+    }
+}
+
 private struct DuoyiWidgetConfig {
     let kind: String
     let title: String
@@ -19,6 +115,37 @@ private struct DuoyiWidgetConfig {
     let rowKeys: [String]
     let quickActionTitle: String
     let quickActionLink: String
+    let titleEn: String
+    let fallbackEn: String
+    let quickActionTitleEn: String
+
+    func localized(for locale: DuoyiWidgetLocale) -> DuoyiWidgetConfig {
+        guard locale == .en else {
+            return self
+        }
+        return DuoyiWidgetConfig(
+            kind: kind,
+            title: titleEn,
+            deepLink: deepLink,
+            accent: accent,
+            primaryKey: primaryKey,
+            fallback: fallbackEn,
+            rowKeys: rowKeys,
+            quickActionTitle: quickActionTitleEn,
+            quickActionLink: quickActionLink,
+            titleEn: titleEn,
+            fallbackEn: fallbackEn,
+            quickActionTitleEn: quickActionTitleEn
+        )
+    }
+
+    func galleryDescription(for locale: DuoyiWidgetLocale) -> String {
+        if locale == .en {
+            return "Duoyi \(titleEn) widget"
+        } else {
+            return "多仪 \(title) 小组件"
+        }
+    }
 }
 
 private struct DuoyiWidgetTheme {
@@ -44,16 +171,16 @@ private struct DuoyiWidgetTheme {
         accentEnd: color("#FFFFB088")
     )
 
-    init(defaults: UserDefaults?) {
-        self.primary = Self.read(defaults, key: "widget_theme_primary", fallback: "#FFFF6B6B")
-        self.background = Self.read(defaults, key: "widget_theme_background", fallback: "#FFFFFFFF")
-        self.surface = Self.read(defaults, key: "widget_theme_surface", fallback: "#FFFFFFFF")
-        self.navBackground = Self.read(defaults, key: "widget_theme_nav_background", fallback: "#FFFFF6F2")
-        self.text = Self.read(defaults, key: "widget_theme_text", fallback: "#FF333333")
-        self.mutedText = Self.read(defaults, key: "widget_theme_muted_text", fallback: "#FF666666")
-        self.onPrimary = Self.read(defaults, key: "widget_theme_on_primary", fallback: "#FFFFFFFF")
-        self.accentStart = Self.read(defaults, key: "widget_theme_accent_start", fallback: "#FFFF6B6B")
-        self.accentEnd = Self.read(defaults, key: "widget_theme_accent_end", fallback: "#FFFFB088")
+    init(values: [String: Any]) {
+        self.primary = Self.read(values, key: "widget_theme_primary", fallback: "#FFFF6B6B")
+        self.background = Self.read(values, key: "widget_theme_background", fallback: "#FFFFFFFF")
+        self.surface = Self.read(values, key: "widget_theme_surface", fallback: "#FFFFFFFF")
+        self.navBackground = Self.read(values, key: "widget_theme_nav_background", fallback: "#FFFFF6F2")
+        self.text = Self.read(values, key: "widget_theme_text", fallback: "#FF333333")
+        self.mutedText = Self.read(values, key: "widget_theme_muted_text", fallback: "#FF666666")
+        self.onPrimary = Self.read(values, key: "widget_theme_on_primary", fallback: "#FFFFFFFF")
+        self.accentStart = Self.read(values, key: "widget_theme_accent_start", fallback: "#FFFF6B6B")
+        self.accentEnd = Self.read(values, key: "widget_theme_accent_end", fallback: "#FFFFB088")
     }
 
     private init(
@@ -78,8 +205,8 @@ private struct DuoyiWidgetTheme {
         self.accentEnd = accentEnd
     }
 
-    private static func read(_ defaults: UserDefaults?, key: String, fallback: String) -> Color {
-        color(defaults?.string(forKey: key) ?? fallback)
+    private static func read(_ values: [String: Any], key: String, fallback: String) -> Color {
+        color(values[key] as? String ?? fallback)
     }
 
     private static func color(_ raw: String) -> Color {
@@ -107,6 +234,7 @@ private struct DuoyiTodoRow: Identifiable {
     let index: Int
     let title: String
     let todoId: String
+    let snapshot: DuoyiWidgetSnapshot
 
     var id: Int { index }
 
@@ -124,7 +252,7 @@ private struct DuoyiTodoRow: Identifiable {
         }
         var components = URLComponents(string: "duoyi://action/complete_todo")
         components?.queryItems = [URLQueryItem(name: "id", value: todoId)]
-        return components?.url
+        return snapshot.actionURL(components)
     }
 }
 
@@ -144,9 +272,70 @@ private struct DuoyiWidgetRow: Identifiable {
     }
 }
 
+private func localizedFallbackString(_ raw: String, kind: String, locale: DuoyiWidgetLocale) -> String {
+    let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    let prefix = value.hasPrefix("· ") ? "· " : ""
+    let trimmed = prefix.isEmpty ? value : String(value.dropFirst(2))
+    switch kind {
+    case "DuoyiTodoWidget":
+        if trimmed == "今天没有未完成待办" || trimmed == "No open tasks today" {
+            return prefix + (locale == .en ? "No open tasks today" : "今天没有未完成待办")
+        }
+    case "DuoyiFocusWidget":
+        if trimmed == "25 分钟专注" || trimmed == "25-min focus" {
+            return prefix + (locale == .en ? "25-min focus" : "25 分钟专注")
+        }
+    case "DuoyiHabitWidget":
+        if trimmed == "今日习惯待打卡" || trimmed == "Habits to check in today" {
+            return prefix + (locale == .en ? "Habits to check in today" : "今日习惯待打卡")
+        }
+    case "DuoyiCalendarWidget":
+        if trimmed == "本月日期 · 今日已标记" || trimmed == "Month view · today is marked" {
+            return prefix + (locale == .en ? "Month view · today is marked" : "本月日期 · 今日已标记")
+        }
+    case "DuoyiScheduleWidget":
+        if trimmed == "今日没有日程" || trimmed == "No events today" {
+            return prefix + (locale == .en ? "No events today" : "今日没有日程")
+        }
+    case "DuoyiGoalWidget":
+        if trimmed == "暂无进行中目标" || trimmed == "No active goals" {
+            return prefix + (locale == .en ? "No active goals" : "暂无进行中目标")
+        }
+    case "DuoyiCourseWidget":
+        if trimmed == "今日暂无课程" || trimmed == "No courses today" {
+            return prefix + (locale == .en ? "No courses today" : "今日暂无课程")
+        }
+    case "DuoyiNoteWidget":
+        if trimmed == "暂无随手记" || trimmed == "No notes yet" {
+            return prefix + (locale == .en ? "No notes yet" : "暂无随手记")
+        }
+    case "DuoyiAnniversaryWidget":
+        if trimmed == "暂无近期纪念日" || trimmed == "No upcoming anniversaries" || trimmed == "暂无纪念日" {
+            return prefix + (locale == .en ? "No upcoming anniversaries" : "暂无近期纪念日")
+        }
+    case "DuoyiDiaryWidget":
+        if trimmed == "暂无日记" || trimmed == "No diary entries yet" {
+            return prefix + (locale == .en ? "No diary entries yet" : "暂无日记")
+        }
+    default:
+        break
+    }
+    return raw
+}
+
+private func isAnniversaryFallback(_ text: String) -> Bool {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ||
+        trimmed == "暂无近期纪念日" ||
+        trimmed == "No upcoming anniversaries" ||
+        trimmed == "暂无纪念日"
+}
+
 private struct DuoyiWidgetEntry: TimelineEntry {
     let date: Date
     let config: DuoyiWidgetConfig
+    let locale: DuoyiWidgetLocale
+    let snapshot: DuoyiWidgetSnapshot
     let primary: String
     let primaryTarget: String
     let rows: [DuoyiWidgetRow]
@@ -177,27 +366,32 @@ private struct DuoyiWidgetProvider: TimelineProvider {
     let config: DuoyiWidgetConfig
 
     func placeholder(in context: Context) -> DuoyiWidgetEntry {
-        DuoyiWidgetEntry(
+        let defaults = UserDefaults(suiteName: appGroupId)
+        let locale = DuoyiWidgetLocale.resolve(defaults)
+        let localizedConfig = config.localized(for: locale)
+        return DuoyiWidgetEntry(
             date: Date(),
-            config: config,
-            primary: config.fallback,
-            primaryTarget: config.deepLink,
-            rows: config.rowKeys.enumerated().map {
-                DuoyiWidgetRow(index: $0.offset + 2, title: config.fallback, target: config.deepLink)
+            config: localizedConfig,
+            locale: locale,
+            snapshot: .empty,
+            primary: localizedConfig.fallback,
+            primaryTarget: localizedConfig.deepLink,
+            rows: localizedConfig.rowKeys.enumerated().map {
+                DuoyiWidgetRow(index: $0.offset + 2, title: localizedConfig.fallback, target: localizedConfig.deepLink)
             },
             todoRows: [],
-            brandTitle: "多仪",
-            navTodo: "待办",
-            navHabit: "习惯",
-            navCalendar: "日历",
-            navFocus: "专注",
+            brandTitle: locale == .en ? "Duoyi" : "多仪",
+            navTodo: locale == .en ? "Tasks" : "待办",
+            navHabit: locale == .en ? "Habits" : "习惯",
+            navCalendar: locale == .en ? "Calendar" : "日历",
+            navFocus: locale == .en ? "Focus" : "专注",
             displayMode: "standard",
             habitQuickCheckId: "",
             focusTimerRunning: false,
             focusTimerRemainingSeconds: 0,
             focusTimerTotalSeconds: 0,
             focusTimerEndsAtMillis: 0,
-            focusTimerLabel: "专注倒计时",
+            focusTimerLabel: locale == .en ? "Focus countdown" : "专注倒计时",
             theme: .fallback
         )
     }
@@ -209,67 +403,114 @@ private struct DuoyiWidgetProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<DuoyiWidgetEntry>) -> Void) {
         let current = entry()
         let refreshMinutes = current.focusTimerRunning ? 1 : 15
-        let nextRefresh = Calendar.current.date(byAdding: .minute, value: refreshMinutes, to: Date()) ?? Date()
+        let now = current.date
+        var nextRefresh = Calendar.current.date(byAdding: .minute, value: refreshMinutes, to: now) ?? now.addingTimeInterval(60)
+        if let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)) {
+            nextRefresh = min(nextRefresh, midnight)
+        }
+        if current.focusTimerRunning, let end = current.focusTimerEndDate, end > now {
+            nextRefresh = min(nextRefresh, end)
+        }
         completion(Timeline(entries: [current], policy: .after(nextRefresh)))
     }
 
     private func entry() -> DuoyiWidgetEntry {
-        let defaults = UserDefaults(suiteName: appGroupId)
-        let todoRows = readTodoRows(defaults)
+        // One immutable read avoids mixing item IDs and account metadata.
+        let defaults = UserDefaults(suiteName: appGroupId)?.dictionaryRepresentation() ?? [:]
+        let now = Date()
+        let snapshot = DuoyiWidgetSnapshot(values: defaults)
+        let fresh = snapshot.isFresh(at: now)
+        let locale = DuoyiWidgetLocale.resolve(saved: defaults["widget_locale"] as? String)
+        let localizedConfig = config.localized(for: locale)
+        let todoRows = fresh ? readTodoRows(defaults, locale: locale, snapshot: snapshot) : []
         let primary: String
         let primaryTarget: String
         let rows: [DuoyiWidgetRow]
-        if config.kind == "DuoyiTodoWidget" {
-            primary = todoRows.first?.title ?? config.fallback
-            primaryTarget = todoRows.first?.detailURL?.absoluteString ?? config.deepLink
+        if !fresh {
+            primary = locale == .en ? "Open Duoyi to refresh" : "打开多仪刷新数据"
+            primaryTarget = localizedConfig.deepLink
+            rows = []
+        } else if localizedConfig.kind == "DuoyiTodoWidget" {
+            primary = todoRows.first?.title ?? localizedConfig.fallback
+            primaryTarget = todoRows.first?.detailURL?.absoluteString ?? localizedConfig.deepLink
             rows = []
         } else {
-            let primarySource = readPrimary(defaults)
+            let primarySource = readPrimary(defaults, config: localizedConfig, locale: locale)
             primary = primarySource.title
             primaryTarget = primarySource.target
-            rows = readRows(defaults, excluding: primarySource.sourceKey)
+            rows = readRows(defaults, config: localizedConfig, locale: locale, excluding: primarySource.sourceKey)
         }
+        let brandFallback = locale == .en ? "Duoyi" : "多仪"
+        let rawBrand = readString(defaults, key: "brand_app_title", fallback: brandFallback)
+        let brandTitle = (locale == .en && rawBrand == "多仪") ? "Duoyi" : (locale == .zh && rawBrand == "Duoyi" ? "多仪" : rawBrand)
+
+        let navTodoFallback = locale == .en ? "Tasks" : "待办"
+        let rawNavTodo = readString(defaults, key: "nav_todo", fallback: navTodoFallback)
+        let navTodo = (locale == .en && rawNavTodo == "待办") ? "Tasks" : (locale == .zh && rawNavTodo == "Tasks" ? "待办" : rawNavTodo)
+
+        let navHabitFallback = locale == .en ? "Habits" : "习惯"
+        let rawNavHabit = readString(defaults, key: "nav_habit", fallback: navHabitFallback)
+        let navHabit = (locale == .en && rawNavHabit == "习惯") ? "Habits" : (locale == .zh && rawNavHabit == "Habits" ? "习惯" : rawNavHabit)
+
+        let navCalendarFallback = locale == .en ? "Calendar" : "日历"
+        let rawNavCalendar = readString(defaults, key: "nav_calendar", fallback: navCalendarFallback)
+        let navCalendar = (locale == .en && rawNavCalendar == "日历") ? "Calendar" : (locale == .zh && rawNavCalendar == "Calendar" ? "日历" : rawNavCalendar)
+
+        let navFocusFallback = locale == .en ? "Focus" : "专注"
+        let rawNavFocus = readString(defaults, key: "nav_focus", fallback: navFocusFallback)
+        let navFocus = (locale == .en && rawNavFocus == "专注") ? "Focus" : (locale == .zh && rawNavFocus == "Focus" ? "专注" : rawNavFocus)
+
+        let focusTimerLabelFallback = locale == .en ? "Focus countdown" : "专注倒计时"
+        let rawTimerLabel = readString(defaults, key: "focus_timer_label", fallback: focusTimerLabelFallback)
+        let focusTimerLabel = (locale == .en && rawTimerLabel == "专注倒计时") ? "Focus countdown" : (locale == .zh && rawTimerLabel == "Focus countdown" ? "专注倒计时" : rawTimerLabel)
+
         return DuoyiWidgetEntry(
-            date: Date(),
-            config: config,
+            date: now,
+            config: localizedConfig,
+            locale: locale,
+            snapshot: snapshot,
             primary: primary,
             primaryTarget: primaryTarget,
             rows: rows,
             todoRows: todoRows,
-            brandTitle: readString(defaults, key: "brand_app_title", fallback: "多仪"),
-            navTodo: readString(defaults, key: "nav_todo", fallback: "待办"),
-            navHabit: readString(defaults, key: "nav_habit", fallback: "习惯"),
-            navCalendar: readString(defaults, key: "nav_calendar", fallback: "日历"),
-            navFocus: readString(defaults, key: "nav_focus", fallback: "专注"),
+            brandTitle: brandTitle,
+            navTodo: navTodo,
+            navHabit: navHabit,
+            navCalendar: navCalendar,
+            navFocus: navFocus,
             displayMode: readString(defaults, key: "widget_display_mode", fallback: "standard"),
-            habitQuickCheckId: readString(defaults, key: "habit_quick_check_id", fallback: ""),
-            focusTimerRunning: readBool(defaults, key: "focus_timer_running"),
-            focusTimerRemainingSeconds: readInt(defaults, key: "focus_timer_remaining_seconds"),
-            focusTimerTotalSeconds: readInt(defaults, key: "focus_timer_total_seconds"),
-            focusTimerEndsAtMillis: readInt64(defaults, key: "focus_timer_ends_at_millis"),
-            focusTimerLabel: readString(defaults, key: "focus_timer_label", fallback: "专注倒计时"),
-            theme: DuoyiWidgetTheme(defaults: defaults)
+            habitQuickCheckId: fresh ? readString(defaults, key: "habit_quick_check_id", fallback: "") : "",
+            focusTimerRunning: snapshot.hasPublishedSession ? readBool(defaults, key: "focus_timer_running") : false,
+            focusTimerRemainingSeconds: snapshot.hasPublishedSession ? readInt(defaults, key: "focus_timer_remaining_seconds") : 0,
+            focusTimerTotalSeconds: snapshot.hasPublishedSession ? readInt(defaults, key: "focus_timer_total_seconds") : 0,
+            focusTimerEndsAtMillis: snapshot.hasPublishedSession ? readInt64(defaults, key: "focus_timer_ends_at_millis") : 0,
+            focusTimerLabel: focusTimerLabel,
+            theme: DuoyiWidgetTheme(values: defaults)
         )
     }
 
-    private func readString(_ defaults: UserDefaults?, key: String, fallback: String) -> String {
-        guard let value = defaults?.string(forKey: key), !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+    private func readString(_ defaults: [String: Any], key: String, fallback: String) -> String {
+        guard let value = defaults[key] as? String, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return fallback
         }
         return value
     }
 
-    private func readPrimary(_ defaults: UserDefaults?) -> (title: String, target: String, sourceKey: String) {
-        var title = readString(defaults, key: config.primaryKey, fallback: config.fallback)
-        var target = readString(defaults, key: "\(config.primaryKey)_id", fallback: config.deepLink)
+    private func readPrimary(_ defaults: [String: Any], config: DuoyiWidgetConfig, locale: DuoyiWidgetLocale) -> (title: String, target: String, sourceKey: String) {
+        let rawTitle = readString(defaults, key: config.primaryKey, fallback: config.fallback)
+        let itemTarget = readString(defaults, key: "\(config.primaryKey)_id", fallback: "")
+        var target = itemTarget.isEmpty ? config.deepLink : itemTarget
         var sourceKey = config.primaryKey
+        var title = itemTarget.isEmpty
+            ? localizedFallbackString(rawTitle, kind: config.kind, locale: locale)
+            : rawTitle
 
         if config.kind == "DuoyiAnniversaryWidget" {
             let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmedTitle == config.fallback {
+            if isAnniversaryFallback(trimmedTitle) {
                 let memorialTitle = readString(defaults, key: "memorial_highlight_1", fallback: "")
                 let trimmedMemorialTitle = memorialTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmedMemorialTitle.isEmpty && trimmedMemorialTitle != config.fallback {
+                if !trimmedMemorialTitle.isEmpty && !isAnniversaryFallback(trimmedMemorialTitle) {
                     title = memorialTitle
                     target = readString(defaults, key: "memorial_highlight_1_id", fallback: config.deepLink)
                     sourceKey = "memorial_highlight_1"
@@ -280,16 +521,16 @@ private struct DuoyiWidgetProvider: TimelineProvider {
         return (title, target, sourceKey)
     }
 
-    private func readBool(_ defaults: UserDefaults?, key: String) -> Bool {
-        defaults?.bool(forKey: key) ?? false
+    private func readBool(_ defaults: [String: Any], key: String) -> Bool {
+        (defaults[key] as? NSNumber)?.boolValue ?? false
     }
 
-    private func readInt(_ defaults: UserDefaults?, key: String) -> Int {
-        defaults?.integer(forKey: key) ?? 0
+    private func readInt(_ defaults: [String: Any], key: String) -> Int {
+        Int(readInt64(defaults, key: key))
     }
 
-    private func readInt64(_ defaults: UserDefaults?, key: String) -> Int64 {
-        guard let value = defaults?.object(forKey: key) else {
+    private func readInt64(_ defaults: [String: Any], key: String) -> Int64 {
+        guard let value = defaults[key] else {
             return 0
         }
         if let number = value as? NSNumber {
@@ -301,7 +542,7 @@ private struct DuoyiWidgetProvider: TimelineProvider {
         return 0
     }
 
-    private func readTodoRows(_ defaults: UserDefaults?) -> [DuoyiTodoRow] {
+    private func readTodoRows(_ defaults: [String: Any], locale: DuoyiWidgetLocale, snapshot: DuoyiWidgetSnapshot) -> [DuoyiTodoRow] {
         guard config.kind == "DuoyiTodoWidget" else {
             return []
         }
@@ -310,15 +551,19 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 return nil
             }
+            let todoId = readString(defaults, key: "todo_top3_\(index)_id", fallback: "")
             return DuoyiTodoRow(
                 index: index,
-                title: title,
-                todoId: readString(defaults, key: "todo_top3_\(index)_id", fallback: "")
+                title: todoId.isEmpty
+                    ? localizedFallbackString(title, kind: config.kind, locale: locale)
+                    : title,
+                todoId: todoId,
+                snapshot: snapshot
             )
         }
     }
 
-    private func readRows(_ defaults: UserDefaults?, excluding excludedKey: String? = nil) -> [DuoyiWidgetRow] {
+    private func readRows(_ defaults: [String: Any], config: DuoyiWidgetConfig, locale: DuoyiWidgetLocale, excluding excludedKey: String? = nil) -> [DuoyiWidgetRow] {
         return config.rowKeys.enumerated().compactMap { offset, key in
             if let excludedKey = excludedKey, key == excludedKey {
                 return nil
@@ -327,10 +572,13 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 return nil
             }
+            let itemTarget = readString(defaults, key: "\(key)_id", fallback: "")
             return DuoyiWidgetRow(
                 index: offset + 2,
-                title: title,
-                target: readString(defaults, key: "\(key)_id", fallback: config.deepLink)
+                title: itemTarget.isEmpty
+                    ? localizedFallbackString(title, kind: config.kind, locale: locale)
+                    : title,
+                target: itemTarget.isEmpty ? config.deepLink : itemTarget
             )
         }
     }
@@ -435,7 +683,7 @@ private struct DuoyiWidgetView: View {
 
     private func linkedText(_ title: String, target: String, primary: Bool) -> some View {
         Group {
-            if let url = URL(string: target), !target.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let url = entry.snapshot.actionURL(URLComponents(string: target)), !target.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Link(destination: url) {
                     rowText(title, primary: primary)
                 }
@@ -513,8 +761,13 @@ private struct DuoyiWidgetView: View {
                 ZStack {
                     AccessoryWidgetBackground()
                     VStack(spacing: 2) {
-                        Text(accessorySymbol)
-                            .font(.system(size: 18, weight: .bold))
+                        if entry.locale == .en {
+                            Image(systemName: accessorySFSymbol)
+                                .font(.system(size: 15, weight: .semibold))
+                        } else {
+                            Text(accessorySymbol)
+                                .font(.system(size: 18, weight: .bold))
+                        }
                         Text(accessoryShortText)
                             .font(.system(size: 9, weight: .semibold))
                             .lineLimit(1)
@@ -610,7 +863,7 @@ private struct DuoyiWidgetView: View {
     }
 
     private func cleanRow(_ row: String) -> String {
-        row.replacingOccurrences(of: "· ", with: "")
+        row.hasPrefix("· ") ? String(row.dropFirst(2)) : row
     }
 
     private var spacing: CGFloat {
@@ -665,14 +918,47 @@ private struct DuoyiWidgetView: View {
     }
 
     private var accessoryShortText: String {
+        if entry.config.kind == "DuoyiFocusWidget",
+           entry.focusTimerRunning,
+           entry.focusTimerRemainingSeconds > 0 {
+            let minutes = max(1, (entry.focusTimerRemainingSeconds + 59) / 60)
+            return entry.locale == .en ? "\(minutes)m" : "\(minutes)分"
+        }
         let text = accessoryPrimaryText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            return entry.config.title
+            return entry.locale == .en ? "None" : "暂无"
+        }
+        if isKnownFallback(text) {
+            return entry.locale == .en ? "None" : "暂无"
         }
         return String(text.prefix(4))
     }
 
     private var accessorySymbol: String {
+        if entry.locale == .en {
+            switch entry.config.kind {
+            case "DuoyiTodoWidget":
+                return "✓"
+            case "DuoyiFocusWidget":
+                return "⏱"
+            case "DuoyiHabitWidget":
+                return "★"
+            case "DuoyiCalendarWidget", "DuoyiScheduleWidget":
+                return "📅"
+            case "DuoyiGoalWidget":
+                return "🎯"
+            case "DuoyiCourseWidget":
+                return "📚"
+            case "DuoyiNoteWidget":
+                return "📝"
+            case "DuoyiAnniversaryWidget":
+                return "♥"
+            case "DuoyiDiaryWidget":
+                return "📖"
+            default:
+                return "D"
+            }
+        }
         switch entry.config.kind {
         case "DuoyiTodoWidget":
             return "待"
@@ -697,9 +983,67 @@ private struct DuoyiWidgetView: View {
         }
     }
 
+    private var accessorySFSymbol: String {
+        switch entry.config.kind {
+        case "DuoyiTodoWidget":
+            return "checkmark.circle"
+        case "DuoyiFocusWidget":
+            return "timer"
+        case "DuoyiHabitWidget":
+            return "flame"
+        case "DuoyiCalendarWidget":
+            return "calendar"
+        case "DuoyiScheduleWidget":
+            return "clock"
+        case "DuoyiGoalWidget":
+            return "target"
+        case "DuoyiCourseWidget":
+            return "book"
+        case "DuoyiNoteWidget":
+            return "square.and.pencil"
+        case "DuoyiAnniversaryWidget":
+            return "heart"
+        case "DuoyiDiaryWidget":
+            return "book.closed"
+        default:
+            return "app"
+        }
+    }
+
+    private func isKnownFallback(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed == entry.config.fallback {
+            return true
+        }
+        switch entry.config.kind {
+        case "DuoyiTodoWidget":
+            return trimmed == "今天没有未完成待办" || trimmed == "No open tasks today"
+        case "DuoyiFocusWidget":
+            return trimmed == "25 分钟专注" || trimmed == "25-min focus"
+        case "DuoyiHabitWidget":
+            return trimmed == "今日习惯待打卡" || trimmed == "Habits to check in today"
+        case "DuoyiCalendarWidget":
+            return trimmed == "本月日期 · 今日已标记" || trimmed == "Month view · today is marked"
+        case "DuoyiScheduleWidget":
+            return trimmed == "今日没有日程" || trimmed == "No events today"
+        case "DuoyiGoalWidget":
+            return trimmed == "暂无进行中目标" || trimmed == "No active goals"
+        case "DuoyiCourseWidget":
+            return trimmed == "今日暂无课程" || trimmed == "No courses today"
+        case "DuoyiNoteWidget":
+            return trimmed == "暂无随手记" || trimmed == "No notes yet"
+        case "DuoyiAnniversaryWidget":
+            return trimmed == "暂无近期纪念日" || trimmed == "No upcoming anniversaries" || trimmed == "暂无纪念日"
+        case "DuoyiDiaryWidget":
+            return trimmed == "暂无日记" || trimmed == "No diary entries yet"
+        default:
+            return false
+        }
+    }
+
     private func formatMinutes(_ seconds: Int) -> String {
         let minutes = max(1, (seconds + 59) / 60)
-        return "\(minutes)分"
+        return entry.locale == .en ? "\(minutes) min" : "\(minutes)分"
     }
 
     private var quickURL: URL? {
@@ -710,9 +1054,9 @@ private struct DuoyiWidgetView: View {
             }
             var components = URLComponents(string: "duoyi://action/checkin_habit")
             components?.queryItems = [URLQueryItem(name: "id", value: id)]
-            return components?.url
+            return entry.snapshot.actionURL(components)
         }
-        return URL(string: entry.config.quickActionLink)
+        return entry.snapshot.actionURL(URLComponents(string: entry.config.quickActionLink))
     }
 }
 
@@ -725,19 +1069,25 @@ private let todoConfig = DuoyiWidgetConfig(
     fallback: "今天没有未完成待办",
     rowKeys: ["todo_top3_2", "todo_top3_3"],
     quickActionTitle: "+ 添加",
-    quickActionLink: "duoyi://action/quick_todo"
+    quickActionLink: "duoyi://action/quick_todo",
+    titleEn: "Today's Tasks",
+    fallbackEn: "No open tasks today",
+    quickActionTitleEn: "+ Add"
 )
 
 private let focusConfig = DuoyiWidgetConfig(
     kind: "DuoyiFocusWidget",
     title: "专注",
-    deepLink: "duoyi://action/start_pomodoro",
+    deepLink: "duoyi://focus",
     accent: .red,
     primaryKey: "next_focus_label",
     fallback: "25 分钟专注",
     rowKeys: ["focus_summary", "streak_summary"],
     quickActionTitle: "开始",
-    quickActionLink: "duoyi://action/start_pomodoro"
+    quickActionLink: "duoyi://action/start_pomodoro",
+    titleEn: "Focus",
+    fallbackEn: "25-min focus",
+    quickActionTitleEn: "Start"
 )
 
 private let habitConfig = DuoyiWidgetConfig(
@@ -749,7 +1099,10 @@ private let habitConfig = DuoyiWidgetConfig(
     fallback: "今日习惯待打卡",
     rowKeys: ["habit_quick_check_label", "streak_summary"],
     quickActionTitle: "打卡",
-    quickActionLink: "duoyi://habit"
+    quickActionLink: "duoyi://habit",
+    titleEn: "Habits",
+    fallbackEn: "Habits to check in today",
+    quickActionTitleEn: "Check In"
 )
 
 private let calendarConfig = DuoyiWidgetConfig(
@@ -761,7 +1114,10 @@ private let calendarConfig = DuoyiWidgetConfig(
     fallback: "本月日期 · 今日已标记",
     rowKeys: ["today_event_summary", "schedule_highlight_2"],
     quickActionTitle: "打开",
-    quickActionLink: "duoyi://calendar"
+    quickActionLink: "duoyi://calendar",
+    titleEn: "Calendar",
+    fallbackEn: "Month view · today is marked",
+    quickActionTitleEn: "Open"
 )
 
 private let scheduleConfig = DuoyiWidgetConfig(
@@ -773,7 +1129,10 @@ private let scheduleConfig = DuoyiWidgetConfig(
     fallback: "今日没有日程",
     rowKeys: ["schedule_highlight_1", "schedule_highlight_2", "schedule_highlight_3"],
     quickActionTitle: "打开",
-    quickActionLink: "duoyi://calendar"
+    quickActionLink: "duoyi://calendar",
+    titleEn: "Today's Schedule",
+    fallbackEn: "No events today",
+    quickActionTitleEn: "Open"
 )
 
 private let goalConfig = DuoyiWidgetConfig(
@@ -785,7 +1144,10 @@ private let goalConfig = DuoyiWidgetConfig(
     fallback: "暂无进行中目标",
     rowKeys: ["goal_highlight_2", "goal_highlight_3"],
     quickActionTitle: "查看",
-    quickActionLink: "duoyi://goal"
+    quickActionLink: "duoyi://goal",
+    titleEn: "Goals",
+    fallbackEn: "No active goals",
+    quickActionTitleEn: "View"
 )
 
 private let courseConfig = DuoyiWidgetConfig(
@@ -797,7 +1159,10 @@ private let courseConfig = DuoyiWidgetConfig(
     fallback: "今日暂无课程",
     rowKeys: ["course_highlight_2", "today_event_summary"],
     quickActionTitle: "课表",
-    quickActionLink: "duoyi://course"
+    quickActionLink: "duoyi://course",
+    titleEn: "Courses",
+    fallbackEn: "No courses today",
+    quickActionTitleEn: "Courses"
 )
 
 private let noteConfig = DuoyiWidgetConfig(
@@ -809,7 +1174,10 @@ private let noteConfig = DuoyiWidgetConfig(
     fallback: "暂无随手记",
     rowKeys: ["note_highlight_2", "note_highlight_3"],
     quickActionTitle: "记录",
-    quickActionLink: "duoyi://note"
+    quickActionLink: "duoyi://note",
+    titleEn: "Quick Notes",
+    fallbackEn: "No notes yet",
+    quickActionTitleEn: "Note"
 )
 
 private let anniversaryConfig = DuoyiWidgetConfig(
@@ -821,7 +1189,10 @@ private let anniversaryConfig = DuoyiWidgetConfig(
     fallback: "暂无近期纪念日",
     rowKeys: ["anniversary_highlight_2", "memorial_highlight_1", "memorial_highlight_2", "memorial_highlight_3"],
     quickActionTitle: "查看",
-    quickActionLink: "duoyi://anniversary"
+    quickActionLink: "duoyi://anniversary",
+    titleEn: "Anniversary",
+    fallbackEn: "No upcoming anniversaries",
+    quickActionTitleEn: "View"
 )
 
 private let diaryConfig = DuoyiWidgetConfig(
@@ -833,18 +1204,23 @@ private let diaryConfig = DuoyiWidgetConfig(
     fallback: "暂无日记",
     rowKeys: ["diary_highlight_2", "diary_highlight_3"],
     quickActionTitle: "写日记",
-    quickActionLink: "duoyi://diary"
+    quickActionLink: "duoyi://diary",
+    titleEn: "Diary",
+    fallbackEn: "No diary entries yet",
+    quickActionTitleEn: "Write"
 )
 
 private struct DuoyiAnyWidget: Widget {
     let config: DuoyiWidgetConfig
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: config.kind, provider: DuoyiWidgetProvider(config: config)) { entry in
+        let locale = DuoyiWidgetLocale.resolve(UserDefaults(suiteName: appGroupId))
+        let localizedConfig = config.localized(for: locale)
+        return StaticConfiguration(kind: config.kind, provider: DuoyiWidgetProvider(config: config)) { entry in
             DuoyiWidgetView(entry: entry)
         }
-        .configurationDisplayName(config.title)
-        .description("多仪 \(config.title) 小组件")
+        .configurationDisplayName(Text(localizedConfig.title))
+        .description(Text(localizedConfig.galleryDescription(for: locale)))
         .supportedFamilies(supportedFamilies)
     }
 

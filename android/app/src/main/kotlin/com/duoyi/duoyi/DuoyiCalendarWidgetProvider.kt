@@ -1,7 +1,6 @@
 package com.duoyi.duoyi
 
 import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -11,9 +10,7 @@ import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Locale
 
 /** "月历" 小组件。 */
 open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
@@ -72,12 +69,12 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
                 prefs,
                 secondaryIds = intArrayOf(R.id.widget_calendar_today_button),
             )
+            val isZh = DuoyiWidgetCopy.isZh(prefs)
             val now = Calendar.getInstance()
             val height = appWidgetManager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
             val compact = DuoyiWidgetDisplayMode.isCompact(prefs, id) || height in 1..129
             val detailed = DuoyiWidgetDisplayMode.isDetailed(prefs, id) && (height == 0 || height >= 180)
-            val monthPattern = if (compact) "M月" else "yyyy年M月"
-            val monthTitle = SimpleDateFormat(monthPattern, Locale.getDefault()).format(now.time)
+            val monthTitle = DuoyiWidgetCopy.calendarMonthTitle(now, compact, isZh)
 
             views.setViewVisibility(
                 R.id.widget_calendar_title,
@@ -85,10 +82,11 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
             )
             views.setTextViewText(
                 R.id.widget_calendar_title,
-                prefs.getString("brand_app_title", "多仪") ?: "多仪"
+                DuoyiWidgetCopy.appTitle(prefs, isZh)
             )
             views.setTextViewText(R.id.widget_calendar_month, monthTitle)
-            views.setTextViewText(R.id.widget_calendar_grid, buildMonthGrid(now, compact, detailed))
+            views.setTextViewText(R.id.widget_calendar_today_button, DuoyiWidgetCopy.calendarTodayButton(isZh))
+            views.setTextViewText(R.id.widget_calendar_grid, buildMonthGrid(now, compact, detailed, isZh))
             views.setTextViewTextSize(
                 R.id.widget_calendar_grid,
                 TypedValue.COMPLEX_UNIT_SP,
@@ -96,7 +94,7 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
             )
             views.setTextViewText(
                 R.id.widget_calendar_summary,
-                prefs.getString("calendar_month_summary", "本月日期 · 今日已标记") ?: "本月日期 · 今日已标记"
+                DuoyiWidgetCopy.calendarMonthSummary(prefs.getString("calendar_month_summary", null), isZh)
             )
             views.setViewVisibility(
                 R.id.widget_calendar_summary,
@@ -107,10 +105,10 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
             )
 
-            val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
-            val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
-            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
-            val tabFocus = prefs.getString("nav_focus", "专注") ?: "专注"
+            val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
+            val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
+            val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
+            val tabFocus = DuoyiWidgetCopy.navFocus(prefs, isZh)
             views.setTextViewText(R.id.widget_calendar_nav_todo, tabTodo)
             views.setTextViewText(R.id.widget_calendar_nav_habit, tabHabit)
             views.setTextViewText(R.id.widget_calendar_nav_calendar, tabCalendar)
@@ -145,7 +143,7 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
         }
     }
 
-    private fun buildMonthGrid(now: Calendar, compact: Boolean, detailed: Boolean): String {
+    private fun buildMonthGrid(now: Calendar, compact: Boolean, detailed: Boolean, isZh: Boolean): String {
         val cal = now.clone() as Calendar
         val today = cal.get(Calendar.DAY_OF_MONTH)
         cal.set(Calendar.DAY_OF_MONTH, 1)
@@ -161,7 +159,7 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
             detailed -> 0..5
             else -> maxOf(0, currentWeek - 1)..minOf(5, currentWeek + 2)
         }
-        val lines = mutableListOf("一 二 三 四 五 六 日")
+        val lines = mutableListOf(DuoyiWidgetCopy.calendarWeekdayHeader(isZh))
         for (week in visibleWeeks) {
             lines += cells.subList(week * 7, week * 7 + 7).joinToString(" ")
         }

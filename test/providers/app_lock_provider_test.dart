@@ -54,7 +54,12 @@ void main() {
     expect(source, contains(r"RegExp(r'^\d{4,8}$')"));
     expect(source, contains("I18n.tr('app_lock.pin_invalid')"));
     expect(source, contains('try {'));
-    expect(source, contains('ctrl.dispose();'));
+    final dialogState = source.substring(
+      source.indexOf('class _PinInputDialogState'),
+    );
+    expect(dialogState, contains('void dispose()'));
+    expect(dialogState, contains('_controller.dispose();'));
+    expect(dialogState, contains('I18n.localeListenable.removeListener'));
 
     final i18n = File('lib/core/i18n.dart').readAsStringSync();
     expect(i18n, contains("'app_lock.pin_invalid': '需要 4-8 位数字'"));

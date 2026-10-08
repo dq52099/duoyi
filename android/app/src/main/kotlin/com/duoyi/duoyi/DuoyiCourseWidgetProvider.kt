@@ -65,14 +65,15 @@ open class DuoyiCourseWidgetProvider : DuoyiStyledWidgetProvider() {
                 ),
             )
 
+            val isZh = DuoyiWidgetCopy.isZh(prefs)
             views.setTextViewText(
                 R.id.widget_course_title,
-                prefs.getString("brand_app_title", "多仪") ?: "多仪"
+                DuoyiWidgetCopy.appTitle(prefs, isZh)
             )
-            views.setTextViewText(R.id.widget_course_subtitle, "今日课程")
+            views.setTextViewText(R.id.widget_course_subtitle, DuoyiWidgetCopy.courseSubtitle(isZh))
             views.setTextViewText(
                 R.id.widget_course_1,
-                prefs.getString("course_highlight_1", "· 今日暂无课程") ?: "· 今日暂无课程"
+                DuoyiWidgetCopy.courseHighlight1(prefs.getString("course_highlight_1", null), isZh)
             )
             views.setTextViewText(
                 R.id.widget_course_2,
@@ -95,10 +96,10 @@ open class DuoyiCourseWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
             )
 
-            val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
-            val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
-            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
-            val tabFocus = prefs.getString("nav_focus", "专注") ?: "专注"
+            val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
+            val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
+            val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
+            val tabFocus = DuoyiWidgetCopy.navFocus(prefs, isZh)
             views.setTextViewText(R.id.widget_course_nav_todo, tabTodo)
             views.setTextViewText(R.id.widget_course_nav_habit, tabHabit)
             views.setTextViewText(R.id.widget_course_nav_calendar, tabCalendar)

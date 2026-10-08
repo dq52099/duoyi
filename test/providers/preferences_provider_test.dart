@@ -87,14 +87,13 @@ void main() {
     expect(source, contains("I18n.tr('preferences.nav.fixed')"));
     expect(source, contains('class _NavConfigActions'));
     expect(source, contains(r"ValueKey('bottom_nav_actions_$tab')"));
-    expect(source, contains('width: 138'));
-    expect(source, contains('BoxConstraints.tightFor(width: 36, height: 36)'));
+    expect(source, contains('BoxConstraints.tightFor(width: 44, height: 44)'));
     expect(source, contains('PreferencesProvider.maxBottomNavTabs'));
     expect(source, contains('reachedLimit'));
     expect(source, contains('? null'));
   });
 
-  test('底部导航设置 320px trailing 操作组使用固定紧凑宽度', () {
+  test('底部导航设置在窄屏和放大字体下为名称保留独立一行', () {
     final source = File(
       'lib/screens/preferences_screen.dart',
     ).readAsStringSync();
@@ -107,14 +106,15 @@ void main() {
       source.indexOf('class _SliderSetting'),
     );
 
-    expect(navTileSource, contains('trailing: _NavConfigActions('));
+    expect(navTileSource, contains('LayoutBuilder('));
+    expect(navTileSource, contains('textScaler'));
+    expect(navTileSource, contains('Expanded(child: textColumn)'));
+    expect(navTileSource, contains('children: [actionsWidget]'));
     expect(actionsSource, contains(r"ValueKey('bottom_nav_actions_$tab')"));
-    expect(actionsSource, contains('width: 138'));
     expect(
       actionsSource,
-      contains('BoxConstraints.tightFor(width: 36, height: 36)'),
+      contains('BoxConstraints.tightFor(width: 44, height: 44)'),
     );
-    expect(actionsSource, contains('width: 56'));
     expect(actionsSource, isNot(contains('mainAxisSize: MainAxisSize.max')));
   });
 
@@ -137,11 +137,11 @@ void main() {
 
     expect(source, contains('class _PreferenceMenuGroup'));
     expect(source, contains('_PreferenceSectionMenu('));
-    expect(source, contains("title: '显示默认'"));
-    expect(source, contains("label: '日期日历'"));
-    expect(source, contains("label: '默认行为'"));
-    expect(source, contains("label: '交互归档'"));
-    expect(source, contains("title: '导航入口'"));
+    expect(source, contains('title: SettingsUiCopy.jumpToMenuTitle'));
+    expect(source, contains('label: SettingsUiCopy.jumpToDate'));
+    expect(source, contains('label: SettingsUiCopy.jumpToDefaults'));
+    expect(source, contains('label: SettingsUiCopy.jumpToInteraction'));
+    expect(source, contains('title: SettingsUiCopy.navigationSectionTitle'));
     expect(source, contains('const BottomNavSettingsScreen()'));
     expect(source, contains('fontSize: 11'));
     expect(source, contains('appSecondaryMenuItemTextStyle('));

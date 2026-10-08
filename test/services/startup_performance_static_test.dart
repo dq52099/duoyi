@@ -134,6 +134,32 @@ void main() {
       expect(main, contains('String lastHomeWidgetDataSignature = \'\';'));
       expect(main, contains('String homeWidgetDataRevisionSignature()'));
       expect(main, contains('_homeWidgetDataRevisionSignature('));
+      final widgetDataSignatureStart = main.indexOf(
+        'String _homeWidgetDataRevisionSignature(',
+      );
+      final widgetDataSignatureEnd = main.indexOf(
+        '\nint _homeWidgetTodoRevision(',
+        widgetDataSignatureStart,
+      );
+      expect(widgetDataSignatureStart, greaterThanOrEqualTo(0));
+      expect(widgetDataSignatureEnd, greaterThan(widgetDataSignatureStart));
+      final widgetDataSignature = main.substring(
+        widgetDataSignatureStart,
+        widgetDataSignatureEnd,
+      );
+      expect(widgetDataSignature, contains('now.timeZoneOffset.inMinutes'));
+      expect(widgetDataSignature, contains('I18n.current.name'));
+      final localeListenerStart = main.indexOf(
+        '  localeProvider.addListener(() {',
+      );
+      final localeListenerEnd = main.indexOf('\n  });', localeListenerStart);
+      expect(localeListenerStart, greaterThanOrEqualTo(0));
+      expect(localeListenerEnd, greaterThan(localeListenerStart));
+      final localeListener = main.substring(
+        localeListenerStart,
+        localeListenerEnd,
+      );
+      expect(localeListener, contains('queueHomeWidgetPush();'));
       expect(
         main,
         contains('if (dataSignature != lastHomeWidgetDataSignature)'),

@@ -68,27 +68,28 @@ open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
 
             DuoyiWidgetTheme.applyButtonSurfaces(views, prefs, secondaryIds = intArrayOf(R.id.widget_habit_hint))
 
+            val isZh = DuoyiWidgetCopy.isZh(prefs)
             views.setTextViewText(
                 R.id.widget_habit_title,
-                prefs.getString("brand_app_title", "多仪") ?: "多仪"
+                DuoyiWidgetCopy.appTitle(prefs, isZh)
             )
             val noHabitsToday = prefs.getInt("habit_active_count", -1) == 0
             views.setTextViewText(R.id.widget_habit_percent,
                 if (noHabitsToday) "—" else "${prefs.getInt("habit_percent", 0).coerceIn(0, 100)}%")
-            views.setTextViewText(R.id.widget_habit_subtitle, "今日习惯")
+            views.setTextViewText(R.id.widget_habit_subtitle, DuoyiWidgetCopy.habitSubtitle(isZh))
             views.setTextViewText(
                 R.id.widget_habit_summary,
-                prefs.getString("habit_summary", "· 今日习惯待打卡") ?: "· 今日习惯待打卡"
+                DuoyiWidgetCopy.habitSummary(prefs.getString("habit_summary", null), isZh)
             )
             views.setTextViewText(
                 R.id.widget_habit_streak,
-                prefs.getString("streak_summary", "· 连续记录 0 天") ?: "· 连续记录 0 天"
+                DuoyiWidgetCopy.streakSummary(prefs.getString("streak_summary", null), isZh)
             )
             val habitQuickCheckId = prefs.getString("habit_quick_check_id", "") ?: ""
-            val habitQuickCheckLabel = prefs.getString(
-                "habit_quick_check_label",
-                "点击进入习惯打卡"
-            ) ?: "点击进入习惯打卡"
+            val habitQuickCheckLabel = DuoyiWidgetCopy.habitQuickCheckLabel(
+                prefs.getString("habit_quick_check_label", null),
+                isZh
+            )
             views.setTextViewText(R.id.widget_habit_hint, habitQuickCheckLabel)
             views.setContentDescription(R.id.widget_habit_hint, habitQuickCheckLabel)
             views.setViewVisibility(
@@ -105,10 +106,10 @@ open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 android.view.View.VISIBLE
             )
 
-            val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
-            val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
-            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
-            val tabFocus = prefs.getString("nav_focus", "专注") ?: "专注"
+            val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
+            val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
+            val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
+            val tabFocus = DuoyiWidgetCopy.navFocus(prefs, isZh)
             views.setTextViewText(R.id.widget_habit_nav_todo, tabTodo)
             views.setTextViewText(R.id.widget_habit_nav_habit, tabHabit)
             views.setTextViewText(R.id.widget_habit_nav_calendar, tabCalendar)

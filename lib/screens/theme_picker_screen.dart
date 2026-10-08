@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_brand.dart';
+import '../core/data_settings_ui_copy.dart';
 import '../core/i18n.dart';
 import '../providers/achievement_provider.dart';
 import '../providers/auth_provider.dart';
@@ -145,7 +146,12 @@ class ThemePickerScreen extends StatelessWidget {
         messenger.hideCurrentSnackBar();
         messenger.showSnackBar(
           SnackBar(
-            content: Text(userVisibleApiError(e, fallbackMessage: '主题保存失败')),
+            content: Text(
+              userVisibleApiError(
+                e,
+                fallbackMessage: DataSettingsUiCopy.themeSaveFailed,
+              ),
+            ),
           ),
         );
         return false;
@@ -165,7 +171,11 @@ class ThemePickerScreen extends StatelessWidget {
         messenger.hideCurrentSnackBar();
         messenger.showSnackBar(
           SnackBar(
-            content: Text('时光币不足，还差 ${cost - achievementProvider.coinBalance}'),
+            content: Text(
+              DataSettingsUiCopy.insufficientCoins(
+                cost - achievementProvider.coinBalance,
+              ),
+            ),
           ),
         );
         return false;
@@ -236,8 +246,8 @@ class ThemePickerScreen extends StatelessWidget {
       SnackBar(
         content: Text(
           isUnlocked
-              ? '已启用 ${_styleName(brand)}'
-              : '已兑换并启用 ${_styleName(brand)}',
+              ? DataSettingsUiCopy.themeApplied(_styleName(brand))
+              : DataSettingsUiCopy.themeRedeemedAndApplied(_styleName(brand)),
         ),
       ),
     );
@@ -275,12 +285,18 @@ class ThemePickerScreen extends StatelessWidget {
     if (!ok) {
       return;
     }
+    final backdropDisplayName = DataSettingsUiCopy.focusBackdropName(
+      backdrop.id,
+      backdrop.name,
+    );
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          isUnlocked ? '已启用 ${backdrop.name}' : '已兑换并启用 ${backdrop.name}',
+          isUnlocked
+              ? DataSettingsUiCopy.themeApplied(backdropDisplayName)
+              : DataSettingsUiCopy.themeRedeemedAndApplied(backdropDisplayName),
         ),
       ),
     );
@@ -318,12 +334,18 @@ class ThemePickerScreen extends StatelessWidget {
     if (!ok) {
       return;
     }
+    final frameDisplayName = DataSettingsUiCopy.avatarFrameName(
+      frame.id,
+      frame.name,
+    );
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          isUnlocked ? '已启用 ${frame.name}' : '已兑换并启用 ${frame.name}',
+          isUnlocked
+              ? DataSettingsUiCopy.themeApplied(frameDisplayName)
+              : DataSettingsUiCopy.themeRedeemedAndApplied(frameDisplayName),
         ),
       ),
     );
@@ -361,11 +383,16 @@ class ThemePickerScreen extends StatelessWidget {
     if (!ok) {
       return;
     }
+    final skinDisplayName = DataSettingsUiCopy.cardSkinName(skin.id, skin.name);
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
-        content: Text(isUnlocked ? '已启用 ${skin.name}' : '已兑换并启用 ${skin.name}'),
+        content: Text(
+          isUnlocked
+              ? DataSettingsUiCopy.themeApplied(skinDisplayName)
+              : DataSettingsUiCopy.themeRedeemedAndApplied(skinDisplayName),
+        ),
       ),
     );
   }
@@ -383,7 +410,13 @@ class ThemePickerScreen extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
-      SnackBar(content: Text(ok ? '小组件背景已切换为 $label' : '请先解锁该主题')),
+      SnackBar(
+        content: Text(
+          ok
+              ? DataSettingsUiCopy.widgetBackgroundSwitched(label)
+              : DataSettingsUiCopy.unlockThemeFirst,
+        ),
+      ),
     );
   }
 
@@ -400,11 +433,20 @@ class ThemePickerScreen extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
-      SnackBar(content: Text(ok ? '小组件卡片皮肤已切换为 $label' : '请先解锁该卡片皮肤')),
+      SnackBar(
+        content: Text(
+          ok
+              ? DataSettingsUiCopy.widgetCardSkinSwitched(label)
+              : DataSettingsUiCopy.unlockCardSkinFirst,
+        ),
+      ),
     );
   }
 
-  Widget _focusBackdropPreview(FocusBackdropReward backdrop) {
+  Widget _focusBackdropPreview(
+    BuildContext context,
+    FocusBackdropReward backdrop,
+  ) {
     return Container(
       width: 52,
       height: 52,
@@ -414,7 +456,9 @@ class ThemePickerScreen extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(
+          appSurfaceStyleOf(context)?.smallTileRadius ?? 14,
+        ),
       ),
       child: Icon(backdrop.icon, color: Colors.white, size: 26),
     );
@@ -440,7 +484,11 @@ class ThemePickerScreen extends StatelessWidget {
     );
   }
 
-  Widget _cardSkinPreview(CardSkinReward skin, ColorScheme cs) {
+  Widget _cardSkinPreview(
+    BuildContext context,
+    CardSkinReward skin,
+    ColorScheme cs,
+  ) {
     return Container(
       width: 52,
       height: 52,
@@ -451,7 +499,9 @@ class ThemePickerScreen extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(
+          appSurfaceStyleOf(context)?.smallTileRadius ?? 14,
+        ),
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.45)),
       ),
       child: Align(
@@ -472,19 +522,20 @@ class ThemePickerScreen extends StatelessWidget {
       label: Text(label),
       selected: selected,
       onSelected: (_) => onTap(),
-      labelStyle: appSecondaryMenuItemTextStyle(
-        context,
-      ).copyWith(color: selected ? cs.onSurface : cs.onSurfaceVariant),
+      labelStyle: appSecondaryMenuItemTextStyle(context).copyWith(
+        fontWeight: FontWeight.normal,
+        color: selected ? cs.primary : cs.onSurfaceVariant,
+      ),
       selectedColor: Color.alphaBlend(
-        cs.primary.withValues(alpha: 0.11),
+        cs.primary.withValues(alpha: 0.14),
         cs.surface,
       ),
       backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.42),
       side: BorderSide(
         color: selected
-            ? cs.primary.withValues(alpha: 0.24)
+            ? cs.primary.withValues(alpha: 0.38)
             : cs.outlineVariant.withValues(alpha: 0.16),
-        width: 0.45,
+        width: 0.5,
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       showCheckmark: false,
@@ -502,13 +553,23 @@ class ThemePickerScreen extends StatelessWidget {
         .where((skin) => provider.isCardSkinUnlocked(skin.id))
         .toList(growable: false);
     final backgroundChoices = <({String id, String label})>[
-      (id: ThemeProvider.widgetFollowThemeId, label: '跟随当前主题'),
+      (
+        id: ThemeProvider.widgetFollowThemeId,
+        label: DataSettingsUiCopy.widgetFollowCurrentTheme,
+      ),
       for (final brand in availableBrands)
         (id: brand.id, label: _styleName(brand)),
     ];
     final cardSkinChoices = <({String id, String label})>[
-      (id: ThemeProvider.widgetFollowCardSkinId, label: '跟随卡片皮肤'),
-      for (final skin in availableSkins) (id: skin.id, label: skin.name),
+      (
+        id: ThemeProvider.widgetFollowCardSkinId,
+        label: DataSettingsUiCopy.widgetFollowCardSkin,
+      ),
+      for (final skin in availableSkins)
+        (
+          id: skin.id,
+          label: DataSettingsUiCopy.cardSkinName(skin.id, skin.name),
+        ),
     ];
 
     return AppSurfaceCard(
@@ -538,15 +599,16 @@ class ThemePickerScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '桌面小组件主题',
+                      DataSettingsUiCopy.widgetThemeTitle,
                       style: appSecondaryRouteTitleTextStyle(
                         context,
-                      ).copyWith(fontSize: 14),
+                      ).copyWith(fontSize: 14, fontWeight: FontWeight.normal),
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '单独调整桌面小组件背景和卡片皮肤',
+                      DataSettingsUiCopy.widgetThemeSubtitle,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.normal,
                         color: cs.onSurface.withValues(alpha: 0.66),
                       ),
                     ),
@@ -557,10 +619,11 @@ class ThemePickerScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '背景图',
-            style: appSecondaryControlTextStyle(
-              context,
-            ).copyWith(color: cs.onSurface.withValues(alpha: 0.72)),
+            DataSettingsUiCopy.widgetBackgroundLabel,
+            style: appSecondaryControlTextStyle(context).copyWith(
+              fontWeight: FontWeight.normal,
+              color: cs.onSurface.withValues(alpha: 0.72),
+            ),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -583,10 +646,11 @@ class ThemePickerScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '卡片皮肤',
-            style: appSecondaryControlTextStyle(
-              context,
-            ).copyWith(color: cs.onSurface.withValues(alpha: 0.72)),
+            DataSettingsUiCopy.widgetCardSkinLabel,
+            style: appSecondaryControlTextStyle(context).copyWith(
+              fontWeight: FontWeight.normal,
+              color: cs.onSurface.withValues(alpha: 0.72),
+            ),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -614,125 +678,133 @@ class ThemePickerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final achievementProvider = context.watch<AchievementProvider>();
-    final authProvider = context.watch<AuthProvider>();
-    final currentBrand = themeProvider.brand;
-    final cs = Theme.of(context).colorScheme;
-    final routeBackground = Theme.of(context).brightness == Brightness.dark
-        ? cs.surface
-        : cs.surfaceContainerLowest;
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final themeProvider = context.watch<ThemeProvider>();
+        final achievementProvider = context.watch<AchievementProvider>();
+        final authProvider = context.watch<AuthProvider>();
+        final currentBrand = themeProvider.brand;
+        final cs = Theme.of(context).colorScheme;
+        final routeBackground = Theme.of(context).brightness == Brightness.dark
+            ? cs.surface
+            : cs.surfaceContainerLowest;
 
-    return Scaffold(
-      backgroundColor: routeBackground,
-      appBar: AppBar(
-        title: Text(I18n.tr('theme.title')),
-        titleTextStyle: appSecondaryRouteTitleTextStyle(context),
-        backgroundColor: routeBackground.withValues(alpha: 0.96),
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: AppSecondaryControlTheme(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-          children: [
-            AppSurfaceCard(
-              padding: const EdgeInsets.all(16),
-              gradient: LinearGradient(
-                colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      Icons.palette_outlined,
-                      color: cs.primary,
-                      size: 28,
-                    ),
+        return Scaffold(
+          backgroundColor: routeBackground,
+          appBar: AppBar(
+            title: Text(I18n.tr('theme.title')),
+            titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+            backgroundColor: routeBackground.withValues(alpha: 0.96),
+            surfaceTintColor: Colors.transparent,
+          ),
+          body: AppSecondaryControlTheme(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+              children: [
+                AppSurfaceCard(
+                  padding: const EdgeInsets.all(16),
+                  gradient: LinearGradient(
+                    colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _styleName(currentBrand),
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.normal,
-                                color: cs.onSurface,
-                              ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: cs.primary.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _styleDescription(currentBrand.style),
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.66),
-                              ),
+                        child: Icon(
+                          Icons.palette_outlined,
+                          color: cs.primary,
+                          size: 28,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '时光币 ${_visibleCoinBalance(authProvider, achievementProvider)}',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(color: cs.primary),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            AppSectionHeader(
-              title: I18n.tr('theme.section.styles'),
-              subtitle: I18n.tr('theme.section.styles.subtitle'),
-              padding: EdgeInsets.zero,
-            ),
-            const SizedBox(height: 8),
-            ...themeProvider.brands.map((brand) {
-              final isActive = brand.style == currentBrand.style;
-              final isUnlocked = themeProvider.isBrandUnlocked(brand.id);
-              final cost = themeProvider.brandCost(brand.id);
-              final accent = _accentColor(brand);
-              return AppSurfaceCard(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(14),
-                color: isActive ? accent.withValues(alpha: 0.08) : null,
-                border: Border.all(
-                  color: isActive
-                      ? accent.withValues(alpha: 0.28)
-                      : cs.outlineVariant.withValues(alpha: 0.14),
-                  width: 0.45,
-                ),
-                onTap: () => _handleBrandTap(
-                  context,
-                  themeProvider,
-                  achievementProvider,
-                  brand,
-                ),
-                child: Row(
-                  children: [
-                    BrandBackgroundThumbnail(
-                      key: ValueKey('theme_card_bg_${brand.id}'),
-                      brand: brand,
-                      fallback: Icon(
-                        Icons.palette_outlined,
-                        color: accent,
-                        size: 28,
                       ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _styleName(currentBrand),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.normal,
+                                    color: cs.onSurface,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _styleDescription(currentBrand.style),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.normal,
+                                    color: cs.onSurface.withValues(alpha: 0.66),
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              DataSettingsUiCopy.coinCount(
+                                _visibleCoinBalance(
+                                  authProvider,
+                                  achievementProvider,
+                                ),
+                              ),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.normal,
+                                    color: cs.primary,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                AppSectionHeader(
+                  title: I18n.tr('theme.section.styles'),
+                  subtitle: I18n.tr('theme.section.styles.subtitle'),
+                  padding: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 8),
+                ...themeProvider.brands.map((brand) {
+                  final isActive = brand.style == currentBrand.style;
+                  final isUnlocked = themeProvider.isBrandUnlocked(brand.id);
+                  final cost = themeProvider.brandCost(brand.id);
+                  final accent = _accentColor(brand);
+                  return AppSurfaceCard(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    color: isActive ? accent.withValues(alpha: 0.08) : null,
+                    border: Border.all(
+                      color: isActive
+                          ? accent.withValues(alpha: 0.28)
+                          : cs.outlineVariant.withValues(alpha: 0.14),
+                      width: 0.45,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
+                    onTap: () => _handleBrandTap(
+                      context,
+                      themeProvider,
+                      achievementProvider,
+                      brand,
+                    ),
+                    child: _ThemeOptionRow(
+                      preview: BrandBackgroundThumbnail(
+                        key: ValueKey('theme_card_bg_${brand.id}'),
+                        brand: brand,
+                        fallback: Icon(
+                          Icons.palette_outlined,
+                          color: accent,
+                          size: 28,
+                        ),
+                      ),
+                      details: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
@@ -748,6 +820,7 @@ class ThemePickerScreen extends StatelessWidget {
                             _styleDescription(brand.style),
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
+                                  fontWeight: FontWeight.normal,
                                   color: cs.onSurface.withValues(alpha: 0.66),
                                 ),
                           ),
@@ -763,94 +836,94 @@ class ThemePickerScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Icon(
-                          isActive
-                              ? Icons.check_circle
-                              : isUnlocked
-                              ? Icons.radio_button_unchecked
-                              : Icons.lock_outline,
-                          color: isActive
-                              ? accent
-                              : cs.onSurface.withValues(alpha: 0.36),
-                        ),
-                        if (!isUnlocked) ...[
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '$cost 币',
-                              style: TextStyle(
-                                color: accent,
-                                fontSize: 11,
-                                fontWeight: FontWeight.normal,
+                      trailing: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Icon(
+                            isActive
+                                ? Icons.check_circle
+                                : isUnlocked
+                                ? Icons.radio_button_unchecked
+                                : Icons.lock_outline,
+                            color: isActive
+                                ? accent
+                                : cs.onSurface.withValues(alpha: 0.36),
+                          ),
+                          if (!isUnlocked) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                DataSettingsUiCopy.coinCost(cost),
+                                style: TextStyle(
+                                  color: accent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.normal,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ],
+                  );
+                }),
+                const SizedBox(height: 6),
+                AppSectionHeader(
+                  title: DataSettingsUiCopy.focusBackdropSectionTitle,
+                  subtitle: DataSettingsUiCopy.focusBackdropSectionSubtitle,
+                  padding: EdgeInsets.zero,
                 ),
-              );
-            }),
-            const SizedBox(height: 6),
-            const AppSectionHeader(
-              title: '专注背景',
-              subtitle: '用时光币兑换番茄钟卡片装饰',
-              padding: EdgeInsets.zero,
-            ),
-            const SizedBox(height: 8),
-            ...themeProvider.focusBackdrops.map((backdrop) {
-              final isActive =
-                  themeProvider.activeFocusBackdrop.id == backdrop.id;
-              final isUnlocked = themeProvider.isFocusBackdropUnlocked(
-                backdrop.id,
-              );
-              final accent = backdrop.colors.first;
-              return AppSurfaceCard(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(14),
-                gradient: isActive
-                    ? LinearGradient(
-                        colors: [accent.withValues(alpha: 0.12), cs.surface],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                border: Border.all(
-                  color: isActive
-                      ? accent.withValues(alpha: 0.28)
-                      : cs.outlineVariant.withValues(alpha: 0.14),
-                  width: 0.45,
-                ),
-                onTap: () => _handleFocusBackdropTap(
-                  context,
-                  themeProvider,
-                  achievementProvider,
-                  backdrop,
-                ),
-                child: Row(
-                  children: [
-                    _focusBackdropPreview(backdrop),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
+                const SizedBox(height: 8),
+                ...themeProvider.focusBackdrops.map((backdrop) {
+                  final isActive =
+                      themeProvider.activeFocusBackdrop.id == backdrop.id;
+                  final isUnlocked = themeProvider.isFocusBackdropUnlocked(
+                    backdrop.id,
+                  );
+                  final accent = backdrop.colors.first;
+                  return AppSurfaceCard(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    gradient: isActive
+                        ? LinearGradient(
+                            colors: [
+                              accent.withValues(alpha: 0.12),
+                              cs.surface,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    border: Border.all(
+                      color: isActive
+                          ? accent.withValues(alpha: 0.28)
+                          : cs.outlineVariant.withValues(alpha: 0.14),
+                      width: 0.45,
+                    ),
+                    onTap: () => _handleFocusBackdropTap(
+                      context,
+                      themeProvider,
+                      achievementProvider,
+                      backdrop,
+                    ),
+                    child: _ThemeOptionRow(
+                      preview: _focusBackdropPreview(context, backdrop),
+                      details: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            backdrop.name,
+                            DataSettingsUiCopy.focusBackdropName(
+                              backdrop.id,
+                              backdrop.name,
+                            ),
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
                                   fontWeight: FontWeight.normal,
@@ -859,98 +932,105 @@ class ThemePickerScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            backdrop.description,
+                            DataSettingsUiCopy.focusBackdropDescription(
+                              backdrop.id,
+                              backdrop.description,
+                            ),
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
+                                  fontWeight: FontWeight.normal,
                                   color: cs.onSurface.withValues(alpha: 0.66),
                                 ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Icon(
-                          isActive
-                              ? Icons.check_circle
-                              : isUnlocked
-                              ? Icons.radio_button_unchecked
-                              : Icons.lock_outline,
-                          color: isActive
-                              ? accent
-                              : cs.onSurface.withValues(alpha: 0.36),
-                        ),
-                        if (!isUnlocked) ...[
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '${backdrop.cost} 币',
-                              style: TextStyle(
-                                color: accent,
-                                fontSize: 11,
-                                fontWeight: FontWeight.normal,
+                      trailing: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Icon(
+                            isActive
+                                ? Icons.check_circle
+                                : isUnlocked
+                                ? Icons.radio_button_unchecked
+                                : Icons.lock_outline,
+                            color: isActive
+                                ? accent
+                                : cs.onSurface.withValues(alpha: 0.36),
+                          ),
+                          if (!isUnlocked) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                DataSettingsUiCopy.coinCost(backdrop.cost),
+                                style: TextStyle(
+                                  color: accent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.normal,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ],
+                  );
+                }),
+                const SizedBox(height: 6),
+                AppSectionHeader(
+                  title: DataSettingsUiCopy.avatarFrameSectionTitle,
+                  subtitle: DataSettingsUiCopy.avatarFrameSectionSubtitle,
+                  padding: EdgeInsets.zero,
                 ),
-              );
-            }),
-            const SizedBox(height: 6),
-            const AppSectionHeader(
-              title: '头像框',
-              subtitle: '用时光币兑换我的页头像装饰',
-              padding: EdgeInsets.zero,
-            ),
-            const SizedBox(height: 8),
-            ...themeProvider.avatarFrames.map((frame) {
-              final isActive = themeProvider.activeAvatarFrame.id == frame.id;
-              final isUnlocked = themeProvider.isAvatarFrameUnlocked(frame.id);
-              final accent = frame.colors.first;
-              return AppSurfaceCard(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(14),
-                gradient: isActive
-                    ? LinearGradient(
-                        colors: [accent.withValues(alpha: 0.12), cs.surface],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                border: Border.all(
-                  color: isActive
-                      ? accent.withValues(alpha: 0.44)
-                      : cs.outlineVariant.withValues(alpha: 0.35),
-                ),
-                onTap: () => _handleAvatarFrameTap(
-                  context,
-                  themeProvider,
-                  achievementProvider,
-                  frame,
-                ),
-                child: Row(
-                  children: [
-                    _avatarFramePreview(frame, cs),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
+                const SizedBox(height: 8),
+                ...themeProvider.avatarFrames.map((frame) {
+                  final isActive =
+                      themeProvider.activeAvatarFrame.id == frame.id;
+                  final isUnlocked = themeProvider.isAvatarFrameUnlocked(
+                    frame.id,
+                  );
+                  final accent = frame.colors.first;
+                  return AppSurfaceCard(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    gradient: isActive
+                        ? LinearGradient(
+                            colors: [
+                              accent.withValues(alpha: 0.12),
+                              cs.surface,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    border: Border.all(
+                      color: isActive
+                          ? accent.withValues(alpha: 0.44)
+                          : cs.outlineVariant.withValues(alpha: 0.35),
+                    ),
+                    onTap: () => _handleAvatarFrameTap(
+                      context,
+                      themeProvider,
+                      achievementProvider,
+                      frame,
+                    ),
+                    child: _ThemeOptionRow(
+                      preview: _avatarFramePreview(frame, cs),
+                      details: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            frame.name,
+                            DataSettingsUiCopy.avatarFrameName(
+                              frame.id,
+                              frame.name,
+                            ),
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
                                   fontWeight: FontWeight.normal,
@@ -959,98 +1039,99 @@ class ThemePickerScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            frame.description,
+                            DataSettingsUiCopy.avatarFrameDescription(
+                              frame.id,
+                              frame.description,
+                            ),
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
+                                  fontWeight: FontWeight.normal,
                                   color: cs.onSurface.withValues(alpha: 0.66),
                                 ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Icon(
-                          isActive
-                              ? Icons.check_circle
-                              : isUnlocked
-                              ? Icons.radio_button_unchecked
-                              : Icons.lock_outline,
-                          color: isActive
-                              ? accent
-                              : cs.onSurface.withValues(alpha: 0.36),
-                        ),
-                        if (!isUnlocked) ...[
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '${frame.cost} 币',
-                              style: TextStyle(
-                                color: accent,
-                                fontSize: 11,
-                                fontWeight: FontWeight.normal,
+                      trailing: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Icon(
+                            isActive
+                                ? Icons.check_circle
+                                : isUnlocked
+                                ? Icons.radio_button_unchecked
+                                : Icons.lock_outline,
+                            color: isActive
+                                ? accent
+                                : cs.onSurface.withValues(alpha: 0.36),
+                          ),
+                          if (!isUnlocked) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                DataSettingsUiCopy.coinCost(frame.cost),
+                                style: TextStyle(
+                                  color: accent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.normal,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ],
+                  );
+                }),
+                const SizedBox(height: 6),
+                AppSectionHeader(
+                  title: DataSettingsUiCopy.cardSkinSectionTitle,
+                  subtitle: DataSettingsUiCopy.cardSkinSectionSubtitle,
+                  padding: EdgeInsets.zero,
                 ),
-              );
-            }),
-            const SizedBox(height: 6),
-            const AppSectionHeader(
-              title: '卡片皮肤',
-              subtitle: '用时光币兑换信息卡片质感',
-              padding: EdgeInsets.zero,
-            ),
-            const SizedBox(height: 8),
-            ...themeProvider.cardSkins.map((skin) {
-              final isActive = themeProvider.activeCardSkin.id == skin.id;
-              final isUnlocked = themeProvider.isCardSkinUnlocked(skin.id);
-              final accent = skin.colors.first;
-              return AppSurfaceCard(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(14),
-                gradient: isActive
-                    ? LinearGradient(
-                        colors: [accent.withValues(alpha: 0.18), cs.surface],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                border: Border.all(
-                  color: isActive
-                      ? accent.withValues(alpha: 0.5)
-                      : cs.outlineVariant.withValues(alpha: 0.35),
-                ),
-                onTap: () => _handleCardSkinTap(
-                  context,
-                  themeProvider,
-                  achievementProvider,
-                  skin,
-                ),
-                child: Row(
-                  children: [
-                    _cardSkinPreview(skin, cs),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
+                const SizedBox(height: 8),
+                ...themeProvider.cardSkins.map((skin) {
+                  final isActive = themeProvider.activeCardSkin.id == skin.id;
+                  final isUnlocked = themeProvider.isCardSkinUnlocked(skin.id);
+                  final accent = skin.colors.first;
+                  return AppSurfaceCard(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    gradient: isActive
+                        ? LinearGradient(
+                            colors: [
+                              accent.withValues(alpha: 0.18),
+                              cs.surface,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    border: Border.all(
+                      color: isActive
+                          ? accent.withValues(alpha: 0.5)
+                          : cs.outlineVariant.withValues(alpha: 0.35),
+                    ),
+                    onTap: () => _handleCardSkinTap(
+                      context,
+                      themeProvider,
+                      achievementProvider,
+                      skin,
+                    ),
+                    child: _ThemeOptionRow(
+                      preview: _cardSkinPreview(context, skin, cs),
+                      details: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            skin.name,
+                            DataSettingsUiCopy.cardSkinName(skin.id, skin.name),
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
                                   fontWeight: FontWeight.normal,
@@ -1059,67 +1140,118 @@ class ThemePickerScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            skin.description,
+                            DataSettingsUiCopy.cardSkinDescription(
+                              skin.id,
+                              skin.description,
+                            ),
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
+                                  fontWeight: FontWeight.normal,
                                   color: cs.onSurface.withValues(alpha: 0.66),
                                 ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Icon(
-                          isActive
-                              ? Icons.check_circle
-                              : isUnlocked
-                              ? Icons.radio_button_unchecked
-                              : Icons.lock_outline,
-                          color: isActive
-                              ? accent
-                              : cs.onSurface.withValues(alpha: 0.36),
-                        ),
-                        if (!isUnlocked) ...[
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '${skin.cost} 币',
-                              style: TextStyle(
-                                color: accent,
-                                fontSize: 11,
-                                fontWeight: FontWeight.normal,
+                      trailing: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Icon(
+                            isActive
+                                ? Icons.check_circle
+                                : isUnlocked
+                                ? Icons.radio_button_unchecked
+                                : Icons.lock_outline,
+                            color: isActive
+                                ? accent
+                                : cs.onSurface.withValues(alpha: 0.36),
+                          ),
+                          if (!isUnlocked) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                DataSettingsUiCopy.coinCost(skin.cost),
+                                style: TextStyle(
+                                  color: accent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.normal,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ],
+                  );
+                }),
+                const SizedBox(height: 6),
+                AppSectionHeader(
+                  title: DataSettingsUiCopy.widgetSyncNoticeTitle,
+                  subtitle: DataSettingsUiCopy.widgetSyncNoticeSubtitle,
+                  padding: EdgeInsets.zero,
                 ),
-              );
-            }),
-            const SizedBox(height: 6),
-            const AppSectionHeader(
-              title: '小组件主题',
-              subtitle: '背景图和卡片皮肤会同步到手机桌面小组件',
-              padding: EdgeInsets.zero,
+                const SizedBox(height: 8),
+                _widgetThemeSection(context, themeProvider),
+              ],
             ),
-            const SizedBox(height: 8),
-            _widgetThemeSection(context, themeProvider),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Gives enlarged text room without competing with price and status.
+class _ThemeOptionRow extends StatelessWidget {
+  final Widget preview;
+  final Widget details;
+  final Widget trailing;
+
+  const _ThemeOptionRow({
+    required this.preview,
+    required this.details,
+    required this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+        if (constraints.maxWidth < 340 || scale > 1.3) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  preview,
+                  const SizedBox(width: 12),
+                  Expanded(child: details),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Align(alignment: Alignment.centerRight, child: trailing),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            preview,
+            const SizedBox(width: 12),
+            Expanded(child: details),
+            const SizedBox(width: 10),
+            trailing,
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }

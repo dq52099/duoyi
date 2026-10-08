@@ -15,12 +15,14 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
+import '../core/notification_ui_copy.dart';
 import '../models/location_reminder.dart';
 import '../providers/location_reminder_provider.dart';
 import '../providers/notification_service.dart';
 import '../services/calendar_sync_service.dart';
 import '../services/location_geofence_service.dart';
 import '../widgets/surface_components.dart';
+import '../widgets/controller_dialog.dart';
 
 class IntegrationsScreen extends StatelessWidget {
   final Uri? initialOAuthCallbackUri;
@@ -137,42 +139,50 @@ class _IntegrationsScreenBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final routeBackground = Theme.of(context).brightness == Brightness.dark
-        ? cs.surface
-        : cs.surfaceContainerLowest;
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        backgroundColor: routeBackground,
-        appBar: AppBar(
-          title: const Text('扩展功能'),
-          backgroundColor: routeBackground.withValues(alpha: 0.96),
-          surfaceTintColor: Colors.transparent,
-          bottom: TabBar(
-            labelStyle: appSecondaryMenuItemTextStyle(context),
-            unselectedLabelStyle: appSecondaryMenuItemTextStyle(context),
-            labelPadding: const EdgeInsets.symmetric(horizontal: 12),
-            indicatorSize: TabBarIndicatorSize.tab,
-            tabs: const [
-              Tab(height: 34, text: '日历订阅'),
-              Tab(height: 34, text: '位置提醒'),
-              Tab(height: 34, text: '语言'),
-            ],
-          ),
-        ),
-        body: AppSecondaryControlTheme(
-          child: TabBarView(
-            children: [
-              _CalendarSubscriptionsTab(
-                initialOAuthCallbackUri: initialOAuthCallbackUri,
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) {
+        final cs = Theme.of(context).colorScheme;
+        final routeBackground = Theme.of(context).brightness == Brightness.dark
+            ? cs.surface
+            : cs.surfaceContainerLowest;
+        return DefaultTabController(
+          length: 3,
+          child: Scaffold(
+            backgroundColor: routeBackground,
+            appBar: AppBar(
+              title: Text(NotificationUiCopy.integrationsTitle),
+              titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+              backgroundColor: routeBackground.withValues(alpha: 0.96),
+              surfaceTintColor: Colors.transparent,
+              bottom: TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                labelStyle: appSecondaryMenuItemTextStyle(context),
+                unselectedLabelStyle: appSecondaryMenuItemTextStyle(context),
+                labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+                indicatorSize: TabBarIndicatorSize.tab,
+                tabs: [
+                  Tab(height: 34, text: NotificationUiCopy.tabCalendar),
+                  Tab(height: 34, text: NotificationUiCopy.tabLocation),
+                  Tab(height: 34, text: NotificationUiCopy.tabLanguage),
+                ],
               ),
-              const _LocationRemindersTab(),
-              const _LocaleTab(),
-            ],
+            ),
+            body: AppSecondaryControlTheme(
+              child: TabBarView(
+                children: [
+                  _CalendarSubscriptionsTab(
+                    initialOAuthCallbackUri: initialOAuthCallbackUri,
+                  ),
+                  const _LocationRemindersTab(),
+                  const _LocaleTab(),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -327,11 +337,14 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
                       children: [
                         const Icon(Icons.event_available, size: 18),
                         const SizedBox(width: 8),
-                        const Text(
-                          '从 ICS URL 订阅',
-                          style: TextStyle(fontWeight: FontWeight.normal),
+                        Expanded(
+                          child: Text(
+                            NotificationUiCopy.icsHeaderTitle,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
                         ),
-                        const Spacer(),
                         if (provider.isSyncing)
                           const SizedBox(
                             width: 14,
@@ -342,9 +355,7 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '支持 Google / Outlook / Apple iCloud 公开日历、企业 iCal feed、'
-                      '部分 CalDAV 服务器的导出端点。订阅为只读，'
-                      '不会修改远端日历。',
+                      NotificationUiCopy.icsHeaderDescription,
                       style: _integrationHintTextStyle(context),
                     ),
                   ],
@@ -365,7 +376,7 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
                 padding: const EdgeInsets.all(32),
                 child: Center(
                   child: Text(
-                    '还没有订阅，点击右下角 + 添加 ICS，或添加 Google / Outlook 账号',
+                    NotificationUiCopy.emptySubscriptions,
                     style: _integrationHintTextStyle(context, alpha: 0.50),
                   ),
                 ),
@@ -392,10 +403,10 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
                           : () => provider.syncAll(),
                       style: _integrationFilledButtonStyle(context),
                       icon: const Icon(Icons.refresh),
-                      label: const Text('刷新'),
+                      label: Text(NotificationUiCopy.refreshAction),
                     ),
                   IconButton.filled(
-                    tooltip: '添加 ICS',
+                    tooltip: NotificationUiCopy.addIcsTooltip,
                     onPressed: () => _showAddDialog(context, provider),
                     icon: const Icon(Icons.add),
                   ),
@@ -416,61 +427,75 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
     final urlCtrl = TextEditingController();
     String? nameError;
     String? urlError;
-    final ok = await showDialog<bool>(
+    final ok = await showControllerDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AppDialog(
-          title: const Text('添加日历订阅'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: InputDecoration(
-                  labelText: '名称',
-                  errorText: nameError,
+      controllers: [nameCtrl, urlCtrl],
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, _, _) => StatefulBuilder(
+          builder: (ctx, setState) => AppDialog(
+            title: Text(NotificationUiCopy.addSubscriptionDialogTitle),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: NotificationUiCopy.subscriptionNameLabel,
+                    errorText: nameError,
+                  ),
+                  autofocus: true,
                 ),
-                autofocus: true,
+                const SizedBox(height: 12),
+                TextField(
+                  controller: urlCtrl,
+                  decoration: InputDecoration(
+                    labelText: NotificationUiCopy.icsUrlLabel,
+                    hintText: 'https://...',
+                    errorText: urlError,
+                  ),
+                  keyboardType: TextInputType.url,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(I18n.tr('action.cancel')),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: urlCtrl,
-                decoration: InputDecoration(
-                  labelText: 'ICS URL',
-                  hintText: 'https://...',
-                  errorText: urlError,
-                ),
-                keyboardType: TextInputType.url,
+              FilledButton(
+                onPressed: () {
+                  final name = nameCtrl.text.trim();
+                  final url = urlCtrl.text.trim();
+                  final uri = Uri.tryParse(url);
+                  final validUrl =
+                      uri != null &&
+                      uri.host.isNotEmpty &&
+                      (uri.scheme == 'http' || uri.scheme == 'https');
+                  setState(() {
+                    nameError = name.isEmpty
+                        ? (NotificationUiCopy.isEn
+                              ? 'Please enter a subscription name'
+                              : '请填写订阅名称')
+                        : null;
+                    urlError = url.isEmpty
+                        ? (NotificationUiCopy.isEn
+                              ? 'Please enter an ICS URL'
+                              : '请填写 ICS URL')
+                        : (!validUrl
+                              ? (NotificationUiCopy.isEn
+                                    ? 'Please enter a valid http/https address'
+                                    : '请输入有效的 http/https 地址')
+                              : null);
+                  });
+                  if (nameError == null && urlError == null) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+                child: Text(I18n.tr('action.add')),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: () {
-                final name = nameCtrl.text.trim();
-                final url = urlCtrl.text.trim();
-                final uri = Uri.tryParse(url);
-                final validUrl =
-                    uri != null &&
-                    uri.host.isNotEmpty &&
-                    (uri.scheme == 'http' || uri.scheme == 'https');
-                setState(() {
-                  nameError = name.isEmpty ? '请填写订阅名称' : null;
-                  urlError = url.isEmpty
-                      ? '请填写 ICS URL'
-                      : (!validUrl ? '请输入有效的 http/https 地址' : null);
-                });
-                if (nameError == null && urlError == null) {
-                  Navigator.pop(ctx, true);
-                }
-              },
-              child: Text(I18n.tr('action.add')),
-            ),
-          ],
         ),
       ),
     );
@@ -510,10 +535,10 @@ class _OAuthCalendarCard extends StatelessWidget {
                   color: hasAccounts ? Colors.green : Colors.blueGrey,
                 ),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Google / Outlook OAuth 日历',
-                    style: TextStyle(fontWeight: FontWeight.normal),
+                    NotificationUiCopy.oauthCardTitle,
+                    style: const TextStyle(fontWeight: FontWeight.normal),
                   ),
                 ),
                 if (provider.isSyncing)
@@ -526,8 +551,7 @@ class _OAuthCalendarCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '通过授权码 + PKCE 连接私有 Google Calendar 或 Outlook Calendar，'
-              '自动刷新 token 并把远端事件并入本地日历视图。',
+              NotificationUiCopy.oauthCardDescription,
               style: _integrationHintTextStyle(context),
             ),
             const SizedBox(height: 10),
@@ -537,7 +561,7 @@ class _OAuthCalendarCard extends StatelessWidget {
                 onPressed: () => showOAuthDialog(context, provider),
                 style: _integrationFilledButtonStyle(context),
                 icon: const Icon(Icons.add_link, size: 16),
-                label: const Text('添加账号'),
+                label: Text(NotificationUiCopy.addAccountAction),
               ),
             ),
           ],
@@ -582,7 +606,7 @@ class _OAuthCalendarCard extends StatelessWidget {
         if (pendingState.isNotEmpty && callbackState != pendingState) {
           disposeControllers();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('OAuth 回调 state 不匹配，请重新授权')),
+            SnackBar(content: Text(NotificationUiCopy.oauthStateMismatch)),
           );
           return;
         }
@@ -636,190 +660,218 @@ class _OAuthCalendarCard extends StatelessWidget {
       await Clipboard.setData(ClipboardData(text: authUri.toString()));
     }
 
-    final ok = await showDialog<bool>(
+    final ok = await showControllerDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (dialogContext, setState) {
-          final authUri = buildAuthUri();
-          return AppDialog(
-            title: const Text('添加 OAuth 日历'),
-            maxWidth: 560,
-            content: SizedBox(
-              width: double.maxFinite,
-              child: SingleChildScrollView(
-                child: AppSecondaryControlTheme(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppDropdownField<OAuthCalendarProvider>(
-                        initialValue: selectedProvider,
-                        decoration: const InputDecoration(labelText: '服务商'),
-                        items: [
-                          for (final p in OAuthCalendarProvider.values)
-                            DropdownMenuItem(value: p, child: Text(p.label)),
-                        ],
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() {
-                            selectedProvider = value;
-                            if (nameCtrl.text.trim().isEmpty ||
-                                OAuthCalendarProvider.values.any(
-                                  (p) => p.label == nameCtrl.text.trim(),
-                                )) {
-                              nameCtrl.text = value.label;
-                            }
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: nameCtrl,
-                        decoration: const InputDecoration(labelText: '显示名称'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: clientIdCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Client ID',
+      controllers: [
+        nameCtrl,
+        clientIdCtrl,
+        clientSecretCtrl,
+        redirectCtrl,
+        calendarIdCtrl,
+        codeCtrl,
+      ],
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, _, _) => StatefulBuilder(
+          builder: (dialogContext, setState) {
+            final authUri = buildAuthUri();
+            return AppDialog(
+              title: Text(NotificationUiCopy.addOauthDialogTitle),
+              maxWidth: 560,
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: AppSecondaryControlTheme(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AppDropdownField<OAuthCalendarProvider>(
+                          initialValue: selectedProvider,
+                          decoration: InputDecoration(
+                            labelText: NotificationUiCopy.providerLabel,
+                          ),
+                          items: [
+                            for (final p in OAuthCalendarProvider.values)
+                              DropdownMenuItem(value: p, child: Text(p.label)),
+                          ],
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              selectedProvider = value;
+                              if (nameCtrl.text.trim().isEmpty ||
+                                  OAuthCalendarProvider.values.any(
+                                    (p) => p.label == nameCtrl.text.trim(),
+                                  )) {
+                                nameCtrl.text = value.label;
+                              }
+                            });
+                          },
                         ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: clientSecretCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Client Secret（可选）',
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: nameCtrl,
+                          decoration: InputDecoration(
+                            labelText: NotificationUiCopy.displayNameLabel,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: redirectCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Redirect URI',
-                          hintText: 'duoyi://oauth/calendar',
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: clientIdCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Client ID',
+                          ),
+                          onChanged: (_) => setState(() {}),
                         ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: calendarIdCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Calendar ID',
-                          hintText: 'primary',
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: clientSecretCtrl,
+                          decoration: InputDecoration(
+                            labelText:
+                                NotificationUiCopy.clientSecretOptionalLabel,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest
-                              .withValues(alpha: 0.35),
-                          borderRadius: BorderRadius.circular(12),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: redirectCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Redirect URI',
+                            hintText: 'duoyi://oauth/calendar',
+                          ),
+                          onChanged: (_) => setState(() {}),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              '授权链接',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            SelectableText(
-                              authUri?.toString() ?? '填写 Client ID 后生成',
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                OutlinedButton.icon(
-                                  onPressed: authUri == null
-                                      ? null
-                                      : () async {
-                                          await savePendingAuthorization(
-                                            authUri,
-                                          );
-                                          if (!dialogContext.mounted) return;
-                                          ScaffoldMessenger.of(
-                                            dialogContext,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('授权链接已复制'),
-                                            ),
-                                          );
-                                        },
-                                  style: _integrationOutlinedButtonStyle(
-                                    context,
-                                  ),
-                                  icon: const Icon(Icons.copy, size: 16),
-                                  label: const Text('复制'),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: calendarIdCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Calendar ID',
+                            hintText: 'primary',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.35),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                NotificationUiCopy.authUrlSectionTitle,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.normal,
                                 ),
-                                FilledButton.tonalIcon(
-                                  onPressed: authUri == null
-                                      ? null
-                                      : () async {
-                                          await savePendingAuthorization(
-                                            authUri,
-                                          );
-                                          final opened = await launchUrl(
-                                            authUri,
-                                            mode:
-                                                LaunchMode.externalApplication,
-                                          );
-                                          if (!dialogContext.mounted) return;
-                                          if (!opened) {
+                              ),
+                              const SizedBox(height: 6),
+                              SelectableText(
+                                authUri?.toString() ??
+                                    NotificationUiCopy.authUrlPlaceholder,
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: authUri == null
+                                        ? null
+                                        : () async {
+                                            await savePendingAuthorization(
+                                              authUri,
+                                            );
+                                            if (!dialogContext.mounted) return;
                                             ScaffoldMessenger.of(
                                               dialogContext,
                                             ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text('无法打开授权页，已保留链接'),
+                                              SnackBar(
+                                                content: Text(
+                                                  NotificationUiCopy
+                                                      .authUrlCopied,
+                                                ),
                                               ),
                                             );
-                                          }
-                                        },
-                                  style: _integrationFilledButtonStyle(context),
-                                  icon: const Icon(Icons.open_in_new, size: 16),
-                                  label: const Text('打开'),
-                                ),
-                              ],
-                            ),
-                          ],
+                                          },
+                                    style: _integrationOutlinedButtonStyle(
+                                      context,
+                                    ),
+                                    icon: const Icon(Icons.copy, size: 16),
+                                    label: Text(NotificationUiCopy.copyAction),
+                                  ),
+                                  FilledButton.tonalIcon(
+                                    onPressed: authUri == null
+                                        ? null
+                                        : () async {
+                                            await savePendingAuthorization(
+                                              authUri,
+                                            );
+                                            final opened = await launchUrl(
+                                              authUri,
+                                              mode: LaunchMode
+                                                  .externalApplication,
+                                            );
+                                            if (!dialogContext.mounted) return;
+                                            if (!opened) {
+                                              ScaffoldMessenger.of(
+                                                dialogContext,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    NotificationUiCopy
+                                                        .openAuthFailed,
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          },
+                                    style: _integrationFilledButtonStyle(
+                                      context,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.open_in_new,
+                                      size: 16,
+                                    ),
+                                    label: Text(NotificationUiCopy.openAction),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: codeCtrl,
-                        minLines: 2,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: '授权码或回调 URL',
-                          hintText: '粘贴 code，或粘贴带 ?code= 的回调 URL',
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: codeCtrl,
+                          minLines: 2,
+                          maxLines: 4,
+                          decoration: InputDecoration(
+                            labelText: NotificationUiCopy.authCodeLabel,
+                            hintText: NotificationUiCopy.authCodeHint,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(I18n.tr('action.cancel')),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('保存并同步'),
-              ),
-            ],
-          );
-        },
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(I18n.tr('action.cancel')),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(NotificationUiCopy.saveAndSyncAction),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
 
@@ -829,16 +881,15 @@ class _OAuthCalendarCard extends StatelessWidget {
     final authorizationCode = codeCtrl.text.trim();
     final clientSecret = clientSecretCtrl.text.trim();
     final calendarId = calendarIdCtrl.text.trim();
-    disposeControllers();
     if (ok != true) return;
     if (displayName.isEmpty ||
         clientId.isEmpty ||
         redirectUri.isEmpty ||
         authorizationCode.isEmpty) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请填写名称、Client ID、回调地址和授权码')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(NotificationUiCopy.oauthFieldsRequired)),
+      );
       return;
     }
     try {
@@ -854,14 +905,14 @@ class _OAuthCalendarCard extends StatelessWidget {
       );
       await provider.clearPendingOAuthAuthorization();
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('OAuth 日历已连接')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(NotificationUiCopy.oauthConnected)),
+      );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('连接失败：$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(NotificationUiCopy.formatOauthConnectError(e))),
+      );
     }
   }
 }
@@ -890,9 +941,10 @@ class _OAuthCalendarTile extends StatelessWidget {
         ),
         title: Text(account.displayName),
         subtitle: Text(
-          '${account.provider.label} · ${account.enabled ? "启用" : "暂停"} · '
+          '${account.provider.label} · '
+          '${account.enabled ? NotificationUiCopy.statusActive : NotificationUiCopy.statusPaused} · '
           '${account.calendarId.isEmpty ? "primary" : account.calendarId}'
-          '${account.lastSyncedAt == null ? "" : " · 上次同步 ${_formatDateTime(account.lastSyncedAt!)}"}',
+          '${account.lastSyncedAt == null ? "" : " · ${NotificationUiCopy.lastSyncedAt(_formatDateTime(account.lastSyncedAt!))}"}',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 11),
@@ -912,15 +964,19 @@ class _OAuthCalendarTile extends StatelessWidget {
           itemBuilder: (_) => [
             PopupMenuItem(
               value: 'toggle',
-              child: AppSecondaryMenuText(account.enabled ? '暂停' : '启用'),
+              child: AppSecondaryMenuText(
+                account.enabled
+                    ? (NotificationUiCopy.isEn ? 'Pause' : '暂停')
+                    : (NotificationUiCopy.isEn ? 'Resume' : '启用'),
+              ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'sync',
-              child: AppSecondaryMenuText('同步'),
+              child: AppSecondaryMenuText(NotificationUiCopy.menuSync),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'delete',
-              child: AppSecondaryMenuText('删除'),
+              child: AppSecondaryMenuText(NotificationUiCopy.menuDelete),
             ),
           ],
         ),
@@ -953,10 +1009,10 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                   color: configured ? Colors.green : Colors.blueGrey,
                 ),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'CalDAV 写回目标',
-                    style: TextStyle(fontWeight: FontWeight.normal),
+                    NotificationUiCopy.calDavTargetTitle,
+                    style: const TextStyle(fontWeight: FontWeight.normal),
                   ),
                 ),
                 if (provider.isTestingWriteTarget)
@@ -970,8 +1026,8 @@ class _CalDavWriteTargetCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               configured
-                  ? '${target!.enabled ? "已验证" : "未验证"} · ${_conflictPolicyLabel(target.conflictPolicy)} · ${target.collectionUrl}'
-                  : '配置 CalDAV 集合 URL 和 Authorization header，测试时会创建并删除一条探测事件。',
+                  ? '${target!.enabled ? NotificationUiCopy.calDavVerified : NotificationUiCopy.calDavUnverified} · ${_conflictPolicyLabel(target.conflictPolicy)} · ${target.collectionUrl}'
+                  : NotificationUiCopy.calDavConfigPrompt,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: _integrationHintTextStyle(context),
@@ -979,7 +1035,9 @@ class _CalDavWriteTargetCard extends StatelessWidget {
             if (provider.lastCalDavConflicts.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(
-                '有 ${provider.lastCalDavConflicts.length} 条远端变更已跳过，避免覆盖别人改过的日程。',
+                NotificationUiCopy.calDavConflictsSkipped(
+                  provider.lastCalDavConflicts.length,
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: _integrationWarningTextStyle(context),
@@ -988,7 +1046,9 @@ class _CalDavWriteTargetCard extends StatelessWidget {
             if (target?.lastTestedAt != null) ...[
               const SizedBox(height: 4),
               Text(
-                '上次测试 ${_formatDateTime(target!.lastTestedAt!)}',
+                NotificationUiCopy.lastTestedAt(
+                  _formatDateTime(target!.lastTestedAt!),
+                ),
                 style: _integrationHintTextStyle(
                   context,
                   fontSize: 11,
@@ -999,7 +1059,7 @@ class _CalDavWriteTargetCard extends StatelessWidget {
             if (provider.lastError != null) ...[
               const SizedBox(height: 6),
               Text(
-                provider.lastError!,
+                NotificationUiCopy.formatCalDavError(provider.lastError!),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: _integrationErrorTextStyle(context),
@@ -1012,7 +1072,11 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                   onPressed: () => _showCalDavDialog(context, provider),
                   style: _integrationOutlinedButtonStyle(context),
                   icon: const Icon(Icons.edit_outlined, size: 16),
-                  label: Text(configured ? '编辑' : '配置'),
+                  label: Text(
+                    configured
+                        ? NotificationUiCopy.calDavEdit
+                        : NotificationUiCopy.calDavConfigure,
+                  ),
                 ),
                 if (configured)
                   OutlinedButton.icon(
@@ -1021,7 +1085,7 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                         : provider.clearWriteTarget,
                     style: _integrationOutlinedButtonStyle(context),
                     icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('移除'),
+                    label: Text(NotificationUiCopy.calDavRemove),
                   ),
                 OutlinedButton.icon(
                   onPressed: () => _showICloudCalDavDialog(context, provider),
@@ -1035,7 +1099,7 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                       : provider.testWriteTarget,
                   style: _integrationFilledButtonStyle(context),
                   icon: const Icon(Icons.fact_check_outlined, size: 16),
-                  label: const Text('测试写回'),
+                  label: Text(NotificationUiCopy.calDavTestWriteback),
                 ),
               ],
             ),
@@ -1056,72 +1120,78 @@ class _CalDavWriteTargetCard extends StatelessWidget {
     );
     var conflictPolicy =
         current?.conflictPolicy ?? CalDavConflictPolicy.skipRemoteChanges;
-    final ok = await showDialog<bool>(
+    final ok = await showControllerDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setState) => AppDialog(
-          title: const Text('配置 CalDAV 写回'),
-          content: AppSecondaryControlTheme(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: urlCtrl,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: '集合 URL',
-                    hintText:
-                        'https://caldav.example.com/calendars/me/default/',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: authCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Authorization header',
-                    hintText: 'Bearer ... 或 Basic ...',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                AppDropdownField<CalDavConflictPolicy>(
-                  initialValue: conflictPolicy,
-                  decoration: const InputDecoration(labelText: '远端冲突处理'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: CalDavConflictPolicy.skipRemoteChanges,
-                      child: Text('跳过远端已修改事件'),
+      controllers: [urlCtrl, authCtrl],
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (context, _, _) => StatefulBuilder(
+          builder: (context, setState) => AppDialog(
+            title: Text(NotificationUiCopy.calDavDialogTitle),
+            content: AppSecondaryControlTheme(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: urlCtrl,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: NotificationUiCopy.collectionUrlLabel,
+                      hintText:
+                          'https://caldav.example.com/calendars/me/default/',
                     ),
-                    DropdownMenuItem(
-                      value: CalDavConflictPolicy.overwriteRemote,
-                      child: Text('始终覆盖远端'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: authCtrl,
+                    decoration: InputDecoration(
+                      labelText: NotificationUiCopy.authHeaderLabel,
+                      hintText: NotificationUiCopy.authHeaderHint,
                     ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => conflictPolicy = value);
-                    }
-                  },
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 12),
+                  AppDropdownField<CalDavConflictPolicy>(
+                    initialValue: conflictPolicy,
+                    decoration: InputDecoration(
+                      labelText: NotificationUiCopy.conflictPolicyLabel,
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: CalDavConflictPolicy.skipRemoteChanges,
+                        child: Text(NotificationUiCopy.conflictPolicySkipItem),
+                      ),
+                      DropdownMenuItem(
+                        value: CalDavConflictPolicy.overwriteRemote,
+                        child: Text(
+                          NotificationUiCopy.conflictPolicyOverwriteItem,
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => conflictPolicy = value);
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(I18n.tr('action.cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(NotificationUiCopy.saveAction),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('保存'),
-            ),
-          ],
         ),
       ),
     );
     final url = urlCtrl.text.trim();
     final auth = authCtrl.text.trim();
-    urlCtrl.dispose();
-    authCtrl.dispose();
     if (ok != true || url.isEmpty || auth.isEmpty) return;
     await provider.saveWriteTarget(
       CalDavWriteTarget(
@@ -1147,82 +1217,91 @@ class _CalDavWriteTargetCard extends StatelessWidget {
     final appPasswordCtrl = TextEditingController();
     var conflictPolicy =
         current?.conflictPolicy ?? CalDavConflictPolicy.skipRemoteChanges;
-    final ok = await showDialog<bool>(
+    final ok = await showControllerDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setState) => AppDialog(
-          title: const Text('配置 iCloud 日历写回'),
-          content: AppSecondaryControlTheme(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  CalDavCredentialHelper.iCloudSetupCopy,
-                  style: _integrationHintTextStyle(context),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: urlCtrl,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'iCloud CalDAV 集合 URL',
-                    hintText: CalDavCredentialHelper.iCloudCollectionUrlHint,
+      controllers: [urlCtrl, appleIdCtrl, appPasswordCtrl],
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (context, _, _) => StatefulBuilder(
+          builder: (context, setState) => AppDialog(
+            title: Text(NotificationUiCopy.iCloudDialogTitle),
+            content: AppSecondaryControlTheme(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    NotificationUiCopy.isEn
+                        ? 'Generate Basic Authorization with your Apple ID and App-Specific Password. Enter the iCloud CalDAV calendar collection URL.'
+                        : CalDavCredentialHelper.iCloudSetupCopy,
+                    style: _integrationHintTextStyle(context),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: appleIdCtrl,
-                  decoration: const InputDecoration(labelText: 'Apple ID'),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: appPasswordCtrl,
-                  decoration: const InputDecoration(labelText: 'App 专用密码'),
-                  obscureText: true,
-                ),
-                const SizedBox(height: 12),
-                AppDropdownField<CalDavConflictPolicy>(
-                  initialValue: conflictPolicy,
-                  decoration: const InputDecoration(labelText: '远端冲突处理'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: CalDavConflictPolicy.skipRemoteChanges,
-                      child: Text('跳过远端已修改事件'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: urlCtrl,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: NotificationUiCopy.iCloudUrlLabel,
+                      hintText: CalDavCredentialHelper.iCloudCollectionUrlHint,
                     ),
-                    DropdownMenuItem(
-                      value: CalDavConflictPolicy.overwriteRemote,
-                      child: Text('始终覆盖远端'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: appleIdCtrl,
+                    decoration: const InputDecoration(labelText: 'Apple ID'),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: appPasswordCtrl,
+                    decoration: InputDecoration(
+                      labelText: NotificationUiCopy.appSpecificPasswordLabel,
                     ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => conflictPolicy = value);
-                    }
-                  },
-                ),
-              ],
+                    obscureText: true,
+                  ),
+                  const SizedBox(height: 12),
+                  AppDropdownField<CalDavConflictPolicy>(
+                    initialValue: conflictPolicy,
+                    decoration: InputDecoration(
+                      labelText: NotificationUiCopy.conflictPolicyLabel,
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: CalDavConflictPolicy.skipRemoteChanges,
+                        child: Text(NotificationUiCopy.conflictPolicySkipItem),
+                      ),
+                      DropdownMenuItem(
+                        value: CalDavConflictPolicy.overwriteRemote,
+                        child: Text(
+                          NotificationUiCopy.conflictPolicyOverwriteItem,
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => conflictPolicy = value);
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(I18n.tr('action.cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(NotificationUiCopy.saveAction),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('保存'),
-            ),
-          ],
         ),
       ),
     );
     final url = urlCtrl.text.trim();
     final appleId = appleIdCtrl.text.trim();
     final appPassword = appPasswordCtrl.text.trim();
-    urlCtrl.dispose();
-    appleIdCtrl.dispose();
-    appPasswordCtrl.dispose();
     if (ok != true || url.isEmpty || appleId.isEmpty || appPassword.isEmpty) {
       return;
     }
@@ -1241,8 +1320,10 @@ class _CalDavWriteTargetCard extends StatelessWidget {
 
   String _conflictPolicyLabel(CalDavConflictPolicy policy) {
     return switch (policy) {
-      CalDavConflictPolicy.skipRemoteChanges => '远端变更不覆盖',
-      CalDavConflictPolicy.overwriteRemote => '覆盖远端',
+      CalDavConflictPolicy.skipRemoteChanges =>
+        NotificationUiCopy.isEn ? 'Keep remote changes' : '远端变更不覆盖',
+      CalDavConflictPolicy.overwriteRemote =>
+        NotificationUiCopy.isEn ? 'Overwrite remote' : '覆盖远端',
     };
   }
 }
@@ -1285,11 +1366,15 @@ class _SubscriptionTile extends StatelessWidget {
           itemBuilder: (_) => [
             PopupMenuItem(
               value: 'toggle',
-              child: AppSecondaryMenuText(sub.enabled ? '暂停' : '启用'),
+              child: AppSecondaryMenuText(
+                sub.enabled
+                    ? (NotificationUiCopy.isEn ? 'Pause' : '暂停')
+                    : (NotificationUiCopy.isEn ? 'Resume' : '启用'),
+              ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'delete',
-              child: AppSecondaryMenuText('删除'),
+              child: AppSecondaryMenuText(NotificationUiCopy.menuDelete),
             ),
           ],
         ),
@@ -1323,14 +1408,13 @@ class _LocationRemindersTab extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '位置提醒',
-                      style: TextStyle(fontWeight: FontWeight.normal),
+                    Text(
+                      NotificationUiCopy.locationHeaderTitle,
+                      style: const TextStyle(fontWeight: FontWeight.normal),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '到达 / 离开指定地点时弹出提醒。前台位置更新会立即触发本地通知；'
-                      'Android 已接入系统 geofence 调度，需授予后台位置权限并真机验证。',
+                      NotificationUiCopy.locationHeaderDescription,
                       style: _integrationHintTextStyle(context),
                     ),
                     const SizedBox(height: 12),
@@ -1341,17 +1425,22 @@ class _LocationRemindersTab extends StatelessWidget {
                               _testCurrentLocation(context, provider),
                           style: _integrationOutlinedButtonStyle(context),
                           icon: const Icon(Icons.my_location_outlined),
-                          label: const Text('输入当前位置测试'),
+                          label: Text(
+                            NotificationUiCopy.testCurrentLocationAction,
+                          ),
                         ),
                         OutlinedButton.icon(
                           onPressed: () =>
                               _requestLocationPermissions(context, provider),
                           style: _integrationOutlinedButtonStyle(context),
                           icon: const Icon(Icons.location_searching_outlined),
-                          label: const Text('授权后台位置'),
+                          label: Text(
+                            NotificationUiCopy.grantBackgroundLocationAction,
+                          ),
                         ),
                         IconButton.outlined(
-                          tooltip: '系统位置设置',
+                          tooltip:
+                              NotificationUiCopy.systemLocationSettingsTooltip,
                           onPressed:
                               LocationGeofenceService.openLocationSettings,
                           icon: const Icon(Icons.settings_outlined),
@@ -1369,7 +1458,7 @@ class _LocationRemindersTab extends StatelessWidget {
                 padding: const EdgeInsets.all(32),
                 child: Center(
                   child: Text(
-                    '没有位置提醒，点击 + 创建',
+                    NotificationUiCopy.emptyLocationReminders,
                     style: _integrationHintTextStyle(context, alpha: 0.50),
                   ),
                 ),
@@ -1386,7 +1475,7 @@ class _LocationRemindersTab extends StatelessWidget {
             child: Align(
               alignment: Alignment.bottomRight,
               child: IconButton.filled(
-                tooltip: '新建位置提醒',
+                tooltip: NotificationUiCopy.newLocationReminderTooltip,
                 onPressed: () => _addReminder(context, provider),
                 icon: const Icon(Icons.add),
               ),
@@ -1410,122 +1499,140 @@ class _LocationRemindersTab extends StatelessWidget {
     String? latError;
     String? lngError;
     String? radiusError;
-    final ok = await showDialog<bool>(
+    final ok = await showControllerDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: const Text('新建位置提醒'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleCtrl,
-                decoration: InputDecoration(
-                  labelText: '标题',
-                  errorText: titleError,
+      controllers: [titleCtrl, latCtrl, lngCtrl, radiusCtrl],
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, _, _) => StatefulBuilder(
+          builder: (ctx, setSt) => AppDialog(
+            title: Text(NotificationUiCopy.newLocationReminderTitle),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleCtrl,
+                  decoration: InputDecoration(
+                    labelText: NotificationUiCopy.reminderTitleLabel,
+                    errorText: titleError,
+                  ),
+                  autofocus: true,
                 ),
-                autofocus: true,
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: latCtrl,
-                      decoration: InputDecoration(
-                        labelText: '纬度',
-                        errorText: latError,
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        signed: true,
-                        decimal: true,
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: latCtrl,
+                        decoration: InputDecoration(
+                          labelText: NotificationUiCopy.latitudeLabel,
+                          errorText: latError,
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          signed: true,
+                          decimal: true,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: lngCtrl,
-                      decoration: InputDecoration(
-                        labelText: '经度',
-                        errorText: lngError,
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        signed: true,
-                        decimal: true,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: lngCtrl,
+                        decoration: InputDecoration(
+                          labelText: NotificationUiCopy.longitudeLabel,
+                          errorText: lngError,
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          signed: true,
+                          decimal: true,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: radiusCtrl,
-                decoration: InputDecoration(
-                  labelText: '半径（米）',
-                  errorText: radiusError,
+                  ],
                 ),
-                keyboardType: TextInputType.number,
+                const SizedBox(height: 8),
+                TextField(
+                  controller: radiusCtrl,
+                  decoration: InputDecoration(
+                    labelText: NotificationUiCopy.radiusMetersLabel,
+                    errorText: radiusError,
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(NotificationUiCopy.triggerDirectionLabel),
+                    const Spacer(),
+                    ChoiceChip(
+                      label: Text(NotificationUiCopy.triggerEnter),
+                      selected: trigger == LocationTrigger.enter,
+                      onSelected: (_) =>
+                          setSt(() => trigger = LocationTrigger.enter),
+                    ),
+                    const SizedBox(width: 4),
+                    ChoiceChip(
+                      label: Text(NotificationUiCopy.triggerLeave),
+                      selected: trigger == LocationTrigger.leave,
+                      onSelected: (_) =>
+                          setSt(() => trigger = LocationTrigger.leave),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(I18n.tr('action.cancel')),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Text('触发方向'),
-                  const Spacer(),
-                  ChoiceChip(
-                    label: const Text('进入'),
-                    selected: trigger == LocationTrigger.enter,
-                    onSelected: (_) =>
-                        setSt(() => trigger = LocationTrigger.enter),
-                  ),
-                  const SizedBox(width: 4),
-                  ChoiceChip(
-                    label: const Text('离开'),
-                    selected: trigger == LocationTrigger.leave,
-                    onSelected: (_) =>
-                        setSt(() => trigger = LocationTrigger.leave),
-                  ),
-                ],
+              FilledButton(
+                onPressed: () {
+                  final title = titleCtrl.text.trim();
+                  final lat = double.tryParse(latCtrl.text.trim());
+                  final lng = double.tryParse(lngCtrl.text.trim());
+                  final radius = double.tryParse(radiusCtrl.text.trim());
+                  setSt(() {
+                    titleError = title.isEmpty
+                        ? (NotificationUiCopy.isEn
+                              ? 'Please enter a reminder title'
+                              : '请填写提醒标题')
+                        : null;
+                    latError = lat == null
+                        ? (NotificationUiCopy.isEn
+                              ? 'Please enter a valid latitude'
+                              : '请输入有效纬度')
+                        : null;
+                    lngError = lng == null
+                        ? (NotificationUiCopy.isEn
+                              ? 'Please enter a valid longitude'
+                              : '请输入有效经度')
+                        : null;
+                    radiusError = radius == null || radius <= 0
+                        ? (NotificationUiCopy.isEn
+                              ? 'Please enter a valid radius'
+                              : '请输入有效半径')
+                        : null;
+                  });
+                  if (titleError == null &&
+                      latError == null &&
+                      lngError == null &&
+                      radiusError == null) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+                child: Text(I18n.tr('action.save')),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: () {
-                final title = titleCtrl.text.trim();
-                final lat = double.tryParse(latCtrl.text.trim());
-                final lng = double.tryParse(lngCtrl.text.trim());
-                final radius = double.tryParse(radiusCtrl.text.trim());
-                setSt(() {
-                  titleError = title.isEmpty ? '请填写提醒标题' : null;
-                  latError = lat == null ? '请输入有效纬度' : null;
-                  lngError = lng == null ? '请输入有效经度' : null;
-                  radiusError = radius == null || radius <= 0
-                      ? '请输入有效半径'
-                      : null;
-                });
-                if (titleError == null &&
-                    latError == null &&
-                    lngError == null &&
-                    radiusError == null) {
-                  Navigator.pop(ctx, true);
-                }
-              },
-              child: Text(I18n.tr('action.save')),
-            ),
-          ],
         ),
       ),
     );
-    if (ok != true) return;
     final title = titleCtrl.text.trim();
     final lat = double.tryParse(latCtrl.text.trim());
     final lng = double.tryParse(lngCtrl.text.trim());
     final radius = double.tryParse(radiusCtrl.text.trim()) ?? 200;
+    if (ok != true) return;
     if (title.isEmpty || lat == null || lng == null) return;
     await provider.add(
       LocationReminder(
@@ -1551,13 +1658,15 @@ class _LocationRemindersTab extends StatelessWidget {
       SnackBar(
         content: Text(
           sync == null
-              ? permission.message
-              : '后台位置权限已授权，已同步 ${sync.scheduledCount} 条系统 geofence',
+              ? NotificationUiCopy.formatLocationPermissionMessage(
+                  permission.message,
+                )
+              : NotificationUiCopy.locationSynced(sync.scheduledCount),
         ),
         behavior: SnackBarBehavior.floating,
         action: permission.shouldOpenSettings
             ? SnackBarAction(
-                label: '去设置',
+                label: NotificationUiCopy.toSettingsAction,
                 onPressed: LocationGeofenceService.openLocationSettings,
               )
             : null,
@@ -1571,65 +1680,73 @@ class _LocationRemindersTab extends StatelessWidget {
   ) async {
     final latCtrl = TextEditingController();
     final lngCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
+    final ok = await showControllerDialog<bool>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: const Text('输入当前位置'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: latCtrl,
-                    decoration: const InputDecoration(labelText: '纬度'),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      signed: true,
-                      decimal: true,
+      controllers: [latCtrl, lngCtrl],
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, _, _) => AppDialog(
+          title: Text(NotificationUiCopy.testInputLocationTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: latCtrl,
+                      decoration: InputDecoration(
+                        labelText: NotificationUiCopy.latitudeLabel,
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        signed: true,
+                        decimal: true,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: lngCtrl,
-                    decoration: const InputDecoration(labelText: '经度'),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      signed: true,
-                      decimal: true,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: lngCtrl,
+                      decoration: InputDecoration(
+                        labelText: NotificationUiCopy.longitudeLabel,
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        signed: true,
+                        decimal: true,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                NotificationUiCopy.testInputLocationDescription,
+                style: _integrationHintTextStyle(context),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(I18n.tr('action.cancel')),
             ),
-            const SizedBox(height: 8),
-            Text(
-              '这会把坐标喂给位置提醒引擎，用来验证到达/离开触发规则。',
-              style: _integrationHintTextStyle(context),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(NotificationUiCopy.testButton),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(I18n.tr('action.cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('测试'),
-          ),
-        ],
       ),
     );
-    if (ok != true || !context.mounted) return;
-
     final lat = double.tryParse(latCtrl.text.trim());
     final lng = double.tryParse(lngCtrl.text.trim());
+    if (ok != true || !context.mounted) return;
+
     if (lat == null || lng == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('请输入有效经纬度'),
+        SnackBar(
+          content: Text(NotificationUiCopy.validCoordinatesRequired),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -1648,7 +1765,9 @@ class _LocationRemindersTab extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          hits.isEmpty ? '当前位置未命中任何位置提醒' : '已触发 ${hits.length} 条位置提醒',
+          hits.isEmpty
+              ? NotificationUiCopy.locationNoHits
+              : NotificationUiCopy.locationTriggeredHits(hits.length),
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -1674,7 +1793,7 @@ class _LocationTile extends StatelessWidget {
           '${reminder.latitude.toStringAsFixed(4)}, '
           '${reminder.longitude.toStringAsFixed(4)} · '
           '${reminder.radiusMeters.toStringAsFixed(0)}m · '
-          '${reminder.trigger == LocationTrigger.enter ? "进入" : "离开"}触发',
+          '${NotificationUiCopy.locationTriggerSuffix(reminder.trigger == LocationTrigger.enter)}',
           style: const TextStyle(fontSize: 11),
         ),
         trailing: IconButton(
@@ -1692,6 +1811,27 @@ class _LocationTile extends StatelessWidget {
 
 class _LocaleTab extends StatelessWidget {
   const _LocaleTab();
+
+  Future<void> _selectLocale(
+    BuildContext context,
+    LocaleProvider provider,
+    AppLocale selection,
+  ) async {
+    try {
+      await provider.setLocale(selection);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(NotificationUiCopy.localeSaveFailed),
+          action: SnackBarAction(
+            label: I18n.tr('action.retry'),
+            onPressed: () => _selectLocale(context, provider, selection),
+          ),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1715,7 +1855,7 @@ class _LocaleTab extends StatelessWidget {
                   : Icons.radio_button_unchecked,
             ),
             title: Text(I18n.tr(entry.$2)),
-            onTap: () => locale.setLocale(entry.$1),
+            onTap: () => _selectLocale(context, locale, entry.$1),
           ),
         const SizedBox(height: 16),
         Text(

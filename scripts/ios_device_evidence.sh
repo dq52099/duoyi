@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
 IOS_WORKSPACE="${IOS_WORKSPACE:-$ROOT_DIR/ios/Runner.xcworkspace}"
 IOS_SCHEME="${IOS_SCHEME:-Runner}"
 IOS_DESTINATION="${IOS_DESTINATION:-generic/platform=iOS}"
@@ -50,6 +51,17 @@ grep -R "$WIDGET_BUNDLE_ID" ios/Runner.xcodeproj/project.pbxproj \
   | tee "$EVIDENCE_DIR/widget_bundle_id.txt"
 grep -R 'DuoyiWidgets.appex\|DuoyiWidgets.swift in Sources\|Embed App Extensions' ios/Runner.xcodeproj/project.pbxproj \
   | tee "$EVIDENCE_DIR/widget_target.txt"
+
+echo
+echo "== Refresh Flutter build configuration =="
+if ! command -v "$FLUTTER_BIN" >/dev/null 2>&1; then
+  echo "Flutter not found. Set FLUTTER_BIN to the Flutter executable." >&2
+  exit 2
+fi
+"$FLUTTER_BIN" build ios --config-only --no-codesign --debug --no-pub \
+  | tee "$EVIDENCE_DIR/flutter_ios_config.log"
+grep -E '^FLUTTER_BUILD_(NAME|NUMBER)=' ios/Flutter/Generated.xcconfig \
+  > "$EVIDENCE_DIR/generated_build_version.txt"
 
 echo
 echo "== Xcode build for device signing evidence =="

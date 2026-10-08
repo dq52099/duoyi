@@ -52,7 +52,7 @@
             android:layout_height="36dp"
             android:minWidth="36dp"
             android:minHeight="36dp"
-            android:contentDescription="刷新小组件"
+            android:contentDescription="@string/widget_refresh_description"
             android:ellipsize="end"
             android:gravity="center"
             android:maxLines="1"
@@ -68,7 +68,7 @@
         android:layout_marginTop="2dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="随手记"
+        android:text="@string/widget_note_title"
         android:textColor="#666666"
         android:textSize="11sp" />
 
@@ -135,7 +135,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="待办"
+            android:text="@string/widget_tab_todo"
             android:textColor="#333333"
             android:textSize="10sp" />
 
@@ -147,7 +147,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="习惯"
+            android:text="@string/widget_tab_habit"
             android:textColor="#333333"
             android:textSize="10sp" />
 
@@ -159,7 +159,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="日历"
+            android:text="@string/widget_tab_calendar"
             android:textColor="#333333"
             android:textSize="10sp" />
 
@@ -171,7 +171,7 @@
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="专注"
+            android:text="@string/widget_tab_focus"
             android:textColor="#333333"
             android:textSize="10sp" />
     </LinearLayout>

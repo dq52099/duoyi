@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../core/i18n.dart';
+import '../core/settings_ui_copy.dart';
 import '../providers/app_lock_provider.dart';
+import '../widgets/settings_picker_tile.dart';
 import '../widgets/surface_components.dart';
 
 class LockSettingsScreen extends StatefulWidget {
@@ -14,96 +16,97 @@ class LockSettingsScreen extends StatefulWidget {
 }
 
 class _LockSettingsScreenState extends State<LockSettingsScreen> {
+  bool _isPinFlowInFlight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _setPinFlow() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final lock = context.read<AppLockProvider>();
-    final pin = await _askPin(I18n.tr('app_lock.dialog.set_pin'));
-    if (pin == null) return;
-    final confirm = await _askPin(I18n.tr('app_lock.dialog.confirm_pin'));
-    if (confirm == null) return;
-    if (pin != confirm) {
+    if (_isPinFlowInFlight) return;
+    _isPinFlowInFlight = true;
+    try {
+      final messenger = ScaffoldMessenger.of(context);
+      final lock = context.read<AppLockProvider>();
+      final pin = await _askPin('app_lock.dialog.set_pin');
+      if (pin == null || !mounted) return;
+      final confirm = await _askPin('app_lock.dialog.confirm_pin');
+      if (confirm == null || !mounted) return;
+      if (pin != confirm) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(I18n.tr('app_lock.pin_mismatch'))),
+        );
+        return;
+      }
+      final ok = await lock.setPin(pin);
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text(I18n.tr('app_lock.pin_mismatch'))),
-      );
-      return;
-    }
-    final ok = await lock.setPin(pin);
-    if (!mounted) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          ok
-              ? I18n.tr('app_lock.enabled_message')
-              : I18n.tr('app_lock.pin_invalid'),
+        SnackBar(
+          content: Text(
+            ok
+                ? I18n.tr('app_lock.enabled_message')
+                : I18n.tr('app_lock.pin_invalid'),
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      _isPinFlowInFlight = false;
+    }
   }
 
   Future<void> _disableFlow() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final lock = context.read<AppLockProvider>();
-    final pin = await _askPin(I18n.tr('app_lock.dialog.disable_pin'));
-    if (pin == null) return;
-    final ok = await lock.verify(pin);
-    if (!ok) {
+    if (_isPinFlowInFlight) return;
+    _isPinFlowInFlight = true;
+    try {
+      final messenger = ScaffoldMessenger.of(context);
+      final lock = context.read<AppLockProvider>();
+      final pin = await _askPin('app_lock.dialog.disable_pin');
+      if (pin == null || !mounted) return;
+      final ok = await lock.verify(pin);
+      if (!mounted) return;
+      if (!ok) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(I18n.tr('app_lock.pin_wrong'))),
+        );
+        return;
+      }
+      await lock.disable(pin);
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text(I18n.tr('app_lock.pin_wrong'))),
+        SnackBar(content: Text(I18n.tr('app_lock.disabled_message'))),
       );
-      return;
+    } finally {
+      _isPinFlowInFlight = false;
     }
-    await lock.disable(pin);
-    if (!mounted) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text(I18n.tr('app_lock.disabled_message'))),
-    );
   }
 
-  Future<String?> _askPin(String title) async {
-    final ctrl = TextEditingController();
-    try {
-      final v = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AppDialog(
-          title: Text(title),
-          content: TextField(
-            controller: ctrl,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            obscureText: true,
-            maxLength: 8,
-            decoration: InputDecoration(
-              hintText: I18n.tr('app_lock.pin_hint'),
-              counterText: '',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text),
-              child: Text(I18n.tr('action.confirm')),
-            ),
-          ],
-        ),
-      );
-      if (v == null) return null;
-      if (!RegExp(r'^\d{4,8}$').hasMatch(v)) {
-        if (!mounted) return null;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(I18n.tr('app_lock.pin_invalid'))),
-        );
-        return null;
-      }
-      return v;
-    } finally {
-      ctrl.dispose();
+  Future<String?> _askPin(String titleKey) async {
+    if (!mounted) return null;
+    final v = await showDialog<String>(
+      context: context,
+      builder: (_) => _PinInputDialog(titleKey: titleKey),
+    );
+    if (v == null) return null;
+    if (!RegExp(r'^\d{4,8}$').hasMatch(v)) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(I18n.tr('app_lock.pin_invalid'))));
+      return null;
     }
+    return v;
   }
 
   @override
@@ -199,56 +202,31 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
                     subtitle: I18n.tr('app_lock.change_pin.subtitle'),
                     onTap: _setPinFlow,
                   ),
-                  AppSettingsTile(
+                  SettingsPickerTile<int>(
                     icon: Icons.timer_outlined,
                     color: Colors.orange,
-                    title: I18n.tr('app_lock.auto_lock'),
-                    subtitle: lock.autoLockMinutes == 0
-                        ? I18n.tr('app_lock.auto_lock.every_foreground')
-                        : '${I18n.tr('app_lock.auto_lock.after_prefix')}'
-                              '${lock.autoLockMinutes}'
-                              '${I18n.tr('app_lock.auto_lock.after_suffix')}',
-                    trailing: AppCompactDropdown<int>(
-                      width: 132,
-                      value: lock.autoLockMinutes,
-                      items: [
-                        DropdownMenuItem(
-                          value: 0,
-                          child: Text(I18n.tr('app_lock.auto_lock.immediate')),
+                    titleBuilder: () => I18n.tr('app_lock.auto_lock'),
+                    subtitleBuilder: () =>
+                        SettingsUiCopy.autoLockSubtitle(lock.autoLockMinutes),
+                    pickerTitleBuilder: () => SettingsUiCopy.selectAutoLock,
+                    currentValue: lock.autoLockMinutes,
+                    displayLabelBuilder: () =>
+                        SettingsUiCopy.autoLockOptionLabel(
+                          lock.autoLockMinutes,
                         ),
-                        DropdownMenuItem(
-                          value: 1,
-                          child: Text(
-                            '1${I18n.tr('app_lock.auto_lock.minute_label')}',
-                          ),
+                    optionsBuilder: () => [
+                      for (final m in SettingsUiCopy.autoLockMinuteOptions)
+                        SettingsPickerOption<int>(
+                          value: m,
+                          title: SettingsUiCopy.autoLockOptionLabel(m),
+                          subtitle: m == 0
+                              ? I18n.tr('app_lock.auto_lock.every_foreground')
+                              : '${I18n.tr('app_lock.auto_lock.after_prefix')}$m${I18n.tr('app_lock.auto_lock.after_suffix')}',
                         ),
-                        DropdownMenuItem(
-                          value: 5,
-                          child: Text(
-                            '5${I18n.tr('app_lock.auto_lock.minute_label')}',
-                          ),
-                        ),
-                        DropdownMenuItem(
-                          value: 15,
-                          child: Text(
-                            '15${I18n.tr('app_lock.auto_lock.minute_label')}',
-                          ),
-                        ),
-                        DropdownMenuItem(
-                          value: 60,
-                          child: Text(I18n.tr('app_lock.auto_lock.one_hour')),
-                        ),
-                        DropdownMenuItem(
-                          value: 240,
-                          child: Text(I18n.tr('app_lock.auto_lock.four_hours')),
-                        ),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) {
-                          context.read<AppLockProvider>().setAutoLockMinutes(v);
-                        }
-                      },
-                    ),
+                    ],
+                    onSelected: (v) {
+                      context.read<AppLockProvider>().setAutoLockMinutes(v);
+                    },
                   ),
                   AppSettingsTile(
                     icon: Icons.lock_clock_outlined,
@@ -286,6 +264,70 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Dedicated dialog widget that manages its own TextEditingController lifetime.
+///
+/// Disposes the controller only when unmounted (after route transition finishes),
+/// and dynamically rebuilds when [I18n.localeListenable] changes without losing input.
+class _PinInputDialog extends StatefulWidget {
+  final String titleKey;
+
+  const _PinInputDialog({required this.titleKey});
+
+  @override
+  State<_PinInputDialog> createState() => _PinInputDialogState();
+}
+
+class _PinInputDialogState extends State<_PinInputDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialog(
+      title: Text(I18n.tr(widget.titleKey)),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        obscureText: true,
+        maxLength: 8,
+        decoration: InputDecoration(
+          hintText: I18n.tr('app_lock.pin_hint'),
+          counterText: '',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(I18n.tr('action.cancel')),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: Text(I18n.tr('action.confirm')),
+        ),
+      ],
     );
   }
 }

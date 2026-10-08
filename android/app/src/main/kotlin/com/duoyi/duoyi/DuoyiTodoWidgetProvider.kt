@@ -72,6 +72,7 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
                     R.id.widget_todo_item_3,
                 ),
                 mutedIds = intArrayOf(
+                    R.id.widget_todo_unit,
                     R.id.widget_todo_nav_habit,
                     R.id.widget_todo_nav_calendar,
                     R.id.widget_todo_nav_focus,
@@ -88,25 +89,41 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
                 ),
             )
 
+            val isZh = DuoyiWidgetCopy.isZh(prefs)
+            val todoCount = prefs.getInt("todo_top3_count", 0)
             views.setTextViewText(
                 R.id.widget_todo_title,
-                prefs.getString("brand_app_title", "多仪") ?: "多仪"
+                DuoyiWidgetCopy.appTitle(prefs, isZh)
             )
             views.setTextViewText(
                 R.id.widget_todo_count,
-                prefs.getInt("todo_top3_count", 0).toString()
+                todoCount.toString()
             )
-            val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
-            val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
-            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
-            val tabFocus = prefs.getString("nav_focus", "专注") ?: "专注"
+            views.setTextViewText(
+                R.id.widget_todo_unit,
+                DuoyiWidgetCopy.todoCountUnit(todoCount, isZh)
+            )
+            views.setTextViewText(
+                R.id.widget_todo_quick_add,
+                DuoyiWidgetCopy.todoQuickAdd(isZh)
+            )
+            val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
+            val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
+            val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
+            val tabFocus = DuoyiWidgetCopy.navFocus(prefs, isZh)
             views.setTextViewText(R.id.widget_todo_nav_todo, tabTodo)
             views.setTextViewText(R.id.widget_todo_nav_habit, tabHabit)
             views.setTextViewText(R.id.widget_todo_nav_calendar, tabCalendar)
             views.setTextViewText(R.id.widget_todo_nav_focus, tabFocus)
+            val todo1 = prefs.getString("todo_top3_1", null)
+            val todo1Title = if (todo1.isNullOrBlank() || todo1 == "今天没有未完成待办" || todo1 == "No open tasks today") {
+                DuoyiWidgetCopy.defaultTodoEmpty(isZh)
+            } else {
+                cleanTodoTitle(todo1)
+            }
             views.setTextViewText(
                 R.id.widget_todo_item_1,
-                cleanTodoTitle(prefs.getString("todo_top3_1", "") ?: "")
+                todo1Title
             )
             views.setTextViewText(
                 R.id.widget_todo_item_2,
@@ -118,7 +135,7 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
             )
             views.setTextViewText(
                 R.id.widget_todo_today_summary,
-                "今日待办 · ${prefs.getInt("todo_top3_count", 0)} 项"
+                DuoyiWidgetCopy.todoSummary(prefs.getInt("todo_top3_count", 0), isZh)
             )
             bindTodoRow(context, views, prefs, 1, R.id.widget_todo_item_1, R.id.widget_todo_done_1)
             bindTodoRow(context, views, prefs, 2, R.id.widget_todo_item_2, R.id.widget_todo_done_2)
@@ -208,9 +225,10 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
             return
         }
         val encodedTodoId = Uri.encode(todoId)
+        val isZh = DuoyiWidgetCopy.isZh(prefs)
         val todoTitle = cleanTodoTitle(prefs.getString("todo_top3_${index}", "") ?: "")
-        views.setContentDescription(doneViewId, "完成待办：$todoTitle")
-        views.setContentDescription(itemViewId, "查看待办：$todoTitle")
+        views.setContentDescription(doneViewId, DuoyiWidgetCopy.todoDoneContentDescription(todoTitle, isZh))
+        views.setContentDescription(itemViewId, DuoyiWidgetCopy.todoItemContentDescription(todoTitle, isZh))
         views.setTextViewText(doneViewId, "○")
         views.setViewVisibility(doneViewId, View.VISIBLE)
         views.setOnClickPendingIntent(

@@ -65,14 +65,15 @@ open class DuoyiNoteWidgetProvider : DuoyiStyledWidgetProvider() {
                 ),
             )
 
+            val isZh = DuoyiWidgetCopy.isZh(prefs)
             views.setTextViewText(
                 R.id.widget_note_title,
-                prefs.getString("brand_app_title", "多仪") ?: "多仪"
+                DuoyiWidgetCopy.appTitle(prefs, isZh)
             )
-            views.setTextViewText(R.id.widget_note_subtitle, "随手记")
+            views.setTextViewText(R.id.widget_note_subtitle, DuoyiWidgetCopy.noteSubtitle(isZh))
             views.setTextViewText(
                 R.id.widget_note_1,
-                prefs.getString("note_highlight_1", "· 暂无随手记") ?: "· 暂无随手记"
+                DuoyiWidgetCopy.noteHighlight1(prefs.getString("note_highlight_1", null), isZh)
             )
             views.setTextViewText(
                 R.id.widget_note_2,
@@ -95,14 +96,10 @@ open class DuoyiNoteWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
             )
 
-            val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
-            val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
-            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
-            val tabFocus = prefs.getString("nav_focus", "专注") ?: "专注"
-            views.setTextViewText(R.id.widget_note_nav_todo, tabTodo)
-            views.setTextViewText(R.id.widget_note_nav_habit, tabHabit)
-            views.setTextViewText(R.id.widget_note_nav_calendar, tabCalendar)
-            views.setTextViewText(R.id.widget_note_nav_focus, tabFocus)
+            views.setTextViewText(R.id.widget_note_nav_todo, DuoyiWidgetCopy.navTodo(prefs, isZh))
+            views.setTextViewText(R.id.widget_note_nav_habit, DuoyiWidgetCopy.navHabit(prefs, isZh))
+            views.setTextViewText(R.id.widget_note_nav_calendar, DuoyiWidgetCopy.navCalendar(prefs, isZh))
+            views.setTextViewText(R.id.widget_note_nav_focus, DuoyiWidgetCopy.navFocus(prefs, isZh))
 
             val openNote = HomeWidgetLaunchIntent.getActivity(
                 context, MainActivity::class.java, Uri.parse("duoyi://note")

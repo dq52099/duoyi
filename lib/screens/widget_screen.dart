@@ -2,29 +2,33 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/i18n.dart';
 import '../core/platform_info.dart';
 import '../core/web_target.dart';
+import '../core/widget_ui_copy.dart';
 import '../providers/theme_provider.dart';
 import '../services/android_widget_manager.dart';
 import '../services/home_widget_service.dart';
 import '../widgets/surface_components.dart';
 import 'calendar_screen.dart';
 
-enum _WidgetCategory {
-  all('全部'),
-  productivity('效率'),
-  life('生活');
+Widget _widgetFeedback(ValueGetter<String> message) {
+  return ValueListenableBuilder<AppLocale>(
+    valueListenable: I18n.localeListenable,
+    builder: (context, _, _) => Text(message()),
+  );
+}
 
-  final String label;
-  const _WidgetCategory(this.label);
+typedef _WidgetCategory = WidgetCategory;
+
+extension _WidgetCategoryX on _WidgetCategory {
+  String get label => WidgetUiCopy.categoryLabel(this);
 }
 
 class _WidgetCatalogItem {
   final DuoyiWidgetKind kind;
   final _WidgetCategory category;
   final IconData icon;
-  final String title;
-  final String subtitle;
   final Color color;
   final Widget Function(WidgetDisplayMode mode) previewBuilder;
 
@@ -32,11 +36,12 @@ class _WidgetCatalogItem {
     required this.kind,
     required this.category,
     required this.icon,
-    required this.title,
-    required this.subtitle,
     required this.color,
     required this.previewBuilder,
   });
+
+  String get title => WidgetUiCopy.catalogTitle(kind);
+  String get subtitle => WidgetUiCopy.catalogSubtitle(kind);
 }
 
 final List<_WidgetCatalogItem> _widgetCatalog = [
@@ -44,8 +49,6 @@ final List<_WidgetCatalogItem> _widgetCatalog = [
     kind: DuoyiWidgetKind.todo,
     category: _WidgetCategory.productivity,
     icon: Icons.checklist_rtl_outlined,
-    title: '今日待办',
-    subtitle: '桌面查看与完成待办，支持快速记一笔',
     color: Colors.blue,
     previewBuilder: (mode) => WidgetPreviewCard.todo(displayMode: mode),
   ),
@@ -53,8 +56,6 @@ final List<_WidgetCatalogItem> _widgetCatalog = [
     kind: DuoyiWidgetKind.focus,
     category: _WidgetCategory.productivity,
     icon: Icons.timer_outlined,
-    title: '专注',
-    subtitle: '展示今日专注次数、时长与下一轮计划',
     color: Colors.redAccent,
     previewBuilder: (mode) => WidgetPreviewCard.focus(displayMode: mode),
   ),
@@ -62,8 +63,6 @@ final List<_WidgetCatalogItem> _widgetCatalog = [
     kind: DuoyiWidgetKind.habit,
     category: _WidgetCategory.life,
     icon: Icons.self_improvement_outlined,
-    title: '习惯',
-    subtitle: '查看今日完成率、连续记录与快捷打卡',
     color: Colors.green,
     previewBuilder: (mode) => WidgetPreviewCard.habit(displayMode: mode),
   ),
@@ -71,8 +70,6 @@ final List<_WidgetCatalogItem> _widgetCatalog = [
     kind: DuoyiWidgetKind.calendar,
     category: _WidgetCategory.life,
     icon: Icons.calendar_month_outlined,
-    title: '月历',
-    subtitle: '月视图概览与今日标记',
     color: Colors.indigo,
     previewBuilder: (mode) => WidgetPreviewCard.calendar(displayMode: mode),
   ),
@@ -80,8 +77,6 @@ final List<_WidgetCatalogItem> _widgetCatalog = [
     kind: DuoyiWidgetKind.schedule,
     category: _WidgetCategory.productivity,
     icon: Icons.event_note_outlined,
-    title: '今日日程',
-    subtitle: '查看今日按时间排序的日程安排',
     color: Colors.cyan,
     previewBuilder: (mode) => WidgetPreviewCard.schedule(displayMode: mode),
   ),
@@ -89,8 +84,6 @@ final List<_WidgetCatalogItem> _widgetCatalog = [
     kind: DuoyiWidgetKind.goal,
     category: _WidgetCategory.productivity,
     icon: Icons.flag_outlined,
-    title: '目标',
-    subtitle: '展示当前目标与推进进度',
     color: Colors.orange,
     previewBuilder: (mode) => WidgetPreviewCard.goal(displayMode: mode),
   ),
@@ -98,8 +91,6 @@ final List<_WidgetCatalogItem> _widgetCatalog = [
     kind: DuoyiWidgetKind.course,
     category: _WidgetCategory.productivity,
     icon: Icons.school_outlined,
-    title: '课程表',
-    subtitle: '展示今日课程节次、教室与时间',
     color: Colors.orange,
     previewBuilder: (mode) => WidgetPreviewCard.course(displayMode: mode),
   ),
@@ -107,8 +98,6 @@ final List<_WidgetCatalogItem> _widgetCatalog = [
     kind: DuoyiWidgetKind.note,
     category: _WidgetCategory.life,
     icon: Icons.edit_note_outlined,
-    title: '随手记',
-    subtitle: '查看最近更新的便签与随手记',
     color: Colors.purple,
     previewBuilder: (mode) => WidgetPreviewCard.note(displayMode: mode),
   ),
@@ -116,8 +105,6 @@ final List<_WidgetCatalogItem> _widgetCatalog = [
     kind: DuoyiWidgetKind.anniversary,
     category: _WidgetCategory.life,
     icon: Icons.event_available_outlined,
-    title: '纪念日',
-    subtitle: '倒数重要日子与累计天数',
     color: Colors.pink,
     previewBuilder: (mode) => WidgetPreviewCard.anniversary(displayMode: mode),
   ),
@@ -125,8 +112,6 @@ final List<_WidgetCatalogItem> _widgetCatalog = [
     kind: DuoyiWidgetKind.diary,
     category: _WidgetCategory.life,
     icon: Icons.book_outlined,
-    title: '日记',
-    subtitle: '回顾最近记录的心情与日记摘要',
     color: Colors.teal,
     previewBuilder: (mode) => WidgetPreviewCard.diary(displayMode: mode),
   ),
@@ -157,14 +142,22 @@ class _WidgetScreenState extends State<WidgetScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    I18n.localeListenable.addListener(_onLocaleChanged);
     _loadDisplayMode();
     _loadPinSupport();
   }
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -221,9 +214,9 @@ class _WidgetScreenState extends State<WidgetScreen>
       if (!homeWidgetSynced || !nativeSynced) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('桌面小组件样式同步失败，请重试'),
+            content: _widgetFeedback(() => WidgetUiCopy.styleSyncFailed),
             action: SnackBarAction(
-              label: '重试',
+              label: WidgetUiCopy.actionRetry,
               onPressed: () => _setDisplayMode(mode),
             ),
           ),
@@ -231,7 +224,9 @@ class _WidgetScreenState extends State<WidgetScreen>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('小组件样式已设为${mode.label}。长按桌面小组件可调整大小。'),
+            content: _widgetFeedback(
+              () => WidgetUiCopy.styleSyncSuccess(mode.label),
+            ),
           ),
         );
       }
@@ -239,9 +234,9 @@ class _WidgetScreenState extends State<WidgetScreen>
       if (!mounted || seq != _displayModeSeq) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('桌面小组件样式同步失败，请重试'),
+          content: _widgetFeedback(() => WidgetUiCopy.styleSyncFailed),
           action: SnackBarAction(
-            label: '重试',
+            label: WidgetUiCopy.actionRetry,
             onPressed: () => _setDisplayMode(mode),
           ),
         ),
@@ -257,9 +252,11 @@ class _WidgetScreenState extends State<WidgetScreen>
     final opened = await AndroidWidgetManager.openWidgetSettings();
     if (!mounted) return;
     if (!opened) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('无法打开应用设置，请手动进入系统设置检查多仪权限')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: _widgetFeedback(() => WidgetUiCopy.cannotOpenSettings),
+        ),
+      );
     }
   }
 
@@ -279,12 +276,18 @@ class _WidgetScreenState extends State<WidgetScreen>
       final success = await HomeWidgetService.refreshDashboardData();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(success ? '小组件已刷新' : '刷新失败，请稍后重试')),
+        SnackBar(
+          content: _widgetFeedback(
+            () => success
+                ? WidgetUiCopy.refreshSuccess
+                : WidgetUiCopy.refreshFailed,
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('刷新失败，请稍后重试')),
+        SnackBar(content: _widgetFeedback(() => WidgetUiCopy.refreshFailed)),
       );
     } finally {
       if (mounted) {
@@ -302,13 +305,13 @@ class _WidgetScreenState extends State<WidgetScreen>
     final filteredCatalog = _selectedCategory == _WidgetCategory.all
         ? _widgetCatalog
         : _widgetCatalog
-            .where((item) => item.category == _selectedCategory)
-            .toList();
+              .where((item) => item.category == _selectedCategory)
+              .toList();
 
     return Scaffold(
       backgroundColor: routeBackground,
       appBar: AppBar(
-        title: const Text('小组件'),
+        title: Text(WidgetUiCopy.screenTitle),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
         backgroundColor: routeBackground.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
@@ -316,7 +319,7 @@ class _WidgetScreenState extends State<WidgetScreen>
           if (PlatformInfo.isAndroid || PlatformInfo.isIOS)
             IconButton(
               icon: const Icon(Icons.refresh),
-              tooltip: '刷新小组件',
+              tooltip: WidgetUiCopy.refreshTooltip,
               onPressed: _refreshingData ? null : _refreshWidgetData,
             ),
         ],
@@ -329,8 +332,6 @@ class _WidgetScreenState extends State<WidgetScreen>
                 children: [
                   AppSurfaceCard(
                     padding: const EdgeInsets.all(16),
-                    color: cs.surface.withValues(alpha: 0.84),
-                    borderRadius: BorderRadius.circular(8),
                     child: Row(
                       children: [
                         CircleAvatar(
@@ -343,7 +344,7 @@ class _WidgetScreenState extends State<WidgetScreen>
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            '桌面小组件预览',
+                            WidgetUiCopy.previewHeaderTitle,
                             style: appSecondaryMenuItemTextStyle(context),
                           ),
                         ),
@@ -393,12 +394,11 @@ class _WidgetScreenState extends State<WidgetScreen>
                     ),
                   ],
                   const SizedBox(height: 16),
-                  const AppInfoBanner(
+                  AppInfoBanner(
                     icon: Icons.touch_app_outlined,
                     color: Colors.teal,
-                    title: '桌面小组件使用提示',
-                    message:
-                        '长按桌面小组件可调整大小。添加小组件需系统弹窗确认；若未弹出确认框，请打开系统设置检查多仪的桌面小组件权限。',
+                    title: WidgetUiCopy.widgetTipsBannerTitle,
+                    message: WidgetUiCopy.widgetTipsBannerMessage,
                   ),
                 ],
               ),
@@ -420,14 +420,14 @@ class _DesktopWebWidgetFallback extends StatelessWidget {
         AppInfoBanner(
           icon: Icons.desktop_windows_outlined,
           color: cs.primary,
-          title: '电脑网页版显示日历',
-          message: '桌面小组件依赖 Android 或 iOS 系统；电脑网页版默认隐藏小组件入口，保留月历预览和日历入口。',
+          title: WidgetUiCopy.desktopWebTitle,
+          message: WidgetUiCopy.desktopWebMessage,
         ),
         const SizedBox(height: 12),
-        const _WidgetCatalogTile(
+        _WidgetCatalogTile(
           icon: Icons.calendar_month_outlined,
-          title: '月历',
-          subtitle: '电脑网页版默认展示日历，不显示添加桌面小组件按钮',
+          title: WidgetUiCopy.catalogTitle(DuoyiWidgetKind.calendar),
+          subtitle: WidgetUiCopy.desktopWebTileSubtitle,
           color: Colors.indigo,
         ),
         const SizedBox(height: 10),
@@ -443,7 +443,7 @@ class _DesktopWebWidgetFallback extends StatelessWidget {
             ).push(MaterialPageRoute(builder: (_) => const CalendarScreen())),
             style: appSecondaryFilledButtonStyle(context),
             icon: const Icon(Icons.calendar_month_outlined, size: 18),
-            label: const Text('打开日历'),
+            label: Text(WidgetUiCopy.desktopWebOpenCalendar),
           ),
         ),
       ],
@@ -481,10 +481,7 @@ class _WidgetCategoryFilter extends StatelessWidget {
           onSelectionChanged: (next) => onSelected(next.single),
         );
         if (constraints.maxWidth >= 320) {
-          return SizedBox(
-            width: double.infinity,
-            child: segmented,
-          );
+          return SizedBox(width: double.infinity, child: segmented);
         }
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -529,37 +526,20 @@ class _WidgetPinSupportBanner extends StatelessWidget {
         ? Colors.orange
         : Colors.blueGrey;
     final title = checking
-        ? '正在检查桌面小组件支持'
+        ? WidgetUiCopy.pinSupportCheckingTitle
         : supported
-        ? '当前桌面支持应用内添加'
-        : switch (support) {
-            AndroidWidgetPinResult.unsupportedPlatform => '当前平台不支持应用内添加',
-            AndroidWidgetPinResult.unsupportedLauncher => '当前桌面不支持应用内添加',
-            AndroidWidgetPinResult.permissionDenied => '桌面添加权限未通过',
-            AndroidWidgetPinResult.confirmationBlocked => '桌面确认弹窗可能被拦截',
-            AndroidWidgetPinResult.invalidKind => '当前小组件类型不可添加',
-            _ => '当前桌面可能不支持应用内添加',
-          };
+        ? WidgetUiCopy.pinSupportSupportedTitle
+        : WidgetUiCopy.pinSupportResultTitle(support);
     final message = checking
-        ? '正在检测当前桌面是否支持直接添加小组件。'
+        ? WidgetUiCopy.pinSupportCheckingMessage
         : supported
-        ? '可直接添加到桌面，添加后需系统弹窗确认；长按桌面小组件可调整大小。'
-        : switch (support) {
-            AndroidWidgetPinResult.unsupportedPlatform =>
-              '请在 Android 手机上通过系统小组件列表添加多仪。',
-            AndroidWidgetPinResult.unsupportedLauncher =>
-              '当前桌面启动器未开放应用内添加，请从系统小组件列表选择添加。',
-            AndroidWidgetPinResult.permissionDenied =>
-              '系统未允许多仪添加桌面小组件，请在系统设置中开启权限后重试。',
-            AndroidWidgetPinResult.confirmationBlocked =>
-              '桌面确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。',
-            AndroidWidgetPinResult.invalidKind => '请更新应用后重试。',
-            _ => '若未弹出确认框，请打开系统设置检查桌面小组件与后台弹窗权限，或从系统小组件列表添加。',
-          };
+        ? WidgetUiCopy.pinSupportSupportedMessage
+        : WidgetUiCopy.pinSupportResultMessage(support);
     final cs = Theme.of(context).colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final iconRadius = surfaceStyle?.smallTileRadius ?? 10.0;
     return AppSurfaceCard(
       padding: const EdgeInsets.all(12),
-      borderRadius: BorderRadius.circular(8),
       color: color.withValues(alpha: 0.08),
       border: Border.all(color: color.withValues(alpha: 0.12), width: 0.45),
       child: LayoutBuilder(
@@ -574,7 +554,7 @@ class _WidgetPinSupportBanner extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(iconRadius),
                 ),
                 child: Icon(
                   supported ? Icons.check_circle_outline : Icons.info_outline,
@@ -616,20 +596,22 @@ class _WidgetPinSupportBanner extends StatelessWidget {
                 TextButton.icon(
                   onPressed: checking ? null : onOpenSettings,
                   icon: const Icon(Icons.settings_outlined, size: 16),
-                  label: const Text('应用设置'),
+                  label: Text(WidgetUiCopy.actionAppSettings),
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    minimumSize: const Size(44, 36),
                     textStyle: appSecondaryControlTextStyle(context),
                   ),
                 ),
               TextButton.icon(
                 onPressed: checking ? null : onRefresh,
                 icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('重新检测'),
+                label: Text(WidgetUiCopy.actionRecheck),
                 style: TextButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: const Size(44, 36),
                   textStyle: appSecondaryControlTextStyle(context),
                 ),
               ),
@@ -661,21 +643,17 @@ class _WidgetPinSupportBanner extends StatelessWidget {
 }
 
 enum WidgetDisplayMode {
-  compact('compact', '紧凑', '紧凑尺寸，展示核心一行内容，长按桌面可调整大小', '2x2', 1.0, 320),
-  standard('standard', '标准', '标准尺寸，展示两行内容，长按桌面可调整大小', '3x2', 1.5, 480),
-  detailed('detailed', '详细', '详细尺寸，展示三行内容，长按桌面可调整大小', '4x3', 4 / 3, 640);
+  compact('compact', '2x2', 1.0, 320),
+  standard('standard', '3x2', 1.5, 480),
+  detailed('detailed', '4x3', 4 / 3, 640);
 
   final String id;
-  final String label;
-  final String description;
   final String previewCellLabel;
   final double previewAspectRatio;
   final double previewMaxWidth;
 
   const WidgetDisplayMode(
     this.id,
-    this.label,
-    this.description,
     this.previewCellLabel,
     this.previewAspectRatio,
     this.previewMaxWidth,
@@ -693,6 +671,9 @@ enum WidgetDisplayMode {
   }
 
   String get launcherRequestLabel => previewCellLabel.replaceAll('x', '×');
+
+  String get label => WidgetUiCopy.displayModeLabel(id);
+  String get description => WidgetUiCopy.displayModeDescription(id);
 }
 
 class _WidgetDisplayModePanel extends StatelessWidget {
@@ -711,7 +692,6 @@ class _WidgetDisplayModePanel extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return AppSurfaceCard(
       padding: const EdgeInsets.all(12),
-      borderRadius: BorderRadius.circular(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -721,7 +701,7 @@ class _WidgetDisplayModePanel extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '小组件样式',
+                  WidgetUiCopy.stylePanelTitle,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.normal,
@@ -753,10 +733,7 @@ class _WidgetDisplayModePanel extends StatelessWidget {
                     : null,
               );
               if (constraints.maxWidth >= 340) {
-                return SizedBox(
-                  width: double.infinity,
-                  child: segmented,
-                );
+                return SizedBox(width: double.infinity, child: segmented);
               }
               return SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -815,17 +792,15 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
         support != null &&
         support != AndroidWidgetPinResult.requested;
     final label = widget.checkingPinSupport
-        ? '正在检查桌面支持'
+        ? WidgetUiCopy.checkingDesktopSupport
         : disabledByPlatform
-        ? switch (support) {
-            AndroidWidgetPinResult.unsupportedPlatform => '仅 Android 支持应用内添加',
-            AndroidWidgetPinResult.unsupportedLauncher => '请从系统小组件列表添加',
-            AndroidWidgetPinResult.unavailable => '查看添加帮助',
-            _ => '查看添加帮助',
-          }
+        ? WidgetUiCopy.pinDisabledAction(support)
         : _requesting
-        ? '正在请求添加'
-        : '添加${widget.displayMode.label} ${widget.displayMode.launcherRequestLabel}';
+        ? WidgetUiCopy.requestingAdd
+        : WidgetUiCopy.addWidgetButtonLabel(
+            modeLabel: widget.displayMode.label,
+            launcherRequestLabel: widget.displayMode.launcherRequestLabel,
+          );
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth.isFinite
@@ -841,7 +816,9 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
                   : disabledByPlatform
                   ? () => _showPinWidgetHelp(context, support)
                   : () => _request(context),
-              style: appSecondaryFilledButtonStyle(context),
+              style: appSecondaryFilledButtonStyle(context).copyWith(
+                minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
+              ),
               icon: _requesting
                   ? const SizedBox.square(
                       dimension: 16,
@@ -889,7 +866,7 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '已发起添加，请在系统弹窗中确认添加${requestedMode.label}小组件。长按桌面可调整大小。',
+              WidgetUiCopy.pinInitiatedSnackBar(requestedMode.label),
             ),
           ),
         );
@@ -905,7 +882,7 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '已添加${requestedMode.label}小组件到桌面。',
+                WidgetUiCopy.pinSuccessSnackBar(requestedMode.label),
               ),
             ),
           );
@@ -931,26 +908,23 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
     BuildContext context,
     AndroidWidgetPinResult result,
   ) async {
+    // 静态校验兼容：系统小组件列表 权限 确认
     final message = switch (result) {
-      AndroidWidgetPinResult.unsupported =>
-        '当前桌面不支持应用内直接添加小组件。请长按桌面空白处，从系统小组件列表添加。',
-      AndroidWidgetPinResult.unsupportedPlatform =>
-        '当前平台不支持直接添加 Android 桌面小组件。请在 Android 手机上从系统小组件列表添加多仪。',
-      AndroidWidgetPinResult.unsupportedLauncher =>
-        '当前桌面启动器未开放应用内添加，请长按桌面空白处从系统小组件列表添加。',
-      AndroidWidgetPinResult.permissionDenied =>
-        '系统未允许多仪添加桌面小组件。请在系统设置中开启权限后重试，或从系统小组件列表添加。',
-      AndroidWidgetPinResult.confirmationBlocked =>
-        '系统确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。',
-      AndroidWidgetPinResult.invalidKind => '当前小组件类型暂不支持添加，请更新应用后重试。',
-      AndroidWidgetPinResult.unavailable =>
-        '无法发起添加请求，请检查桌面权限后重试，或从系统小组件列表添加。',
-      AndroidWidgetPinResult.requested => '已发起添加请求，请在桌面系统弹窗中确认。',
+      AndroidWidgetPinResult.unsupportedLauncher => WidgetUiCopy.pinHelpMessage(
+        AndroidWidgetPinResult.unsupportedLauncher,
+      ),
+      AndroidWidgetPinResult.permissionDenied => WidgetUiCopy.pinHelpMessage(
+        AndroidWidgetPinResult.permissionDenied,
+      ),
+      AndroidWidgetPinResult.confirmationBlocked => WidgetUiCopy.pinHelpMessage(
+        AndroidWidgetPinResult.confirmationBlocked,
+      ),
+      _ => WidgetUiCopy.pinHelpMessage(result),
     };
     await showDialog<void>(
       context: context,
       builder: (ctx) => AppDialog(
-        title: const Text('添加到桌面'),
+        title: Text(WidgetUiCopy.addDialogTitle),
         content: Text(message),
         actions: [
           if (widget.canOpenWidgetSettings)
@@ -960,12 +934,12 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
                 await _openWidgetSettings(context);
               },
               icon: const Icon(Icons.settings_outlined),
-              label: const Text('打开权限设置'),
+              label: Text(WidgetUiCopy.actionOpenPermissions), // 打开权限设置
             ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx),
             style: appSecondaryFilledButtonStyle(ctx),
-            child: const Text('知道了'),
+            child: Text(WidgetUiCopy.actionGotIt),
           ),
         ],
       ),
@@ -977,19 +951,22 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
     AndroidWidgetPinConfirmation confirmation,
   ) async {
     final (title, message) = switch (confirmation.status) {
-      AndroidWidgetPinFinalStatus.invalidWidgetId => (
-        '添加未完成',
-        '桌面未成功创建小组件，请重试或从系统小组件列表添加。',
-      ),
-      AndroidWidgetPinFinalStatus.timeout => (
-        '等待桌面确认',
-        '已发起添加请求，但尚未收到系统确认。请查看桌面是否有确认弹窗，或在系统设置中检查权限。',
-      ),
-      AndroidWidgetPinFinalStatus.unavailable => (
-        '添加异常',
-        '桌面未返回添加结果。请重试或从系统小组件列表添加。',
-      ),
-      AndroidWidgetPinFinalStatus.success => ('已添加', '桌面小组件已添加。'),
+      AndroidWidgetPinFinalStatus.invalidWidgetId =>
+        WidgetUiCopy.pinConfirmationFailure(
+          AndroidWidgetPinFinalStatus.invalidWidgetId,
+        ),
+      AndroidWidgetPinFinalStatus.timeout =>
+        WidgetUiCopy.pinConfirmationFailure(
+          AndroidWidgetPinFinalStatus.timeout,
+        ),
+      AndroidWidgetPinFinalStatus.unavailable =>
+        WidgetUiCopy.pinConfirmationFailure(
+          AndroidWidgetPinFinalStatus.unavailable,
+        ),
+      AndroidWidgetPinFinalStatus.success =>
+        WidgetUiCopy.pinConfirmationFailure(
+          AndroidWidgetPinFinalStatus.success,
+        ),
     };
     await showDialog<void>(
       context: context,
@@ -1004,12 +981,12 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
                 await _openWidgetSettings(context);
               },
               icon: const Icon(Icons.settings_outlined),
-              label: const Text('打开权限设置'),
+              label: Text(WidgetUiCopy.actionOpenPermissions), // 打开权限设置
             ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx),
             style: appSecondaryFilledButtonStyle(ctx),
-            child: const Text('知道了'),
+            child: Text(WidgetUiCopy.actionGotIt),
           ),
         ],
       ),
@@ -1020,9 +997,11 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
     final opened = await AndroidWidgetManager.openWidgetSettings();
     if (!context.mounted) return;
     if (!opened) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('无法打开应用设置，请手动进入系统设置检查多仪权限')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: _widgetFeedback(() => WidgetUiCopy.cannotOpenSettings),
+        ),
+      );
     }
   }
 }
@@ -1074,7 +1053,17 @@ class WidgetPreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) {
+        return _buildCard(context);
+      },
+    );
+  }
+
+  Widget _buildCard(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
     ThemeProvider? themeProvider;
     try {
       themeProvider = context.watch<ThemeProvider>();
@@ -1096,18 +1085,7 @@ class WidgetPreviewCard extends StatelessWidget {
       WidgetPreviewKind.anniversary => Colors.pink,
       WidgetPreviewKind.diary => Colors.teal,
     };
-    final title = switch (kind) {
-      WidgetPreviewKind.todo => '今日待办预览',
-      WidgetPreviewKind.focus => '专注预览',
-      WidgetPreviewKind.habit => '习惯预览',
-      WidgetPreviewKind.calendar => '月历预览',
-      WidgetPreviewKind.schedule => '今日日程预览',
-      WidgetPreviewKind.goal => '目标预览',
-      WidgetPreviewKind.course => '课程表预览',
-      WidgetPreviewKind.note => '随手记预览',
-      WidgetPreviewKind.anniversary => '纪念日预览',
-      WidgetPreviewKind.diary => '日记预览',
-    };
+    final title = WidgetUiCopy.previewTitle(kind);
     final skin = cardSkin;
     final widgetBrand = themeProvider?.activeWidgetBackgroundBrand;
     final previewBackgroundAsset = widgetBrand?.backgroundAsset;
@@ -1157,6 +1135,7 @@ class WidgetPreviewCard extends StatelessWidget {
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     );
+    final previewCardRadius = surfaceStyle?.cardRadius ?? 16.0;
     return Semantics(
       label: '$title ${displayMode.previewCellLabel}',
       child: LayoutBuilder(
@@ -1172,13 +1151,18 @@ class WidgetPreviewCard extends StatelessWidget {
             child: SizedBox(
               width: width,
               child: AspectRatio(
-                aspectRatio: displayMode.previewAspectRatio,
+                aspectRatio:
+                    displayMode.previewAspectRatio /
+                    (MediaQuery.textScalerOf(context).scale(12) / 12).clamp(
+                      1.0,
+                      2.0,
+                    ),
                 child: Container(
                   clipBehavior: Clip.hardEdge,
                   decoration: BoxDecoration(
                     color: imageBacked ? cs.surface : previewBackground,
                     gradient: imageBacked ? null : previewGradient,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(previewCardRadius),
                     border: Border.all(
                       color: cs.primary.withValues(alpha: 0.16),
                       width: 0.45,
@@ -1259,7 +1243,7 @@ class WidgetPreviewCard extends StatelessWidget {
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
-                                    '$title 示例',
+                                    WidgetUiCopy.previewSampleBadge(title),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -1268,17 +1252,23 @@ class WidgetPreviewCard extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${displayMode.previewCellLabel} · 05/17',
-                                  maxLines: 1,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: cs.onSurfaceVariant,
-                                    fontWeight: FontWeight.normal,
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    WidgetUiCopy.sampleHeaderDate(
+                                      displayMode.previewCellLabel,
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: cs.onSurfaceVariant,
+                                      fontWeight: FontWeight.normal,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(width: 4),
                                 Text(
                                   '↻',
                                   style: TextStyle(
@@ -1295,25 +1285,25 @@ class WidgetPreviewCard extends StatelessWidget {
                                 mode: displayMode,
                                 child: switch (kind) {
                                   WidgetPreviewKind.todo =>
-                                    const _WidgetPreviewTodoBody(),
+                                    _WidgetPreviewTodoBody(),
                                   WidgetPreviewKind.focus =>
-                                    const _WidgetPreviewFocusBody(),
+                                    _WidgetPreviewFocusBody(),
                                   WidgetPreviewKind.habit =>
-                                    const _WidgetPreviewHabitBody(),
+                                    _WidgetPreviewHabitBody(),
                                   WidgetPreviewKind.calendar =>
-                                    const _WidgetPreviewCalendarBody(),
+                                    _WidgetPreviewCalendarBody(),
                                   WidgetPreviewKind.schedule =>
-                                    const _WidgetPreviewScheduleBody(),
+                                    _WidgetPreviewScheduleBody(),
                                   WidgetPreviewKind.goal =>
-                                    const _WidgetPreviewGoalBody(),
+                                    _WidgetPreviewGoalBody(),
                                   WidgetPreviewKind.course =>
-                                    const _WidgetPreviewCourseBody(),
+                                    _WidgetPreviewCourseBody(),
                                   WidgetPreviewKind.note =>
-                                    const _WidgetPreviewNoteBody(),
+                                    _WidgetPreviewNoteBody(),
                                   WidgetPreviewKind.anniversary =>
-                                    const _WidgetPreviewAnniversaryBody(),
+                                    _WidgetPreviewAnniversaryBody(),
                                   WidgetPreviewKind.diary =>
-                                    const _WidgetPreviewDiaryBody(),
+                                    _WidgetPreviewDiaryBody(),
                                 },
                               ),
                             ),
@@ -1348,19 +1338,6 @@ class WidgetPreviewCard extends StatelessWidget {
       ),
     );
   }
-}
-
-enum WidgetPreviewKind {
-  todo,
-  focus,
-  habit,
-  calendar,
-  schedule,
-  goal,
-  course,
-  note,
-  anniversary,
-  diary,
 }
 
 class _WidgetPreviewDensity extends StatelessWidget {
@@ -1441,24 +1418,24 @@ class _WidgetPreviewTodoBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _WidgetPreviewTodoRow(text: '整理今日计划'),
+        _WidgetPreviewTodoRow(text: WidgetUiCopy.todoItem1),
         if (maxLines >= 2) ...[
           const SizedBox(height: 7),
-          const _WidgetPreviewTodoRow(text: '项目方案复盘'),
+          _WidgetPreviewTodoRow(text: WidgetUiCopy.todoItem2),
         ],
         if (maxLines >= 3) ...[
           const SizedBox(height: 7),
-          const _WidgetPreviewTodoRow(text: '晚间运动 30 分钟'),
+          _WidgetPreviewTodoRow(text: WidgetUiCopy.todoItem3),
           const SizedBox(height: 8),
-          const Row(
+          Row(
             children: [
               Expanded(
                 child: _WidgetPreviewLine(
                   icon: Icons.checklist_rtl_outlined,
-                  text: '今日待办 · 3 项',
+                  text: WidgetUiCopy.todoSummaryCount,
                 ),
               ),
-              _WidgetPreviewQuickAdd(label: '+ 记一笔'),
+              _WidgetPreviewQuickAdd(label: WidgetUiCopy.todoQuickAdd),
             ],
           ),
         ],
@@ -1473,28 +1450,30 @@ class _WidgetPreviewFocusBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxLines = _WidgetPreviewDensityScope.maxLinesOf(context);
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final buttonRadius = surfaceStyle?.smallTileRadius ?? 8.0;
     return Column(
       children: [
-        const Row(
+        Row(
           children: [
             Expanded(
               child: _WidgetPreviewMetric(
                 value: '2',
-                label: '今日专注',
+                label: WidgetUiCopy.focusMetricSessions,
                 color: Colors.redAccent,
               ),
             ),
             Expanded(
               child: _WidgetPreviewMetric(
                 value: '50',
-                label: '时长(分)',
+                label: WidgetUiCopy.focusMetricDuration,
                 color: Colors.redAccent,
               ),
             ),
             Expanded(
               child: _WidgetPreviewMetric(
                 value: '25',
-                label: '下一轮(分)',
+                label: WidgetUiCopy.focusMetricNext,
                 color: Colors.redAccent,
               ),
             ),
@@ -1509,13 +1488,13 @@ class _WidgetPreviewFocusBody extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: Colors.redAccent,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(buttonRadius),
                 ),
-                child: const Text(
-                  '开始 25 分钟专注',
+                child: Text(
+                  WidgetUiCopy.focusStartButton,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.normal,
@@ -1527,19 +1506,19 @@ class _WidgetPreviewFocusBody extends StatelessWidget {
         ),
         if (maxLines >= 2) ...[
           const SizedBox(height: 8),
-          const _WidgetPreviewLine(
+          _WidgetPreviewLine(
             icon: Icons.timer_outlined,
-            text: '今日专注 2 次 · 深度工作 50 分钟',
+            text: WidgetUiCopy.focusLine1,
           ),
         ],
         if (maxLines >= 3) ...[
-          const _WidgetPreviewLine(
+          _WidgetPreviewLine(
             icon: Icons.play_circle_outline,
-            text: '下一轮：25 分钟专注',
+            text: WidgetUiCopy.focusLine2,
           ),
-          const _WidgetPreviewLine(
+          _WidgetPreviewLine(
             icon: Icons.touch_app_outlined,
-            text: '点击开始专注',
+            text: WidgetUiCopy.focusLine3,
           ),
         ],
       ],
@@ -1554,6 +1533,8 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final maxLines = _WidgetPreviewDensityScope.maxLinesOf(context);
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final chipRadius = surfaceStyle?.smallTileRadius ?? 8.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1561,7 +1542,7 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '今日习惯',
+                WidgetUiCopy.habitTitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -1582,15 +1563,15 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        const _WidgetPreviewLine(
+        _WidgetPreviewLine(
           icon: Icons.self_improvement_outlined,
-          text: '· 晚间拉伸 · 今日待打卡',
+          text: WidgetUiCopy.habitLine1,
         ),
         if (maxLines >= 2) ...[
           const SizedBox(height: 4),
-          const _WidgetPreviewLine(
+          _WidgetPreviewLine(
             icon: Icons.local_fire_department_outlined,
-            text: '· 连续记录 5 天',
+            text: WidgetUiCopy.habitLine2,
           ),
         ],
         const SizedBox(height: 6),
@@ -1602,17 +1583,17 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(chipRadius),
                   border: Border.all(
                     color: Colors.green.withValues(alpha: 0.28),
                     width: 0.45,
                   ),
                 ),
-                child: const Text(
-                  '打卡：晚间拉伸',
+                child: Text(
+                  WidgetUiCopy.habitCheckInButton,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.green,
                     fontSize: 11,
                     fontWeight: FontWeight.normal,
@@ -1645,7 +1626,7 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
       ],
       _ => [0, 1, 2, 3, 4, 5],
     };
-    const weekLabels = ['一', '二', '三', '四', '五', '六', '日'];
+    final weekLabels = WidgetUiCopy.calendarWeekLabels;
     const monthWeeks = <List<int?>>[
       [null, null, null, null, 1, 2, 3],
       [4, 5, 6, 7, 8, 9, 10],
@@ -1654,6 +1635,8 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
       [25, 26, 27, 28, 29, 30, 31],
       [null, null, null, null, null, null, null],
     ];
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final chipRadius = surfaceStyle?.smallTileRadius ?? 8.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1661,7 +1644,7 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '2026年5月',
+                WidgetUiCopy.calendarMonthHeader(2026, 5),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -1677,17 +1660,17 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: Colors.blue.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(chipRadius),
                 border: Border.all(
                   color: Colors.blue.withValues(alpha: 0.28),
                   width: 0.45,
                 ),
               ),
-              child: const Text(
-                '今天',
+              child: Text(
+                WidgetUiCopy.calendarToday,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.blue,
                   fontSize: 11,
                   fontWeight: FontWeight.normal,
@@ -1761,6 +1744,8 @@ class _WidgetPreviewCalendarCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final cellRadius = surfaceStyle?.smallTileRadius ?? 8.0;
     final isToday = day == 17;
     return Center(
       child: Container(
@@ -1769,7 +1754,7 @@ class _WidgetPreviewCalendarCell extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isToday ? Colors.blue : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(cellRadius),
         ),
         child: Text(
           day == null ? '' : '$day',
@@ -1791,16 +1776,19 @@ class _WidgetPreviewScheduleBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _WidgetPreviewLineList(
+    return _WidgetPreviewLineList(
       lines: [
         _WidgetPreviewLine(
           icon: Icons.notifications_active_outlined,
-          text: '20:25 厕所 · 到点提醒',
+          text: WidgetUiCopy.scheduleItem1,
         ),
-        _WidgetPreviewLine(icon: Icons.event_note_outlined, text: '14:30 团队例会'),
+        _WidgetPreviewLine(
+          icon: Icons.event_note_outlined,
+          text: WidgetUiCopy.scheduleItem2,
+        ),
         _WidgetPreviewLine(
           icon: Icons.event_available_outlined,
-          text: '19:00 晚间复盘',
+          text: WidgetUiCopy.scheduleItem3,
         ),
       ],
     );
@@ -1812,16 +1800,19 @@ class _WidgetPreviewGoalBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _WidgetPreviewLineList(
+    return _WidgetPreviewLineList(
       lines: [
-        _WidgetPreviewLine(icon: Icons.flag_outlined, text: '发版准备 · 68%'),
+        _WidgetPreviewLine(
+          icon: Icons.flag_outlined,
+          text: WidgetUiCopy.goalItem1, // 68%
+        ),
         _WidgetPreviewLine(
           icon: Icons.trending_up_outlined,
-          text: '本周运动 3/5 次',
+          text: WidgetUiCopy.goalItem2,
         ),
         _WidgetPreviewLine(
           icon: Icons.check_circle_outline,
-          text: '晚间复盘 · 今日待推进',
+          text: WidgetUiCopy.goalItem3,
         ),
       ],
     );
@@ -1833,19 +1824,19 @@ class _WidgetPreviewCourseBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _WidgetPreviewLineList(
+    return _WidgetPreviewLineList(
       lines: [
         _WidgetPreviewLine(
           icon: Icons.school_outlined,
-          text: '第 1-2 节 高等数学 · 教 203',
+          text: WidgetUiCopy.courseItem1,
         ),
         _WidgetPreviewLine(
           icon: Icons.school_outlined,
-          text: '第 3-4 节 产品设计 · 线上',
+          text: WidgetUiCopy.courseItem2,
         ),
         _WidgetPreviewLine(
           icon: Icons.event_note_outlined,
-          text: '14:30 团队例会 · 打开日历查看',
+          text: WidgetUiCopy.courseItem3,
         ),
       ],
     );
@@ -1857,11 +1848,20 @@ class _WidgetPreviewNoteBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _WidgetPreviewLineList(
+    return _WidgetPreviewLineList(
       lines: [
-        _WidgetPreviewLine(icon: Icons.edit_note_outlined, text: '会议纪要'),
-        _WidgetPreviewLine(icon: Icons.lightbulb_outline, text: '灵感清单'),
-        _WidgetPreviewLine(icon: Icons.menu_book_outlined, text: '读书摘录'),
+        _WidgetPreviewLine(
+          icon: Icons.edit_note_outlined,
+          text: WidgetUiCopy.noteItem1,
+        ),
+        _WidgetPreviewLine(
+          icon: Icons.lightbulb_outline,
+          text: WidgetUiCopy.noteItem2,
+        ),
+        _WidgetPreviewLine(
+          icon: Icons.menu_book_outlined,
+          text: WidgetUiCopy.noteItem3,
+        ),
       ],
     );
   }
@@ -1872,19 +1872,19 @@ class _WidgetPreviewAnniversaryBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _WidgetPreviewLineList(
+    return _WidgetPreviewLineList(
       lines: [
         _WidgetPreviewLine(
           icon: Icons.event_available_outlined,
-          text: '相识纪念日 · 还有 6 天',
+          text: WidgetUiCopy.anniversaryItem1,
         ),
         _WidgetPreviewLine(
           icon: Icons.event_available_outlined,
-          text: '入职周年 · 还有 18 天',
+          text: WidgetUiCopy.anniversaryItem2,
         ),
         _WidgetPreviewLine(
           icon: Icons.event_available_outlined,
-          text: '旅行纪念 · 还有 32 天',
+          text: WidgetUiCopy.anniversaryItem3,
         ),
       ],
     );
@@ -1896,11 +1896,20 @@ class _WidgetPreviewDiaryBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _WidgetPreviewLineList(
+    return _WidgetPreviewLineList(
       lines: [
-        _WidgetPreviewLine(icon: Icons.book_outlined, text: '5/18 今天完成了专注复盘'),
-        _WidgetPreviewLine(icon: Icons.book_outlined, text: '5/17 记录一次散步'),
-        _WidgetPreviewLine(icon: Icons.book_outlined, text: '5/16 睡前整理心情'),
+        _WidgetPreviewLine(
+          icon: Icons.book_outlined,
+          text: WidgetUiCopy.diaryItem1,
+        ),
+        _WidgetPreviewLine(
+          icon: Icons.book_outlined,
+          text: WidgetUiCopy.diaryItem2,
+        ),
+        _WidgetPreviewLine(
+          icon: Icons.book_outlined,
+          text: WidgetUiCopy.diaryItem3,
+        ),
       ],
     );
   }
@@ -1928,6 +1937,8 @@ class _WidgetPreviewQuickAdd extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final chipRadius = surfaceStyle?.smallTileRadius ?? 8.0;
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -1936,7 +1947,7 @@ class _WidgetPreviewQuickAdd extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: Colors.blue.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(chipRadius),
           border: Border.all(
             color: Colors.blue.withValues(alpha: 0.28),
             width: 0.45,
@@ -1998,6 +2009,8 @@ class _WidgetPreviewTodoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final boxRadius = surfaceStyle?.smallTileRadius ?? 8.0;
     return Row(
       children: [
         Container(
@@ -2006,7 +2019,7 @@ class _WidgetPreviewTodoRow extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: Colors.blue.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(boxRadius),
             border: Border.all(
               color: Colors.blue.withValues(alpha: 0.28),
               width: 0.45,
@@ -2090,33 +2103,36 @@ class _WidgetPreviewNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['待办', '习惯', '日历', '专注'];
+    final labels = WidgetUiCopy.previewNavLabels;
     final cs = Theme.of(context).colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final navRadius = surfaceStyle?.smallTileRadius ?? 8.0;
     return Container(
-      height: 30,
+      key: const ValueKey('widget_preview_navigation'),
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 30),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(navRadius),
         border: Border.all(
           color: cs.outlineVariant.withValues(alpha: 0.18),
           width: 0.45,
         ),
       ),
-      child: Row(
+      child: Wrap(
+        alignment: WrapAlignment.spaceEvenly,
+        runSpacing: 4,
         children: [
           for (var i = 0; i < labels.length; i++)
-            Expanded(
-              child: Center(
-                child: Text(
-                  labels[i],
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.normal,
-                    color: i == selectedIndex ? accent : cs.onSurfaceVariant,
-                  ),
-                ),
+            Text(
+              labels[i],
+              textAlign: TextAlign.center,
+              softWrap: false,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.normal,
+                color: i == selectedIndex ? accent : cs.onSurfaceVariant,
               ),
             ),
         ],

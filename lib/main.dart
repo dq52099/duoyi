@@ -227,6 +227,8 @@ String _homeWidgetDataRevisionSignature(
   final today = DateTime(now.year, now.month, now.day);
   return Object.hashAll([
     today.microsecondsSinceEpoch,
+    now.timeZoneOffset.inMinutes,
+    I18n.current.name,
     _homeWidgetThemeSignature(themeProvider),
     _homeWidgetTodoRevision(todoProvider),
     _homeWidgetHabitRevision(habitProvider, today),

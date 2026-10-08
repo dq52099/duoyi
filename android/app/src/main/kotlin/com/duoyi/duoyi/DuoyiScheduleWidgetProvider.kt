@@ -64,24 +64,38 @@ open class DuoyiScheduleWidgetProvider : DuoyiStyledWidgetProvider() {
                     R.id.widget_schedule_nav_focus,
                 ),
             )
-            val todayEventSummary = prefs.getString("today_event_summary", "今日没有日程") ?: "今日没有日程"
+            val isZh = DuoyiWidgetCopy.isZh(prefs)
+            val todayEventSummary = DuoyiWidgetCopy.todayEventSummary(
+                prefs.getString("today_event_summary", null),
+                isZh
+            )
 
             views.setTextViewText(
                 R.id.widget_schedule_title,
-                prefs.getString("brand_app_title", "多仪") ?: "多仪"
+                DuoyiWidgetCopy.appTitle(prefs, isZh)
             )
-            views.setTextViewText(R.id.widget_schedule_subtitle, "今日日程")
+            views.setTextViewText(R.id.widget_schedule_subtitle, DuoyiWidgetCopy.scheduleSubtitle(isZh))
             views.setTextViewText(
                 R.id.widget_schedule_1,
-                prefs.getString("schedule_highlight_1", "· $todayEventSummary") ?: "· 今日没有日程"
+                DuoyiWidgetCopy.scheduleHighlight1(
+                    prefs.getString("schedule_highlight_1", null),
+                    todayEventSummary,
+                    isZh
+                )
             )
             views.setTextViewText(
                 R.id.widget_schedule_2,
-                prefs.getString("schedule_highlight_2", "· 打开日历查看完整安排") ?: "· 打开日历查看完整安排"
+                DuoyiWidgetCopy.scheduleHighlight2(
+                    prefs.getString("schedule_highlight_2", null),
+                    isZh
+                )
             )
             views.setTextViewText(
                 R.id.widget_schedule_3,
-                prefs.getString("schedule_highlight_3", "提醒会跟随系统时区") ?: "提醒会跟随系统时区"
+                DuoyiWidgetCopy.scheduleHighlight3(
+                    prefs.getString("schedule_highlight_3", null),
+                    isZh
+                )
             )
             views.setViewVisibility(
                 R.id.widget_schedule_2,
@@ -96,10 +110,10 @@ open class DuoyiScheduleWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
             )
 
-            val tabTodo = prefs.getString("nav_todo", "待办") ?: "待办"
-            val tabHabit = prefs.getString("nav_habit", "习惯") ?: "习惯"
-            val tabCalendar = prefs.getString("nav_calendar", "日历") ?: "日历"
-            val tabFocus = prefs.getString("nav_focus", "专注") ?: "专注"
+            val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
+            val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
+            val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
+            val tabFocus = DuoyiWidgetCopy.navFocus(prefs, isZh)
             views.setTextViewText(R.id.widget_schedule_nav_todo, tabTodo)
             views.setTextViewText(R.id.widget_schedule_nav_habit, tabHabit)
             views.setTextViewText(R.id.widget_schedule_nav_calendar, tabCalendar)
