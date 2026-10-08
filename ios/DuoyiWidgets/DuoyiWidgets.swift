@@ -1,5 +1,208 @@
 import SwiftUI
 import WidgetKit
+import Foundation
+import CoreFoundation
+
+// BEGIN DUOYI_WIDGET_TIMER_CORE
+// Foundation-only logic is exercised directly by the portable Swift verifier.
+private enum DuoyiFocusTimerPhase: Equatable {
+    case unavailable, idle
+    case runningCountdown, runningCountUp
+    case pausedCountdown, pausedCountUp
+    case ended
+}
+
+private struct DuoyiFocusTimerInput {
+    let countUp: Bool
+    let storedRunning: Bool
+    let savedSeconds: Int64
+    let totalSeconds: Int64
+    let startedAtMillis: Int64
+    let endsAtMillis: Int64
+
+    init?(values: [String: Any]) {
+        guard let countUp = Self.boolean(values["focus_timer_count_up"]),
+              let running = Self.boolean(values["focus_timer_running"]),
+              let saved = Self.integer(values["focus_timer_remaining_seconds"]),
+              let total = Self.integer(values["focus_timer_total_seconds"]),
+              let start = Self.integer(values["focus_timer_started_at_millis"]),
+              let end = Self.integer(values["focus_timer_ends_at_millis"]),
+              saved >= 0, total >= 0, start >= 0, end >= 0 else { return nil }
+        self.countUp = countUp
+        storedRunning = running
+        savedSeconds = saved
+        totalSeconds = total
+        startedAtMillis = start
+        endsAtMillis = end
+    }
+
+    private static func boolean(_ value: Any?) -> Bool? {
+        guard let value = value else { return false }
+        if let text = value as? String {
+            switch text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "1": return true
+            case "false", "0": return false
+            default: return nil
+            }
+        }
+        guard let number = value as? NSNumber else { return nil }
+        if CFGetTypeID(number) == CFBooleanGetTypeID() { return number.boolValue }
+        guard let raw = integer(number), raw == 0 || raw == 1 else { return nil }
+        return raw == 1
+    }
+
+    private static func integer(_ value: Any?) -> Int64? {
+        guard let value = value else { return 0 }
+        if let text = value as? String {
+            return Int64(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        // Preserve full-width integer NSNumber values before considering Double.
+        if let exact = Int64(number.stringValue) { return exact }
+        let raw = number.doubleValue
+        guard raw.isFinite, let exact = Int64(exactly: raw),
+              number.compare(NSNumber(value: exact)) == .orderedSame else { return nil }
+        return exact
+    }
+}
+
+private struct DuoyiFocusTimerState {
+    static let countUpCapSeconds: Int64 = 86_400
+    // Existing accessory formatting adds 59 before rounding to minutes.
+    private static let safeDisplayLimit = Int64(Int.max - 59)
+
+    let phase: DuoyiFocusTimerPhase
+    let seconds: Int
+    let totalSeconds: Int
+    let startDate: Date?
+    let endDate: Date?
+    let capDate: Date?
+    let hasFutureStart: Bool
+    let isAtCountUpCap: Bool
+
+    static let unavailable = DuoyiFocusTimerState(
+        phase: .unavailable, seconds: 0, totalSeconds: 0,
+        startDate: nil, endDate: nil, capDate: nil,
+        hasFutureStart: false, isAtCountUpCap: false
+    )
+
+    var isRunning: Bool { phase == .runningCountdown || phase == .runningCountUp }
+
+    func actionIntent(isDailyFresh: Bool) -> DuoyiFocusActionIntent {
+        guard isDailyFresh else { return .open }
+        switch phase {
+        case .idle: return .start
+        case .pausedCountdown, .pausedCountUp: return .resume
+        default: return .open
+        }
+    }
+
+    static func resolve(values: [String: Any], sessionPublished: Bool, at date: Date) -> DuoyiFocusTimerState {
+        guard sessionPublished,
+              let input = DuoyiFocusTimerInput(values: values),
+              let nowMillis = milliseconds(date) else { return .unavailable }
+        let total = Int(min(input.totalSeconds, safeDisplayLimit))
+        if input.storedRunning {
+            if input.countUp {
+                guard let start = anchorDate(input.startedAtMillis) else { return .unavailable }
+                let delta = nowMillis.subtractingReportingOverflow(input.startedAtMillis)
+                guard !delta.overflow else { return .unavailable }
+                let cap = start.addingTimeInterval(TimeInterval(countUpCapSeconds))
+                let elapsed = date >= cap
+                    ? countUpCapSeconds
+                    : min(max(0, delta.partialValue / 1000), countUpCapSeconds)
+                return DuoyiFocusTimerState(
+                    phase: .runningCountUp, seconds: Int(elapsed), totalSeconds: total,
+                    startDate: start, endDate: nil,
+                    capDate: cap <= Date.distantFuture ? cap : nil,
+                    hasFutureStart: date < start,
+                    isAtCountUpCap: elapsed == countUpCapSeconds
+                )
+            }
+            guard input.totalSeconds > 0,
+                  let end = anchorDate(input.endsAtMillis) else { return .unavailable }
+            // Compare Dates first: an entry created from this exact end anchor
+            // must be ended even when Date-to-millisecond conversion rounds.
+            if date >= end {
+                return fixed(phase: .ended, seconds: 0, total: total)
+            }
+            let delta = input.endsAtMillis.subtractingReportingOverflow(nowMillis)
+            guard !delta.overflow, delta.partialValue > 0 else { return .unavailable }
+            let remaining = delta.partialValue / 1000 + (delta.partialValue % 1000 == 0 ? 0 : 1)
+            return DuoyiFocusTimerState(
+                phase: .runningCountdown,
+                seconds: Int(min(remaining, input.totalSeconds, safeDisplayLimit)),
+                totalSeconds: total, startDate: nil, endDate: end, capDate: nil,
+                hasFutureStart: false, isAtCountUpCap: false
+            )
+        }
+        if input.countUp {
+            let elapsed = min(input.savedSeconds, countUpCapSeconds)
+            return fixed(
+                phase: input.savedSeconds == 0 ? .idle : .pausedCountUp,
+                seconds: Int(elapsed), total: total,
+                atCountUpCap: elapsed == countUpCapSeconds
+            )
+        }
+        guard input.totalSeconds > 0,
+              input.savedSeconds > 0,
+              input.savedSeconds <= input.totalSeconds else { return .unavailable }
+        return fixed(
+            phase: input.savedSeconds == input.totalSeconds ? .idle : .pausedCountdown,
+            seconds: Int(min(input.savedSeconds, safeDisplayLimit)), total: total
+        )
+    }
+
+    private static func fixed(
+        phase: DuoyiFocusTimerPhase, seconds: Int, total: Int, atCountUpCap: Bool = false
+    ) -> DuoyiFocusTimerState {
+        DuoyiFocusTimerState(
+            phase: phase, seconds: seconds, totalSeconds: total,
+            startDate: nil, endDate: nil, capDate: nil,
+            hasFutureStart: false, isAtCountUpCap: atCountUpCap
+        )
+    }
+
+    private static func milliseconds(_ date: Date) -> Int64? {
+        let raw = date.timeIntervalSince1970 * 1000
+        guard raw.isFinite else { return nil }
+        return Int64(exactly: floor(raw))
+    }
+
+    private static func anchorDate(_ milliseconds: Int64) -> Date? {
+        guard milliseconds > 0 else { return nil }
+        let date = Date(timeIntervalSince1970: Double(milliseconds) / 1000)
+        guard date <= Date.distantFuture else { return nil }
+        return date
+    }
+}
+
+private enum DuoyiFocusActionIntent: Equatable {
+    case start, resume, open
+}
+
+private enum DuoyiFocusTimerTimeline {
+    static func dates(now: Date, timer: DuoyiFocusTimerState, calendar: Calendar) -> [Date] {
+        guard now.timeIntervalSince1970.isFinite else { return [now] }
+        let horizon = now.addingTimeInterval(48 * 60 * 60)
+        var dates = [now]
+        func append(_ date: Date?) {
+            guard let date = date, date > now, date <= horizon else { return }
+            dates.append(date)
+        }
+        append(calendar.dateInterval(of: .day, for: now)?.end)
+        // A saved UTC offset becomes stale at the known daylight-saving change.
+        append(calendar.timeZone.nextDaylightSavingTimeTransition(after: now))
+        if timer.phase == .runningCountdown { append(timer.endDate) }
+        if timer.phase == .runningCountUp {
+            if timer.hasFutureStart { append(timer.startDate) }
+            if !timer.isAtCountUpCap { append(timer.capDate) }
+        }
+        return Array(Set(dates)).sorted()
+    }
+}
+// END DUOYI_WIDGET_TIMER_CORE
 
 private let appGroupId = "group.com.duoyi.duoyi"
 
@@ -336,6 +539,7 @@ private struct DuoyiWidgetEntry: TimelineEntry {
     let config: DuoyiWidgetConfig
     let locale: DuoyiWidgetLocale
     let snapshot: DuoyiWidgetSnapshot
+    let isDailyFresh: Bool
     let primary: String
     let primaryTarget: String
     let rows: [DuoyiWidgetRow]
@@ -347,18 +551,17 @@ private struct DuoyiWidgetEntry: TimelineEntry {
     let navFocus: String
     let displayMode: String
     let habitQuickCheckId: String
-    let focusTimerRunning: Bool
-    let focusTimerRemainingSeconds: Int
-    let focusTimerTotalSeconds: Int
-    let focusTimerEndsAtMillis: Int64
+    let focusTimer: DuoyiFocusTimerState
     let focusTimerLabel: String
     let theme: DuoyiWidgetTheme
 
-    var focusTimerEndDate: Date? {
-        guard focusTimerEndsAtMillis > 0 else {
-            return nil
-        }
-        return Date(timeIntervalSince1970: TimeInterval(focusTimerEndsAtMillis) / 1000)
+    var focusTimerRunning: Bool { focusTimer.isRunning }
+    var focusTimerRemainingSeconds: Int { focusTimer.seconds }
+    var focusTimerTotalSeconds: Int { focusTimer.totalSeconds }
+    var focusTimerEndDate: Date? { focusTimer.endDate }
+
+    var focusActionIntent: DuoyiFocusActionIntent {
+        focusTimer.actionIntent(isDailyFresh: isDailyFresh)
     }
 }
 
@@ -374,6 +577,7 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             config: localizedConfig,
             locale: locale,
             snapshot: .empty,
+            isDailyFresh: false,
             primary: localizedConfig.fallback,
             primaryTarget: localizedConfig.deepLink,
             rows: localizedConfig.rowKeys.enumerated().map {
@@ -387,10 +591,7 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             navFocus: locale == .en ? "Focus" : "专注",
             displayMode: "standard",
             habitQuickCheckId: "",
-            focusTimerRunning: false,
-            focusTimerRemainingSeconds: 0,
-            focusTimerTotalSeconds: 0,
-            focusTimerEndsAtMillis: 0,
+            focusTimer: .unavailable,
             focusTimerLabel: locale == .en ? "Focus countdown" : "专注倒计时",
             theme: .fallback
         )
@@ -401,23 +602,29 @@ private struct DuoyiWidgetProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<DuoyiWidgetEntry>) -> Void) {
-        let current = entry()
+        // All scheduled transitions retain this publication and account identity.
+        let defaults = UserDefaults(suiteName: appGroupId)?.dictionaryRepresentation() ?? [:]
+        let now = Date()
+        let current = entry(values: defaults, at: now)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let dates = DuoyiFocusTimerTimeline.dates(now: now, timer: current.focusTimer, calendar: calendar)
+        let entries = dates.map { entry(values: defaults, at: $0) }
         let refreshMinutes = current.focusTimerRunning ? 1 : 15
-        let now = current.date
-        var nextRefresh = Calendar.current.date(byAdding: .minute, value: refreshMinutes, to: now) ?? now.addingTimeInterval(60)
-        if let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)) {
-            nextRefresh = min(nextRefresh, midnight)
+        var nextRefresh = now.addingTimeInterval(TimeInterval(refreshMinutes * 60))
+        if let nextTransition = dates.dropFirst().first {
+            nextRefresh = min(nextRefresh, nextTransition)
         }
-        if current.focusTimerRunning, let end = current.focusTimerEndDate, end > now {
-            nextRefresh = min(nextRefresh, end)
-        }
-        completion(Timeline(entries: [current], policy: .after(nextRefresh)))
+        completion(Timeline(entries: entries, policy: .after(nextRefresh)))
     }
 
     private func entry() -> DuoyiWidgetEntry {
         // One immutable read avoids mixing item IDs and account metadata.
         let defaults = UserDefaults(suiteName: appGroupId)?.dictionaryRepresentation() ?? [:]
-        let now = Date()
+        return entry(values: defaults, at: Date())
+    }
+
+    private func entry(values defaults: [String: Any], at now: Date) -> DuoyiWidgetEntry {
         let snapshot = DuoyiWidgetSnapshot(values: defaults)
         let fresh = snapshot.isFresh(at: now)
         let locale = DuoyiWidgetLocale.resolve(saved: defaults["widget_locale"] as? String)
@@ -469,6 +676,7 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             config: localizedConfig,
             locale: locale,
             snapshot: snapshot,
+            isDailyFresh: fresh,
             primary: primary,
             primaryTarget: primaryTarget,
             rows: rows,
@@ -480,10 +688,7 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             navFocus: navFocus,
             displayMode: readString(defaults, key: "widget_display_mode", fallback: "standard"),
             habitQuickCheckId: fresh ? readString(defaults, key: "habit_quick_check_id", fallback: "") : "",
-            focusTimerRunning: snapshot.hasPublishedSession ? readBool(defaults, key: "focus_timer_running") : false,
-            focusTimerRemainingSeconds: snapshot.hasPublishedSession ? readInt(defaults, key: "focus_timer_remaining_seconds") : 0,
-            focusTimerTotalSeconds: snapshot.hasPublishedSession ? readInt(defaults, key: "focus_timer_total_seconds") : 0,
-            focusTimerEndsAtMillis: snapshot.hasPublishedSession ? readInt64(defaults, key: "focus_timer_ends_at_millis") : 0,
+            focusTimer: DuoyiFocusTimerState.resolve(values: defaults, sessionPublished: snapshot.hasPublishedSession, at: now),
             focusTimerLabel: focusTimerLabel,
             theme: DuoyiWidgetTheme(values: defaults)
         )

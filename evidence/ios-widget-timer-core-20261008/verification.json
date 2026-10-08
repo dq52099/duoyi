@@ -1,0 +1,61 @@
+{
+  "recorded_at_utc": "2026-10-08T01:43:32.510305+00:00",
+  "base_commit": "fe9b4acdc48f0fe3c3b332eaed678c7ab69bd04c",
+  "source_sha256": {
+    "ios/DuoyiWidgets/DuoyiWidgets.swift": "4d31b21076181229f55797b2a968a08b68809a7ff14f532bc195b98752759fbc",
+    "test/services/ios_widget_resources_test.dart": "5ee22d0128499100736a8d6ba4fd0852e12a4c63e62ee8c8cfd1bc79669c1584",
+    "scripts/ios_widget_timer_core_cases.swift": "e4c52a797ecf2da77b189d9e33ec752989ab8215a76b81bf69104f9a036842ed",
+    "scripts/verify_ios_widget_timer_core.py": "6a84ab9bb20c23ef48036d806983b24a8e06cc74e751856b648519d606c4c067"
+  },
+  "production_and_fixture_match_executed_combined_file": true,
+  "combined_execution_sha256": "d99f9f6a11f7baad62b9b2699b5237262e941c7c9b650bbb0dc6587cc72beb48",
+  "swift": {
+    "cases_passed": 19,
+    "exit_code": 0,
+    "finished_at_utc": "2026-10-08T01:37:07.906720+00:00",
+    "runtime_version": "Swift 6.1.3 (swift-6.1.3-RELEASE)",
+    "target": "aarch64-unknown-linux-gnu",
+    "container_image": "swift@sha256:19792fa7ef68fb0e0ca5763ec3dfd40d6461afca7c081eb689e2e374fa80c0be",
+    "scope": "Source-extracted production Foundation core; no WidgetKit or SwiftUI compilation",
+    "log_sha256": "823ebaedc3e638f10ce40df1fab1b803b932c4c4da8adc56d77b3b766361252c"
+  },
+  "flutter": {
+    "cases_passed": 22,
+    "exit_code": 0,
+    "finished_at_utc": "2026-10-08T01:38:15.396771+00:00",
+    "command": [
+      "/home/ubuntu/flutter/bin/flutter",
+      "test",
+      "--no-pub",
+      "--concurrency=1",
+      "--reporter=expanded",
+      "test/services/ios_widget_resources_test.dart",
+      "test/services/home_widget_snapshot_test.dart"
+    ],
+    "log_sha256": "d6d4e0df35c3e7afea035fceedc88ace30eac2d15fdfac36bf43f272cf3c4f7d"
+  },
+  "deployment": {
+    "new_deployment_performed": false,
+    "web_version": "1.1.45+140011",
+    "public_android_version": "1.1.43 / 140009"
+  },
+  "pending": [
+    "WidgetKit views consuming phase, live count-up and countdown limits, action intent and localized states",
+    "Xcode/WidgetKit compilation",
+    "Android and iOS real device action/refresh and timing evidence",
+    "Broader default iOS style, all-route localization, profile/settings acceptance"
+  ],
+  "analyzer": {
+    "exit_code": 0,
+    "result": "No issues found",
+    "finished_at_utc": "2026-10-08T01:43:00.842833+00:00",
+    "command": [
+      "/home/ubuntu/flutter/bin/flutter",
+      "analyze",
+      "--no-pub",
+      "test/services/ios_widget_resources_test.dart"
+    ],
+    "log_sha256": "839a493594721464accf09cb8af08aac692d4278794597d866603d76b8b4adc8"
+  },
+  "git_diff_check_exit_code": 0
+}

@@ -325,7 +325,17 @@ void main() {
       expect(swift, contains('focusTimerRunning'));
       expect(swift, contains('focusTimerRemainingSeconds'));
       expect(swift, contains('focusTimerTotalSeconds'));
-      expect(swift, contains('focusTimerEndsAtMillis'));
+      expect(swift, contains('let endsAtMillis: Int64'));
+      expect(swift, contains('focus_timer_count_up'));
+      expect(swift, contains('focus_timer_started_at_millis'));
+      expect(
+        swift,
+        contains('var focusTimerRemainingSeconds: Int { focusTimer.seconds }'),
+      );
+      expect(
+        swift,
+        contains('var focusTimerEndDate: Date? { focusTimer.endDate }'),
+      );
       expect(swift, contains('focusTimerLabel'));
       expect(swift, contains('Text(endDate, style: .timer)'));
       expect(swift, contains('.monospacedDigit()'));
@@ -353,7 +363,8 @@ void main() {
       final snapshot = swift.substring(snapshotStart, snapshotEnd);
       final actionURLStart = snapshot.indexOf('    func actionURL(');
       final actionURL = snapshot.substring(actionURLStart);
-      final entry = _swiftFunctionBlock(swift, 'entry');
+      final capture = _swiftFunctionBlock(swift, 'entry()');
+      final entry = _swiftFunctionBlock(swift, 'entry(values');
       final readTodoRows = _swiftFunctionBlock(swift, 'readTodoRows');
       final todoRowStart = swift.indexOf('private struct DuoyiTodoRow:');
       final todoRowEnd = swift.indexOf(
@@ -411,16 +422,19 @@ void main() {
       );
 
       expect(
-        entry,
+        capture,
         contains(
           'let defaults = UserDefaults(suiteName: appGroupId)?.'
           'dictionaryRepresentation() ?? [:]',
         ),
       );
       expect(
-        RegExp(r'dictionaryRepresentation\(\)').allMatches(entry),
+        RegExp(r'dictionaryRepresentation\(\)').allMatches(capture),
         hasLength(1),
       );
+      expect(capture, contains('return entry(values: defaults, at: Date())'));
+      expect(entry, isNot(contains('UserDefaults')));
+      expect(entry, isNot(contains('Date()')));
       expect(
         entry,
         contains('let snapshot = DuoyiWidgetSnapshot(values: defaults)'),
@@ -473,41 +487,34 @@ void main() {
       expect(noncePublished, lessThan(offsetPublished));
       expect(offsetPublished, lessThan(dayPublished));
 
-      for (final timerField in [
-        'focusTimerRunning',
-        'focusTimerRemainingSeconds',
-        'focusTimerTotalSeconds',
-        'focusTimerEndsAtMillis',
-      ]) {
-        expect(entry, contains('$timerField: snapshot.hasPublishedSession ?'));
-      }
+      expect(entry, contains('isDailyFresh: fresh,'));
       expect(
         entry,
         contains(
-          'focusTimerRunning: snapshot.hasPublishedSession ? '
-          'readBool(defaults, key: "focus_timer_running") : false',
+          'focusTimer: DuoyiFocusTimerState.resolve(values: defaults, '
+          'sessionPublished: snapshot.hasPublishedSession, at: now)',
         ),
       );
+      final core = swift.substring(
+        swift.indexOf('// BEGIN DUOYI_WIDGET_TIMER_CORE'),
+        swift.indexOf('// END DUOYI_WIDGET_TIMER_CORE'),
+      );
+      expect(core, contains('guard sessionPublished,'));
+      expect(core, isNot(contains('UserDefaults')));
+      expect(core, isNot(contains('Date()')));
+      expect(core, contains('nowMillis.subtractingReportingOverflow'));
+      expect(core, contains('input.endsAtMillis.subtractingReportingOverflow'));
+      expect(core, contains('CFBooleanGetTypeID()'));
+      expect(core, contains('Int64(exactly: floor(raw))'));
+      expect(core, contains('guard isDailyFresh else { return .open }'));
+      expect(core, contains('case .idle: return .start'));
       expect(
-        entry,
-        contains(
-          'focusTimerRemainingSeconds: snapshot.hasPublishedSession ? '
-          'readInt(defaults, key: "focus_timer_remaining_seconds") : 0',
-        ),
+        core,
+        contains('case .pausedCountdown, .pausedCountUp: return .resume'),
       );
       expect(
-        entry,
-        contains(
-          'focusTimerTotalSeconds: snapshot.hasPublishedSession ? '
-          'readInt(defaults, key: "focus_timer_total_seconds") : 0',
-        ),
-      );
-      expect(
-        entry,
-        contains(
-          'focusTimerEndsAtMillis: snapshot.hasPublishedSession ? '
-          'readInt64(defaults, key: "focus_timer_ends_at_millis") : 0',
-        ),
+        swift,
+        contains('focusTimer.actionIntent(isDailyFresh: isDailyFresh)'),
       );
 
       expect(
@@ -618,21 +625,45 @@ void main() {
 
       expect(timeline, contains('current.focusTimerRunning ? 1 : 15'));
       expect(
-        timeline,
-        contains(
-          'Calendar.current.date(byAdding: .day, value: 1, to: '
-          'Calendar.current.startOfDay(for: now))',
-        ),
+        RegExp(r'dictionaryRepresentation\(\)').allMatches(timeline),
+        hasLength(1),
       );
-      expect(timeline, contains('nextRefresh = min(nextRefresh, midnight)'));
+      expect(
+        timeline,
+        contains('let current = entry(values: defaults, at: now)'),
+      );
       expect(
         timeline,
         contains(
-          'if current.focusTimerRunning, let end = current.focusTimerEndDate, '
-          'end > now',
+          r'let entries = dates.map { entry(values: defaults, at: $0) }',
         ),
       );
-      expect(timeline, contains('nextRefresh = min(nextRefresh, end)'));
+      expect(
+        timeline,
+        contains(
+          'DuoyiFocusTimerTimeline.dates(now: now, timer: current.focusTimer, calendar: calendar)',
+        ),
+      );
+      expect(
+        timeline,
+        contains('Timeline(entries: entries, policy: .after(nextRefresh))'),
+      );
+      expect(
+        timeline,
+        contains('nextRefresh = min(nextRefresh, nextTransition)'),
+      );
+      expect(swift, contains('calendar.dateInterval(of: .day, for: now)?.end'));
+      expect(
+        swift,
+        contains('let horizon = now.addingTimeInterval(48 * 60 * 60)'),
+      );
+      expect(swift, contains('return Array(Set(dates)).sorted()'));
+      expect(
+        swift,
+        contains(
+          'if timer.phase == .runningCountdown { append(timer.endDate) }',
+        ),
+      );
     });
 
     test('supports home screen and lock screen WidgetKit families', () {
@@ -790,7 +821,7 @@ void main() {
           contains('navLink(entry.navCalendar, "duoyi://calendar")'),
         );
         expect(swift, contains('navLink(entry.navFocus, "duoyi://focus")'));
-        final entryBlock = _swiftFunctionBlock(swift, 'entry');
+        final entryBlock = _swiftFunctionBlock(swift, 'entry(values');
         const navPayloadFields = {
           'navTodo': 'nav_todo',
           'navHabit': 'nav_habit',
