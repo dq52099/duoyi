@@ -257,7 +257,11 @@ void main() {
     expect(source, contains('Future<void> _storageWriteQueue'));
     expect(source, contains('final Set<String> _inFlightCreateKeys'));
     expect(source, contains('_createInFlightDuplicateKey(todo)'));
-    expect(source, contains("resultFor('reminder_scheduler_missing')"));
+    expect(
+      source,
+      matches(RegExp(r"resultFor\(\s*'reminder_scheduler_missing',")),
+    );
+    expect(source, contains('ReminderSyncIssueNotice.schedulerMissing'));
     expect(source, contains('_lastReminderSyncIssue = result.issue'));
     expect(
       source,
@@ -271,7 +275,10 @@ void main() {
     );
     expect(source, contains('.syncTodos(List.of(_todos))'));
     expect(source, contains('syncTodosAndGetTodoFailure'));
-    expect(source, contains('final result = resultFor(failure);'));
+    expect(
+      source,
+      contains('final result = resultFor(failure?.raw, issueCopy: failure);'),
+    );
     expect(source, contains('_lastReminderSyncIssue = null'));
     expect(
       source,

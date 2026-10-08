@@ -105,6 +105,18 @@ operation plus the original account, storage and request-generation guards.
 The widget renderer reads the selected language at guarded delivery. This does
 not add late toast replay or turn an unconfirmed result into confirmed success.
 
+## Provider lifetime
+
+TodoProvider disposal is terminal. It invalidates local storage and reminder
+request generations, stops late state/notification delivery, and rejects new
+hydration, persistence, reminder and mutation work. Every hydration continuation
+checks disposal again after the await resumes; deferred writes check again when
+their queue runs. Synchronous event listeners may dispose the provider too:
+import/completion/toggle/kanban stop before the next item or recurring successor.
+Disposed calls return each API's existing neutral value and leave visible tasks
+and saved diagnostics intact. This does not cancel an already dispatched native
+request or undo a persistence operation that has already started.
+
 ## Acceptance scope
 
 Runtime coordinator fixtures exercise gated preflight/create and account

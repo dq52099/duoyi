@@ -91,6 +91,7 @@ class TodoProvider extends ChangeNotifier {
 
   List<TodoItem> _todos = [];
   bool _storageLoaded = false;
+  bool _disposed = false;
   Future<void>? _storageLoadFuture;
   Future<void> _storageWriteQueue = Future<void>.value();
   int _storageGeneration = 0;
@@ -138,6 +139,7 @@ class TodoProvider extends ChangeNotifier {
   /// 注入或解绑调度器；传 `null` 即解绑。
   // ignore: use_setters_to_change_properties
   set scheduler(ReminderScheduler? s) {
+    if (_disposed) return;
     _scheduler = s;
     if (s != null && _lastReminderSyncIssue == 'reminder_scheduler_missing') {
       _lastReminderSyncIssue = null;
@@ -147,6 +149,7 @@ class TodoProvider extends ChangeNotifier {
 
   // ignore: use_setters_to_change_properties
   set timeAudit(TimeAuditProvider? provider) {
+    if (_disposed) return;
     _timeAudit = provider;
   }
 
@@ -154,6 +157,7 @@ class TodoProvider extends ChangeNotifier {
   /// 传入 `null` 表示最近一次云同步已完成（清空旧提示）。
   // ignore: use_setters_to_change_properties
   set cloudSyncNotice(TodoCloudSyncNotice? value) {
+    if (_disposed) return;
     if (_cloudSyncNotice == value) return;
     _cloudSyncNotice = value;
     notifyListeners();
@@ -202,6 +206,7 @@ class TodoProvider extends ChangeNotifier {
   int get revision => _revision;
 
   void _notify() {
+    if (_disposed) return;
     _revision++;
     // 大列表下每次 notify 全量 sort 是明显热点；大多数变更不改变排序，
     // 先做一次 O(n) 有序性检查，已有序时直接跳过 sort。
@@ -318,6 +323,7 @@ class TodoProvider extends ChangeNotifier {
   // --- Persistence ---
 
   Future<void> loadFromStorage({bool force = false}) async {
+    if (_disposed) return;
     if (!force) {
       if (_storageLoaded) return;
       final running = _storageLoadFuture;
@@ -360,6 +366,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    if (_disposed) return;
     _storageGeneration++;
     _nextReminderSyncGeneration++;
     _todos = [];
@@ -378,10 +385,7 @@ class TodoProvider extends ChangeNotifier {
   Future<void> _loadFromStorage(int generation) async {
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
       return;
     }
     final data = prefs.getString('todos');
@@ -490,16 +494,19 @@ class TodoProvider extends ChangeNotifier {
     return [for (final id in order) byId[id]!];
   }
 
-  Future<void> _ensureStorageLoaded() async {
+  Future<bool> _ensureStorageLoaded() async {
+    if (_disposed) return false;
     final loading = _storageLoadFuture;
     if (loading != null) await loading;
-    if (_storageLoaded) return;
+    if (_disposed) return false;
+    if (_storageLoaded) return true;
     debugPrint('[TodoProvider] waiting for local todo hydration before write');
     await loadFromStorage();
+    return !_disposed;
   }
 
   Future<void> _saveToStorage() async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return;
     await _writeToStorage();
   }
 
@@ -510,6 +517,7 @@ class TodoProvider extends ChangeNotifier {
   ///   pending 写入先于加载执行，加载期间新提交的写入链在加载完成之后；
   ///   若此处再走队列，强制重读会链到自身导致循环等待死锁）。
   Future<void> _writeTodosSnapshot() async {
+    if (_disposed) return;
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     // 大列表的 JSON 编码会阻塞主 isolate 数十毫秒（2000 条 ≈ 20ms），
@@ -519,10 +527,7 @@ class TodoProvider extends ChangeNotifier {
         ? await compute(_encodeTodoStoragePayload, List<TodoItem>.of(_todos))
         : json.encode(_todos.map((e) => e.toJson()).toList());
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
       return;
     }
     await prefs.setString('todos', data);
@@ -532,6 +537,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _writeToStorage() async {
+    if (_disposed) return;
     final write = _storageWriteQueue.then((_) => _writeTodosSnapshot());
     _storageWriteQueue = write.catchError((Object e, StackTrace st) {
       debugPrint('[TodoProvider] queued local todo write failed: $e\n$st');
@@ -540,6 +546,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _notifyLocalMutationPersisted() async {
+    if (_disposed) return;
     try {
       await onLocalMutationPersisted?.call();
     } catch (e, st) {
@@ -552,6 +559,13 @@ class TodoProvider extends ChangeNotifier {
   Future<TodoReminderSyncResult> _syncTodoRemindersNow({
     String? reportTodoId,
   }) async {
+    if (_disposed) {
+      return TodoReminderSyncResult(
+        generation: _nextReminderSyncGeneration,
+        issue: null,
+        attemptedAt: DateTime.now(),
+      );
+    }
     final generation = ++_nextReminderSyncGeneration;
     final storageGeneration = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
@@ -711,7 +725,7 @@ class TodoProvider extends ChangeNotifier {
   }) async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return null;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
       return null;
     }
@@ -746,7 +760,9 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<TodoImportSummary> importTodos(Iterable<TodoItem> imported) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) {
+      return const TodoImportSummary(inserted: 0, skippedDuplicates: 0);
+    }
     final incoming = imported.toList();
     if (incoming.isEmpty) {
       return const TodoImportSummary(inserted: 0, skippedDuplicates: 0);
@@ -773,6 +789,9 @@ class TodoProvider extends ChangeNotifier {
       DomainEventBus.instance.publish(
         DomainEvent(type: DomainEventType.todoCreated, objectId: next.id),
       );
+      if (_disposed) {
+        return const TodoImportSummary(inserted: 0, skippedDuplicates: 0);
+      }
     }
 
     if (inserted == 0) {
@@ -841,7 +860,9 @@ class TodoProvider extends ChangeNotifier {
   }) async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) {
+      return const TodoMutationResult.notSaved();
+    }
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
       return const TodoMutationResult.notSaved();
     }
@@ -948,7 +969,7 @@ class TodoProvider extends ChangeNotifier {
   }) async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     final completed = <TodoItem>[];
     var changed = 0;
@@ -967,6 +988,7 @@ class TodoProvider extends ChangeNotifier {
       DomainEventBus.instance.publish(
         DomainEvent(type: DomainEventType.todoCompleted, objectId: next.id),
       );
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
 
       if (prev.recurrence.isActive) {
         final recurring = _nextRecurringTodo(prev);
@@ -1031,7 +1053,7 @@ class TodoProvider extends ChangeNotifier {
   Future<int> _reopenTodosLocked(Set<String> selected) async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     final reopened = <TodoItem>[];
     var changed = 0;
@@ -1099,7 +1121,7 @@ class TodoProvider extends ChangeNotifier {
   }) async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx == -1) return;
@@ -1120,6 +1142,7 @@ class TodoProvider extends ChangeNotifier {
       );
     }
 
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     if (nowCompleted && prev.recurrence.isActive) {
       final recurring = _nextRecurringTodo(prev);
       if (recurring != null) _todos.add(recurring);
@@ -1184,7 +1207,7 @@ class TodoProvider extends ChangeNotifier {
   Future<int> _deleteTodosLocked(Set<String> selected) async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     final existing = _todos.where((t) => selected.contains(t.id)).toList();
     if (existing.isEmpty) return 0;
@@ -1257,7 +1280,7 @@ class TodoProvider extends ChangeNotifier {
     Set<String> selected,
     EisenhowerQuadrant quadrant,
   ) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return 0;
     var changed = 0;
     for (var i = 0; i < _todos.length; i++) {
       final todo = _todos[i];
@@ -1308,7 +1331,7 @@ class TodoProvider extends ChangeNotifier {
     Set<String> selected,
     TodoPriority priority,
   ) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return 0;
     var changed = 0;
     for (var i = 0; i < _todos.length; i++) {
       final todo = _todos[i];
@@ -1374,7 +1397,7 @@ class TodoProvider extends ChangeNotifier {
   ) async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     final completed = <TodoItem>[];
     final reopened = <TodoItem>[];
@@ -1405,6 +1428,9 @@ class TodoProvider extends ChangeNotifier {
         DomainEventBus.instance.publish(
           DomainEvent(type: DomainEventType.todoCompleted, objectId: next.id),
         );
+        if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+          return 0;
+        }
         if (todo.recurrence.isActive) {
           final recurring = _nextRecurringTodo(todo);
           if (recurring != null) _todos.add(recurring);
@@ -1476,7 +1502,7 @@ class TodoProvider extends ChangeNotifier {
     DateTime? now,
     required bool waitForReminderSync,
   }) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return false;
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx == -1) return false;
     final todo = _todos[idx];
@@ -1561,7 +1587,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _reorderLocked(List<String> orderedIds) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return;
     final map = {for (final t in _todos) t.id: t};
     final newList = <TodoItem>[];
     for (int i = 0; i < orderedIds.length; i++) {
@@ -1595,7 +1621,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<int> _reorderVisibleTodosLocked(List<String> orderedIds) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return 0;
     final ordered = orderedIds.toList(growable: false);
     if (ordered.length < 2) return 0;
     final orderedSet = ordered.toSet();
@@ -1739,7 +1765,7 @@ class TodoProvider extends ChangeNotifier {
     String workspaceId, {
     String? userId,
   }) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return;
     final affectedIds = _todos
         .where((todo) => (todo.listGroupName ?? '未分组') == groupName)
         .map((todo) => todo.id)
@@ -1774,6 +1800,7 @@ class TodoProvider extends ChangeNotifier {
   // --- Subtask operations ---
 
   Future<void> addSubtask(String todoId, String title) async {
+    if (_disposed) return;
     final cleanTitle = title.trim();
     if (cleanTitle.isEmpty) return;
     final key = '$todoId:${cleanTitle.toLowerCase()}';
@@ -1797,7 +1824,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _addSubtaskLocked(String todoId, String title) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return;
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx != -1) {
       final newSubtasks = List<Subtask>.from(_todos[idx].subtasks)
@@ -1809,6 +1836,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> toggleSubtask(String todoId, String subtaskId) async {
+    if (_disposed) return;
     final key = '$todoId:$subtaskId';
     if (!_inFlightSubtaskToggleKeys.add(key)) return;
     final mutationClaimed = _claimTodoMutationIds([
@@ -1827,7 +1855,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _toggleSubtaskLocked(String todoId, String subtaskId) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return;
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx == -1) return;
     final todo = _todos[idx];
@@ -1858,7 +1886,7 @@ class TodoProvider extends ChangeNotifier {
   Future<void> recomputeParent(String todoId) async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx == -1) return;
@@ -1903,6 +1931,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> deleteSubtask(String todoId, String subtaskId) async {
+    if (_disposed) return;
     final key = '$todoId:$subtaskId';
     if (!_inFlightSubtaskDeleteKeys.add(key)) return;
     final mutationClaimed = _claimTodoMutationIds([
@@ -1921,7 +1950,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _deleteSubtaskLocked(String todoId, String subtaskId) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return;
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx != -1) {
       final todo = _todos[idx];
@@ -1969,7 +1998,7 @@ class TodoProvider extends ChangeNotifier {
     String todoId,
     List<String> orderedIds,
   ) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return;
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx == -1) return;
     final map = {for (final s in _todos[idx].subtasks) s.id: s};
@@ -2020,7 +2049,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _archivePastCompletionsLocked(DateTime todayStart) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return;
     var mutated = false;
 
     for (final t in _todos) {
@@ -2079,7 +2108,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _postponeOverdueLocked(DateTime todayDay) async {
-    await _ensureStorageLoaded();
+    if (!await _ensureStorageLoaded() || _disposed) return;
     var mutated = false;
 
     for (final t in _todos) {
@@ -2140,6 +2169,7 @@ class TodoProvider extends ChangeNotifier {
     bool allowPartial = false,
     bool throwWhenDuplicate = true,
   }) {
+    if (_disposed) return <String>{};
     final requested = keys.where((key) => key.isNotEmpty).toSet();
     if (requested.isEmpty) return <String>{};
 
@@ -2189,11 +2219,20 @@ class TodoProvider extends ChangeNotifier {
     );
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    _storageGeneration++;
+    _nextReminderSyncGeneration++;
+    super.dispose();
+  }
+
   bool _isCurrentStorageGeneration(
     int storageGeneration,
     int accountGeneration,
   ) {
-    return storageGeneration == _storageGeneration &&
+    return !_disposed &&
+        storageGeneration == _storageGeneration &&
         AccountLocalDataCleaner.isCurrentAccountDataGeneration(
           accountGeneration,
         );
