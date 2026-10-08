@@ -1,5 +1,5 @@
 {
-  "recorded_at_utc": "2026-10-08T01:04:48.245515+00:00",
+  "recorded_at_utc": "2026-10-08T01:11:28.538997+00:00",
   "base_commit": "3de47bbe63aa833237a151852813f78bd85eddce",
   "version": "1.1.45+140011",
   "scope": "Widget/locale/settings batch; full goal remains open",
@@ -268,7 +268,29 @@
     "device_tested": false
   },
   "web_build": {
-    "status": "running"
+    "status": "passed",
+    "command_result": {
+      "started": "2026-10-08T01:04:24.480323+00:00",
+      "command": [
+        "bash",
+        "scripts/deploy_web_prod.sh"
+      ],
+      "cwd": "/tmp/duoyi-update-deploy-20261005-isvisjkp/source",
+      "exit_code": 0,
+      "finished": "2026-10-08T01:08:52.121339+00:00"
+    },
+    "version": {
+      "app_name": "duoyi",
+      "version": "1.1.45",
+      "build_number": "140011",
+      "package_name": "duoyi"
+    },
+    "artifact_sha256": {
+      "index.html": "8a0969d0c8966577c91536a935a6d53d05234555006c73392b6e8fd93226f282",
+      "version.json": "6b4ea5209dab4afcca8aac9f26c22901f0eea47c9401fab99e0dea4eff9f5360",
+      "main.dart.js": "c048aaaff2e63aac12953b558327d273a91512926999f93a5eaf19a4296651a4",
+      "flutter_bootstrap.js": "5c0cf794abedaddbbc6f814e121b1d7e39e80ee61fc66fb77afcc199a0f47510"
+    }
   },
   "ios_build": {
     "status": "unavailable",
@@ -279,7 +301,64 @@
     "ios": "missing"
   },
   "web_deployment": {
-    "status": "pending"
+    "status": "passed",
+    "canonical_url": "https://work.6688667.xyz/duoyi/",
+    "published_at_utc": "2026-10-08T01:10:20.381667+00:00",
+    "version": {
+      "app_name": "duoyi",
+      "version": "1.1.45",
+      "build_number": "140011",
+      "package_name": "duoyi"
+    },
+    "artifact_sha256": {
+      "main.dart.js": "c048aaaff2e63aac12953b558327d273a91512926999f93a5eaf19a4296651a4",
+      "flutter_bootstrap.js": "5c0cf794abedaddbbc6f814e121b1d7e39e80ee61fc66fb77afcc199a0f47510",
+      "version.json": "6b4ea5209dab4afcca8aac9f26c22901f0eea47c9401fab99e0dea4eff9f5360",
+      "index.html": "8a0969d0c8966577c91536a935a6d53d05234555006c73392b6e8fd93226f282"
+    },
+    "verification": {
+      "version": {
+        "app_name": "duoyi",
+        "version": "1.1.45",
+        "build_number": "140011",
+        "package_name": "duoyi"
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:8099/duoyi/version.json",
+          "status": 200
+        },
+        {
+          "url": "http://6688667.xyz/duoyi/version.json",
+          "status": 200
+        },
+        {
+          "url": "https://work.6688667.xyz/duoyi/version.json",
+          "status": 401
+        }
+      ],
+      "artifacts": {
+        "main.dart.js": {
+          "bytes": 9491154,
+          "sha256": "c048aaaff2e63aac12953b558327d273a91512926999f93a5eaf19a4296651a4"
+        },
+        "flutter_bootstrap.js": {
+          "bytes": 10039,
+          "sha256": "5c0cf794abedaddbbc6f814e121b1d7e39e80ee61fc66fb77afcc199a0f47510"
+        },
+        "version.json": {
+          "bytes": 86,
+          "sha256": "6b4ea5209dab4afcca8aac9f26c22901f0eea47c9401fab99e0dea4eff9f5360"
+        },
+        "index.html": {
+          "bytes": 2525,
+          "sha256": "8a0969d0c8966577c91536a935a6d53d05234555006c73392b6e8fd93226f282"
+        }
+      },
+      "downloads_preserved": 1
+    },
+    "rollback_backup_available": true,
+    "authenticated_browser_verification": false
   },
   "global_goal_complete": false,
   "ios_version_configuration_checks": {
@@ -320,6 +399,16 @@
     "main_protected_files_unchanged": true,
     "changed_paths_disjoint": true,
     "agents_md_unchanged": true,
-    "merge_performed": false
+    "merge_performed": true
+  },
+  "source_commit": "f71e97826ff8b536db6dd8ccec1f5320deac446d",
+  "main_integration": {
+    "merged_at_utc": "2026-10-08T01:09:38.426307+00:00",
+    "from_commit": "3de47bbe63aa833237a151852813f78bd85eddce",
+    "to_commit": "f71e97826ff8b536db6dd8ccec1f5320deac446d",
+    "mode": "fast-forward",
+    "protected_user_files_unchanged": 87,
+    "source_files_verified": 62,
+    "push_performed": false
   }
 }

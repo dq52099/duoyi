@@ -26,3 +26,11 @@ No attached Android/iOS device, macOS/Xcode build or production signing is avail
 - Full route localization, success/cancel/retry/account-switch acceptance, Android/iOS device regression and measured mobile fluency.
 
 The full requirement matrix and device gates in `docs/goal-requirement-matrix.md` remain authoritative and open. Broader frontend implementation remains subject to the established AGY ownership; Gemini high quota recovery and Sonnet high invocation availability are tracked separately. The pending user clarification about broader direct takeover has not been treated as approval.
+
+## Delivery
+
+- Source commit: `f71e978`; fast-forwarded into local `main`. All 87 pre-existing user files retained their saved hashes. No push/tag/release was performed.
+- Web `1.1.45+140011` published to https://work.6688667.xyz/duoyi/ on 2026-10-08. Served assets match the staged release hashes; the older downloads remain unchanged. The canonical anonymous version endpoint retains its existing 401 authentication response; no authenticated browser acceptance is claimed.
+- Android debug candidate compiled and APK metadata confirms `1.1.45 / 140011`; it remains private. APK SHA-256: `216643670736ab15c9c02dcecbf4e8f6cd6f8d3b942bc182ce94eae8fef3e4dd`.
+- 178 cases across 16 regression files passed. After the final iOS version edits, its 12-case source-contract suite passed again; these are repeat checks, not 12 additional distinct cases. Fresh analysis of all 32 changed Dart files found no issues.
+- Old web files were backed up before publication; static serving required no restart.
