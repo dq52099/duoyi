@@ -121,7 +121,9 @@ void main() {
     expect(aiService, contains('未来 7 天 3 条可执行动作'));
     expect(aiService, contains(r"summary: '统计报告 AI 解读：$periodLabel'"));
     expect(aiService, contains('_reviewHistory.insert(0, entry)'));
-    expect(aiService, contains('await _saveHistory()'));
+    expect(aiService, contains('await _appendReview(operation, entry)'));
+    expect(aiService, contains('await _saveHistory(operation)'));
+    expect(aiService, contains('_requireHistoryOperation(operation)'));
     expect(aiService, contains('maxTokens: 900'));
   });
 }

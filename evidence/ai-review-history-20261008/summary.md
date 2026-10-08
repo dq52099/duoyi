@@ -1,0 +1,17 @@
+# AI review history account boundary — 2026-10-08
+
+## Implemented
+
+- Preserve review-producing Future<String> APIs while rejecting stale work with the typed, bilingual AiReviewDiscardedException. All four persisted review producers check storage/account generations and captured client/token/base URL before work and after network, persistence and notification boundaries.
+- Immediately clear account-owned history on account epoch changes; detach the listener on disposal. History access is closed by the actual AuthProvider transition/blocked flags from initial service construction. Cache/getters and hydration cannot expose prior-account history while cleanup is pending.
+- Queue immutable serialized history snapshots in operation order. Recheck ownership before platform writes; revisions prevent pending hydration from replacing newer in-memory edits. Delete/clear and review appends share the queue. Failed or pending writes keep history dirty; the public daily cache stays unavailable until persistence succeeds. Weekly retries save retained content without another AI request. Older successful snapshots cannot confirm newer mutations. Clean hydration reloads the physical preference store, avoiding the legacy setter cache after a failed write.
+- Drain already-issued history writes before the final account preference clear. Physical write failures retain their original error/stack and are reported through critical cleanup; stale queued jobs are observed and skipped. False write results produce a bilingual owned error.
+
+## Verification
+
+- 669 regressions passed across 44 files, followed sequentially by clean targeted analysis across 54 paths; all 64 frozen source/test hashes remained unchanged.
+- Regression scope includes the preceding widget/popup/provider boundaries plus AI service, account cleanup, auth sessions, Mine/profile, history, diary review, AI scheduling and statistics contracts. The independent bounded source audit and exact commands/hashes/logs are attached. The first run passed 655 cases and failed four source assertions: two used the old unbound history-save signature, and two expected outdated Mine/Login layout representations. Those assertions now follow the inspected production contract and retain layout, save, and ownership checks; all 15 original new runtime cases passed in that first run. The final 25-case AI boundary fixture exercises failed-write retries and pending cache reads, revision ordering, cleanup access gates, late old hydration snapshots, false-setter process cache versus physical reload, and stale physical failures. A subsequent 668-case run was explicitly discarded because the fixture changed after its initial hash capture; the final successful run was restarted only after that session terminated and fixture strengthening finished. Targeted analysis then identified one unused fixture local; its declaration and assignment were removed, and both checks were repeated on the final hash.
+
+## Remaining
+
+This proves the service/history and cleanup boundary under regression fixtures. Existing page catches still need to ignore typed discards quietly and guard the post-return account race; already-rendered page results/dialogs also need account invalidation. Profile draft retention across mounted locale changes remains open. Default iOS visual acceptance, full bilingual routes and real Android/iOS widget/performance acceptance are not established by this batch. No new build or deployment is claimed.

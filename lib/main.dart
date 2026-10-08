@@ -638,7 +638,10 @@ void main() async {
   final localeProvider = LocaleProvider();
   final locationReminderProvider = LocationReminderProvider();
   final calendarSyncProvider = CalendarSyncProvider();
-  final aiService = AiService();
+  final aiService = AiService()
+    ..historyAccessAllowed = () =>
+        !authProvider.isAccountTransitionInProgress &&
+        !authProvider.isLocalAccountDataBlocked;
   final appUpdate = AppUpdateService(
     repo: 'dq52099/duoyi',
     currentVersion: AppVersion.name,
@@ -819,6 +822,11 @@ void main() async {
         await _yieldForNextFrame(const Duration(milliseconds: 16));
         guardedSync('calendar sync', calendarSyncProvider.resetLocalState);
         guardedSync('ai service', aiService.resetLocalState);
+        await guarded(
+          'ai history writes',
+          aiService.drainPendingHistoryWrites,
+          critical: true,
+        );
         guardedSync(
           'notification service',
           notificationService.resetLocalState,

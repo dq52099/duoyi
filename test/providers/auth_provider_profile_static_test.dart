@@ -388,9 +388,9 @@ void main() {
       'profile.avatarInitials',
       'avatar: avatarValue',
       'final metadata = <Widget>[',
-      'return SizedBox(',
+      'return ConstrainedBox(',
       "key: const ValueKey('mine_header_stable_box')",
-      'height: headerHeight',
+      'constraints: BoxConstraints(minHeight: headerHeight)',
       'child: Row(',
       'crossAxisAlignment: CrossAxisAlignment.center',
       "key: const ValueKey('mine_avatar_row')",
@@ -487,8 +487,8 @@ void main() {
 
     for (final field in [
       'class _LoginActionField',
-      'final actionWidth = constraints.maxWidth < 360 ? 64.0 : 72.0',
-      'SizedBox(width: actionWidth, height: 34, child: action)',
+      'final actionWidth = constraints.maxWidth < 360 ? 68.0 : 76.0',
+      'SizedBox(width: actionWidth, height: 40, child: action)',
       '_userCtrl.addListener(_refreshControls)',
       '_emailCtrl.addListener(_refreshControls)',
       'if (_busy || _sendingEmailCode) return;',

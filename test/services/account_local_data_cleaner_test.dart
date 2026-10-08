@@ -405,7 +405,7 @@ void main() {
     final aiReset = _sourceBlock(
       ai,
       'void resetLocalState() {',
-      'Future<void> _saveHistory()',
+      'Future<void> _saveHistory(_AiHistoryOperation operation)',
     );
     expect(aiReset, contains('_reviewHistory = []'));
 

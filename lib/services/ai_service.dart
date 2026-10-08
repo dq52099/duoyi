@@ -14,6 +14,8 @@ import '../models/goal.dart'
         ReminderRuleType;
 import '../models/todo.dart';
 import 'api_client.dart';
+import 'account_local_data_cleaner.dart';
+import '../core/i18n.dart';
 
 /// AI 客户端：**不再持有任何 key/base_url**，所有调用通过 `/api/ai/chat`
 /// 由已登录用户的 token 代理到管理员在服务端配置好的上游。
@@ -25,29 +27,177 @@ class AiService extends ChangeNotifier {
   String _model = '';
   List<AiReviewEntry> _reviewHistory = [];
   int _storageGeneration = 0;
+  int _historyRevision = 0;
+  bool _historyNeedsPersistence = false;
+  bool _disposed = false;
+  int _historyAccountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+  Future<void> _historyWriteQueue = Future<void>.value();
+  Object? _historyWriteFailure;
+  StackTrace? _historyWriteFailureStack;
+
+  /// The app closes history access during authentication/cleanup transitions.
+  bool Function()? historyAccessAllowed;
+
+  AiService() {
+    AccountLocalDataCleaner.accountDataGenerationListenable.addListener(
+      _accountHistoryInvalidated,
+    );
+  }
+
+  bool get _canAccessHistory =>
+      !_disposed && (historyAccessAllowed?.call() ?? true);
+
+  void _accountHistoryInvalidated() {
+    if (_disposed) return;
+    _storageGeneration++;
+    _historyAccountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    _reviewHistory = [];
+    _historyRevision++;
+    _historyNeedsPersistence = false;
+    notifyListeners();
+  }
+
+  _AiHistoryOperation _captureHistoryOperation() {
+    if (!_canAccessHistory) throw const AiReviewDiscardedException();
+    return _AiHistoryOperation(
+      storage: _storageGeneration,
+      account: AccountLocalDataCleaner.accountDataGeneration,
+      client: _client,
+      token: _client.token,
+      baseUrl: _client.baseUrl,
+      model: _model,
+    );
+  }
+
+  bool _isHistoryOperationCurrent(_AiHistoryOperation operation) =>
+      _canAccessHistory &&
+      operation.storage == _storageGeneration &&
+      operation.account == _historyAccountGeneration &&
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        operation.account,
+      ) &&
+      identical(operation.client, _client) &&
+      operation.token == _client.token &&
+      operation.baseUrl == _client.baseUrl;
+
+  void _requireHistoryOperation(_AiHistoryOperation operation) {
+    if (!_isHistoryOperationCurrent(operation)) {
+      throw const AiReviewDiscardedException();
+    }
+  }
+
+  Future<String> _reviewChat(
+    _AiHistoryOperation operation,
+    String systemPrompt,
+    String userPrompt, {
+    double temperature = 0.4,
+    int maxTokens = 512,
+  }) async {
+    _requireHistoryOperation(operation);
+    try {
+      final result = await _chat(
+        systemPrompt,
+        userPrompt,
+        temperature: temperature,
+        maxTokens: maxTokens,
+      );
+      _requireHistoryOperation(operation);
+      return result;
+    } catch (_) {
+      _requireHistoryOperation(operation);
+      rethrow;
+    }
+  }
+
+  Future<void> _appendReview(
+    _AiHistoryOperation operation,
+    AiReviewEntry entry,
+  ) async {
+    _requireHistoryOperation(operation);
+    _reviewHistory.insert(0, entry);
+    _historyRevision++;
+    _historyNeedsPersistence = true;
+    if (_reviewHistory.length > 50) {
+      _reviewHistory = _reviewHistory.sublist(0, 50);
+    }
+    await _saveHistory(operation);
+    _requireHistoryOperation(operation);
+    notifyListeners();
+    _requireHistoryOperation(operation);
+  }
+
+  /// Wait for issued platform writes before account preferences are removed.
+  Future<void> drainPendingHistoryWrites() async {
+    while (true) {
+      final pending = _historyWriteQueue;
+      await pending;
+      if (identical(pending, _historyWriteQueue)) break;
+    }
+    final failure = _historyWriteFailure;
+    final stack = _historyWriteFailureStack;
+    _historyWriteFailure = null;
+    _historyWriteFailureStack = null;
+    if (failure != null) Error.throwWithStackTrace(failure, stack!);
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _storageGeneration++;
+    AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
+      _accountHistoryInvalidated,
+    );
+    super.dispose();
+  }
 
   bool get enabled => _enabled;
   bool get isConfigured => _enabled;
   String get model => _model;
-  List<AiReviewEntry> get reviewHistory => List.unmodifiable(_reviewHistory);
+  List<AiReviewEntry> get reviewHistory =>
+      _canAccessHistory &&
+          _historyAccountGeneration ==
+              AccountLocalDataCleaner.accountDataGeneration
+      ? List.unmodifiable(_reviewHistory)
+      : const [];
 
   static const _kReviewHistory = 'ai_review_history';
   static const weeklyReviewKind = 'weekly_review';
 
   void attachClient(ApiClient client) {
+    if (_disposed) return;
     _client = client;
   }
 
   void updateFromServerConfig(Map<String, dynamic> cfg) {
+    if (_disposed) return;
     _enabled = cfg['ai_enabled'] == true;
     _model = (cfg['ai_model'] ?? '').toString();
     notifyListeners();
   }
 
   Future<void> loadFromStorage() async {
-    final generation = _storageGeneration;
+    if (!_canAccessHistory) return;
+    final operation = _captureHistoryOperation();
+    final revision = _historyRevision;
+    await _historyWriteQueue;
+    if (!_isHistoryOperationCurrent(operation) ||
+        revision != _historyRevision ||
+        _historyNeedsPersistence) {
+      return;
+    }
     final p = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
+    if (!_isHistoryOperationCurrent(operation) ||
+        revision != _historyRevision ||
+        _historyNeedsPersistence) {
+      return;
+    }
+    // Legacy preferences setters update their cache even when writing fails.
+    await p.reload();
+    if (!_isHistoryOperationCurrent(operation) ||
+        revision != _historyRevision ||
+        _historyNeedsPersistence) {
+      return;
+    }
     final raw = p.getStringList(_kReviewHistory) ?? [];
     _reviewHistory = raw
         .map((e) {
@@ -59,33 +209,73 @@ class AiService extends ChangeNotifier {
         })
         .whereType<AiReviewEntry>()
         .toList();
+    _historyRevision++;
     notifyListeners();
   }
 
   void resetLocalState() {
+    if (_disposed) return;
+    _historyAccountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _storageGeneration++;
     _reviewHistory = [];
+    _historyRevision++;
+    _historyNeedsPersistence = false;
     notifyListeners();
   }
 
-  Future<void> _saveHistory() async {
-    final p = await SharedPreferences.getInstance();
-    await p.setStringList(
-      _kReviewHistory,
-      _reviewHistory.map((e) => jsonEncode(e.toJson())).toList(),
+  Future<void> _saveHistory(_AiHistoryOperation operation) async {
+    _requireHistoryOperation(operation);
+    final revision = _historyRevision;
+    final snapshot = List<String>.unmodifiable(
+      _reviewHistory.map((entry) => jsonEncode(entry.toJson())),
     );
+    final write = _historyWriteQueue.then((_) async {
+      _requireHistoryOperation(operation);
+      final prefs = await SharedPreferences.getInstance();
+      _requireHistoryOperation(operation);
+      try {
+        final written = await prefs.setStringList(_kReviewHistory, snapshot);
+        if (!written) {
+          throw const AiReviewHistoryWriteException();
+        }
+      } catch (error, stack) {
+        _historyWriteFailure = error;
+        _historyWriteFailureStack = stack;
+        rethrow;
+      }
+      _requireHistoryOperation(operation);
+      if (revision == _historyRevision) _historyNeedsPersistence = false;
+    });
+    _historyWriteQueue = write.catchError((Object error, StackTrace stack) {
+      if (error is! AiReviewDiscardedException) {
+        debugPrint('[AiService] history write failed: $error\n$stack');
+      }
+    });
+    try {
+      await write;
+      _requireHistoryOperation(operation);
+    } catch (_) {
+      _requireHistoryOperation(operation);
+      rethrow;
+    }
   }
 
   Future<void> deleteReview(String id) async {
-    _reviewHistory.removeWhere((e) => e.id == id);
+    final operation = _captureHistoryOperation();
+    _reviewHistory.removeWhere((entry) => entry.id == id);
+    _historyRevision++;
+    _historyNeedsPersistence = true;
     notifyListeners();
-    await _saveHistory();
+    await _saveHistory(operation);
   }
 
   Future<void> clearReviewHistory() async {
+    final operation = _captureHistoryOperation();
     _reviewHistory.clear();
+    _historyRevision++;
+    _historyNeedsPersistence = true;
     notifyListeners();
-    await _saveHistory();
+    await _saveHistory(operation);
   }
 
   Future<String> _chat(
@@ -194,12 +384,18 @@ class AiService extends ChangeNotifier {
     String periodLabel = '本周',
     DateTime? now,
   }) async {
+    final operation = _captureHistoryOperation();
     final createdAt = now ?? DateTime.now();
-    final cached = weeklyReviewForDay(createdAt);
-    if (cached != null) return cached.content;
+    final cached = _findWeeklyReviewForDay(createdAt);
+    if (cached != null) {
+      if (_historyNeedsPersistence) await _saveHistory(operation);
+      _requireHistoryOperation(operation);
+      return cached.content;
+    }
     final summary =
         '$periodLabel数据：完成 $completedTodos / $totalTodos 项待办，专注 $weeklyFocusMinutes 分钟，习惯连续打卡 $habitStreak 天。';
-    final out = await _chat(
+    final out = await _reviewChat(
+      operation,
       _weeklyReviewSystemPrompt(periodLabel),
       '周期：$periodLabel\n'
       '待办完成：$completedTodos / $totalTodos\n'
@@ -222,15 +418,11 @@ class AiService extends ChangeNotifier {
       createdAt: createdAt,
       content: review,
       summary: summary,
-      model: _model,
+      model: operation.model,
       kind: weeklyReviewKind,
     );
-    _reviewHistory.insert(0, entry);
-    if (_reviewHistory.length > 50) {
-      _reviewHistory = _reviewHistory.sublist(0, 50);
-    }
-    await _saveHistory();
-    notifyListeners();
+    await _appendReview(operation, entry);
+    _requireHistoryOperation(operation);
     return review;
   }
 
@@ -255,7 +447,9 @@ class AiService extends ChangeNotifier {
     required String periodLabel,
     required String reportMarkdown,
   }) async {
-    final out = await _chat(
+    final operation = _captureHistoryOperation();
+    final out = await _reviewChat(
+      operation,
       '你是多仪的云端效率报告分析师。基于用户的周期统计报告，输出一段结构化中文个性化解读。'
           '要求：1) 先给一句总判断；2) 分析待办、专注、习惯、时间足迹中最值得保留和最需要调整的点；'
           '3) 给出未来 7 天 3 条可执行动作；4) 不要泛泛鼓励，不要重复原始数据堆砌。',
@@ -268,14 +462,10 @@ class AiService extends ChangeNotifier {
       createdAt: DateTime.now(),
       content: out,
       summary: '统计报告 AI 解读：$periodLabel',
-      model: _model,
+      model: operation.model,
     );
-    _reviewHistory.insert(0, entry);
-    if (_reviewHistory.length > 50) {
-      _reviewHistory = _reviewHistory.sublist(0, 50);
-    }
-    await _saveHistory();
-    notifyListeners();
+    await _appendReview(operation, entry);
+    _requireHistoryOperation(operation);
     return out;
   }
 
@@ -283,8 +473,10 @@ class AiService extends ChangeNotifier {
     required Iterable<DiaryEntry> entries,
     DateTime? today,
   }) async {
+    final operation = _captureHistoryOperation();
     final prompt = DiaryDeepReviewBuilder.build(entries: entries, today: today);
-    final out = await _chat(
+    final out = await _reviewChat(
+      operation,
       prompt.systemPrompt,
       prompt.userPrompt,
       temperature: 0.55,
@@ -295,18 +487,24 @@ class AiService extends ChangeNotifier {
       createdAt: DateTime.now(),
       content: out,
       summary: '日记深度复盘：${prompt.summary}',
-      model: _model,
+      model: operation.model,
     );
-    _reviewHistory.insert(0, entry);
-    if (_reviewHistory.length > 50) {
-      _reviewHistory = _reviewHistory.sublist(0, 50);
-    }
-    await _saveHistory();
-    notifyListeners();
+    await _appendReview(operation, entry);
+    _requireHistoryOperation(operation);
     return out;
   }
 
   AiReviewEntry? weeklyReviewForDay(DateTime day) {
+    if (!_canAccessHistory ||
+        _historyNeedsPersistence ||
+        _historyAccountGeneration !=
+            AccountLocalDataCleaner.accountDataGeneration) {
+      return null;
+    }
+    return _findWeeklyReviewForDay(day);
+  }
+
+  AiReviewEntry? _findWeeklyReviewForDay(DateTime day) {
     for (final entry in _reviewHistory) {
       if (_looksLikeWeeklyReview(entry) && _sameDay(entry.createdAt, day)) {
         return entry;
@@ -321,7 +519,9 @@ class AiService extends ChangeNotifier {
     String kind = '',
     DateTime? createdAt,
   }) async {
-    final out = await _chat(
+    final operation = _captureHistoryOperation();
+    final out = await _reviewChat(
+      operation,
       '你是一个温柔且实用的效率教练。基于$periodLabel完成情况写一段 80-150 字的中文回顾，'
       '开头必须明确写“$periodLabel回顾：”。语气积极不空洞，先肯定 1-2 点亮点，'
       '再提 1-2 个具体可执行的下周建议。不要使用 Markdown、表格、emoji、加粗或分隔线。',
@@ -335,15 +535,11 @@ class AiService extends ChangeNotifier {
       createdAt: entryTime,
       content: out,
       summary: summary,
-      model: _model,
+      model: operation.model,
       kind: kind,
     );
-    _reviewHistory.insert(0, entry);
-    if (_reviewHistory.length > 50) {
-      _reviewHistory = _reviewHistory.sublist(0, 50);
-    }
-    await _saveHistory();
-    notifyListeners();
+    await _appendReview(operation, entry);
+    _requireHistoryOperation(operation);
     return out;
   }
 
@@ -1066,4 +1262,45 @@ class AiException implements Exception {
   const AiException(this.message);
   @override
   String toString() => message;
+}
+
+/// Stable cancellation signal; callers should discard it without showing an error.
+class AiReviewDiscardedException extends AiException {
+  const AiReviewDiscardedException() : super('AI review request was canceled.');
+
+  static const code = 'review_discarded';
+
+  @override
+  String get message => I18n.current == AppLocale.zh
+      ? '账号或本地数据已变化，本次 AI 回顾已取消。'
+      : 'The account or local data changed. This AI review was canceled.';
+}
+
+class AiReviewHistoryWriteException extends AiException {
+  const AiReviewHistoryWriteException()
+    : super('AI review history could not be saved.');
+
+  static const code = 'review_history_write_failed';
+
+  @override
+  String get message => I18n.current == AppLocale.zh
+      ? 'AI 回顾历史未能保存，请重试。'
+      : 'AI review history could not be saved. Try again.';
+}
+
+final class _AiHistoryOperation {
+  const _AiHistoryOperation({
+    required this.storage,
+    required this.account,
+    required this.client,
+    required this.token,
+    required this.baseUrl,
+    required this.model,
+  });
+  final int storage;
+  final int account;
+  final ApiClient client;
+  final String? token;
+  final String baseUrl;
+  final String model;
 }
