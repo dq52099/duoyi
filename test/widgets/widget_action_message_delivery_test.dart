@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/services/account_local_data_cleaner.dart';
+import 'package:duoyi/services/reminder_scheduler.dart'
+    show TodoReminderPreflightIssue;
+import 'package:duoyi/services/todo_reminder_preflight_copy.dart';
 import 'package:duoyi/services/widget_action_message.dart';
 import 'package:duoyi/services/widget_action_scope.dart';
 import 'package:duoyi/services/widget_quick_todo_action.dart';
@@ -229,6 +232,127 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('typed preflight feedback localizes after a delayed failure', (
+    tester,
+  ) async {
+    final messengerKey = GlobalKey<ScaffoldMessengerState>();
+    await _pumpMessenger(tester, messengerKey);
+    final enteredPreflight = Completer<void>();
+    final releasePreflight = Completer<void>();
+    final feedbackQueued = Completer<WidgetActionMessage>();
+    var createCalls = 0;
+    final issue = TodoReminderPreflightIssue.coded(
+      TodoReminderPreflightNotice.invalidWeeklyRule,
+    );
+    final descriptor = WidgetActionMessage(
+      WidgetActionNotice.reminderIssue,
+      subject: issue.title,
+      detail: issue.message,
+      preflightCopy: issue.copy,
+    );
+
+    final pending = _runAction(
+      messengerKey: messengerKey,
+      feedbackQueued: feedbackQueued,
+      preflight: (showFeedback) {
+        enteredPreflight.complete();
+        return releasePreflight.future.then((_) {
+          showFeedback(descriptor);
+          return false;
+        });
+      },
+      create: () async {
+        createCalls++;
+        return const WidgetActionMessage(WidgetActionNotice.todoCompleted);
+      },
+    );
+
+    await enteredPreflight.future;
+    I18n.setLocale(AppLocale.en);
+    releasePreflight.complete();
+    final delivered = await feedbackQueued.future;
+    await pending;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(createCalls, 0);
+    expect(delivered, same(descriptor));
+    expect(delivered.subject, issue.title);
+    expect(delivered.detail, issue.message);
+    expect(find.text(descriptor.render(locale: AppLocale.en)), findsOneWidget);
+  });
+
+  testWidgets(
+    'account A typed preflight descriptor is suppressed while B is current',
+    (tester) async {
+      final messengerKey = GlobalKey<ScaffoldMessengerState>();
+      await _pumpMessenger(tester, messengerKey);
+      I18n.setLocale(AppLocale.en);
+      var createCalls = 0;
+
+      WidgetActionMessage descriptorFor(TodoReminderPreflightIssue issue) =>
+          WidgetActionMessage(
+            WidgetActionNotice.reminderIssue,
+            subject: issue.title,
+            detail: issue.message,
+            preflightCopy: issue.copy,
+          );
+
+      final accountAIssue = TodoReminderPreflightIssue.coded(
+        TodoReminderPreflightNotice.missingDate,
+      );
+      final accountAMessage = descriptorFor(accountAIssue);
+      final accountAQueued = Completer<WidgetActionMessage>();
+      final accountAPending = _runAction(
+        messengerKey: messengerKey,
+        feedbackQueued: accountAQueued,
+        preflight: (showFeedback) async {
+          showFeedback(accountAMessage);
+          return false;
+        },
+        create: () async {
+          createCalls++;
+          return const WidgetActionMessage(WidgetActionNotice.todoCompleted);
+        },
+      );
+      await accountAQueued.future;
+      await accountAPending;
+
+      AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+      final accountBIssue = TodoReminderPreflightIssue.coded(
+        TodoReminderPreflightNotice.timeInPast,
+      );
+      final accountBMessage = descriptorFor(accountBIssue);
+      final accountBQueued = Completer<WidgetActionMessage>();
+      final accountBPending = _runAction(
+        messengerKey: messengerKey,
+        feedbackQueued: accountBQueued,
+        preflight: (showFeedback) async {
+          showFeedback(accountBMessage);
+          return false;
+        },
+        create: () async {
+          createCalls++;
+          return const WidgetActionMessage(WidgetActionNotice.todoCompleted);
+        },
+      );
+      await accountBQueued.future;
+      await accountBPending;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(createCalls, 0);
+      expect(
+        find.text(accountAMessage.render(locale: AppLocale.en)),
+        findsNothing,
+      );
+      expect(
+        find.text(accountBMessage.render(locale: AppLocale.en)),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 Future<void> _pumpMessenger(

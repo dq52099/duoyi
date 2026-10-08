@@ -64,6 +64,18 @@ preflight, reminder-sync and server retry/error reasons are retained verbatim
 inside a localized outer message. Those service reasons may still contain
 another language; typed reason codes are required to localize them reliably.
 
+The five app-owned todo preflight reasons now carry `TodoReminderPreflightCopy`:
+missing date, past time, invalid repeat time, incomplete weekly rule and no
+deliverable rule. The coded factory keeps the original Chinese title/message,
+blocking flag and scheduled time for diagnostic consumers. Main also passes the
+copy object, so the widget renderer selects the title and reason together using
+the locale captured at delivery. The immediate shared String adapter uses the
+same renderer. Raw/custom issues without a copy object remain literal.
+
+This preflight branch does not migrate notification permission/channel issues,
+alarm/popup reasons, scheduler failure aggregates or other screens that read
+the canonical String fields directly.
+
 ## Acceptance scope
 
 Runtime coordinator fixtures exercise gated preflight/create and account

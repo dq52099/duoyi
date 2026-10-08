@@ -1,4 +1,5 @@
 import '../core/i18n.dart';
+import 'todo_reminder_preflight_copy.dart';
 
 enum WidgetActionNotice {
   focusRunning,
@@ -95,6 +96,7 @@ final class WidgetActionMessage {
     this.subject = '',
     this.detail = '',
     this.issueTitle,
+    this.preflightCopy,
     this.syncState = WidgetActionSyncState.unknown,
     this.syncReason = '',
     this.reminderHint = WidgetActionReminderHint.none,
@@ -104,16 +106,22 @@ final class WidgetActionMessage {
   final String subject;
   final String detail;
   final String? issueTitle;
+  final TodoReminderPreflightCopy? preflightCopy;
   final WidgetActionSyncState syncState;
   final String syncReason;
   final WidgetActionReminderHint reminderHint;
 
   /// Call after the origin/lifetime checks, immediately before displaying text.
   String render({AppLocale? locale}) {
-    final isZh = (locale ?? I18n.current) == AppLocale.zh;
+    final effectiveLocale = locale ?? I18n.current;
+    final isZh = effectiveLocale == AppLocale.zh;
     String pick(String zh, String en) => isZh ? zh : en;
     final issueLabel =
         issueTitle ?? pick('待办提醒注册失败', 'Task reminder not registered');
+    final reminderSubject =
+        preflightCopy?.title(locale: effectiveLocale) ?? subject;
+    final reminderDetail =
+        preflightCopy?.message(locale: effectiveLocale) ?? detail;
     return switch (notice) {
       WidgetActionNotice.focusRunning => pick(
         '专注计时正在进行',
@@ -213,8 +221,8 @@ final class WidgetActionMessage {
         '$issueLabel: notifications are disabled. Enable them and save the alarm reminder again.',
       ),
       WidgetActionNotice.reminderIssue => pick(
-        '提醒状态需检查：$subject：$detail',
-        'Reminder status needs attention: $subject: $detail',
+        '提醒状态需检查：$reminderSubject：$reminderDetail',
+        'Reminder status needs attention: $reminderSubject: $reminderDetail',
       ),
       WidgetActionNotice.savedReminderIssue => pick(
         '快捷待办已保存到本机，提醒状态需检查：$detail',

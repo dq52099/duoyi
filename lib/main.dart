@@ -4454,6 +4454,7 @@ Future<bool> _preflightWidgetTodoReminder(
         WidgetActionNotice.reminderIssue,
         subject: blocking.title,
         detail: blocking.message,
+        preflightCopy: blocking.copy,
       ),
     );
     return false;

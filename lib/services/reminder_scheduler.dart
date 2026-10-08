@@ -15,6 +15,7 @@ import 'alarm_service.dart';
 import 'notification_permission_exception.dart';
 import 'reminder_sinks.dart';
 import 'reminder_notification_id.dart';
+import 'todo_reminder_preflight_copy.dart';
 
 const Duration _sameMinuteReminderGrace = Duration(seconds: 70);
 
@@ -23,13 +24,31 @@ class TodoReminderPreflightIssue {
   final String message;
   final bool blocking;
   final DateTime? scheduledTime;
+  final TodoReminderPreflightCopy? copy;
 
   const TodoReminderPreflightIssue({
     required this.title,
     required this.message,
     this.blocking = true,
     this.scheduledTime,
+    this.copy,
   });
+
+  /// Keeps the canonical diagnostics stable while carrying locale-neutral copy.
+  factory TodoReminderPreflightIssue.coded(
+    TodoReminderPreflightNotice notice, {
+    bool blocking = true,
+    DateTime? scheduledTime,
+  }) {
+    final copy = TodoReminderPreflightCopy(notice);
+    return TodoReminderPreflightIssue(
+      title: copy.title(locale: AppLocale.zh),
+      message: copy.message(locale: AppLocale.zh),
+      blocking: blocking,
+      scheduledTime: scheduledTime,
+      copy: copy,
+    );
+  }
 }
 
 class TodoReminderPreflightResult {
@@ -125,9 +144,8 @@ TodoReminderPreflightResult preflightTodoReminderPlan(
         final anchor = _absoluteTodoReminderAnchor(todo);
         if (anchor == null) {
           issues.add(
-            const TodoReminderPreflightIssue(
-              title: '待办提醒注册失败',
-              message: '一次性提醒需要截止日期或提醒日期。请先设置未来的日期。',
+            TodoReminderPreflightIssue.coded(
+              TodoReminderPreflightNotice.missingDate,
             ),
           );
           continue;
@@ -143,9 +161,8 @@ TodoReminderPreflightResult preflightTodoReminderPlan(
         );
         if (scheduledWhen == null) {
           issues.add(
-            TodoReminderPreflightIssue(
-              title: '待办提醒注册失败',
-              message: '提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。',
+            TodoReminderPreflightIssue.coded(
+              TodoReminderPreflightNotice.timeInPast,
               scheduledTime: base,
             ),
           );
@@ -161,9 +178,8 @@ TodoReminderPreflightResult preflightTodoReminderPlan(
         final anchor = _relativeTodoReminderAnchor(todo);
         if (anchor == null) {
           issues.add(
-            const TodoReminderPreflightIssue(
-              title: '待办提醒注册失败',
-              message: '一次性提醒需要截止日期或提醒日期。请先设置未来的日期。',
+            TodoReminderPreflightIssue.coded(
+              TodoReminderPreflightNotice.missingDate,
             ),
           );
           continue;
@@ -180,9 +196,8 @@ TodoReminderPreflightResult preflightTodoReminderPlan(
         );
         if (scheduledWhen == null) {
           issues.add(
-            TodoReminderPreflightIssue(
-              title: '待办提醒注册失败',
-              message: '提醒时间已过去，未注册到系统通知。请把提醒时间改到未来时间。',
+            TodoReminderPreflightIssue.coded(
+              TodoReminderPreflightNotice.timeInPast,
               scheduledTime: when,
             ),
           );
@@ -197,9 +212,8 @@ TodoReminderPreflightResult preflightTodoReminderPlan(
       case ReminderRuleType.dailyTime:
         if (!_validTimeForPreflight(rule.hour, rule.minute)) {
           issues.add(
-            const TodoReminderPreflightIssue(
-              title: '重复提醒注册失败',
-              message: '重复提醒缺少有效时间，请重新选择提醒时间。',
+            TodoReminderPreflightIssue.coded(
+              TodoReminderPreflightNotice.invalidRepeatTime,
             ),
           );
           continue;
@@ -210,9 +224,8 @@ TodoReminderPreflightResult preflightTodoReminderPlan(
         if (!_validTimeForPreflight(rule.hour, rule.minute) ||
             rule.weekdays.isEmpty) {
           issues.add(
-            const TodoReminderPreflightIssue(
-              title: '每周提醒注册失败',
-              message: '每周提醒需要有效时间和至少一个星期。请重新选择提醒规则。',
+            TodoReminderPreflightIssue.coded(
+              TodoReminderPreflightNotice.invalidWeeklyRule,
             ),
           );
           continue;
@@ -224,9 +237,8 @@ TodoReminderPreflightResult preflightTodoReminderPlan(
 
   if (deliverableRules == 0 && issues.isEmpty) {
     issues.add(
-      const TodoReminderPreflightIssue(
-        title: '待办提醒注册失败',
-        message: '提醒计划没有可注册的规则，请重新设置提醒。',
+      TodoReminderPreflightIssue.coded(
+        TodoReminderPreflightNotice.noDeliverableRule,
       ),
     );
   }
