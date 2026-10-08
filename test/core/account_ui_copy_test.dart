@@ -6,6 +6,35 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   tearDown(() => I18n.setLocale(AppLocale.zh));
 
+  for (final scenario in [
+    (
+      details: [
+        '账号已发生变化，请在当前账号重试操作。',
+        'Account has changed. Try again in the current account.',
+      ],
+      chinese: '账号已切换，请重新打开页面后再操作',
+      english: 'Account changed. Reopen this page before trying again.',
+    ),
+    (
+      details: ['账号正在切换，请稍后重试。', 'Account is switching. Please retry.'],
+      chinese: '账号正在切换，请稍候再试',
+      english: 'Account is switching. Please wait and try again.',
+    ),
+  ]) {
+    test('account boundary feedback follows locale: ${scenario.english}', () {
+      for (final detail in scenario.details) {
+        for (final error in <Object>[detail, ApiException(detail)]) {
+          I18n.setLocale(AppLocale.zh);
+          expect(AccountUiCopy.formatError(error), scenario.chinese);
+          I18n.setLocale(AppLocale.en);
+          expect(AccountUiCopy.formatError(error), scenario.english);
+          I18n.setLocale(AppLocale.zh);
+          expect(AccountUiCopy.formatError(error), scenario.chinese);
+        }
+      }
+    });
+  }
+
   test(
     'verification rate limits advise waiting rather than replacing the code',
     () {

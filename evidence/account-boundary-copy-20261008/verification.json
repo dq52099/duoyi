@@ -1,0 +1,43 @@
+{
+  "recorded_at_utc": "2026-10-08T01:47:25.742920+00:00",
+  "base_commit": "04a9225ca1ad0987247c1f063ec7c664973cfb02",
+  "source_sha256": {
+    "lib/core/account_ui_copy.dart": "338c7fb32f8b02f56a57e91059ef5c2605d415c1a4754c10b1a43f27fc8eea3b",
+    "test/core/account_ui_copy_test.dart": "03642fe0b32c7aa4a96cfaad4147ca9d4f850007ab641cff16b6c3d61c954791"
+  },
+  "tests": {
+    "cases_passed": 10,
+    "exit_code": 0,
+    "finished_at_utc": "2026-10-08T01:46:36.036666+00:00",
+    "command": [
+      "/home/ubuntu/flutter/bin/flutter",
+      "test",
+      "--no-pub",
+      "--concurrency=1",
+      "--reporter=expanded",
+      "test/core/account_ui_copy_test.dart"
+    ],
+    "log_sha256": "72408eab4fc5d1b0336e6c0e496a8d64f187190e5a01fdc8292e0e21e6d20eed"
+  },
+  "new_deployment_performed": false,
+  "pending": [
+    "Consume a provider session binding across profile file-selection preflight and long-lived dialogs",
+    "Bind dirty profile drafts to account identity",
+    "Build and deploy changed account copy in the next web/app delivery",
+    "Complete WidgetKit views and native device verification"
+  ],
+  "analyzer": {
+    "exit_code": 0,
+    "result": "No issues found",
+    "finished_at_utc": "2026-10-08T01:47:25.264592+00:00",
+    "command": [
+      "/home/ubuntu/flutter/bin/flutter",
+      "analyze",
+      "--no-pub",
+      "lib/core/account_ui_copy.dart",
+      "test/core/account_ui_copy_test.dart"
+    ],
+    "log_sha256": "090320177a8966a880f395a9af58e18db03bb46c4c25d61daaf539d9e9a64d64"
+  },
+  "git_diff_check_exit_code": 0
+}

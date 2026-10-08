@@ -72,6 +72,21 @@ class AccountUiCopy {
         : error as String;
     final lower = rawMessage.toLowerCase();
 
+    // Account changes need a new page intent, even if the new session is valid.
+    if (lower.contains('账号已发生变化') ||
+        lower.contains('account has changed') ||
+        lower.contains('account changed')) {
+      return isEn
+          ? 'Account changed. Reopen this page before trying again.'
+          : '账号已切换，请重新打开页面后再操作';
+    }
+    if (lower.contains('账号正在切换') ||
+        lower.contains('account is switching')) {
+      return isEn
+          ? 'Account is switching. Please wait and try again.'
+          : '账号正在切换，请稍候再试';
+    }
+
     if (lower.contains('当前密码不正确') ||
         lower.contains('current password is incorrect')) {
       return isEn
