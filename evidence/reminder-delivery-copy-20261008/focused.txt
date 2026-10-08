@@ -1,0 +1,643 @@
+00:00 +0: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart
+00:00 +0: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: operation-owned reminder sync copy unresolved target is message-only while all-list keeps titles
+00:00 +1: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: operation-owned reminder sync copy target-only reporting excludes other-object failures
+00:00 +2: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: operation-owned reminder sync copy serialized operations keep each returned copy after map replacement
+00:00 +3: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: operation-owned reminder sync copy all-list unresolved collector preserves source order and raw join
+00:00 +4: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: operation-owned reminder sync copy rule aggregate still takes precedence over earlier unresolved collector
+00:00 +5: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: operation-owned reminder sync copy false push result keeps StateError raw and explicit owned reason
+00:00 +6: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: operation-owned reminder sync copy typed dispatch exception retains copy and exact raw projection
+[ReminderScheduler] push notification dispatch failed for 166579242: 待办提醒注册失败：原始注册失败(native literal)
+#0      _SyncCopyFailingNotif.scheduleOnceWithResult (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:6326:5)
+#1      ReminderScheduler._schedulePushOnceWithResult (package:duoyi/services/reminder_scheduler.dart:3395:42)
+#2      ReminderScheduler._dispatch (package:duoyi/services/reminder_scheduler.dart:3565:24)
+#3      ReminderScheduler._dispatchRule (package:duoyi/services/reminder_scheduler.dart:5580:24)
+#4      ReminderScheduler._syncRuleObjects (package:duoyi/services/reminder_scheduler.dart:4530:26)
+<asynchronous suspension>
+#5      ReminderScheduler._syncTodosLocked (package:duoyi/services/reminder_scheduler.dart:2173:5)
+<asynchronous suspension>
+#6      ReminderScheduler._syncTodosAndGetTodoIssue.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:2127:9)
+<asynchronous suspension>
+#7      ReminderScheduler._runSerializedForAccountGeneration.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:1483:7)
+<asynchronous suspension>
+#8      ReminderScheduler._syncTodosAndGetTodoIssue (package:duoyi/services/reminder_scheduler.dart:2124:5)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:970:24)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+00:00 +7: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: operation-owned reminder sync copy unknown dispatch exception remains literal despite permission words
+[ReminderScheduler] push notification dispatch failed for 1320989871: Bad state: 系统通知权限未开启 / custom opaque diagnostic
+#0      _SyncCopyFailingNotif.scheduleOnceWithResult (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:6326:5)
+#1      ReminderScheduler._schedulePushOnceWithResult (package:duoyi/services/reminder_scheduler.dart:3395:42)
+#2      ReminderScheduler._dispatch (package:duoyi/services/reminder_scheduler.dart:3565:24)
+#3      ReminderScheduler._dispatchRule (package:duoyi/services/reminder_scheduler.dart:5580:24)
+#4      ReminderScheduler._syncRuleObjects (package:duoyi/services/reminder_scheduler.dart:4530:26)
+<asynchronous suspension>
+#5      ReminderScheduler._syncTodosLocked (package:duoyi/services/reminder_scheduler.dart:2173:5)
+<asynchronous suspension>
+#6      ReminderScheduler._syncTodosAndGetTodoIssue.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:2127:9)
+<asynchronous suspension>
+#7      ReminderScheduler._runSerializedForAccountGeneration.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:1483:7)
+<asynchronous suspension>
+#8      ReminderScheduler._syncTodosAndGetTodoIssue (package:duoyi/services/reminder_scheduler.dart:2124:5)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1001:24)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+00:00 +8: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 registeredRemindersSnapshot exposes sorted registry details
+00:00 +9: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 resetInMemoryState clears cached popup rules before account rebuild
+00:00 +10: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 account reset keeps failed cancellation owners and registry for retry
+[ReminderScheduler] cancel failed for todo popup registry:reset-cancel-failure-owner (2124866890): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2052:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1124:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for todo popup registry:reset-cancel-failure-owner (2124866890): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for todo popup registry:reset-cancel-failure-owner (1179107316): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2052:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1124:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for todo popup registry:reset-cancel-failure-owner (1179107316): Bad state: forced popup cancel failure
+00:00 +11: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 account reset cancels persisted owners after scheduler cold start
+00:00 +12: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 account suspension invalidates queued snapshots and resume accepts new data
+00:00 +13: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 suspended multi-rule habit batch retains every popup id for cold-start retry
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1446097921): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1446097921): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (108558069): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (108558069): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1576077323): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+00:00 +14: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 修改提醒时旧清理失败仍注册当前提醒
+00:00 +15: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 preflight blocks enabled one-shot todo reminders in the past
+00:00 +16: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 preflight accepts just-missed same-minute one-shot reminders
+00:00 +17: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 preflight prefers reminderAt over date-only dueDate for absolute todo reminders
+00:00 +18: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos registers absolute todo reminderAt when dueDate is date-only midnight
+00:01 +19: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 startup resync does not re-arm just-missed same-minute one-shot reminders
+00:01 +20: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 write-side sync still accepts just-missed same-minute one-shot reminders
+00:01 +21: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos fails visibly when enabled reminder resolves empty
+00:01 +22: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 并发触发时串行化，避免同一提醒重复下发
+00:01 +23: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 对完全相同的多条规则只下发一次
+00:01 +24: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 对同一时间同一内容的不同规则类型只下发一次
+00:01 +25: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性/相对截止提醒标题跟随语言（en 下不再回退中文）
+00:01 +26: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 对重复的每日通知只注册第一条规则
+00:01 +27: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 同一时间同时配置通知和闹钟时只保留闹钟
+00:01 +28: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 同一时间同时配置通知和弹出框时只保留通知
+00:01 +29: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 同一时间同时配置弹出框和闹钟时只保留闹钟
+00:01 +30: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每周部分重叠时只替换冲突日期
+00:01 +31: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每日和每周全选同时间只保留更高优先级
+00:01 +32: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 不合并不同时间的提醒规则
+00:01 +33: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 刚错过同一分钟不会因秒级漂移重复下发
+00:01 +34: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos surfaces swallowed one-shot notification failures by todo id
+00:01 +35: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos does not record issue when reminders are disabled
+00:01 +36: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 preflight accepts future one-shot todo reminders and reports kind
+00:01 +37: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 preflight blocks relative reminders without an anchor date
+00:01 +38: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 对已完成待办不调度
+00:01 +39: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 把旧字段习惯默认调度成弹出框提醒
+00:01 +40: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟通知权限异常时注册兜底但返回可见失败
+00:01 +41: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 旧注册清理失败时仍注册当前提醒并保留债务
+00:01 +42: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟插件异常时注册兜底但返回可见失败
+00:01 +43: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟半注册后异常时不降级普通通知避免双弹
+00:01 +44: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟权限异常但已入队时不降级普通通知避免双弹
+00:01 +45: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:01 +46: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟交接失败时不降级普通通知避免双弹
+00:01 +47: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits kind=push 走普通通知而不是闹钟
+00:01 +48: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits kind=popup 走应用内弹窗提醒
+00:01 +49: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 多提醒时间逐条注册到独立 id（每天 8 杯水场景）
+00:01 +50: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 删除其中一个提醒时间会取消对应通知
+00:01 +50: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 suspended multi-rule habit batch retains every popup id for cold-start retry
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1576077323): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (58225212): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (58225212): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1576077324): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1576077324): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (75002831): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (75002831): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1576077325): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1576077325): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (24669974): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (24669974): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1576077326): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+00:02 +51: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 多提醒时间部分调度失败时，已成功的派生 id 仍入册，禁用后能被清理
+00:02 +52: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 未注入 popup sink 时，习惯 popup 会注册系统通知兜底
+00:02 +53: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟插件异常时注册一次性兜底但返回可见失败
+00:02 +54: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性闹钟降级通知后仍返回可见失败
+00:02 +55: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟降级通知后 pending 查询失败时记录兜底诊断
+00:02 +56: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性闹钟半注册后异常时不降级普通通知避免双弹
+00:02 +57: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性闹钟异常且 pending 查询失败时不降级普通通知避免双弹
+00:02 +58: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性闹钟权限异常但已入队时不降级普通通知避免双弹
+00:02 +59: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 一次性通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:02 +60: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 未注入 popup sink 时，待办 popup 会注册系统通知兜底
+00:02 +61: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 显式 Noop popup sink 不会把 popup 待办缓存为已调度
+00:02 +62: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟和一次性 push 都失败时不记为已调度，权限恢复后重试
+00:02 +63: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟通知权限失败时不记为已调度，权限恢复后重试
+00:02 +64: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 精准闹钟权限失败且 push 插件异常时抛出可见同步异常
+00:02 +65: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟插件异常时注册兜底但返回可见失败
+00:02 +66: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟降级通知后仍返回可见失败
+00:02 +67: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟半注册后异常时不降级普通通知避免双弹
+00:02 +68: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟异常且 pending 查询失败时不降级普通通知避免双弹
+00:02 +69: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟权限异常但已入队时不降级普通通知避免双弹
+00:02 +70: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:02 +71: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟和重复 push 都失败时不记为已调度，权限恢复后重试
+00:02 +72: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 重复闹钟权限失败且 push 插件异常时抛出可见同步异常
+00:02 +73: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟和 push 都失败时不记为已调度，权限恢复后会重试
+00:02 +74: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 闹钟降级通知后仍返回可见失败
+00:02 +75: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 关闭提醒后清理上一轮调度
+00:02 +76: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 冷启动关闭提醒会清理已持久化的旧提醒
+00:02 +77: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 同一提醒重复同步不会取消重放
+00:02 +78: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 每周原生闹钟 base id pending 时不会重复重注册
+00:02 +79: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 每周闹钟规则未变时会清理旧版普通通知子 id，避免双弹
+00:02 +80: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 规则未变但 push pending 丢失时会重新注册
+00:02 +81: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncHabits 修改时间后取消旧调度并重新下发
+00:02 +82: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 默认走 push 通道
+00:02 +83: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries kind=alarm 走全屏闹钟
+00:02 +84: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries kind=popup 走弹出框提醒
+00:02 +85: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries popup 调度失败时不缓存成功状态，恢复后会重试
+00:02 +86: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries kind=off 会清理旧提醒且不重新注册
+00:02 +87: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries alarm 失败时即使 push fallback 成功也记录异常且可重试
+00:02 +88: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 闹钟降级通知不会缓存为成功状态
+00:02 +89: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 闹钟交接失败时不降级普通通知避免双弹
+00:02 +90: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 闹钟半注册后异常时不降级普通通知避免双弹
+00:02 +91: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 闹钟权限异常但已入队时不降级普通通知避免双弹
+00:02 +92: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:02 +93: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 同一提醒重复同步不会重复注册
+00:02 +94: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 规则未变但 push pending 丢失时会重新注册
+00:02 +95: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries push 切到 alarm 时双通道清理旧提醒
+00:02 +96: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries alarm 切到 push 时清理旧闹钟提醒
+00:02 +97: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 resyncAll 会清理并重放纪念日闹钟提醒
+00:02 +98: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 resyncAll 取消某个通道失败时继续清理且不重放失败对象
+00:02 +99: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns 按提醒方式路由到通知、弹出框和闹钟
+00:02 +100: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns skips reminder kind off even when remind is true
+00:02 +101: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns popup 调度失败时不缓存成功状态，恢复后会重试
+00:02 +102: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns 弹出框规则未变时会清理残留通知和闹钟，避免双弹
+00:02 +103: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns 通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:02 +104: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 未注入 popup sink 时，倒数 popup 会注册系统通知兜底
+00:02 +105: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns push 插件异常时不缓存成功状态，恢复后会重试
+00:02 +105: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 suspended multi-rule habit batch retains every popup id for cold-start retry
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1576077326): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (41447593): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (41447593): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1576077327): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1576077327): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (211061410): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (211061410): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1319369388): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (1319369388): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (2110614101): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      main.<anonymous closure>.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:1302:9)
+<asynchronous suspension>
+#10     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#11     Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#12     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[ReminderScheduler] Old reminder cleanup failed for habit popup registry:suspended-multi-popup-owner (2110614101): Bad state: forced popup cancel failure
+[ReminderScheduler] cancel failed for habit popup registry:suspended-multi-popup-owner (1369702245): Bad state: forced popup cancel failure
+#0      _FakePopupSink.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart:437:7)
+#1      ReminderScheduler._cancelIds.<anonymous closure> (package:duoyi/services/reminder_scheduler.dart:4230:25)
+#2      ReminderScheduler._cancelSafely (package:duoyi/services/reminder_scheduler.dart:4305:19)
+#3      ReminderScheduler._cancelIds (package:duoyi/services/reminder_scheduler.dart:4228:17)
+<asynchronous suspension>
+#4      ReminderScheduler._resetInMemoryStateLocked.cancelObjects (package:duoyi/services/reminder_scheduler.dart:1997:25)
+<asynchronous suspension>
+#5      ReminderScheduler._resetInMemoryStateLocked (package:duoyi/services/reminder_scheduler.dart:2054:5)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+00:03 +106: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns 规则未变但 push pending 丢失时会重新注册
+00:03 +107: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncCountdowns 切换提醒方式会取消旧通道后重新注册
+00:03 +108: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 按通知、弹出框、闹钟、邮件和关闭五种提醒方式分支调度
+00:03 +109: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 通知、弹窗和闹钟都可切换为关闭并清理旧通道
+00:03 +110: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每周重复提醒按通知、弹出框、闹钟和关闭分支路由
+00:03 +111: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 同一 rule 在通知、弹出框和闹钟之间切换只保留当前通道
+00:03 +112: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 规则未变但 push pending 丢失时会重新注册
+00:03 +113: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 规则未变但 push pending 查询失败时会重新注册并记录诊断
+00:03 +114: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 冷启动同步前清理当前 rule id，避免旧队列并存
+00:03 +115: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 冷启动旧队列清理失败时仍注册当前提醒
+00:03 +116: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 冷启动会清理已持久化的旧 rule id
+00:03 +117: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 冷启动旧 rule id 清理失败时保留 registry 债务并注册新提醒
+00:03 +118: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 冷启动同 rule 跨通道取消失败时仍注册当前闹钟
+00:03 +119: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 改规则时取消失败仍注册新提醒并记录债务
+00:03 +120: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每周原生闹钟 base id pending 时不会重复重注册
+00:03 +121: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 规则未变但每周闹钟 pending 丢失时会重新注册
+00:03 +122: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟规则未变时会清理残留普通通知，避免双弹
+00:03 +123: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 闹钟已在队列但残留通知清理失败时不重排当前闹钟
+00:03 +124: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每周闹钟规则未变时会清理旧版普通通知子 id，避免双弹
+00:03 +125: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 每周闹钟规则未变时会清理当前普通通知子 id，避免双弹
+00:03 +126: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 普通通知规则未变时会清理残留闹钟，避免双弹
+00:03 +127: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 普通通知已在队列但残留闹钟清理失败时不重排当前通知
+00:03 +128: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 弹出框规则未变时会清理残留通知和闹钟并重建前台计时器
+00:03 +129: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 邮件一次性调度失败时不缓存成功状态，恢复后重试
+00:03 +130: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncTodos 邮件重复调度失败时不缓存成功状态，恢复后重试
+00:03 +131: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncAnniversaries 邮件调度失败时不缓存成功状态，恢复后重试
+00:03 +132: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 邮件取消失败不会中断其他通道清理
+00:03 +133: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 对非 active 状态不调度
+00:03 +134: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 同一时间重复提醒只保留最高优先级通道
+00:03 +135: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 同一时间通知和闹钟只保留闹钟
+00:03 +136: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 按弹出框和关闭提醒分支调度
+00:03 +137: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 从 popup 切到 off 会清理旧弹窗提醒
+00:03 +138: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 无目标日期时不把开始日期当相对截止日提醒
+00:03 +139: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: ReminderScheduler 集成 syncGoals 通知权限异常但闹钟已入队时不降级普通通知避免双弹
+00:03 +140: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: English initial reminder dispatch copy todo push preserves English copy across all rule types
+00:03 +141: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: English initial reminder dispatch copy goal push, popup, and alarm preserve copy for every rule type
+00:03 +142: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: English initial reminder dispatch copy retained raw habit plans route English popup, alarm, and nonprimary push copy
+00:03 +143: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: English initial reminder dispatch copy canonical multi-time habits use English popup copy after normalization
+00:03 +144: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: English initial reminder dispatch copy anniversary popup and alarm preserve English copy and dispatch data
+00:03 +145: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: English initial reminder dispatch copy countdown push, popup, and alarm preserve positive, zero, and negative days
+00:03 +146: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: English initial reminder dispatch copy goal locale-only copy changes retain email; intent changes clean it up
+00:03 +147: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_scheduler_integration_test.dart: English initial reminder dispatch copy countdown email signature stays stable when locale changes
+00:03 +148: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_delivery_copy_test.dart
+00:05 +148: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_delivery_copy_test.dart: todo copy covers every rule type in Chinese and English
+00:05 +149: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_delivery_copy_test.dart: goal copy covers every rule type and reminder kind
+00:05 +150: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_delivery_copy_test.dart: habit copy keeps semantic push distinct and uses each brand locale
+00:06 +151: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_delivery_copy_test.dart: anniversary copy covers every kind and calendar distance fact
+00:06 +152: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_delivery_copy_test.dart: countdown copy covers today, tomorrow, later, and overdue facts
+00:06 +153: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_delivery_copy_test.dart: raw user titles survive every subject renderer unchanged
+00:06 +154: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_delivery_copy_test.dart: the same copy renders zh to en to zh without changing global locale
+00:06 +155: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_delivery_copy_test.dart: semantic fingerprint is stable across locale and brand rendering
+00:06 +156: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_delivery_copy_test.dart: semantic fingerprint changes when any semantic fact changes
+00:06 +157: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_delivery_copy_test.dart: semantic fingerprint JSON preserves separator and newline titles
+00:06 +158: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_semantic_notification_delivery_test.dart
+00:10 +158: /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/reminder_semantic_notification_delivery_test.dart: production habit and anniversary wrappers send localized copy and record it
+00:11 +159: All tests passed!

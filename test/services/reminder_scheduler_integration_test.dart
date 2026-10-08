@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 
+import 'package:duoyi/core/app_brand.dart';
+import 'package:duoyi/core/brand_strings.dart';
 import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/models/anniversary.dart';
 import 'package:duoyi/models/countdown.dart';
@@ -134,6 +136,7 @@ class _FakeNotifSink
       'body': body,
       'hour': hour,
       'minute': minute,
+      'weekdays': weekdays == null ? null : List<int>.of(weekdays),
       'payload': payload,
     });
     _rememberPendingRepeating(id, weekdays);
@@ -339,6 +342,8 @@ class _FakeAlarmSink implements ReminderAlarmSink, ReminderPendingSink {
       'body': body,
       'when': when,
       'payload': payload,
+      'requireExactAlarm': requireExactAlarm,
+      'fullScreen': fullScreen,
       'vibrate': vibrate,
       'snoozeMinutes': snoozeMinutes,
       'repeatCount': repeatCount,
@@ -390,6 +395,8 @@ class _FakeAlarmSink implements ReminderAlarmSink, ReminderPendingSink {
       'payload': payload,
       'hour': hour,
       'minute': minute,
+      'weekdays': weekdays == null ? null : List<int>.of(weekdays),
+      'requireExactAlarm': requireExactAlarm,
       'fullScreen': fullScreen,
       'vibrate': vibrate,
       'snoozeMinutes': snoozeMinutes,
@@ -447,6 +454,7 @@ class _FakePopupSink implements ReminderPopupSink {
       'kind': 'popup_once',
       'id': id,
       'title': title,
+      'body': body,
       'when': when,
       'payload': payload,
     });
@@ -511,6 +519,7 @@ class _FakeEmailSink implements ReminderEmailSink {
       'kind': 'email_once',
       'id': id,
       'title': title,
+      'body': body,
       'when': when,
       'payload': payload,
     });
@@ -687,6 +696,7 @@ void main() {
   late ReminderScheduler scheduler;
 
   setUp(() {
+    I18n.setLocale(AppLocale.zh);
     notif = _FakeNotifSink();
     alarm = _FakeAlarmSink();
     popup = _FakePopupSink();
@@ -699,7 +709,18 @@ void main() {
       email: email,
       registry: registry,
     );
+    scheduler.setStrings(
+      BrandStrings.forLocale(BrandStyle.defaultBrand, I18n.current),
+    );
   });
+  void applyLocale(AppLocale locale) {
+    I18n.setLocale(locale);
+    scheduler.setStrings(
+      BrandStrings.forLocale(BrandStyle.defaultBrand, I18n.current),
+    );
+  }
+
+  tearDown(() => applyLocale(AppLocale.zh));
 
   group('operation-owned reminder sync copy', () {
     TodoItem missingDate(String id) => TodoItem(
@@ -5495,6 +5516,796 @@ void main() {
       expect(notif.scheduled, isEmpty);
       expect(alarm.pending, contains(expectedId));
     });
+  });
+
+  group('English initial reminder dispatch copy', () {
+    BrandStrings useEnglish() {
+      applyLocale(AppLocale.en);
+      return BrandStrings.forLocale(BrandStyle.defaultBrand, I18n.current);
+    }
+
+    Map<String, Object?> entryWithId(
+      List<Map<String, Object?>> entries,
+      int id,
+    ) => entries.singleWhere((entry) => entry['id'] == id);
+
+    test('todo push preserves English copy across all rule types', () async {
+      final strings = useEnglish();
+      const todoId = 'todo-english-all-rule-types';
+      const title = '提交报告 / Submit the launch report';
+      final due = DateTime.now().add(const Duration(days: 4));
+      const weekdays = <int>[1, 4];
+      final todo = TodoItem(
+        id: todoId,
+        title: title,
+        dueDate: due,
+        reminderPlan: ReminderPlan(
+          enabled: true,
+          rules: [
+            ReminderRule(
+              id: 'absolute',
+              type: ReminderRuleType.absolute,
+              kind: ReminderKind.push,
+              hour: 9,
+              minute: 10,
+            ),
+            ReminderRule(
+              id: 'relative',
+              type: ReminderRuleType.relativeToDue,
+              kind: ReminderKind.push,
+              hour: 10,
+              minute: 20,
+              offsetMinutes: 15,
+            ),
+            ReminderRule(
+              id: 'daily',
+              type: ReminderRuleType.dailyTime,
+              kind: ReminderKind.push,
+              hour: 11,
+              minute: 30,
+            ),
+            ReminderRule(
+              id: 'weekly',
+              type: ReminderRuleType.weeklyTime,
+              kind: ReminderKind.push,
+              hour: 12,
+              minute: 40,
+              weekdays: weekdays,
+            ),
+          ],
+        ),
+      );
+
+      await scheduler.syncTodos([todo]);
+
+      expect(notif.scheduled, hasLength(4));
+      final absoluteId = _idFor('todo:$todoId:absolute');
+      final absolute = entryWithId(notif.scheduled, absoluteId);
+      expect(absolute['kind'], 'once');
+      expect(absolute['title'], 'Reminder: $title');
+      expect(absolute['body'], title);
+      expect(absolute['when'], DateTime(due.year, due.month, due.day, 9, 10));
+      expect(absolute['payload'], 'duoyi://todo/$todoId');
+
+      final relativeId = _idFor('todo:$todoId:relative');
+      final relative = entryWithId(notif.scheduled, relativeId);
+      expect(relative['kind'], 'once');
+      expect(relative['title'], 'Reminder: $title');
+      expect(relative['body'], title);
+      expect(relative['when'], DateTime(due.year, due.month, due.day, 10, 35));
+      expect(relative['payload'], 'duoyi://todo/$todoId');
+
+      final dailyId = _idFor('todo:$todoId:daily');
+      final daily = entryWithId(notif.scheduled, dailyId);
+      expect(daily['kind'], 'daily');
+      expect(daily['title'], strings.notifTodoDueTitle);
+      expect(daily['body'], title);
+      expect(daily['hour'], 11);
+      expect(daily['minute'], 30);
+      expect(daily['weekdays'], isNull);
+      expect(daily['payload'], 'duoyi://todo/$todoId');
+
+      final weeklyId = _idFor('todo:$todoId:weekly');
+      final weekly = entryWithId(notif.scheduled, weeklyId);
+      expect(weekly['kind'], 'daily');
+      expect(weekly['title'], strings.notifTodoDueTitle);
+      expect(weekly['body'], title);
+      expect(weekly['hour'], 12);
+      expect(weekly['minute'], 40);
+      expect(weekly['weekdays'], weekdays);
+      expect(weekly['payload'], 'duoyi://todo/$todoId');
+    });
+
+    test(
+      'goal push, popup, and alarm preserve copy for every rule type',
+      () async {
+        useEnglish();
+        const goalId = 'goal-english-all-rule-types';
+        const title = '完成里程碑 / Finish milestone 3';
+        final start = DateTime.now().add(const Duration(days: 5));
+        final target = DateTime.now().add(const Duration(days: 8));
+        const weekdays = <int>[1, 4];
+        const kinds = <ReminderKind>[
+          ReminderKind.push,
+          ReminderKind.popup,
+          ReminderKind.alarm,
+        ];
+        final rules = <ReminderRule>[];
+        final expectedIdsByKind = <ReminderKind, Set<int>>{
+          for (final kind in kinds) kind: <int>{},
+        };
+
+        for (final type in ReminderRuleType.values) {
+          for (var kindIndex = 0; kindIndex < kinds.length; kindIndex += 1) {
+            final kind = kinds[kindIndex];
+            final ruleId = '${type.name}-${kind.name}';
+            final hour = 8 + type.index * kinds.length + kindIndex;
+            final minute = 10 + kindIndex;
+            rules.add(
+              ReminderRule(
+                id: ruleId,
+                type: type,
+                kind: kind,
+                hour: hour,
+                minute: minute,
+                offsetMinutes: type == ReminderRuleType.relativeToDue ? 10 : 0,
+                weekdays: type == ReminderRuleType.weeklyTime ? weekdays : null,
+                fullScreen: kind == ReminderKind.alarm,
+                vibrate: kind != ReminderKind.alarm,
+                snoozeMinutes: kind == ReminderKind.alarm ? 7 : 0,
+                repeatCount: kind == ReminderKind.alarm ? 2 : 0,
+              ),
+            );
+            expectedIdsByKind[kind]!.add(_idFor('goal:$goalId:$ruleId'));
+          }
+        }
+        final goal = GoalItem(
+          id: goalId,
+          title: title,
+          startDate: start,
+          targetDate: target,
+          reminderPlan: ReminderPlan(enabled: true, rules: rules),
+        );
+
+        await scheduler.syncGoals([goal]);
+
+        expect(notif.scheduled, hasLength(4));
+        expect(popup.scheduled, hasLength(4));
+        expect(alarm.scheduled, hasLength(4));
+        for (final type in ReminderRuleType.values) {
+          for (var kindIndex = 0; kindIndex < kinds.length; kindIndex += 1) {
+            final kind = kinds[kindIndex];
+            final ruleId = '${type.name}-${kind.name}';
+            final id = _idFor('goal:$goalId:$ruleId');
+            final sink = switch (kind) {
+              ReminderKind.push => notif.scheduled,
+              ReminderKind.popup => popup.scheduled,
+              ReminderKind.alarm => alarm.scheduled,
+              ReminderKind.email || ReminderKind.off => throw StateError(
+                'Unexpected test delivery kind: $kind',
+              ),
+            };
+            final entry = entryWithId(sink, id);
+            final label = switch (type) {
+              ReminderRuleType.absolute => 'Goal reminder',
+              ReminderRuleType.relativeToDue => 'Upcoming goal reminder',
+              ReminderRuleType.dailyTime => 'Daily goal reminder',
+              ReminderRuleType.weeklyTime => 'Weekly goal reminder',
+            };
+            final prefix = kind == ReminderKind.alarm ? '⏰' : '🔔';
+            final oneShot =
+                type == ReminderRuleType.absolute ||
+                type == ReminderRuleType.relativeToDue;
+            final expectedKind = switch (kind) {
+              ReminderKind.push => oneShot ? 'once' : 'daily',
+              ReminderKind.popup => oneShot ? 'popup_once' : 'popup_repeating',
+              ReminderKind.alarm => oneShot ? 'fullscreen' : 'daily_fullscreen',
+              ReminderKind.email || ReminderKind.off => '',
+            };
+            expect(entry['kind'], expectedKind);
+            expect(entry['title'], '$prefix $label');
+            expect(entry['body'], title);
+            expect(entry['payload'], 'duoyi://goal/$goalId');
+
+            if (oneShot) {
+              final base = type == ReminderRuleType.absolute ? start : target;
+              final expectedWhen =
+                  DateTime(
+                    base.year,
+                    base.month,
+                    base.day,
+                    8 + type.index * kinds.length + kindIndex,
+                    10 + kindIndex,
+                  ).add(
+                    Duration(
+                      minutes: type == ReminderRuleType.relativeToDue ? 10 : 0,
+                    ),
+                  );
+              expect(entry['when'], expectedWhen);
+            } else {
+              expect(entry['hour'], 8 + type.index * kinds.length + kindIndex);
+              expect(entry['minute'], 10 + kindIndex);
+              if (type == ReminderRuleType.weeklyTime) {
+                expect(entry['weekdays'], weekdays);
+              } else {
+                expect(entry['weekdays'], isNull);
+              }
+            }
+            if (kind == ReminderKind.alarm) {
+              expect(entry['fullScreen'], isTrue);
+              expect(entry['requireExactAlarm'], isTrue);
+              expect(entry['vibrate'], isFalse);
+              expect(entry['snoozeMinutes'], 7);
+              expect(entry['repeatCount'], 2);
+            }
+          }
+        }
+        expect(
+          notif.scheduled.map((entry) => entry['id']).toSet(),
+          expectedIdsByKind[ReminderKind.push],
+        );
+        expect(
+          popup.scheduled.map((entry) => entry['id']).toSet(),
+          expectedIdsByKind[ReminderKind.popup],
+        );
+        expect(
+          alarm.scheduled.map((entry) => entry['id']).toSet(),
+          expectedIdsByKind[ReminderKind.alarm],
+        );
+      },
+    );
+
+    test(
+      'retained raw habit plans route English popup, alarm, and nonprimary push copy',
+      () async {
+        final strings = useEnglish();
+        const habitId = 'habit-english-delivery-routes';
+        const name = '喝水 / Drink water';
+        const popupWeekdays = <int>[2, 4];
+        const alarmWeekdays = <int>[1, 5];
+        const pushWeekdays = <int>[3, 6];
+        // Constructor/storage hydration normalize habit rules to popup. This
+        // existing helper explicitly exercises retained raw scheduler inputs.
+        final habit = _rawHabitWithReminderPlan(
+          id: habitId,
+          name: name,
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'popup-daily',
+                type: ReminderRuleType.dailyTime,
+                kind: ReminderKind.popup,
+                hour: 8,
+                minute: 5,
+              ),
+              ReminderRule(
+                id: 'popup-weekly',
+                type: ReminderRuleType.weeklyTime,
+                kind: ReminderKind.popup,
+                hour: 9,
+                minute: 10,
+                weekdays: popupWeekdays,
+              ),
+              ReminderRule(
+                id: 'alarm-daily',
+                type: ReminderRuleType.dailyTime,
+                kind: ReminderKind.alarm,
+                hour: 10,
+                minute: 15,
+                fullScreen: true,
+                vibrate: false,
+                snoozeMinutes: 5,
+                repeatCount: 1,
+              ),
+              ReminderRule(
+                id: 'alarm-weekly',
+                type: ReminderRuleType.weeklyTime,
+                kind: ReminderKind.alarm,
+                hour: 11,
+                minute: 20,
+                weekdays: alarmWeekdays,
+                fullScreen: false,
+                vibrate: true,
+                snoozeMinutes: 9,
+                repeatCount: 2,
+              ),
+              ReminderRule(
+                id: 'push-weekly',
+                type: ReminderRuleType.weeklyTime,
+                kind: ReminderKind.push,
+                hour: 12,
+                minute: 25,
+                weekdays: pushWeekdays,
+              ),
+            ],
+          ),
+        );
+        final popupDailyId = _idFor('habit_$habitId');
+        final popupWeeklyId = _idFor('habit_$habitId#popup-weekly');
+        final alarmDailyId = _idFor('habit_$habitId#alarm-daily');
+        final alarmWeeklyId = _idFor('habit_$habitId#alarm-weekly');
+        final pushWeeklyId = _idFor('habit_$habitId#push-weekly');
+
+        await scheduler.syncHabits([habit]);
+
+        expect(popup.scheduled, hasLength(2));
+        expect(alarm.scheduled, hasLength(2));
+        // This is the scheduler's generic nonprimary push route. The fake
+        // primary scheduleHabitReminder route hardcodes Chinese, so this does
+        // not assert NotificationService's primary habit notification path.
+        expect(notif.scheduled, hasLength(1));
+        final popupDaily = entryWithId(popup.scheduled, popupDailyId);
+        expect(popupDaily['kind'], 'popup_repeating');
+        expect(popupDaily['title'], strings.notifHabitRemindTitle);
+        expect(popupDaily['body'], 'Time for $name. Open to check in.');
+        expect(popupDaily['hour'], 8);
+        expect(popupDaily['minute'], 5);
+        expect(popupDaily['weekdays'], isNull);
+        expect(popupDaily['payload'], 'duoyi://habit/$habitId?confirm=1');
+
+        final popupWeekly = entryWithId(popup.scheduled, popupWeeklyId);
+        expect(popupWeekly['kind'], 'popup_repeating');
+        expect(popupWeekly['title'], strings.notifHabitRemindTitle);
+        expect(popupWeekly['body'], 'Time for $name. Open to check in.');
+        expect(popupWeekly['hour'], 9);
+        expect(popupWeekly['minute'], 10);
+        expect(popupWeekly['weekdays'], popupWeekdays);
+        expect(popupWeekly['payload'], 'duoyi://habit/$habitId?confirm=1');
+
+        final alarmDaily = entryWithId(alarm.scheduled, alarmDailyId);
+        expect(alarmDaily['kind'], 'daily_fullscreen');
+        expect(alarmDaily['title'], strings.notifHabitRemindTitle);
+        expect(alarmDaily['body'], 'Time for $name. Open to check in.');
+        expect(alarmDaily['hour'], 10);
+        expect(alarmDaily['minute'], 15);
+        expect(alarmDaily['weekdays'], isNull);
+        expect(alarmDaily['payload'], 'duoyi://habit/$habitId?confirm=1');
+        expect(alarmDaily['fullScreen'], isTrue);
+        expect(alarmDaily['vibrate'], isFalse);
+        expect(alarmDaily['snoozeMinutes'], 5);
+        expect(alarmDaily['repeatCount'], 1);
+
+        final alarmWeekly = entryWithId(alarm.scheduled, alarmWeeklyId);
+        expect(alarmWeekly['kind'], 'daily_fullscreen');
+        expect(alarmWeekly['title'], strings.notifHabitRemindTitle);
+        expect(alarmWeekly['body'], 'Time for $name. Open to check in.');
+        expect(alarmWeekly['hour'], 11);
+        expect(alarmWeekly['minute'], 20);
+        expect(alarmWeekly['weekdays'], alarmWeekdays);
+        expect(alarmWeekly['payload'], 'duoyi://habit/$habitId?confirm=1');
+        expect(alarmWeekly['fullScreen'], isFalse);
+        expect(alarmWeekly['vibrate'], isTrue);
+        expect(alarmWeekly['snoozeMinutes'], 9);
+        expect(alarmWeekly['repeatCount'], 2);
+
+        final pushWeekly = entryWithId(notif.scheduled, pushWeeklyId);
+        expect(pushWeekly['kind'], 'daily');
+        expect(pushWeekly['title'], strings.notifHabitRemindTitle);
+        expect(pushWeekly['body'], 'Time for $name. Open to check in.');
+        expect(pushWeekly['hour'], 12);
+        expect(pushWeekly['minute'], 25);
+        expect(pushWeekly['weekdays'], pushWeekdays);
+        expect(pushWeekly['payload'], 'duoyi://habit/$habitId?confirm=1');
+      },
+    );
+
+    test(
+      'canonical multi-time habits use English popup copy after normalization',
+      () async {
+        final strings = useEnglish();
+        const id = 'habit-english-canonical';
+        const name = ' 读书 / Read 📖\n保持原文 ';
+        final habit = Habit(
+          id: id,
+          name: name,
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'daily',
+                type: ReminderRuleType.dailyTime,
+                kind: ReminderKind.push,
+                hour: 8,
+                minute: 7,
+              ),
+              ReminderRule(
+                id: 'weekly',
+                type: ReminderRuleType.weeklyTime,
+                kind: ReminderKind.alarm,
+                hour: 18,
+                minute: 12,
+                weekdays: const [2, 5],
+                fullScreen: true,
+                snoozeMinutes: 5,
+                repeatCount: 2,
+              ),
+            ],
+          ),
+        );
+        expect(
+          habit.reminderPlan.rules.map((rule) => rule.kind),
+          everyElement(ReminderKind.popup),
+        );
+        await scheduler.syncHabits([habit]);
+        expect(notif.scheduled, isEmpty);
+        expect(alarm.scheduled, isEmpty);
+        expect(popup.scheduled, hasLength(2));
+        final daily = entryWithId(popup.scheduled, _idFor('habit_$id'));
+        final weekly = entryWithId(popup.scheduled, _idFor('habit_$id#weekly'));
+        for (final entry in popup.scheduled) {
+          expect(entry['kind'], 'popup_repeating');
+          expect(entry['title'], strings.notifHabitRemindTitle);
+          expect(entry['body'], 'Time for $name. Open to check in.');
+          expect(entry['payload'], 'duoyi://habit/$id?confirm=1');
+        }
+        expect(daily['hour'], 8);
+        expect(daily['minute'], 7);
+        expect(daily['weekdays'], isNull);
+        expect(weekly['hour'], 18);
+        expect(weekly['minute'], 12);
+        expect(weekly['weekdays'], [2, 5]);
+      },
+    );
+
+    test(
+      'anniversary popup and alarm preserve English copy and dispatch data',
+      () async {
+        useEnglish();
+        const popupId = 'anniversary-english-popup';
+        const popupTitle = '毕业纪念 / Graduation day';
+        const alarmId = 'anniversary-english-alarm';
+        const alarmTitle = '相识纪念 / First met';
+        final popupDate = DateTime.now().add(const Duration(days: 30));
+        final alarmDate = DateTime.now().add(const Duration(days: 35));
+        final popupAnniversary = Anniversary(
+          id: popupId,
+          title: popupTitle,
+          originDate: popupDate,
+          type: AnniversaryType.normal,
+          remind: true,
+          remindDaysBefore: 0,
+          remindHour: 16,
+          remindMinute: 5,
+          reminderKind: ReminderKind.popup,
+        );
+        final alarmAnniversary = Anniversary(
+          id: alarmId,
+          title: alarmTitle,
+          originDate: alarmDate,
+          type: AnniversaryType.normal,
+          remind: true,
+          remindDaysBefore: 3,
+          remindHour: 17,
+          remindMinute: 25,
+          reminderKind: ReminderKind.alarm,
+        );
+
+        await scheduler.syncAnniversaries([popupAnniversary, alarmAnniversary]);
+
+        expect(popup.scheduled, hasLength(1));
+        expect(alarm.scheduled, hasLength(1));
+        final popupEntry = entryWithId(
+          popup.scheduled,
+          _anniversaryPopupId(popupId),
+        );
+        expect(popupEntry['kind'], 'popup_once');
+        expect(popupEntry['title'], '🔔 Anniversary reminder');
+        expect(popupEntry['body'], 'Today is $popupTitle');
+        expect(
+          popupEntry['when'],
+          DateTime(popupDate.year, popupDate.month, popupDate.day, 16, 5),
+        );
+        expect(popupEntry['payload'], 'duoyi://anniversary/$popupId');
+
+        final alarmEntry = entryWithId(
+          alarm.scheduled,
+          _anniversaryAlarmId(alarmId),
+        );
+        expect(alarmEntry['kind'], 'fullscreen');
+        expect(alarmEntry['title'], '⏰ Anniversary reminder');
+        expect(alarmEntry['body'], '$alarmTitle is in 3 days.');
+        expect(
+          alarmEntry['when'],
+          DateTime(
+            alarmDate.year,
+            alarmDate.month,
+            alarmDate.day,
+            17,
+            25,
+          ).subtract(const Duration(days: 3)),
+        );
+        expect(alarmEntry['payload'], 'duoyi://anniversary/$alarmId');
+        expect(alarmEntry['requireExactAlarm'], isTrue);
+        expect(alarmEntry['fullScreen'], isTrue);
+        expect(alarmEntry['vibrate'], isTrue);
+        expect(alarmEntry['snoozeMinutes'], 0);
+        expect(alarmEntry['repeatCount'], 0);
+      },
+    );
+
+    test(
+      'countdown push, popup, and alarm preserve positive, zero, and negative days',
+      () async {
+        useEnglish();
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final dayCases =
+            <
+              ({
+                String suffix,
+                int dayCount,
+                int remindDaysBefore,
+                String label,
+              })
+            >[
+              (
+                suffix: 'future',
+                dayCount: 5,
+                remindDaysBefore: 1,
+                label: '倒数节点 / Release day',
+              ),
+              (
+                suffix: 'today',
+                dayCount: 0,
+                remindDaysBefore: -1,
+                label: '今日节点 / Today milestone',
+              ),
+              (
+                suffix: 'past',
+                dayCount: -1,
+                remindDaysBefore: -3,
+                label: '已过节点 / Past milestone',
+              ),
+            ];
+        const kinds = <ReminderKind>[
+          ReminderKind.push,
+          ReminderKind.popup,
+          ReminderKind.alarm,
+        ];
+        final expectedIdsByKind = <ReminderKind, Set<int>>{
+          for (final kind in kinds) kind: <int>{},
+        };
+        final expectedBodyById = <int, String>{};
+        final expectedWhenById = <int, DateTime>{};
+        final items = <CountdownItem>[];
+
+        for (final dayCase in dayCases) {
+          final target = today.add(Duration(days: dayCase.dayCount));
+          final distance = dayCase.dayCount >= 0
+              ? '${dayCase.dayCount} ${dayCase.dayCount == 1 ? 'day' : 'days'} to go'
+              : '${-dayCase.dayCount} ${dayCase.dayCount == -1 ? 'day' : 'days'} ago';
+          for (final kind in kinds) {
+            final id = 'countdown-english-${dayCase.suffix}-${kind.name}';
+            final item = CountdownItem(
+              id: id,
+              title: dayCase.label,
+              targetDate: target,
+              remind: true,
+              remindDaysBefore: dayCase.remindDaysBefore,
+              remindHour: 23,
+              remindMinute: 59,
+              reminderKind: kind,
+            );
+            expect(item.daysRemaining, dayCase.dayCount);
+            items.add(item);
+            final notificationId = _idFor('countdown:$id:due');
+            expectedIdsByKind[kind]!.add(notificationId);
+            expectedBodyById[notificationId] = '${dayCase.label} · $distance';
+            expectedWhenById[notificationId] = DateTime(
+              target.year,
+              target.month,
+              target.day,
+              23,
+              59,
+            ).subtract(Duration(days: dayCase.remindDaysBefore));
+          }
+        }
+
+        await scheduler.syncCountdowns(items);
+
+        expect(notif.scheduled, hasLength(3));
+        expect(popup.scheduled, hasLength(3));
+        expect(alarm.scheduled, hasLength(3));
+        for (final kind in kinds) {
+          final sink = switch (kind) {
+            ReminderKind.push => notif.scheduled,
+            ReminderKind.popup => popup.scheduled,
+            ReminderKind.alarm => alarm.scheduled,
+            ReminderKind.email || ReminderKind.off => throw StateError(
+              'Unexpected test delivery kind: $kind',
+            ),
+          };
+          expect(
+            sink.map((entry) => entry['id']).toSet(),
+            expectedIdsByKind[kind],
+          );
+          for (final id in expectedIdsByKind[kind]!) {
+            final entry = entryWithId(sink, id);
+            expect(entry['kind'], switch (kind) {
+              ReminderKind.push => 'once',
+              ReminderKind.popup => 'popup_once',
+              ReminderKind.alarm => 'fullscreen',
+              ReminderKind.email || ReminderKind.off => '',
+            });
+            expect(entry['title'], '🔔 Countdown reminder');
+            expect(entry['body'], expectedBodyById[id]);
+            expect(entry['when'], expectedWhenById[id]);
+            final countdownId = items
+                .singleWhere((item) => _idFor('countdown:${item.id}:due') == id)
+                .id;
+            expect(entry['payload'], 'duoyi://countdown/$countdownId');
+            if (kind == ReminderKind.alarm) {
+              expect(entry['requireExactAlarm'], isTrue);
+              expect(entry['fullScreen'], isTrue);
+              expect(entry['vibrate'], isTrue);
+              expect(entry['snoozeMinutes'], 0);
+              expect(entry['repeatCount'], 0);
+            }
+          }
+        }
+      },
+    );
+
+    test(
+      'goal locale-only copy changes retain email; intent changes clean it up',
+      () async {
+        applyLocale(AppLocale.zh);
+        const goalId = 'goal-email-locale-signature';
+        const originalTitle = '整理计划 / Organize the roadmap';
+        final start = DateTime.now().add(const Duration(days: 5));
+        GoalItem makeGoal({
+          String? title,
+          int emailHour = 10,
+          ReminderKind emailKind = ReminderKind.email,
+        }) {
+          return GoalItem(
+            id: goalId,
+            title: title ?? originalTitle,
+            startDate: start,
+            targetDate: start,
+            reminderPlan: ReminderPlan(
+              enabled: true,
+              rules: [
+                ReminderRule(
+                  id: 'local-push',
+                  type: ReminderRuleType.absolute,
+                  kind: ReminderKind.push,
+                  hour: 9,
+                  minute: 10,
+                ),
+                ReminderRule(
+                  id: 'email-rule',
+                  type: ReminderRuleType.absolute,
+                  kind: emailKind,
+                  hour: emailHour,
+                  minute: 20,
+                ),
+              ],
+            ),
+          );
+        }
+
+        final goal = makeGoal();
+        final emailId = _idFor('goal:$goalId:email-rule');
+        final pushId = _idFor('goal:$goalId:local-push');
+        await scheduler.syncGoals([goal]);
+        expect(email.scheduled, hasLength(1));
+        final initialEmail = Map<String, Object?>.from(email.scheduled.single);
+        final initialEmailCancelCount = email.cancelled.length;
+        expect(initialEmail['id'], emailId);
+        expect(initialEmail['title'], '✉️ 目标提醒');
+        expect(initialEmail['body'], originalTitle);
+        expect(
+          initialEmail['when'],
+          DateTime(start.year, start.month, start.day, 10, 20),
+        );
+        expect(initialEmail['payload'], 'duoyi://goal/$goalId');
+
+        applyLocale(AppLocale.en);
+        await scheduler.syncGoals([goal]);
+        expect(email.cancelled, hasLength(initialEmailCancelCount));
+        expect(email.scheduled, hasLength(1));
+        expect(email.scheduled.single, initialEmail);
+        expect(
+          notif.scheduled.where((entry) => entry['id'] == pushId),
+          hasLength(2),
+        );
+        expect(
+          notif.scheduled.lastWhere((entry) => entry['id'] == pushId)['title'],
+          '🔔 Goal reminder',
+        );
+
+        await scheduler.syncGoals([makeGoal(emailHour: 11)]);
+        expect(email.cancelled, hasLength(initialEmailCancelCount + 1));
+        expect(email.cancelled.last, emailId);
+        expect(email.scheduled, hasLength(2));
+        expect(
+          email.scheduled.last['when'],
+          DateTime(start.year, start.month, start.day, 11, 20),
+        );
+
+        const changedTitle = '整理计划 / Roadmap ready';
+        await scheduler.syncGoals([
+          makeGoal(title: changedTitle, emailHour: 11),
+        ]);
+        expect(email.cancelled, hasLength(initialEmailCancelCount + 3));
+        expect(email.cancelled.last, emailId);
+        expect(email.cancelled, contains(pushId));
+        expect(email.scheduled, hasLength(3));
+        expect(email.scheduled.last['body'], changedTitle);
+
+        await scheduler.syncGoals([
+          makeGoal(
+            title: changedTitle,
+            emailHour: 11,
+            emailKind: ReminderKind.popup,
+          ),
+        ]);
+        expect(email.cancelled, hasLength(initialEmailCancelCount + 4));
+        expect(email.cancelled.last, emailId);
+        expect(email.scheduled, hasLength(3));
+        final changedChannel = entryWithId(popup.scheduled, emailId);
+        expect(changedChannel['kind'], 'popup_once');
+        expect(changedChannel['title'], '🔔 Goal reminder');
+        expect(changedChannel['body'], changedTitle);
+        expect(changedChannel['payload'], 'duoyi://goal/$goalId');
+      },
+    );
+
+    test(
+      'countdown email signature stays stable when locale changes',
+      () async {
+        applyLocale(AppLocale.zh);
+        const id = 'countdown-email-locale-signature';
+        const title = '考试 / Final exam';
+        final today = DateTime.now();
+        final target = DateTime(
+          today.year,
+          today.month,
+          today.day,
+        ).add(const Duration(days: 6));
+        final item = CountdownItem(
+          id: id,
+          title: title,
+          targetDate: target,
+          remind: true,
+          remindDaysBefore: 1,
+          remindHour: 10,
+          remindMinute: 30,
+          reminderKind: ReminderKind.email,
+        );
+        final emailId = _idFor('countdown:$id:due');
+
+        await scheduler.syncCountdowns([item]);
+
+        expect(email.scheduled, hasLength(1));
+        final initialEmail = Map<String, Object?>.from(email.scheduled.single);
+        final initialEmailCancelCount = email.cancelled.length;
+        expect(initialEmail['kind'], 'email_once');
+        expect(initialEmail['id'], emailId);
+        expect(initialEmail['title'], '🔔 倒数日提醒');
+        expect(initialEmail['body'], '$title · 还有 6 天');
+        expect(
+          initialEmail['when'],
+          DateTime(
+            target.year,
+            target.month,
+            target.day,
+            10,
+            30,
+          ).subtract(const Duration(days: 1)),
+        );
+        expect(initialEmail['payload'], 'duoyi://countdown/$id');
+
+        applyLocale(AppLocale.en);
+        await scheduler.syncCountdowns([item]);
+
+        expect(email.cancelled, hasLength(initialEmailCancelCount));
+        expect(email.scheduled, hasLength(1));
+        expect(email.scheduled.single, initialEmail);
+      },
+    );
   });
 }
 

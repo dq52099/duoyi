@@ -18,6 +18,7 @@ import 'reminder_notification_id.dart';
 import 'todo_reminder_preflight_copy.dart';
 import 'reminder_issue_copy.dart';
 import 'reminder_sync_issue.dart';
+import 'reminder_delivery_copy.dart';
 
 const Duration _sameMinuteReminderGrace = Duration(seconds: 70);
 
@@ -364,6 +365,7 @@ class _ScheduledRule {
   final _DispatchMode mode;
   final String scope;
   final String fingerprint;
+  final String intentFingerprint;
   final String title;
   final String body;
 
@@ -372,6 +374,7 @@ class _ScheduledRule {
     required this.mode,
     required this.scope,
     required this.fingerprint,
+    required this.intentFingerprint,
     required this.title,
     required this.body,
   });
@@ -1210,6 +1213,28 @@ class _ResolvedRule {
   });
 
   String get key => '$objectType:$objectId:$ruleId';
+
+  // These rule families keep verbatim user content in body. Presentation titles
+  // can change with language or branding without changing the delivery intent.
+  String get intentFingerprint => jsonEncode([
+    objectType,
+    objectId,
+    ruleId,
+    kind.name,
+    mode.name,
+    ruleType.name,
+    scope,
+    body,
+    payload,
+    fullScreen,
+    vibrate,
+    snoozeMinutes,
+    repeatCount,
+    when?.toIso8601String(),
+    hour,
+    minute,
+    weekdays,
+  ]);
 
   String get fingerprint {
     final weekdayPart = weekdays.isEmpty ? '-' : weekdays.join(',');
@@ -2624,7 +2649,9 @@ class ReminderScheduler {
     final weekdays = _habitWeekdays(habit, rule);
     final payload = 'duoyi://habit/${habit.id}?confirm=1';
     final title = _habitTitle();
-    final body = '${habit.name} 到时间了，点开确认打卡';
+    final body = ReminderDeliveryCopy.habit(
+      habit.name,
+    ).render(locale: I18n.current, strings: _strings).body;
 
     switch (rule.kind) {
       case ReminderKind.push:
@@ -2807,7 +2834,9 @@ class ReminderScheduler {
         await notif.scheduleDaily(
           id: explicitId,
           title: _habitTitle(),
-          body: '${habit.name} 到时间了，点开确认打卡',
+          body: ReminderDeliveryCopy.habit(
+            habit.name,
+          ).render(locale: I18n.current, strings: _strings).body,
           hour: hour,
           minute: minute,
           weekdays: weekdays.isEmpty ? null : weekdays,
@@ -3114,13 +3143,19 @@ class ReminderScheduler {
         await registry.removeObject('countdown', item.id);
       }
       final when = _countdownReminderAt(item);
+      final copy =
+          ReminderDeliveryCopy.countdown(item.title, item.daysRemaining).render(
+            locale: item.reminderKind == ReminderKind.email
+                ? AppLocale.zh
+                : I18n.current,
+            strings: _strings,
+          );
       final scheduled = await _dispatch(
         kind: item.reminderKind,
         payload: _DispatchPayload(
           id: _idFor('countdown:${item.id}:due'),
-          title: '🔔 倒数日提醒',
-          body:
-              '${item.title} · ${item.daysRemaining >= 0 ? '还有 ${item.daysRemaining} 天' : '已过 ${-item.daysRemaining} 天'}',
+          title: copy.title,
+          body: copy.body,
           when: when,
           payload: 'duoyi://countdown/${item.id}',
           fullScreen: item.reminderKind == ReminderKind.alarm,
@@ -4212,6 +4247,7 @@ class ReminderScheduler {
     String objectId,
     String ruleId, {
     bool blocking = true,
+    bool includeEmail = true,
   }) async {
     final intId = _idFor('$objectType:$objectId:$ruleId');
     var ok = true;
@@ -4229,13 +4265,15 @@ class ReminderScheduler {
           blocking: blocking,
         ) &&
         ok;
-    ok =
-        await _cancelEmail(
-          intId,
-          '$objectType:$objectId:$ruleId',
-          blocking: blocking,
-        ) &&
-        ok;
+    if (includeEmail) {
+      ok =
+          await _cancelEmail(
+            intId,
+            '$objectType:$objectId:$ruleId',
+            blocking: blocking,
+          ) &&
+          ok;
+    }
     ok =
         await _cancelSafely(
           '$objectType popup:$objectId:$ruleId',
@@ -4385,6 +4423,7 @@ class ReminderScheduler {
             objectId,
             nextEntry.key,
             blocking: false,
+            includeEmail: !_isLocalPresentationChange(prior, nextRule),
           );
         }
       }
@@ -4545,6 +4584,13 @@ class ReminderScheduler {
         prior.mode == next.mode &&
         prior.scope == next.scope &&
         prior.fingerprint == next.fingerprint;
+  }
+
+  bool _isLocalPresentationChange(_ScheduledRule prior, _ResolvedRule next) {
+    return next.kind != ReminderKind.email &&
+        next.kind != ReminderKind.off &&
+        prior.kind == next.kind &&
+        prior.intentFingerprint == next.intentFingerprint;
   }
 
   Future<bool> _scheduledRuleStillPending(_ResolvedRule rule) async {
@@ -5084,6 +5130,7 @@ class ReminderScheduler {
       mode: rule.mode,
       scope: rule.scope,
       fingerprint: rule.fingerprint,
+      intentFingerprint: rule.intentFingerprint,
       title: rule.title,
       body: rule.body,
     );
@@ -5666,14 +5713,10 @@ class ReminderScheduler {
   }
 
   String _todoTitle(TodoItem item, ReminderRuleType type) {
-    return switch (type) {
-      ReminderRuleType.dailyTime ||
-      ReminderRuleType.weeklyTime => _strings.notifTodoDueTitle,
-      // 一次性/相对截止提醒标题走 I18n（语言跟随）：daily/weekly 分支读品牌
-      // 词条，本分支历史上为硬编码中文，会让 en 用户收到中文系统通知标题。
-      ReminderRuleType.absolute || ReminderRuleType.relativeToDue =>
-        '${I18n.tr('reminder.todo_title_prefix')}${item.title}',
-    };
+    return ReminderDeliveryCopy.todo(
+      item.title,
+      type,
+    ).render(locale: I18n.current, strings: _strings).title;
   }
 
   List<int> _normalizedWeekdays(List<int> weekdays) {
@@ -5699,7 +5742,16 @@ class ReminderScheduler {
     ReminderRuleType type,
     ReminderKind kind,
   ) {
-    final subject = objectType == 'goal' ? '目标' : '待办';
+    if (objectType == 'goal') {
+      // Email intent remains unchanged until a backend copy-update contract exists.
+      return ReminderDeliveryCopy.goal('', type, kind)
+          .render(
+            locale: kind == ReminderKind.email ? AppLocale.zh : I18n.current,
+            strings: _strings,
+          )
+          .title;
+    }
+    const subject = '待办';
     final prefix = switch (kind) {
       ReminderKind.alarm => '⏰',
       ReminderKind.popup => '🔔',
@@ -5721,6 +5773,11 @@ class ReminderScheduler {
   }
 
   Future<bool> _dispatchAnniversary(Anniversary item, DateTime remindAt) async {
+    final copy = ReminderDeliveryCopy.anniversary(
+      item.title,
+      item.remindDaysBefore,
+      item.reminderKind,
+    ).render(locale: I18n.current, strings: _strings);
     switch (item.reminderKind) {
       case ReminderKind.push:
         try {
@@ -5748,10 +5805,8 @@ class ReminderScheduler {
         try {
           await popup.scheduleOnce(
             id: _idFor('anni_${item.id}'),
-            title: '🔔 纪念日提醒',
-            body: item.remindDaysBefore == 0
-                ? '今天是 ${item.title}'
-                : '${item.remindDaysBefore} 天后是 ${item.title}',
+            title: copy.title,
+            body: copy.body,
             when: remindAt,
             payload: 'duoyi://anniversary/${item.id}',
           );
@@ -5768,10 +5823,8 @@ class ReminderScheduler {
         try {
           await alarm.scheduleFullScreen(
             id: alarmId,
-            title: '⏰ 纪念日提醒',
-            body: item.remindDaysBefore == 0
-                ? '今天是 ${item.title}'
-                : '${item.remindDaysBefore} 天后是 ${item.title}',
+            title: copy.title,
+            body: copy.body,
             when: remindAt,
             payload: 'duoyi://anniversary/${item.id}',
           );

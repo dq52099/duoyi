@@ -16,6 +16,7 @@ import '../services/notification_permission_exception.dart';
 import '../services/notification_settings.dart';
 import '../services/reminder_sinks.dart';
 import '../services/reminder_issue_copy.dart';
+import '../services/reminder_delivery_copy.dart';
 
 class NotificationItem {
   final String id;
@@ -1550,11 +1551,15 @@ class NotificationService extends ChangeNotifier
     required int minute,
     List<int>? weekdays,
   }) async {
-    const title = '习惯打卡提醒';
+    final copy = ReminderDeliveryCopy.habit(
+      habitName,
+      semanticPush: true,
+    ).render(locale: I18n.current, strings: _strings);
+    final title = copy.title;
     final scheduled = await _scheduleDailyOrRecord(
       id: _idFor('habit_$habitId'),
       title: title,
-      body: '别忘了: $habitName',
+      body: copy.body,
       hour: hour,
       minute: minute,
       weekdays: weekdays,
@@ -1575,7 +1580,7 @@ class NotificationService extends ChangeNotifier
       NotificationItem(
         id: _idFor('habit_$habitId').toString(),
         title: title,
-        body: '别忘了: $habitName',
+        body: copy.body,
         scheduledTime: DateTime.now(),
         type: NotificationType.habit,
         relatedId: habitId,
@@ -1603,6 +1608,11 @@ class NotificationService extends ChangeNotifier
     int hour = 9,
     int minute = 0,
   }) async {
+    final copy = ReminderDeliveryCopy.anniversary(
+      title,
+      daysBefore,
+      ReminderKind.push,
+    ).render(locale: I18n.current, strings: _strings);
     final remindAt = DateTime(
       whenDate.year,
       whenDate.month,
@@ -1612,8 +1622,8 @@ class NotificationService extends ChangeNotifier
     ).subtract(Duration(days: daysBefore));
     final scheduled = await _scheduleOnceOrRecord(
       id: _idFor('anni_$annId'),
-      title: '📅 纪念日提醒',
-      body: daysBefore == 0 ? '今天是 $title' : '$daysBefore 天后是 $title',
+      title: copy.title,
+      body: copy.body,
       when: remindAt,
       payload: 'duoyi://tab/calendar',
       issueTitle: '纪念日提醒注册失败',
@@ -1632,8 +1642,8 @@ class NotificationService extends ChangeNotifier
     _addScheduledToHistory(
       NotificationItem(
         id: _idFor('anni_$annId').toString(),
-        title: '📅 纪念日提醒',
-        body: daysBefore == 0 ? '今天是 $title' : '$daysBefore 天后是 $title',
+        title: copy.title,
+        body: copy.body,
         scheduledTime: remindAt,
         type: NotificationType.anniversary,
         relatedId: annId,

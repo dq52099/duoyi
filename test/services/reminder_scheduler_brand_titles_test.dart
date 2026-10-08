@@ -33,7 +33,12 @@ void main() {
       expect(source, contains("import '../core/brand_strings.dart';"));
       expect(source, contains('void setStrings(BrandStrings strings)'));
       expect(source, contains('_strings.notifHabitRemindTitle'));
-      expect(source, contains('_strings.notifTodoDueTitle'));
+      expect(source, contains('return ReminderDeliveryCopy.todo('));
+      expect(source, contains('strings: _strings'));
+      final copy = File(
+        'lib/services/reminder_delivery_copy.dart',
+      ).readAsStringSync();
+      expect(copy, contains('strings.notifTodoDueTitle'));
       // 旧硬编码标题应被移除（default 文案改由品牌词条提供）。
       expect(source, isNot(contains("return '习惯打卡提醒'")));
       expect(source, isNot(contains("=> '今日提醒'")));
