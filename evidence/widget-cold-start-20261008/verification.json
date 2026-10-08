@@ -1,0 +1,62 @@
+{
+  "source_sha256": {
+    "lib/services/home_widget_service.dart": "a0f27c6994ab53ffd476847498d7c32ef35dc1597619ec93f90c8313d24d9f88",
+    "test/services/home_widget_cold_start_test.dart": "930adfe709cf267bda9d6d8f9c3ad36fc8cec806576aefe63123bdc7c8ca9e11"
+  },
+  "baseline": {
+    "started": "2026-10-08T02:23:22.430296+00:00",
+    "command": [
+      "/home/ubuntu/flutter/bin/flutter",
+      "test",
+      "--no-pub",
+      "--concurrency=1",
+      "--reporter=expanded",
+      "test/services/home_widget_cold_start_test.dart"
+    ],
+    "exit_code": 1,
+    "finished": "2026-10-08T02:23:35.654827+00:00"
+  },
+  "final": {
+    "regression": {
+      "started": "2026-10-08T02:24:04.222442+00:00",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/home_widget_cold_start_test.dart",
+        "test/services/home_widget_snapshot_test.dart",
+        "test/services/ios_widget_resources_test.dart",
+        "test/services/android_widget_resources_test.dart"
+      ],
+      "source_sha256": {
+        "lib/services/home_widget_service.dart": "a0f27c6994ab53ffd476847498d7c32ef35dc1597619ec93f90c8313d24d9f88",
+        "test/services/home_widget_cold_start_test.dart": "930adfe709cf267bda9d6d8f9c3ad36fc8cec806576aefe63123bdc7c8ca9e11"
+      },
+      "exit_code": 0,
+      "finished": "2026-10-08T02:24:33.488650+00:00",
+      "log_sha256": "cdd8eb632f792b5445f4474318d2186961384da2e028cde81c453c04e479af9f",
+      "case_count": 62
+    },
+    "analyze": {
+      "started": "2026-10-08T02:24:33.491172+00:00",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "analyze",
+        "--no-pub",
+        "lib/services/home_widget_service.dart",
+        "test/services/home_widget_cold_start_test.dart"
+      ],
+      "source_sha256": {
+        "lib/services/home_widget_service.dart": "a0f27c6994ab53ffd476847498d7c32ef35dc1597619ec93f90c8313d24d9f88",
+        "test/services/home_widget_cold_start_test.dart": "930adfe709cf267bda9d6d8f9c3ad36fc8cec806576aefe63123bdc7c8ca9e11"
+      },
+      "exit_code": 0,
+      "finished": "2026-10-08T02:26:47.294877+00:00",
+      "log_sha256": "c25376745963501349d4c8f403375315d0bf4e37ca242f85173936f7d0798848"
+    }
+  },
+  "new_deployment": false,
+  "device_acceptance": false
+}

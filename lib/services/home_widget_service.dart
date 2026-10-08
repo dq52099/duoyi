@@ -178,7 +178,11 @@ class HomeWidgetService {
         'widget_account_nonce',
       );
       if (generation != _accountGeneration) return;
-      final nonce = stored?.isNotEmpty == true ? stored! : _newActionNonce();
+      // Native snapshot readers require a nonblank nonce. Keep valid raw
+      // identity strings intact, but recover corrupt blank data on cold start.
+      final nonce = stored?.trim().isNotEmpty == true
+          ? stored!
+          : _newActionNonce();
       // Persist only with the serialized payload. Independent init calls must
       // never race account clearing by publishing an old nonce afterwards.
       if (generation == _accountGeneration) _accountActionNonce = nonce;
