@@ -42,6 +42,28 @@ post-frame processing requests the following frame. Requests coalesce, callbacks
 run once, and account invalidation makes queued callbacks no-ops. Rendering still
 follows Flutter lifecycle rules; this does not force background rendering.
 
+## Locale at delivery
+
+Widget actions carry immutable `WidgetActionMessage` descriptors through the
+generic quick-todo coordinator. Both main feedback helpers render only inside
+the guarded frame callback, after checking the current shell is mounted. A
+language change during permission waits or before frame delivery therefore
+changes the app-owned copy that is shown. Task/habit names remain literal
+parameters; they are never recognized or translated as message text.
+
+Quick-todo success captures sync facts and reminder hints at completion. The
+pure `WidgetActionSyncStatus.fromFacts` uses the same availability/auto-sync/
+retry/pending-error precedence as CloudSyncProvider's local-save presentation.
+It does not trigger sync or report a completed upload. Rendering the descriptor
+does not read providers or change the global locale.
+
+The existing immediate String preflight/created-message adapters remain for
+quick-entry and shared-text callers. This is a presentation migration, not a
+session-safety repair of those separate dialog flows. Untyped notification,
+preflight, reminder-sync and server retry/error reasons are retained verbatim
+inside a localized outer message. Those service reasons may still contain
+another language; typed reason codes are required to localize them reliably.
+
 ## Acceptance scope
 
 Runtime coordinator fixtures exercise gated preflight/create and account

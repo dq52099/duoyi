@@ -380,11 +380,28 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'sync_pending_local_changes': true,
     });
+    var acceptUpload = false;
+    var applyCallbacks = 0;
     final client = ApiClient(
       baseUrl: 'https://duoyi.test',
       token: 'admin-token',
       httpClient: MockClient((request) async {
         expect(request.url.path, '/api/sync');
+        if (acceptUpload) {
+          final sent = json.decode(request.body) as Map<String, dynamic>;
+          return http.Response(
+            json.encode({
+              'server_updated_at': '2026-10-08T03:00:00.000Z',
+              'server_version': 7,
+              'collection_hashes': {
+                for (final key in sent.keys) key: 'confirmed-$key',
+              },
+              'todos': sent['todos'],
+            }),
+            200,
+            headers: const {'content-type': 'application/json'},
+          );
+        }
         return http.Response(
           json.encode({'detail': 'local upload failed'}),
           500,
@@ -395,6 +412,7 @@ void main() {
     final provider = CloudSyncProvider();
     provider.apiClientGetter = () => client;
     provider.serverConfigGetter = () => {'backup_enabled': true};
+    provider.onSynced = (_) async => applyCallbacks++;
     await provider.loadFromStorage();
 
     await provider.syncNow();
@@ -402,19 +420,49 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(provider.hasPendingChanges, isTrue);
     expect(provider.lastError, isNotNull);
-    expect(provider.lastError, contains('local upload failed'));
+    expect(provider.lastError, '云同步暂不可用，请稍后重试或联系管理员');
+    expect(provider.lastError, isNot(contains('local upload failed')));
+    expect(provider.isSyncing, isFalse);
+    expect(provider.config.lastSync.millisecondsSinceEpoch, 0);
+    expect(applyCallbacks, 0);
+    expect(prefs.getString('sync_server_updated_at'), isNull);
+    expect(prefs.getInt('sync_server_version'), isNull);
+    expect(prefs.getString('sync_collection_hashes'), isNull);
+    final localNotice = provider.localSaveSyncMessage(
+      localSavedText: '待办已保存到本机',
+    );
+    expect(localNotice, contains('待办已保存到本机'));
+    expect(localNotice, contains('云同步上次失败'));
+    expect(localNotice, isNot(contains('local upload failed')));
     expect(provider.hasSyncRetryPending, isFalse);
     expect(prefs.getBool('sync_pending_local_changes'), isTrue);
 
+    acceptUpload = true;
+    await provider.syncNow();
+    expect(provider.lastError, isNull);
+    expect(provider.hasPendingChanges, isFalse);
+    expect(provider.hasSyncRetryPending, isFalse);
+    expect(provider.isSyncing, isFalse);
+    expect(prefs.getBool('sync_pending_local_changes'), isFalse);
+    expect(provider.lastServerVersion, 7);
+    expect(prefs.getInt('sync_server_version'), 7);
+    expect(
+      prefs.getString('sync_server_updated_at'),
+      '2026-10-08T03:00:00.000Z',
+    );
+    expect(provider.config.lastSync.millisecondsSinceEpoch, greaterThan(0));
+    expect(prefs.getString('sync_collection_hashes'), isNotNull);
     provider.dispose();
   });
 
   test('本地 pending 上传收到缺确认字段的 200 响应时保留重试', () async {
+    final localTodos = json.encode([
+      {'id': 'local-todo', 'title': '本地待办'},
+    ]);
+    var applyCallbacks = 0;
     SharedPreferences.setMockInitialValues(<String, Object>{
       'sync_pending_local_changes': true,
-      'todos': json.encode([
-        {'id': 'local-todo', 'title': '本地待办'},
-      ]),
+      'todos': localTodos,
     });
     final client = ApiClient(
       baseUrl: 'https://duoyi.test',
@@ -424,7 +472,7 @@ void main() {
         return http.Response(
           json.encode({
             'todos': [
-              {'id': 'local-todo', 'title': '本地待办'},
+              {'id': 'unconfirmed-remote-todo', 'title': '不可覆盖本机'},
             ],
           }),
           200,
@@ -435,14 +483,34 @@ void main() {
     final provider = CloudSyncProvider();
     provider.apiClientGetter = () => client;
     provider.serverConfigGetter = () => {'backup_enabled': true};
+    provider.onSynced = (_) async => applyCallbacks++;
     await provider.loadFromStorage();
 
     await provider.syncNow();
 
     final prefs = await SharedPreferences.getInstance();
     expect(provider.hasPendingChanges, isTrue);
-    expect(provider.lastError, contains('服务器同步响应缺少确认字段'));
-    expect(provider.lastError, contains('本机改动已保留'));
+    expect(provider.lastError, '云同步暂不可用，请稍后重试或联系管理员');
+    for (final diagnostic in [
+      '服务器同步响应缺少确认字段',
+      'server_updated_at',
+      'server_version',
+      'collection_hashes',
+    ]) {
+      expect(provider.lastError, isNot(contains(diagnostic)));
+    }
+    expect(provider.isSyncing, isFalse);
+    expect(provider.hasSyncRetryPending, isFalse);
+    expect(provider.syncRetryStatus, isNull);
+    expect(provider.config.lastSync.millisecondsSinceEpoch, 0);
+    expect(prefs.getString('todos'), localTodos);
+    expect(prefs.getString('sync_collection_hashes'), isNull);
+    expect(applyCallbacks, 0);
+    final localNotice = provider.localSaveSyncMessage(
+      localSavedText: '待办已保存到本机',
+    );
+    expect(localNotice, contains('待办已保存到本机'));
+    expect(localNotice, contains('云同步上次失败'));
     expect(prefs.getBool('sync_pending_local_changes'), isTrue);
     expect(prefs.getString('sync_server_updated_at'), isNull);
     expect(prefs.getInt('sync_server_version'), isNull);
@@ -735,7 +803,21 @@ void main() {
     );
     expect(mainSource, contains('cloudSyncProvider.syncRetryStatus'));
     expect(mainSource, contains('cloudSyncProvider.syncUnavailableStatus'));
-    expect(mainSource, contains('localSaveSyncMessage('));
+    final noticeStart = mainSource.indexOf(
+      'WidgetActionMessage _quickTodoCreatedNotice(TodoItem todo)',
+    );
+    final noticeEnd = mainSource.indexOf(
+      '\nFuture<bool> _syncNotificationQuickAdd',
+      noticeStart,
+    );
+    expect(noticeStart, greaterThanOrEqualTo(0));
+    expect(noticeEnd, greaterThan(noticeStart));
+    final quickTodoNotice = mainSource.substring(noticeStart, noticeEnd);
+    expect(quickTodoNotice, contains('WidgetActionSyncStatus.fromFacts('));
+    expect(quickTodoNotice, contains('syncState = status.state;'));
+    expect(quickTodoNotice, contains('syncReason = status.reason;'));
+    expect(quickTodoNotice, contains('syncState: syncState'));
+    expect(quickTodoNotice, contains('syncReason: syncReason'));
     expect(mainSource, contains('cloudSyncProvider.queuedRemotePullStatus'));
     expect(mainSource, contains('cloudSyncProvider.hasPendingChanges'));
     expect(mainSource, contains('!cloudSyncProvider.config.autoSync'));

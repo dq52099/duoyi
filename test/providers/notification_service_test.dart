@@ -1975,10 +1975,13 @@ void main() {
     );
     expect(branch, contains('navigateTo(1, allowHidden: true)'));
     expect(source, contains('todos.completeTodos([target.id])'));
-    expect(source, contains('已完成：'));
+    expect(
+      source,
+      contains('WidgetActionNotice.todoCompleted, subject: title'),
+    );
     expect(source, contains("latest?.isCompleted == true"));
-    expect(source, contains('待办正在保存中，请稍后重试'));
-    expect(source, contains('待办完成失败，请稍后重试'));
+    expect(source, contains('WidgetActionNotice.todoSaving'));
+    expect(source, contains('WidgetActionNotice.todoCompletionFailed'));
     expect(branch, isNot(contains('completeTodoWithOptionalTimeRecord')));
     expect(branch, isNot(contains('todos.toggleTodo(id);')));
   });

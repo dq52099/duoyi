@@ -774,7 +774,7 @@ void main() {
             "action == 'start_pomodoro'",
             'state.navigateTo(4, allowHidden: true);',
             'pomodoro.startIfIdle()',
-            '专注计时正在进行',
+            'WidgetActionNotice.focusRunning',
           ],
           'DuoyiHabitWidget': [
             "uri.host == 'habit'",

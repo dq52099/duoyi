@@ -59,6 +59,7 @@ import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
 import 'services/widget_quick_todo_action.dart';
 import 'services/widget_action_scope.dart';
+import 'services/widget_action_message.dart';
 import 'services/ai_service.dart';
 import 'services/app_update_service.dart';
 import 'services/backend_reminder_email_sink.dart';
@@ -3997,10 +3998,20 @@ void _handleWidgetUri(
     if (action == 'start_pomodoro') {
       state.navigateTo(4, allowHidden: true);
       if (pomodoro.state.isRunning) {
-        if (ctx != null) _showWidgetActionFeedback(ctx, '专注计时正在进行');
+        if (ctx != null) {
+          _showWidgetActionFeedback(
+            ctx,
+            const WidgetActionMessage(WidgetActionNotice.focusRunning),
+          );
+        }
       } else {
         pomodoro.startIfIdle();
-        if (ctx != null) _showWidgetActionFeedback(ctx, '已开始专注');
+        if (ctx != null) {
+          _showWidgetActionFeedback(
+            ctx,
+            const WidgetActionMessage(WidgetActionNotice.focusStarted),
+          );
+        }
       }
     } else if (action == 'refresh_widgets' && ctx != null) {
       unawaited(_refreshWidgetsFromAction(ctx));
@@ -4022,11 +4033,20 @@ void _handleWidgetUri(
       final todos = Provider.of<TodoProvider>(ctx, listen: false);
       final target = todos.todos.where((todo) => todo.id == id).firstOrNull;
       if (target == null) {
-        _showWidgetActionFeedback(ctx, '这个任务不存在或已被删除');
+        _showWidgetActionFeedback(
+          ctx,
+          const WidgetActionMessage(WidgetActionNotice.todoMissing),
+        );
         return;
       }
       if (target.isCompleted) {
-        _showWidgetActionFeedback(ctx, '“${target.title}”已经完成');
+        _showWidgetActionFeedback(
+          ctx,
+          WidgetActionMessage(
+            WidgetActionNotice.todoAlreadyCompleted,
+            subject: target.title,
+          ),
+        );
         return;
       }
       unawaited(_completeTodoFromWidgetAction(ctx, todos, target));
@@ -4037,19 +4057,37 @@ void _handleWidgetUri(
       final habits = Provider.of<HabitProvider>(ctx, listen: false);
       final target = habits.habits.where((habit) => habit.id == id).firstOrNull;
       if (target == null) {
-        _showWidgetActionFeedback(ctx, '这个习惯不存在或已被删除');
+        _showWidgetActionFeedback(
+          ctx,
+          const WidgetActionMessage(WidgetActionNotice.habitMissing),
+        );
         return;
       }
       if (target.kind != HabitKind.positive) {
-        _showWidgetActionFeedback(ctx, '这个习惯不支持快捷打卡');
+        _showWidgetActionFeedback(
+          ctx,
+          const WidgetActionMessage(WidgetActionNotice.habitUnsupported),
+        );
         return;
       }
       if (!target.isActiveToday()) {
-        _showWidgetActionFeedback(ctx, '“${target.name}”今天不需要打卡');
+        _showWidgetActionFeedback(
+          ctx,
+          WidgetActionMessage(
+            WidgetActionNotice.habitNotScheduled,
+            subject: target.name,
+          ),
+        );
         return;
       }
       if (target.isCompletedToday()) {
-        _showWidgetActionFeedback(ctx, '“${target.name}”今天已经完成');
+        _showWidgetActionFeedback(
+          ctx,
+          WidgetActionMessage(
+            WidgetActionNotice.habitAlreadyCompleted,
+            subject: target.name,
+          ),
+        );
         return;
       }
       unawaited(_checkInHabitFromWidgetAction(habits, target));
@@ -4058,7 +4096,10 @@ void _handleWidgetUri(
     debugPrint('[DeepLink] unknown duoyi host: ${uri.host} uri=$uri');
     state.navigateTo(6, allowHidden: true);
     if (ctx != null) {
-      _showWidgetActionFeedback(ctx, '无法识别的入口，已返回我的');
+      _showWidgetActionFeedback(
+        ctx,
+        const WidgetActionMessage(WidgetActionNotice.unknownEntry),
+      );
     }
   }
 }
@@ -4074,7 +4115,10 @@ void _pushHiddenWidgetFallbackRoute(BuildContext context, Widget child) {
   });
 }
 
-void _showWidgetActionFeedback(BuildContext context, String message) {
+void _showWidgetActionFeedback(
+  BuildContext context,
+  WidgetActionMessage message,
+) {
   WidgetActionScope().afterFrame(() {
     final latestContext = mainShellKey.currentContext ?? context;
     if (!latestContext.mounted) return;
@@ -4082,7 +4126,7 @@ void _showWidgetActionFeedback(BuildContext context, String message) {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(message.render()),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1400),
         ),
@@ -4091,7 +4135,7 @@ void _showWidgetActionFeedback(BuildContext context, String message) {
 }
 
 void _showWidgetActionFeedbackFromShell(
-  String message, {
+  WidgetActionMessage message, {
   bool Function()? isCurrentAction,
 }) {
   WidgetActionScope(isCallerAvailable: isCurrentAction).afterFrame(() {
@@ -4101,7 +4145,7 @@ void _showWidgetActionFeedbackFromShell(
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(message.render()),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1400),
         ),
@@ -4118,7 +4162,7 @@ Future<void> _createQuickTodoFromAction(
   // could dispatch this old draft into the newly selected account.
   final auth = context.read<AuthProvider>();
   final todos = Provider.of<TodoProvider?>(context, listen: false);
-  await runWidgetQuickTodoAction(
+  await runWidgetQuickTodoAction<WidgetActionMessage>(
     isCallerAvailable: () =>
         context.mounted && !_widgetAccountUnavailable(auth),
     preflight: (feedback) async {
@@ -4126,10 +4170,12 @@ Future<void> _createQuickTodoFromAction(
         debugPrint(
           '[QuickTodoAction] TodoProvider unavailable for action create',
         );
-        feedback('快捷待办暂不可用，请打开待办页后重试');
+        feedback(
+          const WidgetActionMessage(WidgetActionNotice.quickTodoUnavailable),
+        );
         return false;
       }
-      return _preflightQuickTodoReminder(context, todo, feedback: feedback);
+      return _preflightWidgetTodoReminder(context, todo, feedback: feedback);
     },
     create: () async {
       final waitForReminderSync = _todoNeedsReminderSync(todo);
@@ -4141,12 +4187,17 @@ Future<void> _createQuickTodoFromAction(
           ? reminderSyncResult?.issue
           : null;
       return reminderSyncIssue == null
-          ? _quickTodoCreatedMessage(todo)
-          : '快捷待办已保存到本机，但提醒未注册：$reminderSyncIssue';
+          ? _quickTodoCreatedNotice(todo)
+          : WidgetActionMessage(
+              WidgetActionNotice.savedReminderIssue,
+              detail: reminderSyncIssue,
+            );
     },
     feedback: (message, isCurrent) =>
         _showWidgetActionFeedbackFromShell(message, isCurrentAction: isCurrent),
-    failureMessage: '快捷待办创建失败，请稍后重试',
+    failureMessage: const WidgetActionMessage(
+      WidgetActionNotice.quickTodoFailed,
+    ),
     logError: (error, stack) =>
         debugPrint('[QuickTodoAction] create failed: $error\n$stack'),
   );
@@ -4176,7 +4227,7 @@ Future<void> _dispatchWidgetUriAfterHydration(
   } catch (e, st) {
     debugPrint('[WidgetAction] data preparation failed: $e\n$st');
     _showWidgetActionFeedbackFromShell(
-      '内容加载失败，请重新打开多仪',
+      const WidgetActionMessage(WidgetActionNotice.hydrationFailed),
       isCurrentAction: () => scope.isCurrent,
     );
   }
@@ -4195,7 +4246,7 @@ Future<void> _handleBoundWidgetAction(Uri uri) async {
         !context.mounted ||
         _widgetAccountUnavailable(context.read<AuthProvider>())) {
       _showWidgetActionFeedbackFromShell(
-        '小组件内容已过期，请刷新后再操作',
+        const WidgetActionMessage(WidgetActionNotice.staleContent),
         isCurrentAction: () => scope.isCurrent,
       );
       return;
@@ -4210,7 +4261,7 @@ Future<void> _handleBoundWidgetAction(Uri uri) async {
   } catch (e, st) {
     debugPrint('[WidgetAction] validation failed: $e\n$st');
     _showWidgetActionFeedbackFromShell(
-      '内容加载失败，请刷新小组件',
+      const WidgetActionMessage(WidgetActionNotice.validationFailed),
       isCurrentAction: () => scope.isCurrent,
     );
   }
@@ -4250,7 +4301,9 @@ Future<void> _refreshWidgetsFromAction(
     );
     if (showFeedback) {
       _showWidgetActionFeedbackFromShell(
-        ok ? '小组件已刷新' : '刷新失败，请稍后重试',
+        ok
+            ? const WidgetActionMessage(WidgetActionNotice.refreshSucceeded)
+            : const WidgetActionMessage(WidgetActionNotice.refreshFailed),
         isCurrentAction: () => scope.isCurrent,
       );
     }
@@ -4258,7 +4311,7 @@ Future<void> _refreshWidgetsFromAction(
     debugPrint('[WidgetAction] refresh failed: $e\n$st');
     if (showFeedback) {
       _showWidgetActionFeedbackFromShell(
-        '刷新失败，请稍后重试',
+        const WidgetActionMessage(WidgetActionNotice.refreshFailed),
         isCurrentAction: () => scope.isCurrent,
       );
     }
@@ -4283,8 +4336,11 @@ Future<void> _checkInHabitFromWidgetAction(
         .firstOrNull;
     _showWidgetActionFeedbackFromShell(
       latest != null && latest.countForDate(today) > before
-          ? '已打卡：${latest.name}'
-          : '习惯正在保存中，请稍后重试',
+          ? WidgetActionMessage(
+              WidgetActionNotice.habitCheckedIn,
+              subject: latest.name,
+            )
+          : const WidgetActionMessage(WidgetActionNotice.habitSaving),
     );
     final context = mainShellKey.currentContext;
     if (context != null && context.mounted) {
@@ -4295,7 +4351,9 @@ Future<void> _checkInHabitFromWidgetAction(
       return;
     }
     debugPrint('[WidgetAction] habit check-in failed: $e\n$st');
-    _showWidgetActionFeedbackFromShell('打卡失败，请稍后重试');
+    _showWidgetActionFeedbackFromShell(
+      const WidgetActionMessage(WidgetActionNotice.habitCheckInFailed),
+    );
   }
 }
 
@@ -4313,7 +4371,9 @@ Future<void> _completeTodoFromWidgetAction(
     }
     if (!context.mounted && mainShellKey.currentContext == null) return;
     if (changed > 0) {
-      _showWidgetActionFeedbackFromShell('已完成：$title');
+      _showWidgetActionFeedbackFromShell(
+        WidgetActionMessage(WidgetActionNotice.todoCompleted, subject: title),
+      );
       final latestContext = mainShellKey.currentContext;
       if (latestContext != null && latestContext.mounted) {
         unawaited(
@@ -4326,14 +4386,21 @@ Future<void> _completeTodoFromWidgetAction(
         .where((todo) => todo.id == target.id)
         .firstOrNull;
     _showWidgetActionFeedbackFromShell(
-      latest?.isCompleted == true ? '“$title”已经完成' : '待办正在保存中，请稍后重试',
+      latest?.isCompleted == true
+          ? WidgetActionMessage(
+              WidgetActionNotice.todoAlreadyCompleted,
+              subject: title,
+            )
+          : const WidgetActionMessage(WidgetActionNotice.todoSaving),
     );
   } catch (e, st) {
     if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
       return;
     }
     debugPrint('[WidgetAction] complete todo failed: $e\n$st');
-    _showWidgetActionFeedbackFromShell('待办完成失败，请稍后重试');
+    _showWidgetActionFeedbackFromShell(
+      const WidgetActionMessage(WidgetActionNotice.todoCompletionFailed),
+    );
   }
 }
 
@@ -4351,21 +4418,44 @@ Future<bool> _preflightQuickTodoReminder(
   BuildContext context,
   TodoItem todo, {
   required void Function(String message) feedback,
-  String issueTitle = '待办提醒注册失败',
+  String? issueTitle,
+}) => _preflightWidgetTodoReminder(
+  context,
+  todo,
+  feedback: (message) => feedback(message.render()),
+  issueTitle: issueTitle,
+);
+
+Future<bool> _preflightWidgetTodoReminder(
+  BuildContext context,
+  TodoItem todo, {
+  required void Function(WidgetActionMessage message) feedback,
+  String? issueTitle,
 }) async {
   late final TodoReminderPreflightResult preflight;
   try {
     preflight = preflightTodoReminderPlan(todo);
   } catch (e, st) {
     debugPrint('[QuickTodoAction] reminder preflight failed: $e\n$st');
-    feedback('$issueTitle：提醒配置异常，请在待办详情中重新设置提醒。');
+    feedback(
+      WidgetActionMessage(
+        WidgetActionNotice.reminderConfigurationInvalid,
+        issueTitle: issueTitle,
+      ),
+    );
     return false;
   }
   if (!preflight.hasEnabledPlan) return true;
 
   final blocking = preflight.blockingIssue;
   if (blocking != null) {
-    feedback('${blocking.title}：${blocking.message}');
+    feedback(
+      WidgetActionMessage(
+        WidgetActionNotice.reminderIssue,
+        subject: blocking.title,
+        detail: blocking.message,
+      ),
+    );
     return false;
   }
 
@@ -4388,7 +4478,11 @@ Future<bool> _preflightQuickTodoReminder(
     final ready = await notification
         .ensureReadyForReminder(
           scheduledTime: preflight.firstScheduledTime,
-          issueTitle: issueTitle,
+          issueTitle:
+              issueTitle ??
+              (I18n.current == AppLocale.zh
+                  ? '待办提醒注册失败'
+                  : 'Task reminder not registered'),
           relatedId: todo.id,
         )
         .catchError((Object e, StackTrace st) {
@@ -4401,8 +4495,15 @@ Future<bool> _preflightQuickTodoReminder(
     final issue = notification.lastScheduleIssue;
     feedback(
       issue == null
-          ? '$issueTitle：提醒未注册，请检查通知权限、渠道声音和提醒时间。'
-          : '${issue.title}：${issue.message}',
+          ? WidgetActionMessage(
+              WidgetActionNotice.reminderNotRegistered,
+              issueTitle: issueTitle,
+            )
+          : WidgetActionMessage(
+              WidgetActionNotice.reminderIssue,
+              subject: issue.title,
+              detail: issue.message,
+            ),
     );
     return false;
   }
@@ -4416,7 +4517,12 @@ Future<bool> _preflightQuickTodoReminder(
           return false;
         });
     if (!granted) {
-      feedback('$issueTitle：系统通知权限未开启，闹钟提醒未注册。请开启通知权限后重新保存提醒。');
+      feedback(
+        WidgetActionMessage(
+          WidgetActionNotice.alarmPermissionDenied,
+          issueTitle: issueTitle,
+        ),
+      );
       return false;
     }
     // 与待办详情保存保持一致：主动申请精准闹钟 / 全屏 intent 权限，
@@ -4439,32 +4545,48 @@ Future<bool> _preflightQuickTodoReminder(
   return true;
 }
 
-String _quickTodoCreatedMessage(TodoItem todo) {
-  final syncMessage = _localSaveSyncMessage(localSavedText: '待办已保存到本机');
+String _quickTodoCreatedMessage(TodoItem todo) =>
+    _quickTodoCreatedNotice(todo).render();
+
+WidgetActionMessage _quickTodoCreatedNotice(TodoItem todo) {
+  var reminderHint = WidgetActionReminderHint.none;
   try {
-    final preflight = preflightTodoReminderPlan(todo);
-    return preflight.hasEnabledPlan
-        ? '$syncMessage；提醒状态可在通知设置/待办详情检查'
-        : syncMessage;
+    if (preflightTodoReminderPlan(todo).hasEnabledPlan) {
+      reminderHint = WidgetActionReminderHint.settings;
+    }
   } catch (e, st) {
     debugPrint('[QuickTodoAction] created message preflight failed: $e\n$st');
-    return '$syncMessage；提醒状态可在待办详情中检查';
+    reminderHint = WidgetActionReminderHint.details;
   }
-}
-
-String _localSaveSyncMessage({String localSavedText = '本机已保存'}) {
+  var syncState = WidgetActionSyncState.unknown;
+  var syncReason = '';
   final context = mainShellKey.currentContext;
-  if (context == null || !context.mounted) {
-    return '$localSavedText，云同步状态待确认';
+  if (context != null && context.mounted) {
+    try {
+      final sync = context.read<CloudSyncProvider>();
+      final status = WidgetActionSyncStatus.fromFacts(
+        enabled: sync.isCloudSyncV2Enabled,
+        accountTransition: sync.isSyncSuspended,
+        authenticated: sync.hasAuthenticatedClient,
+        serverDisabled: sync.isBackupDisabledByServer,
+        autoSync: sync.config.autoSync,
+        retryPending: sync.hasSyncRetryPending,
+        pendingChanges: sync.hasPendingChanges,
+        retryReason: sync.syncRetryStatus,
+        lastError: sync.lastError,
+      );
+      syncState = status.state;
+      syncReason = status.reason;
+    } catch (e, st) {
+      debugPrint('[CloudSyncStatus] local save message unavailable: $e\n$st');
+    }
   }
-  try {
-    return context.read<CloudSyncProvider>().localSaveSyncMessage(
-      localSavedText: localSavedText,
-    );
-  } catch (e, st) {
-    debugPrint('[CloudSyncStatus] local save message unavailable: $e\n$st');
-    return '$localSavedText，云同步状态待确认';
-  }
+  return WidgetActionMessage(
+    WidgetActionNotice.todoSaved,
+    syncState: syncState,
+    syncReason: syncReason,
+    reminderHint: reminderHint,
+  );
 }
 
 Future<bool> _syncNotificationQuickAdd(
@@ -4659,7 +4781,9 @@ Future<void> _showQuickTodoDialog(BuildContext context) async {
     if (context.mounted) {
       _showContextSnackBar(context, '快捷待办创建失败，请稍后重试');
     } else {
-      _showWidgetActionFeedbackFromShell('快捷待办创建失败，请稍后重试');
+      _showWidgetActionFeedbackFromShell(
+        const WidgetActionMessage(WidgetActionNotice.quickTodoFailed),
+      );
     }
   } finally {
     ctrl.dispose();

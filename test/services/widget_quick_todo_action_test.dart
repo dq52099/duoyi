@@ -438,6 +438,14 @@ void main() {
     'source wiring: quick widget draft binds providers and guarded feedback',
     () {
       final source = File('lib/main.dart').readAsStringSync();
+      String functionSource(String startMarker, String endMarker) {
+        final start = source.indexOf(startMarker);
+        final end = source.indexOf(endMarker, start);
+        expect(start, greaterThanOrEqualTo(0));
+        expect(end, greaterThan(start));
+        return source.substring(start, end);
+      }
+
       final actionStart = source.indexOf(
         'Future<void> _createQuickTodoFromAction(',
       );
@@ -455,7 +463,7 @@ void main() {
         'final todos = Provider.of<TodoProvider?>(context, listen: false);',
       );
       final coordinatorCall = actionSource.indexOf(
-        'await runWidgetQuickTodoAction(',
+        'await runWidgetQuickTodoAction<WidgetActionMessage>(',
       );
 
       expect(authBinding, greaterThanOrEqualTo(0));
@@ -472,9 +480,12 @@ void main() {
           '_showWidgetActionFeedbackFromShell(message, isCurrentAction: isCurrent)',
         ),
       );
+      expect(actionSource, contains('WidgetActionNotice.savedReminderIssue'));
+      expect(actionSource, contains('detail: reminderSyncIssue'));
+      expect(actionSource, contains('_quickTodoCreatedNotice(todo)'));
 
       final localFeedbackStart = source.indexOf(
-        'void _showWidgetActionFeedback(BuildContext context, String message)',
+        'void _showWidgetActionFeedback(',
       );
       final shellFeedbackStart = source.indexOf(
         'void _showWidgetActionFeedbackFromShell(',
@@ -485,15 +496,20 @@ void main() {
       expect(localFeedbackStart, greaterThanOrEqualTo(0));
       expect(shellFeedbackStart, greaterThan(localFeedbackStart));
       expect(createActionStart, greaterThan(shellFeedbackStart));
-      final localFeedbackSource = source.substring(
-        localFeedbackStart,
-        shellFeedbackStart,
+      final localFeedbackSource = functionSource(
+        'void _showWidgetActionFeedback(',
+        '\nvoid _showWidgetActionFeedbackFromShell',
       );
-      final shellFeedbackSource = source.substring(
-        shellFeedbackStart,
-        createActionStart,
+      final shellFeedbackSource = functionSource(
+        'void _showWidgetActionFeedbackFromShell(',
+        '\nFuture<void> _createQuickTodoFromAction',
       );
-      expect(localFeedbackSource, contains('WidgetActionScope().afterFrame'));
+      expect(localFeedbackSource, contains('WidgetActionMessage message'));
+      expect(
+        localFeedbackSource,
+        contains('WidgetActionScope().afterFrame(() {'),
+      );
+      expect(shellFeedbackSource, contains('WidgetActionMessage message'));
       expect(
         shellFeedbackSource,
         contains('WidgetActionScope(isCallerAvailable: isCurrentAction)'),
@@ -504,13 +520,92 @@ void main() {
         contains('ScaffoldMessenger.of(latestContext)'),
       );
 
-      String functionSource(String startMarker, String endMarker) {
-        final start = source.indexOf(startMarker);
-        final end = source.indexOf(endMarker, start);
-        expect(start, greaterThanOrEqualTo(0));
-        expect(end, greaterThan(start));
-        return source.substring(start, end);
+      void expectRenderAfterFrameAndMountedCheck(
+        String function,
+        String frameMarker,
+        String mountedMarker,
+      ) {
+        final frame = function.indexOf(frameMarker);
+        final mounted = function.indexOf(mountedMarker);
+        final render = function.indexOf('Text(message.render())');
+        expect(frame, greaterThanOrEqualTo(0));
+        expect(mounted, greaterThan(frame));
+        expect(render, greaterThan(mounted));
       }
+
+      expectRenderAfterFrameAndMountedCheck(
+        localFeedbackSource,
+        'WidgetActionScope().afterFrame(() {',
+        'if (!latestContext.mounted) return;',
+      );
+      expectRenderAfterFrameAndMountedCheck(
+        shellFeedbackSource,
+        'WidgetActionScope(isCallerAvailable: isCurrentAction).afterFrame(() {',
+        'if (latestContext == null || !latestContext.mounted) return;',
+      );
+
+      final legacyPreflightSource = functionSource(
+        'Future<bool> _preflightQuickTodoReminder(',
+        '\nFuture<bool> _preflightWidgetTodoReminder',
+      );
+      expect(
+        legacyPreflightSource,
+        contains('required void Function(String message) feedback'),
+      );
+      expect(
+        legacyPreflightSource,
+        contains('feedback: (message) => feedback(message.render())'),
+      );
+      final typedPreflightSource = functionSource(
+        'Future<bool> _preflightWidgetTodoReminder(',
+        '\nString _quickTodoCreatedMessage',
+      );
+      expect(
+        typedPreflightSource,
+        contains(
+          'required void Function(WidgetActionMessage message) feedback',
+        ),
+      );
+      expect(
+        typedPreflightSource,
+        contains('WidgetActionNotice.reminderConfigurationInvalid'),
+      );
+      expect(
+        typedPreflightSource,
+        contains('WidgetActionNotice.reminderIssue'),
+      );
+      expect(
+        typedPreflightSource,
+        contains('WidgetActionNotice.reminderNotRegistered'),
+      );
+      expect(
+        typedPreflightSource,
+        contains('WidgetActionNotice.alarmPermissionDenied'),
+      );
+
+      final legacyCreatedMessageSource = functionSource(
+        'String _quickTodoCreatedMessage(TodoItem todo) =>',
+        '\nWidgetActionMessage _quickTodoCreatedNotice',
+      );
+      expect(
+        legacyCreatedMessageSource,
+        contains('_quickTodoCreatedNotice(todo).render()'),
+      );
+      final createdNoticeSource = functionSource(
+        'WidgetActionMessage _quickTodoCreatedNotice(TodoItem todo)',
+        '\nFuture<bool> _syncNotificationQuickAdd',
+      );
+      expect(
+        createdNoticeSource,
+        contains('WidgetActionSyncStatus.fromFacts('),
+      );
+      expect(createdNoticeSource, contains('syncState = status.state;'));
+      expect(createdNoticeSource, contains('syncReason = status.reason;'));
+      expect(createdNoticeSource, contains('WidgetActionNotice.todoSaved'));
+      expect(createdNoticeSource, contains('syncState: syncState'));
+      expect(createdNoticeSource, contains('syncReason: syncReason'));
+      expect(createdNoticeSource, contains('reminderHint: reminderHint'));
+      expect(createdNoticeSource, isNot(contains('localSaveSyncMessage(')));
 
       final hydrationSource = functionSource(
         'Future<void> _dispatchWidgetUriAfterHydration(',

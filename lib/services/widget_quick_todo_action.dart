@@ -1,22 +1,22 @@
 import 'widget_action_scope.dart';
 
 /// The receiver must check [isCurrent] again when deferred feedback is shown.
-typedef WidgetActionFeedback =
-    void Function(String message, bool Function() isCurrent);
+typedef WidgetActionFeedback<T> =
+    void Function(T message, bool Function() isCurrent);
 
 /// Keeps a typed widget draft tied to its account throughout permission waits.
 /// The caller binds its original provider before invoking this operation.
-Future<void> runWidgetQuickTodoAction({
+Future<void> runWidgetQuickTodoAction<T>({
   required bool Function() isCallerAvailable,
-  required Future<bool> Function(void Function(String) feedback) preflight,
-  required Future<String> Function() create,
-  required WidgetActionFeedback feedback,
-  required String failureMessage,
+  required Future<bool> Function(void Function(T) feedback) preflight,
+  required Future<T> Function() create,
+  required WidgetActionFeedback<T> feedback,
+  required T failureMessage,
   void Function(Object error, StackTrace stack)? logError,
 }) async {
   final scope = WidgetActionScope(isCallerAvailable: isCallerAvailable);
   bool isCurrent() => scope.isCurrent;
-  void guardedFeedback(String message) {
+  void guardedFeedback(T message) {
     if (isCurrent()) feedback(message, isCurrent);
   }
 

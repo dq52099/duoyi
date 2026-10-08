@@ -3108,8 +3108,8 @@ void main() {
         reason: '桌面专注动作应能进入隐藏的专注页',
       );
       expect(startPomodoroBranch, contains('pomodoro.startIfIdle()'));
-      expect(startPomodoroBranch, contains('已开始专注'));
-      expect(startPomodoroBranch, contains('专注计时正在进行'));
+      expect(startPomodoroBranch, contains('WidgetActionNotice.focusStarted'));
+      expect(startPomodoroBranch, contains('WidgetActionNotice.focusRunning'));
       final quickTodoBranch = _widgetActionBranch(main, 'quick_todo');
       expect(
         quickTodoBranch,
@@ -3119,9 +3119,29 @@ void main() {
       expect(quickTodoBranch, contains('_createQuickTodoFromAction'));
       expect(main, contains('_showWidgetActionFeedbackFromShell'));
       expect(main, contains('String _quickTodoCreatedMessage(TodoItem todo)'));
-      expect(main, contains('String _localSaveSyncMessage('));
-      expect(main, contains('localSaveSyncMessage('));
-      expect(main, contains('尚未上传服务器'));
+      expect(main, contains('_quickTodoCreatedNotice(todo).render()'));
+      final quickTodoNoticeStart = main.indexOf(
+        'WidgetActionMessage _quickTodoCreatedNotice(TodoItem todo)',
+      );
+      final quickTodoNoticeEnd = main.indexOf(
+        '\nFuture<bool> _syncNotificationQuickAdd',
+        quickTodoNoticeStart,
+      );
+      expect(quickTodoNoticeStart, greaterThanOrEqualTo(0));
+      expect(quickTodoNoticeEnd, greaterThan(quickTodoNoticeStart));
+      final quickTodoNoticeSource = main.substring(
+        quickTodoNoticeStart,
+        quickTodoNoticeEnd,
+      );
+      expect(
+        quickTodoNoticeSource,
+        contains('WidgetActionSyncStatus.fromFacts('),
+      );
+      expect(quickTodoNoticeSource, contains('WidgetActionNotice.todoSaved'));
+      expect(quickTodoNoticeSource, contains('syncState: syncState'));
+      expect(quickTodoNoticeSource, contains('syncReason: syncReason'));
+      expect(quickTodoNoticeSource, contains('reminderHint: reminderHint'));
+      expect(quickTodoNoticeSource, isNot(contains('localSaveSyncMessage(')));
       final completeTodoBranch = _widgetActionBranch(main, 'complete_todo');
       expect(
         completeTodoBranch,
@@ -3130,14 +3150,52 @@ void main() {
       );
       expect(completeTodoBranch, contains('_completeTodoFromWidgetAction'));
       expect(main, contains('todos.completeTodos([target.id])'));
-      expect(main, contains('已完成：'));
       expect(
         completeTodoBranch,
         isNot(contains('completeTodoWithOptionalTimeRecord')),
       );
       expect(completeTodoBranch, contains('_showWidgetActionFeedback'));
-      expect(completeTodoBranch, contains('这个任务不存在或已被删除'));
-      expect(completeTodoBranch, contains('已经完成'));
+      expect(completeTodoBranch, contains('WidgetActionNotice.todoMissing'));
+      expect(
+        completeTodoBranch,
+        contains('WidgetActionNotice.todoAlreadyCompleted'),
+      );
+      expect(completeTodoBranch, contains('subject: target.title'));
+      final completeTodoStart = main.indexOf(
+        'Future<void> _completeTodoFromWidgetAction(',
+      );
+      final completeTodoEnd = main.indexOf(
+        '\nbool _todoNeedsReminderSync',
+        completeTodoStart,
+      );
+      expect(completeTodoStart, greaterThanOrEqualTo(0));
+      expect(completeTodoEnd, greaterThan(completeTodoStart));
+      final completeTodoSource = main.substring(
+        completeTodoStart,
+        completeTodoEnd,
+      );
+      final capturedTitle = completeTodoSource.indexOf(
+        'final title = target.title;',
+      );
+      final completionAwait = completeTodoSource.indexOf(
+        'await todos.completeTodos([target.id])',
+      );
+      expect(capturedTitle, greaterThanOrEqualTo(0));
+      expect(completionAwait, greaterThan(capturedTitle));
+      expect(
+        completeTodoSource,
+        contains('WidgetActionNotice.todoCompleted, subject: title'),
+      );
+      expect(
+        completeTodoSource,
+        contains('WidgetActionNotice.todoAlreadyCompleted'),
+      );
+      expect(completeTodoSource, contains('subject: title'));
+      expect(completeTodoSource, contains('WidgetActionNotice.todoSaving'));
+      expect(
+        completeTodoSource,
+        contains('WidgetActionNotice.todoCompletionFailed'),
+      );
       final checkinHabitBranch = _widgetActionBranch(main, 'checkin_habit');
       expect(
         checkinHabitBranch,
@@ -3145,11 +3203,38 @@ void main() {
         reason: '桌面习惯打卡动作应先进入习惯页',
       );
       expect(checkinHabitBranch, contains('_showWidgetActionFeedback'));
-      expect(checkinHabitBranch, contains('这个习惯不存在或已被删除'));
-      expect(checkinHabitBranch, contains('不支持快捷打卡'));
-      expect(checkinHabitBranch, contains('今天不需要打卡'));
-      expect(checkinHabitBranch, contains('今天已经完成'));
-      expect(checkinHabitBranch, contains('已打卡：'));
+      expect(checkinHabitBranch, contains('WidgetActionNotice.habitMissing'));
+      expect(
+        checkinHabitBranch,
+        contains('WidgetActionNotice.habitUnsupported'),
+      );
+      expect(
+        checkinHabitBranch,
+        contains('WidgetActionNotice.habitNotScheduled'),
+      );
+      expect(checkinHabitBranch, contains('subject: target.name'));
+      expect(
+        checkinHabitBranch,
+        contains('WidgetActionNotice.habitAlreadyCompleted'),
+      );
+      expect(
+        checkinHabitBranch,
+        contains('unawaited(_checkInHabitFromWidgetAction(habits, target))'),
+      );
+      final checkinStart = main.indexOf(
+        'Future<void> _checkInHabitFromWidgetAction(',
+      );
+      final checkinEnd = main.indexOf(
+        '\nFuture<void> _completeTodoFromWidgetAction',
+        checkinStart,
+      );
+      expect(checkinStart, greaterThanOrEqualTo(0));
+      expect(checkinEnd, greaterThan(checkinStart));
+      final checkinSource = main.substring(checkinStart, checkinEnd);
+      expect(checkinSource, contains('WidgetActionNotice.habitCheckedIn'));
+      expect(checkinSource, contains('subject: latest.name'));
+      expect(checkinSource, contains('WidgetActionNotice.habitSaving'));
+      expect(checkinSource, contains('WidgetActionNotice.habitCheckInFailed'));
       expect(main, contains("uri.host == 'countdown'"));
       expect(main, contains('CountdownScreen(initialCountdownId: id)'));
       expect(main, contains("uri.host == 'time-entry'"));
