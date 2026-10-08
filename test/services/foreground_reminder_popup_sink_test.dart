@@ -20,6 +20,9 @@ class _FakeNotificationFallback
   Object? cancelError;
   bool failCancelAfterSchedule = false;
   int scheduleCount = 0;
+  Completer<void>? cancelGate;
+  Completer<void>? cancelStarted;
+  bool gateNextCancel = false;
   Completer<void>? dailyGate;
   int? failDailyCall;
   int dailyCalls = 0;
@@ -88,6 +91,12 @@ class _FakeNotificationFallback
   @override
   Future<void> cancel(int id) async {
     operations.add('cancel:$id');
+    if (gateNextCancel) {
+      gateNextCancel = false;
+      final started = cancelStarted;
+      if (started != null && !started.isCompleted) started.complete();
+      await cancelGate!.future;
+    }
     if (cancelError case final error?) {
       if (!failCancelAfterSchedule || scheduleCount > 0) throw error;
     }
@@ -138,6 +147,12 @@ class _FakeNotificationFallback
     required int minute,
     List<int>? weekdays,
   }) async {}
+}
+
+Future<void> _ignoreCleanupFailure(Future<void> future) async {
+  try {
+    await future;
+  } catch (_) {}
 }
 
 void main() {
@@ -316,6 +331,334 @@ void main() {
       expect(fallback.once, isEmpty);
     },
   );
+
+  testWidgets(
+    'cancel wins while in-app-only scheduling awaits fallback cleanup',
+    (tester) async {
+      final fixedNow = DateTime.now();
+      final navigatorKey = GlobalKey<NavigatorState>();
+      final fallback = _FakeNotificationFallback()
+        ..cancelGate = Completer<void>()
+        ..cancelStarted = Completer<void>()
+        ..gateNextCancel = true;
+      final sink = ForegroundReminderPopupSink(
+        contextGetter: () => navigatorKey.currentContext,
+        notificationFallback: fallback,
+        nowGetter: () => fixedNow,
+      );
+
+      Future<void>? schedule;
+      Future<void>? cancelling;
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            navigatorKey: navigatorKey,
+            home: const Scaffold(body: SizedBox()),
+          ),
+        );
+
+        final scheduled = sink.scheduleInAppOnlyOnce(
+          id: 61,
+          title: '被取消的应用内提醒',
+          body: '不能出现',
+          when: fixedNow.add(const Duration(seconds: 5)),
+        );
+        schedule = scheduled;
+        await tester.pump();
+        expect(fallback.cancelStarted!.isCompleted, isTrue);
+
+        final cancelRequest = sink.cancel(61);
+        cancelling = cancelRequest;
+        fallback.cancelGate!.complete();
+        await Future.wait<void>([scheduled, cancelRequest]);
+
+        await tester.pump(const Duration(seconds: 6));
+        await tester.pump(const Duration(milliseconds: 250));
+        expect(find.text('不能出现'), findsNothing);
+        expect(fallback.once, isEmpty);
+        expect(fallback.daily, isEmpty);
+        expect(fallback.cancelled, contains(61));
+      } finally {
+        if (!fallback.cancelGate!.isCompleted) {
+          fallback.cancelGate!.complete();
+        }
+        final pendingSchedule = schedule;
+        if (pendingSchedule != null) {
+          await _ignoreCleanupFailure(pendingSchedule);
+        }
+        final pendingCancellation = cancelling;
+        if (pendingCancellation != null) {
+          await _ignoreCleanupFailure(pendingCancellation);
+        }
+        await _ignoreCleanupFailure(sink.cancel(61));
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets(
+    'overlapping in-app-only schedules keep the newer timer cancelable',
+    (tester) async {
+      final fixedNow = DateTime.now();
+      final navigatorKey = GlobalKey<NavigatorState>();
+      final fallback = _FakeNotificationFallback()
+        ..cancelGate = Completer<void>()
+        ..cancelStarted = Completer<void>()
+        ..gateNextCancel = true;
+      final sink = ForegroundReminderPopupSink(
+        contextGetter: () => navigatorKey.currentContext,
+        notificationFallback: fallback,
+        nowGetter: () => fixedNow,
+      );
+
+      Future<void>? oldSchedule;
+      Future<void>? newSchedule;
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            navigatorKey: navigatorKey,
+            home: const Scaffold(body: SizedBox()),
+          ),
+        );
+
+        final scheduledOld = sink.scheduleInAppOnlyOnce(
+          id: 62,
+          title: '旧的应用内提醒',
+          body: '旧提醒',
+          when: fixedNow.add(const Duration(seconds: 1)),
+        );
+        oldSchedule = scheduledOld;
+        await tester.pump();
+        expect(fallback.cancelStarted!.isCompleted, isTrue);
+
+        final scheduledNew = sink.scheduleInAppOnlyOnce(
+          id: 62,
+          title: '新的应用内提醒',
+          body: '新提醒',
+          when: fixedNow.add(const Duration(seconds: 3)),
+        );
+        newSchedule = scheduledNew;
+        await tester.pump();
+        fallback.cancelGate!.complete();
+        await Future.wait<void>([scheduledOld, scheduledNew]);
+
+        await tester.pump(const Duration(milliseconds: 1100));
+        await tester.pump(const Duration(milliseconds: 250));
+        expect(find.text('旧提醒'), findsNothing);
+        expect(find.text('新提醒'), findsNothing);
+
+        // Cancel after the old deadline but before the newer one. If the old
+        // callback removed the new timer from the sink's index, this cancel
+        // misses it and the newer body appears at its deadline.
+        await sink.cancel(62);
+        await tester.pump(const Duration(milliseconds: 250));
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pump(const Duration(milliseconds: 250));
+
+        expect(find.text('旧提醒'), findsNothing);
+        expect(find.text('新提醒'), findsNothing);
+        expect(fallback.once, isEmpty);
+        expect(fallback.daily, isEmpty);
+      } finally {
+        if (!fallback.cancelGate!.isCompleted) {
+          fallback.cancelGate!.complete();
+        }
+        final pendingOldSchedule = oldSchedule;
+        if (pendingOldSchedule != null) {
+          await _ignoreCleanupFailure(pendingOldSchedule);
+        }
+        final pendingNewSchedule = newSchedule;
+        if (pendingNewSchedule != null) {
+          await _ignoreCleanupFailure(pendingNewSchedule);
+        }
+        await tester.pump(const Duration(seconds: 6));
+        await _ignoreCleanupFailure(sink.cancel(62));
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets('in-app-only deadline uses the injected clock', (tester) async {
+    final fixedNow = DateTime(2100, 1, 1, 10);
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final fallback = _FakeNotificationFallback();
+    var nowGetterCalls = 0;
+    final sink = ForegroundReminderPopupSink(
+      contextGetter: () => navigatorKey.currentContext,
+      notificationFallback: fallback,
+      nowGetter: () {
+        nowGetterCalls++;
+        return fixedNow;
+      },
+    );
+
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: const Scaffold(body: SizedBox()),
+        ),
+      );
+
+      await sink.scheduleInAppOnlyOnce(
+        id: 63,
+        title: '固定时钟提醒',
+        body: '按注入时钟触发',
+        when: fixedNow.add(const Duration(seconds: 2)),
+      );
+
+      expect(nowGetterCalls, greaterThan(0));
+      expect(fallback.once, isEmpty);
+      expect(fallback.daily, isEmpty);
+      await tester.pump(const Duration(milliseconds: 1999));
+      expect(find.text('按注入时钟触发'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('按注入时钟触发'), findsOneWidget);
+    } finally {
+      await _ignoreCleanupFailure(sink.cancel(63));
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('in-app-only cancel error is preserved and installs no timer', (
+    tester,
+  ) async {
+    final fixedNow = DateTime.now();
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final fallback = _FakeNotificationFallback();
+    final sink = ForegroundReminderPopupSink(
+      contextGetter: () => navigatorKey.currentContext,
+      notificationFallback: fallback,
+      nowGetter: () => fixedNow,
+    );
+
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: const Scaffold(body: SizedBox()),
+        ),
+      );
+
+      await sink.scheduleOnce(
+        id: 64,
+        title: '原定系统兜底提醒',
+        body: '原提醒不能再弹出',
+        when: fixedNow.add(const Duration(seconds: 1)),
+      );
+      expect(fallback.once, hasLength(1));
+      final cancelCountBeforeFailure = fallback.cancelled.length;
+      final cancelFailure = StateError('popup fallback cancellation failed');
+      fallback
+        ..cancelError = cancelFailure
+        ..failCancelAfterSchedule = true;
+
+      await expectLater(
+        sink.scheduleInAppOnlyOnce(
+          id: 64,
+          title: '取消失败的应用内替换',
+          body: '替换计时器不能启动',
+          when: fixedNow.add(const Duration(seconds: 3)),
+        ),
+        throwsA(same(cancelFailure)),
+      );
+      expect(fallback.cancelled.length, cancelCountBeforeFailure);
+
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('原提醒不能再弹出'), findsNothing);
+      expect(find.text('替换计时器不能启动'), findsNothing);
+      expect(fallback.once, hasLength(1));
+    } finally {
+      fallback.cancelError = null;
+      await _ignoreCleanupFailure(sink.cancel(64));
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('regular schedule replaces a pending in-app-only reminder', (
+    tester,
+  ) async {
+    final fixedNow = DateTime.now();
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final fallback = _FakeNotificationFallback()
+      ..cancelGate = Completer<void>()
+      ..cancelStarted = Completer<void>()
+      ..gateNextCancel = true;
+    final sink = ForegroundReminderPopupSink(
+      contextGetter: () => navigatorKey.currentContext,
+      notificationFallback: fallback,
+      nowGetter: () => fixedNow,
+    );
+
+    Future<void>? oldSchedule;
+    Future<void>? regularSchedule;
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: const Scaffold(body: SizedBox()),
+        ),
+      );
+
+      final pendingOldSchedule = sink.scheduleInAppOnlyOnce(
+        id: 65,
+        title: '待替换的应用内提醒',
+        body: '旧应用内提醒',
+        when: fixedNow.add(const Duration(seconds: 1)),
+      );
+      oldSchedule = pendingOldSchedule;
+      await tester.pump();
+      expect(fallback.cancelStarted!.isCompleted, isTrue);
+
+      final pendingRegularSchedule = sink.scheduleOnce(
+        id: 65,
+        title: '普通弹出提醒',
+        body: '新的普通提醒',
+        when: fixedNow.add(const Duration(seconds: 3)),
+        payload: 'duoyi://todo/65',
+      );
+      regularSchedule = pendingRegularSchedule;
+      await tester.pump();
+      fallback.cancelGate!.complete();
+      await Future.wait<void>([pendingOldSchedule, pendingRegularSchedule]);
+
+      expect(fallback.once, hasLength(1));
+      expect(fallback.once.single['body'], '新的普通提醒');
+      expect(
+        fallback.once.single['payload'],
+        contains('fallback=popup_notification'),
+      );
+      final cancelsBeforeDelivery = fallback.cancelled.length;
+      await tester.pump(const Duration(milliseconds: 1100));
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('旧应用内提醒'), findsNothing);
+      expect(find.text('新的普通提醒'), findsNothing);
+      expect(fallback.cancelled.length, cancelsBeforeDelivery);
+      await tester.pump(const Duration(milliseconds: 1900));
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('旧应用内提醒'), findsNothing);
+      expect(find.text('新的普通提醒'), findsOneWidget);
+      expect(fallback.once, hasLength(1));
+      expect(fallback.cancelled.length, greaterThan(cancelsBeforeDelivery));
+    } finally {
+      if (!fallback.cancelGate!.isCompleted) {
+        fallback.cancelGate!.complete();
+      }
+      final pendingOldSchedule = oldSchedule;
+      if (pendingOldSchedule != null) {
+        await _ignoreCleanupFailure(pendingOldSchedule);
+      }
+      final pendingRegularSchedule = regularSchedule;
+      if (pendingRegularSchedule != null) {
+        await _ignoreCleanupFailure(pendingRegularSchedule);
+      }
+      await tester.pump(const Duration(seconds: 6));
+      await _ignoreCleanupFailure(sink.cancel(65));
+      await tester.pumpAndSettle();
+    }
+  });
 
   testWidgets(
     'one-shot popup keeps fallback when app backgrounds right before due time',

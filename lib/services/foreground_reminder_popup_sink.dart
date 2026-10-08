@@ -91,17 +91,29 @@ class ForegroundReminderPopupSink implements ReminderInAppOnlyPopupSink {
     required DateTime when,
     String? payload,
   }) async {
-    await cancel(id);
-    final delay = when.difference(DateTime.now());
+    final generation = _invalidate(id);
+    await _cancelGeneration(id, generation);
+    if (!_isCurrent(id, generation)) return;
+    final delay = when.difference(nowGetter());
     if (delay <= Duration.zero) {
       throw StateError('提醒时间已过去，popup 提醒未注册');
     }
     _timers[id] = Timer(delay, () {
-      _timers.remove(id);
-      if (!isForegroundGetter()) return;
-      final context = contextGetter();
-      if (context == null || !context.mounted) return;
-      _show(id: id, title: title, body: body, payload: payload);
+      unawaited(
+        _prepareForegroundDelivery(
+          id: id,
+          generation: generation,
+          title: title,
+          body: body,
+          payload: payload,
+          cancelFallbackAfterDialog: false,
+        ).catchError((Object error, StackTrace stackTrace) {
+          debugPrint(
+            '[ForegroundReminderPopupSink] in-app-only popup delivery failed: '
+            '$error\n$stackTrace',
+          );
+        }),
+      );
     });
   }
 
@@ -208,42 +220,6 @@ class ForegroundReminderPopupSink implements ReminderInAppOnlyPopupSink {
         }),
       );
     });
-  }
-
-  Future<void> _rescheduleRepeatingFallbackSafely({
-    required int id,
-    required String title,
-    required String body,
-    required int hour,
-    required int minute,
-    List<int>? weekdays,
-    String? payload,
-  }) async {
-    try {
-      await _scheduleFallbackRepeating(
-        id: id,
-        title: title,
-        body: body,
-        hour: hour,
-        minute: minute,
-        weekdays: weekdays,
-        payload: payload,
-      );
-    } catch (e, st) {
-      debugPrint(
-        '[ForegroundReminderPopupSink] repeating fallback reschedule failed: '
-        '$e\n$st',
-      );
-      final issueSink = notificationFallback;
-      if (issueSink is ReminderScheduleIssueSink) {
-        (issueSink as ReminderScheduleIssueSink).recordReminderScheduleIssue(
-          title: '弹出提醒兜底重建失败',
-          message: '前台弹出提醒已展示，但下一次后台通知兜底未能重新注册。请检查通知权限后重新保存提醒。($e)',
-          relatedId: _relatedIdFromPayload(payload) ?? id.toString(),
-          blocking: false,
-        );
-      }
-    }
   }
 
   Future<void> _scheduleFallbackOnce({
@@ -473,9 +449,7 @@ class ForegroundReminderPopupSink implements ReminderInAppOnlyPopupSink {
   String? _relatedIdFromPayload(String? payload) {
     if (payload == null || payload.isEmpty) return null;
     final uri = Uri.tryParse(payload);
-    if (uri == null ||
-        uri.scheme != 'duoyi' ||
-        uri.pathSegments.isEmpty) {
+    if (uri == null || uri.scheme != 'duoyi' || uri.pathSegments.isEmpty) {
       return null;
     }
     return switch (uri.host) {
@@ -492,6 +466,10 @@ class ForegroundReminderPopupSink implements ReminderInAppOnlyPopupSink {
   @override
   Future<void> cancel(int id) async {
     final generation = _invalidate(id);
+    await _cancelGeneration(id, generation);
+  }
+
+  Future<void> _cancelGeneration(int id, int generation) async {
     Object? cancelError;
     StackTrace? cancelStackTrace;
     try {

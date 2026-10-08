@@ -1,0 +1,302 @@
+00:00 +0: loading /tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart
+00:00 +0: one-shot popup reports fallback registration failures
+[ForegroundReminderPopupSink] fallback operation failed: Bad state: one-shot fallback failed
+#0      _FakeNotificationFallback.scheduleOnce (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:44:38)
+#1      ForegroundReminderPopupSink._scheduleFallbackOnce (package:duoyi/services/foreground_reminder_popup_sink.dart:273:20)
+#2      ForegroundReminderPopupSink.scheduleOnce.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:56:15)
+#3      ForegroundReminderPopupSink._replaceFallback.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:366:21)
+<asynchronous suspension>
+#4      ForegroundReminderPopupSink._serializeFallbackOperation (package:duoyi/services/foreground_reminder_popup_sink.dart:378:7)
+<asynchronous suspension>
+#5      ForegroundReminderPopupSink.scheduleOnce (package:duoyi/services/foreground_reminder_popup_sink.dart:55:7)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)
+<asynchronous suspension>
+#10     main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:177:5)
+<asynchronous suspension>
+#11     testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#12     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+#13     StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+
+00:01 +1: repeating popup reports fallback registration failures
+[ForegroundReminderPopupSink] fallback operation failed: Bad state: repeating fallback failed
+#0      _FakeNotificationFallback.scheduleDaily (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:76:7)
+<asynchronous suspension>
+#1      ForegroundReminderPopupSink._scheduleFallbackRepeating (package:duoyi/services/foreground_reminder_popup_sink.dart:310:5)
+<asynchronous suspension>
+#2      ForegroundReminderPopupSink.scheduleRepeating.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:123:9)
+<asynchronous suspension>
+#3      ForegroundReminderPopupSink._replaceFallback.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:366:7)
+<asynchronous suspension>
+#4      ForegroundReminderPopupSink._serializeFallbackOperation (package:duoyi/services/foreground_reminder_popup_sink.dart:378:7)
+<asynchronous suspension>
+#5      ForegroundReminderPopupSink.scheduleRepeating (package:duoyi/services/foreground_reminder_popup_sink.dart:122:7)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)
+<asynchronous suspension>
+#10     main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:210:5)
+<asynchronous suspension>
+#11     testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#12     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+#13     StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+
+00:01 +2: cancel failure still closes the popup dialog
+[ForegroundReminderPopupSink] fallback operation failed: Bad state: cancel failed
+#0      _FakeNotificationFallback.cancel (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:101:58)
+#1      ForegroundReminderPopupSink._showOrFallback.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:454:41)
+#2      ForegroundReminderPopupSink._serializeFallbackOperation.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:375:77)
+#3      StackZoneSpecification._registerUnaryCallback.<anonymous closure>.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:127:36)
+#4      StackZoneSpecification._run (package:stack_trace/src/stack_zone_specification.dart:207:15)
+#5      StackZoneSpecification._registerUnaryCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:127:24)
+#6      _rootRunUnary (dart:async/zone_root.dart:48:47)
+#7      _CustomZone.runUnary (dart:async/zone.dart:733:19)
+<asynchronous suspension>
+#8      ForegroundReminderPopupSink._serializeFallbackOperation (package:duoyi/services/foreground_reminder_popup_sink.dart:378:7)
+<asynchronous suspension>
+#9      ForegroundReminderPopupSink._showOrFallback (package:duoyi/services/foreground_reminder_popup_sink.dart:452:9)
+<asynchronous suspension>
+#10     ForegroundReminderPopupSink._prepareForegroundDelivery (package:duoyi/services/foreground_reminder_popup_sink.dart:412:5)
+<asynchronous suspension>
+
+00:01 +3: one-shot popup registers notification fallback and cancels it for foreground dialog
+00:01 +4: in-app-only one-shot popup does not register notification fallback
+00:01 +5: cancel wins while in-app-only scheduling awaits fallback cleanup
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: no matching candidates
+  Actual: _TextWidgetFinder:<Found 1 widget with text "不能出现": [
+            Text("不能出现", dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery]),
+          ]>
+   Which: means one was found but none were expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:377:9)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart line 377
+The test description was:
+  cancel wins while in-app-only scheduling awaits fallback cleanup
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +5 -1: cancel wins while in-app-only scheduling awaits fallback cleanup [E]
+  Test failed. See exception logs above.
+  The test description was: cancel wins while in-app-only scheduling awaits fallback cleanup
+
+00:02 +5 -1: overlapping in-app-only schedules keep the newer timer cancelable
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: no matching candidates
+  Actual: _TextWidgetFinder:<Found 1 widget with text "旧提醒": [
+            Text("旧提醒", dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery]),
+          ]>
+   Which: means one was found but none were expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:447:9)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart line 447
+The test description was:
+  overlapping in-app-only schedules keep the newer timer cancelable
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +5 -2: overlapping in-app-only schedules keep the newer timer cancelable [E]
+  Test failed. See exception logs above.
+  The test description was: overlapping in-app-only schedules keep the newer timer cancelable
+
+00:02 +5 -2: in-app-only deadline uses the injected clock
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: a value greater than <0>
+  Actual: <0>
+   Which: is not a value greater than <0>
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:510:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart line 510
+The test description was:
+  in-app-only deadline uses the injected clock
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +5 -3: in-app-only deadline uses the injected clock [E]
+  Test failed. See exception logs above.
+  The test description was: in-app-only deadline uses the injected clock
+
+00:02 +5 -3: in-app-only cancel error is preserved and installs no timer
+00:02 +6 -3: regular schedule replaces a pending in-app-only reminder
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: no matching candidates
+  Actual: _TextWidgetFinder:<Found 1 widget with text "旧应用内提醒": [
+            Text("旧应用内提醒", dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery]),
+          ]>
+   Which: means one was found but none were expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:636:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart line 636
+The test description was:
+  regular schedule replaces a pending in-app-only reminder
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +6 -4: regular schedule replaces a pending in-app-only reminder [E]
+  Test failed. See exception logs above.
+  The test description was: regular schedule replaces a pending in-app-only reminder
+
+00:02 +6 -4: one-shot popup keeps fallback when app backgrounds right before due time
+00:02 +7 -4: one-shot popup keeps notification fallback when app is not foreground
+00:02 +8 -4: foreground repeating delivery serializes fallback refresh
+00:02 +9 -4: repeating popup registers daily notification fallback
+00:02 +10 -4: repeating popup records fallback rebuild failure after foreground delivery
+[ForegroundReminderPopupSink] fallback operation failed: forced scheduleDaily fallback failure
+#0      _FakeNotificationFallback.scheduleDaily (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:69:7)
+<asynchronous suspension>
+#1      ForegroundReminderPopupSink._scheduleFallbackRepeating (package:duoyi/services/foreground_reminder_popup_sink.dart:310:5)
+<asynchronous suspension>
+#2      ForegroundReminderPopupSink._refreshRepeatingFallback.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:334:9)
+<asynchronous suspension>
+#3      ForegroundReminderPopupSink._replaceFallback.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:366:7)
+<asynchronous suspension>
+#4      ForegroundReminderPopupSink._serializeFallbackOperation (package:duoyi/services/foreground_reminder_popup_sink.dart:378:7)
+<asynchronous suspension>
+#5      ForegroundReminderPopupSink._refreshRepeatingFallback (package:duoyi/services/foreground_reminder_popup_sink.dart:333:7)
+<asynchronous suspension>
+#6      ForegroundReminderPopupSink._scheduleRepeatingTimer.<anonymous closure>.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:173:13)
+<asynchronous suspension>
+#7      ForegroundReminderPopupSink._showOrFallback (package:duoyi/services/foreground_reminder_popup_sink.dart:461:37)
+<asynchronous suspension>
+#8      ForegroundReminderPopupSink._prepareForegroundDelivery (package:duoyi/services/foreground_reminder_popup_sink.dart:412:5)
+<asynchronous suspension>
+
+00:02 +11 -4: one-shot popup propagates notification fallback failures
+[ForegroundReminderPopupSink] fallback operation failed: forced scheduleOnce fallback failure
+#0      _FakeNotificationFallback.scheduleOnce (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:40:7)
+#1      ForegroundReminderPopupSink._scheduleFallbackOnce (package:duoyi/services/foreground_reminder_popup_sink.dart:273:20)
+#2      ForegroundReminderPopupSink.scheduleOnce.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:56:15)
+#3      ForegroundReminderPopupSink._replaceFallback.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:366:21)
+<asynchronous suspension>
+#4      ForegroundReminderPopupSink._serializeFallbackOperation (package:duoyi/services/foreground_reminder_popup_sink.dart:378:7)
+<asynchronous suspension>
+#5      ForegroundReminderPopupSink.scheduleOnce (package:duoyi/services/foreground_reminder_popup_sink.dart:55:7)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)
+<asynchronous suspension>
+#10     main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:886:5)
+<asynchronous suspension>
+#11     testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#12     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+#13     StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+
+00:02 +12 -4: repeating popup propagates notification fallback failures
+[ForegroundReminderPopupSink] fallback operation failed: forced scheduleDaily fallback failure
+#0      _FakeNotificationFallback.scheduleDaily (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:69:7)
+<asynchronous suspension>
+#1      ForegroundReminderPopupSink._scheduleFallbackRepeating (package:duoyi/services/foreground_reminder_popup_sink.dart:310:5)
+<asynchronous suspension>
+#2      ForegroundReminderPopupSink.scheduleRepeating.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:123:9)
+<asynchronous suspension>
+#3      ForegroundReminderPopupSink._replaceFallback.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:366:7)
+<asynchronous suspension>
+#4      ForegroundReminderPopupSink._serializeFallbackOperation (package:duoyi/services/foreground_reminder_popup_sink.dart:378:7)
+<asynchronous suspension>
+#5      ForegroundReminderPopupSink.scheduleRepeating (package:duoyi/services/foreground_reminder_popup_sink.dart:122:7)
+<asynchronous suspension>
+#6      Throws._matchFuture (package:matcher/src/expect/throws_matcher.dart:103:19)
+<asynchronous suspension>
+#7      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+#8      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+#9      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)
+<asynchronous suspension>
+#10     main.<anonymous closure> (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:908:5)
+<asynchronous suspension>
+#11     testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#12     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+#13     StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+
+00:02 +13 -4: repeating popup reports second fallback registration failure
+[ForegroundReminderPopupSink] fallback operation failed: Bad state: second repeating fallback failed
+#0      _FakeNotificationFallback.scheduleDaily (file:///tmp/duoyi-update-deploy-20261005-isvisjkp/source/test/services/foreground_reminder_popup_sink_test.dart:76:7)
+<asynchronous suspension>
+#1      ForegroundReminderPopupSink._scheduleFallbackRepeating (package:duoyi/services/foreground_reminder_popup_sink.dart:310:5)
+<asynchronous suspension>
+#2      ForegroundReminderPopupSink._refreshRepeatingFallback.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:334:9)
+<asynchronous suspension>
+#3      ForegroundReminderPopupSink._replaceFallback.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:366:7)
+<asynchronous suspension>
+#4      ForegroundReminderPopupSink._serializeFallbackOperation (package:duoyi/services/foreground_reminder_popup_sink.dart:378:7)
+<asynchronous suspension>
+#5      ForegroundReminderPopupSink._refreshRepeatingFallback (package:duoyi/services/foreground_reminder_popup_sink.dart:333:7)
+<asynchronous suspension>
+#6      ForegroundReminderPopupSink._scheduleRepeatingTimer.<anonymous closure>.<anonymous closure> (package:duoyi/services/foreground_reminder_popup_sink.dart:173:13)
+<asynchronous suspension>
+#7      ForegroundReminderPopupSink._showOrFallback (package:duoyi/services/foreground_reminder_popup_sink.dart:461:37)
+<asynchronous suspension>
+#8      ForegroundReminderPopupSink._prepareForegroundDelivery (package:duoyi/services/foreground_reminder_popup_sink.dart:412:5)
+<asynchronous suspension>
+
+00:02 +14 -4: delayed fallback registration cannot resurrect after cancel
+00:03 +15 -4: cancel closes a visible foreground reminder dialog
+00:03 +16 -4: rescheduling same id keeps only the latest foreground dialog
+00:03 +17 -4: rescheduling visible same id replaces the existing dialog
+00:03 +18 -4: same popup content only opens one visible dialog briefly
+00:03 +19 -4: Some tests failed.
