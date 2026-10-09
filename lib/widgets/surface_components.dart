@@ -2234,6 +2234,9 @@ class AppDropdownField<T> extends StatelessWidget {
   final FormFieldSetter<T>? onSaved;
   final VoidCallback? onTap;
 
+  /// Rechecked at entry and after each await, before changing form state.
+  final bool Function()? isInteractionAllowed;
+
   const AppDropdownField({
     super.key,
     required this.initialValue,
@@ -2255,6 +2258,7 @@ class AppDropdownField<T> extends StatelessWidget {
     this.validator,
     this.onSaved,
     this.onTap,
+    this.isInteractionAllowed,
   });
 
   @override
@@ -2314,7 +2318,10 @@ class AppDropdownField<T> extends StatelessWidget {
               child: InkWell(
                 borderRadius: effectiveBorderRadius,
                 onTapDown: canOpen
-                    ? (_) => _beginDropdownKeyboardDismiss(anchorContext)
+                    ? (_) {
+                        if (isInteractionAllowed?.call() == false) return;
+                        _beginDropdownKeyboardDismiss(anchorContext);
+                      }
                     : null,
                 onTap: canOpen
                     ? () => _openPicker(anchorContext, field, inputDecoration)
@@ -2344,9 +2351,12 @@ class AppDropdownField<T> extends StatelessWidget {
     FormFieldState<T> field,
     InputDecoration decoration,
   ) async {
+    if (isInteractionAllowed?.call() == false) return;
     onTap?.call();
+    if (isInteractionAllowed?.call() == false) return;
     await _hideKeyboardBeforePicker(anchorContext);
     if (!anchorContext.mounted || !field.mounted) return;
+    if (isInteractionAllowed?.call() == false) return;
 
     final picked = await _showAnchoredDropdownMenu<T>(
       context: anchorContext,
@@ -2356,6 +2366,7 @@ class AppDropdownField<T> extends StatelessWidget {
       shiftForKeyboard: false,
     );
     if (!field.mounted || picked == null) return;
+    if (isInteractionAllowed?.call() == false) return;
     field.didChange(picked);
     onChanged(picked);
   }

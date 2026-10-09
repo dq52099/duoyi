@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../core/completion_visibility_policy.dart';
+import '../core/calendar_ui_copy.dart';
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
 import '../core/main_ui_copy.dart';
+import '../services/account_local_data_cleaner.dart';
 import 'package:provider/provider.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/todo_provider.dart';
@@ -66,10 +68,12 @@ class _CalendarScreenState extends State<CalendarScreen>
   String? _activeWorkspaceId;
   bool _calendarRebuildScheduled = false;
   Object? _lastCalendarInputSignature;
+  late final _CallerLifecycleNotifier _callerLifecycleNotifier;
 
   @override
   void initState() {
     super.initState();
+    _callerLifecycleNotifier = _CallerLifecycleNotifier();
     final initialDate = widget.initialDate;
     if (initialDate != null) {
       _selectedDay = DateTime(
@@ -95,6 +99,7 @@ class _CalendarScreenState extends State<CalendarScreen>
 
   @override
   void dispose() {
+    _callerLifecycleNotifier.notifyCallerDisposed();
     I18n.localeListenable.removeListener(_onLocaleChanged);
     _tabController.removeListener(_handleTabControllerChanged);
     _tabController.dispose();
@@ -342,63 +347,12 @@ class _CalendarScreenState extends State<CalendarScreen>
       ),
   ]);
 
-  void _showQuickAddTodo() {
-    final s = context.read<ThemeProvider>().brand.strings;
-    final titleCtrl = TextEditingController();
-    var submitting = false;
-    showDialog(
+  void _showQuickAddTodo({_CalendarOriginScope? origin}) {
+    final effectiveOrigin = origin ?? _createOriginScope();
+    if (!effectiveOrigin.isValid) return;
+    showDialog<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: Text(
-            '${s.calendarQuickAddTitle} - ${_selectedDay.month}月${_selectedDay.day}日',
-          ),
-          content: AppSecondaryControlTheme(
-            child: TextField(
-              controller: titleCtrl,
-              decoration: const InputDecoration(labelText: '任务名称'),
-              autofocus: true,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: submitting ? null : () => Navigator.pop(ctx),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: submitting
-                  ? null
-                  : () async {
-                      final title = titleCtrl.text.trim();
-                      if (title.isEmpty) return;
-                      setSt(() => submitting = true);
-                      try {
-                        await context.read<TodoProvider>().addTodo(
-                          TodoItem(
-                            title: title,
-                            date: _selectedDay,
-                            workspaceId: _activeWorkspaceId ?? 'private',
-                          ),
-                          waitForReminderSync: false,
-                        );
-                        if (ctx.mounted) Navigator.pop(ctx);
-                      } finally {
-                        if (ctx.mounted) {
-                          setSt(() => submitting = false);
-                        }
-                      }
-                    },
-              child: submitting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(I18n.tr('action.add')),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => _QuickAddTodoDialog(origin: effectiveOrigin),
     );
   }
 
@@ -572,7 +526,7 @@ class _CalendarScreenState extends State<CalendarScreen>
           padding: const EdgeInsets.symmetric(horizontal: 12),
           children: [
             _calendarFilterChip(
-              label: const Text('全部'),
+              label: Text(CalendarUiCopy.filterAll),
               selected: _activeTypes == null,
               onSelected: (_) => setState(() => _activeTypes = null),
             ),
@@ -580,13 +534,13 @@ class _CalendarScreenState extends State<CalendarScreen>
               const SizedBox(width: 6),
               _calendarFilterChip(
                 avatar: const Icon(Icons.folder_outlined, size: 16),
-                label: const Text('全部项目'),
+                label: Text(CalendarUiCopy.filterAllProjects),
                 selected: effectiveProjectKey == null,
                 onSelected: (_) => setState(() => _activeProjectKey = null),
               ),
               for (final option in projectOptions)
                 _calendarFilterChip(
-                  label: Text('${option.name} ${option.count}'),
+                  label: Text('${option.displayName} ${option.count}'),
                   selected: effectiveProjectKey == option.key,
                   onSelected: (_) {
                     setState(() {
@@ -601,7 +555,7 @@ class _CalendarScreenState extends State<CalendarScreen>
               if (effectiveProjectKey != null)
                 _calendarActionChip(
                   avatar: const Icon(Icons.info_outline, size: 16),
-                  label: const Text('项目详情'),
+                  label: Text(CalendarUiCopy.projectDetailAction),
                   onPressed: () {
                     final option = projectOptions.firstWhere(
                       (item) => item.key == effectiveProjectKey,
@@ -618,7 +572,7 @@ class _CalendarScreenState extends State<CalendarScreen>
               const SizedBox(width: 6),
               _calendarFilterChip(
                 avatar: const Icon(Icons.groups_2_outlined, size: 16),
-                label: const Text('全部空间'),
+                label: Text(CalendarUiCopy.filterAllWorkspaces),
                 selected: effectiveWorkspaceId == null,
                 onSelected: (_) => setState(() => _activeWorkspaceId = null),
               ),
@@ -630,7 +584,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                         : Icons.groups_2_outlined,
                     size: 16,
                   ),
-                  label: Text('${option.name} ${option.count}'),
+                  label: Text('${option.displayName} ${option.count}'),
                   selected: effectiveWorkspaceId == option.id,
                   onSelected: (_) {
                     setState(() {
@@ -673,15 +627,16 @@ class _CalendarScreenState extends State<CalendarScreen>
   }
 
   Future<void> _pickDate() async {
+    final origin = _createOriginScope();
     final picked = await AppDatePicker.pickSolar(
       context,
       initialDate: _selectedDay,
       firstDate: DateTime(1900),
       lastDate: DateTime(2099, 12, 31),
-      title: '选择日期',
-      subtitle: '手动跳转到指定日期',
+      titleKey: 'calendar.content.date_picker_title',
+      subtitleKey: 'calendar.content.date_picker_subtitle',
     );
-    if (!mounted) return;
+    if (!origin.isValid) return;
     if (picked == null) return;
     setState(() {
       _selectedDay = picked;
@@ -755,9 +710,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       projectKey: effectiveProjectKey,
       workspaceId: effectiveWorkspaceId,
     );
-    final monthLabel = MainUiCopy.isEn
-        ? '${I18nDateFormat.monthDay(DateTime(_focusedMonth.year, _focusedMonth.month, 1)).split(" ").first} ${_focusedMonth.year}'
-        : '${_focusedMonth.year}年${_focusedMonth.month}月';
+    final monthLabel = CalendarUiCopy.monthHeader(_focusedMonth);
     final weekStart = _selectedDay.subtract(
       Duration(days: _selectedDay.weekday - 1),
     );
@@ -767,9 +720,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     final threeDayEnd = _selectedDay.add(const Duration(days: 2));
     final threeDayLabel =
         '${I18nDateFormat.monthDay(_selectedDay)} - ${I18nDateFormat.monthDay(threeDayEnd)}';
-    final yearLabel = MainUiCopy.isEn
-        ? '${_focusedMonth.year}'
-        : '${_focusedMonth.year} 年';
+    final yearLabel = CalendarUiCopy.yearHeader(_focusedMonth.year);
     final routeBackground = Theme.of(context).brightness == Brightness.dark
         ? Theme.of(context).colorScheme.surface
         : Theme.of(context).colorScheme.surfaceContainerLowest;
@@ -825,38 +776,52 @@ class _CalendarScreenState extends State<CalendarScreen>
               PopupMenuItem(
                 value: 'today',
                 height: 38,
-                child: AppSecondaryMenuText(MainUiCopy.calendarBackToToday),
+                child: _LocaleAwareSecondaryMenuText(
+                  () => MainUiCopy.calendarBackToToday,
+                ),
               ),
               PopupMenuItem(
                 value: 'pick',
                 height: 38,
-                child: AppSecondaryMenuText(MainUiCopy.calendarPickDate),
+                child: _LocaleAwareSecondaryMenuText(
+                  () => MainUiCopy.calendarPickDate,
+                ),
               ),
               const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'month',
                 height: 38,
-                child: AppSecondaryMenuText(MainUiCopy.calendarViewMonth),
+                child: _LocaleAwareSecondaryMenuText(
+                  () => MainUiCopy.calendarViewMonth,
+                ),
               ),
               PopupMenuItem(
                 value: 'week',
                 height: 38,
-                child: AppSecondaryMenuText(MainUiCopy.calendarViewWeek),
+                child: _LocaleAwareSecondaryMenuText(
+                  () => MainUiCopy.calendarViewWeek,
+                ),
               ),
               PopupMenuItem(
                 value: 'day',
                 height: 38,
-                child: AppSecondaryMenuText(MainUiCopy.calendarViewDay),
+                child: _LocaleAwareSecondaryMenuText(
+                  () => MainUiCopy.calendarViewDay,
+                ),
               ),
               PopupMenuItem(
                 value: 'three_day',
                 height: 38,
-                child: AppSecondaryMenuText(MainUiCopy.calendarViewThreeDay),
+                child: _LocaleAwareSecondaryMenuText(
+                  () => MainUiCopy.calendarViewThreeDay,
+                ),
               ),
               PopupMenuItem(
                 value: 'year',
                 height: 38,
-                child: AppSecondaryMenuText(MainUiCopy.calendarViewYear),
+                child: _LocaleAwareSecondaryMenuText(
+                  () => MainUiCopy.calendarViewYear,
+                ),
               ),
             ],
           ),
@@ -895,8 +860,8 @@ class _CalendarScreenState extends State<CalendarScreen>
                 Tab(height: 34, text: s.calendarTabMonth),
                 Tab(height: 34, text: s.calendarTabWeek),
                 Tab(height: 34, text: s.calendarTabDay),
-                const Tab(height: 34, text: '三日'),
-                const Tab(height: 34, text: '年'),
+                Tab(height: 34, text: CalendarUiCopy.tabThreeDay),
+                Tab(height: 34, text: CalendarUiCopy.tabYear),
               ],
               labelStyle: appSecondaryMenuItemTextStyle(context),
               unselectedLabelStyle: appSecondaryMenuItemTextStyle(context),
@@ -1060,6 +1025,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        tooltip: CalendarUiCopy.quickAddTooltip,
         onPressed: () => _showQuickAddMenu(context),
         child: const Icon(Icons.add),
       ),
@@ -1070,12 +1036,11 @@ class _CalendarScreenState extends State<CalendarScreen>
     final options = <_CalendarProjectOption>[];
     for (final todo in todos) {
       final trimmedName = todo.listGroupName?.trim();
-      final name = trimmedName == null || trimmedName.isEmpty
-          ? '未分组'
-          : trimmedName;
+      final hasGroupName = trimmedName != null && trimmedName.isNotEmpty;
       final key = todo.listGroupId?.isNotEmpty == true
           ? todo.listGroupId!
-          : (trimmedName == null || trimmedName.isEmpty ? '' : trimmedName);
+          : (hasGroupName ? trimmedName : '');
+      final name = hasGroupName ? trimmedName : '';
       final index = options.indexWhere((option) => option.key == key);
       if (index == -1) {
         options.add(_CalendarProjectOption(key: key, name: name, count: 1));
@@ -1083,7 +1048,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         final current = options[index];
         options[index] = _CalendarProjectOption(
           key: current.key,
-          name: current.name,
+          name: current.name.isNotEmpty ? current.name : name,
           count: current.count + 1,
         );
       }
@@ -1091,7 +1056,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     options.sort((a, b) {
       if (a.key.isEmpty) return 1;
       if (b.key.isEmpty) return -1;
-      return a.name.compareTo(b.name);
+      return a.displayName.compareTo(b.displayName);
     });
     return options;
   }
@@ -1150,9 +1115,10 @@ class _CalendarScreenState extends State<CalendarScreen>
       options.add(
         _CalendarWorkspaceOption(
           id: entry.key,
-          name: workspace?.name ?? '共享空间',
+          name: workspace?.name ?? '',
           count: entry.value,
           isPrivate: false,
+          isFallbackShared: workspace == null || workspace.name.isEmpty,
         ),
       );
     }
@@ -1160,7 +1126,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       options.add(
         _CalendarWorkspaceOption(
           id: 'private',
-          name: '个人空间',
+          name: '',
           count: privateCount,
           isPrivate: true,
         ),
@@ -1172,7 +1138,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     options.sort((a, b) {
       if (a.isPrivate && !b.isPrivate) return 1;
       if (!a.isPrivate && b.isPrivate) return -1;
-      return a.name.compareTo(b.name);
+      return a.displayName.compareTo(b.displayName);
     });
     return options;
   }
@@ -1197,377 +1163,163 @@ class _CalendarScreenState extends State<CalendarScreen>
     }).toList();
   }
 
+  _CalendarOriginScope _createOriginScope() {
+    return _CalendarOriginScope(
+      accountGeneration: AccountLocalDataCleaner.accountDataGeneration,
+      selectedDay: _selectedDay,
+      activeWorkspaceId: _activeWorkspaceId,
+      isCallerActive: () => mounted && !_callerLifecycleNotifier._isDisposed,
+      callerAvailabilityListenable: _callerLifecycleNotifier,
+    );
+  }
+
   Future<void> _showProjectDetail(
     BuildContext context,
     _CalendarProjectOption option,
     List<TodoItem> todos,
-  ) async {
-    final today = DateTime.now();
-    final todayKey = DateTime(today.year, today.month, today.day);
-    final completed = todos.where((todo) => todo.isCompleted).length;
-    final overdue = todos.where((todo) => todo.isOverdue).length;
-    final todayCount = todos.where((todo) {
-      final d = DateTime(todo.date.year, todo.date.month, todo.date.day);
-      return d == todayKey;
-    }).length;
-    await showAppModalSheet<void>(
+  ) {
+    final origin = _createOriginScope();
+    return showAppModalSheet<void>(
       context: context,
-      builder: (_) => AppModalSheet(
-        title: '项目详情',
-        subtitle: option.name,
-        maxWidth: 860,
-        scrollable: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final sheetHeight = (MediaQuery.sizeOf(context).height * 0.68)
-                .clamp(360.0, 680.0);
-            return SizedBox(
-              height: sheetHeight,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final itemWidth = constraints.maxWidth >= 640
-                          ? (constraints.maxWidth - 36) / 4
-                          : (constraints.maxWidth - 12) / 2;
-                      return Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          SizedBox(
-                            width: itemWidth,
-                            child: _ProjectStat(
-                              label: '总数',
-                              value: '${todos.length}',
-                            ),
-                          ),
-                          SizedBox(
-                            width: itemWidth,
-                            child: _ProjectStat(
-                              label: '完成',
-                              value: '$completed',
-                            ),
-                          ),
-                          SizedBox(
-                            width: itemWidth,
-                            child: _ProjectStat(label: '逾期', value: '$overdue'),
-                          ),
-                          SizedBox(
-                            width: itemWidth,
-                            child: _ProjectStat(
-                              label: '今日',
-                              value: '$todayCount',
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: todos.isEmpty
-                        ? const Center(child: Text('这个项目暂无任务'))
-                        : Scrollbar(
-                            child: ListView.separated(
-                              key: const ValueKey(
-                                'calendar_project_detail_scroll_region',
-                              ),
-                              primary: false,
-                              padding: EdgeInsets.zero,
-                              itemCount: todos.length,
-                              separatorBuilder: (_, _) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final todo = todos[index];
-                                final visual =
-                                    CompletionVisibilityPolicy.visualState(
-                                      todo,
-                                    );
-                                final isCompleted =
-                                    visual == TodoVisualState.completed;
-                                final isOverdue =
-                                    visual == TodoVisualState.overdue;
-                                final statusColor = isCompleted
-                                    ? Theme.of(context).colorScheme.tertiary
-                                    : isOverdue
-                                    ? Theme.of(context).colorScheme.error
-                                    : null;
-                                return ListTile(
-                                  dense: true,
-                                  visualDensity: VisualDensity.compact,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: Icon(
-                                    isCompleted
-                                        ? Icons.check_circle
-                                        : isOverdue
-                                        ? Icons.priority_high_rounded
-                                        : Icons.radio_button_unchecked,
-                                    size: 18,
-                                    color: statusColor,
-                                  ),
-                                  title: Text(
-                                    todo.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: isCompleted
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant
-                                          : isOverdue
-                                          ? Theme.of(context).colorScheme.error
-                                          : null,
-                                      decoration: isCompleted
-                                          ? TextDecoration.lineThrough
-                                          : null,
-                                    ),
-                                  ),
-                                  subtitle: Wrap(
-                                    spacing: 6,
-                                    runSpacing: 4,
-                                    crossAxisAlignment:
-                                        WrapCrossAlignment.center,
-                                    children: [
-                                      Text(
-                                        '${todo.date.month}/${todo.date.day}${todo.priority != TodoPriority.none ? ' · ${todo.priority.label}' : ''}',
-                                        style: const TextStyle(fontSize: 11),
-                                      ),
-                                      if (statusColor != null)
-                                        Text(
-                                          isCompleted ? '已完成' : '逾期',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: statusColor,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                  ),
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.tonalIcon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const BrandRouteSurface(child: TodoScreen()),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('打开待办'),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
+      builder: (_) =>
+          _ProjectDetailSheet(origin: origin, option: option, todos: todos),
     );
   }
 
   void _showQuickAddMenu(BuildContext context) {
     final routeContext = context;
+    final origin = _createOriginScope();
     showAppModalSheet<void>(
       context: context,
-      builder: (sheetContext) => AppModalSheet(
-        title: '新建',
-        subtitle: '选择要添加到日历的内容',
-        maxWidth: 520,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.auto_awesome_outlined),
-              title: const Text('AI 创建日程'),
-              subtitle: const Text('识别自然语言，确认后写入日程或待办'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                if (!mounted) return;
-                Navigator.push(
-                  routeContext,
-                  MaterialPageRoute(
-                    builder: (_) => BrandRouteSurface(
-                      child: AiScheduleScreen(initialDate: _selectedDay),
-                    ),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.event_note_outlined),
-              title: const Text('新建日程'),
-              subtitle: const Text('支持全天和多日安排'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                if (!mounted) return;
-                showLocalCalendarEventEditor(
-                  routeContext,
-                  initialDate: _selectedDay,
-                  workspaceId: _activeWorkspaceId,
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.check_circle_outline),
-              title: const Text('新建待办'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                if (!mounted) return;
-                _showQuickAddTodo();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.timelapse_outlined),
-              title: const Text('记录一段时间'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                if (!mounted) return;
-                _showQuickAddTimeEntry();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showQuickAddTimeEntry() async {
-    final titleCtrl = TextEditingController();
-    final noteCtrl = TextEditingController();
-    final durationCtrl = TextEditingController(text: '30');
-    var category = TimeEntryCategory.work;
-    final now = DateTime.now();
-    var startTime = TimeOfDay.fromDateTime(
-      _isSameDate(_selectedDay, now)
-          ? now
-          : DateTime(
-              _selectedDay.year,
-              _selectedDay.month,
-              _selectedDay.day,
-              9,
-            ),
-    );
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AppDialog(
-          title: Text('记录时间 - ${_selectedDay.month}月${_selectedDay.day}日'),
-          content: AppSecondaryControlTheme(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '事项',
-                      prefixIcon: Icon(Icons.title, size: 20),
-                    ),
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 12),
-                  AppDropdownField<TimeEntryCategory>(
-                    initialValue: category,
-                    labelText: '分类',
-                    prefixIcon: const Icon(Icons.label_outline, size: 20),
-                    items: [
-                      for (final c in TimeEntryCategory.values)
-                        DropdownMenuItem(value: c, child: Text(c.label)),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) setDialogState(() => category = v);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.schedule),
-                    title: const Text('开始时间'),
-                    subtitle: Text(AppTimePicker.format(startTime)),
-                    onTap: () async {
-                      final picked = await AppTimePicker.show(
-                        ctx,
-                        initialTime: startTime,
-                        title: '开始时间',
-                        minuteStep: 5,
-                      );
-                      if (picked != null) {
-                        setDialogState(() => startTime = picked);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: durationCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '时长（分钟）',
-                      prefixIcon: Icon(Icons.timelapse, size: 20),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: noteCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '备注',
-                      prefixIcon: Icon(Icons.notes_outlined, size: 20),
-                    ),
-                    maxLines: 2,
-                  ),
-                ],
+      builder: (_) => _QuickAddMenuSheet(
+        origin: origin,
+        onAiSchedule: () {
+          if (!origin.isValid) return;
+          Navigator.push(
+            routeContext,
+            MaterialPageRoute(
+              builder: (_) => BrandRouteSurface(
+                child: AiScheduleScreen(initialDate: origin.selectedDay),
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('记录'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (ok != true) return;
-    final title = titleCtrl.text.trim();
-    final minutes = int.tryParse(durationCtrl.text.trim()) ?? 0;
-    if (title.isEmpty || minutes <= 0) return;
-    if (!mounted) return;
-    final start = DateTime(
-      _selectedDay.year,
-      _selectedDay.month,
-      _selectedDay.day,
-      startTime.hour,
-      startTime.minute,
-    );
-    final end = start.add(Duration(minutes: minutes));
-    await context.read<TimeAuditProvider>().add(
-      TimeEntry(
-        title: title,
-        startAt: start,
-        endAt: end,
-        category: category,
-        source: TimeEntrySource.manual,
-        note: noteCtrl.text.trim(),
+          );
+        },
+        onNewEvent: () {
+          if (!origin.isValid) return;
+          showLocalCalendarEventEditor(
+            routeContext,
+            initialDate: origin.selectedDay,
+            workspaceId: origin.activeWorkspaceId,
+          );
+        },
+        onNewTodo: () {
+          if (!origin.isValid) return;
+          _showQuickAddTodo(origin: origin);
+        },
+        onQuickAddTimeEntry: () {
+          if (!origin.isValid) return;
+          _showQuickAddTimeEntry(origin: origin);
+        },
       ),
     );
   }
 
-  bool _isSameDate(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
+  Future<void> _showQuickAddTimeEntry({_CalendarOriginScope? origin}) async {
+    final effectiveOrigin = origin ?? _createOriginScope();
+    if (!effectiveOrigin.isValid) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _QuickAddTimeEntryDialog(origin: effectiveOrigin),
+    );
+  }
+}
+
+class _CallerLifecycleNotifier implements Listenable {
+  final List<VoidCallback> _listeners = [];
+  bool _isDisposed = false;
+
+  void notifyCallerDisposed() {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    final copy = List<VoidCallback>.from(_listeners);
+    for (final listener in copy) {
+      listener();
+    }
+  }
+
+  @override
+  void addListener(VoidCallback listener) {
+    if (_isDisposed) {
+      listener();
+      return;
+    }
+    _listeners.add(listener);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    _listeners.remove(listener);
+  }
+}
+
+class _CalendarOriginScope {
+  final int accountGeneration;
+  final DateTime selectedDay;
+  final String? activeWorkspaceId;
+  final bool Function() isCallerActive;
+  final Listenable? callerAvailabilityListenable;
+
+  const _CalendarOriginScope({
+    required this.accountGeneration,
+    required this.selectedDay,
+    required this.activeWorkspaceId,
+    required this.isCallerActive,
+    this.callerAvailabilityListenable,
+  });
+
+  bool get isValid =>
+      isCallerActive() &&
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(accountGeneration);
+}
+
+class _CalendarFeedbackErrorText extends StatelessWidget {
+  const _CalendarFeedbackErrorText();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) => Text(CalendarUiCopy.saveFailed),
+    );
+  }
+}
+
+class _LocaleAwareText extends StatelessWidget {
+  final String Function() textBuilder;
+
+  const _LocaleAwareText(this.textBuilder);
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) => Text(textBuilder()),
+    );
+  }
+}
+
+class _LocaleAwareSecondaryMenuText extends StatelessWidget {
+  final String Function() textBuilder;
+
+  const _LocaleAwareSecondaryMenuText(this.textBuilder);
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) => AppSecondaryMenuText(textBuilder()),
+    );
+  }
 }
 
 class _CalendarProjectOption {
@@ -1580,6 +1332,9 @@ class _CalendarProjectOption {
     required this.name,
     required this.count,
   });
+
+  String get displayName =>
+      key.isEmpty || name.isEmpty ? CalendarUiCopy.ungroupedProject : name;
 }
 
 class _CalendarWorkspaceOption {
@@ -1587,13 +1342,768 @@ class _CalendarWorkspaceOption {
   final String name;
   final int count;
   final bool isPrivate;
+  final bool isFallbackShared;
 
   const _CalendarWorkspaceOption({
     required this.id,
     required this.name,
     required this.count,
     required this.isPrivate,
+    this.isFallbackShared = false,
   });
+
+  String get displayName {
+    if (isPrivate) return CalendarUiCopy.personalWorkspace;
+    if (isFallbackShared || name.isEmpty) return CalendarUiCopy.sharedWorkspace;
+    return name;
+  }
+}
+
+class _QuickAddTodoDialog extends StatefulWidget {
+  final _CalendarOriginScope origin;
+
+  const _QuickAddTodoDialog({required this.origin});
+
+  @override
+  State<_QuickAddTodoDialog> createState() => _QuickAddTodoDialogState();
+}
+
+class _QuickAddTodoDialogState extends State<_QuickAddTodoDialog> {
+  late final TextEditingController _titleController;
+  late final FocusNode _focusNode;
+  bool _submitting = false;
+  bool _saved = false;
+  ModalRoute<dynamic>? _owningRoute;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _owningRoute ??= ModalRoute.of(context);
+  }
+
+  void _dismissOwningDialog() {
+    final route = _owningRoute ?? ModalRoute.of(context);
+    if (route != null && route.isActive) {
+      if (route.isCurrent) {
+        route.navigator?.pop();
+      } else {
+        route.navigator?.removeRoute(route);
+      }
+    }
+  }
+
+  void _showFeedbackError(BuildContext context) {
+    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null || !messenger.mounted) return;
+    messenger.showSnackBar(
+      const SnackBar(content: _CalendarFeedbackErrorText()),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController();
+    _focusNode = FocusNode();
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    _titleController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_submitting || _saved) return;
+    if (!mounted || !widget.origin.isValid) {
+      _dismissOwningDialog();
+      return;
+    }
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
+    setState(() => _submitting = true);
+    try {
+      await context.read<TodoProvider>().addTodo(
+        TodoItem(
+          title: title,
+          date: widget.origin.selectedDay,
+          workspaceId: widget.origin.activeWorkspaceId ?? 'private',
+        ),
+        waitForReminderSync: false,
+      );
+      if (!mounted) return;
+      if (!widget.origin.isValid) {
+        _saved = true;
+        _dismissOwningDialog();
+        return;
+      }
+      _saved = true;
+      _dismissOwningDialog();
+    } catch (e) {
+      if (!mounted) return;
+      if (!widget.origin.isValid) {
+        _dismissOwningDialog();
+        return;
+      }
+      setState(() => _submitting = false);
+      _showFeedbackError(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<ThemeProvider>().brand.strings;
+    return AppDialog(
+      title: Text(
+        CalendarUiCopy.quickAddTodoDialogTitle(
+          s.calendarQuickAddTitle,
+          widget.origin.selectedDay,
+        ),
+      ),
+      content: AppSecondaryControlTheme(
+        child: TextField(
+          controller: _titleController,
+          focusNode: _focusNode,
+          enabled: !_submitting && !_saved,
+          decoration: InputDecoration(labelText: CalendarUiCopy.todoTitleLabel),
+          autofocus: true,
+          onSubmitted: (_submitting || _saved) ? null : (_) => _submit(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: (_submitting || _saved) ? null : _dismissOwningDialog,
+          child: Text(I18n.tr('action.cancel')),
+        ),
+        FilledButton(
+          onPressed: (_submitting || _saved) ? null : _submit,
+          child: _submitting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(I18n.tr('action.add')),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickAddTimeEntryDialog extends StatefulWidget {
+  final _CalendarOriginScope origin;
+
+  const _QuickAddTimeEntryDialog({required this.origin});
+
+  @override
+  State<_QuickAddTimeEntryDialog> createState() =>
+      _QuickAddTimeEntryDialogState();
+}
+
+class _QuickAddTimeEntryDialogState extends State<_QuickAddTimeEntryDialog> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _noteController;
+  late final TextEditingController _durationController;
+  late TimeOfDay _startTime;
+  TimeEntryCategory _category = TimeEntryCategory.work;
+  bool _submitting = false;
+  bool _saved = false;
+  ModalRoute<dynamic>? _owningRoute;
+  bool _originDismissalScheduled = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _owningRoute ??= ModalRoute.of(context);
+  }
+
+  void _dismissOwningDialog() {
+    final route = _owningRoute ?? ModalRoute.of(context);
+    if (route != null && route.isActive) {
+      if (route.isCurrent) {
+        route.navigator?.pop();
+      } else {
+        route.navigator?.removeRoute(route);
+      }
+    }
+  }
+
+  void _showFeedbackError(BuildContext context) {
+    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null || !messenger.mounted) return;
+    messenger.showSnackBar(
+      const SnackBar(content: _CalendarFeedbackErrorText()),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController();
+    _noteController = TextEditingController();
+    _durationController = TextEditingController(text: '30');
+    final now = DateTime.now();
+    _startTime = TimeOfDay.fromDateTime(
+      _isSameDay(widget.origin.selectedDay, now)
+          ? now
+          : DateTime(
+              widget.origin.selectedDay.year,
+              widget.origin.selectedDay.month,
+              widget.origin.selectedDay.day,
+              9,
+            ),
+    );
+    I18n.localeListenable.addListener(_onLocaleChanged);
+    AccountLocalDataCleaner.accountDataGenerationListenable.addListener(
+      _onOriginChanged,
+    );
+    widget.origin.callerAvailabilityListenable?.addListener(_onOriginChanged);
+  }
+
+  void _onOriginChanged() {
+    if (!mounted || widget.origin.isValid || _originDismissalScheduled) return;
+    _originDismissalScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _originDismissalScheduled = false;
+      if (!mounted || widget.origin.isValid) return;
+      _dismissOwningDialog();
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
+      _onOriginChanged,
+    );
+    widget.origin.callerAvailabilityListenable?.removeListener(
+      _onOriginChanged,
+    );
+    _titleController.dispose();
+    _noteController.dispose();
+    _durationController.dispose();
+    super.dispose();
+  }
+
+  static bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  Future<void> _submit() async {
+    if (_submitting || _saved) return;
+    if (!mounted || !widget.origin.isValid) {
+      _dismissOwningDialog();
+      return;
+    }
+    final title = _titleController.text.trim();
+    final minutes = int.tryParse(_durationController.text.trim()) ?? 0;
+    if (title.isEmpty || minutes <= 0) return;
+    setState(() => _submitting = true);
+    try {
+      final start = DateTime(
+        widget.origin.selectedDay.year,
+        widget.origin.selectedDay.month,
+        widget.origin.selectedDay.day,
+        _startTime.hour,
+        _startTime.minute,
+      );
+      final end = start.add(Duration(minutes: minutes));
+      await context.read<TimeAuditProvider>().add(
+        TimeEntry(
+          title: title,
+          startAt: start,
+          endAt: end,
+          category: _category,
+          source: TimeEntrySource.manual,
+          note: _noteController.text.trim(),
+        ),
+      );
+      if (!mounted) return;
+      if (!widget.origin.isValid) {
+        _saved = true;
+        _dismissOwningDialog();
+        return;
+      }
+      _saved = true;
+      _dismissOwningDialog();
+    } catch (e) {
+      if (!mounted) return;
+      if (!widget.origin.isValid) {
+        _dismissOwningDialog();
+        return;
+      }
+      setState(() => _submitting = false);
+      _showFeedbackError(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialog(
+      title: Text(
+        CalendarUiCopy.quickAddTimeEntryDialogTitle(widget.origin.selectedDay),
+      ),
+      content: AppSecondaryControlTheme(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _titleController,
+                enabled: !_submitting && !_saved,
+                decoration: InputDecoration(
+                  labelText: CalendarUiCopy.timeEntryTitleLabel,
+                  prefixIcon: const Icon(Icons.title, size: 20),
+                ),
+                autofocus: true,
+              ),
+              const SizedBox(height: 12),
+              AppDropdownField<TimeEntryCategory>(
+                initialValue: _category,
+                labelText: CalendarUiCopy.timeEntryCategoryLabel,
+                prefixIcon: const Icon(Icons.label_outline, size: 20),
+                enabled: !_submitting && !_saved,
+                isInteractionAllowed: () {
+                  if (!mounted) return false;
+                  if (!widget.origin.isValid) {
+                    _dismissOwningDialog();
+                    return false;
+                  }
+                  return !_submitting && !_saved;
+                },
+                items: [
+                  for (final c in TimeEntryCategory.values)
+                    DropdownMenuItem(
+                      value: c,
+                      child: _LocaleAwareText(() => c.label),
+                    ),
+                ],
+                onChanged: (v) {
+                  if (!mounted ||
+                      !widget.origin.isValid ||
+                      _submitting ||
+                      _saved) {
+                    return;
+                  }
+                  if (v != null) setState(() => _category = v);
+                },
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.schedule),
+                title: Text(CalendarUiCopy.timeEntryStartTimeLabel),
+                subtitle: Text(AppTimePicker.format(_startTime)),
+                enabled: !_submitting && !_saved,
+                onTap: (_submitting || _saved)
+                    ? null
+                    : () async {
+                        if (!mounted || !widget.origin.isValid) {
+                          _dismissOwningDialog();
+                          return;
+                        }
+                        final picked = await AppTimePicker.show(
+                          context,
+                          initialTime: _startTime,
+                          titleKey: 'calendar.content.time_picker_start_time',
+                          minuteStep: 5,
+                        );
+                        if (!mounted || !widget.origin.isValid) return;
+                        if (picked != null) {
+                          setState(() => _startTime = picked);
+                        }
+                      },
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _durationController,
+                enabled: !_submitting && !_saved,
+                decoration: InputDecoration(
+                  labelText: CalendarUiCopy.timeEntryDurationLabel,
+                  prefixIcon: const Icon(Icons.timelapse, size: 20),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _noteController,
+                enabled: !_submitting && !_saved,
+                decoration: InputDecoration(
+                  labelText: CalendarUiCopy.timeEntryNoteLabel,
+                  prefixIcon: const Icon(Icons.notes_outlined, size: 20),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: (_submitting || _saved) ? null : _dismissOwningDialog,
+          child: Text(I18n.tr('action.cancel')),
+        ),
+        FilledButton(
+          onPressed: (_submitting || _saved) ? null : _submit,
+          child: _submitting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(CalendarUiCopy.timeEntrySubmitButton),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickAddMenuSheet extends StatefulWidget {
+  final _CalendarOriginScope origin;
+  final VoidCallback onAiSchedule;
+  final VoidCallback onNewEvent;
+  final VoidCallback onNewTodo;
+  final VoidCallback onQuickAddTimeEntry;
+
+  const _QuickAddMenuSheet({
+    required this.origin,
+    required this.onAiSchedule,
+    required this.onNewEvent,
+    required this.onNewTodo,
+    required this.onQuickAddTimeEntry,
+  });
+
+  @override
+  State<_QuickAddMenuSheet> createState() => _QuickAddMenuSheetState();
+}
+
+class _QuickAddMenuSheetState extends State<_QuickAddMenuSheet> {
+  ModalRoute<dynamic>? _owningRoute;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _owningRoute ??= ModalRoute.of(context);
+  }
+
+  void _dismissOwningSheet() {
+    final route = _owningRoute ?? ModalRoute.of(context);
+    if (route != null && route.isActive) {
+      if (route.isCurrent) {
+        route.navigator?.pop();
+      } else {
+        route.navigator?.removeRoute(route);
+      }
+    }
+  }
+
+  void _handleAction(VoidCallback callback) {
+    if (!mounted || !widget.origin.isValid) {
+      _dismissOwningSheet();
+      return;
+    }
+    _dismissOwningSheet();
+    callback();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppModalSheet(
+      title: CalendarUiCopy.quickAddMenuTitle,
+      subtitle: CalendarUiCopy.quickAddMenuSubtitle,
+      maxWidth: 520,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.auto_awesome_outlined),
+            title: Text(CalendarUiCopy.quickAddAiScheduleTitle),
+            subtitle: Text(CalendarUiCopy.quickAddAiScheduleSubtitle),
+            onTap: () => _handleAction(widget.onAiSchedule),
+          ),
+          ListTile(
+            leading: const Icon(Icons.event_note_outlined),
+            title: Text(CalendarUiCopy.quickAddNewEventTitle),
+            subtitle: Text(CalendarUiCopy.quickAddNewEventSubtitle),
+            onTap: () => _handleAction(widget.onNewEvent),
+          ),
+          ListTile(
+            leading: const Icon(Icons.check_circle_outline),
+            title: Text(CalendarUiCopy.quickAddNewTodoTitle),
+            onTap: () => _handleAction(widget.onNewTodo),
+          ),
+          ListTile(
+            leading: const Icon(Icons.timelapse_outlined),
+            title: Text(CalendarUiCopy.quickAddTimeEntryTitle),
+            onTap: () => _handleAction(widget.onQuickAddTimeEntry),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProjectDetailSheet extends StatefulWidget {
+  final _CalendarOriginScope origin;
+  final _CalendarProjectOption option;
+  final List<TodoItem> todos;
+
+  const _ProjectDetailSheet({
+    required this.origin,
+    required this.option,
+    required this.todos,
+  });
+
+  @override
+  State<_ProjectDetailSheet> createState() => _ProjectDetailSheetState();
+}
+
+class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
+  ModalRoute<dynamic>? _owningRoute;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _owningRoute ??= ModalRoute.of(context);
+  }
+
+  void _dismissOwningSheet() {
+    final route = _owningRoute ?? ModalRoute.of(context);
+    if (route != null && route.isActive) {
+      if (route.isCurrent) {
+        route.navigator?.pop();
+      } else {
+        route.navigator?.removeRoute(route);
+      }
+    }
+  }
+
+  void _openTodoScreen() {
+    if (!mounted || !widget.origin.isValid) {
+      _dismissOwningSheet();
+      return;
+    }
+    _dismissOwningSheet();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const BrandRouteSurface(child: TodoScreen()),
+      ),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final todayKey = DateTime(today.year, today.month, today.day);
+    final completed = widget.todos.where((todo) => todo.isCompleted).length;
+    final overdue = widget.todos.where((todo) => todo.isOverdue).length;
+    final todayCount = widget.todos.where((todo) {
+      final d = DateTime(todo.date.year, todo.date.month, todo.date.day);
+      return d == todayKey;
+    }).length;
+
+    return AppModalSheet(
+      title: CalendarUiCopy.projectDetailSheetTitle,
+      subtitle: widget.option.displayName,
+      maxWidth: 860,
+      scrollable: false,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final sheetHeight = (MediaQuery.sizeOf(context).height * 0.68).clamp(
+            360.0,
+            680.0,
+          );
+          return SizedBox(
+            height: sheetHeight,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final itemWidth = constraints.maxWidth >= 640
+                        ? (constraints.maxWidth - 36) / 4
+                        : (constraints.maxWidth - 12) / 2;
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        SizedBox(
+                          width: itemWidth,
+                          child: _ProjectStat(
+                            label: CalendarUiCopy.projectStatTotal,
+                            value: '${widget.todos.length}',
+                          ),
+                        ),
+                        SizedBox(
+                          width: itemWidth,
+                          child: _ProjectStat(
+                            label: CalendarUiCopy.projectStatCompleted,
+                            value: '$completed',
+                          ),
+                        ),
+                        SizedBox(
+                          width: itemWidth,
+                          child: _ProjectStat(
+                            label: CalendarUiCopy.projectStatOverdue,
+                            value: '$overdue',
+                          ),
+                        ),
+                        SizedBox(
+                          width: itemWidth,
+                          child: _ProjectStat(
+                            label: CalendarUiCopy.projectStatToday,
+                            value: '$todayCount',
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: widget.todos.isEmpty
+                      ? Center(child: Text(CalendarUiCopy.projectEmptyTasks))
+                      : Scrollbar(
+                          child: ListView.separated(
+                            key: const ValueKey(
+                              'calendar_project_detail_scroll_region',
+                            ),
+                            primary: false,
+                            padding: EdgeInsets.zero,
+                            itemCount: widget.todos.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final todo = widget.todos[index];
+                              final visual =
+                                  CompletionVisibilityPolicy.visualState(todo);
+                              final isCompleted =
+                                  visual == TodoVisualState.completed;
+                              final isOverdue =
+                                  visual == TodoVisualState.overdue;
+                              final statusColor = isCompleted
+                                  ? Theme.of(context).colorScheme.tertiary
+                                  : isOverdue
+                                  ? Theme.of(context).colorScheme.error
+                                  : null;
+                              return ListTile(
+                                dense: true,
+                                visualDensity: VisualDensity.compact,
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(
+                                  isCompleted
+                                      ? Icons.check_circle
+                                      : isOverdue
+                                      ? Icons.priority_high_rounded
+                                      : Icons.radio_button_unchecked,
+                                  size: 18,
+                                  color: statusColor,
+                                ),
+                                title: Text(
+                                  todo.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: isCompleted
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant
+                                        : isOverdue
+                                        ? Theme.of(context).colorScheme.error
+                                        : null,
+                                    decoration: isCompleted
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  ),
+                                ),
+                                subtitle: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    Text(
+                                      '${todo.date.month}/${todo.date.day}${todo.priority != TodoPriority.none ? ' · ${todo.priority.label}' : ''}',
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                    if (statusColor != null)
+                                      Text(
+                                        isCompleted
+                                            ? MainUiCopy.calendarStatusCompleted
+                                            : MainUiCopy.calendarStatusOverdue,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: statusColor,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.tonalIcon(
+                    onPressed: _openTodoScreen,
+                    icon: const Icon(Icons.open_in_new),
+                    label: Text(CalendarUiCopy.openTodoScreenButton),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _ProjectStat extends StatelessWidget {
@@ -1978,7 +2488,7 @@ class _ThreeDayLane extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${date.month}月${date.day}日 周${_weekdayLabel(date.weekday)}',
+                  CalendarUiCopy.threeDayLaneHeader(date),
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 13,
@@ -1986,8 +2496,9 @@ class _ThreeDayLane extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: 4),
               Text(
-                '${events.length} 项',
+                CalendarUiCopy.laneItemCount(events.length),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ],
@@ -2012,19 +2523,6 @@ class _ThreeDayLane extends StatelessWidget {
       ],
     );
   }
-}
-
-String _weekdayLabel(int weekday) {
-  return switch (weekday) {
-    DateTime.monday => '一',
-    DateTime.tuesday => '二',
-    DateTime.wednesday => '三',
-    DateTime.thursday => '四',
-    DateTime.friday => '五',
-    DateTime.saturday => '六',
-    DateTime.sunday => '日',
-    _ => '',
-  };
 }
 
 class _CalendarYearOverview extends StatelessWidget {
@@ -2091,7 +2589,7 @@ class _CalendarYearOverview extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '$month 月',
+                  CalendarUiCopy.yearMonthTitle(month),
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.normal,
@@ -2100,7 +2598,9 @@ class _CalendarYearOverview extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  eventCount == 0 ? '本月暂无事项' : '$eventCount 个事项',
+                  CalendarUiCopy.yearMonthEventCount(eventCount),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
                     color: isSelected

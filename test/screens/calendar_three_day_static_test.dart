@@ -8,12 +8,15 @@ void main() {
 
     expect(source, contains('TabController(length: 5'));
     expect(source, contains("value: 'three_day'"));
-    expect(source, contains("AppSecondaryMenuText('三日视图')"));
-    expect(source, contains("const Tab(height: 34, text: '三日')"));
+    expect(source, contains('() => MainUiCopy.calendarViewThreeDay'));
+    expect(
+      source,
+      contains('Tab(height: 34, text: CalendarUiCopy.tabThreeDay)'),
+    );
     expect(source, contains('_previousThreeDays'));
     expect(source, contains('_nextThreeDays'));
-    expect(source, contains("3 => '前三天'"));
-    expect(source, contains("3 => '后三天'"));
+    expect(source, contains('3 => MainUiCopy.calendarPrevThreeDays'));
+    expect(source, contains('3 => MainUiCopy.calendarNextThreeDays'));
     expect(source, contains('threeDayLabel'));
     expect(source, contains("const ValueKey('calendar_three_day_view')"));
   });

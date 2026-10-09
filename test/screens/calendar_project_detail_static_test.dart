@@ -6,20 +6,23 @@ void main() {
   test('calendar project detail is a separate project action', () {
     final source = File('lib/screens/calendar_screen.dart').readAsStringSync();
 
-    expect(source, contains("label: const Text('项目详情')"));
+    expect(source, contains('label: Text(CalendarUiCopy.projectDetailAction)'));
     expect(source, contains('Future<void> _showProjectDetail'));
     expect(source, contains('class _ProjectStat'));
-    expect(source, contains("label: const Text('打开待办')"));
+    expect(
+      source,
+      contains('label: Text(CalendarUiCopy.openTodoScreenButton)'),
+    );
     expect(source, contains('const BrandRouteSurface(child: TodoScreen())'));
 
     expect(source, isNot(contains("title: '\${option.name} · 项目详情'")));
-    expect(source, contains("title: '项目详情'"));
-    expect(source, contains('subtitle: option.name'));
+    expect(source, contains('title: CalendarUiCopy.projectDetailSheetTitle'));
+    expect(source, contains('subtitle: widget.option.displayName'));
     expect(source, contains('scrollable: false'));
     expect(source, contains("'calendar_project_detail_scroll_region'"));
     expect(source, contains('ListView.separated('));
     expect(source, contains('primary: false'));
-    expect(source, contains('itemCount: todos.length'));
+    expect(source, contains('itemCount: widget.todos.length'));
     expect(source, isNot(contains('.take(8)')));
   });
 
@@ -95,7 +98,7 @@ void main() {
     expect(source, contains('bool _monthGridShowsLunar('));
     expect(source, contains('maxWidth: 860'));
     expect(source, contains('MediaQuery.sizeOf(context).height * 0.68'));
-    expect(source, contains('.clamp(360.0, 680.0)'));
+    expect(source, matches(RegExp(r'\.clamp\(\s*360\.0,\s*680\.0,?\s*\)')));
     final agenda = File(
       'lib/widgets/calendar_day_agenda.dart',
     ).readAsStringSync();
@@ -122,7 +125,14 @@ void main() {
     expect(source, contains('TodoVisualState.overdue'));
     expect(source, contains('Icons.priority_high_rounded'));
     expect(source, contains('TextDecoration.lineThrough'));
-    expect(source, contains("isCompleted ? '已完成' : '逾期'"));
+    expect(
+      source,
+      matches(
+        RegExp(
+          r'isCompleted\s*\?\s*MainUiCopy\.calendarStatusCompleted\s*:\s*MainUiCopy\.calendarStatusOverdue',
+        ),
+      ),
+    );
   });
 
   test('calendar exposes shared workspace filters', () {
@@ -139,7 +149,7 @@ void main() {
     expect(aggregator, contains('workspaceId: t.workspaceId'));
     expect(provider, contains('String? workspaceId'));
     expect(provider, contains('bool _matchesWorkspace('));
-    expect(source, contains("label: const Text('全部空间')"));
+    expect(source, contains('label: Text(CalendarUiCopy.filterAllWorkspaces)'));
     expect(
       source,
       contains('List<_CalendarWorkspaceOption> _workspaceOptions('),
