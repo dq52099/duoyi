@@ -431,16 +431,20 @@ void main() {
       );
       expect(
         focusProvider,
-        contains(
-          'R.id.widget_focus_count_label,\n'
-          '                DuoyiWidgetCopy.focusMetricSessions(isZh)',
+        matches(
+          RegExp(
+            r'views\.setTextViewText\(\s*R\.id\.widget_focus_count_label,\s*'
+            r'DuoyiWidgetCopy\.focusMetricSessions\(isZh\)',
+          ),
         ),
       );
       expect(
         focusProvider,
-        contains(
-          'R.id.widget_focus_minutes_label,\n'
-          '                DuoyiWidgetCopy.focusMetricDuration(isZh)',
+        matches(
+          RegExp(
+            r'views\.setTextViewText\(\s*R\.id\.widget_focus_minutes_label,\s*'
+            r'DuoyiWidgetCopy\.focusMetricDuration\(isZh\)',
+          ),
         ),
       );
       expect(focusProvider, contains('DuoyiWidgetCopy.focusTimerCaption('));
@@ -1057,11 +1061,12 @@ void main() {
       );
       expect(
         providerSources['todo'],
-        contains(
-          'if (todoId.isBlank()) {\n'
-          '            views.setViewVisibility(doneViewId, View.GONE)\n'
-          '            views.setOnClickPendingIntent(\n'
-          '                itemViewId,',
+        matches(
+          RegExp(
+            r'if \(!frame\.fresh \|\| todoId\.isBlank\(\)\) \{\s*'
+            r'views\.setViewVisibility\(doneViewId, View\.GONE\)\s*'
+            r'views\.setOnClickPendingIntent\(\s*itemViewId,',
+          ),
         ),
       );
       expect(providerSources['todo'], contains('R.id.widget_todo_item_1'));
@@ -2285,11 +2290,23 @@ void main() {
         );
         expect(
           providerSource,
-          contains(
-            'DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)',
-          ),
+          contains('DuoyiWidgetSnapshot.renderWidget('),
           reason:
-              '${widget.title} provider should persist receiver style before first render.',
+              '${widget.title} provider must use the helper that initializes receiver style before capture.',
+        );
+        final snapshot = File(
+          'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetSnapshot.kt',
+        ).readAsStringSync();
+        expect(
+          snapshot,
+          contains(
+            'DuoyiWidgetDisplayMode.saveForWidgetIfMissing(backing, id, initialStyle)',
+          ),
+        );
+        expect(
+          snapshot.indexOf('saveForWidgetIfMissing('),
+          lessThan(snapshot.indexOf('DuoyiWidgetFrameAttempts.run(')),
+          reason: '${widget.title} style must be saved before frame capture.',
         );
         expect(compact, contains('android:minWidth="110dp"'));
         expect(compact, contains('android:minHeight="110dp"'));

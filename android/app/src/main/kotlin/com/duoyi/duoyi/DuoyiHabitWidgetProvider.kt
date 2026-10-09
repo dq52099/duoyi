@@ -30,127 +30,127 @@ open class DuoyiHabitWidgetProvider : DuoyiStyledWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        val prefs: SharedPreferences = DuoyiWidgetSnapshot.forDisplay(context, HomeWidgetPlugin.getData(context))
+        val backing = HomeWidgetPlugin.getData(context)
 
         appWidgetIds.forEach { id ->
-            DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)?.let { style ->
-                DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
-            }
-            val views = RemoteViews(context.packageName, R.layout.duoyi_habit_widget)
-            DuoyiWidgetTheme.applyContainer(
-                context = context,
-                views = views,
-                prefs = prefs,
-                rootId = R.id.widget_habit_root,
-                navId = R.id.widget_habit_bottom_nav,
-                appWidgetId = id,
-            )
-            DuoyiWidgetTheme.applyTextColors(
-                views,
-                prefs,
-                primaryIds = intArrayOf(
-                    R.id.widget_habit_title,
-                    R.id.widget_habit_percent,
-                    R.id.widget_habit_nav_habit,
-                ),
-                bodyIds = intArrayOf(
-                    R.id.widget_habit_summary,
-                    R.id.widget_habit_streak,
-                    R.id.widget_habit_hint,
-                ),
-                mutedIds = intArrayOf(
-                    R.id.widget_habit_subtitle,
-                    R.id.widget_habit_nav_todo,
-                    R.id.widget_habit_nav_calendar,
-                    R.id.widget_habit_nav_focus,
-                ),
-            )
-
-            DuoyiWidgetTheme.applyButtonSurfaces(views, prefs, secondaryIds = intArrayOf(R.id.widget_habit_hint))
-
-            val isZh = DuoyiWidgetCopy.isZh(prefs)
-            views.setTextViewText(
-                R.id.widget_habit_title,
-                DuoyiWidgetCopy.appTitle(prefs, isZh)
-            )
-            val noHabitsToday = prefs.getInt("habit_active_count", -1) == 0
-            views.setTextViewText(R.id.widget_habit_percent,
-                if (noHabitsToday) "—" else "${prefs.getInt("habit_percent", 0).coerceIn(0, 100)}%")
-            views.setTextViewText(R.id.widget_habit_subtitle, DuoyiWidgetCopy.habitSubtitle(isZh))
-            views.setTextViewText(
-                R.id.widget_habit_summary,
-                DuoyiWidgetCopy.habitSummary(prefs.getString("habit_summary", null), isZh)
-            )
-            views.setTextViewText(
-                R.id.widget_habit_streak,
-                DuoyiWidgetCopy.streakSummary(prefs.getString("streak_summary", null), isZh)
-            )
-            val habitQuickCheckId = prefs.getString("habit_quick_check_id", "") ?: ""
-            val habitQuickCheckLabel = DuoyiWidgetCopy.habitQuickCheckLabel(
-                prefs.getString("habit_quick_check_label", null),
-                isZh
-            )
-            views.setTextViewText(R.id.widget_habit_hint, habitQuickCheckLabel)
-            views.setContentDescription(R.id.widget_habit_hint, habitQuickCheckLabel)
-            views.setViewVisibility(
-                R.id.widget_habit_streak,
-                if (noHabitsToday) android.view.View.GONE
-                else DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
-            )
-            views.setViewVisibility(
-                R.id.widget_habit_bottom_nav,
-                DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
-            )
-            views.setViewVisibility(
-                R.id.widget_habit_hint,
-                android.view.View.VISIBLE
-            )
-
-            val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
-            val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
-            val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
-            val tabFocus = DuoyiWidgetCopy.navFocus(prefs, isZh)
-            views.setTextViewText(R.id.widget_habit_nav_todo, tabTodo)
-            views.setTextViewText(R.id.widget_habit_nav_habit, tabHabit)
-            views.setTextViewText(R.id.widget_habit_nav_calendar, tabCalendar)
-            views.setTextViewText(R.id.widget_habit_nav_focus, tabFocus)
-
-            val openHabit = HomeWidgetLaunchIntent.getActivity(
-                context, MainActivity::class.java, Uri.parse("duoyi://tab/habit")
-            )
-            val openTodo = HomeWidgetLaunchIntent.getActivity(
-                context, MainActivity::class.java, Uri.parse("duoyi://tab/todo")
-            )
-            val openCalendar = HomeWidgetLaunchIntent.getActivity(
-                context, MainActivity::class.java, Uri.parse("duoyi://tab/calendar")
-            )
-            val openFocus = HomeWidgetLaunchIntent.getActivity(
-                context, MainActivity::class.java, Uri.parse("duoyi://tab/focus")
-            )
-            val quickCheckHabit = if (habitQuickCheckId.isNotBlank()) {
-                HomeWidgetLaunchIntent.getActivity(
-                    context,
-                    MainActivity::class.java,
-                    DuoyiWidgetSnapshot.actionUri(prefs, Uri.parse("duoyi://action/checkin_habit?id=${Uri.encode(habitQuickCheckId)}"))
+            DuoyiWidgetSnapshot.renderWidget(context, appWidgetManager, backing, id,
+                DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)) { frame ->
+                val prefs = frame.prefs
+                val views = RemoteViews(context.packageName, R.layout.duoyi_habit_widget)
+                DuoyiWidgetTheme.applyContainer(
+                    context = context,
+                    views = views,
+                    prefs = prefs,
+                    rootId = R.id.widget_habit_root,
+                    navId = R.id.widget_habit_bottom_nav,
+                    appWidgetId = id,
                 )
-            } else {
-                openHabit
+                DuoyiWidgetTheme.applyTextColors(
+                    views,
+                    prefs,
+                    primaryIds = intArrayOf(
+                        R.id.widget_habit_title,
+                        R.id.widget_habit_percent,
+                        R.id.widget_habit_nav_habit,
+                    ),
+                    bodyIds = intArrayOf(
+                        R.id.widget_habit_summary,
+                        R.id.widget_habit_streak,
+                        R.id.widget_habit_hint,
+                    ),
+                    mutedIds = intArrayOf(
+                        R.id.widget_habit_subtitle,
+                        R.id.widget_habit_nav_todo,
+                        R.id.widget_habit_nav_calendar,
+                        R.id.widget_habit_nav_focus,
+                    ),
+                )
+
+                DuoyiWidgetTheme.applyButtonSurfaces(views, prefs, secondaryIds = intArrayOf(R.id.widget_habit_hint))
+
+                val isZh = DuoyiWidgetCopy.isZh(prefs)
+                views.setTextViewText(
+                    R.id.widget_habit_title,
+                    DuoyiWidgetCopy.appTitle(prefs, isZh)
+                )
+                val noHabitsToday = prefs.getInt("habit_active_count", -1) == 0
+                views.setTextViewText(R.id.widget_habit_percent,
+                    if (noHabitsToday) "—" else "${prefs.getInt("habit_percent", 0).coerceIn(0, 100)}%")
+                views.setTextViewText(R.id.widget_habit_subtitle, DuoyiWidgetCopy.habitSubtitle(isZh))
+                views.setTextViewText(
+                    R.id.widget_habit_summary,
+                    DuoyiWidgetCopy.habitSummary(prefs.getString("habit_summary", null), isZh)
+                )
+                views.setTextViewText(
+                    R.id.widget_habit_streak,
+                    DuoyiWidgetCopy.streakSummary(prefs.getString("streak_summary", null), isZh)
+                )
+                val habitQuickCheckId = prefs.getString("habit_quick_check_id", "") ?: ""
+                val habitQuickCheckLabel = DuoyiWidgetCopy.habitQuickCheckLabel(
+                    prefs.getString("habit_quick_check_label", null),
+                    isZh
+                )
+                views.setTextViewText(R.id.widget_habit_hint, habitQuickCheckLabel)
+                views.setContentDescription(R.id.widget_habit_hint, habitQuickCheckLabel)
+                views.setViewVisibility(
+                    R.id.widget_habit_streak,
+                    if (noHabitsToday) android.view.View.GONE
+                    else DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
+                )
+                views.setViewVisibility(
+                    R.id.widget_habit_bottom_nav,
+                    DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
+                )
+                views.setViewVisibility(
+                    R.id.widget_habit_hint,
+                    android.view.View.VISIBLE
+                )
+
+                val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
+                val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
+                val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
+                val tabFocus = DuoyiWidgetCopy.navFocus(prefs, isZh)
+                views.setTextViewText(R.id.widget_habit_nav_todo, tabTodo)
+                views.setTextViewText(R.id.widget_habit_nav_habit, tabHabit)
+                views.setTextViewText(R.id.widget_habit_nav_calendar, tabCalendar)
+                views.setTextViewText(R.id.widget_habit_nav_focus, tabFocus)
+
+                val openHabit = HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/habit")
+                )
+                val openTodo = HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/todo")
+                )
+                val openCalendar = HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/calendar")
+                )
+                val openFocus = HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/focus")
+                )
+                val quickCheckHabit = if (frame.fresh && habitQuickCheckId.isNotBlank()) {
+                    HomeWidgetLaunchIntent.getActivity(
+                        context,
+                        MainActivity::class.java,
+                        DuoyiWidgetSnapshot.actionUri(frame, Uri.parse("duoyi://action/checkin_habit?id=${Uri.encode(habitQuickCheckId)}"))
+                    )
+                } else {
+                    openHabit
+                }
+
+                views.setOnClickPendingIntent(R.id.widget_habit_root, openHabit)
+                views.setOnClickPendingIntent(R.id.widget_habit_title, openHabit)
+                views.setOnClickPendingIntent(R.id.widget_habit_subtitle, openHabit)
+                views.setOnClickPendingIntent(R.id.widget_habit_percent, openHabit)
+                views.setOnClickPendingIntent(R.id.widget_habit_summary, openHabit)
+                views.setOnClickPendingIntent(R.id.widget_habit_streak, openHabit)
+                views.setOnClickPendingIntent(R.id.widget_habit_hint, quickCheckHabit)
+                views.setOnClickPendingIntent(R.id.widget_habit_nav_todo, openTodo)
+                views.setOnClickPendingIntent(R.id.widget_habit_nav_habit, openHabit)
+                views.setOnClickPendingIntent(R.id.widget_habit_nav_calendar, openCalendar)
+                views.setOnClickPendingIntent(R.id.widget_habit_nav_focus, openFocus)
+
+                DuoyiWidgetBuiltViews(views)
             }
-
-            views.setOnClickPendingIntent(R.id.widget_habit_root, openHabit)
-            views.setOnClickPendingIntent(R.id.widget_habit_title, openHabit)
-            views.setOnClickPendingIntent(R.id.widget_habit_subtitle, openHabit)
-            views.setOnClickPendingIntent(R.id.widget_habit_percent, openHabit)
-            views.setOnClickPendingIntent(R.id.widget_habit_summary, openHabit)
-            views.setOnClickPendingIntent(R.id.widget_habit_streak, openHabit)
-            views.setOnClickPendingIntent(R.id.widget_habit_hint, quickCheckHabit)
-            views.setOnClickPendingIntent(R.id.widget_habit_nav_todo, openTodo)
-            views.setOnClickPendingIntent(R.id.widget_habit_nav_habit, openHabit)
-            views.setOnClickPendingIntent(R.id.widget_habit_nav_calendar, openCalendar)
-            views.setOnClickPendingIntent(R.id.widget_habit_nav_focus, openFocus)
-
-            DuoyiWidgetSnapshot.finishRender(context, views, prefs, id)
-            appWidgetManager.updateAppWidget(id, views)
         }
     }
 

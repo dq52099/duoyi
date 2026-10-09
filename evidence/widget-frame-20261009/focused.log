@@ -1,0 +1,76 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_frame_static_test.dart
+00:00 +0: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_frame_static_test.dart: all eleven actual renderers submit through captured frames
+00:00 +1: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_frame_static_test.dart: snapshot initializes styles before capture and keeps one commit site
+00:00 +2: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_frame_static_test.dart: raw values and dimensions are checked before any accepted effect
+00:00 +3: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_frame_static_test.dart: frozen preferences cover all reads and deny generic editing
+00:00 +4: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_frame_static_test.dart: focus uses frozen clock values and defers its existing alarm effect
+00:00 +5: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_frame_static_test.dart: all mutation entry points require the captured fresh session
+00:00 +6: loading /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart
+00:02 +6: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 今日待办小组件声明底部导航和 PNG 预览
+00:02 +7: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 专注小组件声明底部导航和 PNG 预览
+00:02 +8: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 习惯小组件声明底部导航和 PNG 预览
+00:02 +9: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 月历小组件声明底部导航和 PNG 预览
+00:02 +10: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 今日日程小组件声明底部导航和 PNG 预览
+00:02 +11: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 目标小组件声明底部导航和 PNG 预览
+00:02 +12: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 课程表小组件声明底部导航和 PNG 预览
+00:02 +13: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 随手记小组件声明底部导航和 PNG 预览
+00:02 +14: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 纪念日小组件声明底部导航和 PNG 预览
+00:02 +15: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 日记小组件声明底部导航和 PNG 预览
+00:02 +16: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 Android 小组件中英文字符串资源具有相同 key
+00:02 +17: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 小组件界面和 Android provider 从共享 copy 层读取本地化文案
+00:02 +18: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 所有桌面小组件单行文本都声明截断边界
+00:02 +19: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 桌面小组件动态短文本使用 wrap_content 时声明最大宽度
+00:02 +20: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 桌面小组件圆角背景和按钮跟随主题且不被纯色背景覆盖
+00:02 +21: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 历史兼容主小组件保留注册用于升级前旧实例刷新
+00:02 +22: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 升级或重启后恢复旧桌面小组件并延后启动期恢复任务
+00:02 +23: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 专注、习惯、月历、今日日程、目标保持独立，不再暴露组合入口
+00:02 +24: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 应用内添加失败提示区分 launcher、权限、弹窗拦截和迟到回执
+00:02 +25: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 底部导航每个入口都绑定到对应深链
+00:02 +26: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 待办小组件未完成任务使用空心圆并保留交互按钮
+00:02 +27: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 月历小组件按尺寸裁剪网格并提供今天交互按钮
+00:02 +28: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 小组件样式密度设置同步预览、新增固定请求和系统添加默认值
+00:02 +29: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 小组件数据和样式刷新覆盖紧凑、标准和详细 provider
+00:02 +30: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 桌面快捷创建失败会返回明确原因并接入成功回调
+00:02 +31: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 应用内固定小组件按样式请求尺寸并按需保持 variant provider 可用
+00:02 +32: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 每个小组件三种样式声明为不同桌面尺寸
+00:02 +33: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 应用内小组件添加按样式选择真实 provider，标准入口仍独立
+00:03 +34: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 10 个标准 provider 统一继承、清理实例样式且三样式映射一致
+00:03 +35: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 小组件 Android iOS 和 Flutter 清单保持 10 类 exact set 对齐
+00:03 +36: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 全部小组件 provider XML 只引用对应三档 preview layout
+00:03 +37: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 options changed 只保存样式并触发 update 广播，避免递归修改 options/provider
+00:03 +38: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 升级后刷新已有小组件，避免旧布局继续留在桌面
+00:03 +39: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 应用内小组件页展示 10 个可见独立预览并接入底部导航
+00:03 +40: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 桌面小组件 deep link 跳转隐藏底部页时允许打开隐藏 tab
+00:03 +41: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 隐藏页小组件内容行都绑定详情 deep link，空 id 回退到对应页面
+00:03 +42: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 桌面快捷创建只支持 10 种可见独立小组件
+00:03 +43: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 10 种可见独立小组件都通过配置入口初始化对应 provider
+00:03 +44: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/android_widget_resources_test.dart: Android 小组件资源 10 种可见独立小组件标准入口默认 3x2 且可调整到 2x2-4x3
+00:03 +45: loading /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/screens/widget_preview_screen_test.dart
+00:05 +45: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/screens/widget_preview_screen_test.dart: 小组件预览覆盖待办 o、月历和目标三档尺寸
+00:06 +46: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/screens/widget_preview_screen_test.dart: 小组件预览窄屏 2x2、3x2、4x3 不溢出
+00:07 +47: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/screens/widget_preview_screen_test.dart: WidgetScreen 支持类型筛选且切换不丢样式，320 宽 1.6 倍字体无溢出
+00:09 +48: loading /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/widgets/widget_polish_interaction_test.dart
+00:10 +48: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/widgets/widget_polish_interaction_test.dart: today habit detail opens and shows provider data at width 320.0 / 1.3x
+[HabitProvider] reminder sync skipped: scheduler missing
+00:12 +49: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/widgets/widget_polish_interaction_test.dart: today habit detail opens and shows provider data at width 390.0 / 1.3x
+[HabitProvider] reminder sync skipped: scheduler missing
+00:12 +50: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/widgets/widget_polish_interaction_test.dart: day detail updates live after a habit check-in
+[HabitProvider] reminder sync skipped: scheduler missing
+00:13 +51: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/widgets/widget_polish_interaction_test.dart: future weekday cells are disabled
+[HabitProvider] reminder sync skipped: scheduler missing
+00:13 +52: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/widgets/widget_polish_interaction_test.dart: past date detail filters habits created after that date
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:13 +53: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/widgets/widget_polish_interaction_test.dart: generation invalidation removes the detail sheet once below a dialog
+[HabitProvider] reminder sync skipped: scheduler missing
+00:13 +54: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/widgets/widget_polish_interaction_test.dart: admin overview KPIs fit at 320.0 px / 1.3x text scale
+00:14 +55: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/widgets/widget_polish_interaction_test.dart: admin overview KPIs fit at 320.0 px / 1.6x text scale
+00:14 +56: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/widgets/widget_polish_interaction_test.dart: admin overview KPIs fit at 390.0 px / 1.3x text scale
+00:14 +57: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/widgets/widget_polish_interaction_test.dart: admin overview KPIs fit at 390.0 px / 1.6x text scale
+00:15 +58: loading /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/goal_requirement_matrix_test.dart
+00:16 +58: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/goal_requirement_matrix_test.dart: goal requirement matrix maps user requests to eight regression groups
+00:18 +59: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/goal_requirement_matrix_test.dart: alignment gate includes the goal requirement matrix validator
+00:18 +60: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/goal_requirement_matrix_test.dart: matrix validator rejects missing local evidence paths
+00:20 +61: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/goal_requirement_matrix_test.dart: matrix validator ignores slash prose in parenthetical evidence notes
+00:22 +62: /home/ubuntu/duoyi-worktrees/widget-frame-20261009/test/services/goal_requirement_matrix_test.dart: matrix validator rejects the old nonexistent habit card path
+00:24 +63: All tests passed!

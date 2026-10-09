@@ -5,6 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Shared localization and presentation copy for Android home screen widgets.
@@ -162,10 +163,11 @@ object DuoyiWidgetCopy {
         nextFocusLabel: String,
         appLocale: Locale,
         isZh: Boolean,
+        timeZone: TimeZone = TimeZone.getDefault(),
     ): String = when {
         !sessionTrusted -> if (isZh) "数据待刷新，打开多仪更新" else "Data pending refresh, open Duoyi to update"
         showEndTime -> {
-            val timeStr = SimpleDateFormat("HH:mm", appLocale).format(Date(endsAt))
+            val timeStr = SimpleDateFormat("HH:mm", appLocale).apply { this.timeZone = timeZone }.format(Date(endsAt))
             if (isZh) "预计 $timeStr 结束" else "Est. finish at $timeStr"
         }
         timerRunning -> {
@@ -190,10 +192,11 @@ object DuoyiWidgetCopy {
         expired: Boolean,
         appLocale: Locale,
         isZh: Boolean,
+        timeZone: TimeZone = TimeZone.getDefault(),
     ): String = when {
         timerRunning -> {
             if (endsAtMillis > 0L) {
-                val timeStr = SimpleDateFormat("HH:mm", appLocale).format(Date(endsAtMillis))
+                val timeStr = SimpleDateFormat("HH:mm", appLocale).apply { this.timeZone = timeZone }.format(Date(endsAtMillis))
                 if (isZh) "预计 $timeStr 结束" else "Est. finish at $timeStr"
             } else {
                 if (isZh) "正在专注中" else "Focus in progress"
@@ -296,10 +299,10 @@ object DuoyiWidgetCopy {
     fun calendarMonthTitle(now: Calendar, compact: Boolean, isZh: Boolean): String {
         return if (isZh) {
             val pattern = if (compact) "M月" else "yyyy年M月"
-            SimpleDateFormat(pattern, Locale.SIMPLIFIED_CHINESE).format(now.time)
+            SimpleDateFormat(pattern, Locale.SIMPLIFIED_CHINESE).apply { timeZone = now.timeZone }.format(now.time)
         } else {
             val pattern = if (compact) "MMM" else "MMM yyyy"
-            SimpleDateFormat(pattern, Locale.ENGLISH).format(now.time)
+            SimpleDateFormat(pattern, Locale.ENGLISH).apply { timeZone = now.timeZone }.format(now.time)
         }
     }
     fun calendarTodayButton(isZh: Boolean): String = if (isZh) "今天" else "Today"

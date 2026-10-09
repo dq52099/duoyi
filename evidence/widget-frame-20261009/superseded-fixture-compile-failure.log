@@ -1,0 +1,3 @@
+android/app/src/test/java/com/duoyi/duoyi/DuoyiFrozenWidgetPreferencesTest.kt:100:50: error: cannot infer type for type parameter 'V'. Specify it explicitly.
+        val prefs = DuoyiFrozenWidgetPreferences(emptyMap())
+                                                 ^^^^^^^^

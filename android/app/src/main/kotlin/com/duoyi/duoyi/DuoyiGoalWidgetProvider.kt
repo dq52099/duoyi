@@ -30,119 +30,119 @@ open class DuoyiGoalWidgetProvider : DuoyiStyledWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        val prefs: SharedPreferences = DuoyiWidgetSnapshot.forDisplay(context, HomeWidgetPlugin.getData(context))
+        val backing = HomeWidgetPlugin.getData(context)
 
         appWidgetIds.forEach { id ->
-            DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)?.let { style ->
-                DuoyiWidgetDisplayMode.saveForWidgetIfMissing(prefs, id, style)
-            }
-            val views = RemoteViews(context.packageName, R.layout.duoyi_goal_widget)
-            DuoyiWidgetTheme.applyContainer(
-                context = context,
-                views = views,
-                prefs = prefs,
-                rootId = R.id.widget_goal_root,
-                navId = R.id.widget_goal_bottom_nav,
-                appWidgetId = id,
-            )
-            DuoyiWidgetTheme.applyTextColors(
-                views,
-                prefs,
-                primaryIds = intArrayOf(
+            DuoyiWidgetSnapshot.renderWidget(context, appWidgetManager, backing, id,
+                DuoyiWidgetProviderRegistry.styleForProvider(this::class.java.name)) { frame ->
+                val prefs = frame.prefs
+                val views = RemoteViews(context.packageName, R.layout.duoyi_goal_widget)
+                DuoyiWidgetTheme.applyContainer(
+                    context = context,
+                    views = views,
+                    prefs = prefs,
+                    rootId = R.id.widget_goal_root,
+                    navId = R.id.widget_goal_bottom_nav,
+                    appWidgetId = id,
+                )
+                DuoyiWidgetTheme.applyTextColors(
+                    views,
+                    prefs,
+                    primaryIds = intArrayOf(
+                        R.id.widget_goal_title,
+                        R.id.widget_goal_nav_calendar,
+                    ),
+                    bodyIds = intArrayOf(
+                        R.id.widget_goal_1,
+                        R.id.widget_goal_2,
+                        R.id.widget_goal_3,
+                    ),
+                    mutedIds = intArrayOf(
+                        R.id.widget_goal_subtitle,
+                        R.id.widget_goal_nav_todo,
+                        R.id.widget_goal_nav_habit,
+                        R.id.widget_goal_nav_focus,
+                    ),
+                )
+
+                val isZh = DuoyiWidgetCopy.isZh(prefs)
+                views.setTextViewText(
                     R.id.widget_goal_title,
-                    R.id.widget_goal_nav_calendar,
-                ),
-                bodyIds = intArrayOf(
+                    DuoyiWidgetCopy.appTitle(prefs, isZh)
+                )
+                views.setTextViewText(R.id.widget_goal_subtitle, DuoyiWidgetCopy.goalSubtitle(isZh))
+                views.setTextViewText(
                     R.id.widget_goal_1,
+                    DuoyiWidgetCopy.goalHighlight1(prefs.getString("goal_highlight_1", null), isZh)
+                )
+                views.setTextViewText(
                     R.id.widget_goal_2,
+                    DuoyiWidgetCopy.goalHighlight2(prefs.getString("goal_highlight_2", null), isZh)
+                )
+                views.setTextViewText(
                     R.id.widget_goal_3,
-                ),
-                mutedIds = intArrayOf(
-                    R.id.widget_goal_subtitle,
-                    R.id.widget_goal_nav_todo,
-                    R.id.widget_goal_nav_habit,
-                    R.id.widget_goal_nav_focus,
-                ),
-            )
+                    DuoyiWidgetCopy.goalHighlight3(prefs.getString("goal_highlight_3", null), isZh)
+                )
+                views.setViewVisibility(
+                    R.id.widget_goal_2,
+                    DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
+                )
+                views.setViewVisibility(
+                    R.id.widget_goal_3,
+                    DuoyiWidgetDisplayMode.detailedVisibility(prefs, id)
+                )
+                views.setViewVisibility(
+                    R.id.widget_goal_bottom_nav,
+                    DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
+                )
 
-            val isZh = DuoyiWidgetCopy.isZh(prefs)
-            views.setTextViewText(
-                R.id.widget_goal_title,
-                DuoyiWidgetCopy.appTitle(prefs, isZh)
-            )
-            views.setTextViewText(R.id.widget_goal_subtitle, DuoyiWidgetCopy.goalSubtitle(isZh))
-            views.setTextViewText(
-                R.id.widget_goal_1,
-                DuoyiWidgetCopy.goalHighlight1(prefs.getString("goal_highlight_1", null), isZh)
-            )
-            views.setTextViewText(
-                R.id.widget_goal_2,
-                DuoyiWidgetCopy.goalHighlight2(prefs.getString("goal_highlight_2", null), isZh)
-            )
-            views.setTextViewText(
-                R.id.widget_goal_3,
-                DuoyiWidgetCopy.goalHighlight3(prefs.getString("goal_highlight_3", null), isZh)
-            )
-            views.setViewVisibility(
-                R.id.widget_goal_2,
-                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
-            )
-            views.setViewVisibility(
-                R.id.widget_goal_3,
-                DuoyiWidgetDisplayMode.detailedVisibility(prefs, id)
-            )
-            views.setViewVisibility(
-                R.id.widget_goal_bottom_nav,
-                DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
-            )
+                val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
+                val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
+                val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
+                val tabFocus = DuoyiWidgetCopy.navFocus(prefs, isZh)
+                views.setTextViewText(R.id.widget_goal_nav_todo, tabTodo)
+                views.setTextViewText(R.id.widget_goal_nav_habit, tabHabit)
+                views.setTextViewText(R.id.widget_goal_nav_calendar, tabCalendar)
+                views.setTextViewText(R.id.widget_goal_nav_focus, tabFocus)
 
-            val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
-            val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
-            val tabCalendar = DuoyiWidgetCopy.navCalendar(prefs, isZh)
-            val tabFocus = DuoyiWidgetCopy.navFocus(prefs, isZh)
-            views.setTextViewText(R.id.widget_goal_nav_todo, tabTodo)
-            views.setTextViewText(R.id.widget_goal_nav_habit, tabHabit)
-            views.setTextViewText(R.id.widget_goal_nav_calendar, tabCalendar)
-            views.setTextViewText(R.id.widget_goal_nav_focus, tabFocus)
+                val openGoal = HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://goal")
+                )
+                val openTodo = HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/todo")
+                )
+                val openHabit = HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/habit")
+                )
+                val openCalendar = HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/calendar")
+                )
+                val openFocus = HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse("duoyi://tab/focus")
+                )
 
-            val openGoal = HomeWidgetLaunchIntent.getActivity(
-                context, MainActivity::class.java, Uri.parse("duoyi://goal")
-            )
-            val openTodo = HomeWidgetLaunchIntent.getActivity(
-                context, MainActivity::class.java, Uri.parse("duoyi://tab/todo")
-            )
-            val openHabit = HomeWidgetLaunchIntent.getActivity(
-                context, MainActivity::class.java, Uri.parse("duoyi://tab/habit")
-            )
-            val openCalendar = HomeWidgetLaunchIntent.getActivity(
-                context, MainActivity::class.java, Uri.parse("duoyi://tab/calendar")
-            )
-            val openFocus = HomeWidgetLaunchIntent.getActivity(
-                context, MainActivity::class.java, Uri.parse("duoyi://tab/focus")
-            )
+                views.setOnClickPendingIntent(R.id.widget_goal_root, openGoal)
+                views.setOnClickPendingIntent(R.id.widget_goal_title, openGoal)
+                views.setOnClickPendingIntent(R.id.widget_goal_subtitle, openGoal)
+                views.setOnClickPendingIntent(
+                    R.id.widget_goal_1,
+                    itemIntent(context, prefs, "goal_highlight_1_id", "duoyi://goal")
+                )
+                views.setOnClickPendingIntent(
+                    R.id.widget_goal_2,
+                    itemIntent(context, prefs, "goal_highlight_2_id", "duoyi://goal")
+                )
+                views.setOnClickPendingIntent(
+                    R.id.widget_goal_3,
+                    itemIntent(context, prefs, "goal_highlight_3_id", "duoyi://goal")
+                )
+                views.setOnClickPendingIntent(R.id.widget_goal_nav_todo, openTodo)
+                views.setOnClickPendingIntent(R.id.widget_goal_nav_habit, openHabit)
+                views.setOnClickPendingIntent(R.id.widget_goal_nav_calendar, openCalendar)
+                views.setOnClickPendingIntent(R.id.widget_goal_nav_focus, openFocus)
 
-            views.setOnClickPendingIntent(R.id.widget_goal_root, openGoal)
-            views.setOnClickPendingIntent(R.id.widget_goal_title, openGoal)
-            views.setOnClickPendingIntent(R.id.widget_goal_subtitle, openGoal)
-            views.setOnClickPendingIntent(
-                R.id.widget_goal_1,
-                itemIntent(context, prefs, "goal_highlight_1_id", "duoyi://goal")
-            )
-            views.setOnClickPendingIntent(
-                R.id.widget_goal_2,
-                itemIntent(context, prefs, "goal_highlight_2_id", "duoyi://goal")
-            )
-            views.setOnClickPendingIntent(
-                R.id.widget_goal_3,
-                itemIntent(context, prefs, "goal_highlight_3_id", "duoyi://goal")
-            )
-            views.setOnClickPendingIntent(R.id.widget_goal_nav_todo, openTodo)
-            views.setOnClickPendingIntent(R.id.widget_goal_nav_habit, openHabit)
-            views.setOnClickPendingIntent(R.id.widget_goal_nav_calendar, openCalendar)
-            views.setOnClickPendingIntent(R.id.widget_goal_nav_focus, openFocus)
-
-            DuoyiWidgetSnapshot.finishRender(context, views, prefs, id)
-            appWidgetManager.updateAppWidget(id, views)
+                DuoyiWidgetBuiltViews(views)
+            }
         }
     }
 

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-09T04:03:57.518Z" hostname="mail.6688667.xyz" time="0.102">
+  <properties/>
+  <testcase name="nextBoundaryCoversUtcShanghaiKathmanduAndNegativeOffsetCalendarEdges" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.042"/>
+  <testcase name="failedCancellationRemainsRetryable" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.005"/>
+  <testcase name="lateDeliveryClockMovementAndZoneChangeRecalculateAndRearm" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.005"/>
+  <testcase name="newYorkSpringAndFallBoundariesUseExactTransitionThenFollowingMidnight" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.009"/>
+  <testcase name="lordHoweHalfHourTransitionsAreBoundariesAndExactNowMovesForward" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.005"/>
+  <testcase name="controllerSchedulesOnceForManyInstancesAndDeduplicatesReconciliation" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.003"/>
+  <testcase name="deletingLastWidgetCancelsTheExistingAlarm" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.001"/>
+  <testcase name="falseScheduleResultCanBeRetriedOnTheNextReconcile" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.0"/>
+  <testcase name="throwingScheduleHandoffCanBeRetriedOnTheNextReconcile" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.0"/>
+  <testcase name="historicMidnightGapAndOverlapResolveToStrictlyFutureInstants" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.012"/>
+  <testcase name="skippedApiaCivilDateUsesTheFirstRepresentableFutureBoundary" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.002"/>
+  <testcase name="exactTransitionNowNeverReturnsTheDeliveredInstant" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.006"/>
+  <testcase name="forceAndInvalidateEachRearmTheSameBoundary" classname="com.duoyi.duoyi.DuoyiWidgetDayBoundaryPolicyTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

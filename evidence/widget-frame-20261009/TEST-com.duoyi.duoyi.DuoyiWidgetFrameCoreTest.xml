@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-09T04:03:57.640Z" hostname="mail.6688667.xyz" time="0.091">
+  <properties/>
+  <testcase name="sessionOffsetAcceptsOnlyItsInclusiveMinuteBounds" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.007"/>
+  <testcase name="immutableSnapshotCopiesMapAndStringSetAndExposesUnmodifiableViews" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.005"/>
+  <testcase name="throwingCommitDoesNotRunAcceptedEffect" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.013"/>
+  <testcase name="daylightSavingOffsetChangeRejectsWithinTheSameZoneAndLocalDay" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.003"/>
+  <testcase name="runningCountdownCrossingItsEndRejectsTheFrame" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.001"/>
+  <testcase name="effectiveModeRespectsMinimumSizeThresholdsAndModeBounds" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.009"/>
+  <testcase name="wallAndElapsedClockJumpsAreRejected" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.0"/>
+  <testcase name="changedWidgetOptionsRejectTheCapturedFrame" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.0"/>
+  <testcase name="nonceRemainsByteForByteUnmodifiedInTheFrameSnapshot" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.004"/>
+  <testcase name="frameAttemptsStopAfterTwoRejectedCapturesWithoutCommitOrEffect" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.005"/>
+  <testcase name="rawPayloadChangeRejectsDespiteAnUnchangedPublicationTuple" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.0"/>
+  <testcase name="capturedLocalDayChangeAcrossMidnightRejectsTheFrame" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.0"/>
+  <testcase name="frameAttemptsRejectFirstCaptureThenCommitSecondMatchingBuildBeforeEffect" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.021"/>
+  <testcase name="zoneChangeRejectsEvenWhenBothZonesHaveTheSameOffset" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.001"/>
+  <testcase name="staleValidSessionRemainsTrustedWhileMissingSessionIsUntrusted" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.0"/>
+  <testcase name="sessionTrustRequiresCanonicalDayStringIntOffsetAndNonblankStringNonce" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.004"/>
+  <testcase name="languageSelectionSupportsChineseEnglishAndSystemFallback" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.001"/>
+  <testcase name="ordinaryWallAndElapsedProgressionIsAccepted" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.001"/>
+  <testcase name="changedSystemLocaleRejectsEvenWhenWidgetLanguageWouldMatch" classname="com.duoyi.duoyi.DuoyiWidgetFrameCoreTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -6,82 +6,85 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
 /** Read-only rendering view; never replaces the saved account data or style. */
 object DuoyiWidgetSnapshot {
-    fun isFresh(prefs: SharedPreferences): Boolean {
-        val now = System.currentTimeMillis()
-        val day = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(now))
-        return prefs.getString("widget_snapshot_day", "") == day &&
-            prefs.getInt("widget_snapshot_utc_offset_minutes", Int.MIN_VALUE) ==
-            TimeZone.getDefault().getOffset(now) / 60_000
+    private fun clock(): DuoyiWidgetFrameClock = DuoyiWidgetFrameClock(
+        System.currentTimeMillis(), android.os.SystemClock.elapsedRealtime(),
+        TimeZone.getDefault().toZoneId(),
+    )
+
+    private fun options(manager: AppWidgetManager, id: Int): DuoyiWidgetFrameOptions {
+        val value = manager.getAppWidgetOptions(id)
+        return DuoyiWidgetFrameOptions(
+            value.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0),
+            value.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0),
+            value.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0),
+            value.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0),
+            value.getString("duoyi_widget_style"),
+        )
     }
 
-    fun forDisplay(context: Context, backing: SharedPreferences): SharedPreferences {
-        val fresh = isFresh(backing)
-        val sessionTrusted = hasPublishedSession(backing)
-        val isZh = DuoyiWidgetCopy.isZh(backing)
-        return object : SharedPreferences by backing {
-            override fun getAll(): Map<String, *> = if (sessionTrusted) backing.all else
-                backing.all.filterKeys { !it.startsWith("focus_timer_") }
+    private fun capture(manager: AppWidgetManager, backing: SharedPreferences, id: Int): DuoyiWidgetRenderFrame {
+        val raw = backing.all
+        return DuoyiWidgetRenderFrame(DuoyiWidgetFrameCore(
+            raw, clock(), options(manager, id), id, Locale.getDefault().toLanguageTag(),
+        ))
+    }
 
-            override fun getString(key: String?, defValue: String?): String? {
-                if (key?.startsWith("widget_display_mode_") == true) {
-                    val id = key.removePrefix("widget_display_mode_").toIntOrNull()
-                    if (id != null) return effectiveMode(context, backing, id)
-                }
-                if (!fresh && key != null) {
-                    val stale = DuoyiWidgetCopy.staleMessage(key, isZh)
-                    if (stale != null) return stale
-                    if (key.startsWith("todo_top3_") && key.endsWith("_id")) return ""
-                    if (key == "habit_quick_check_id" || key.endsWith("_id")) return ""
-                    if ((key.startsWith("course_highlight_") ||
-                            key.startsWith("schedule_highlight_") ||
-                            key.startsWith("anniversary_highlight_") ||
-                            key.startsWith("memorial_highlight_")) && key.endsWith("_id")) return ""
-                }
-                return backing.getString(key, defValue)
-            }
-
-            override fun getInt(key: String?, defValue: Int): Int {
-                if (!fresh && key in staleCounters) return 0
-                return backing.getInt(key, defValue)
-            }
+    /** Keep validation and commit in the same main-looper segment as native writers. */
+    fun renderWidget(
+        context: Context,
+        manager: AppWidgetManager,
+        backing: SharedPreferences,
+        id: Int,
+        initialStyle: String?,
+        build: (DuoyiWidgetRenderFrame) -> DuoyiWidgetBuiltViews,
+    ): Boolean {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            android.util.Log.w("DuoyiWidgetFrame", "render_skipped widgetId=$id reason=thread")
+            return false
+        }
+        try {
+            DuoyiWidgetDisplayMode.saveForWidgetIfMissing(backing, id, initialStyle)
+            return DuoyiWidgetFrameAttempts.run(
+                capture = { capture(manager, backing, id) },
+                build = { frame -> build(frame).also { finishRender(it.views, frame) } },
+                rejectionReason = { frame ->
+                    frame.core.rejectionReason(backing.all, clock(), options(manager, id),
+                        Locale.getDefault().toLanguageTag())
+                },
+                commit = { built -> manager.updateAppWidget(id, built.views) },
+                acceptedEffect = { _, built ->
+                    try { built.acceptedEffect?.invoke() } catch (_: RuntimeException) {
+                        android.util.Log.w("DuoyiWidgetFrame", "effect_failed widgetId=$id")
+                    }
+                },
+                rejected = { reason -> android.util.Log.i("DuoyiWidgetFrame", "render_rejected widgetId=$id reason=$reason") },
+            )
+        } catch (_: RuntimeException) {
+            // A failed build/Binder call never runs an effect or blocks the next id.
+            android.util.Log.w("DuoyiWidgetFrame", "render_failed widgetId=$id")
+            return false
         }
     }
 
-    fun hasPublishedSession(prefs: SharedPreferences): Boolean =
-        !prefs.getString("widget_snapshot_day", "").isNullOrBlank() &&
-            !prefs.getString("widget_account_nonce", "").isNullOrBlank()
-
-    private fun effectiveMode(context: Context, prefs: SharedPreferences, id: Int): String {
-        val preferred = prefs.getString("widget_display_mode_$id", null)
-            ?: prefs.getString("widget_display_mode", "standard") ?: "standard"
-        val options = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
-        val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
-        val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
-        if (width <= 0 || height <= 0) return preferred
-        // Both dimensions must fit. Preserve the user's chosen upper density.
-        if (width < 180 || height < 100 || preferred == "compact") return "compact"
-        if (preferred == "detailed" && width >= 250 && height >= 170) return "detailed"
-        return "standard"
+    fun actionUri(frame: DuoyiWidgetRenderFrame, action: Uri): Uri {
+        require(frame.fresh) { "Widget action requires a fresh published session" }
+        return action.buildUpon()
+            .appendQueryParameter("source", "widget")
+            .appendQueryParameter("widget_day", frame.core.day)
+            .appendQueryParameter("widget_offset", frame.core.offset.toString())
+            .appendQueryParameter("widget_account", frame.core.nonce)
+            .build()
     }
 
-    fun actionUri(prefs: SharedPreferences, action: Uri): Uri = action.buildUpon()
-        .appendQueryParameter("source", "widget")
-        .appendQueryParameter("widget_day", prefs.getString("widget_snapshot_day", ""))
-        .appendQueryParameter("widget_offset", prefs.getInt("widget_snapshot_utc_offset_minutes", Int.MIN_VALUE).toString())
-        .appendQueryParameter("widget_account", prefs.getString("widget_account_nonce", ""))
-        .build()
-
-    fun finishRender(context: Context, views: RemoteViews, prefs: SharedPreferences, id: Int) {
-        val options = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
-        val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
-        val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+    private fun finishRender(views: RemoteViews, frame: DuoyiWidgetRenderFrame) {
+        val prefs = frame.prefs
+        val width = frame.core.options.minWidth
+        val height = frame.core.options.minHeight
         // Keep navigation out of a two-cell widget while retaining its main action.
         views.setViewVisibility(R.id.widget_refresh, if (width in 1..139) View.GONE else View.VISIBLE)
         if (height in 1..149) {
@@ -143,8 +146,8 @@ object DuoyiWidgetSnapshot {
         }
         val isZh = DuoyiWidgetCopy.isZh(prefs)
         views.setContentDescription(R.id.widget_refresh,
-            DuoyiWidgetCopy.refreshContentDescription(isFresh(prefs), isZh))
-        if (isFresh(prefs)) return
+            DuoyiWidgetCopy.refreshContentDescription(frame.fresh, isZh))
+        if (frame.fresh) return
         val numericIds = when (views.layoutId) {
             R.layout.duoyi_todo_widget -> intArrayOf(R.id.widget_todo_count)
             R.layout.duoyi_habit_widget -> intArrayOf(R.id.widget_habit_percent)
@@ -157,6 +160,4 @@ object DuoyiWidgetSnapshot {
         numericIds.forEach { views.setTextViewText(it, "—") }
     }
 
-    private val staleCounters = setOf("todo_count", "todo_top3_count", "habit_percent",
-        "pomodoro_today", "focus_minutes_today")
 }
