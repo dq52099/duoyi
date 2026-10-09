@@ -1,0 +1,43 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_picker_locale_state_test.dart
+00:00 +0: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_picker_locale_state_test.dart: date picker keeps selection, viewed month, mode, and ignore-year state across locale changes
+00:03 +1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_picker_locale_state_test.dart: date picker resolves semantic title and subtitle keys live
+00:04 +2: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_picker_locale_state_test.dart: time picker resolves semantic title and subtitle keys live
+00:04 +3: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_picker_locale_state_test.dart: time picker keeps wheel controllers and rounded selection across locale changes
+00:05 +4: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_picker_locale_state_test.dart: cancel returns null and disposed pickers release locale listeners
+00:05 +5: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_date_picker_test.dart
+00:06 +5: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_date_picker_test.dart: 日期和时间选择器避免二级页面大字号和厚边框回退
+00:07 +6: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_date_picker_test.dart: 公历日期选择器显示可点击日期网格
+00:09 +7: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_date_picker_test.dart: 公历当前月日期不是禁用灰色态
+00:10 +8: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart
+00:11 +8: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart: I18nDateFormat 中文完整日期时间符合 R17 样例
+00:11 +9: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart: I18nDateFormat 英文完整日期时间使用英文月份和 12 小时制
+00:11 +10: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart: I18nDateFormat 智能日期在无时间时只展示日期
+00:11 +11: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart: I18nDateFormat 短日期时间可省略午夜时间
+00:11 +12: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart: I18nDateFormat 月日星期和纯时间跟随语言
+00:11 +13: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/no_global_bold_static_test.dart
+00:12 +13: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/no_global_bold_static_test.dart: 应用 UI 不再引入全局粗体字重
+00:13 +14: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/no_global_bold_static_test.dart: 全局设计令牌和管理后台不再提供粗体入口
+00:13 +15: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart
+00:14 +15: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: status badge contrast uses rendered Brightness.dark surface
+00:15 +16: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: status badge contrast uses rendered Brightness.light surface
+00:15 +17: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSectionHeader handles long action on narrow width
+00:16 +18: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppStatusBadge constrains long labels in narrow containers
+00:16 +19: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSettingsTile keeps text readable with complex trailing
+00:16 +20: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSettingsTile centers leading icon in the whole row
+00:16 +21: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSettingsTile aligns daily reminder time row
+00:16 +22: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppMetricCard 默认数值字号为主角，标题/单位保持 11
+00:16 +23: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: StatsOverviewCard 不传样式时数值吃到 16 默认（我的页路径）
+00:16 +24: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppMetricCard 显式 valueStyle 仍然优先生效
+00:16 +25: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppMetricCard 亮色下填充/描边/阴影走主题玻璃档（两套主题同源）
+00:17 +26: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/widget_day_boundary_static_test.dart
+00:18 +26: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/widget_day_boundary_static_test.dart: day-boundary alarm receiver is private and has no manifest filter
+00:18 +27: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/widget_day_boundary_static_test.dart: receiver accepts only its private action and performs no input-driven work
+00:18 +28: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/widget_day_boundary_static_test.dart: one immutable alarm identity is reused for create, lookup, and cancel
+00:18 +29: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/widget_day_boundary_static_test.dart: day scheduler uses only inexact APIs and requests no exact-alarm permission
+00:18 +30: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/widget_day_boundary_static_test.dart: registry inventory is based on real widget ids for every family and legacy provider
+00:18 +31: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/widget_day_boundary_static_test.dart: styled and legacy providers reconcile widget lifecycle actions in finally
+00:18 +32: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/widget_day_boundary_static_test.dart: registry update and restore paths reconcile, with restore forcing rearm
+00:18 +33: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/widget_day_boundary_static_test.dart: system restore receiver rearms after restore and update even when work fails
+00:18 +34: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/widget_day_boundary_static_test.dart: alarm receiver catches dispatch failure and always reconciles in finally
+00:18 +35: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/widget_day_boundary_static_test.dart: scheduler and receiver do not write widget publication or account state
+00:18 +36: All tests passed!

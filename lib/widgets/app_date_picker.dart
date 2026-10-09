@@ -8,6 +8,50 @@ import 'surface_components.dart';
 
 enum AppDatePickerMode { solar, lunar }
 
+int _positiveMod(int value, int mod) {
+  final result = value % mod;
+  return result < 0 ? result + mod : result;
+}
+
+String _lunarGanzhiRomanized(int lunarYear) {
+  const stems = <String>[
+    'Jia',
+    'Yi',
+    'Bing',
+    'Ding',
+    'Wu',
+    'Ji',
+    'Geng',
+    'Xin',
+    'Ren',
+    'Gui',
+  ];
+  const branches = <String>[
+    'Zi',
+    'Chou',
+    'Yin',
+    'Mao',
+    'Chen',
+    'Si',
+    'Wu',
+    'Wei',
+    'Shen',
+    'You',
+    'Xu',
+    'Hai',
+  ];
+  final g = _positiveMod(lunarYear - 4, 10);
+  final b = _positiveMod(lunarYear - 4, 12);
+  return '${stems[g]}-${branches[b]}';
+}
+
+String _formatLunarYear(int year, {int? solarYear}) {
+  if (I18n.current == AppLocale.zh) {
+    return '${LunarCalendar.ganzhiOf(year)}年（${solarYear ?? year}）';
+  }
+  return '$year (${_lunarGanzhiRomanized(year)})';
+}
+
 class AppDatePickerResult {
   final DateTime date;
   final AppDatePickerMode mode;
@@ -23,12 +67,16 @@ class AppDatePickerResult {
 
   String get lunarText {
     final lunar = LunarCalendar.fromSolar(date);
-    final text =
-        '${LunarCalendar.ganzhiOf(lunar.year)}年（${date.year}）'
-        '${LunarCalendar.monthName(lunar.month, isLeap: lunar.isLeapMonth)} '
-        '${LunarCalendar.dayName(lunar.day)}';
-    if (I18n.current == AppLocale.zh) return text;
-    return '${I18n.tr('calendar.chinese_lunar_calendar')}: $text';
+    if (I18n.current == AppLocale.zh) {
+      return '${_formatLunarYear(lunar.year, solarYear: date.year)}'
+          '${LunarCalendar.monthName(lunar.month, isLeap: lunar.isLeapMonth)} '
+          '${LunarCalendar.dayName(lunar.day)}';
+    }
+    final monthStr = lunar.isLeapMonth
+        ? '${I18n.tr('picker.lunar.leap_month')} ${lunar.month}'
+        : '${I18n.tr('picker.lunar.month')} ${lunar.month}';
+    final dayStr = '${I18n.tr('picker.lunar.day')} ${lunar.day}';
+    return '${I18n.tr('calendar.lunar')} ${_formatLunarYear(lunar.year)} $monthStr, $dayStr';
   }
 }
 
@@ -40,8 +88,10 @@ class AppDatePicker {
     required DateTime initialDate,
     DateTime? firstDate,
     DateTime? lastDate,
-    String title = '选择日期',
+    String? title,
     String? subtitle,
+    String? titleKey,
+    String? subtitleKey,
   }) async {
     final result = await show(
       context,
@@ -50,6 +100,8 @@ class AppDatePicker {
       lastDate: lastDate,
       title: title,
       subtitle: subtitle,
+      titleKey: titleKey,
+      subtitleKey: subtitleKey,
       initialMode: AppDatePickerMode.solar,
     );
     return result?.date;
@@ -60,8 +112,10 @@ class AppDatePicker {
     required DateTime initialDate,
     DateTime? firstDate,
     DateTime? lastDate,
-    String title = '选择日期',
+    String? title,
     String? subtitle,
+    String? titleKey,
+    String? subtitleKey,
     AppDatePickerMode initialMode = AppDatePickerMode.solar,
     bool allowIgnoreYear = false,
     bool initialIgnoreYear = false,
@@ -74,6 +128,8 @@ class AppDatePicker {
         lastDate: lastDate ?? DateTime(2099, 12, 31),
         title: title,
         subtitle: subtitle,
+        titleKey: titleKey,
+        subtitleKey: subtitleKey,
         initialMode: initialMode,
         allowIgnoreYear: allowIgnoreYear,
         initialIgnoreYear: initialIgnoreYear,
@@ -86,8 +142,10 @@ class _AppDatePickerSheet extends StatefulWidget {
   final DateTime initialDate;
   final DateTime firstDate;
   final DateTime lastDate;
-  final String title;
+  final String? title;
   final String? subtitle;
+  final String? titleKey;
+  final String? subtitleKey;
   final AppDatePickerMode initialMode;
   final bool allowIgnoreYear;
   final bool initialIgnoreYear;
@@ -96,8 +154,10 @@ class _AppDatePickerSheet extends StatefulWidget {
     required this.initialDate,
     required this.firstDate,
     required this.lastDate,
-    required this.title,
-    required this.subtitle,
+    this.title,
+    this.subtitle,
+    this.titleKey,
+    this.subtitleKey,
     required this.initialMode,
     required this.allowIgnoreYear,
     required this.initialIgnoreYear,
@@ -122,6 +182,17 @@ class _AppDatePickerSheetState extends State<_AppDatePickerSheet> {
     _mode = widget.initialMode;
     _lunar = LunarCalendar.fromSolar(_selectedDay);
     _ignoreYear = widget.initialIgnoreYear && widget.allowIgnoreYear;
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    super.dispose();
   }
 
   DateTime _clamp(DateTime date) {
@@ -156,6 +227,17 @@ class _AppDatePickerSheetState extends State<_AppDatePickerSheet> {
     });
   }
 
+  String _resolveTitle() {
+    if (widget.titleKey != null) return I18n.tr(widget.titleKey!);
+    if (widget.title != null) return widget.title!;
+    return I18n.tr('picker.date.title');
+  }
+
+  String? _resolveSubtitle() {
+    if (widget.subtitleKey != null) return I18n.tr(widget.subtitleKey!);
+    return widget.subtitle;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -166,21 +248,21 @@ class _AppDatePickerSheetState extends State<_AppDatePickerSheet> {
       ignoreYear: _ignoreYear,
     );
     return AppModalSheet(
-      title: widget.title,
-      subtitle: widget.subtitle,
+      title: _resolveTitle(),
+      subtitle: _resolveSubtitle(),
       actions: [
         TextButton.icon(
           onPressed: () => _setSolar(DateTime.now()),
           icon: const Icon(Icons.today_outlined, size: 18),
-          label: const Text('今天'),
+          label: Text(I18n.tr('picker.action.today')),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: Text(I18n.tr('action.cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, result),
-          child: const Text('确定'),
+          child: Text(I18n.tr('action.confirm')),
         ),
       ],
       child: Column(
@@ -269,8 +351,8 @@ class _AppDatePickerSheetState extends State<_AppDatePickerSheet> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _ignoreYear,
-              title: const Text('忽略年份'),
-              subtitle: const Text('适合生日、纪念日每年重复'),
+              title: Text(I18n.tr('picker.date.ignore_year')),
+              subtitle: Text(I18n.tr('picker.date.ignore_year_desc')),
               onChanged: (v) => setState(() => _ignoreYear = v),
             ),
           ],
@@ -309,6 +391,26 @@ class _SolarCalendar extends StatelessWidget {
     required this.onPageChanged,
   });
 
+  static const _weekdayKeys = <String>[
+    'picker.weekday.mon',
+    'picker.weekday.tue',
+    'picker.weekday.wed',
+    'picker.weekday.thu',
+    'picker.weekday.fri',
+    'picker.weekday.sat',
+    'picker.weekday.sun',
+  ];
+
+  static const _weekdayFullKeys = <String>[
+    'weekday.mon',
+    'weekday.tue',
+    'weekday.wed',
+    'weekday.thu',
+    'weekday.fri',
+    'weekday.sat',
+    'weekday.sun',
+  ];
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -345,7 +447,7 @@ class _SolarCalendar extends StatelessWidget {
             Row(
               children: [
                 IconButton(
-                  tooltip: '上个月',
+                  tooltip: I18n.tr('picker.date.prev_month'),
                   visualDensity: VisualDensity.compact,
                   onPressed: canGoPrevious
                       ? () =>
@@ -356,7 +458,7 @@ class _SolarCalendar extends StatelessWidget {
                 Expanded(
                   child: Center(
                     child: Text(
-                      '${month.year}年${month.month}月',
+                      I18nDateFormat.yearMonth(month),
                       style:
                           theme.textTheme.titleMedium?.copyWith(
                             color: cs.onSurface,
@@ -371,7 +473,7 @@ class _SolarCalendar extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: '下个月',
+                  tooltip: I18n.tr('picker.date.next_month'),
                   visualDensity: VisualDensity.compact,
                   onPressed: canGoNext
                       ? () =>
@@ -383,13 +485,17 @@ class _SolarCalendar extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Row(
-              children: const ['一', '二', '三', '四', '五', '六', '日']
-                  .map(
-                    (label) => Expanded(
-                      child: Center(child: _WeekdayLabel(label: label)),
+              children: [
+                for (var i = 0; i < 7; i++)
+                  Expanded(
+                    child: Center(
+                      child: _WeekdayLabel(
+                        label: I18n.tr(_weekdayKeys[i]),
+                        semanticsLabel: I18n.tr(_weekdayFullKeys[i]),
+                      ),
                     ),
-                  )
-                  .toList(),
+                  ),
+              ],
             ),
             const SizedBox(height: 4),
             for (var row = 0; row < rows; row++)
@@ -440,20 +546,27 @@ class _SolarCalendarCell {
 
 class _WeekdayLabel extends StatelessWidget {
   final String label;
+  final String? semanticsLabel;
 
-  const _WeekdayLabel({required this.label});
+  const _WeekdayLabel({required this.label, this.semanticsLabel});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Text(
-        label,
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: cs.primary.withValues(alpha: 0.82),
-          fontWeight: FontWeight.normal,
+    return Semantics(
+      label: semanticsLabel,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: cs.primary.withValues(alpha: 0.82),
+              fontWeight: FontWeight.normal,
+            ),
+          ),
         ),
       ),
     );
@@ -531,27 +644,33 @@ class _SolarDayCell extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.all(3),
-      child: Material(
-        key: ValueKey(
-          'solar-day-${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}',
-        ),
-        color: background,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
+      child: Semantics(
+        label: I18nDateFormat.date(day),
+        selected: isSelected,
+        enabled: !disabled,
+        button: true,
+        child: Material(
+          key: ValueKey(
+            'solar-day-${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}',
+          ),
+          color: background,
           borderRadius: BorderRadius.circular(12),
-          onTap: disabled ? null : () => onSelected(day),
-          child: Container(
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: border,
-            ),
-            child: Text(
-              '${day.day}',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.normal,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: disabled ? null : () => onSelected(day),
+            child: Container(
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: border,
+              ),
+              child: Text(
+                '${day.day}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.normal,
+                ),
               ),
             ),
           ),
@@ -573,6 +692,25 @@ class _LunarPicker extends StatelessWidget {
 
   const _LunarPicker({required this.lunar, required this.onChanged});
 
+  static String _yearLabel(int year) => _formatLunarYear(year);
+
+  static String _formatMonth(int month, {bool isLeap = false}) {
+    if (I18n.current == AppLocale.zh) {
+      return LunarCalendar.monthName(month, isLeap: isLeap);
+    }
+    final prefix = isLeap
+        ? I18n.tr('picker.lunar.leap_month')
+        : I18n.tr('picker.lunar.month');
+    return '$prefix $month';
+  }
+
+  static String _formatDay(int day) {
+    if (I18n.current == AppLocale.zh) {
+      return LunarCalendar.dayName(day);
+    }
+    return '${I18n.tr('picker.lunar.day')} $day';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -582,7 +720,7 @@ class _LunarPicker extends StatelessWidget {
             value: lunar.year,
             min: 1900,
             max: 2099,
-            labelBuilder: (v) => '${LunarCalendar.ganzhiOf(v)}年（$v）',
+            labelBuilder: _yearLabel,
             onChanged: (v) => onChanged(year: v),
           ),
         ),
@@ -591,7 +729,10 @@ class _LunarPicker extends StatelessWidget {
             value: lunar.month,
             min: 1,
             max: 12,
-            labelBuilder: (v) => LunarCalendar.monthName(v),
+            labelBuilder: (v) => _formatMonth(
+              v,
+              isLeap: lunar.isLeapMonth && v == lunar.month,
+            ),
             onChanged: (v) => onChanged(month: v),
           ),
         ),
@@ -600,7 +741,7 @@ class _LunarPicker extends StatelessWidget {
             value: lunar.day,
             min: 1,
             max: LunarCalendar.daysInMonth(lunar.year, lunar.month),
-            labelBuilder: (v) => LunarCalendar.dayName(v),
+            labelBuilder: _formatDay,
             onChanged: (v) => onChanged(day: v),
           ),
         ),
@@ -674,12 +815,19 @@ class _NumberWheelState extends State<_NumberWheel> {
           childCount: widget.max - widget.min + 1,
           builder: (context, index) {
             final value = widget.min + index;
-            return Center(
-              child: Text(
-                widget.labelBuilder(value),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: cs.onSurface),
+            final label = widget.labelBuilder(value);
+            return Semantics(
+              label: label,
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: cs.onSurface),
+                  ),
+                ),
               ),
             );
           },

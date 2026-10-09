@@ -19,6 +19,13 @@ class I18nDateFormat {
     };
   }
 
+  static String yearMonth(DateTime value) {
+    return switch (I18n.current) {
+      AppLocale.en => '${_enMonth(value.month)} ${value.year}',
+      AppLocale.zh => '${value.year}年${value.month}月',
+    };
+  }
+
   static String date(DateTime value) {
     return switch (I18n.current) {
       AppLocale.en => '${_enMonth(value.month)} ${value.day}, ${value.year}',

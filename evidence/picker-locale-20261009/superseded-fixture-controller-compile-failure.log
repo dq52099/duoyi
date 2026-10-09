@@ -1,0 +1,130 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_picker_locale_state_test.dart
+test/widgets/app_picker_locale_state_test.dart:222:29: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+ - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+      expect(hourController.selectedItem, 9);
+                            ^^^^^^^^^^^^
+test/widgets/app_picker_locale_state_test.dart:223:31: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+ - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+      expect(minuteController.selectedItem, 3);
+                              ^^^^^^^^^^^^
+test/widgets/app_picker_locale_state_test.dart:229:29: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+ - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+      expect(hourController.selectedItem, 20);
+                            ^^^^^^^^^^^^
+test/widgets/app_picker_locale_state_test.dart:230:31: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+ - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+      expect(minuteController.selectedItem, 0);
+                              ^^^^^^^^^^^^
+test/widgets/app_picker_locale_state_test.dart:244:29: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+ - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+      expect(hourController.selectedItem, 20);
+                            ^^^^^^^^^^^^
+test/widgets/app_picker_locale_state_test.dart:245:31: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+ - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+      expect(minuteController.selectedItem, 0);
+                              ^^^^^^^^^^^^
+test/widgets/app_picker_locale_state_test.dart:252:29: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+ - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+      expect(hourController.selectedItem, 20);
+                            ^^^^^^^^^^^^
+test/widgets/app_picker_locale_state_test.dart:253:31: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+ - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+      expect(minuteController.selectedItem, 0);
+                              ^^^^^^^^^^^^
+00:00 +0 -1: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_picker_locale_state_test.dart [E]
+  Failed to load "/home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_picker_locale_state_test.dart":
+  Compilation failed for testPath=/home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_picker_locale_state_test.dart: test/widgets/app_picker_locale_state_test.dart:222:29: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+   - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+        expect(hourController.selectedItem, 9);
+                              ^^^^^^^^^^^^
+  test/widgets/app_picker_locale_state_test.dart:223:31: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+   - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+        expect(minuteController.selectedItem, 3);
+                                ^^^^^^^^^^^^
+  test/widgets/app_picker_locale_state_test.dart:229:29: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+   - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+        expect(hourController.selectedItem, 20);
+                              ^^^^^^^^^^^^
+  test/widgets/app_picker_locale_state_test.dart:230:31: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+   - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+        expect(minuteController.selectedItem, 0);
+                                ^^^^^^^^^^^^
+  test/widgets/app_picker_locale_state_test.dart:244:29: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+   - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+        expect(hourController.selectedItem, 20);
+                              ^^^^^^^^^^^^
+  test/widgets/app_picker_locale_state_test.dart:245:31: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+   - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+        expect(minuteController.selectedItem, 0);
+                                ^^^^^^^^^^^^
+  test/widgets/app_picker_locale_state_test.dart:252:29: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+   - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+        expect(hourController.selectedItem, 20);
+                              ^^^^^^^^^^^^
+  test/widgets/app_picker_locale_state_test.dart:253:31: Error: The getter 'selectedItem' isn't defined for the type 'ScrollController'.
+   - 'ScrollController' is from 'package:flutter/src/widgets/scroll_controller.dart' ('../../flutter/packages/flutter/lib/src/widgets/scroll_controller.dart').
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'selectedItem'.
+        expect(minuteController.selectedItem, 0);
+                                ^^^^^^^^^^^^
+  .
+00:00 +0 -1: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_date_picker_test.dart
+00:00 +0 -1: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_picker_locale_state_test.dart [E]
+  Error: The Dart compiler exited unexpectedly.
+  package:flutter_tools/src/base/common.dart 34:3  throwToolExit
+  package:flutter_tools/src/compile.dart 939:11    DefaultResidentCompiler._compile.<fn>
+  dart:async/zone_root.dart 48:47                  _rootRunUnary
+  dart:async/zone.dart 733:19                      _CustomZone.runUnary
+  dart:async/future_impl.dart 948:45               Future._propagateToListeners.handleValueCallback
+  dart:async/future_impl.dart 977:13               Future._propagateToListeners
+  dart:async/future_impl.dart 862:9                Future._propagateToListeners
+  dart:async/future_impl.dart 720:5                Future._completeWithValue
+  dart:async/future_impl.dart 804:7                Future._asyncCompleteWithValue.<fn>
+  dart:async/zone_root.dart 35:13                  _rootRun
+  dart:async/zone.dart 726:19                      _CustomZone.run
+  dart:async/zone.dart 625:7                       _CustomZone.runGuarded
+  dart:async/zone.dart 666:23                      _CustomZone.bindCallbackGuarded.<fn>
+  dart:async/schedule_microtask.dart 40:35         _microtaskLoop
+  dart:async/schedule_microtask.dart 49:5          _startMicrotaskLoop
+  dart:isolate-patch/isolate_patch.dart 127:13     _runPendingImmediateCallback
+  dart:isolate-patch/isolate_patch.dart 194:5      _RawReceivePort._handleMessage
+  
+00:00 +0 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_date_picker_test.dart: 日期和时间选择器避免二级页面大字号和厚边框回退
+00:00 +1 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_date_picker_test.dart: 公历日期选择器显示可点击日期网格
+00:02 +2 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/app_date_picker_test.dart: 公历当前月日期不是禁用灰色态
+00:03 +3 -1: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart
+00:04 +3 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart: I18nDateFormat 中文完整日期时间符合 R17 样例
+00:04 +4 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart: I18nDateFormat 英文完整日期时间使用英文月份和 12 小时制
+00:04 +5 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart: I18nDateFormat 智能日期在无时间时只展示日期
+00:04 +6 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart: I18nDateFormat 短日期时间可省略午夜时间
+00:04 +7 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/core/i18n_date_format_test.dart: I18nDateFormat 月日星期和纯时间跟随语言
+00:05 +8 -1: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/no_global_bold_static_test.dart
+00:07 +8 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/no_global_bold_static_test.dart: 应用 UI 不再引入全局粗体字重
+00:07 +9 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/services/no_global_bold_static_test.dart: 全局设计令牌和管理后台不再提供粗体入口
+00:07 +10 -1: loading /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart
+00:09 +10 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: status badge contrast uses rendered Brightness.dark surface
+00:10 +11 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: status badge contrast uses rendered Brightness.light surface
+00:10 +12 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSectionHeader handles long action on narrow width
+00:10 +13 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppStatusBadge constrains long labels in narrow containers
+00:10 +14 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSettingsTile keeps text readable with complex trailing
+00:10 +15 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSettingsTile centers leading icon in the whole row
+00:11 +16 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSettingsTile aligns daily reminder time row
+00:11 +17 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppMetricCard 默认数值字号为主角，标题/单位保持 11
+00:11 +18 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: StatsOverviewCard 不传样式时数值吃到 16 默认（我的页路径）
+00:11 +19 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppMetricCard 显式 valueStyle 仍然优先生效
+00:11 +20 -1: /home/ubuntu/duoyi-worktrees/picker-locale-20261009/test/widgets/surface_components_layout_test.dart: AppMetricCard 亮色下填充/描边/阴影走主题玻璃档（两套主题同源）
+00:11 +21 -1: Some tests failed.

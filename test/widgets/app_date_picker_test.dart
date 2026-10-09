@@ -13,10 +13,10 @@ void main() {
     expect(timePicker, contains('fontWeight: FontWeight.normal'));
     expect(
       timePicker,
-      contains(
-        'Border.all(\n'
-        '                color: cs.primary.withValues(alpha: 0.12),\n'
-        '                width: 0.45,',
+      matches(
+        RegExp(
+          r'Border\.all\(\s*color: cs\.primary\.withValues\(alpha: 0\.12\),\s*width: 0\.45,',
+        ),
       ),
     );
 
