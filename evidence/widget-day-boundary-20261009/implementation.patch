@@ -2,31 +2,18 @@ diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/And
 index ae407ec..40bc35e 100644
 --- a/android/app/src/main/AndroidManifest.xml
 +++ b/android/app/src/main/AndroidManifest.xml
-@@ -141,6 +141,10 @@
-         <receiver
-             android:name=".DuoyiWidgetPinResultReceiver"
-             android:exported="false" />
+@@ -143,0 +144,4 @@
 +        <receiver
 +            android:name=".DuoyiWidgetDayBoundaryReceiver"
 +            android:exported="false"
 +            android:enabled="true" />
-         <receiver
-             android:name=".DuoyiWidgetRestoreReceiver"
-             android:exported="true"
 diff --git a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiStyledWidgetProvider.kt b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiStyledWidgetProvider.kt
 index 15910dc..0e1fe1c 100644
 --- a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiStyledWidgetProvider.kt
 +++ b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiStyledWidgetProvider.kt
-@@ -4,11 +4,22 @@ import android.appwidget.AppWidgetManager
- import android.appwidget.AppWidgetProvider
- import android.content.ComponentName
- import android.content.Context
+@@ -6,0 +7 @@ import android.content.Context
 +import android.content.Intent
- import android.os.Bundle
- import android.util.Log
- import es.antonborri.home_widget.HomeWidgetPlugin
- 
- open class DuoyiStyledWidgetProvider : AppWidgetProvider() {
+@@ -11,0 +13,10 @@ open class DuoyiStyledWidgetProvider : AppWidgetProvider() {
 +    override fun onReceive(context: Context, intent: Intent) {
 +        try {
 +            super.onReceive(context, intent)
@@ -37,115 +24,11 @@ index 15910dc..0e1fe1c 100644
 +        }
 +    }
 +
-     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
-         super.onDeleted(context, appWidgetIds)
-         DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(
-diff --git a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt
-index a242ad4..d95b836 100644
---- a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt
-+++ b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt
-@@ -21,9 +21,15 @@ import java.util.Locale
-  */
- class DuoyiWidgetProvider : AppWidgetProvider() {
-     override fun onReceive(context: Context, intent: Intent) {
--        super.onReceive(context, intent)
--        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
--            DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(context)
-+        try {
-+            super.onReceive(context, intent)
-+            if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-+                DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(context)
-+            }
-+        } finally {
-+            if (DuoyiWidgetDayBoundaryScheduler.isWidgetLifecycleAction(intent.action)) {
-+                DuoyiWidgetDayBoundaryScheduler.reconcile(context)
-+            }
-         }
-     }
- 
-diff --git a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRestoreReceiver.kt b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRestoreReceiver.kt
-index 3e68181..0572664 100644
---- a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRestoreReceiver.kt
-+++ b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRestoreReceiver.kt
-@@ -10,9 +10,14 @@ class DuoyiWidgetRestoreReceiver : BroadcastReceiver() {
-         val action = intent.action ?: return
-         if (action !in supportedActions) return
-         val appContext = context.applicationContext
--        val restored = DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(appContext)
--        val updated = DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(appContext)
--        Log.i(tag, "restore action=$action restoredProviders=$restored updatedWidgets=$updated")
-+        DuoyiWidgetDayBoundaryScheduler.invalidate()
-+        try {
-+            val restored = DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(appContext)
-+            val updated = DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(appContext)
-+            Log.i(tag, "restore action=$action restoredProviders=$restored updatedWidgets=$updated")
-+        } finally {
-+            DuoyiWidgetDayBoundaryScheduler.reconcile(appContext)
-+        }
-     }
- 
-     companion object {
-diff --git a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetVariantProviders.kt b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetVariantProviders.kt
-index dc1b200..a9ded49 100644
---- a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetVariantProviders.kt
-+++ b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetVariantProviders.kt
-@@ -227,9 +227,18 @@ object DuoyiWidgetProviderRegistry {
-         if (restoredCount > 0) {
-             Log.i(tag, "restore_enabled_providers count=$restoredCount")
-         }
-+        // Resume also reaches this path when provider enablement needed no repair.
-+        DuoyiWidgetDayBoundaryScheduler.reconcile(context, force = true)
-         return restoredCount
-     }
- 
-+    fun installedWidgetCount(context: Context): Int {
-+        val manager = AppWidgetManager.getInstance(context)
-+        return allWidgetProviderClasses().sumOf { providerClass ->
-+            manager.getAppWidgetIds(ComponentName(context, providerClass)).size
-+        }
-+    }
-+
-     private fun pendingEntry(requestId: String, component: ComponentName): String {
-         return pendingEntry(requestId, component, null)
-     }
-@@ -362,18 +371,22 @@ object DuoyiWidgetProviderRegistry {
-     private fun requestUpdateComponents(context: Context, components: List<ComponentName>): Int {
-         val manager = AppWidgetManager.getInstance(context)
-         var updatedCount = 0
--        for (component in components) {
--            val ids = manager.getAppWidgetIds(component)
--            if (ids.isEmpty()) continue
--            ensureProviderEnabled(context, component)
--            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
--                setComponent(component)
--                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-+        try {
-+            for (component in components) {
-+                val ids = manager.getAppWidgetIds(component)
-+                if (ids.isEmpty()) continue
-+                ensureProviderEnabled(context, component)
-+                val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
-+                    setComponent(component)
-+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-+                }
-+                context.sendBroadcast(intent)
-+                updatedCount += ids.size
-             }
--            context.sendBroadcast(intent)
--            updatedCount += ids.size
-+            return updatedCount
-+        } finally {
-+            DuoyiWidgetDayBoundaryScheduler.reconcile(context)
-         }
--        return updatedCount
-     }
- 
-     private fun hasPendingVariantProvider(context: Context, component: ComponentName): Boolean {
-diff --git a/home/ubuntu/duoyi-worktrees/widget-refresh-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryPolicy.kt b/home/ubuntu/duoyi-worktrees/widget-refresh-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryPolicy.kt
+diff --git a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryPolicy.kt b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryPolicy.kt
 new file mode 100644
 index 0000000..4deb1e0
 --- /dev/null
-+++ b/home/ubuntu/duoyi-worktrees/widget-refresh-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryPolicy.kt
++++ b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryPolicy.kt
 @@ -0,0 +1,74 @@
 +package com.duoyi.duoyi
 +
@@ -221,11 +104,40 @@ index 0000000..4deb1e0
 +        return DuoyiWidgetBoundaryResult(DuoyiWidgetBoundaryOutcome.SCHEDULED, next)
 +    }
 +}
-diff --git a/home/ubuntu/duoyi-worktrees/widget-refresh-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryScheduler.kt b/home/ubuntu/duoyi-worktrees/widget-refresh-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryScheduler.kt
+diff --git a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryReceiver.kt b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryReceiver.kt
+new file mode 100644
+index 0000000..0187542
+--- /dev/null
++++ b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryReceiver.kt
+@@ -0,0 +1,23 @@
++package com.duoyi.duoyi
++
++import android.content.BroadcastReceiver
++import android.content.Context
++import android.content.Intent
++import android.util.Log
++
++/** Private alarm entry point; no incoming data is used to choose content or targets. */
++class DuoyiWidgetDayBoundaryReceiver : BroadcastReceiver() {
++    override fun onReceive(context: Context, intent: Intent) {
++        if (intent.action != DuoyiWidgetDayBoundaryScheduler.action) return
++        val appContext = context.applicationContext
++        DuoyiWidgetDayBoundaryScheduler.invalidate()
++        try {
++            DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(appContext)
++        } catch (error: RuntimeException) {
++            Log.w("DuoyiWidgetRefresh", "boundary refresh dispatch failed", error)
++        } finally {
++            // Recompute from delivery time, including delayed alarms and zone changes.
++            DuoyiWidgetDayBoundaryScheduler.reconcile(appContext)
++        }
++    }
++}
+diff --git a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryScheduler.kt b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryScheduler.kt
 new file mode 100644
 index 0000000..cb35abd
 --- /dev/null
-+++ b/home/ubuntu/duoyi-worktrees/widget-refresh-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryScheduler.kt
++++ b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryScheduler.kt
 @@ -0,0 +1,88 @@
 +package com.duoyi.duoyi
 +
@@ -315,32 +227,78 @@ index 0000000..cb35abd
 +        }
 +    }
 +}
-diff --git a/home/ubuntu/duoyi-worktrees/widget-refresh-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryReceiver.kt b/home/ubuntu/duoyi-worktrees/widget-refresh-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryReceiver.kt
-new file mode 100644
-index 0000000..0187542
---- /dev/null
-+++ b/home/ubuntu/duoyi-worktrees/widget-refresh-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryReceiver.kt
-@@ -0,0 +1,23 @@
-+package com.duoyi.duoyi
-+
-+import android.content.BroadcastReceiver
-+import android.content.Context
-+import android.content.Intent
-+import android.util.Log
-+
-+/** Private alarm entry point; no incoming data is used to choose content or targets. */
-+class DuoyiWidgetDayBoundaryReceiver : BroadcastReceiver() {
-+    override fun onReceive(context: Context, intent: Intent) {
-+        if (intent.action != DuoyiWidgetDayBoundaryScheduler.action) return
-+        val appContext = context.applicationContext
+diff --git a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt
+index a242ad4..d95b836 100644
+--- a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt
++++ b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt
+@@ -24,3 +24,9 @@ class DuoyiWidgetProvider : AppWidgetProvider() {
+-        super.onReceive(context, intent)
+-        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+-            DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(context)
++        try {
++            super.onReceive(context, intent)
++            if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
++                DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(context)
++            }
++        } finally {
++            if (DuoyiWidgetDayBoundaryScheduler.isWidgetLifecycleAction(intent.action)) {
++                DuoyiWidgetDayBoundaryScheduler.reconcile(context)
++            }
+diff --git a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRestoreReceiver.kt b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRestoreReceiver.kt
+index 3e68181..0572664 100644
+--- a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRestoreReceiver.kt
++++ b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRestoreReceiver.kt
+@@ -13,3 +13,8 @@ class DuoyiWidgetRestoreReceiver : BroadcastReceiver() {
+-        val restored = DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(appContext)
+-        val updated = DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(appContext)
+-        Log.i(tag, "restore action=$action restoredProviders=$restored updatedWidgets=$updated")
 +        DuoyiWidgetDayBoundaryScheduler.invalidate()
 +        try {
-+            DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(appContext)
-+        } catch (error: RuntimeException) {
-+            Log.w("DuoyiWidgetRefresh", "boundary refresh dispatch failed", error)
++            val restored = DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(appContext)
++            val updated = DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(appContext)
++            Log.i(tag, "restore action=$action restoredProviders=$restored updatedWidgets=$updated")
 +        } finally {
-+            // Recompute from delivery time, including delayed alarms and zone changes.
 +            DuoyiWidgetDayBoundaryScheduler.reconcile(appContext)
 +        }
+diff --git a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetVariantProviders.kt b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetVariantProviders.kt
+index dc1b200..a9ded49 100644
+--- a/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetVariantProviders.kt
++++ b/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetVariantProviders.kt
+@@ -229,0 +230,2 @@ object DuoyiWidgetProviderRegistry {
++        // Resume also reaches this path when provider enablement needed no repair.
++        DuoyiWidgetDayBoundaryScheduler.reconcile(context, force = true)
+@@ -232,0 +235,7 @@ object DuoyiWidgetProviderRegistry {
++    fun installedWidgetCount(context: Context): Int {
++        val manager = AppWidgetManager.getInstance(context)
++        return allWidgetProviderClasses().sumOf { providerClass ->
++            manager.getAppWidgetIds(ComponentName(context, providerClass)).size
++        }
 +    }
-+}
++
+@@ -365,7 +374,11 @@ object DuoyiWidgetProviderRegistry {
+-        for (component in components) {
+-            val ids = manager.getAppWidgetIds(component)
+-            if (ids.isEmpty()) continue
+-            ensureProviderEnabled(context, component)
+-            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
+-                setComponent(component)
+-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
++        try {
++            for (component in components) {
++                val ids = manager.getAppWidgetIds(component)
++                if (ids.isEmpty()) continue
++                ensureProviderEnabled(context, component)
++                val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
++                    setComponent(component)
++                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
++                }
++                context.sendBroadcast(intent)
++                updatedCount += ids.size
+@@ -373,2 +386,3 @@ object DuoyiWidgetProviderRegistry {
+-            context.sendBroadcast(intent)
+-            updatedCount += ids.size
++            return updatedCount
++        } finally {
++            DuoyiWidgetDayBoundaryScheduler.reconcile(context)
+@@ -376 +389,0 @@ object DuoyiWidgetProviderRegistry {
+-        return updatedCount
