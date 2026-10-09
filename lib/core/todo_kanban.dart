@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'todo_ui_copy.dart';
+
 const String defaultKanbanPendingColumnId = 'pending';
 const String defaultKanbanInProgressColumnId = 'in_progress';
 const String defaultKanbanDoneColumnId = 'done';
@@ -17,13 +19,7 @@ extension TodoKanbanGroupModeX on TodoKanbanGroupMode {
     TodoKanbanGroupMode.list => 'list',
   };
 
-  String get label => switch (this) {
-    TodoKanbanGroupMode.none => '不分组',
-    TodoKanbanGroupMode.priority => '按优先级',
-    TodoKanbanGroupMode.dueDate => '按截止日',
-    TodoKanbanGroupMode.tag => '按标签',
-    TodoKanbanGroupMode.list => '按清单',
-  };
+  String get label => TodoUiCopy.kanbanGroupModeLabel(this);
 
   static TodoKanbanGroupMode fromStorageKey(Object? raw) {
     final value = raw?.toString().trim() ?? '';

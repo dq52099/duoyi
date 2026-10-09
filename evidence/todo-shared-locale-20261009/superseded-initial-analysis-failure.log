@@ -1,0 +1,19 @@
+Analyzing 88 items...                                           
+
+   info • Don't use 'BuildContext's across async gaps • lib/widgets/todo_completion_flow.dart:80:5 • use_build_context_synchronously
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:98:34 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:136:34 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:150:34 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:162:34 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:181:36 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:194:36 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:244:36 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:291:36 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:327:36 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:367:36 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:473:36 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:541:36 • invalid_use_of_protected_member
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/todo_shared_locale_state_test.dart:626:36 • invalid_use_of_protected_member
+warning • A value for optional parameter 'automaticRecordGate' isn't ever given • test/widgets/todo_shared_locale_state_test.dart:864:50 • unused_element_parameter
+
+15 issues found. (ran in 86.4s)

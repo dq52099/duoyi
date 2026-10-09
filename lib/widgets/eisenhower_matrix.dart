@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/completion_visibility_policy.dart';
 import '../core/design_tokens.dart';
+import '../core/i18n.dart';
+import '../core/todo_ui_copy.dart';
 import '../models/todo.dart';
 import '../providers/theme_provider.dart';
 
@@ -28,94 +30,106 @@ class EisenhowerMatrix extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = context.watch<ThemeProvider>().brand.strings;
+    final themeProvider = context.watch<ThemeProvider>();
     // 局部变量以获得空值提升，供四处 _QuadrantCard 接线使用。
     final onTodoChanged = onTodoQuadrantChanged;
-    return Column(
-      children: [
-        Row(
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) {
+        final s = themeProvider.brand.strings;
+        return Column(
           children: [
-            Expanded(
-              child: _QuadrantCard(
-                quadrant: EisenhowerQuadrant.urgentImportant,
-                label: s.quadrantQ1Label,
-                subLabel: s.quadrantQ1Sub,
-                items: quadrantGroups[EisenhowerQuadrant.urgentImportant] ?? [],
-                onTodoDropped: onTodoChanged == null
-                    ? null
-                    : (todo) => onTodoChanged(
-                        todo,
-                        EisenhowerQuadrant.urgentImportant,
-                      ),
-                canEditTodo: canEditTodo,
-                onTap: () => onQuadrantTap(EisenhowerQuadrant.urgentImportant),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: _QuadrantCard(
+                    quadrant: EisenhowerQuadrant.urgentImportant,
+                    label: s.quadrantQ1Label,
+                    subLabel: s.quadrantQ1Sub,
+                    items:
+                        quadrantGroups[EisenhowerQuadrant.urgentImportant] ??
+                        [],
+                    onTodoDropped: onTodoChanged == null
+                        ? null
+                        : (todo) => onTodoChanged(
+                            todo,
+                            EisenhowerQuadrant.urgentImportant,
+                          ),
+                    canEditTodo: canEditTodo,
+                    onTap: () =>
+                        onQuadrantTap(EisenhowerQuadrant.urgentImportant),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _QuadrantCard(
+                    quadrant: EisenhowerQuadrant.notUrgentImportant,
+                    label: s.quadrantQ2Label,
+                    subLabel: s.quadrantQ2Sub,
+                    items:
+                        quadrantGroups[EisenhowerQuadrant.notUrgentImportant] ??
+                        [],
+                    onTodoDropped: onTodoChanged == null
+                        ? null
+                        : (todo) => onTodoChanged(
+                            todo,
+                            EisenhowerQuadrant.notUrgentImportant,
+                          ),
+                    canEditTodo: canEditTodo,
+                    onTap: () =>
+                        onQuadrantTap(EisenhowerQuadrant.notUrgentImportant),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _QuadrantCard(
-                quadrant: EisenhowerQuadrant.notUrgentImportant,
-                label: s.quadrantQ2Label,
-                subLabel: s.quadrantQ2Sub,
-                items:
-                    quadrantGroups[EisenhowerQuadrant.notUrgentImportant] ?? [],
-                onTodoDropped: onTodoChanged == null
-                    ? null
-                    : (todo) => onTodoChanged(
-                        todo,
-                        EisenhowerQuadrant.notUrgentImportant,
-                      ),
-                canEditTodo: canEditTodo,
-                onTap: () =>
-                    onQuadrantTap(EisenhowerQuadrant.notUrgentImportant),
-              ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _QuadrantCard(
+                    quadrant: EisenhowerQuadrant.urgentNotImportant,
+                    label: s.quadrantQ3Label,
+                    subLabel: s.quadrantQ3Sub,
+                    items:
+                        quadrantGroups[EisenhowerQuadrant.urgentNotImportant] ??
+                        [],
+                    onTodoDropped: onTodoChanged == null
+                        ? null
+                        : (todo) => onTodoChanged(
+                            todo,
+                            EisenhowerQuadrant.urgentNotImportant,
+                          ),
+                    canEditTodo: canEditTodo,
+                    onTap: () =>
+                        onQuadrantTap(EisenhowerQuadrant.urgentNotImportant),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _QuadrantCard(
+                    quadrant: EisenhowerQuadrant.notUrgentNotImportant,
+                    label: s.quadrantQ4Label,
+                    subLabel: s.quadrantQ4Sub,
+                    items:
+                        quadrantGroups[EisenhowerQuadrant
+                            .notUrgentNotImportant] ??
+                        [],
+                    onTodoDropped: onTodoChanged == null
+                        ? null
+                        : (todo) => onTodoChanged(
+                            todo,
+                            EisenhowerQuadrant.notUrgentNotImportant,
+                          ),
+                    canEditTodo: canEditTodo,
+                    onTap: () =>
+                        onQuadrantTap(EisenhowerQuadrant.notUrgentNotImportant),
+                  ),
+                ),
+              ],
             ),
           ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _QuadrantCard(
-                quadrant: EisenhowerQuadrant.urgentNotImportant,
-                label: s.quadrantQ3Label,
-                subLabel: s.quadrantQ3Sub,
-                items:
-                    quadrantGroups[EisenhowerQuadrant.urgentNotImportant] ?? [],
-                onTodoDropped: onTodoChanged == null
-                    ? null
-                    : (todo) => onTodoChanged(
-                        todo,
-                        EisenhowerQuadrant.urgentNotImportant,
-                      ),
-                canEditTodo: canEditTodo,
-                onTap: () =>
-                    onQuadrantTap(EisenhowerQuadrant.urgentNotImportant),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _QuadrantCard(
-                quadrant: EisenhowerQuadrant.notUrgentNotImportant,
-                label: s.quadrantQ4Label,
-                subLabel: s.quadrantQ4Sub,
-                items:
-                    quadrantGroups[EisenhowerQuadrant.notUrgentNotImportant] ??
-                    [],
-                onTodoDropped: onTodoChanged == null
-                    ? null
-                    : (todo) => onTodoChanged(
-                        todo,
-                        EisenhowerQuadrant.notUrgentNotImportant,
-                      ),
-                canEditTodo: canEditTodo,
-                onTap: () =>
-                    onQuadrantTap(EisenhowerQuadrant.notUrgentNotImportant),
-              ),
-            ),
-          ],
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -238,7 +252,7 @@ class _QuadrantCard extends StatelessWidget {
                         Expanded(
                           child: Center(
                             child: Text(
-                              '暂无任务',
+                              TodoUiCopy.eisenhowerEmpty,
                               style: TextStyle(
                                 color: Colors.grey.shade400,
                                 fontSize: 12,
@@ -328,7 +342,9 @@ class _QuadrantCard extends StatelessWidget {
                                                 left: 6,
                                               ),
                                               child: Text(
-                                                isCompleted ? '已完成' : '逾期',
+                                                isCompleted
+                                                    ? TodoUiCopy.completed
+                                                    : TodoUiCopy.overdue,
                                                 style: TextStyle(
                                                   fontSize: 10,
                                                   color: itemColor,
@@ -376,7 +392,7 @@ class _QuadrantCard extends StatelessWidget {
                                     Padding(
                                       padding: const EdgeInsets.only(top: 2),
                                       child: Text(
-                                        '+$hiddenCount 更多...',
+                                        TodoUiCopy.eisenhowerMore(hiddenCount),
                                         style: TextStyle(
                                           fontSize: 11,
                                           color: Colors.grey.shade400,

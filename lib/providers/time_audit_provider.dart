@@ -27,7 +27,17 @@ class TimeAuditProvider extends ChangeNotifier {
   List<TimeEntry> _entries = [];
   int _storageGeneration = 0;
   int _saveRevision = 0;
+  bool _disposed = false;
   VoidCallback? onLocalMutationPersisted;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _storageGeneration++;
+    _saveRevision++;
+    onLocalMutationPersisted = null;
+    super.dispose();
+  }
 
   List<TimeEntry> get entries {
     final sorted = [..._entries]
@@ -36,13 +46,11 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    if (_disposed) return;
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
       return;
     }
     final raw = prefs.getStringList(storageKey) ?? const <String>[];
@@ -63,12 +71,14 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   void resetLocalState() {
+    if (_disposed) return;
     _storageGeneration++;
     _entries = [];
     notifyListeners();
   }
 
   Future<void> _save() async {
+    if (_disposed) return;
     final saveRevision = ++_saveRevision;
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
@@ -78,6 +88,7 @@ class TimeAuditProvider extends ChangeNotifier {
     final data = snapshot.length >= _isolateEncodeMinItems
         ? await compute(_encodeTimeAuditPayload, snapshot)
         : snapshot.map((e) => jsonEncode(e.toJson())).toList();
+    if (!_isCurrentSave(saveRevision, generation, accountGeneration)) return;
     final prefs = await SharedPreferences.getInstance();
     if (!_isCurrentSave(saveRevision, generation, accountGeneration)) return;
     await prefs.setStringList(storageKey, data);
@@ -86,6 +97,7 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   void _notifyLocalMutationPersisted() {
+    if (_disposed) return;
     try {
       onLocalMutationPersisted?.call();
     } catch (e, st) {
@@ -97,7 +109,8 @@ class TimeAuditProvider extends ChangeNotifier {
     int storageGeneration,
     int accountGeneration,
   ) {
-    return storageGeneration == _storageGeneration &&
+    return !_disposed &&
+        storageGeneration == _storageGeneration &&
         AccountLocalDataCleaner.isCurrentAccountDataGeneration(
           accountGeneration,
         );
@@ -113,14 +126,23 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   Future<void> add(TimeEntry entry) async {
+    if (_disposed) return;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _entries.add(entry);
     await _save();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     notifyListeners();
   }
 
   Future<TimeEntryImportSummary> importTimeEntries(
     Iterable<TimeEntry> entries,
   ) async {
+    if (_disposed) {
+      return const TimeEntryImportSummary(inserted: 0, skippedDuplicates: 0);
+    }
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     var inserted = 0;
     var skippedDuplicates = 0;
     final seen = _entries.map(_importDuplicateKey).toSet();
@@ -136,7 +158,9 @@ class TimeAuditProvider extends ChangeNotifier {
     }
     if (inserted > 0) {
       await _save();
-      notifyListeners();
+      if (_isCurrentStorageGeneration(generation, accountGeneration)) {
+        notifyListeners();
+      }
     }
     return TimeEntryImportSummary(
       inserted: inserted,
@@ -145,12 +169,16 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   Future<void> upsertAuto(TimeEntry entry) async {
+    if (_disposed) return;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final key = entry.dedupeKey;
     if (key != null && key.isNotEmpty) {
       final idx = _entries.indexWhere((e) => e.dedupeKey == key);
       if (idx >= 0) {
         _entries[idx] = entry.copyWith();
         await _save();
+        if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
         notifyListeners();
         return;
       }
@@ -161,6 +189,7 @@ class TimeAuditProvider extends ChangeNotifier {
   // TimeEntry serialization has no workspaceId, so these records use the
   // account-level collection and its private tombstones.
   Future<void> deleteByDedupeKey(String dedupeKey) async {
+    if (_disposed) return;
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final removedIds = _entries
@@ -183,6 +212,7 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   Future<void> deleteWhere(bool Function(TimeEntry entry) test) async {
+    if (_disposed) return;
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final removedIds = _entries.where(test).map((e) => e.id).toList();
@@ -217,14 +247,19 @@ class TimeAuditProvider extends ChangeNotifier {
   }
 
   Future<void> update(TimeEntry entry) async {
+    if (_disposed) return;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final idx = _entries.indexWhere((e) => e.id == entry.id);
     if (idx < 0) return;
     _entries[idx] = entry;
     await _save();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     notifyListeners();
   }
 
   Future<void> delete(String id) async {
+    if (_disposed) return;
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final existing = _entries.where((e) => e.id == id).toList(growable: false);

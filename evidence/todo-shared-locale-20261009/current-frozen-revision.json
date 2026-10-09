@@ -1,0 +1,26 @@
+{
+  "cwd": "/home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009",
+  "source_sha256": {
+    "lib/core/todo_ui_copy.dart": "fdc8ced8403eb91674c100d75e4f76ed4837187a357206a03a279cf4f6bbf21d",
+    "lib/core/todo_kanban.dart": "a1bd60b9af50b4f561402c6b7750a5fe635ef6130143da15ffdab7d028cea71e",
+    "lib/widgets/eisenhower_matrix.dart": "9d4e1b93121b07e1f2fdd94757d27b628bad3a06c6280d38b29959a7ae2d232d",
+    "lib/widgets/todo_completion_flow.dart": "901c6b40b29a32bbe3bc6bf100a831e416b8f05538b4cbeabc8f3134ab68318d",
+    "lib/providers/time_audit_provider.dart": "478a44e42482b3a660b226936b774fe831d7cad5deb5fba1dba2707c8f731c3b",
+    "test/widgets/todo_shared_locale_state_test.dart": "094494769420ea7d089d232c3367f3c4fe564bb18a9520ac96e755d16f3c617a",
+    "test/providers/time_audit_provider_disposal_test.dart": "e23a711564caa2bd73ca3f6e18125e7e95ea393e603b50456fb28d1e3f8e45b4",
+    "test/widgets/eisenhower_matrix_static_test.dart": "e464e05ecf70f8241ef2f6e2298600f54c050dc825e768ee3ebc3cb4a6c3656b"
+  },
+  "writers_frozen": true,
+  "locale_fixture_cases": 15,
+  "provider_fixture_cases": 11,
+  "AGY_analyzer_repair_job": "implement-mv0h1ofg-3295bfeb",
+  "AGY_worker_absent": true,
+  "production_repair_only": "Direct context.mounted check after confirmation await; original account predicate retained",
+  "fixture_repair": "Documented protected listener accessor; added held automatic recording/account invalidation fixture",
+  "checks_executed_on_current_revision": true,
+  "goal_complete": false,
+  "passing_focused": 64,
+  "passing_regression": 987,
+  "regression_files": 83,
+  "analysis_targets": 88
+}

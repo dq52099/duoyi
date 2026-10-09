@@ -17,7 +17,11 @@ void main() {
     expect(source, contains('TodoVisualState.completed'));
     expect(source, contains('TodoVisualState.overdue'));
     expect(source, contains('TodoVisualState.dueSoon'));
-    expect(source, contains("isCompleted ? '已完成' : '逾期'"));
+    expect(source, contains("import '../core/todo_ui_copy.dart';"));
+    expect(
+      source.replaceAll(RegExp(r'\s+'), ' '),
+      contains('isCompleted ? TodoUiCopy.completed : TodoUiCopy.overdue'),
+    );
     expect(source, contains('TextDecoration.lineThrough'));
   });
 }

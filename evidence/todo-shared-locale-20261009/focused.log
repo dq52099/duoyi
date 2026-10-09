@@ -1,0 +1,97 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart
+00:00 +0: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: TodoKanbanGroupMode labels follow original zh-en-zh locale events
+00:00 +1: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: cancelled completion confirmation never completes or records
+00:01 +2: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: duplicate in-flight launches show one flow and record once
+00:02 +3: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: disposing the caller during confirmation cancels completion
+00:02 +4: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: disposing the caller during duration prompt cancels completion and removes locale listener
+00:02 +5: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: a new account generation can start the same todo while confirmation is pending
+00:03 +6: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: a new account generation can start the same todo while duration is pending
+00:03 +7: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: account invalidation while completion is held prevents recording and feedback
+00:04 +8: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: account invalidation during held automatic recording suppresses feedback
+00:04 +9: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: caller removal while time recording is held prevents stale feedback
+00:04 +10: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: active confirmation and duration prompt translate without losing route input or focus
+00:05 +11: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: locale changes during duration dismissal retain dialog resources until route removal
+00:05 +12: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: skipping duration records completion exactly once
+00:05 +13: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: standalone Eisenhower matrix refreshes empty status and more copy on locale events
+00:05 +14: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_shared_locale_state_test.dart: locale rebuild preserves Eisenhower edit permissions and drag callback
+00:06 +15: loading /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/core/todo_kanban_test.dart
+00:07 +15: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/core/todo_kanban_test.dart: 默认看板列是待处理、进行中、已完成并按顺序输出
+00:07 +16: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/core/todo_kanban_test.dart: 看板列配置可序列化、持久化并补回必需默认列
+00:07 +17: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/core/todo_kanban_test.dart: 未知任务列会归一到待处理列
+00:07 +18: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/core/todo_kanban_test.dart: 未知看板分组模式会回退到不分组
+00:07 +19: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/core/todo_kanban_test.dart: 自定义看板列删除 删除自定义列成功，剩余列 sortOrder 压实且内置列保留
+00:07 +20: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/core/todo_kanban_test.dart: 自定义看板列删除 内置列不可删除，不存在的列返回 null
+00:07 +21: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/core/todo_kanban_test.dart: 自定义看板列删除 删除后指向旧列的任务归并到默认待处理列（无需迁移）
+00:07 +22: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/core/todo_kanban_test.dart: 自定义看板列删除 删除后的配置可编码持久化，重新解码不复活已删列
+00:07 +23: loading /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_test.dart
+00:08 +23: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_test.dart: 长按拖动待办到目标象限触发 onTodoQuadrantChanged
+00:10 +24: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_test.dart: 拖到原象限不触发回调（DragTarget 拒绝同象限）
+00:10 +25: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_test.dart: 未传回调时矩阵保持只读，长按不进入拖拽也不崩
+00:10 +26: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_test.dart: 点按象限卡仍触发 onQuadrantTap 进入列表
+00:10 +27: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_test.dart: canEditTodo 返回 false 时行不可拖拽，投放不触发回调
+00:10 +28: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_test.dart: canEditTodo 返回 true 时拖拽行为与默认一致
+00:10 +29: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_test.dart: textScaler 2.0：卡高按 1.6 倍封顶放大，预览不再底部溢出
+00:10 +30: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_test.dart: textScaler 2.0：空象限空态在 Expanded 内自适应，不溢出
+00:10 +31: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_test.dart: textScaler 1.0：卡高保持 160，与基线一致无回归
+00:10 +32: loading /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_static_test.dart
+00:12 +32: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/eisenhower_matrix_static_test.dart: 四象限预览任务按逾期完成临期状态区分显示
+00:12 +33: loading /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_completion_flow_test.dart
+00:13 +33: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_completion_flow_test.dart: completion flow can skip manual duration and keep auto record
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:15 +34: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/widgets/todo_completion_flow_test.dart: completion flow ignores duplicate invocation while in-flight
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:15 +35: loading /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/screens/todo_kanban_view_test.dart
+00:17 +35: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/screens/todo_kanban_view_test.dart: 快速创建待办成功后显示本机保存和云同步状态
+00:17 +36: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen can switch to kanban view
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:20 +37: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen surfaces cloud sync submit failures
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:20 +38: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen surfaces pending cloud sync status
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:21 +39: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen restores kanban grouping preference
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:21 +40: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen left swipe reveals completion and delete actions
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:22 +41: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen scrolling closes open swipe actions
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:23 +42: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen kanban card left swipe can delete task
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:25 +43: loading /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_test.dart
+00:27 +43: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_test.dart: manual entries persist and aggregate by category / day
+00:27 +44: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_test.dart: todo completion writes and removes a time entry
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:27 +45: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_test.dart: todo completion can skip automatic time entry for manual duration
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:27 +46: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_test.dart: habit check-ins write and remove time entries
+[HabitProvider] reminder sync skipped: scheduler missing
+00:27 +47: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_test.dart: goal milestone completion writes and clears entries on delete
+00:27 +48: loading /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_auto_record_test.dart
+00:29 +48: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_auto_record_test.dart: TimeAuditProvider 自动记录 recordPomodoroSession 写入一条 focus 类别条目
+00:29 +49: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_auto_record_test.dart: TimeAuditProvider 自动记录 相同 sessionId 重复调用不会创建重复条目
+00:29 +50: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_auto_record_test.dart: TimeAuditProvider 自动记录 recordTodoCompletion 在带 focusLink 时长时写入
+00:29 +51: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_auto_record_test.dart: TimeAuditProvider 自动记录 removeTodoCompletion 撤销自动记录
+00:29 +52: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_auto_record_test.dart: TimeAuditProvider 持久化 loadFromStorage 后修改可重新加载
+00:29 +53: loading /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart
+00:31 +53: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart: dispose during storage load suppresses hydration and notification
+00:31 +54: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart: dispose during save initialization prevents a later storage write
+00:31 +55: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart: dispose during add write suppresses later effects
+00:31 +56: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart: dispose during update write suppresses later effects
+00:31 +57: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart: dispose during import write suppresses later effects
+00:31 +58: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart: dispose during upsert write suppresses later effects
+00:31 +59: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart: dispose during tombstone write prevents the subsequent entry save
+00:31 +60: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart: direct mutations after disposal do not change state or use storage
+00:31 +61: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart: reset during load keeps newer entries and rejects the stale load
+00:31 +62: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart: account invalidation during load keeps newer entries and rejects stale data
+00:31 +63: /home/ubuntu/duoyi-worktrees/todo-shared-locale-20261009/test/providers/time_audit_provider_disposal_test.dart: a fresh provider lifetime still saves and notifies
+00:31 +64: All tests passed!
