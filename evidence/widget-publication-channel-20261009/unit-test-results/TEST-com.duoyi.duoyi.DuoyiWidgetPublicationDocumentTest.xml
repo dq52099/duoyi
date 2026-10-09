@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-09T06:40:52.261Z" hostname="mail.6688667.xyz" time="0.166">
+  <properties/>
+  <testcase name="metadataRevisionsCaptureTimeAndOffsetUseExactBoundsAndTypedProjection" classname="com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest" time="0.04"/>
+  <testcase name="publishedDayUsesGregorianYearsOneThrough9999AndKeepsHistoricalDays" classname="com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest" time="0.012"/>
+  <testcase name="clearedAndBlockedDocumentsRetainTwentyTwoPresentationValuesAndRejectEveryBusinessTamper" classname="com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest" time="0.026"/>
+  <testcase name="ownerEpochUsesDartTrimWhitespaceForBlankChecksAndPreservesOpaqueCodeUnits" classname="com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest" time="0.026"/>
+  <testcase name="schemaStateLocaleOwnerAndTodoCountInvariantsAreExact" classname="com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest" time="0.003"/>
+  <testcase name="timerMillisRemainLongAtZeroAndAtExactIntegerLimit" classname="com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest" time="0.011"/>
+  <testcase name="completePublishedFixtureMatchesIndependentTenFieldAndEightyNineValueManifest" classname="com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest" time="0.003"/>
+  <testcase name="inputAndDocumentMapsAreDefensiveAndProjectionsKeepAndroidTypes" classname="com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest" time="0.0"/>
+  <testcase name="stringAndBooleanFieldsRejectPrimitiveTypeCoercion" classname="com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest" time="0.028"/>
+  <testcase name="everyInt32FieldAcceptsItsInclusiveBoundsAndRejectsOverflowAndNonIntegerTypes" classname="com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest" time="0.013"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

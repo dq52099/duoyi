@@ -118,6 +118,9 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        if (!flutterEngine.plugins.has(DuoyiWidgetPublicationBridge::class.java)) {
+            flutterEngine.plugins.add(DuoyiWidgetPublicationBridge())
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, platformInfoChannel)
             .setMethodCallHandler { call, result ->
                 when (call.method) {

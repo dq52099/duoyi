@@ -1,0 +1,108 @@
+{
+  "started": "2026-10-09T06:30:53.058731+00:00",
+  "cwd": "/home/ubuntu/duoyi-worktrees/widget-store-20261009",
+  "test_class": "com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest",
+  "compiled_source_files": [
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationDocument.kt",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationEnvelope.kt",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationTransition.kt",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationStore.kt",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationBridge.kt"
+  ],
+  "existing_test_file": "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetPublicationDocumentTest.kt",
+  "main_activity_observed_only": "android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt",
+  "main_activity_registration_lines": [
+    {
+      "line": 121,
+      "text": "if (!flutterEngine.plugins.has(DuoyiWidgetPublicationBridge::class.java)) {"
+    },
+    {
+      "line": 122,
+      "text": "flutterEngine.plugins.add(DuoyiWidgetPublicationBridge())"
+    }
+  ],
+  "android_platform_jar": "/home/ubuntu/android-sdk/platforms/android-36/android.jar",
+  "android_platform_jar_sha256": "d9eb9da824d9e247a352f570f01e1169e725b2954bca9e283a71786c59b59f9a",
+  "flutter_android_engine_jar": "/home/ubuntu/flutter/bin/cache/artifacts/engine/android-arm64/flutter.jar",
+  "flutter_android_engine_jar_sha256": "cd229a0cb25cd7519b5cd389251cfd364ec27060892b4502cb2a4a35381e1a9d",
+  "commands": [
+    [
+      "java",
+      "-Xmx768m",
+      "-cp",
+      "/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.2.20/bb8331b7585e36ea311825b01a1c06860c055fd1/kotlin-compiler-embeddable-2.2.20.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.2.20/5380b19fa1924399b62ce3a1faffebb2b4f82272/kotlin-stdlib-2.2.20.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.2.20/4c679cbeac0bb583b75c3a080013da8eaf240807/kotlin-script-runtime-2.2.20.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.2.20/feff12d48d7f1eb628742b0a721395e16f8755bf/kotlin-daemon-embeddable-2.2.20.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar",
+      "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+      "-no-stdlib",
+      "-no-reflect",
+      "-jvm-target",
+      "17",
+      "-classpath",
+      "/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.2.20/5380b19fa1924399b62ce3a1faffebb2b4f82272/kotlin-stdlib-2.2.20.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/junit/junit/4.13.2/8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12/junit-4.13.2.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/42a25dc3219429f0e5d060061f71acb49bf010a0/hamcrest-core-1.3.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar:/home/ubuntu/android-sdk/platforms/android-36/android.jar:/home/ubuntu/flutter/bin/cache/artifacts/engine/android-arm64/flutter.jar",
+      "-d",
+      "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/widget-store-bridge-jvm-0scc9596/classes",
+      "/home/ubuntu/duoyi-worktrees/widget-store-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationDocument.kt",
+      "/home/ubuntu/duoyi-worktrees/widget-store-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationEnvelope.kt",
+      "/home/ubuntu/duoyi-worktrees/widget-store-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationTransition.kt",
+      "/home/ubuntu/duoyi-worktrees/widget-store-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationStore.kt",
+      "/home/ubuntu/duoyi-worktrees/widget-store-20261009/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationBridge.kt",
+      "/home/ubuntu/duoyi-worktrees/widget-store-20261009/android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetPublicationDocumentTest.kt"
+    ],
+    [
+      "java",
+      "-cp",
+      "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/widget-store-bridge-jvm-0scc9596/classes:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.2.20/5380b19fa1924399b62ce3a1faffebb2b4f82272/kotlin-stdlib-2.2.20.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/junit/junit/4.13.2/8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12/junit-4.13.2.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/42a25dc3219429f0e5d060061f71acb49bf010a0/hamcrest-core-1.3.jar:/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar:/home/ubuntu/android-sdk/platforms/android-36/android.jar:/home/ubuntu/flutter/bin/cache/artifacts/engine/android-arm64/flutter.jar",
+      "org.junit.runner.JUnitCore",
+      "com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest"
+    ]
+  ],
+  "source_sha256_before": {
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationDocument.kt": "940a7e6181fe0ca8f3b83d892b57f342aaef0a5cfb48c0b040bb29a3e8f6087e",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationEnvelope.kt": "4e815f7c2c0df318a5da21533fe8c784cbcee2afb28b2a9a7e53e8032a501a3d",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationTransition.kt": "25caec35ca9c6133b9ec82bd4ee21210d742ee5644ae8eeec4b9fdc0fd496111",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationStore.kt": "e9df08b1f029d71f7ee6678d73c424302e6ac5d0df194ede6fcdc1d1f8635950",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationBridge.kt": "5018022004df1dc0f8bc0f3bfc874c8732f8357db2a6b3cdd8c890e38baec385",
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetPublicationDocumentTest.kt": "0e355b1fb4764be0a7e8ccd3a956c42edd6145b3a9ca6b72f1e4499af9c5aafa",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt": "af9d700fec23bcd10fd7dd94e826f0faff9c68b4064f9350b3da82d717c978b7"
+  },
+  "dependency_sha256": {
+    "/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/junit/junit/4.13.2/8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12/junit-4.13.2.jar": "8e495b634469d64fb8acfa3495a065cbacc8a0fff55ce1e31007be4c16dc57d3",
+    "/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/42a25dc3219429f0e5d060061f71acb49bf010a0/hamcrest-core-1.3.jar": "66fdef91e9739348df7a096aa384a5685f4e875584cce89386a7a47251c4d8e9",
+    "/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+    "/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.2.20/bb8331b7585e36ea311825b01a1c06860c055fd1/kotlin-compiler-embeddable-2.2.20.jar": "1c6c3f810bfe6a41abcbc34b3a2ef639f1e3f4aeed3a953a4b0974eea4f41889",
+    "/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.2.20/feff12d48d7f1eb628742b0a721395e16f8755bf/kotlin-daemon-embeddable-2.2.20.jar": "7c5c8cd2f8beadd3283239bb9ca219a0cafa1af02682b407b181e1179718f2f7",
+    "/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar": "3277ac102ae17aad10a55abec75ff5696c8d109790396434b496e75087854203",
+    "/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.2.20/4c679cbeac0bb583b75c3a080013da8eaf240807/kotlin-script-runtime-2.2.20.jar": "5c8bd5dd7ae1ea2eeb2778fdbeaa19a562184975f6cab8a0bb6779e4190731ae",
+    "/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.2.20/5380b19fa1924399b62ce3a1faffebb2b4f82272/kotlin-stdlib-2.2.20.jar": "8836ccffd3585fadda9901244b20d42901d2f3cd581058d8434e2ffabcf3a3e7",
+    "/home/ubuntu/duoyi_deploy_backups/android-startup-admin-20261006T073922Z/gradle-private/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5"
+  },
+  "run_dir": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/widget-store-bridge-jvm-0scc9596",
+  "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/widget-store-bridge-compile-oct9.log",
+  "git_status_before": [
+    " M android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt",
+    "?? android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationBridge.kt"
+  ],
+  "scope": "Compile only the five standalone publication Kotlin files and the existing document JUnit fixture. MainActivity is hashed and its plugin registration lines observed only; MainActivity/full APK is not compiled. No repository writes.",
+  "pid": 2376148,
+  "stage": "existing_junit_test",
+  "finished": "2026-10-09T06:31:26.951112+00:00",
+  "exit_code": 0,
+  "final_stage": "complete",
+  "source_sha256_after": {
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationDocument.kt": "940a7e6181fe0ca8f3b83d892b57f342aaef0a5cfb48c0b040bb29a3e8f6087e",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationEnvelope.kt": "4e815f7c2c0df318a5da21533fe8c784cbcee2afb28b2a9a7e53e8032a501a3d",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationTransition.kt": "25caec35ca9c6133b9ec82bd4ee21210d742ee5644ae8eeec4b9fdc0fd496111",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationStore.kt": "e9df08b1f029d71f7ee6678d73c424302e6ac5d0df194ede6fcdc1d1f8635950",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationBridge.kt": "5018022004df1dc0f8bc0f3bfc874c8732f8357db2a6b3cdd8c890e38baec385",
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetPublicationDocumentTest.kt": "0e355b1fb4764be0a7e8ccd3a956c42edd6145b3a9ca6b72f1e4499af9c5aafa",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt": "af9d700fec23bcd10fd7dd94e826f0faff9c68b4064f9350b3da82d717c978b7"
+  },
+  "source_unchanged": true,
+  "log_sha256": "35f1db40b7a06e1b4e327d6737b56493b9449ed6d4a7ad3cfabae562f29607f4",
+  "success_marker_present": true,
+  "case_count": 10,
+  "git_status_after": [
+    " M android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt",
+    "?? android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationBridge.kt"
+  ],
+  "git_status_unchanged": true
+}

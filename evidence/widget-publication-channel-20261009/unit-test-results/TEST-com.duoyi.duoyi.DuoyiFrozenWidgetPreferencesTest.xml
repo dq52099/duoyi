@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-09T06:40:51.561Z" hostname="mail.6688667.xyz" time="0.309">
+  <properties/>
+  <testcase name="wrongTypesThrowClassCastExceptionFromTypedGetters" classname="com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest" time="0.015"/>
+  <testcase name="freshDisplayProjectionPreservesContentAndSessionData" classname="com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest" time="0.168"/>
+  <testcase name="staleDailyContentAndEveryVisibleCounterUseSafeBilingualPlaceholders" classname="com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest" time="0.019"/>
+  <testcase name="noSessionHidesEveryFocusTimerKeyAndReplacesOldNextFocusLabel" classname="com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest" time="0.001"/>
+  <testcase name="typedReadsContainsAndAllShareTheSameFrozenSnapshot" classname="com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest" time="0.0"/>
+  <testcase name="editIsRejected" classname="com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest" time="0.005"/>
+  <testcase name="trustedButDailyStaleProjectionRetainsAbsoluteTimerFields" classname="com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest" time="0.0"/>
+  <testcase name="stringSetsAreCopiedAndImmutableAndMissingDefaultsAreCopied" classname="com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest" time="0.011"/>
+  <testcase name="calendarMonthTitleUsesSuppliedCalendarZoneForBothLanguagesAndWidths" classname="com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest" time="0.077"/>
+  <testcase name="staleProjectionClearsBusinessEntityIdsButKeepsThemeLocaleAndMode" classname="com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
