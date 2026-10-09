@@ -60,6 +60,7 @@
     <string name="widget_todo_unit"> 项</string>
     <string name="widget_todo_summary_default">今日待办 · 5 项</string>
     <string name="widget_calendar_summary_default">本月日期 · 今日已标记</string>
+    <string name="widget_calendar_event_empty">今日没有日程</string>
     <string name="widget_focus_timer_next">下一轮</string>
     <string name="widget_focus_quick_start_default">开始 25 分钟专注</string>
     <string name="widget_focus_summary_default">今日还未专注</string>

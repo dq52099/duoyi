@@ -293,6 +293,10 @@ void main() {
         'DuoyiCalendarWidgetProvider.kt',
       ).readAsStringSync();
 
+      final calendarLayout = File(
+        'android/app/src/main/res/layout/duoyi_calendar_widget.xml',
+      ).readAsStringSync();
+
       expect(widgetScreen, contains('WidgetUiCopy.previewTitle(kind)'));
       expect(widgetScreen, contains('WidgetUiCopy.catalogTitle(kind)'));
       expect(widgetScreen, contains('WidgetUiCopy.catalogSubtitle(kind)'));
@@ -464,7 +468,39 @@ void main() {
       );
       expect(
         calendarProvider,
-        contains('buildMonthGrid(now, compact, detailed, isZh)'),
+        contains('buildMonthGridSpan(prefs, now, compact, detailed, isZh)'),
+      );
+      expect(
+        calendarProvider,
+        contains(
+          'DuoyiWidgetContent.buildMonthGrid(now.time, now.timeZone, isZh)',
+        ),
+      );
+      expect(calendarProvider, contains('BackgroundColorSpan(theme.primary)'));
+      expect(
+        calendarProvider,
+        contains('ForegroundColorSpan(theme.onPrimary)'),
+      );
+      expect(calendarLayout, contains('@+id/widget_calendar_event_summary'));
+      expect(
+        calendarProvider,
+        contains('DuoyiWidgetContent.resolveCalendarSummaryAndTarget('),
+      );
+      expect(calendarProvider, contains('rawSummary = rawEventSummary'));
+      expect(calendarProvider, contains('rawSchedule1Id = rawSchedule1Id'));
+      expect(calendarProvider, contains('isFresh = isFresh'));
+      expect(calendarProvider, contains('Uri.parse(summaryResult.target)'));
+      expect(
+        calendarProvider,
+        contains('!compact && (height == 0 || height >= 140)'),
+      );
+      expect(
+        calendarProvider,
+        contains('if (summaryResult.summary != null && canFitEventSummary)'),
+      );
+      expect(
+        calendarProvider,
+        contains('R.id.widget_calendar_event_summary, View.GONE'),
       );
       expect(
         calendarProvider,
@@ -1275,7 +1311,7 @@ void main() {
       );
       expect(
         provider,
-        contains('buildMonthGrid(now, compact, detailed, isZh)'),
+        contains('buildMonthGridSpan(prefs, now, compact, detailed, isZh)'),
       );
       expect(provider, contains('views.setTextViewTextSize('));
       expect(provider, contains('TypedValue.COMPLEX_UNIT_SP'));
@@ -3296,26 +3332,54 @@ void main() {
         if (entry.key == 'anniversary') {
           expect(
             source,
-            contains('detailUri(prefs, primaryKey, fallbackKey, fallback)'),
+            contains(
+              'DuoyiWidgetContent.resolveAnniversaryItems(rawSlots, isFresh, isZh)',
+            ),
             reason:
-                'anniversary should prefer ordinary anniversary ids and fall back to memorial ids.',
+                'Anniversary selection must preserve each displayed text and its target as one item.',
           );
-          expect(source, contains('prefs.getString(primaryKey, null)'));
-          expect(source, contains('?: prefs.getString(fallbackKey, "")'));
+          for (final key in [
+            'anniversary_highlight_1',
+            'anniversary_highlight_2',
+            'memorial_highlight_1',
+            'memorial_highlight_2',
+            'memorial_highlight_3',
+          ]) {
+            expect(
+              source,
+              contains(
+                'DuoyiAnniversaryRawSlot("$key", prefs.getString("$key", null), prefs.getString("${key}_id", null))',
+              ),
+            );
+          }
+          expect(source, isNot(contains('anniversary_highlight_3_id')));
           for (var index = 1; index <= 3; index++) {
             expect(source, contains('R.id.${entry.value.rowPrefix}$index,'));
-            expect(source, contains('anniversary_highlight_${index}_id'));
-            expect(source, contains('memorial_highlight_${index}_id'));
+            expect(
+              source,
+              contains(
+                'val item$index = selectedItems.getOrNull(${index - 1})',
+              ),
+            );
+            expect(source, contains('item$index?.text.orEmpty()'));
+            expect(
+              source,
+              contains(
+                'Uri.parse(item$index?.target ?: "duoyi://anniversary")',
+              ),
+            );
           }
           expect(
             source,
             contains(
-              'if (rawId.startsWith("duoyi://")) return Uri.parse(rawId)',
+              'if (item2 != null) DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id) else View.GONE',
             ),
           );
           expect(
             source,
-            contains(r'Uri.parse("$fallback/${Uri.encode(rawId)}")'),
+            contains(
+              'if (item3 != null) DuoyiWidgetDisplayMode.detailedVisibility(prefs, id) else View.GONE',
+            ),
           );
           continue;
         }

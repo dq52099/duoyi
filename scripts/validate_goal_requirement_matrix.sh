@@ -73,6 +73,9 @@ extract_local_evidence_paths() {
   local token=""
   local evidence=""
 
+  # Paths are semicolon-separated; parenthetical notes can contain prose slashes
+  # and semicolons. Remove those notes before parsing, retaining Markdown links.
+  evidence_column="$(printf '%s' "$evidence_column" | sed -E 's/ \([^)]*\)//g')"
   IFS=';' read -ra evidence_items <<< "$evidence_column"
   for raw_evidence in "${evidence_items[@]}"; do
     normalized="$(normalize_evidence_path "$raw_evidence")"

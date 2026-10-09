@@ -1,0 +1,22 @@
+{
+  "executed_at": "2026-10-09T02:17:50.767360+00:00",
+  "scope": "Foundation-only probe of frozen pre-revision4 source; no reads of current running AGY production",
+  "source_core_sha256": "4661ed74a9bc5026a2166381ba0fe2dd9a7d44d0a85c2fa26cae11d2911b8c3f",
+  "probe_sha256": "42a2071d309e96296d4d8d0109fce96a4ababa3af72d219ea3308cbac3c442c7",
+  "swift_image": "swift@sha256:19792fa7ef68fb0e0ca5763ec3dfd40d6461afca7c081eb689e2e374fa80c0be",
+  "exit_code": 0,
+  "observed": {
+    "bad_percent_target": "duoyi://anniversary/bad%25ZZ",
+    "bad_percent_identity": "bad%ZZ",
+    "empty_port_calendar_target": "duoyi://todo:/x",
+    "distinct_unicode_opaque_ids_retained": 1
+  },
+  "expected": {
+    "bad_percent_target": "duoyi://anniversary",
+    "bad_percent_identity": null,
+    "empty_port_calendar_target": "duoyi://calendar",
+    "distinct_unicode_opaque_ids_retained": 2
+  },
+  "must_fix_confirmed": 3,
+  "goal_complete": false
+}

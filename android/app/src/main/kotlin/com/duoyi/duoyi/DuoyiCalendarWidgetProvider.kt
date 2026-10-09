@@ -5,6 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.BackgroundColorSpan
+import android.text.style.ForegroundColorSpan
 import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
@@ -56,7 +60,10 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
                     R.id.widget_calendar_today_button,
                     R.id.widget_calendar_nav_calendar,
                 ),
-                bodyIds = intArrayOf(R.id.widget_calendar_grid),
+                bodyIds = intArrayOf(
+                    R.id.widget_calendar_grid,
+                    R.id.widget_calendar_event_summary,
+                ),
                 mutedIds = intArrayOf(
                     R.id.widget_calendar_month,
                     R.id.widget_calendar_nav_todo,
@@ -86,7 +93,10 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
             )
             views.setTextViewText(R.id.widget_calendar_month, monthTitle)
             views.setTextViewText(R.id.widget_calendar_today_button, DuoyiWidgetCopy.calendarTodayButton(isZh))
-            views.setTextViewText(R.id.widget_calendar_grid, buildMonthGrid(now, compact, detailed, isZh))
+            views.setTextViewText(
+                R.id.widget_calendar_grid,
+                buildMonthGridSpan(prefs, now, compact, detailed, isZh)
+            )
             views.setTextViewTextSize(
                 R.id.widget_calendar_grid,
                 TypedValue.COMPLEX_UNIT_SP,
@@ -100,6 +110,29 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
                 R.id.widget_calendar_summary,
                 DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
             )
+
+            val rawEventSummary = prefs.getString("today_event_summary", null)
+            val rawSchedule1Id = prefs.getString("schedule_highlight_1_id", null)
+            val isFresh = DuoyiWidgetSnapshot.isFresh(prefs)
+            val summaryResult = DuoyiWidgetContent.resolveCalendarSummaryAndTarget(
+                rawSummary = rawEventSummary,
+                rawSchedule1Id = rawSchedule1Id,
+                isFresh = isFresh,
+                isZh = isZh,
+            )
+            val canFitEventSummary = !compact && (height == 0 || height >= 140)
+
+            if (summaryResult.summary != null && canFitEventSummary) {
+                views.setTextViewText(R.id.widget_calendar_event_summary, summaryResult.summary)
+                views.setViewVisibility(R.id.widget_calendar_event_summary, View.VISIBLE)
+                val openEvent = HomeWidgetLaunchIntent.getActivity(
+                    context, MainActivity::class.java, Uri.parse(summaryResult.target)
+                )
+                views.setOnClickPendingIntent(R.id.widget_calendar_event_summary, openEvent)
+            } else {
+                views.setViewVisibility(R.id.widget_calendar_event_summary, View.GONE)
+            }
+
             views.setViewVisibility(
                 R.id.widget_calendar_bottom_nav,
                 DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
@@ -143,28 +176,54 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
         }
     }
 
-    private fun buildMonthGrid(now: Calendar, compact: Boolean, detailed: Boolean, isZh: Boolean): String {
-        val cal = now.clone() as Calendar
-        val today = cal.get(Calendar.DAY_OF_MONTH)
-        cal.set(Calendar.DAY_OF_MONTH, 1)
-        val firstWeekday = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
-        val maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-        val cells = MutableList(42) { "  " }
-        for (day in 1..maxDay) {
-            cells[firstWeekday + day - 1] = day.toString().padStart(2, ' ')
-        }
-        val currentWeek = ((firstWeekday + today - 1) / 7).coerceIn(0, 5)
+    private fun buildMonthGridSpan(
+        prefs: SharedPreferences,
+        now: Calendar,
+        compact: Boolean,
+        detailed: Boolean,
+        isZh: Boolean
+    ): CharSequence {
+        val model = DuoyiWidgetContent.buildMonthGrid(now.time, now.timeZone, isZh)
+        val currentWeek = ((model.firstWeekdayOffset + model.todayDay - 1) / 7).coerceIn(0, 5)
         val visibleWeeks = when {
             compact -> currentWeek..currentWeek
             detailed -> 0..5
             else -> maxOf(0, currentWeek - 1)..minOf(5, currentWeek + 2)
         }
-        val lines = mutableListOf(DuoyiWidgetCopy.calendarWeekdayHeader(isZh))
+        val theme = DuoyiWidgetTheme.read(prefs)
+        val builder = SpannableStringBuilder()
+        builder.append(model.weekdayHeader)
+
         for (week in visibleWeeks) {
-            lines += cells.subList(week * 7, week * 7 + 7).joinToString(" ")
+            builder.append("\n")
+            val weekCells = model.cells.subList(week * 7, week * 7 + 7)
+            for (col in 0 until 7) {
+                val cell = weekCells[col]
+                val cellStart = builder.length
+                builder.append(cell.text)
+                val cellEnd = builder.length
+                if (cell.dayNumber > 0 && cell.dayNumber == model.todayDay) {
+                    builder.setSpan(
+                        BackgroundColorSpan(theme.primary),
+                        cellStart,
+                        cellEnd,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                    builder.setSpan(
+                        ForegroundColorSpan(theme.onPrimary),
+                        cellStart,
+                        cellEnd,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                }
+                if (col < 6) {
+                    builder.append(" ")
+                }
+            }
         }
-        return lines.joinToString("\n")
+        return builder
     }
+
 
     companion object {
         /** Trigger update from Flutter via HomeWidget.updateWidget or package upgrade. */

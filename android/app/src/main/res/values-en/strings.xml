@@ -60,6 +60,7 @@
     <string name="widget_todo_unit"> items</string>
     <string name="widget_todo_summary_default">Today\'s tasks · 5 items</string>
     <string name="widget_calendar_summary_default">Monthly view · Today marked</string>
+    <string name="widget_calendar_event_empty">No events today</string>
     <string name="widget_focus_timer_next">Next</string>
     <string name="widget_focus_quick_start_default">Start 25-min focus</string>
     <string name="widget_focus_summary_default">No focus sessions today</string>

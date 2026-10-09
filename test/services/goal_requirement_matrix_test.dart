@@ -103,6 +103,44 @@ void main() {
   });
 
   test(
+    'matrix validator ignores slash prose in parenthetical evidence notes',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'duoyi-goal-matrix-',
+      );
+      try {
+        final matrixFile = File('${tempDir.path}/goal-requirement-matrix.md')
+          ..writeAsStringSync(
+            File(
+              'docs/goal-requirement-matrix.md',
+            ).readAsStringSync().replaceFirst(
+              'test/services/api_client_error_test.dart',
+              'test/services/api_client_error_test.dart '
+                  '(todo/goal copy only; refresh/device acceptance remains open)',
+            ),
+          );
+        final result = await Process.run(
+          'bash',
+          ['scripts/validate_goal_requirement_matrix.sh'],
+          workingDirectory: Directory.current.path,
+          environment: bashEnvironment(
+            {'MATRIX_FILE': matrixFile.path},
+            pathVariables: {'MATRIX_FILE'},
+          ),
+          includeParentEnvironment: true,
+        );
+        expect(result.exitCode, 0, reason: _combinedOutput(result));
+        expect(
+          result.stdout,
+          contains('Goal requirement matrix validation passed.'),
+        );
+      } finally {
+        if (await tempDir.exists()) await tempDir.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
     'matrix validator rejects the old nonexistent habit card path',
     () async {
       final tempDir = await Directory.systemTemp.createTemp(

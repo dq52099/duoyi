@@ -1,0 +1,29 @@
+Swift: /home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/ios-focus-core-native-oct8/swift-container-index
+Private output: /home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/runtime-widget-display-oct9/ios-widget-snapshot-core-g0fquliv
+Production source: /home/ubuntu/duoyi-worktrees/widget-display-20261009/ios/DuoyiWidgets/DuoyiWidgets.swift
+Fixture source: /home/ubuntu/duoyi-worktrees/widget-display-20261009/scripts/ios_widget_snapshot_core_cases.swift
+Merged script: /home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/runtime-widget-display-oct9/ios-widget-snapshot-core-g0fquliv/ios_widget_snapshot_core_cases.swift
+Case count: 17
+Production core SHA-256: ca60f94a6b83f88543fe286da125745b27e7328da526086b140c22912d47a535
+Fixture SHA-256: d2606171dd8d300f3ddf33690c1a919490aa5dfffb621807b3439902e2b44941
+Merged script SHA-256: d893c6b776f71cc57c566ab4602358b629c50030add1d6c7b2ae3f94240a3a29
+PASS: valid UTC, East-8, and half-hour offsets publish fresh sessions
+PASS: positive and negative 18-hour offsets are valid boundaries
+PASS: Boolean, fractional, nonfinite, and overflowing offsets are rejected
+PASS: missing, malformed, and non-Gregorian dates cannot publish
+PASS: canonical leap day and raw nonce strings are preserved
+PASS: whitespace-only nonce is rejected without trimming stored values
+PASS: published prior-day snapshots remain published but become stale
+PASS: daylight-saving offset changes stale same-day snapshots
+PASS: freshness uses Gregorian dates with any injected calendar identifier
+PASS: nonfinite dates are stale without producing a session day
+PASS: mutation links freeze snapshot bindings and remove duplicate query keys
+PASS: all mutation actions bind and typed quick todos count as mutations
+PASS: stale day and offset mutations are withheld
+PASS: action routing follows the receiver first literal path segment
+PASS: navigation, refresh, and empty quick entry add no bindings
+PASS: foreign action hosts do not receive widget bindings
+PASS: nil components and legacy wrappers keep safe behavior
+PASS: all production-extracted snapshot core cases
+PASS: production Swift snapshot core satisfied all fixture assertions
+Not covered: WidgetKit/SwiftUI target compilation, provider/timeline integration, device UI behavior, and server-side mutation acceptance.

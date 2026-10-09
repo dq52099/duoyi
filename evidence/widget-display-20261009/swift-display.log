@@ -1,0 +1,30 @@
+Swift: /home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/ios-focus-core-native-oct8/swift-container-index
+Private output: /home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/runtime-widget-display-oct9/ios-widget-display-core-burjpfdg
+Production source: /home/ubuntu/duoyi-worktrees/widget-display-20261009/ios/DuoyiWidgets/DuoyiWidgets.swift
+Fixture source: /home/ubuntu/duoyi-worktrees/widget-display-20261009/scripts/ios_widget_display_core_cases.swift
+Merged script: /home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/runtime-widget-display-oct9/ios-widget-display-core-burjpfdg/ios_widget_display_core_cases.swift
+Case count: 19
+Production core SHA-256: b748ed33b9816d42ddded90abf192743760d4d201c7cb5362336838ca5ca5098
+Fixture SHA-256: 79d1e8bcd67b513f75c0ba6504e65f05761ddd32a6a74f05acef12e90e809bcd
+Merged script SHA-256: b4df94ad7836909349e2680ee9d74dbf497383fa930b8498364a69e9b3a896ec
+PASS: anniversary five-slot ordering preserves each source, ID, and text
+PASS: anniversary de-duplicates by decoded identity rather than display text
+PASS: anniversary identities preserve Unicode normalization bytes as opaque IDs
+PASS: anniversary empty, bullet-only, and known empty placeholders are omitted
+PASS: stale anniversary data yields one localized pending item
+PASS: legacy anniversary text without IDs is retained in slot order
+PASS: anniversary target canonicalization preserves encoded path identities
+PASS: unsafe anniversary URLs fall back to the safe root
+PASS: calendar read-only targets, mutation targets, summaries, and empty states are bounded
+PASS: calendar summary and target are resolved together with freshness and locale
+PASS: calendar cell accessibility labels use the same dates and localized month names
+PASS: month grids cover 28, 29, 30, and 31 day months
+PASS: month grids use Monday-first columns for Monday and Sunday starts
+PASS: UTC, Shanghai, and New York grids use explicit local dates across a year boundary
+PASS: a future WidgetKit entry date, not wall-clock now, selects the grid month
+PASS: New York local midnights remain correct across the spring DST change
+PASS: available-height thresholds include only rows that fit and preserve today at grid edges
+PASS: calendar family and display modes enforce their exact week caps
+PASS: custom calendar metrics change the available-week threshold
+PASS: production Swift display core satisfied all fixture assertions
+Not covered: widget entry/provider and timeline integration, SwiftUI/WidgetKit target compilation, or rendered device UI behavior.

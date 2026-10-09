@@ -364,6 +364,565 @@ private struct DuoyiWidgetSnapshot {
 }
 // END DUOYI_WIDGET_SNAPSHOT_CORE
 
+// BEGIN DUOYI_WIDGET_DISPLAY_CORE
+// Foundation-only logic is exercised directly by the portable Swift verifier.
+
+struct DuoyiAnniversaryRawSlot: Equatable {
+    let sourceKey: String
+    let text: String?
+    let target: String?
+}
+
+struct DuoyiAnniversaryItem: Equatable {
+    let sourceKey: String
+    let text: String
+    let target: String
+    let identity: String?
+}
+
+struct DuoyiMonthCell: Equatable {
+    let dayNumber: Int
+    let isToday: Bool
+    let text: String
+}
+
+struct DuoyiMonthGridModel: Equatable {
+    let year: Int
+    let month: Int
+    let todayDay: Int
+    let firstWeekdayOffset: Int
+    let daysInMonth: Int
+    let cells: [DuoyiMonthCell]
+    let weekdayHeaders: [String]
+    let monthTitle: String
+}
+
+struct DuoyiCalendarEventSummaryResult: Equatable {
+    let summary: String?
+    let target: String
+    let isReal: Bool
+}
+
+enum DuoyiWidgetDisplayCore {
+    static func isKnownAnniversaryEmptyPlaceholder(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let clean = trimmed.hasPrefix("· ") ? String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) : trimmed
+        return clean == "暂无近期纪念日" ||
+            clean == "No upcoming anniversaries" ||
+            clean == "暂无纪念日" ||
+            clean == "纪念日 · 暂无近期纪念日" ||
+            clean == "Anniversaries · No upcoming anniversaries"
+    }
+
+    static func isBareBulletOrEmpty(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return true }
+        let stripped = trimmed.replacingOccurrences(of: "·", with: "")
+            .replacingOccurrences(of: "•", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return stripped.isEmpty
+    }
+
+    private static func hexValue(_ byte: UInt8) -> UInt8? {
+        switch byte {
+        case 0x30...0x39:
+            return byte - 0x30
+        case 0x41...0x46:
+            return byte - 0x41 + 10
+        case 0x61...0x66:
+            return byte - 0x61 + 10
+        default:
+            return nil
+        }
+    }
+
+    static func hasIllegalUriCharacters(_ s: String) -> Bool {
+        let utf8 = Array(s.utf8)
+        var i = 0
+        while i < utf8.count {
+            let byte = utf8[i]
+            if byte <= 0x20 || byte == 0x7F || byte == 0x5C || // <= space, DEL, '\'
+               byte == 0x22 || // '"'
+               byte == 0x3C || byte == 0x3E || // '<', '>'
+               byte == 0x7B || byte == 0x7D || // '{', '}'
+               byte == 0x7C || // '|'
+               byte == 0x5E || // '^'
+               byte == 0x60 || // '`'
+               byte == 0x5B || byte == 0x5D || // '[', ']'
+               byte == 0x3F || byte == 0x23 { // '?', '#'
+                return true
+            }
+            if byte == 0x25 { // '%'
+                if i + 2 >= utf8.count {
+                    return true
+                }
+                guard hexValue(utf8[i + 1]) != nil, hexValue(utf8[i + 2]) != nil else {
+                    return true
+                }
+                i += 3
+            } else {
+                i += 1
+            }
+        }
+        return false
+    }
+
+    static func strictPercentDecode(_ s: String) -> String? {
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(s.utf8.count)
+        var iterator = s.utf8.makeIterator()
+        while let byte = iterator.next() {
+            if byte == 0x25 { // '%'
+                guard let h1 = iterator.next(),
+                      let h2 = iterator.next(),
+                      let d1 = hexValue(h1),
+                      let d2 = hexValue(h2) else {
+                    return nil
+                }
+                bytes.append((d1 << 4) | d2)
+            } else {
+                // In URL path, '+' is literal '+', not form-urlencoded space!
+                bytes.append(byte)
+            }
+        }
+        var string = ""
+        var utf8Iterator = bytes.makeIterator()
+        var utf8Decoder = UTF8()
+        while true {
+            switch utf8Decoder.decode(&utf8Iterator) {
+            case .scalarValue(let scalar):
+                string.unicodeScalars.append(scalar)
+            case .emptyInput:
+                return string
+            case .error:
+                return nil
+            }
+        }
+    }
+
+    static func encodePathSegment(_ raw: String) -> String {
+        var result = ""
+        for byte in raw.utf8 {
+            if (byte >= 0x41 && byte <= 0x5A) || // A-Z
+               (byte >= 0x61 && byte <= 0x7A) || // a-z
+               (byte >= 0x30 && byte <= 0x39) || // 0-9
+               byte == 0x2D || byte == 0x5F ||   // '-', '_'
+               byte == 0x2E || byte == 0x7E {     // '.', '~'
+                result.append(Character(UnicodeScalar(byte)))
+            } else {
+                result.append(String(format: "%%%02X", byte))
+            }
+        }
+        return result
+    }
+
+    static func parseAnniversaryTarget(_ rawTarget: String?) -> (target: String, identity: String?) {
+        guard let raw = rawTarget?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return ("duoyi://anniversary", nil)
+        }
+        if raw.lowercased().hasPrefix("duoyi://") {
+            if hasIllegalUriCharacters(raw) || raw.hasSuffix("/") {
+                return ("duoyi://anniversary", nil)
+            }
+            let afterScheme = String(raw.dropFirst("duoyi://".count))
+            let slashIndex = afterScheme.firstIndex(of: "/")
+            let rawAuthority = slashIndex != nil ? String(afterScheme[..<slashIndex!]) : afterScheme
+            if rawAuthority.isEmpty || rawAuthority.contains("@") || rawAuthority.contains(":") {
+                return ("duoyi://anniversary", nil)
+            }
+            guard let components = URLComponents(string: raw) else {
+                return ("duoyi://anniversary", nil)
+            }
+            guard components.scheme?.lowercased() == "duoyi" else {
+                return ("duoyi://anniversary", nil)
+            }
+            guard components.user == nil,
+                  components.password == nil,
+                  components.port == nil,
+                  components.query == nil,
+                  components.fragment == nil else {
+                return ("duoyi://anniversary", nil)
+            }
+            guard let host = components.host?.lowercased(), host == "anniversary" else {
+                return ("duoyi://anniversary", nil)
+            }
+            let path = components.percentEncodedPath
+            guard path.hasPrefix("/"), path.count > 1 else {
+                return ("duoyi://anniversary", nil)
+            }
+            let segment = String(path.dropFirst())
+            if segment.contains("/") {
+                return ("duoyi://anniversary", nil)
+            }
+            guard let decoded = strictPercentDecode(segment),
+                  !decoded.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return ("duoyi://anniversary", nil)
+            }
+            return ("duoyi://anniversary/\(segment)", decoded)
+        } else {
+            let isForeignUri: Bool = {
+                if raw.contains("://") || raw.hasPrefix("//") { return true }
+                let lower = raw.lowercased()
+                if lower.hasPrefix("mailto:") || lower.hasPrefix("tel:") ||
+                   lower.hasPrefix("sms:") || lower.hasPrefix("data:") ||
+                   lower.hasPrefix("javascript:") || lower.hasPrefix("urn:") ||
+                   lower.hasPrefix("file:") {
+                    return true
+                }
+                return false
+            }()
+            if isForeignUri {
+                return ("duoyi://anniversary", nil)
+            }
+            let encoded = encodePathSegment(raw)
+            return ("duoyi://anniversary/\(encoded)", raw)
+        }
+    }
+
+    static func resolveAnniversaryItems(
+        slots: [DuoyiAnniversaryRawSlot],
+        isFresh: Bool,
+        isZh: Bool
+    ) -> [DuoyiAnniversaryItem] {
+        if !isFresh {
+            let staleText = isZh ? "日期数据待刷新" : "Dates pending refresh"
+            return [
+                DuoyiAnniversaryItem(
+                    sourceKey: "anniversary_highlight_1",
+                    text: staleText,
+                    target: "duoyi://anniversary",
+                    identity: nil
+                )
+            ]
+        }
+
+        var seenIdentities = Set<[UInt8]>()
+        var result: [DuoyiAnniversaryItem] = []
+
+        for slot in slots {
+            guard let rawText = slot.text,
+                  !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                continue
+            }
+            let rawTarget = (slot.target ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if rawTarget.isEmpty && (isBareBulletOrEmpty(rawText) || isKnownAnniversaryEmptyPlaceholder(rawText)) {
+                continue
+            }
+            let (targetUrl, identity) = parseAnniversaryTarget(slot.target)
+            if let id = identity {
+                let identityBytes = Array(id.utf8)
+                if seenIdentities.contains(identityBytes) {
+                    continue
+                }
+                seenIdentities.insert(identityBytes)
+            }
+            result.append(
+                DuoyiAnniversaryItem(
+                    sourceKey: slot.sourceKey,
+                    text: rawText,
+                    target: targetUrl,
+                    identity: identity
+                )
+            )
+        }
+
+        if result.isEmpty {
+            let emptyText = isZh ? "· 暂无近期纪念日" : "· No upcoming anniversaries"
+            return [
+                DuoyiAnniversaryItem(
+                    sourceKey: "anniversary_highlight_1",
+                    text: emptyText,
+                    target: "duoyi://anniversary",
+                    identity: nil
+                )
+            ]
+        }
+
+        return result
+    }
+
+    static func resolveCalendarEventTarget(_ rawTarget: String?) -> String {
+        guard let raw = rawTarget?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return "duoyi://calendar"
+        }
+        guard raw.lowercased().hasPrefix("duoyi://") else {
+            return "duoyi://calendar"
+        }
+        if hasIllegalUriCharacters(raw) || raw.hasSuffix("/") {
+            return "duoyi://calendar"
+        }
+        let afterScheme = String(raw.dropFirst("duoyi://".count))
+        let slashIndex = afterScheme.firstIndex(of: "/")
+        let rawAuthority = slashIndex != nil ? String(afterScheme[..<slashIndex!]) : afterScheme
+        if rawAuthority.isEmpty || rawAuthority.contains("@") || rawAuthority.contains(":") {
+            return "duoyi://calendar"
+        }
+        guard let components = URLComponents(string: raw) else {
+            return "duoyi://calendar"
+        }
+        guard components.scheme?.lowercased() == "duoyi" else {
+            return "duoyi://calendar"
+        }
+        guard components.user == nil,
+              components.password == nil,
+              components.port == nil,
+              components.query == nil,
+              components.fragment == nil else {
+            return "duoyi://calendar"
+        }
+        guard let host = components.host?.lowercased() else {
+            return "duoyi://calendar"
+        }
+
+        if host == "calendar" || host == "focus" {
+            let path = components.percentEncodedPath
+            return path.isEmpty ? raw : "duoyi://calendar"
+        }
+
+        let supportedMutationHosts: Set<String> = [
+            "todo", "habit", "anniversary", "course", "diary", "goal", "countdown", "time-entry"
+        ]
+        if supportedMutationHosts.contains(host) {
+            let path = components.percentEncodedPath
+            guard path.hasPrefix("/"), path.count > 1 else {
+                return "duoyi://calendar"
+            }
+            let segment = String(path.dropFirst())
+            if segment.contains("/") {
+                return "duoyi://calendar"
+            }
+            guard let decoded = strictPercentDecode(segment),
+                  !decoded.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return "duoyi://calendar"
+            }
+            return raw
+        }
+        return "duoyi://calendar"
+    }
+
+    static func calendarEventSummary(raw: String?, isZh: Bool) -> String? {
+        guard let raw = raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let clean = trimmed.hasPrefix("· ") ? String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) : trimmed
+        if clean == "今日没有日程" || clean == "No schedule today" || clean == "No events today" ||
+            clean == "今天暂无日程" || clean == "今日日程" || clean == "Today's schedule" || clean == "Today’s schedule" {
+            return isZh ? "今日没有日程" : "No events today"
+        }
+        return raw
+    }
+
+    static func resolveCalendarSummaryAndTarget(
+        rawSummary: String?,
+        rawSchedule1Id: String?,
+        isFresh: Bool,
+        isZh: Bool
+    ) -> DuoyiCalendarEventSummaryResult {
+        if !isFresh {
+            let staleText = isZh ? "今日数据待刷新" : "Today’s data pending refresh"
+            return DuoyiCalendarEventSummaryResult(
+                summary: staleText,
+                target: "duoyi://calendar",
+                isReal: false
+            )
+        }
+
+        guard let raw = rawSummary, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return DuoyiCalendarEventSummaryResult(
+                summary: nil,
+                target: "duoyi://calendar",
+                isReal: false
+            )
+        }
+
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let clean = trimmed.hasPrefix("· ") ? String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines) : trimmed
+        let isNoEventsPlaceholder = clean == "今日没有日程" ||
+            clean == "No schedule today" ||
+            clean == "No events today" ||
+            clean == "今天暂无日程" ||
+            clean == "今日日程" ||
+            clean == "Today's schedule" ||
+            clean == "Today’s schedule"
+
+        if isNoEventsPlaceholder {
+            let emptyText = isZh ? "今日没有日程" : "No events today"
+            return DuoyiCalendarEventSummaryResult(
+                summary: emptyText,
+                target: "duoyi://calendar",
+                isReal: false
+            )
+        }
+
+        let target = resolveCalendarEventTarget(rawSchedule1Id)
+        return DuoyiCalendarEventSummaryResult(
+            summary: raw,
+            target: target,
+            isReal: true
+        )
+    }
+
+    static func buildMonthGrid(
+        anchorDate: Date,
+        timeZone: TimeZone,
+        isZh: Bool
+    ) -> DuoyiMonthGridModel {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+
+        let comps = calendar.dateComponents([.year, .month, .day], from: anchorDate)
+        let year = comps.year ?? 2026
+        let month = comps.month ?? 1
+        let todayDay = comps.day ?? 1
+
+        var firstDayComps = DateComponents()
+        firstDayComps.year = year
+        firstDayComps.month = month
+        firstDayComps.day = 1
+        firstDayComps.hour = 12
+
+        let firstDayDate = calendar.date(from: firstDayComps) ?? anchorDate
+        let weekday = calendar.component(.weekday, from: firstDayDate)
+        // In Gregorian: Sunday=1, Monday=2 ... Saturday=7. Monday-first offset:
+        let firstWeekdayOffset = (weekday + 5) % 7
+
+        let daysInMonth = calendar.range(of: .day, in: .month, for: firstDayDate)?.count ?? 30
+
+        var cells: [DuoyiMonthCell] = []
+        cells.reserveCapacity(42)
+
+        for index in 0..<42 {
+            if index < firstWeekdayOffset || index >= firstWeekdayOffset + daysInMonth {
+                cells.append(DuoyiMonthCell(dayNumber: 0, isToday: false, text: "  "))
+            } else {
+                let day = index - firstWeekdayOffset + 1
+                let isToday = (day == todayDay)
+                let text = day < 10 ? " \(day)" : "\(day)"
+                cells.append(DuoyiMonthCell(dayNumber: day, isToday: isToday, text: text))
+            }
+        }
+
+        let weekdayHeaders = isZh
+            ? ["一", "二", "三", "四", "五", "六", "日"]
+            : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+
+        let monthTitle: String
+        if isZh {
+            monthTitle = "\(year)年\(month)月"
+        } else {
+            let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            let mName = (1...12).contains(month) ? monthNames[month - 1] : "Month"
+            monthTitle = "\(mName) \(year)"
+        }
+
+        return DuoyiMonthGridModel(
+            year: year,
+            month: month,
+            todayDay: todayDay,
+            firstWeekdayOffset: firstWeekdayOffset,
+            daysInMonth: daysInMonth,
+            cells: cells,
+            weekdayHeaders: weekdayHeaders,
+            monthTitle: monthTitle
+        )
+    }
+
+    static func cellAccessibilityLabel(
+        year: Int,
+        month: Int,
+        day: Int,
+        isToday: Bool,
+        isZh: Bool
+    ) -> String {
+        if isZh {
+            let base = "\(year)年\(month)月\(day)日"
+            return isToday ? "\(base)，今天" : base
+        } else {
+            let monthNames = [
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"
+            ]
+            let mName = (1...12).contains(month) ? monthNames[month - 1] : "\(month)"
+            let base = "\(mName) \(day), \(year)"
+            return isToday ? "Today, \(base)" : base
+        }
+    }
+
+    static func budgetedVisibleWeekRange(
+        familyKind: String,
+        displayMode: String,
+        currentWeek: Int,
+        totalWeeks: Int = 6,
+        hasEventSummary: Bool = false,
+        availableHeight: Double = 0,
+        monthTitleHeight: Double = 16,
+        weekdayHeaderHeight: Double = 14,
+        eventSummaryHeight: Double = 16,
+        cellHeight: Double = 15,
+        rowSpacing: Double = 2,
+        contentSpacing: Double = 4
+    ) -> ClosedRange<Int> {
+        let maxWeekIndex = max(0, totalWeeks - 1)
+        let clampedCurrent = min(max(0, currentWeek), maxWeekIndex)
+
+        let maxAllowedWeeks: Int = {
+            if displayMode == "compact" {
+                return 1
+            }
+            switch familyKind {
+            case "systemSmall":
+                if hasEventSummary { return 1 }
+                return displayMode == "detailed" ? 3 : 2
+            case "systemMedium":
+                if displayMode == "compact" { return 1 }
+                if displayMode == "detailed" {
+                    return hasEventSummary ? 2 : 3
+                }
+                return hasEventSummary ? 2 : 2
+            default: // systemLarge, systemExtraLarge
+                if displayMode == "compact" { return 1 }
+                return totalWeeks
+            }
+        }()
+
+        let targetWeeks: Int
+        if availableHeight > 0 {
+            var overhead = monthTitleHeight + weekdayHeaderHeight + (2 * contentSpacing)
+            if hasEventSummary {
+                overhead += eventSummaryHeight + contentSpacing
+            }
+            let remainingForGrid = availableHeight - overhead
+            if remainingForGrid < cellHeight {
+                targetWeeks = 1
+            } else {
+                let pitch = cellHeight + rowSpacing
+                let fitting = Int((remainingForGrid + rowSpacing) / pitch)
+                let fittingClamped = max(1, min(fitting, totalWeeks))
+                targetWeeks = min(fittingClamped, maxAllowedWeeks)
+            }
+        } else {
+            targetWeeks = maxAllowedWeeks
+        }
+
+        if targetWeeks >= totalWeeks {
+            return 0...maxWeekIndex
+        }
+        if targetWeeks <= 1 {
+            return clampedCurrent...clampedCurrent
+        }
+
+        var start = max(0, clampedCurrent - (targetWeeks - 1) / 2)
+        var end = start + targetWeeks - 1
+        if end > maxWeekIndex {
+            end = maxWeekIndex
+            start = max(0, end - targetWeeks + 1)
+        }
+        return start...end
+    }
+}
+// END DUOYI_WIDGET_DISPLAY_CORE
+
 private struct DuoyiWidgetConfig {
     let kind: String
     let title: String
@@ -583,11 +1142,7 @@ private func localizedFallbackString(_ raw: String, kind: String, locale: DuoyiW
 }
 
 private func isAnniversaryFallback(_ text: String) -> Bool {
-    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ||
-        trimmed == "暂无近期纪念日" ||
-        trimmed == "No upcoming anniversaries" ||
-        trimmed == "暂无纪念日"
+    DuoyiWidgetDisplayCore.isKnownAnniversaryEmptyPlaceholder(text)
 }
 
 private struct DuoyiWidgetEntry: TimelineEntry {
@@ -609,6 +1164,8 @@ private struct DuoyiWidgetEntry: TimelineEntry {
     let habitQuickCheckId: String
     let focusTimer: DuoyiFocusTimerState
     let focusTimerLabel: String
+    let calendarEventSummary: String?
+    let calendarEventTarget: String
     let theme: DuoyiWidgetTheme
 
     var focusTimerRunning: Bool { focusTimer.isRunning }
@@ -649,6 +1206,8 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             habitQuickCheckId: "",
             focusTimer: .unavailable,
             focusTimerLabel: locale == .en ? "Focus countdown" : "专注倒计时",
+            calendarEventSummary: nil,
+            calendarEventTarget: localizedConfig.deepLink,
             theme: .fallback
         )
     }
@@ -689,14 +1248,57 @@ private struct DuoyiWidgetProvider: TimelineProvider {
         let primary: String
         let primaryTarget: String
         let rows: [DuoyiWidgetRow]
+
+        let calendarEventSummary: String?
+        let calendarEventTarget: String
+        if localizedConfig.kind == "DuoyiCalendarWidget" {
+            let rawSummary = defaults["today_event_summary"] as? String
+            let rawSchedule1Id = defaults["schedule_highlight_1_id"] as? String
+            let summaryResult = DuoyiWidgetDisplayCore.resolveCalendarSummaryAndTarget(
+                rawSummary: rawSummary,
+                rawSchedule1Id: rawSchedule1Id,
+                isFresh: fresh,
+                isZh: locale == .zh
+            )
+            calendarEventSummary = summaryResult.summary
+            calendarEventTarget = summaryResult.target
+        } else {
+            calendarEventSummary = nil
+            calendarEventTarget = ""
+        }
+
         if !fresh {
-            primary = locale == .en ? "Open Duoyi to refresh" : "打开多仪刷新数据"
+            if localizedConfig.kind == "DuoyiAnniversaryWidget" {
+                primary = locale == .zh ? "日期数据待刷新" : "Dates pending refresh"
+            } else {
+                primary = locale == .en ? "Open Duoyi to refresh" : "打开多仪刷新数据"
+            }
             primaryTarget = localizedConfig.deepLink
             rows = []
         } else if localizedConfig.kind == "DuoyiTodoWidget" {
             primary = todoRows.first?.title ?? localizedConfig.fallback
             primaryTarget = todoRows.first?.detailURL?.absoluteString ?? localizedConfig.deepLink
             rows = []
+        } else if localizedConfig.kind == "DuoyiAnniversaryWidget" {
+            let rawSlots = [
+                DuoyiAnniversaryRawSlot(sourceKey: "anniversary_highlight_1", text: defaults["anniversary_highlight_1"] as? String, target: defaults["anniversary_highlight_1_id"] as? String),
+                DuoyiAnniversaryRawSlot(sourceKey: "anniversary_highlight_2", text: defaults["anniversary_highlight_2"] as? String, target: defaults["anniversary_highlight_2_id"] as? String),
+                DuoyiAnniversaryRawSlot(sourceKey: "memorial_highlight_1", text: defaults["memorial_highlight_1"] as? String, target: defaults["memorial_highlight_1_id"] as? String),
+                DuoyiAnniversaryRawSlot(sourceKey: "memorial_highlight_2", text: defaults["memorial_highlight_2"] as? String, target: defaults["memorial_highlight_2_id"] as? String),
+                DuoyiAnniversaryRawSlot(sourceKey: "memorial_highlight_3", text: defaults["memorial_highlight_3"] as? String, target: defaults["memorial_highlight_3_id"] as? String),
+            ]
+            let resolved = DuoyiWidgetDisplayCore.resolveAnniversaryItems(slots: rawSlots, isFresh: true, isZh: locale == .zh)
+            if let first = resolved.first {
+                primary = first.text
+                primaryTarget = first.target
+                rows = resolved.dropFirst().enumerated().map { offset, item in
+                    DuoyiWidgetRow(index: offset + 2, title: item.text, target: item.target)
+                }
+            } else {
+                primary = localizedConfig.fallback
+                primaryTarget = localizedConfig.deepLink
+                rows = []
+            }
         } else {
             let primarySource = readPrimary(defaults, config: localizedConfig, locale: locale)
             primary = primarySource.title
@@ -746,6 +1348,8 @@ private struct DuoyiWidgetProvider: TimelineProvider {
             habitQuickCheckId: fresh ? readString(defaults, key: "habit_quick_check_id", fallback: "") : "",
             focusTimer: DuoyiFocusTimerState.resolve(values: defaults, sessionPublished: snapshot.hasPublishedSession, at: now),
             focusTimerLabel: focusTimerLabel,
+            calendarEventSummary: calendarEventSummary,
+            calendarEventTarget: calendarEventTarget,
             theme: DuoyiWidgetTheme(values: defaults)
         )
     }
@@ -854,6 +1458,8 @@ private struct DuoyiWidgetView: View {
         if isAccessoryFamily {
             accessoryContent
                 .widgetURL(URL(string: entry.config.deepLink))
+        } else if entry.config.kind == "DuoyiCalendarWidget" {
+            calendarBody
         } else {
             VStack(alignment: .leading, spacing: spacing) {
                 header
@@ -867,6 +1473,21 @@ private struct DuoyiWidgetView: View {
             .duoyiWidgetBackground(entry.theme)
             .widgetURL(URL(string: entry.config.deepLink))
         }
+    }
+
+    private var calendarBody: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            header
+            GeometryReader { proxy in
+                calendarContent(availableHeight: Double(proxy.size.height))
+            }
+            if family != .systemSmall {
+                footer
+            }
+        }
+        .padding(padding)
+        .duoyiWidgetBackground(entry.theme)
+        .widgetURL(URL(string: entry.config.deepLink))
     }
 
     private var header: some View {
@@ -906,6 +1527,126 @@ private struct DuoyiWidgetView: View {
             focusContent
         } else {
             defaultContent
+        }
+    }
+
+    private func calendarContent(availableHeight: Double) -> some View {
+        let grid = DuoyiWidgetDisplayCore.buildMonthGrid(
+            anchorDate: entry.date,
+            timeZone: .current,
+            isZh: entry.locale == .zh
+        )
+        let currentWeek = min(max(0, (grid.firstWeekdayOffset + grid.todayDay - 1) / 7), 5)
+        let totalWeeks = min(6, (grid.firstWeekdayOffset + grid.daysInMonth - 1) / 7 + 1)
+        let showEventSummary: Bool = {
+            if !entry.isDailyFresh {
+                return true
+            }
+            if family == .systemSmall {
+                return false
+            }
+            return entry.calendarEventSummary != nil && !entry.calendarEventSummary!.isEmpty
+        }()
+        let familyKind: String = {
+            if family == .systemSmall { return "systemSmall" }
+            if family == .systemMedium { return "systemMedium" }
+            if family == .systemLarge { return "systemLarge" }
+            return "other"
+        }()
+
+        let cellHeight: Double = family == .systemSmall ? 13 : 15
+        let cellFontSize: CGFloat = family == .systemSmall ? 9 : 10.5
+        let headerFontSize: CGFloat = family == .systemSmall ? 8 : 9.5
+        let monthTitleHeight: Double = family == .systemSmall ? 14 : 16
+        let weekdayHeaderHeight: Double = family == .systemSmall ? 12 : 14
+        let eventSummaryHeight: Double = family == .systemSmall ? 13 : 15
+        let rowSpacing: Double = family == .systemSmall ? 1 : 2
+        let contentSpacing: Double = family == .systemSmall ? 2 : 4
+
+        let visibleWeekRange = DuoyiWidgetDisplayCore.budgetedVisibleWeekRange(
+            familyKind: familyKind,
+            displayMode: entry.displayMode,
+            currentWeek: currentWeek,
+            totalWeeks: totalWeeks,
+            hasEventSummary: showEventSummary,
+            availableHeight: availableHeight,
+            monthTitleHeight: monthTitleHeight,
+            weekdayHeaderHeight: weekdayHeaderHeight,
+            eventSummaryHeight: eventSummaryHeight,
+            cellHeight: cellHeight,
+            rowSpacing: rowSpacing,
+            contentSpacing: contentSpacing
+        )
+
+        return VStack(alignment: .leading, spacing: CGFloat(contentSpacing)) {
+            Text(grid.monthTitle)
+                .font(.system(size: family == .systemSmall ? 11 : 12, weight: .semibold))
+                .foregroundColor(entry.theme.text)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            HStack(spacing: 0) {
+                ForEach(0..<7, id: \.self) { col in
+                    Text(grid.weekdayHeaders[col])
+                        .font(.system(size: headerFontSize, weight: .regular))
+                        .foregroundColor(entry.theme.mutedText)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            VStack(spacing: CGFloat(rowSpacing)) {
+                ForEach(visibleWeekRange, id: \.self) { week in
+                    HStack(spacing: 0) {
+                        ForEach(0..<7, id: \.self) { col in
+                            let cell = grid.cells[week * 7 + col]
+                            Group {
+                                if cell.dayNumber > 0 {
+                                    let label = DuoyiWidgetDisplayCore.cellAccessibilityLabel(
+                                        year: grid.year,
+                                        month: grid.month,
+                                        day: cell.dayNumber,
+                                        isToday: cell.isToday,
+                                        isZh: entry.locale == .zh
+                                    )
+                                    if cell.isToday {
+                                        Text("\(cell.dayNumber)")
+                                            .font(.system(size: cellFontSize, weight: .medium))
+                                            .foregroundColor(entry.theme.onPrimary)
+                                            .frame(width: CGFloat(cellHeight), height: CGFloat(cellHeight))
+                                            .background(Circle().fill(entry.theme.primary))
+                                            .accessibilityLabel(label)
+                                            .accessibilityAddTraits(.isSelected)
+                                    } else {
+                                        Text("\(cell.dayNumber)")
+                                            .font(.system(size: cellFontSize, weight: .regular))
+                                            .foregroundColor(entry.theme.text)
+                                            .frame(width: CGFloat(cellHeight), height: CGFloat(cellHeight))
+                                            .accessibilityLabel(label)
+                                    }
+                                } else {
+                                    Text("")
+                                        .font(.system(size: cellFontSize))
+                                        .frame(width: CGFloat(cellHeight), height: CGFloat(cellHeight))
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+            }
+
+            if showEventSummary {
+                if let summary = entry.calendarEventSummary, !summary.isEmpty {
+                    linkedText(summary, target: entry.calendarEventTarget, primary: false)
+                } else if !entry.isDailyFresh {
+                    linkedText(
+                        entry.locale == .zh ? "今日数据待刷新" : "Today’s data pending refresh",
+                        target: entry.calendarEventTarget,
+                        primary: false
+                    )
+                }
+            }
         }
     }
 

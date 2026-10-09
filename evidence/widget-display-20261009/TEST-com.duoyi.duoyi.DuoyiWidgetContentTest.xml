@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.duoyi.duoyi.DuoyiWidgetContentTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-10-09T02:51:18.114Z" hostname="mail.6688667.xyz" time="0.219">
+  <properties/>
+  <testcase name="staleAnniversaryDataBecomesExactlyOneLocalizedRefreshHint" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.025"/>
+  <testcase name="emptyAnniversaryResultUsesLocalizedBulletFallback" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.005"/>
+  <testcase name="legacyAnniversariesWithoutIdsStayDistinctAndBulletTextWithAnIdIsKept" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.037"/>
+  <testcase name="opaqueIdentityDedupKeepsDistinctUnicodeByteSequences" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.004"/>
+  <testcase name="monthGridLeavesBlankCellsUnmarkedAndInvalidTodayHasNoTodayCell" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.016"/>
+  <testcase name="anchorDateUsesTheRequestedTimezoneAtLocalMidnight" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.03"/>
+  <testcase name="knownEmptyAnniversaryPlaceholdersAreRecognizedWithWhitespaceAndBullet" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.001"/>
+  <testcase name="encodedUriPunctuationAndUnicodePreserveOneDecodedIdentity" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.018"/>
+  <testcase name="monthGridSupports28Through31DaysWithOneTodayAnd42Cells" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.004"/>
+  <testcase name="anniversaryItemsKeepEqualTextWhenTheirIdsDiffer" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.0"/>
+  <testcase name="anchorDateKeepsCalendarDayCorrectAcrossDstTransition" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.002"/>
+  <testcase name="malformedForeignUnrelatedExtraPathAndQueryTargetsFallBackToSafeRoot" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.004"/>
+  <testcase name="anniversaryItemsDeduplicateA1AndM3ByIdentityAndKeepTheirTargetsPaired" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.001"/>
+  <testcase name="anniversaryUnionPreservesAllFiveOrderedSlotsAndLegacyPunctuationIds" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.023"/>
+  <testcase name="anniversaryTargetCanonicalEncodingRoundTripsPlainIdsExactly" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.001"/>
+  <testcase name="monthGridUsesMondayFirstOffsetsAndHandlesYearBoundaries" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.007"/>
+  <testcase name="calendarSummaryPairsRealContentWithTargetAndPreservesUnknownUserText" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.003"/>
+  <testcase name="calendarTargetsPreserveEverySupportedReadOnlyProducerDestination" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.002"/>
+  <testcase name="invalidCalendarActionsHostsAndPathsUseCalendarRoot" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.002"/>
+  <testcase name="calendarEmptyAndStaleSummariesNeverUseResidualEntityTargets" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.003"/>
+  <testcase name="memorialOnlyAndMixedPlaceholderSlotsUseFallbackWithoutDroppingRealIds" classname="com.duoyi.duoyi.DuoyiWidgetContentTest" time="0.007"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,112 @@
+FAIL: swift exited with status 133
+Swift: /home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/ios-focus-core-native-oct8/swift-container-index
+Private output: /home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/runtime-widget-display-oct9/ios-widget-display-core-d8t7ltne
+Production source: /home/ubuntu/duoyi-worktrees/widget-display-20261009/ios/DuoyiWidgets/DuoyiWidgets.swift
+Fixture source: /home/ubuntu/duoyi-worktrees/widget-display-20261009/scripts/ios_widget_display_core_cases.swift
+Merged script: /home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/runtime-widget-display-oct9/ios-widget-display-core-d8t7ltne/ios_widget_display_core_cases.swift
+Case count: 19
+Production core SHA-256: b748ed33b9816d42ddded90abf192743760d4d201c7cb5362336838ca5ca5098
+Fixture SHA-256: 5b6ac35e91f0a97305a8476c7444bc1d31357dffa5946377dc6db8683fdcb158
+Merged script SHA-256: e82f51a1624d5091acbffaed9a1e58ba6ca77b787b19ecbabe97def506b9eb0a
+ios_widget_display_core_cases/ios_widget_display_core_cases.swift:566: Fatal error: FAIL: legacy ID with a colon target is canonical and safe
+Stack dump:
+0.	Program arguments: /usr/bin/swift-frontend -frontend -interpret /work/ios_widget_display_core_cases.swift -Xllvm -aarch64-use-tbi -disable-objc-interop -module-cache-path /tmp/swift-module-cache -empty-abi-descriptor -resource-dir /usr/lib/swift -module-name ios_widget_display_core_cases -in-process-plugin-server-path /usr/lib/swift/host/libSwiftInProcPluginServer.so -plugin-path /usr/lib/swift/host/plugins -plugin-path /usr/local/lib/swift/host/plugins
+1.	Swift version 6.1.3 (swift-6.1.3-RELEASE)
+2.	Compiling with effective version 5.10
+3.	While running user code "/work/ios_widget_display_core_cases.swift"
+Stack dump without symbol names (ensure you have llvm-symbolizer in your PATH or set the environment var `LLVM_SYMBOLIZER_PATH` to point to it):
+0  swift-frontend  0x0000c78797006520
+1  swift-frontend  0x0000c78797004558
+2  swift-frontend  0x0000c78797006c34
+3  linux-vdso.so.1 0x0000e7a3d1b489d0 __kernel_rt_sigreturn + 0
+4  libswiftCore.so 0x0000e7a3d1735574 $ss17_assertionFailure__4file4line5flagss5NeverOs12StaticStringV_SSAHSus6UInt32VtF + 164
+5  libswiftCore.so 0x0000e7a3c49a9d34 $ss17_assertionFailure__4file4line5flagss5NeverOs12StaticStringV_SSAHSus6UInt32VtF + 18446744073494022244
+6  libswiftCore.so 0x0000e7a3c49a9e90 $ss17_assertionFailure__4file4line5flagss5NeverOs12StaticStringV_SSAHSus6UInt32VtF + 18446744073494022592
+7  libswiftCore.so 0x0000e7a3c499a654 $ss17_assertionFailure__4file4line5flagss5NeverOs12StaticStringV_SSAHSus6UInt32VtF + 18446744073493959044
+8  libswiftCore.so 0x0000e7a3c4996ca0 $ss17_assertionFailure__4file4line5flagss5NeverOs12StaticStringV_SSAHSus6UInt32VtF + 18446744073493944272
+9  libswiftCore.so 0x0000e7a3c49a92ec $ss17_assertionFailure__4file4line5flagss5NeverOs12StaticStringV_SSAHSus6UInt32VtF + 18446744073494019612
+10 swift-frontend  0x0000c78791708010
+11 swift-frontend  0x0000c787915a7aa4
+12 swift-frontend  0x0000c787915a6488
+13 swift-frontend  0x0000c78791550910
+14 swift-frontend  0x0000c7879154d800
+15 swift-frontend  0x0000c7879154c9ec
+16 swift-frontend  0x0000c787915588cc
+17 swift-frontend  0x0000c7879154f564
+18 swift-frontend  0x0000c7879154e1b4
+19 swift-frontend  0x0000c78791356d40
+20 libc.so.6       0x0000e7a3cfe87400
+21 libc.so.6       0x0000e7a3cfe874d8 __libc_start_main + 152
+22 swift-frontend  0x0000c78791355ab0
+
+*** Signal 5: Backtracing from 0xe7a3d1735574... done ***
+
+*** Program crashed: System trap at 0x0000e7a3d1735574 ***
+
+Thread 0 "swift-frontend" crashed:
+
+ 0      0x0000e7a3d1735574 _assertionFailure(_:_:file:line:flags:) + 164 in libswiftCore.so
+ 1 [ra] 0x0000e7a3c49a9d34
+ 2 [ra] 0x0000e7a3c49a9e90
+ 3 [ra] 0x0000e7a3c499a654
+ 4 [ra] 0x0000e7a3c4996ca0
+ 5 [ra] 0x0000e7a3c49a92ec
+ 6 [ra] 0x0000c78791708010 llvm::orc::runAsMain(int (*)(int, char**), llvm::ArrayRef<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::optional<llvm::StringRef>) + 1323 in swift-frontend
+ 7 [ra] 0x0000c787915a7aa4 swift::SwiftJIT::runMain(llvm::ArrayRef<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >) + 231 in swift-frontend
+ 8 [ra] 0x0000c787915a6488 swift::RunImmediately(swift::CompilerInstance&, std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&, swift::IRGenOptions const&, swift::SILOptions const&, std::unique_ptr<swift::SILModule, std::default_delete<swift::SILModule> >&&) + 859 in swift-frontend
+ 9 [ra] 0x0000c78791550910 processCommandLineAndRunImmediately(swift::CompilerInstance&, std::unique_ptr<swift::SILModule, std::default_delete<swift::SILModule> >&&, llvm::PointerUnion<swift::ModuleDecl*, swift::SourceFile*>, swift::FrontendObserver*, int&) + 167 in swift-frontend
+10 [ra] 0x0000c7879154d800 performCompileStepsPostSILGen(swift::CompilerInstance&, std::unique_ptr<swift::SILModule, std::default_delete<swift::SILModule> >, llvm::PointerUnion<swift::ModuleDecl*, swift::SourceFile*>, swift::PrimarySpecificPaths const&, int&, swift::FrontendObserver*) + 1067 in swift-frontend
+11 [ra] 0x0000c7879154c9ec swift::performCompileStepsPostSema(swift::CompilerInstance&, int&, swift::FrontendObserver*) + 731 in swift-frontend
+12 [ra] 0x0000c787915588cc withSemanticAnalysis(swift::CompilerInstance&, swift::FrontendObserver*, llvm::function_ref<bool (swift::CompilerInstance&)>, bool) + 151 in swift-frontend
+13 [ra] 0x0000c7879154f564 performCompile(swift::CompilerInstance&, int&, swift::FrontendObserver*) + 3479 in swift-frontend
+14 [ra] 0x0000c7879154e1b4 swift::performFrontend(llvm::ArrayRef<char const*>, char const*, void*, swift::FrontendObserver*) + 2179 in swift-frontend
+15 [ra] 0x0000c78791356d40 swift::mainEntry(int, char const**) + 4023 in swift-frontend
+16 [ra] 0x0000e7a3cfe87400 <unknown> in libc.so.6
+17 [ra] 0x0000e7a3cfe874d8 <unknown> in libc.so.6
+
+
+Registers:
+
+ x0 0x0000000200000003  8589934595
+ x1 0x0000000000000003  3
+ x2 0x0000c787d7a06ca8  03 00 00 00 00 00 00 00 40 00 00 00 00 00 00 00  ········@·······
+ x3 0x0000c787d6248010  02 00 07 00 01 00 06 00 05 00 04 00 05 00 03 00  ················
+ x4 0x0000000000000006  6
+ x5 0x0000c787d8337250  d7 d2 18 a0 8b c7 00 00 28 78 75 0b e5 05 2f a3  ×Ò· ·Ç··(xu·å·/£
+ x6 0xa32f05e50b757828  11758623633385551912
+ x7 0x494146203a726f72  5278577342488407922
+ x8 0x0000000000000000  0
+ x9 0x726174206e6f6c6f  8241996475705289839
+x10 0x67726174206e6f6c  7454127484639801196
+x11 0x6163207369207465  7017488324430427237
+x12 0x206c6163696e6f6e  2336349386296946542
+x13 0x6566617320646e61  7306634592547794529
+x14 0x494146203a726f72  5278577342488407922
+x15 0x636167656c203a4c  7161118567799208524
+x16 0x0000000000000001  1
+x17 0x0000e7a3cfef0b24  40 07 00 b4 fd 7b bc a9 01 40 00 d1 fd 03 00 91  @··´ý{¼©·@·Ñý···
+x18 0xea00000000003441  16861477004875150401
+x19 0xf000000000000039  17293822569102704697
+x20 0x0000c787d7a06ca0  f8 62 9e d1 a3 e7 00 00 03 00 00 00 00 00 00 00  øb·Ñ£ç··········
+x21 0xf000000000000033  17293822569102704691
+x22 0xe600000000000000  16573246628723425280
+x23 0x0000000000000001  1
+x24 0xd000000000000016  14987979559889010710
+x25 0x0000c787d7cd66d0  f8 62 9e d1 a3 e7 00 00 03 00 00 00 02 00 00 00  øb·Ñ£ç··········
+x26 0x8000e7a3c498fde0  73 70 61 63 65 73 20 69 6e 20 61 20 6c 65 67 61  spaces in a lega
+x27 0xf00000000000001f  17293822569102704671
+x28 0x343a64726f636572  3763430881279305074
+ fp 0x0000ffffdfb1ffd0  40 00 b2 df ff ff 00 00 34 9d 9a c4 a3 e7 00 00  @·²ßÿÿ··4··Ä£ç··
+ lr 0x0000e7a3d1735574  20 00 20 d4 28 00 80 52 89 12 80 52 00 16 00 90   · Ô(··R···R····
+ sp 0x0000ffffdfb1ff60  01 00 00 00 00 00 00 f0 50 c0 67 d1 a3 e7 00 00  ·······ðPÀgÑ£ç··
+ pc 0x0000e7a3d1735574  20 00 20 d4 28 00 80 52 89 12 80 52 00 16 00 90   · Ô(··R···R····
+
+
+Images (31 omitted):
+
+0x0000c78790a60000–0x0000c78797e460c8 13274f15d68e488f49c30ccf0381c3e2a04c3827 swift-frontend  /usr/bin/swift-frontend
+0x0000e7a3cfe60000–0x0000e7a3cffed604 977c021c364ee3c495c0e5f2375bf6ba2124a6da libc.so.6       /usr/lib/aarch64-linux-gnu/libc.so.6
+0x0000e7a3d1490000–0x0000e7a3d19b3c08 9fc5263303a26f0b1ab0b15903fb141ae065a19d libswiftCore.so /usr/lib/swift/linux/libswiftCore.so
+
+Backtrace took 1.99s
+

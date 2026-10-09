@@ -276,10 +276,23 @@ void main() {
           );
           expect(find.text('总用户'), findsOneWidget);
           expect(find.text('12345'), findsOneWidget);
-          expect(find.text('近 7 天注册'), findsOneWidget);
           expect(requests, contains('GET /api/admin/stats'));
           expect(tester.takeException(), isNull);
           await _capture(tester, 'admin-overview-${width.toInt()}-$textScale');
+          await tester.scrollUntilVisible(
+            find.text('近 7 天注册'),
+            250,
+            scrollable: find
+                .byWidgetPredicate(
+                  (widget) =>
+                      widget is Scrollable &&
+                      widget.axisDirection == AxisDirection.down,
+                )
+                .first,
+          );
+          await tester.pumpAndSettle();
+          expect(find.text('近 7 天注册'), findsOneWidget);
+          expect(tester.takeException(), isNull);
         },
       );
     }

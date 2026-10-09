@@ -133,15 +133,10 @@ object DuoyiWidgetSnapshot {
             R.layout.duoyi_diary_widget -> listOf(
                 R.id.widget_diary_2 to "diary_highlight_2",
                 R.id.widget_diary_3 to "diary_highlight_3")
-            R.layout.duoyi_anniversary_widget -> listOf(
-                R.id.widget_anniversary_2 to "anniversary_highlight_2",
-                R.id.widget_anniversary_3 to "anniversary_highlight_3")
             else -> emptyList()
         }
         optionalRows.forEach { (viewId, key) ->
             val value = prefs.getString(key, null)
-                ?: if (key.startsWith("anniversary_"))
-                    prefs.getString(key.replace("anniversary_", "memorial_"), "") else ""
             if (value.isNullOrBlank()) {
                 views.setViewVisibility(viewId, View.GONE)
             }

@@ -311,6 +311,16 @@ object DuoyiWidgetCopy {
     }
     fun calendarWeekdayHeader(isZh: Boolean): String =
         if (isZh) "一 二 三 四 五 六 日" else "Mo Tu We Th Fr Sa Su"
+    fun calendarEventSummary(raw: String?, isZh: Boolean): String? {
+        if (raw.isNullOrBlank()) return null
+        val trimmed = raw.trim()
+        val clean = if (trimmed.startsWith("· ")) trimmed.removePrefix("· ").trim() else trimmed
+        if (clean == "今日没有日程" || clean == "No schedule today" || clean == "No events today" ||
+            clean == "今天暂无日程" || clean == "今日日程" || clean == "Today's schedule" || clean == "Today’s schedule") {
+            return if (isZh) "今日没有日程" else "No events today"
+        }
+        return raw
+    }
 
     // Schedule
     fun scheduleSubtitle(isZh: Boolean): String = if (isZh) "今日日程" else "Today’s schedule"

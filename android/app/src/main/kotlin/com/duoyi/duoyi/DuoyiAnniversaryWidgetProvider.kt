@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
@@ -71,33 +72,40 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
                 DuoyiWidgetCopy.appTitle(prefs, isZh)
             )
             views.setTextViewText(R.id.widget_anniversary_subtitle, DuoyiWidgetCopy.anniversarySubtitle(isZh))
+
+            val isFresh = DuoyiWidgetSnapshot.isFresh(prefs)
+            val rawSlots = listOf(
+                DuoyiAnniversaryRawSlot("anniversary_highlight_1", prefs.getString("anniversary_highlight_1", null), prefs.getString("anniversary_highlight_1_id", null)),
+                DuoyiAnniversaryRawSlot("anniversary_highlight_2", prefs.getString("anniversary_highlight_2", null), prefs.getString("anniversary_highlight_2_id", null)),
+                DuoyiAnniversaryRawSlot("memorial_highlight_1", prefs.getString("memorial_highlight_1", null), prefs.getString("memorial_highlight_1_id", null)),
+                DuoyiAnniversaryRawSlot("memorial_highlight_2", prefs.getString("memorial_highlight_2", null), prefs.getString("memorial_highlight_2_id", null)),
+                DuoyiAnniversaryRawSlot("memorial_highlight_3", prefs.getString("memorial_highlight_3", null), prefs.getString("memorial_highlight_3_id", null)),
+            )
+            val selectedItems = DuoyiWidgetContent.resolveAnniversaryItems(rawSlots, isFresh, isZh)
+
+            val item1 = selectedItems.getOrNull(0)
+            val item2 = selectedItems.getOrNull(1)
+            val item3 = selectedItems.getOrNull(2)
+
             views.setTextViewText(
                 R.id.widget_anniversary_1,
-                DuoyiWidgetCopy.anniversaryHighlight1(
-                    highlightText(
-                        prefs,
-                        "anniversary_highlight_1",
-                        "memorial_highlight_1",
-                        ""
-                    ),
-                    isZh
-                )
+                item1?.text.orEmpty()
             )
             views.setTextViewText(
                 R.id.widget_anniversary_2,
-                highlightText(prefs, "anniversary_highlight_2", "memorial_highlight_2", "")
+                item2?.text.orEmpty()
             )
             views.setTextViewText(
                 R.id.widget_anniversary_3,
-                highlightText(prefs, "anniversary_highlight_3", "memorial_highlight_3", "")
+                item3?.text.orEmpty()
             )
             views.setViewVisibility(
                 R.id.widget_anniversary_2,
-                DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
+                if (item2 != null) DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id) else View.GONE
             )
             views.setViewVisibility(
                 R.id.widget_anniversary_3,
-                DuoyiWidgetDisplayMode.detailedVisibility(prefs, id)
+                if (item3 != null) DuoyiWidgetDisplayMode.detailedVisibility(prefs, id) else View.GONE
             )
             views.setViewVisibility(
                 R.id.widget_anniversary_bottom_nav,
@@ -130,15 +138,27 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_anniversary_subtitle, openAnniversary)
             views.setOnClickPendingIntent(
                 R.id.widget_anniversary_1,
-                itemIntent(context, prefs, "memorial_highlight_1_id", "duoyi://anniversary")
+                HomeWidgetLaunchIntent.getActivity(
+                    context,
+                    MainActivity::class.java,
+                    Uri.parse(item1?.target ?: "duoyi://anniversary")
+                )
             )
             views.setOnClickPendingIntent(
                 R.id.widget_anniversary_2,
-                itemIntent(context, prefs, "memorial_highlight_2_id", "duoyi://anniversary")
+                HomeWidgetLaunchIntent.getActivity(
+                    context,
+                    MainActivity::class.java,
+                    Uri.parse(item2?.target ?: "duoyi://anniversary")
+                )
             )
             views.setOnClickPendingIntent(
                 R.id.widget_anniversary_3,
-                itemIntent(context, prefs, "memorial_highlight_3_id", "duoyi://anniversary")
+                HomeWidgetLaunchIntent.getActivity(
+                    context,
+                    MainActivity::class.java,
+                    Uri.parse(item3?.target ?: "duoyi://anniversary")
+                )
             )
             views.setOnClickPendingIntent(R.id.widget_anniversary_nav_todo, openTodo)
             views.setOnClickPendingIntent(R.id.widget_anniversary_nav_habit, openHabit)
@@ -151,59 +171,6 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
     }
 
     companion object {
-        private fun highlightText(
-            prefs: SharedPreferences,
-            primaryKey: String,
-            fallbackKey: String,
-            fallback: String
-        ): String {
-            return prefs.getString(primaryKey, null)
-                ?: prefs.getString(fallbackKey, fallback)
-                ?: fallback
-        }
-
-        private fun itemIntent(
-            context: Context,
-            prefs: SharedPreferences,
-            key: String,
-            fallback: String
-        ) =
-            HomeWidgetLaunchIntent.getActivity(
-                context,
-                MainActivity::class.java,
-                detailUri(prefs, key, fallback)
-            )
-
-        private fun detailUri(prefs: SharedPreferences, key: String, fallback: String): Uri {
-            val primaryKey = anniversaryPrimaryKey(key)
-            val fallbackKey = key
-            return detailUri(prefs, primaryKey, fallbackKey, fallback)
-        }
-
-        private fun detailUri(
-            prefs: SharedPreferences,
-            primaryKey: String,
-            fallbackKey: String,
-            fallback: String
-        ): Uri {
-            val rawId = (
-                prefs.getString(primaryKey, null)
-                    ?: prefs.getString(fallbackKey, "")
-                )?.trim().orEmpty()
-            if (rawId.isBlank()) return Uri.parse(fallback)
-            if (rawId.startsWith("duoyi://")) return Uri.parse(rawId)
-            return Uri.parse("$fallback/${Uri.encode(rawId)}")
-        }
-
-        private fun anniversaryPrimaryKey(key: String): String {
-            return when (key) {
-                "memorial_highlight_1_id" -> "anniversary_highlight_1_id"
-                "memorial_highlight_2_id" -> "anniversary_highlight_2_id"
-                "memorial_highlight_3_id" -> "anniversary_highlight_3_id"
-                else -> key.replace("memorial_", "anniversary_")
-            }
-        }
-
         fun requestUpdate(context: Context) {
             DuoyiWidgetProviderRegistry.requestUpdateForKind(context, "anniversary")
         }

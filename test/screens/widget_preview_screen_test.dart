@@ -277,8 +277,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    final detailedModeSelected =
-        tester.widget<SegmentedButton<WidgetDisplayMode>>(
+    final detailedModeSelected = tester
+        .widget<SegmentedButton<WidgetDisplayMode>>(
           find.byWidgetPredicate(
             (w) => w is SegmentedButton<WidgetDisplayMode>,
           ),
@@ -292,17 +292,29 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    final modeAfterCategorySwitch =
-        tester.widget<SegmentedButton<WidgetDisplayMode>>(
-          find.byWidgetPredicate(
-            (w) => w is SegmentedButton<WidgetDisplayMode>,
-          ),
-        );
+    // Category selection scrolls the lazy list; reveal the density panel again.
+    final modeFinder = find.byWidgetPredicate(
+      (w) => w is SegmentedButton<WidgetDisplayMode>,
+    );
+    await tester.scrollUntilVisible(
+      modeFinder,
+      -200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    final modeAfterCategorySwitch = tester
+        .widget<SegmentedButton<WidgetDisplayMode>>(modeFinder);
     expect(modeAfterCategorySwitch.selected, {WidgetDisplayMode.detailed});
     expect(find.text(WidgetDisplayMode.detailed.description), findsOneWidget);
     expect(find.text(WidgetDisplayMode.compact.description), findsNothing);
     expect(find.text(WidgetDisplayMode.standard.description), findsNothing);
 
+    await tester.scrollUntilVisible(
+      find.text('桌面查看与完成待办，支持快速记一笔'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('桌面查看与完成待办，支持快速记一笔'), findsOneWidget);
     expect(find.text('查看今日完成率、连续记录与快捷打卡'), findsOneWidget);
     expect(tester.takeException(), isNull);
