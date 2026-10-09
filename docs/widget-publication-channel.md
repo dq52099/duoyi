@@ -7,11 +7,28 @@ operation survives messenger disposal and can be recovered by its receipt.
 
 ## Current integration status
 
-The native store and adapter are implemented. Flutter bootstrap, publisher and
+The native store, Android bridge and Dart wire adapter are implemented. Flutter bootstrap, publisher and
 cleanup paths, Android renderer reads and the equivalent iOS store are not yet
 switched to this protocol. Existing widgets still use the existing path.
 An `applied` response confirms canonical storage, not launcher display.
 The adapter currently returns `refreshRequested: false` for mutation results.
+
+## Dart adapter
+
+`lib/services/widget_publication_client.dart` provides typed reads and immutable
+open/invalidate/advance/publish requests. Read facts carry no writer lease;
+only a validated open acknowledgement returns that capability. The adapter
+checks exact response shapes, operation identity, the next store revision and
+the expected document/presentation result before exposing a committed response.
+
+Keep the original `WidgetStoreRequest` when a response is uncertain. The default
+15-second response deadline bounds the Flutter wait and does not cancel a
+native transaction. A mutation channel error or deadline returns
+`responseUnknown`; malformed responses return `invalidResponse`. Neither is
+permission to advance an accepted cache, retry with new expectations or fall
+back to preference data. The adapter performs no automatic retries, workspace
+bootstrap, account-generation checks or launcher refresh. Those responsibilities
+remain with the forthcoming publication controller and renderer integration.
 
 ## Read
 

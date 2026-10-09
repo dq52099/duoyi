@@ -1,0 +1,16 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/widget-publication-client-20261009/test/services/widget_publication_test.dart
+00:00 +0: v1 has exactly ten document fields and the complete 89-field producer value catalog
+00:00 +1: constructor snapshots source values and all output maps are fresh
+00:00 +2: clearedValuesFrom zeroes 67 business fields and preserves 22 presentation fields
+00:00 +3: cleared and blocked reject each business field tampered individually
+00:00 +4: raw owner, user text, and item IDs survive JSON round trips unchanged
+00:00 +5: descriptor creation and serialization leave the global locale notifier unchanged
+00:00 +6: strict decoder rejects missing, null, extra, and wrongly typed fields
+00:00 +7: unknown schema, state, and locale values are blocked
+00:00 +8: published days use strict Gregorian validation, including leap days
+00:01 +9: published, cleared, and blocked states enforce revision and day rules
+00:01 +10: UTC offset accepts inclusive day bounds and rejects values outside them
+00:01 +11: every Int32 value accepts its field range and rejects each adjacent overflow
+00:01 +12: revision, capture, and integer values preserve exact JSON boundary values
+00:01 +13: flat projection replaces all identity metadata from the document
+00:01 +14: All tests passed!

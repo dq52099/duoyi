@@ -1,0 +1,46 @@
+{
+  "started": "2026-10-09T06:46:54.359947+00:00",
+  "source_before": {
+    "lib/services/widget_publication_client.dart": "c56250f6776106e4941a70ebb2d0127b0566372d249c5928e89abb8243d6d126",
+    "lib/services/widget_publication.dart": "7e964491b57290079c7000f5ff5ba121ae17feb34ae72ab2b1d6c1548650e188",
+    "test/services/widget_publication_test.dart": "8e876378b9dfb20845d06510736844db392bbde2028882ae175281a9e8fd0d76",
+    "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+    "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+  },
+  "commands": [
+    {
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "analyze",
+        "--no-pub",
+        "lib/services/widget_publication_client.dart",
+        "lib/services/widget_publication.dart"
+      ],
+      "exit_code": 0,
+      "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/widget-publication-client-analyze-oct9.log",
+      "log_sha256": "ce952b2b48c958f865acc66fdb0fe309cf938be658bd4011c4f651dfa5c85b87"
+    },
+    {
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "test/services/widget_publication_test.dart"
+      ],
+      "exit_code": 0,
+      "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/widget-publication-client-descriptor-fixture-oct9.log",
+      "log_sha256": "451df135b6c85ad79f3af5d3ade0c2bdb832239f2904a28f58abb698b0961ff6"
+    }
+  ],
+  "goal_complete": false,
+  "finished": "2026-10-09T06:48:13.345867+00:00",
+  "source_after": {
+    "lib/services/widget_publication_client.dart": "c56250f6776106e4941a70ebb2d0127b0566372d249c5928e89abb8243d6d126",
+    "lib/services/widget_publication.dart": "7e964491b57290079c7000f5ff5ba121ae17feb34ae72ab2b1d6c1548650e188",
+    "test/services/widget_publication_test.dart": "8e876378b9dfb20845d06510736844db392bbde2028882ae175281a9e8fd0d76",
+    "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+    "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+  },
+  "source_unchanged": true,
+  "success": true
+}
