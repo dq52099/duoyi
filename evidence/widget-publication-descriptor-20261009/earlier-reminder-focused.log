@@ -1,0 +1,18 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/reminder-copy-ledger-20261009/test/services/reminder_delivery_copy_test.dart
+00:00 +0: todo copy covers every rule type in Chinese and English
+00:00 +1: goal copy covers every rule type and reminder kind
+00:00 +2: habit copy keeps semantic push distinct and uses each brand locale
+00:00 +3: anniversary copy covers every kind and calendar distance fact
+00:00 +4: countdown copy covers today, tomorrow, later, and overdue facts
+00:00 +5: raw user titles survive every subject renderer unchanged
+00:00 +6: the same copy renders zh to en to zh without changing global locale
+00:00 +7: semantic fingerprint is stable across locale and brand rendering
+00:00 +8: semantic fingerprint changes when any semantic fact changes
+00:00 +9: semantic fingerprint JSON preserves separator and newline titles
+00:00 +10: v1 descriptors have the exact schema and round-trip every valid subject combination
+00:00 +11: JSON round-trip preserves raw literal code units, renders, and fingerprint
+00:00 +12: anniversary and countdown keep signed exact integer boundaries
+00:00 +13: ordinary invalid maps are rejected without casts or enum exceptions
+00:00 +14: subject-specific fixed fields must satisfy the v1 invariants
+00:00 +15: serialization leaves the global locale notifier untouched
+00:00 +16: All tests passed!

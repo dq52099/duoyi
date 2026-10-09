@@ -18,6 +18,178 @@ import 'package:flutter_test/flutter_test.dart';
   );
 }
 
+const _descriptorKeys = <String>[
+  'schemaVersion',
+  'subject',
+  'userTitle',
+  'type',
+  'kind',
+  'days',
+  'semanticPush',
+];
+const _maxExactJsonInteger = 9007199254740991;
+
+typedef _CopyFixture = ({
+  ReminderDeliveryCopy copy,
+  Map<String, Object?> expectedDescriptor,
+  String expectedFingerprint,
+  String title,
+});
+
+ReminderRuleType _ruleFromFixtureName(String name) => switch (name) {
+  'absolute' => ReminderRuleType.absolute,
+  'relativeToDue' => ReminderRuleType.relativeToDue,
+  'dailyTime' => ReminderRuleType.dailyTime,
+  'weeklyTime' => ReminderRuleType.weeklyTime,
+  _ => throw StateError('Unknown fixture rule: $name'),
+};
+
+ReminderKind _kindFromFixtureName(String name) => switch (name) {
+  'push' => ReminderKind.push,
+  'alarm' => ReminderKind.alarm,
+  'email' => ReminderKind.email,
+  'popup' => ReminderKind.popup,
+  'off' => ReminderKind.off,
+  _ => throw StateError('Unknown fixture kind: $name'),
+};
+
+ReminderDeliveryCopy _copyFromFixture({
+  required String subject,
+  required String title,
+  required String type,
+  required String kind,
+  required int days,
+  required bool semanticPush,
+}) => switch (subject) {
+  'todo' => ReminderDeliveryCopy.todo(title, _ruleFromFixtureName(type)),
+  'goal' => ReminderDeliveryCopy.goal(
+    title,
+    _ruleFromFixtureName(type),
+    _kindFromFixtureName(kind),
+  ),
+  'habit' => ReminderDeliveryCopy.habit(title, semanticPush: semanticPush),
+  'anniversary' => ReminderDeliveryCopy.anniversary(
+    title,
+    days,
+    _kindFromFixtureName(kind),
+  ),
+  'countdown' => ReminderDeliveryCopy.countdown(title, days),
+  _ => throw StateError('Unknown fixture subject: $subject'),
+};
+
+Map<String, Object?> _expectedDescriptor({
+  required String subject,
+  required String title,
+  required String type,
+  required String kind,
+  required int days,
+  required bool semanticPush,
+}) => <String, Object?>{
+  'schemaVersion': 1,
+  'subject': subject,
+  'userTitle': title,
+  'type': type,
+  'kind': kind,
+  'days': days,
+  'semanticPush': semanticPush,
+};
+
+List<_CopyFixture> _allValidCopyFixtures() {
+  const title = '  提醒：🔔\nA/B "literal" \\n e\u0301  ';
+  const rules = <String>[
+    'absolute',
+    'relativeToDue',
+    'dailyTime',
+    'weeklyTime',
+  ];
+  const kinds = <String>['push', 'alarm', 'email', 'popup', 'off'];
+  final fixtures = <_CopyFixture>[];
+
+  void add({
+    required String subject,
+    required String type,
+    required String kind,
+    required int days,
+    required bool semanticPush,
+  }) {
+    final descriptor = _expectedDescriptor(
+      subject: subject,
+      title: title,
+      type: type,
+      kind: kind,
+      days: days,
+      semanticPush: semanticPush,
+    );
+    fixtures.add((
+      copy: _copyFromFixture(
+        subject: subject,
+        title: title,
+        type: type,
+        kind: kind,
+        days: days,
+        semanticPush: semanticPush,
+      ),
+      expectedDescriptor: descriptor,
+      expectedFingerprint: jsonEncode([
+        subject,
+        title,
+        type,
+        kind,
+        days,
+        semanticPush,
+      ]),
+      title: title,
+    ));
+  }
+
+  for (final type in rules) {
+    add(
+      subject: 'todo',
+      type: type,
+      kind: 'push',
+      days: 0,
+      semanticPush: false,
+    );
+  }
+  for (final type in rules) {
+    for (final kind in kinds) {
+      add(
+        subject: 'goal',
+        type: type,
+        kind: kind,
+        days: 0,
+        semanticPush: false,
+      );
+    }
+  }
+  for (final semanticPush in const [false, true]) {
+    add(
+      subject: 'habit',
+      type: 'absolute',
+      kind: 'push',
+      days: 0,
+      semanticPush: semanticPush,
+    );
+  }
+  for (final kind in kinds) {
+    add(
+      subject: 'anniversary',
+      type: 'absolute',
+      kind: kind,
+      days: -8,
+      semanticPush: false,
+    );
+  }
+  add(
+    subject: 'countdown',
+    type: 'absolute',
+    kind: 'push',
+    days: 8,
+    semanticPush: false,
+  );
+  return fixtures;
+}
+
 void main() {
   setUp(() => I18n.setLocale(AppLocale.zh));
   tearDown(() => I18n.setLocale(AppLocale.zh));
@@ -476,5 +648,469 @@ void main() {
       nearbyFacts.map((copy) => copy.semanticFingerprint).toSet(),
       hasLength(nearbyFacts.length),
     );
+  });
+
+  test(
+    'v1 descriptors have the exact schema and round-trip every valid subject combination',
+    () {
+      I18n.setLocale(AppLocale.en);
+      final fixtures = _allValidCopyFixtures();
+      expect(fixtures, hasLength(32));
+
+      for (final fixture in fixtures) {
+        final firstMap = fixture.copy.toJson();
+        final secondMap = fixture.copy.toJson();
+        expect(firstMap.keys.toList(), _descriptorKeys);
+        expect(firstMap, fixture.expectedDescriptor);
+        expect(identical(firstMap, secondMap), isFalse);
+
+        // Mutating one serialization cannot change the copy or a later map.
+        firstMap['userTitle'] = 'changed output only';
+        expect(secondMap, fixture.expectedDescriptor);
+        expect(fixture.copy.toJson(), fixture.expectedDescriptor);
+
+        final decoded = jsonDecode(jsonEncode(fixture.expectedDescriptor));
+        final restored = ReminderDeliveryCopy.tryFromJson(decoded);
+        expect(restored, isNotNull);
+        final roundTripped = restored!;
+        expect(roundTripped.toJson().keys.toList(), _descriptorKeys);
+        expect(roundTripped.toJson(), fixture.expectedDescriptor);
+        expect(fixture.copy.userTitle.codeUnits, fixture.title.codeUnits);
+        expect(roundTripped.userTitle.codeUnits, fixture.title.codeUnits);
+
+        expect(fixture.copy.semanticFingerprint, fixture.expectedFingerprint);
+        expect(roundTripped.semanticFingerprint, fixture.expectedFingerprint);
+        for (final locale in const [AppLocale.zh, AppLocale.en]) {
+          for (final style in const [
+            BrandStyle.defaultBrand,
+            BrandStyle.re0,
+            BrandStyle.liquidGlass,
+          ]) {
+            expect(
+              _render(roundTripped, locale, style: style),
+              _render(fixture.copy, locale, style: style),
+              reason: '${fixture.expectedDescriptor} / $locale / $style',
+            );
+          }
+        }
+      }
+
+      expect(I18n.current, AppLocale.en);
+      expect(I18n.localeListenable.value, AppLocale.en);
+    },
+  );
+
+  test(
+    'JSON round-trip preserves raw literal code units, renders, and fingerprint',
+    () {
+      I18n.setLocale(AppLocale.en);
+      const rawTitles = <String>[
+        '',
+        '      ',
+        '  leading and trailing  ',
+        'first\r\nsecond\rthird\nfourth',
+        r'literal backslash+n: \n',
+        'Today is 🔔 Countdown reminder\n目标提醒: ✉️',
+        'quote: "double" and \'single\'',
+        'family 👨‍👩‍👧‍👦 and compass 🧭',
+        'é',
+        'e\u0301',
+      ];
+
+      for (final raw in rawTitles) {
+        final copy = ReminderDeliveryCopy.todo(raw, ReminderRuleType.absolute);
+        final expected = _expectedDescriptor(
+          subject: 'todo',
+          title: raw,
+          type: 'absolute',
+          kind: 'push',
+          days: 0,
+          semanticPush: false,
+        );
+        final expectedFingerprint = jsonEncode([
+          'todo',
+          raw,
+          'absolute',
+          'push',
+          0,
+          false,
+        ]);
+        final restored = ReminderDeliveryCopy.tryFromJson(
+          jsonDecode(jsonEncode(expected)),
+        );
+        expect(restored, isNotNull);
+        final roundTripped = restored!;
+        expect(copy.toJson(), expected);
+        expect(roundTripped.toJson(), expected);
+        expect(copy.userTitle.codeUnits, raw.codeUnits);
+        expect(roundTripped.userTitle.codeUnits, raw.codeUnits);
+        expect(copy.semanticFingerprint, expectedFingerprint);
+        expect(roundTripped.semanticFingerprint, expectedFingerprint);
+
+        for (final locale in const [AppLocale.zh, AppLocale.en]) {
+          for (final style in const [
+            BrandStyle.defaultBrand,
+            BrandStyle.re0,
+            BrandStyle.liquidGlass,
+          ]) {
+            final before = _render(copy, locale, style: style);
+            final after = _render(roundTripped, locale, style: style);
+            expect(
+              after,
+              before,
+              reason: '$locale / $style / ${raw.codeUnits}',
+            );
+            expect(before.body.codeUnits, raw.codeUnits);
+          }
+        }
+      }
+
+      expect(I18n.current, AppLocale.en);
+      expect(I18n.localeListenable.value, AppLocale.en);
+    },
+  );
+
+  test('anniversary and countdown keep signed exact integer boundaries', () {
+    I18n.setLocale(AppLocale.en);
+    const boundaryValues = <int>[
+      -_maxExactJsonInteger,
+      -8,
+      -1,
+      0,
+      1,
+      8,
+      _maxExactJsonInteger,
+    ];
+    const kinds = <String>['push', 'alarm', 'email', 'popup', 'off'];
+
+    for (final days in boundaryValues) {
+      for (final kind in kinds) {
+        final expected = _expectedDescriptor(
+          subject: 'anniversary',
+          title: '纪念日',
+          type: 'absolute',
+          kind: kind,
+          days: days,
+          semanticPush: false,
+        );
+        final copy = ReminderDeliveryCopy.anniversary(
+          '纪念日',
+          days,
+          _kindFromFixtureName(kind),
+        );
+        final restored = ReminderDeliveryCopy.tryFromJson(
+          jsonDecode(jsonEncode(expected)),
+        );
+        expect(copy.toJson(), expected);
+        expect(restored, isNotNull);
+        expect(restored!.toJson(), expected);
+      }
+
+      final countdownExpected = _expectedDescriptor(
+        subject: 'countdown',
+        title: '倒数日',
+        type: 'absolute',
+        kind: 'push',
+        days: days,
+        semanticPush: false,
+      );
+      final countdown = ReminderDeliveryCopy.countdown('倒数日', days);
+      final countdownRestored = ReminderDeliveryCopy.tryFromJson(
+        jsonDecode(jsonEncode(countdownExpected)),
+      );
+      expect(countdown.toJson(), countdownExpected);
+      expect(countdownRestored, isNotNull);
+      expect(countdownRestored!.toJson(), countdownExpected);
+    }
+
+    final outsideValues = <({String subject, String kind, int days})>[
+      (subject: 'anniversary', kind: 'push', days: _maxExactJsonInteger + 1),
+      (subject: 'anniversary', kind: 'off', days: -_maxExactJsonInteger - 1),
+      (subject: 'countdown', kind: 'push', days: _maxExactJsonInteger + 1),
+      (subject: 'countdown', kind: 'push', days: -_maxExactJsonInteger - 1),
+    ];
+    for (final value in outsideValues) {
+      final copy = value.subject == 'anniversary'
+          ? ReminderDeliveryCopy.anniversary(
+              '越界',
+              value.days,
+              _kindFromFixtureName(value.kind),
+            )
+          : ReminderDeliveryCopy.countdown('越界', value.days);
+      expect(() => copy.toJson(), throwsA(isA<RangeError>()));
+      final outsideDescriptor = _expectedDescriptor(
+        subject: value.subject,
+        title: '越界',
+        type: 'absolute',
+        kind: value.kind,
+        days: value.days,
+        semanticPush: false,
+      );
+      expect(ReminderDeliveryCopy.tryFromJson(outsideDescriptor), isNull);
+    }
+
+    expect(I18n.current, AppLocale.en);
+    expect(I18n.localeListenable.value, AppLocale.en);
+  });
+
+  test('ordinary invalid maps are rejected without casts or enum exceptions', () {
+    final valid = _expectedDescriptor(
+      subject: 'goal',
+      title: '严格解析',
+      type: 'absolute',
+      kind: 'alarm',
+      days: 0,
+      semanticPush: false,
+    );
+
+    for (final field in _descriptorKeys) {
+      final missing = Map<String, Object?>.of(valid)..remove(field);
+      expect(
+        ReminderDeliveryCopy.tryFromJson(missing),
+        isNull,
+        reason: 'missing $field',
+      );
+
+      final nullValue = Map<String, Object?>.of(valid)..[field] = null;
+      expect(
+        ReminderDeliveryCopy.tryFromJson(nullValue),
+        isNull,
+        reason: 'null $field',
+      );
+    }
+
+    const wrongTypes = <String, Object?>{
+      'schemaVersion': 1.0,
+      'subject': 3,
+      'userTitle': 3,
+      'type': false,
+      'kind': 3,
+      'days': 0.0,
+      'semanticPush': 1,
+    };
+    for (final entry in wrongTypes.entries) {
+      final wrong = Map<String, Object?>.of(valid)..[entry.key] = entry.value;
+      expect(
+        ReminderDeliveryCopy.tryFromJson(wrong),
+        isNull,
+        reason: 'wrong type for ${entry.key}',
+      );
+    }
+
+    for (final version in <Object?>[0, 2, -1, '1', true]) {
+      final unknown = Map<String, Object?>.of(valid)
+        ..['schemaVersion'] = version;
+      expect(ReminderDeliveryCopy.tryFromJson(unknown), isNull);
+    }
+    for (final subject in <String>['Todo', 'todo ', '0', 'task']) {
+      final unknown = Map<String, Object?>.of(valid)..['subject'] = subject;
+      expect(ReminderDeliveryCopy.tryFromJson(unknown), isNull);
+    }
+    for (final type in <String>['Absolute', 'absolute ', '0', 'daily']) {
+      final unknown = Map<String, Object?>.of(valid)..['type'] = type;
+      expect(ReminderDeliveryCopy.tryFromJson(unknown), isNull);
+    }
+    for (final kind in <String>['PUSH', ' push', '0', 'notification']) {
+      final unknown = Map<String, Object?>.of(valid)..['kind'] = kind;
+      expect(ReminderDeliveryCopy.tryFromJson(unknown), isNull);
+    }
+    for (final days in <Object?>['0', 0.0, false]) {
+      final wrong = Map<String, Object?>.of(valid)..['days'] = days;
+      expect(ReminderDeliveryCopy.tryFromJson(wrong), isNull);
+    }
+    for (final semanticPush in <Object?>['false', 0, 1]) {
+      final wrong = Map<String, Object?>.of(valid)
+        ..['semanticPush'] = semanticPush;
+      expect(ReminderDeliveryCopy.tryFromJson(wrong), isNull);
+    }
+
+    final withExtraKey = Map<String, Object?>.of(valid)
+      ..['futureField'] = 'unrecognized';
+    expect(ReminderDeliveryCopy.tryFromJson(withExtraKey), isNull);
+    final withNonStringKey = <Object?, Object?>{...valid, 7: 'extra'};
+    expect(ReminderDeliveryCopy.tryFromJson(withNonStringKey), isNull);
+
+    final malformedInputs = <Object?>[
+      null,
+      1,
+      'not a descriptor',
+      ' ["goal", "严格解析", "absolute", "alarm", 0, false] ',
+      <Object?>['goal', '严格解析', 'absolute', 'alarm', 0, false],
+      <Object?>[],
+      Object(),
+    ];
+    for (final input in malformedInputs) {
+      expect(
+        ReminderDeliveryCopy.tryFromJson(input),
+        isNull,
+        reason: 'input $input',
+      );
+    }
+
+    // Field order is irrelevant to parsing, but fingerprint inputs are not v1 maps.
+    final reordered = <String, Object?>{
+      'semanticPush': false,
+      'days': 0,
+      'kind': 'alarm',
+      'type': 'absolute',
+      'userTitle': '严格解析',
+      'subject': 'goal',
+      'schemaVersion': 1,
+    };
+    expect(ReminderDeliveryCopy.tryFromJson(reordered)?.toJson(), valid);
+    const fingerprintCopy = ReminderDeliveryCopy.goal(
+      '严格解析',
+      ReminderRuleType.absolute,
+      ReminderKind.alarm,
+    );
+    expect(
+      ReminderDeliveryCopy.tryFromJson(fingerprintCopy.semanticFingerprint),
+      isNull,
+    );
+    expect(
+      ReminderDeliveryCopy.tryFromJson(
+        jsonDecode(fingerprintCopy.semanticFingerprint),
+      ),
+      isNull,
+    );
+  });
+
+  test('subject-specific fixed fields must satisfy the v1 invariants', () {
+    final invalidDescriptors = <Map<String, Object?>>[
+      _expectedDescriptor(
+        subject: 'todo',
+        title: 'todo',
+        type: 'absolute',
+        kind: 'alarm',
+        days: 0,
+        semanticPush: false,
+      ),
+      _expectedDescriptor(
+        subject: 'todo',
+        title: 'todo',
+        type: 'absolute',
+        kind: 'push',
+        days: 1,
+        semanticPush: false,
+      ),
+      _expectedDescriptor(
+        subject: 'todo',
+        title: 'todo',
+        type: 'absolute',
+        kind: 'push',
+        days: 0,
+        semanticPush: true,
+      ),
+      _expectedDescriptor(
+        subject: 'goal',
+        title: 'goal',
+        type: 'absolute',
+        kind: 'push',
+        days: 1,
+        semanticPush: false,
+      ),
+      _expectedDescriptor(
+        subject: 'goal',
+        title: 'goal',
+        type: 'absolute',
+        kind: 'alarm',
+        days: 0,
+        semanticPush: true,
+      ),
+      _expectedDescriptor(
+        subject: 'habit',
+        title: 'habit',
+        type: 'dailyTime',
+        kind: 'push',
+        days: 0,
+        semanticPush: false,
+      ),
+      _expectedDescriptor(
+        subject: 'habit',
+        title: 'habit',
+        type: 'absolute',
+        kind: 'alarm',
+        days: 0,
+        semanticPush: true,
+      ),
+      _expectedDescriptor(
+        subject: 'habit',
+        title: 'habit',
+        type: 'absolute',
+        kind: 'push',
+        days: 1,
+        semanticPush: false,
+      ),
+      _expectedDescriptor(
+        subject: 'anniversary',
+        title: 'anniversary',
+        type: 'relativeToDue',
+        kind: 'email',
+        days: -1,
+        semanticPush: false,
+      ),
+      _expectedDescriptor(
+        subject: 'anniversary',
+        title: 'anniversary',
+        type: 'absolute',
+        kind: 'email',
+        days: -1,
+        semanticPush: true,
+      ),
+      _expectedDescriptor(
+        subject: 'countdown',
+        title: 'countdown',
+        type: 'dailyTime',
+        kind: 'push',
+        days: 1,
+        semanticPush: false,
+      ),
+      _expectedDescriptor(
+        subject: 'countdown',
+        title: 'countdown',
+        type: 'absolute',
+        kind: 'popup',
+        days: 1,
+        semanticPush: false,
+      ),
+      _expectedDescriptor(
+        subject: 'countdown',
+        title: 'countdown',
+        type: 'absolute',
+        kind: 'push',
+        days: 1,
+        semanticPush: true,
+      ),
+    ];
+
+    for (final descriptor in invalidDescriptors) {
+      expect(
+        ReminderDeliveryCopy.tryFromJson(descriptor),
+        isNull,
+        reason: '$descriptor',
+      );
+    }
+  });
+
+  test('serialization leaves the global locale notifier untouched', () {
+    I18n.setLocale(AppLocale.en);
+    var notifications = 0;
+    void onLocaleChanged() => notifications++;
+
+    I18n.localeListenable.addListener(onLocaleChanged);
+    try {
+      for (final fixture in _allValidCopyFixtures()) {
+        final encoded = fixture.copy.toJson();
+        expect(ReminderDeliveryCopy.tryFromJson(encoded), isNotNull);
+        expect(I18n.current, AppLocale.en);
+        expect(I18n.localeListenable.value, AppLocale.en);
+        expect(notifications, 0);
+      }
+    } finally {
+      I18n.localeListenable.removeListener(onLocaleChanged);
+    }
+    expect(I18n.current, AppLocale.en);
+    expect(I18n.localeListenable.value, AppLocale.en);
+    expect(notifications, 0);
   });
 }

@@ -1,0 +1,25 @@
+{
+  "cwd": "/home/ubuntu/duoyi-worktrees/widget-publication-20261009",
+  "source_sha256": {
+    "lib/services/widget_publication.dart": "7e964491b57290079c7000f5ff5ba121ae17feb34ae72ab2b1d6c1548650e188",
+    "test/services/widget_publication_test.dart": "8e876378b9dfb20845d06510736844db392bbde2028882ae175281a9e8fd0d76",
+    "lib/services/reminder_delivery_copy.dart": "55a9353b53142040195656e88587e0dc0b828bf6742278a5757f220cf8b5f2a0",
+    "test/services/reminder_delivery_copy_test.dart": "eedb501eee5f72bb12970ba330f8e61c0a1fedebdd7b5f90708d66d57d77b49c",
+    "docs/goal-requirement-matrix.md": "b0a07cce5d176207d7d4365f85b467342eae5393d424e1cb10146d205be5e434"
+  },
+  "writers_frozen": true,
+  "fixture_cases": 14,
+  "checks_executed": true,
+  "protocol_wired": false,
+  "goal_complete": false,
+  "latest_root_repair": "Explicit braces around exact day validation; behavior unchanged.",
+  "formatted": true,
+  "integrated_head": "1f00a46a8c3624d92be300baffd58ca805880f1a",
+  "verification_scope": "Combined widget and reminder semantic descriptors with updated existing evidence references",
+  "reminder_source": "/home/ubuntu/duoyi-worktrees/reminder-copy-ledger-20261009",
+  "reminder_drafts_copied_byte_for_byte": true,
+  "focused_cases": 46,
+  "regression_cases": 1007,
+  "analysis_targets": 86,
+  "analysis_clean": true
+}

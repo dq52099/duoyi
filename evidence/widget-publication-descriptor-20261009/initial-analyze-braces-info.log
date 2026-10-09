@@ -1,0 +1,5 @@
+Analyzing 86 items...                                           
+
+   info • Statements in an if should be enclosed in a block • lib/services/widget_publication.dart:226:7 • curly_braces_in_flow_control_structures
+
+1 issue found. (ran in 62.7s)
