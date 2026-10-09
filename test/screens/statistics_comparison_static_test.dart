@@ -86,19 +86,22 @@ void main() {
     final source = File(
       'lib/screens/statistics_screen.dart',
     ).readAsStringSync();
+    final card = File(
+      'lib/widgets/activity_heatmap_card.dart',
+    ).readAsStringSync();
 
-    expect(source, contains("import '../widgets/habit_heatmap.dart';"));
-    expect(source, contains('_buildActivityHeatmap'));
-    expect(source, contains('_ActivityHeatmapCard'));
-    expect(source, contains('_HeatmapSummary'));
+    expect(source, contains("import '../widgets/activity_heatmap_card.dart';"));
     expect(
       source,
-      contains('HabitHeatmap(heatmapData: heatmapData, weeks: weeks)'),
+      contains('ActivityHeatmapCard(heatmapData: activityHeatmap)'),
     );
-    expect(source, contains('年度活动热力图'));
-    expect(source, contains('待办、习惯、专注、时间足迹和日记的每日活跃度'));
-    expect(source, contains('颜色越深代表当天完成、记录或专注越多。'));
-    expect(source, contains('static const int weeks = 52'));
+    expect(source, isNot(contains('_ActivityHeatmapCard')));
+    expect(source, isNot(contains('_HeatmapSummary')));
+    expect(card, contains('copy.activityTitle'));
+    expect(card, contains('copy.activitySubtitle'));
+    expect(card, contains('copy.activeDays(summary.activeDays)'));
+    expect(card, contains('copy.maximum(summary.maximumLevel)'));
+    expect(card, contains('HeatmapMetric.activity'));
   });
 
   test('统计页展示多维交叉分析', () {

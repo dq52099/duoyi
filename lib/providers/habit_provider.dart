@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/domain_event_bus.dart';
+import '../core/heatmap_calendar.dart';
 import '../models/habit.dart';
 import '../models/time_entry.dart';
 import '../services/account_local_data_cleaner.dart';
@@ -394,26 +395,20 @@ class HabitProvider extends ChangeNotifier {
 
   // --- Heatmap ---
 
-  Map<String, int> combinedHeatmap(int weeks) {
+  Map<String, int> combinedHeatmap(int weeks, {DateTime? today}) {
     final data = <String, int>{};
-    final now = DateTime.now();
-    for (int w = 0; w < weeks; w++) {
-      for (int d = 0; d < 7; d++) {
-        final date = now.subtract(Duration(days: w * 7 + (6 - d)));
-        final key =
-            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-        final active = _habits.where((h) => h.activeForDate(date)).toList();
-        if (active.isEmpty) {
-          data[key] = 0;
-          continue;
-        }
-        final progress =
-            active.fold(0.0, (sum, h) => sum + h.progressForDate(date)) /
-            active.length;
-        data[key] = progress <= 0
-            ? 0
-            : ((progress * 5).ceil().clamp(1, 5)).toInt();
+    final window = HeatmapCalendarWindow(weeks: weeks, today: today);
+    for (final date in window.visibleDays) {
+      final key = HeatmapCalendarWindow.dateKey(date);
+      final active = _habits.where((h) => h.activeForDate(date)).toList();
+      if (active.isEmpty) {
+        data[key] = 0;
+        continue;
       }
+      final progress =
+          active.fold(0.0, (sum, h) => sum + h.progressForDate(date)) /
+          active.length;
+      data[key] = HeatmapCalendarWindow.progressLevel(progress);
     }
     return data;
   }

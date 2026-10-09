@@ -173,8 +173,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 摘要头卡 + 最新一条卡片可见。
+      // 摘要按内容高度展示；滚动到最新记录后验证懒构建。
       expect(find.text(I18n.tr('diary.summary.title')), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('diary_card_entry-0')),
+        120,
+        scrollable: _diaryScroll(),
+      );
       expect(find.byKey(const ValueKey('diary_card_entry-0')), findsOneWidget);
       // 视口外的最后一条未构建 → 证明是懒构建而非全量构建。
       expect(
@@ -198,6 +203,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('diary_card_entry-${total - 1}')),
         500,
+        scrollable: _diaryScroll(),
       );
       expect(
         find.byKey(const ValueKey('diary_card_entry-${total - 1}')),
@@ -206,3 +212,10 @@ void main() {
     });
   });
 }
+
+Finder _diaryScroll() => find
+    .byWidgetPredicate(
+      (widget) =>
+          widget is Scrollable && widget.axisDirection == AxisDirection.down,
+    )
+    .first;

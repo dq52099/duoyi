@@ -1,4 +1,5 @@
 import '../core/i18n.dart';
+import '../core/heatmap_calendar.dart';
 import 'goal.dart'
     show ReminderKind, ReminderPlan, ReminderRule, ReminderRuleType;
 
@@ -522,8 +523,11 @@ class Habit {
     final day = DateTime(date.year, date.month, date.day);
     return switch (flexPeriod ?? HabitFlexPeriod.week) {
       HabitFlexPeriod.week => HabitPeriodBounds(
-        start: day.subtract(Duration(days: day.weekday - 1)),
-        end: day.add(Duration(days: DateTime.daysPerWeek - day.weekday)),
+        start: HeatmapCalendarWindow.shiftDay(day, -(day.weekday - 1)),
+        end: HeatmapCalendarWindow.shiftDay(
+          day,
+          DateTime.daysPerWeek - day.weekday,
+        ),
       ),
       HabitFlexPeriod.month => HabitPeriodBounds(
         start: DateTime(day.year, day.month),
@@ -629,32 +633,23 @@ class Habit {
     return kind == HabitKind.positive ? '$c $u / $targetCount $u' : '已记录 $c $u';
   }
 
-  Map<String, int> heatmapData(int weeks) {
+  Map<String, int> heatmapData(int weeks, {DateTime? today}) {
     final data = <String, int>{};
-    final now = DateTime.now();
+    final window = HeatmapCalendarWindow(weeks: weeks, today: today);
     final safeTarget = targetCount < 1 ? 1 : targetCount;
-    for (int w = 0; w < weeks; w++) {
-      for (int d = 0; d < 7; d++) {
-        final date = now.subtract(Duration(days: w * 7 + (6 - d)));
-        final key = dateKey(date);
-        final count = completions[key] ?? 0;
-        if (!activeForDate(date)) {
-          data[key] = 0;
-        } else if (hasFlexRule) {
-          final progress = flexProgressForDate(date)?.ratio ?? 0;
-          data[key] = progress <= 0
-              ? 0
-              : ((progress * 5).ceil().clamp(1, 5)).toInt();
-        } else if (kind == HabitKind.positive) {
-          if (count > 0) {
-            data[key] = ((count / safeTarget) * 5).ceil().clamp(1, 5);
-          } else {
-            data[key] = 0;
-          }
-        } else {
-          // 负向：0 = 成功(满格)；>0 = 破戒
-          data[key] = count == 0 ? 5 : 0;
-        }
+    for (final date in window.visibleDays) {
+      final key = HeatmapCalendarWindow.dateKey(date);
+      final count = countForDate(date);
+      if (!activeForDate(date)) {
+        data[key] = 0;
+      } else if (hasFlexRule) {
+        final progress = flexProgressForDate(date)?.ratio ?? 0;
+        data[key] = HeatmapCalendarWindow.progressLevel(progress);
+      } else if (kind == HabitKind.positive) {
+        data[key] = HeatmapCalendarWindow.progressLevel(count / safeTarget);
+      } else {
+        // Negative habits retain their existing zero-record success semantics.
+        data[key] = count == 0 ? 5 : 0;
       }
     }
     return data;
@@ -662,7 +657,11 @@ class Habit {
 
   int completionCountInRange(DateTime start, DateTime end) {
     int count = 0;
-    for (var d = start; !d.isAfter(end); d = d.add(const Duration(days: 1))) {
+    for (
+      var d = DateTime(start.year, start.month, start.day);
+      HeatmapCalendarWindow.dayDistance(d, end) >= 0;
+      d = HeatmapCalendarWindow.shiftDay(d, 1)
+    ) {
       if (!activeForDate(d)) continue;
       if (kind == HabitKind.positive
           ? countForDate(d) > 0

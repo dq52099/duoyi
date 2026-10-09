@@ -605,7 +605,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
       );
     }
     final habit = matches.first;
-    final heatmapData = habit.heatmapData(20);
+    final heatmapToday = DateTime.now();
+    final heatmapData = habit.heatmapData(20, today: heatmapToday);
     final cs = Theme.of(context).colorScheme;
     final color = Color(habit.colorValue);
     final flexProgress = habit.flexProgressForDate(DateTime.now());
@@ -792,7 +793,11 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
               ),
             ),
           ),
-          HabitHeatmap(heatmapData: heatmapData, weeks: 20),
+          HabitHeatmap(
+            heatmapData: heatmapData,
+            weeks: 20,
+            today: heatmapToday,
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: _HabitTrendCard(habit: habit),

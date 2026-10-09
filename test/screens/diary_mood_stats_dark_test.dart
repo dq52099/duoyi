@@ -12,7 +12,9 @@ void main() {
     final end = source.indexOf('Future<void> _runDeepDiaryReview(');
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
-    final stats = source.substring(start, end);
+    final stats = source
+        .substring(start, end)
+        .replaceAll(RegExp(r'\s+\.'), '.');
 
     expect(
       stats,

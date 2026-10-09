@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/diary_insights.dart';
+import '../core/heatmap_calendar.dart';
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
 import '../models/diary_entry.dart';
@@ -145,7 +146,15 @@ class DiaryScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          MoodHeatmap(entriesByDate: provider.entriesByDate),
+          MoodHeatmap(
+            entriesByDate: provider.entriesByDate,
+            onOpenDay: (date) => _openEdit(
+              context,
+              entry:
+                  provider.entriesByDate[HeatmapCalendarWindow.dateKey(date)],
+              date: date,
+            ),
+          ),
         ],
       ),
     );
@@ -258,10 +267,8 @@ class DiaryScreen extends StatelessWidget {
                             child: LinearProgressIndicator(
                               value: pct,
                               minHeight: 10,
-                              backgroundColor:
-                                  cs.surfaceContainerHighest.withValues(
-                                    alpha: isDark ? 0.12 : 0.22,
-                                  ),
+                              backgroundColor: cs.surfaceContainerHighest
+                                  .withValues(alpha: isDark ? 0.12 : 0.22),
                             ),
                           ),
                         ),

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:duoyi/core/i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -50,6 +51,9 @@ Set<Color> paintedDecorationColors(WidgetTester tester) {
 }
 
 void main() {
+  setUp(() => I18n.setLocale(AppLocale.zh));
+  tearDown(() => I18n.setLocale(AppLocale.zh));
+
   group('MoodHeatmap 暗色适配', () {
     testWidgets('亮色主题：空格为中性容器色，图例含五档语义色', (tester) async {
       await pumpHeatmap(tester, Brightness.light);
@@ -85,7 +89,7 @@ void main() {
       }
     });
 
-    testWidgets('轴标签与图例文字取色自 ColorScheme，而非固定 Colors.grey', (tester) async {
+    testWidgets('轴标签与分类心情图例取色自 ColorScheme', (tester) async {
       await pumpHeatmap(tester, Brightness.dark);
 
       final element = tester.element(find.byType(MoodHeatmap));
@@ -95,14 +99,125 @@ void main() {
         tester.widget<Text>(find.text('一')).style?.color,
         cs.onSurface.withValues(alpha: 0.45),
       );
-      expect(
-        tester.widget<Text>(find.text('少')).style?.color,
-        cs.onSurface.withValues(alpha: 0.55),
+      for (final label in ['超棒', '开心', '平静', '郁闷', '糟糕']) {
+        final legendLabel = find.text(label);
+        expect(legendLabel, findsOneWidget);
+        expect(
+          tester.widget<Text>(legendLabel).style?.color,
+          cs.onSurfaceVariant,
+        );
+      }
+
+      I18n.setLocale(AppLocale.en);
+      await tester.pumpAndSettle();
+      for (final label in ['Great', 'Good', 'Calm', 'Low', 'Terrible']) {
+        expect(find.text(label), findsOneWidget);
+      }
+    });
+
+    testWidgets(
+      'no diary, unset mood and named mood have distinct day meanings',
+      (tester) async {
+        final today = DateTime(2026, 5, 17);
+        String key(DateTime date) =>
+            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+        final entries = <String, DiaryEntry>{
+          key(DateTime(2026, 5, 16)): DiaryEntry(date: DateTime(2026, 5, 16)),
+          key(today): DiaryEntry(date: today, mood: Mood.awesome),
+        };
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(useMaterial3: true),
+            home: Scaffold(
+              body: MoodHeatmap(entriesByDate: entries, weeks: 1, today: today),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final noEntry = tester.getSemantics(
+          find.byKey(const ValueKey('heatmap_day_2026-05-15')),
+        );
+        final noMood = tester.getSemantics(
+          find.byKey(const ValueKey('heatmap_day_2026-05-16')),
+        );
+        final hasMood = tester.getSemantics(
+          find.byKey(const ValueKey('heatmap_day_2026-05-17')),
+        );
+        expect(noEntry.label, contains('无日记'));
+        expect(noMood.label, contains('未记录心情'));
+        expect(hasMood.label, contains('超棒'));
+
+        final element = tester.element(find.byType(MoodHeatmap));
+        final cs = Theme.of(element).colorScheme;
+        Set<Color> cellDecorationColors(String date) {
+          final cell = find.byKey(ValueKey('heatmap_day_$date'));
+          final container = find.descendant(
+            of: cell,
+            matching: find.byType(Container),
+          );
+          return tester
+              .widgetList<Container>(container)
+              .map((widget) => widget.decoration)
+              .whereType<BoxDecoration>()
+              .map((decoration) => decoration.color)
+              .whereType<Color>()
+              .toSet();
+        }
+
+        expect(
+          cellDecorationColors('2026-05-15'),
+          contains(cs.surfaceContainerHighest.withValues(alpha: 0.22)),
+        );
+        expect(
+          cellDecorationColors('2026-05-16'),
+          contains(
+            Color.alphaBlend(cs.onSurface.withValues(alpha: 0.16), cs.surface),
+          ),
+        );
+        expect(
+          cellDecorationColors('2026-05-17'),
+          contains(moodShades[Brightness.light]!.first),
+        );
+      },
+    );
+
+    testWidgets('open diary callback receives the selected calendar date', (
+      tester,
+    ) async {
+      final today = DateTime(2026, 5, 17);
+      final selected = <DateTime>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MoodHeatmap(
+              entriesByDate: {
+                '2026-05-17': DiaryEntry(date: today, mood: Mood.good),
+              },
+              weeks: 1,
+              today: today,
+              onOpenDay: selected.add,
+            ),
+          ),
+        ),
       );
-      expect(
-        tester.widget<Text>(find.text('多')).style?.color,
-        cs.onSurface.withValues(alpha: 0.55),
-      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('heatmap_day_2026-05-16')));
+      await tester.pumpAndSettle();
+      expect(find.text('写日记'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('heatmap_open_day')));
+      await tester.pumpAndSettle();
+      expect(selected, [DateTime(2026, 5, 16)]);
+
+      await tester.tap(find.byKey(const ValueKey('heatmap_day_2026-05-17')));
+      await tester.pumpAndSettle();
+      expect(find.text('查看日记'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('heatmap_open_day')));
+      await tester.pumpAndSettle();
+      expect(selected, [DateTime(2026, 5, 16), today]);
     });
 
     testWidgets('带心情的格子按暗色档渲染，无记录日期用空格色', (tester) async {

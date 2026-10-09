@@ -20,7 +20,11 @@ void main() {
       ),
     );
     expect(source, contains('for (final habit in previewHabits)'));
-    expect(source, contains('习惯分组'));
+    expect(source, contains('HeatmapUiCopy(I18n.current).habitGroups'));
+    expect(
+      File('lib/core/heatmap_ui_copy.dart').readAsStringSync(),
+      contains('习惯分组'),
+    );
     expect(source, contains('Icons.folder_outlined'));
     expect(
       source.replaceAll(RegExp(r'\s+'), ''),
@@ -224,7 +228,7 @@ void main() {
     ).readAsStringSync();
 
     final weeklyIndex = screen.indexOf(
-      'const SliverToBoxAdapter(child: HabitWeeklyCard())',
+      'SliverToBoxAdapter(child: HabitWeeklyCard())',
     );
     final scrollViewIndex = screen.indexOf(
       "key: const ValueKey('habit_today_scroll_view')",
@@ -341,7 +345,7 @@ void main() {
   test('习惯首页展示智能习惯洞察', () {
     final source = File('lib/screens/habit_screen.dart').readAsStringSync();
     final weeklyIndex = source.indexOf(
-      'const SliverToBoxAdapter(child: HabitWeeklyCard())',
+      'SliverToBoxAdapter(child: HabitWeeklyCard())',
     );
     final insightKeyIndex = source.indexOf(
       "key: const ValueKey('habit_insight_before_today_list')",

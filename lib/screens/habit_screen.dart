@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
+import '../core/heatmap_ui_copy.dart';
 import '../core/main_ui_copy.dart';
 import '../core/habit_grouping.dart';
 import '../core/habit_icons.dart';
@@ -860,7 +861,8 @@ class _HabitHeatmapTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final heatmapData = provider.combinedHeatmap(12);
+    final heatmapToday = DateTime.now();
+    final heatmapData = provider.combinedHeatmap(12, today: heatmapToday);
     final habitGroups = groupHabitsByCategory(provider.habits);
     return CustomScrollView(
       slivers: [
@@ -882,7 +884,7 @@ class _HabitHeatmapTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                HabitHeatmap(heatmapData: heatmapData),
+                HabitHeatmap(heatmapData: heatmapData, today: heatmapToday),
               ],
             ),
           ),
@@ -902,7 +904,7 @@ class _HabitHeatmapTab extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
               child: Text(
-                '习惯分组',
+                HeatmapUiCopy(I18n.current).habitGroups,
                 style: appSecondaryControlTextStyle(context).copyWith(
                   color: cs.onSurface.withValues(alpha: 0.68),
                   fontSize: DesignTokens.fontSizeCaption,

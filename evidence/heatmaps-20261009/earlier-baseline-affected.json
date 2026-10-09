@@ -1,0 +1,20 @@
+{
+  "cwd": "/home/ubuntu/duoyi-worktrees/widget-publication-20261009",
+  "command": [
+    "/home/ubuntu/flutter/bin/flutter",
+    "test",
+    "--no-pub",
+    "--reporter",
+    "expanded",
+    "--concurrency=1",
+    "test/screens/habit_grouping_static_test.dart",
+    "test/screens/diary_mood_stats_dark_test.dart",
+    "test/providers/diary_provider_test.dart",
+    "test/screens/habit_detail_edit_test.dart"
+  ],
+  "head": "98d46d8282c52734944a0fe7f8567f2228f47264",
+  "started": "2026-10-09T05:27:07.251854+00:00",
+  "exit_code": 1,
+  "finished": "2026-10-09T05:27:34.640935+00:00",
+  "log_sha256": "91f9ecfc8e445b667ced1a44cd9754311deb9f3ee9ae14765adfae18dede2821"
+}

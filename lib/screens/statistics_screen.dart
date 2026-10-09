@@ -12,6 +12,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../core/focus_tag_stats.dart';
+import '../core/heatmap_calendar.dart';
 import '../core/i18n_date_format.dart';
 import '../core/project_efficiency.dart';
 import '../core/report_cross_analysis.dart';
@@ -29,7 +30,7 @@ import '../providers/pomodoro_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
 import '../services/ai_service.dart';
-import '../widgets/habit_heatmap.dart';
+import '../widgets/activity_heatmap_card.dart';
 import '../widgets/result_states.dart';
 import '../widgets/surface_components.dart';
 import 'ai_history_screen.dart';
@@ -437,7 +438,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           const SizedBox(height: 10),
           _buildProjectEfficiencyCard(breakdown: projectEfficiency, cs: cs),
           const SizedBox(height: 10),
-          _ActivityHeatmapCard(heatmapData: activityHeatmap),
+          ActivityHeatmapCard(heatmapData: activityHeatmap),
           const SizedBox(height: 10),
           _WeeklyTimeOverview(
             weekTotalSeconds: weekTotalSeconds,
@@ -644,7 +645,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
     for (final todo in todos) {
       final completedAt = todo.completedAt;
-      if (todo.isCompleted && completedAt != null) add(completedAt, 2);
+      if (todo.isCompleted && completedAt != null) {
+        add(completedAt.toLocal(), 2);
+      }
     }
     for (final habit in habits) {
       for (final entry in habit.completions.entries) {
@@ -653,11 +656,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       }
     }
     for (final session in sessions) {
-      if (session.type == PomodoroType.focus) add(session.endTime, 2);
+      if (session.type == PomodoroType.focus) add(session.endTime.toLocal(), 2);
     }
     for (final entry in timeEntries) {
       final minutes = entry.durationSeconds ~/ 60;
-      add(entry.startAt, minutes >= 60 ? 2 : 1);
+      add(entry.startAt.toLocal(), minutes >= 60 ? 2 : 1);
     }
     for (final diary in diaries) {
       add(diary.date, 1);
@@ -666,18 +669,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return raw.map((key, value) => MapEntry(key, value.clamp(0, 5)));
   }
 
-  String _dateKey(DateTime date) =>
-      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  String _dateKey(DateTime date) => HeatmapCalendarWindow.dateKey(date);
 
-  DateTime? _parseDateKey(String key) {
-    final parts = key.split('-');
-    if (parts.length != 3) return null;
-    final year = int.tryParse(parts[0]);
-    final month = int.tryParse(parts[1]);
-    final day = int.tryParse(parts[2]);
-    if (year == null || month == null || day == null) return null;
-    return DateTime(year, month, day);
-  }
+  DateTime? _parseDateKey(String key) =>
+      HeatmapCalendarWindow.tryParseDateKey(key);
 
   Widget _chartCard(String title, Widget child) {
     return AppSurfaceCard(
@@ -4335,129 +4330,6 @@ class _ProjectEfficiencyRow extends StatelessWidget {
                 alpha: 0.64,
               ),
               valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActivityHeatmapCard extends StatelessWidget {
-  static const int weeks = 52;
-
-  final Map<String, int> heatmapData;
-
-  const _ActivityHeatmapCard({required this.heatmapData});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final visibleValues = _visibleValues();
-    final activeDays = visibleValues.where((value) => value > 0).length;
-    final maxIntensity = visibleValues.fold<int>(
-      0,
-      (max, value) => value > max ? value : max,
-    );
-    return AppSurfaceCard(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-      borderRadius: BorderRadius.circular(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '年度活动热力图',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '待办、习惯、专注、时间足迹和日记的每日活跃度',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: cs.onSurface.withValues(alpha: 0.58),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _HeatmapSummary(
-                activeDays: activeDays,
-                maxIntensity: maxIntensity,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          HabitHeatmap(heatmapData: heatmapData, weeks: weeks),
-          const SizedBox(height: 4),
-          Text(
-            '颜色越深代表当天完成、记录或专注越多。',
-            style: TextStyle(
-              fontSize: 10,
-              color: cs.onSurface.withValues(alpha: 0.54),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<int> _visibleValues() {
-    final today = DateTime.now();
-    final start = DateTime(
-      today.year,
-      today.month,
-      today.day,
-    ).subtract(const Duration(days: weeks * 7 - 1));
-    return [
-      for (var i = 0; i < weeks * 7; i++)
-        heatmapData[_dateKey(start.add(Duration(days: i)))] ?? 0,
-    ];
-  }
-
-  String _dateKey(DateTime date) =>
-      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-}
-
-class _HeatmapSummary extends StatelessWidget {
-  final int activeDays;
-  final int maxIntensity;
-
-  const _HeatmapSummary({required this.activeDays, required this.maxIntensity});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            '$activeDays 天',
-            style: TextStyle(
-              fontSize: 12,
-              color: cs.primary,
-              fontWeight: FontWeight.normal,
-            ),
-          ),
-          Text(
-            '最高 $maxIntensity 级',
-            style: TextStyle(
-              fontSize: 10,
-              color: cs.onSurface.withValues(alpha: 0.56),
             ),
           ),
         ],

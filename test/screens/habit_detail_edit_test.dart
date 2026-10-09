@@ -36,6 +36,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('习惯趋势'),
+      120,
+      scrollable: _detailScroll(),
+    );
     expect(find.text('习惯趋势'), findsOneWidget);
     expect(find.text('区间明细'), findsOneWidget);
     expect(find.textContaining('达标'), findsOneWidget);
@@ -166,6 +171,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.scrollUntilVisible(
+        find.text('习惯趋势'),
+        120,
+        scrollable: _detailScroll(),
+      );
       expect(find.text('习惯趋势'), findsOneWidget);
       expect(
         find.textContaining('杯超长单位名称'),
@@ -176,3 +186,10 @@ void main() {
     }
   });
 }
+
+Finder _detailScroll() => find
+    .byWidgetPredicate(
+      (widget) =>
+          widget is Scrollable && widget.axisDirection == AxisDirection.down,
+    )
+    .first;

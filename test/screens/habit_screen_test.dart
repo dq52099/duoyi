@@ -472,6 +472,8 @@ void main() {
 
     expect(find.byKey(const ValueKey('habit_swipe_end_button')), findsNothing);
 
+    await tester.ensureVisible(find.text('已结束习惯').first);
+    await tester.pumpAndSettle();
     await tester.drag(find.text('已结束习惯').first, const Offset(-180, 0));
     await tester.pumpAndSettle();
 
@@ -507,6 +509,8 @@ void main() {
       findsNothing,
     );
 
+    await tester.ensureVisible(find.text('专注').first);
+    await tester.pumpAndSettle();
     await tester.drag(find.text('专注').first, const Offset(160, 0));
     await tester.pumpAndSettle();
 

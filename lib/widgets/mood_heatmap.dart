@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
-import '../core/i18n_date_format.dart';
+import '../core/heatmap_calendar.dart';
+import '../core/heatmap_ui_copy.dart';
+import '../core/i18n.dart';
+import 'calendar_heatmap.dart';
 import '../models/diary_entry.dart';
 
 /// 近 N 周心情热图：每格代表一天，颜色由当天日记的心情决定；无日记则中性灰。
 class MoodHeatmap extends StatelessWidget {
   final Map<String, DiaryEntry> entriesByDate;
   final int weeks;
+  final DateTime? today;
+  final ValueChanged<DateTime>? onOpenDay;
 
-  const MoodHeatmap({super.key, required this.entriesByDate, this.weeks = 12});
+  const MoodHeatmap({
+    super.key,
+    required this.entriesByDate,
+    this.weeks = 12,
+    this.today,
+    this.onOpenDay,
+  });
 
   /// 五档心情语义色：亮色档沿用既有取值；暗色档换用更亮的同色相档，
   /// 避免暗色主题下沿用亮色档的深色值在深背景上发闷、难以分辨。
@@ -43,130 +54,98 @@ class MoodHeatmap extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-    final now = DateTime.now();
-    // 对齐到周一
-    final thisMonday = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(Duration(days: now.weekday - 1));
-    final startMonday = thisMonday.subtract(Duration(days: (weeks - 1) * 7));
+  Widget build(BuildContext context) => ValueListenableBuilder<AppLocale>(
+    valueListenable: I18n.localeListenable,
+    builder: (context, locale, _) {
+      final copy = HeatmapUiCopy(locale);
+      final theme = Theme.of(context);
+      final cs = theme.colorScheme;
+      final isDark = theme.brightness == Brightness.dark;
+      final window = HeatmapCalendarWindow(weeks: weeks, today: today);
+      DiaryEntry? entryFor(DateTime day) =>
+          entriesByDate[HeatmapCalendarWindow.dateKey(day)];
+      String describe(DateTime day) {
+        final entry = entryFor(day);
+        if (entry == null) return copy.noEntry;
+        return entry.mood == null ? copy.noMood : copy.mood(entry.mood!);
+      }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final cell = ((constraints.maxWidth - 4 - 18) / weeks).clamp(
-              6.0,
-              14.0,
-            );
-            return Row(
+      final noMoodColor = Color.alphaBlend(
+        cs.onSurface.withValues(alpha: 0.16),
+        cs.surface,
+      );
+      Color colorFor(DateTime day) {
+        final entry = entryFor(day);
+        return entry == null
+            ? _emptyColor(cs, isDark)
+            : entry.mood == null
+            ? noMoodColor
+            : _moodColor(entry.mood!, isDark);
+      }
+
+      Widget sample(Color color, String label) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(3),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: 0.24),
+                width: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
+          ),
+        ],
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            copy.moodTitle,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal),
+          ),
+          const SizedBox(height: 6),
+          CalendarHeatmap(
+            window: window,
+            title: copy.moodTitle,
+            describeDay: describe,
+            colorForDay: colorFor,
+            onOpenDay: onOpenDay,
+            openDayLabel: (day) =>
+                entryFor(day) == null ? copy.writeDiary : copy.openDiary,
+            legend: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 18,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final d in const ['一', '三', '五', '日'])
-                        Padding(
-                          padding: EdgeInsets.only(top: cell * 0.4),
-                          child: Text(
-                            d,
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: cs.onSurface.withValues(alpha: 0.45),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 6,
+                  children: [
+                    sample(_emptyColor(cs, isDark), copy.noEntry),
+                    sample(noMoodColor, copy.noMood),
+                    for (final mood in Mood.values)
+                      sample(_colorFor(mood, cs, isDark), copy.mood(mood)),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: List.generate(weeks, (w) {
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 2),
-                        child: Column(
-                          children: List.generate(7, (dow) {
-                            final date = startMonday.add(
-                              Duration(days: w * 7 + dow),
-                            );
-                            if (date.isAfter(
-                              DateTime(now.year, now.month, now.day),
-                            )) {
-                              return SizedBox(width: cell, height: cell);
-                            }
-                            final key =
-                                '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-                            final entry = entriesByDate[key];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
-                              child: Tooltip(
-                                message:
-                                    '${I18nDateFormat.date(date)} · ${entry?.mood?.label ?? '无记录'}',
-                                child: Container(
-                                  width: cell,
-                                  height: cell,
-                                  decoration: BoxDecoration(
-                                    color: _colorFor(entry?.mood, cs, isDark),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-                      );
-                    }),
-                  ),
+                const SizedBox(height: 6),
+                Text(
+                  copy.moodHint,
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                 ),
               ],
-            );
-          },
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Text(
-              '少',
-              style: TextStyle(
-                fontSize: 10,
-                color: cs.onSurface.withValues(alpha: 0.55),
-              ),
             ),
-            const SizedBox(width: 4),
-            ...Mood.values.map(
-              (m) => Padding(
-                padding: const EdgeInsets.only(right: 2),
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: _colorFor(m, cs, isDark),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              '多',
-              style: TextStyle(
-                fontSize: 10,
-                color: cs.onSurface.withValues(alpha: 0.55),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+          ),
+        ],
+      );
+    },
+  );
 }
