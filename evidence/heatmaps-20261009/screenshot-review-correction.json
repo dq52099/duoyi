@@ -1,0 +1,23 @@
+{
+  "inspected_all_nine": true,
+  "source_unchanged": true,
+  "reviewer": "Codex",
+  "reviewed_at": "2026-10-09T06:18:34.881123+00:00",
+  "method": "Viewed all nine regenerated images individually via view_image.",
+  "findings": [
+    "The earlier dark fixture retained inherited light text/icon colors; the initial review missed this. The earlier acceptance is superseded.",
+    "The corrected harness applies onSurface foregrounds to textTheme and iconTheme. All nine regenerated images have readable titles and date controls; narrow 2x text wraps without vertical clipping.",
+    "Activity remains horizontally scrollable; partial cells/month labels at its clipped viewport edge indicate the scroll position. Native device behavior is not established."
+  ],
+  "screenshot_sha256": {
+    "evidence/screenshots/heatmaps-20261009/activity-en-320-2.0-dark.png": "d1a80c9693c99c78a9624a9a0609b0035d3bdf4a018f842534bb88437a366dac",
+    "evidence/screenshots/heatmaps-20261009/activity-en-390-1.0-dark.png": "43c8e32a8392848202632e693677f2ab252dec8110449c27a072d5676d36c8f2",
+    "evidence/screenshots/heatmaps-20261009/activity-zh-390-1.0-light.png": "3f01df35c8423926f171227740edeabf07de1ffcfb725417b6a507fb28a50126",
+    "evidence/screenshots/heatmaps-20261009/habit-en-320-2.0-dark.png": "5f95904ccba35ecc419df61a04343723eec49f073243160aad5a5a74929d23c2",
+    "evidence/screenshots/heatmaps-20261009/habit-en-390-1.0-dark.png": "63c5d89e42e246b7a953bc295a96f4b5546ea30aee08217eef7242824f802f0d",
+    "evidence/screenshots/heatmaps-20261009/habit-zh-390-1.0-light.png": "77e39062fb316b51694b1a81058e5c68f96b8cc00c503e0a0de6b3d63bb1a38e",
+    "evidence/screenshots/heatmaps-20261009/mood-en-320-2.0-dark.png": "ceb22bab60fd49d99c02627fda3a301aa636110ec07a01b060461c0fedc82c73",
+    "evidence/screenshots/heatmaps-20261009/mood-en-390-1.0-dark.png": "c81d292ca022b618b26444d0d920529c32313037fa65d6ea234faaecaa147a51",
+    "evidence/screenshots/heatmaps-20261009/mood-zh-390-1.0-light.png": "cd325b512a6f24d3ee23b790ab46cdc5709734656f12c44def0dcb5f590dbde4"
+  }
+}

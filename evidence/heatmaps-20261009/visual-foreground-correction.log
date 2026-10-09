@@ -1,0 +1,11 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/heatmaps-20261009/test/widgets/heatmap_visual_evidence_test.dart
+00:00 +0: heatmap visual layout habit / (dark: false, locale: AppLocale.zh, scale: 1.0, width: 390.0)
+00:10 +1: heatmap visual layout activity / (dark: false, locale: AppLocale.zh, scale: 1.0, width: 390.0)
+00:17 +2: heatmap visual layout mood / (dark: false, locale: AppLocale.zh, scale: 1.0, width: 390.0)
+00:18 +3: heatmap visual layout habit / (dark: true, locale: AppLocale.en, scale: 1.0, width: 390.0)
+00:19 +4: heatmap visual layout activity / (dark: true, locale: AppLocale.en, scale: 1.0, width: 390.0)
+00:23 +5: heatmap visual layout mood / (dark: true, locale: AppLocale.en, scale: 1.0, width: 390.0)
+00:24 +6: heatmap visual layout habit / (dark: true, locale: AppLocale.en, scale: 2.0, width: 320.0)
+00:26 +7: heatmap visual layout activity / (dark: true, locale: AppLocale.en, scale: 2.0, width: 320.0)
+00:28 +8: heatmap visual layout mood / (dark: true, locale: AppLocale.en, scale: 2.0, width: 320.0)
+00:29 +9: All tests passed!

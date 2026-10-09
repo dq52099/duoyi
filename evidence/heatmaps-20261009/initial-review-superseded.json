@@ -1,0 +1,26 @@
+{
+  "inspected_all_nine": false,
+  "source_unchanged": true,
+  "reviewer": "Codex",
+  "reviewed_at": "2026-10-09T00:00:00Z",
+  "method": "Reviewed the nine synthetic Flutter harness captures at their native rendered resolution; contact sheet and per-chart captures were checked for clipping, overlap, contrast, legend wrapping, selection/today markers, and empty-state semantics.",
+  "findings": {
+    "habit": "Chinese light and English dark captures show aligned weekday labels, flat progress cells, readable month labels, and stable selection/today affordances. The 320px capture at 2x text scale remains vertically readable without clipped controls.",
+    "activity": "The weighted activity title, summary, chart, and legend remain distinguishable in both dark widths. The narrow capture wraps content while preserving chart bounds and does not overlap controls.",
+    "mood": "Named mood categories, no-diary and no-mood states remain visually distinct. Chinese light and English dark captures keep the legend readable; the narrow large-text capture wraps without clipping or overlap."
+  },
+  "screenshot_sha256": {
+    "evidence/screenshots/heatmaps-20261009/activity-en-320-2.0-dark.png": "1f5e31ef757944b9151ef7db187ba1d20445ef576f55dc67c40e3d6dbce7311b",
+    "evidence/screenshots/heatmaps-20261009/activity-en-390-1.0-dark.png": "560e42a34f2b49d0088ba8abb055036558dda33ea94118615cc3818e34e92857",
+    "evidence/screenshots/heatmaps-20261009/activity-zh-390-1.0-light.png": "57c97740fdad14ad0bc69b7bd480a8161db6a501c43963d3195758af9da5eed1",
+    "evidence/screenshots/heatmaps-20261009/habit-en-320-2.0-dark.png": "3e0f7020e1e8796fd66b776d6f218fd573b1f1aad33ad6e73d8902e816ac49b2",
+    "evidence/screenshots/heatmaps-20261009/habit-en-390-1.0-dark.png": "ea26c82d9c1707adba200c3528db19a5e95072941d19d942c5f9f1278e688d04",
+    "evidence/screenshots/heatmaps-20261009/habit-zh-390-1.0-light.png": "8ef6eede5472ea5ee45653795f2ccba7004082ca0d84e20a1a5bf048f4fe9bb4",
+    "evidence/screenshots/heatmaps-20261009/mood-en-320-2.0-dark.png": "a02190392b86cf2d55d24faaa9137110e213cca0802054cc2ccec7d6588a6ace",
+    "evidence/screenshots/heatmaps-20261009/mood-en-390-1.0-dark.png": "1a93ad5658243b98b944cabbf31de6ce7a8e57c7a64d60c68809a6fd5dcad2d4",
+    "evidence/screenshots/heatmaps-20261009/mood-zh-390-1.0-light.png": "73783eaa31346a6304a92cd85337d5e4ffcfa7399dddefa261e4f4438ddcfe6f"
+  },
+  "superseded": true,
+  "reviewed_at_corrected": "2026-10-09T06:14:49.021050+00:00",
+  "correction": "Earlier review incorrectly accepted dark captures. Raw images show low-contrast inherited light-fixture headings/icons. New harness captures and an actual per-image review are required."
+}

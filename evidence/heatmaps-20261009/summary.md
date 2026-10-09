@@ -13,7 +13,7 @@
 - 135 focused checks across21 files passed.
 - 1121 integrated regressions across104 files passed; 116 targeted analysis items were clean.
 - 14 calendar/producer checks passed under America/New_York, including DST-sensitive civil dates and actual UTC instant attribution.
-- Nine readable synthetic snapshots cover all three charts: Chinese light390px, English dark390px, English dark320px at2x text. Root inspected all nine; paths and hashes are retained. These are Flutter harness captures, not device screenshots.
+- Nine readable synthetic snapshots cover all three charts: Chinese light390px, English dark390px, English dark320px at2x text. The first manual review missed inherited light-fixture headings/icons on dark backgrounds; that acceptance was superseded. The harness foregrounds were corrected, all nine captures regenerated (9 checks passed), and all nine individually inspected. Current paths and hashes are retained. These are Flutter harness captures, not device screenshots.
 - Earlier failures remain visible in raw logs. Repairs include narrow mood-legend flex, offscreen picker/row/trend navigation in fixtures, correct calendar-range expectation, current semantics API/lifetime, and whitespace/obsolete const assumptions in existing static fixtures. The earlier clean source reproduced two const-matcher failures before this batch; no behavior assertion was dropped.
 
 ## Remaining scope

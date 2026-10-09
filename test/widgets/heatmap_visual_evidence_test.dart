@@ -56,9 +56,17 @@ void main() {
           seedColor: const Color(0xFF397CEB),
           brightness: scenario.dark ? Brightness.dark : Brightness.light,
         );
-        final theme = widgetPolishScreenshotTheme().copyWith(
+        final screenshotTheme = widgetPolishScreenshotTheme();
+        final theme = screenshotTheme.copyWith(
           colorScheme: scheme,
           scaffoldBackgroundColor: scheme.surface,
+          // A new ColorScheme alone leaves the light fixture's inherited
+          // text/icon colors intact. Match the rendered scheme's foregrounds.
+          textTheme: screenshotTheme.textTheme.apply(
+            bodyColor: scheme.onSurface,
+            displayColor: scheme.onSurface,
+          ),
+          iconTheme: screenshotTheme.iconTheme.copyWith(color: scheme.onSurface),
         );
         final child = switch (kind) {
           'activity' => ActivityHeatmapCard(heatmapData: data, today: today),
