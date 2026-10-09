@@ -1,0 +1,7 @@
+Analyzing 80 items...                                           
+
+warning • A value for optional parameter 'key' isn't ever given • test/widgets/brand_route_surface_locale_test.dart:110:45 • unused_element_parameter
+   info • The 'child' argument should be last in widget constructor invocations • test/widgets/brand_route_surface_locale_test.dart:139:25 • sort_child_properties_last
+warning • The '!' will have no effect because the receiver can't be null • test/widgets/brand_route_surface_locale_test.dart:140:69 • unnecessary_non_null_assertion
+
+3 issues found. (ran in 90.1s)

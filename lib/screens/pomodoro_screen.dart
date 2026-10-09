@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../core/focus_report.dart';
 import '../core/focus_sound_catalog.dart';
+import '../core/i18n.dart';
 import '../core/main_ui_copy.dart';
 import '../models/focus_room.dart';
 import '../models/pomodoro.dart';
@@ -327,7 +328,8 @@ Future<void> showPomodoroSessionEditor(
   }
 }
 
-class PomodoroScreen extends StatelessWidget {
+class PomodoroScreen extends StatelessWidget
+    implements LocaleStatePreservingRoute {
   final bool useShellBackground;
 
   const PomodoroScreen({super.key, this.useShellBackground = false});
@@ -441,6 +443,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
+    I18n.localeListenable.addListener(_onLocaleChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final pomodoro = context.read<PomodoroProvider>();
@@ -452,8 +455,13 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
     });
   }
 
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     _tabCtrl.dispose();
     super.dispose();
   }
@@ -992,7 +1000,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
             ),
             // History tab
             _HistoryTab(),
-            const _FocusRoomTab(),
+            _FocusRoomTab(),
           ],
         ),
       ),

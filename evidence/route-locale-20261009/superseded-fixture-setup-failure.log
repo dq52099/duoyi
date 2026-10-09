@@ -1,0 +1,343 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart
+00:00 +0: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart: BrandRouteSurface const 子树在语言热切换后仍跟随新语言
+00:01 +1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart: marked const StatefulWidget keeps State, controller, draft and counter
+00:02 +2: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart: marked stateless facade preserves its stateful body
+00:03 +3: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart: remountOnLocaleChange false preserves an unmarked self-refreshing child
+00:03 +4: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart: marker takes precedence when remountOnLocaleChange is true
+00:03 +5: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart
+00:10 +5: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: the five public routes declare the state-preserving marker
+00:11 +6: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Todo keeps list mode, completion filter and scroll offset through raw locale events
+00:16 +7: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Habit keeps its built heatmap tab and locale copy after raw events
+00:17 +8: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Pomodoro keeps its History tab and running provider state through raw locale events
+00:18 +9: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Calendar keeps changed date and selected tab through raw locale events
+00:20 +10: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Calendar refreshes copy and keeps State on a direct route without BrandRouteSurface
+00:22 +11: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Integrations keeps Language tab and controller while changing locale
+══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞═══════════════════════════════════════════════════════════
+The following ProviderNotFoundException was thrown building BrandBackground(dirty):
+Error: Could not find the correct Provider<ThemeProvider> above this BrandBackground Widget
+
+This happens because you used a `BuildContext` that does not include the provider
+of your choice. There are a few common scenarios:
+
+- You added a new provider in your `main.dart` and performed a hot-reload.
+  To fix, perform a hot-restart.
+
+- The provider you are trying to read is in a different route.
+
+  Providers are "scoped". So if you insert of provider inside a route, then
+  other routes will not be able to access that provider.
+
+- You used a `BuildContext` that is an ancestor of the provider you are trying to read.
+
+  Make sure that BrandBackground is under your MultiProvider/Provider<ThemeProvider>.
+  This usually happens when you are creating a provider and trying to read it immediately.
+
+  For example, instead of:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // Will throw a ProviderNotFoundError, because `context` is associated
+      // to the widget that is the parent of `Provider<Example>`
+      child: Text(context.watch<Example>().toString()),
+    );
+  }
+  ```
+
+  consider using `builder` like so:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // we use `builder` to obtain a new `BuildContext` that has access to the provider
+      builder: (context, child) {
+        // No longer throws
+        return Text(context.watch<Example>().toString());
+      }
+    );
+  }
+  ```
+
+If none of these solutions work, consider asking for help on StackOverflow:
+https://stackoverflow.com/questions/tagged/flutter
+
+The relevant error-causing widget was:
+  BrandBackground
+  BrandBackground:file:///home/ubuntu/duoyi-worktrees/route-locale-20261009/lib/widgets/brand_background.dart:111:18
+
+When the exception was thrown, this was the stack:
+#0      Provider._inheritedElementOf (package:provider/src/provider.dart:377:7)
+#1      Provider.of (package:provider/src/provider.dart:327:30)
+#2      WatchContext.watch (package:provider/src/provider.dart:727:21)
+#3      BrandBackground.build (package:duoyi/widgets/brand_background.dart:19:27)
+#4      StatelessElement.build (package:flutter/src/widgets/framework.dart:5889:49)
+#5      ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5817:15)
+#6      Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#7      ComponentElement._firstBuild (package:flutter/src/widgets/framework.dart:5799:5)
+#8      ComponentElement.mount (package:flutter/src/widgets/framework.dart:5793:5)
+...     Normal element mounting (316 frames)
+#324    Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#325    MultiChildRenderObjectElement.inflateWidget (package:flutter/src/widgets/framework.dart:7264:36)
+#326    MultiChildRenderObjectElement.mount (package:flutter/src/widgets/framework.dart:7279:32)
+...     Normal element mounting (473 frames)
+#799    _InheritedProviderScopeElement.mount (package:provider/src/inherited_provider.dart:424:11)
+...     Normal element mounting (7 frames)
+#806    _InheritedProviderScopeElement.mount (package:provider/src/inherited_provider.dart:424:11)
+...     Normal element mounting (7 frames)
+#813    _InheritedProviderScopeElement.mount (package:provider/src/inherited_provider.dart:424:11)
+...     Normal element mounting (7 frames)
+#820    _InheritedProviderScopeElement.mount (package:provider/src/inherited_provider.dart:424:11)
+...     Normal element mounting (7 frames)
+#827    SingleChildWidgetElementMixin.mount (package:nested/nested.dart:222:11)
+...     Normal element mounting (7 frames)
+#834    _NestedHookElement.mount (package:nested/nested.dart:187:11)
+...     Normal element mounting (7 frames)
+#841    SingleChildWidgetElementMixin.mount (package:nested/nested.dart:222:11)
+#842    Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#843    Element.updateChild (package:flutter/src/widgets/framework.dart:4053:20)
+#844    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#845    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#846    ProxyElement.update (package:flutter/src/widgets/framework.dart:6149:5)
+#847    _InheritedNotifierElement.update (package:flutter/src/widgets/inherited_notifier.dart:108:11)
+#848    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#849    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#850    StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#851    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#852    StatefulElement.update (package:flutter/src/widgets/framework.dart:6007:5)
+#853    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#854    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#855    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#856    ProxyElement.update (package:flutter/src/widgets/framework.dart:6149:5)
+#857    _InheritedNotifierElement.update (package:flutter/src/widgets/inherited_notifier.dart:108:11)
+#858    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#859    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#860    StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#861    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#862    StatefulElement.update (package:flutter/src/widgets/framework.dart:6007:5)
+#863    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#864    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#865    StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#866    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#867    StatefulElement.update (package:flutter/src/widgets/framework.dart:6007:5)
+#868    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#869    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#870    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#871    ProxyElement.update (package:flutter/src/widgets/framework.dart:6149:5)
+#872    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#873    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#874    StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#875    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#876    StatefulElement.update (package:flutter/src/widgets/framework.dart:6007:5)
+#877    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#878    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#879    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#880    ProxyElement.update (package:flutter/src/widgets/framework.dart:6149:5)
+#881    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#882    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#883    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#884    ProxyElement.update (package:flutter/src/widgets/framework.dart:6149:5)
+#885    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#886    _RawViewElement._updateChild (package:flutter/src/widgets/view.dart:481:16)
+#887    _RawViewElement.update (package:flutter/src/widgets/view.dart:568:5)
+#888    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#889    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#890    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#891    StatelessElement.update (package:flutter/src/widgets/framework.dart:5895:5)
+#892    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#893    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#894    StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#895    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#896    StatefulElement.update (package:flutter/src/widgets/framework.dart:6007:5)
+#897    Element.updateChild (package:flutter/src/widgets/framework.dart:4037:15)
+#898    RootElement._rebuild (package:flutter/src/widgets/binding.dart:1822:16)
+#899    RootElement.update (package:flutter/src/widgets/binding.dart:1800:5)
+#900    RootElement.performRebuild (package:flutter/src/widgets/binding.dart:1814:7)
+#901    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#902    BuildScope._tryRebuild (package:flutter/src/widgets/framework.dart:2750:15)
+#903    BuildScope._flushDirtyElements (package:flutter/src/widgets/framework.dart:2807:11)
+#904    BuildOwner.buildScope (package:flutter/src/widgets/framework.dart:3111:18)
+#905    AutomatedTestWidgetsFlutterBinding.drawFrame (package:flutter_test/src/binding.dart:2131:19)
+#906    RendererBinding._handlePersistentFrameCallback (package:flutter/src/rendering/binding.dart:495:5)
+#907    SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1430:15)
+#908    SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1345:9)
+#909    AutomatedTestWidgetsFlutterBinding.pump.<anonymous closure> (package:flutter_test/src/binding.dart:1960:9)
+#912    TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:74:41)
+#913    AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1949:27)
+#914    WidgetTester.pumpWidget.<anonymous closure> (package:flutter_test/src/widget_tester.dart:598:22)
+#917    TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:74:41)
+#918    WidgetTester.pumpWidget (package:flutter_test/src/widget_tester.dart:595:27)
+#919    main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart:631:20)
+#920    testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:29)
+<asynchronous suspension>
+#921    TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 5 frames from dart:async and package:stack_trace)
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+The finder "Found 0 widgets with type "Tab" that are ancestors of widgets with text "语言": []" (used
+in a call to "tap()") could not find any matching widgets.
+
+When the exception was thrown, this was the stack:
+#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2090:7)
+#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1942:12)
+#2      WidgetController.tap (package:flutter_test/src/controller.dart:1075:7)
+#3      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart:652:20)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+The test description was:
+  Integrations keeps Language tab and controller while changing locale
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following message was thrown:
+Multiple exceptions (2) were detected during the running of the current test, and at least one was
+unexpected.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:23 +11 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Integrations keeps Language tab and controller while changing locale [E]
+  Test failed. See exception logs above.
+  The test description was: Integrations keeps Language tab and controller while changing locale
+  
+00:23 +11 -1: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart
+00:27 +11 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: negative habit count uses custom unit on main habit card
+[HabitProvider] reminder sync skipped: scheduler missing
+00:30 +12 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: weekly overview refreshes after today check-in
+[HabitProvider] reminder sync skipped: scheduler missing
+00:32 +13 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: weekly overview remains first even when there is no active habit
+00:32 +14 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: weekly overview excludes days without a scheduled habit
+[HabitProvider] reminder sync skipped: scheduler missing
+00:33 +15 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: new habit reminder defaults to popup plan
+[HabitProvider] reminder sync skipped: scheduler missing
+00:38 +16 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: weekly overview keeps expanded readable metrics
+[HabitProvider] reminder sync skipped: scheduler missing
+00:39 +17 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit insights render above today check-in list
+[HabitProvider] reminder sync skipped: scheduler missing
+00:39 +18 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: flex period target text does not repeat target prefix
+[HabitProvider] reminder sync skipped: scheduler missing
+00:40 +19 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: monthly flex period target text uses period goal copy
+[HabitProvider] reminder sync skipped: scheduler missing
+00:41 +20 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: completed flex period disables check-in with period copy
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:41 +21 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit card uses stored creation icon instead of fallback star
+[HabitProvider] reminder sync skipped: scheduler missing
+00:41 +22 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: custom habit without icon uses neutral target icon
+[HabitProvider] reminder sync skipped: scheduler missing
+00:42 +23 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: template habit falls back to template icon for legacy check icon
+[HabitProvider] reminder sync skipped: scheduler missing
+00:42 +24 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit row keeps edit end and delete behind left swipe
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:43 +25 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: ending a completed habit removes it from today
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:43 +26 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: ended habit summary row keeps end action hidden behind swipe
+[HabitProvider] reminder sync skipped: scheduler missing
+00:44 +27 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: active heatmap habit keeps actions behind left swipe
+[HabitProvider] reminder sync skipped: scheduler missing
+00:45 +28 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit row delete action confirms and removes habit
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:46 +29 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit row tap opens detail without duplicate swipe detail
+[HabitProvider] reminder sync skipped: scheduler missing
+00:47 +30 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit row left swipe can end habit
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:48 +31 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit row left swipe delete confirms and removes habit
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:49 +32 -1: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart
+00:52 +32 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: 快速创建待办成功后显示本机保存和云同步状态
+00:52 +33 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen can switch to kanban view
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:59 +34 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen surfaces cloud sync submit failures
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+01:00 +35 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen surfaces pending cloud sync status
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+01:01 +36 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen restores kanban grouping preference
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+01:01 +37 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen left swipe reveals completion and delete actions
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+01:02 +38 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen scrolling closes open swipe actions
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+01:03 +39 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen kanban card left swipe can delete task
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+01:04 +40 -1: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_year_view_test.dart
+01:05 +40 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen exposes year view
+01:08 +41 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen year navigation shows year controls
+01:09 +42 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen day navigation moves by one day
+01:10 +43 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen exposes three-day view and navigation
+01:10 +44 -1: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_project_filter_test.dart
+01:12 +44 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_project_filter_test.dart: CalendarScreen filters todos by project
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+01:15 +45 -1: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/integrations_location_reminder_test.dart
+01:17 +45 -1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/integrations_location_reminder_test.dart: integrations screen standalone route renders without provider black screen
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "扩展功能": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/integrations_location_reminder_test.dart:28:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/integrations_location_reminder_test.dart line 28
+The test description was:
+  integrations screen standalone route renders without provider black screen
+════════════════════════════════════════════════════════════════════════════════════════════════════
+01:21 +45 -2: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/integrations_location_reminder_test.dart: integrations screen standalone route renders without provider black screen [E]
+  Test failed. See exception logs above.
+  The test description was: integrations screen standalone route renders without provider black screen
+  
+01:21 +45 -2: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/integrations_location_reminder_test.dart: location reminder tab can create and manually trigger reminder
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+The finder "Found 0 widgets with text "位置提醒": []" (used in a call to "tap()") could not find any
+matching widgets.
+
+When the exception was thrown, this was the stack:
+#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2090:7)
+#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1942:12)
+#2      WidgetController.tap (package:flutter_test/src/controller.dart:1075:7)
+#3      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/integrations_location_reminder_test.dart:62:20)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+The test description was:
+  location reminder tab can create and manually trigger reminder
+════════════════════════════════════════════════════════════════════════════════════════════════════
+01:22 +45 -3: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/integrations_location_reminder_test.dart: location reminder tab can create and manually trigger reminder [E]
+  Test failed. See exception logs above.
+  The test description was: location reminder tab can create and manually trigger reminder
+  
+01:22 +45 -3: Some tests failed.

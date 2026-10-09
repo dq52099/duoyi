@@ -28,7 +28,7 @@ import 'habit_detail_screen.dart';
 
 const int _habitHeatmapGroupPreviewLimit = 8;
 
-class HabitScreen extends StatefulWidget {
+class HabitScreen extends StatefulWidget implements LocaleStatePreservingRoute {
   const HabitScreen({super.key});
 
   @override
@@ -45,10 +45,16 @@ class _HabitScreenState extends State<HabitScreen>
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
     _tabCtrl.addListener(_markHeatmapTabBuilt);
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     _tabCtrl.removeListener(_markHeatmapTabBuilt);
     _tabCtrl.dispose();
     super.dispose();
@@ -768,7 +774,7 @@ class _HabitScreenState extends State<HabitScreen>
           CustomScrollView(
             key: const ValueKey('habit_today_scroll_view'),
             slivers: [
-              const SliverToBoxAdapter(child: HabitWeeklyCard()),
+              SliverToBoxAdapter(child: HabitWeeklyCard()),
               SliverToBoxAdapter(
                 key: const ValueKey('habit_insight_before_today_list'),
                 child: _HabitInsightSection(habits: provider.habits),

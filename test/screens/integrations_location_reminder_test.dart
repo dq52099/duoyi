@@ -1,3 +1,4 @@
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/providers/location_reminder_provider.dart';
 import 'package:duoyi/providers/notification_service.dart';
 import 'package:duoyi/screens/integrations_screen.dart';
@@ -15,7 +16,10 @@ void main() {
   );
 
   setUp(() {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
+    I18n.setLocale(AppLocale.zh);
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'duoyi_locale_v1': AppLocale.zh.storageValue,
+    });
   });
 
   testWidgets(

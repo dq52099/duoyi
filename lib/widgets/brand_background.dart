@@ -62,23 +62,47 @@ class BrandBackground extends StatelessWidget {
   }
 }
 
+/// Marker interface indicating that a route manages its own copy refresh on
+/// locale changes and must retain its mounted State, controllers, and provider
+/// instances rather than being remounted by [BrandRouteSurface].
+abstract interface class LocaleStatePreservingRoute {}
+
 /// Keeps route-pushed transparent pages from falling through to the Navigator's
 /// black backing surface.
 class BrandRouteSurface extends StatelessWidget {
   final Widget child;
-  const BrandRouteSurface({super.key, required this.child});
+
+  /// Controls whether unmarked child routes remount when the locale changes.
+  ///
+  /// Defaults to `true` to preserve legacy const stateless route copy refresh
+  /// by remounting unmarked subtrees with a locale-keyed subtree.
+  /// When `false`, unmarked routes that handle their own refresh (such as
+  /// ProfileScreen) will not be remounted.
+  ///
+  /// Routes implementing [LocaleStatePreservingRoute] always take precedence
+  /// and will never be remounted, regardless of this setting.
+  final bool remountOnLocaleChange;
+
+  const BrandRouteSurface({
+    super.key,
+    required this.child,
+    this.remountOnLocaleChange = true,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // 路由页常以 `const BrandRouteSurface(child: XxxScreen())` 推入 Navigator：
-    // 语言热切换时父级不下发新实例，子树不会重建。这里监听 I18n.localeListenable
-    //（挂在 I18n 静态层，不依赖 Provider 作用域），并以 locale 作 KeyedSubtree
-    // 键强制子树重新挂载，const 子页内的 I18n/品牌文案才能即时跟随新语言。
+    // 路由页常以 `const BrandRouteSurface(child: XxxScreen())` 推入 Navigator。
+    // 对于未实现 LocaleStatePreservingRoute 的子页，通过 locale 驱动的 KeyedSubtree
+    // 重新挂载子树以刷新 const 静态文案；若子页实现了 LocaleStatePreservingRoute
+    //（或显式声明 remountOnLocaleChange: false），则保持稳定 KeyedSubtree（key: null），
+    // 避免重建销毁 State、控制器、Provider 实例与定时器，由子页自行响应语言切换。
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final routeBackground = theme.brightness == Brightness.dark
         ? cs.surface
         : cs.surfaceContainerLowest;
+    final shouldRemount =
+        remountOnLocaleChange && child is! LocaleStatePreservingRoute;
     return ValueListenableBuilder<AppLocale>(
       valueListenable: I18n.localeListenable,
       builder: (context, locale, _) {
@@ -87,7 +111,7 @@ class BrandRouteSurface extends StatelessWidget {
           child: BrandBackground(
             child: AppSecondaryControlTheme(
               child: KeyedSubtree(
-                key: ValueKey<AppLocale>(locale),
+                key: shouldRemount ? ValueKey<AppLocale>(locale) : null,
                 child: child,
               ),
             ),

@@ -28,6 +28,7 @@ import '../providers/theme_provider.dart';
 import '../services/ai_service.dart';
 import '../services/api_client.dart';
 import '../core/todo_templates.dart';
+import '../widgets/brand_background.dart';
 import '../widgets/eisenhower_matrix.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/todo_completion_flow.dart';
@@ -36,7 +37,7 @@ import 'share_screen.dart';
 import 'todo_detail_screen.dart'
     show TodoDetailScreen, preflightTodoReminderSave, priorityColor;
 
-class TodoScreen extends StatefulWidget {
+class TodoScreen extends StatefulWidget implements LocaleStatePreservingRoute {
   const TodoScreen({super.key});
 
   @override
@@ -172,6 +173,11 @@ class _TodoScreenState extends State<TodoScreen> {
     super.initState();
     _listScrollController.addListener(_onListScroll);
     _loadKanbanConfig();
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onListScroll() {
@@ -251,6 +257,7 @@ class _TodoScreenState extends State<TodoScreen> {
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     _listScrollController.removeListener(_onListScroll);
     _listScrollController.dispose();
     _swipeDismissSerial.dispose();

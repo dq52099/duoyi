@@ -39,7 +39,8 @@ import '../widgets/surface_components.dart';
 import 'ai_schedule_screen.dart';
 import 'todo_screen.dart';
 
-class CalendarScreen extends StatefulWidget {
+class CalendarScreen extends StatefulWidget
+    implements LocaleStatePreservingRoute {
   final GlobalKey? todoTabKey;
   final DateTime? initialDate;
   final bool useShellBackground;
@@ -80,6 +81,11 @@ class _CalendarScreenState extends State<CalendarScreen>
     }
     _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(_handleTabControllerChanged);
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   void _handleTabControllerChanged() {
@@ -89,6 +95,7 @@ class _CalendarScreenState extends State<CalendarScreen>
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     _tabController.removeListener(_handleTabControllerChanged);
     _tabController.dispose();
     super.dispose();

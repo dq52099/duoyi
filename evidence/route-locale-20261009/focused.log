@@ -1,0 +1,98 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart
+00:00 +0: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart: BrandRouteSurface const 子树在语言热切换后仍跟随新语言
+00:02 +1: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart: marked const StatefulWidget keeps State, controller, draft and counter
+00:04 +2: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart: marked stateless facade preserves its stateful body
+00:05 +3: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart: remountOnLocaleChange false preserves an unmarked self-refreshing child
+00:06 +4: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/widgets/brand_route_surface_locale_test.dart: marker takes precedence when remountOnLocaleChange is true
+00:07 +5: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart
+00:09 +5: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: the five public routes declare the state-preserving marker
+00:09 +6: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Todo keeps list mode, completion filter and scroll offset through raw locale events
+00:15 +7: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Habit keeps its built heatmap tab and locale copy after raw events
+00:16 +8: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Pomodoro keeps its History tab and running provider state through raw locale events
+00:17 +9: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Calendar keeps changed date and selected tab through raw locale events
+00:19 +10: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Calendar refreshes copy and keeps State on a direct route without BrandRouteSurface
+00:20 +11: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/main_route_locale_state_test.dart: Integrations keeps Language tab and controller while changing locale
+00:21 +12: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart
+00:23 +12: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: negative habit count uses custom unit on main habit card
+[HabitProvider] reminder sync skipped: scheduler missing
+00:25 +13: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: weekly overview refreshes after today check-in
+[HabitProvider] reminder sync skipped: scheduler missing
+00:26 +14: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: weekly overview remains first even when there is no active habit
+00:26 +15: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: weekly overview excludes days without a scheduled habit
+[HabitProvider] reminder sync skipped: scheduler missing
+00:27 +16: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: new habit reminder defaults to popup plan
+[HabitProvider] reminder sync skipped: scheduler missing
+00:29 +17: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: weekly overview keeps expanded readable metrics
+[HabitProvider] reminder sync skipped: scheduler missing
+00:29 +18: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit insights render above today check-in list
+[HabitProvider] reminder sync skipped: scheduler missing
+00:29 +19: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: flex period target text does not repeat target prefix
+[HabitProvider] reminder sync skipped: scheduler missing
+00:30 +20: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: monthly flex period target text uses period goal copy
+[HabitProvider] reminder sync skipped: scheduler missing
+00:30 +21: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: completed flex period disables check-in with period copy
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:31 +22: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit card uses stored creation icon instead of fallback star
+[HabitProvider] reminder sync skipped: scheduler missing
+00:31 +23: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: custom habit without icon uses neutral target icon
+[HabitProvider] reminder sync skipped: scheduler missing
+00:31 +24: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: template habit falls back to template icon for legacy check icon
+[HabitProvider] reminder sync skipped: scheduler missing
+00:31 +25: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit row keeps edit end and delete behind left swipe
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:32 +26: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: ending a completed habit removes it from today
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:32 +27: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: ended habit summary row keeps end action hidden behind swipe
+[HabitProvider] reminder sync skipped: scheduler missing
+00:33 +28: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: active heatmap habit keeps actions behind left swipe
+[HabitProvider] reminder sync skipped: scheduler missing
+00:33 +29: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit row delete action confirms and removes habit
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:34 +30: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit row tap opens detail without duplicate swipe detail
+[HabitProvider] reminder sync skipped: scheduler missing
+00:35 +31: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit row left swipe can end habit
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:36 +32: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/habit_screen_test.dart: habit row left swipe delete confirms and removes habit
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:36 +33: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart
+00:38 +33: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: 快速创建待办成功后显示本机保存和云同步状态
+00:38 +34: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen can switch to kanban view
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:42 +35: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen surfaces cloud sync submit failures
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:42 +36: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen surfaces pending cloud sync status
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:43 +37: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen restores kanban grouping preference
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:44 +38: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen left swipe reveals completion and delete actions
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:45 +39: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen scrolling closes open swipe actions
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:48 +40: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/todo_kanban_view_test.dart: TodoScreen kanban card left swipe can delete task
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:51 +41: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_year_view_test.dart
+01:00 +41: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen exposes year view
+01:09 +42: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen year navigation shows year controls
+01:10 +43: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen day navigation moves by one day
+01:11 +44: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen exposes three-day view and navigation
+01:14 +45: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_project_filter_test.dart
+01:16 +45: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/calendar_project_filter_test.dart: CalendarScreen filters todos by project
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+01:20 +46: loading /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/integrations_location_reminder_test.dart
+01:21 +46: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/integrations_location_reminder_test.dart: integrations screen standalone route renders without provider black screen
+01:23 +47: /home/ubuntu/duoyi-worktrees/route-locale-20261009/test/screens/integrations_location_reminder_test.dart: location reminder tab can create and manually trigger reminder
+01:25 +48: All tests passed!

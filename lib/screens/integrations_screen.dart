@@ -21,10 +21,12 @@ import '../providers/location_reminder_provider.dart';
 import '../providers/notification_service.dart';
 import '../services/calendar_sync_service.dart';
 import '../services/location_geofence_service.dart';
+import '../widgets/brand_background.dart';
 import '../widgets/surface_components.dart';
 import '../widgets/controller_dialog.dart';
 
-class IntegrationsScreen extends StatelessWidget {
+class IntegrationsScreen extends StatelessWidget
+    implements LocaleStatePreservingRoute {
   final Uri? initialOAuthCallbackUri;
 
   const IntegrationsScreen({super.key, this.initialOAuthCallbackUri});
@@ -175,8 +177,8 @@ class _IntegrationsScreenBody extends StatelessWidget {
                   _CalendarSubscriptionsTab(
                     initialOAuthCallbackUri: initialOAuthCallbackUri,
                   ),
-                  const _LocationRemindersTab(),
-                  const _LocaleTab(),
+                  _LocationRemindersTab(),
+                  _LocaleTab(),
                 ],
               ),
             ),
