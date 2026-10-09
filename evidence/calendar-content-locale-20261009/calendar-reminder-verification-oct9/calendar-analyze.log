@@ -1,0 +1,10 @@
+Analyzing 5 items...                                            
+
+   info • Unnecessary use of multiple underscores • lib/screens/calendar_screen.dart:1292:29 • unnecessary_underscores
+warning • A value for optional parameter 'style' isn't ever given • lib/screens/calendar_screen.dart:1301:50 • unused_element_parameter
+   info • Unnecessary use of multiple underscores • lib/screens/calendar_screen.dart:1307:29 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/screens/calendar_screen.dart:1321:29 • unnecessary_underscores
+   info • Statements in an if should be enclosed in a block • lib/screens/calendar_screen.dart:1677:21 • curly_braces_in_flow_control_structures
+warning • Unused import: 'package:duoyi/widgets/app_date_picker.dart' • test/screens/calendar_content_locale_state_test.dart:25:8 • unused_import
+
+6 issues found. (ran in 45.4s)

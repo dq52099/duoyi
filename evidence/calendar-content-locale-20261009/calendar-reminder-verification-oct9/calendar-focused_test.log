@@ -1,0 +1,142 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart
+00:00 +0: Calendar date, filter, year, and three-day counts refresh in Chinese and English
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _AncestorWidgetFinder:<Found 0 widgets with type "FilterChip" that are ancestors of
+widgets with text "literal workspace 4": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:348:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart line 348
+The test description was:
+  Calendar date, filter, year, and three-day counts refresh in Chinese and English
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:12 +0 -1: Calendar date, filter, year, and three-day counts refresh in Chinese and English [E]
+  Test failed. See exception logs above.
+  The test description was: Calendar date, filter, year, and three-day counts refresh in Chinese and English
+  
+00:12 +0 -1: mounted quick-add menu and project detail sheet keep state and literal content across locales
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "CupertinoNavigationBarBackButton": []>
+   Which: means none were found but one was expected
+One back button expected on screen
+
+When the exception was thrown, this was the stack:
+#0      fail (package:matcher/src/expect/expect.dart:187:31)
+#1      _expect (package:matcher/src/expect/expect.dart:182:3)
+#2      expect (package:matcher/src/expect/expect.dart:65:3)
+#3      expectSync (package:flutter_test/src/widget_tester.dart:486:18)
+#4      WidgetTester.pageBack.<anonymous closure> (package:flutter_test/src/widget_tester.dart:1177:7)
+#7      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:74:41)
+#8      WidgetTester.pageBack (package:flutter_test/src/widget_tester.dart:1171:27)
+#9      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:456:20)
+<asynchronous suspension>
+#10     testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#11     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from dart:async and package:stack_trace)
+
+The test description was:
+  mounted quick-add menu and project detail sheet keep state and literal content across locales
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:18 +0 -2: mounted quick-add menu and project detail sheet keep state and literal content across locales [E]
+  Test failed. See exception logs above.
+  The test description was: mounted quick-add menu and project detail sheet keep state and literal content across locales
+  
+00:18 +0 -2: normalized project filter IDs select the same literal tasks in the agenda and detail sheet
+
+Warning: A call to tap() with finder "Found 1 widget with text "项目详情": [
+  Text("项目详情", dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery, _ScrollableScope]),
+]" derived an Offset (Offset(366.3, 199.0)) that would not hit test on the specified widget.
+Maybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.
+The finder corresponds to this RenderBox: RenderParagraph#f166a relayoutBoundary=up18
+The hit test result at that offset is: HitTestResult(RenderPointerListener#d5879@Offset(63.4, 14.4), RenderSemanticsAnnotations#9d83a@Offset(63.4, 14.4), RenderMouseRegion#f8e33@Offset(63.4, 14.4), RenderSemanticsAnnotations#31bf7@Offset(63.4, 14.4), _RenderInkFeatures#671d0@Offset(63.4, 14.4), RenderCustomPaint#f472a@Offset(63.4, 14.4), RenderPhysicalShape#01ace@Offset(63.4, 14.4), RenderPositionedBox#ed47f@Offset(63.4, 24.0), RenderSemanticsAnnotations#3b538@Offset(63.4, 24.0), RenderPadding#01f55@Offset(63.4, 24.0), RenderRepaintBoundary#8f17e@Offset(63.4, 24.0), RenderIndexedSemantics#95381@Offset(63.4, 24.0), RenderSliverList@(mainAxis: 366.34999999999997, crossAxis: 24.0), RenderSliverPadding@(mainAxis: 366.34999999999997, crossAxis: 24.0), RenderViewport#ae452@Offset(366.3, 24.0), RenderIgnorePointer#531f8@Offset(366.3, 24.0), RenderSemanticsAnnotations#7ddac@Offset(366.3, 24.0), RenderPointerListener#89aef@Offset(366.3, 24.0), RenderSemanticsGestureHandler#b16b3@Offset(366.3, 24.0), RenderPointerListener#d81c9@Offset(366.3, 24.0), _RenderScrollSemantics#7b043@Offset(366.3, 24.0), RenderClipRect#54c36@Offset(366.3, 24.0), RenderConstrainedBox#f506b@Offset(366.3, 24.0), RenderFlex#a8a58@Offset(366.3, 143.0), RenderCustomMultiChildLayoutBox#2dc28@Offset(366.3, 199.0), _RenderInkFeatures#6beb0@Offset(366.3, 199.0), RenderPhysicalModel#2eeae@Offset(366.3, 199.0), RenderStack#5537f@Offset(366.3, 199.0), _RenderLayoutBuilder#2b387@Offset(366.3, 199.0), _RenderColoredBox#540c6@Offset(366.3, 199.0), RenderSemanticsAnnotations#2c5fe@Offset(366.3, 199.0), RenderRepaintBoundary#e75e1@Offset(366.3, 199.0), RenderIgnorePointer#df06d@Offset(366.3, 199.0), RenderAnimatedOpacity#1994d@Offset(366.3, 199.0), RenderAnimatedOpacity#8565f@Offset(366.3, 199.0), _RenderColoredBox#643ac@Offset(366.3, 199.0), RenderAnimatedOpacity#f0e8e@Offset(366.3, 199.0), RenderIgnorePointer#207d5@Offset(366.3, 199.0), RenderAnimatedOpacity#58768@Offset(366.3, 199.0), RenderRepaintBoundary#1810c@Offset(366.3, 199.0), RenderSemanticsAnnotations#c0988@Offset(366.3, 199.0), RenderOffstage#6e3e6@Offset(366.3, 199.0), RenderSemanticsAnnotations#4370a@Offset(366.3, 199.0), _RenderTheater#43950@Offset(366.3, 199.0), RenderAbsorbPointer#bed88@Offset(366.3, 199.0), RenderPointerListener#6fbf5@Offset(366.3, 199.0), RenderSemanticsAnnotations#b052c@Offset(366.3, 199.0), RenderCustomPaint#0dad5@Offset(366.3, 199.0), RenderSemanticsAnnotations#f6988@Offset(366.3, 199.0), RenderSemanticsAnnotations#7be30@Offset(366.3, 199.0), RenderSemanticsAnnotations#352d7@Offset(366.3, 199.0), RenderTapRegionSurface#e260f@Offset(366.3, 199.0), RenderSemanticsAnnotations#97a5b@Offset(366.3, 199.0), RenderSemanticsAnnotations#bfdea@Offset(366.3, 199.0), HitTestEntry<HitTestTarget>#3f18f(_ReusableRenderView#af9c2), HitTestEntry<HitTestTarget>#f2a2e(<AutomatedTestWidgetsFlutterBinding>))
+#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2158:25)
+#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1942:12)
+#2      WidgetController.tap (package:flutter_test/src/controller.dart:1075:7)
+#3      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:579:20)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+#6      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+To silence this warning, pass "warnIfMissed: false" to "tap()".
+To make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.
+
+00:20 +1 -2: date picker resolves semantic copy live, preserves its choice, and dismisses cleanly across locale changes
+00:25 +2 -2: Todo quick-add draft keeps controller, selection, and focus through locale changes and duplicate submit triggers
+00:29 +3 -2: time-log draft and semantic time picker retain user choices through locale changes and dismissal
+00:32 +4 -2: time-entry category selection flows through its typed callback and saves
+00:35 +5 -2: same account owner cannot submit Todo or time-log drafts from an invalidated account generation
+00:37 +6 -2: an invalidated time-entry origin cannot push a category menu
+00:38 +7 -2: an open category menu cannot apply after account switch or pop an unrelated route
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: false
+  Actual: <true>
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:1145:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart line 1145
+The test description was:
+  an open category menu cannot apply after account switch or pop an unrelated route
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:44 +7 -3: an open category menu cannot apply after account switch or pop an unrelated route [E]
+  Test failed. See exception logs above.
+  The test description was: an open category menu cannot apply after account switch or pop an unrelated route
+  
+00:44 +7 -3: quick-add submission does not outlive its Calendar caller route
+00:44 +8 -3: held Todo submit completes safely after its caller and widget tree are removed
+00:45 +9 -3: pending time-log submit disables nested picker controls and cannot leave a duplicate draft
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+pumpAndSettle timed out
+
+When the exception was thrown, this was the stack:
+#0      WidgetTester.pumpAndSettle.<anonymous closure> (package:flutter_test/src/widget_tester.dart:717:11)
+<asynchronous suspension>
+#1      TestAsyncUtils.guard.<anonymous closure> (package:flutter_test/src/test_async_utils.dart:130:27)
+<asynchronous suspension>
+#2      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:1269:7)
+<asynchronous suspension>
+#3      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#4      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+The test description was:
+  pending time-log submit disables nested picker controls and cannot leave a duplicate draft
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:53 +9 -4: pending time-log submit disables nested picker controls and cannot leave a duplicate draft [E]
+  Test failed. See exception logs above.
+  The test description was: pending time-log submit disables nested picker controls and cannot leave a duplicate draft
+  
+00:53 +9 -4: Some tests failed.

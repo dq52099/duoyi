@@ -1,0 +1,78 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart
+00:00 +0: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: Calendar date, filter, year, and three-day counts refresh in Chinese and English
+00:05 +1: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: mounted quick-add menu and project detail sheet keep state and literal content across locales
+00:08 +2: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: normalized project filter IDs select the same literal tasks in the agenda and detail sheet
+
+Warning: A call to tap() with finder "Found 1 widget with text "项目详情": [
+  Text("项目详情", dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery, _ScrollableScope]),
+]" derived an Offset (Offset(366.3, 199.0)) that would not hit test on the specified widget.
+Maybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.
+The finder corresponds to this RenderBox: RenderParagraph#15d34 relayoutBoundary=up18
+The hit test result at that offset is: HitTestResult(RenderPointerListener#ba23e@Offset(63.4, 14.4), RenderSemanticsAnnotations#605b3@Offset(63.4, 14.4), RenderMouseRegion#b2fa3@Offset(63.4, 14.4), RenderSemanticsAnnotations#0c352@Offset(63.4, 14.4), _RenderInkFeatures#6e0b2@Offset(63.4, 14.4), RenderCustomPaint#1619a@Offset(63.4, 14.4), RenderPhysicalShape#ff64a@Offset(63.4, 14.4), RenderPositionedBox#ea2a4@Offset(63.4, 24.0), RenderSemanticsAnnotations#71af8@Offset(63.4, 24.0), RenderPadding#f05f7@Offset(63.4, 24.0), RenderRepaintBoundary#5a569@Offset(63.4, 24.0), RenderIndexedSemantics#ca62a@Offset(63.4, 24.0), RenderSliverList@(mainAxis: 366.34999999999997, crossAxis: 24.0), RenderSliverPadding@(mainAxis: 366.34999999999997, crossAxis: 24.0), RenderViewport#51ae7@Offset(366.3, 24.0), RenderIgnorePointer#66ae7@Offset(366.3, 24.0), RenderSemanticsAnnotations#53c6e@Offset(366.3, 24.0), RenderPointerListener#9e07b@Offset(366.3, 24.0), RenderSemanticsGestureHandler#0e4f7@Offset(366.3, 24.0), RenderPointerListener#3eae5@Offset(366.3, 24.0), _RenderScrollSemantics#26cdc@Offset(366.3, 24.0), RenderClipRect#eccc4@Offset(366.3, 24.0), RenderConstrainedBox#a4d04@Offset(366.3, 24.0), RenderFlex#2ee40@Offset(366.3, 143.0), RenderCustomMultiChildLayoutBox#748e3@Offset(366.3, 199.0), _RenderInkFeatures#b302b@Offset(366.3, 199.0), RenderPhysicalModel#e13bb@Offset(366.3, 199.0), RenderStack#2d812@Offset(366.3, 199.0), _RenderLayoutBuilder#f2187@Offset(366.3, 199.0), _RenderColoredBox#46dd3@Offset(366.3, 199.0), RenderSemanticsAnnotations#f61a4@Offset(366.3, 199.0), RenderRepaintBoundary#a10aa@Offset(366.3, 199.0), RenderIgnorePointer#66dc5@Offset(366.3, 199.0), RenderAnimatedOpacity#06cec@Offset(366.3, 199.0), RenderAnimatedOpacity#95297@Offset(366.3, 199.0), _RenderColoredBox#e5e6b@Offset(366.3, 199.0), RenderAnimatedOpacity#c54e5@Offset(366.3, 199.0), RenderIgnorePointer#44d3b@Offset(366.3, 199.0), RenderAnimatedOpacity#9dafb@Offset(366.3, 199.0), RenderRepaintBoundary#8dc4d@Offset(366.3, 199.0), RenderSemanticsAnnotations#c42b7@Offset(366.3, 199.0), RenderOffstage#6d41e@Offset(366.3, 199.0), RenderSemanticsAnnotations#628dc@Offset(366.3, 199.0), _RenderTheater#b8f24@Offset(366.3, 199.0), RenderAbsorbPointer#7faf4@Offset(366.3, 199.0), RenderPointerListener#15d6c@Offset(366.3, 199.0), RenderSemanticsAnnotations#e470b@Offset(366.3, 199.0), RenderCustomPaint#076f7@Offset(366.3, 199.0), RenderSemanticsAnnotations#e997e@Offset(366.3, 199.0), RenderSemanticsAnnotations#db0bf@Offset(366.3, 199.0), RenderSemanticsAnnotations#22bf3@Offset(366.3, 199.0), RenderTapRegionSurface#a263e@Offset(366.3, 199.0), RenderSemanticsAnnotations#d5676@Offset(366.3, 199.0), RenderSemanticsAnnotations#25144@Offset(366.3, 199.0), HitTestEntry<HitTestTarget>#df80b(_ReusableRenderView#90f80), HitTestEntry<HitTestTarget>#b94f0(<AutomatedTestWidgetsFlutterBinding>))
+#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2158:25)
+#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1942:12)
+#2      WidgetController.tap (package:flutter_test/src/controller.dart:1075:7)
+#3      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:615:20)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+#6      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+To silence this warning, pass "warnIfMissed: false" to "tap()".
+To make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.
+
+00:09 +3: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: date picker resolves semantic copy live, preserves its choice, and dismisses cleanly across locale changes
+00:11 +4: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: Todo quick-add draft keeps controller, selection, and focus through locale changes and duplicate submit triggers
+00:13 +5: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: time-log draft and semantic time picker retain user choices through locale changes and dismissal
+00:17 +6: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: time-entry category selection flows through its typed callback and saves
+00:19 +7: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: same account owner cannot submit Todo or time-log drafts from an invalidated account generation
+00:20 +8: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: an invalidated time-entry origin cannot push a category menu
+00:20 +9: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: an open category menu cannot apply after account switch or pop an unrelated route
+00:21 +10: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: quick-add submission does not outlive its Calendar caller route
+00:22 +11: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: held Todo submit completes safely after its caller and widget tree are removed
+00:22 +12: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart: pending time-log submit disables nested picker controls and cannot leave a duplicate draft
+00:23 +13: loading /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_inline_time_entry_static_test.dart
+00:25 +13: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_inline_time_entry_static_test.dart: calendar quick time entry captures a real time segment
+00:25 +14: loading /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_project_detail_static_test.dart
+00:26 +14: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_project_detail_static_test.dart: calendar project detail is a separate project action
+00:26 +15: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_project_detail_static_test.dart: calendar detail area and paging are widened for dense views
+00:26 +16: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_project_detail_static_test.dart: calendar exposes shared workspace filters
+00:26 +17: loading /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_project_filter_test.dart
+00:28 +17: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_project_filter_test.dart: CalendarScreen filters todos by project
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:32 +18: loading /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_year_view_test.dart
+00:34 +18: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen exposes year view
+00:37 +19: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen year navigation shows year controls
+00:38 +20: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen day navigation moves by one day
+00:39 +21: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_year_view_test.dart: CalendarScreen exposes three-day view and navigation
+00:39 +22: loading /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_three_day_static_test.dart
+00:41 +22: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_three_day_static_test.dart: 日历提供一等三日视图入口和导航
+00:41 +23: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_three_day_static_test.dart: 三日视图复用日程聚合筛选和日视图详情能力
+00:41 +24: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_three_day_static_test.dart: 三日视图桌面并列展示窄屏横向滚动
+00:41 +25: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_three_day_static_test.dart: 日历聚合不在 build 同步执行
+00:41 +26: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_three_day_static_test.dart: 日历日期导航头避免窄屏固定最小宽度溢出
+00:41 +27: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_three_day_static_test.dart: 月视图使用整页滚动并保留月格任务标记
+00:41 +28: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_three_day_static_test.dart: 日历详情弹层扩大内容宽高并让详情列表独立滚动
+00:41 +29: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_three_day_static_test.dart: 日历二级筛选和表单使用小号控件样式
+00:41 +30: loading /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart
+00:42 +30: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart: status badge contrast uses rendered Brightness.dark surface
+00:43 +31: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart: status badge contrast uses rendered Brightness.light surface
+00:43 +32: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSectionHeader handles long action on narrow width
+00:43 +33: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart: AppStatusBadge constrains long labels in narrow containers
+00:43 +34: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSettingsTile keeps text readable with complex trailing
+00:44 +35: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSettingsTile centers leading icon in the whole row
+00:44 +36: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart: AppSettingsTile aligns daily reminder time row
+00:44 +37: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart: AppMetricCard 默认数值字号为主角，标题/单位保持 11
+00:44 +38: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart: StatsOverviewCard 不传样式时数值吃到 16 默认（我的页路径）
+00:44 +39: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart: AppMetricCard 显式 valueStyle 仍然优先生效
+00:44 +40: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_components_layout_test.dart: AppMetricCard 亮色下填充/描边/阴影走主题玻璃档（两套主题同源）
+00:44 +41: loading /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_secondary_control_static_test.dart
+00:45 +41: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_secondary_control_static_test.dart: 共享二级控件样式和主菜单字号字重一致
+00:45 +42: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_secondary_control_static_test.dart: 危险按钮和状态徽标显式使用高对比前景色
+00:45 +43: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_secondary_control_static_test.dart: 共享卡片、弹框和底部面板有样式回归护栏
+00:45 +44: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_secondary_control_static_test.dart: 习惯、日历和小组件二级表单显式使用共享小号样式
+00:45 +45: /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/widgets/surface_secondary_control_static_test.dart: 二级控件选中态浅深主题下保持可读且克制
+00:45 +46: All tests passed!

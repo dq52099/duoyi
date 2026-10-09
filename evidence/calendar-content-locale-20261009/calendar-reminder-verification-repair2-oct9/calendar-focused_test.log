@@ -1,0 +1,62 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart
+00:00 +0: Calendar date, filter, year, and three-day counts refresh in Chinese and English
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _DescendantWidgetFinder:<Found 0 widgets with text "2021年2月1日" descending from widgets
+with key [<'calendar_navigation_date_button'>]: []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:427:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart line 427
+The test description was:
+  Calendar date, filter, year, and three-day counts refresh in Chinese and English
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:07 +0 -1: Calendar date, filter, year, and three-day counts refresh in Chinese and English [E]
+  Test failed. See exception logs above.
+  The test description was: Calendar date, filter, year, and three-day counts refresh in Chinese and English
+  
+00:07 +0 -1: mounted quick-add menu and project detail sheet keep state and literal content across locales
+00:10 +1 -1: normalized project filter IDs select the same literal tasks in the agenda and detail sheet
+
+Warning: A call to tap() with finder "Found 1 widget with text "项目详情": [
+  Text("项目详情", dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery, _ScrollableScope]),
+]" derived an Offset (Offset(366.3, 199.0)) that would not hit test on the specified widget.
+Maybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.
+The finder corresponds to this RenderBox: RenderParagraph#78ce2 relayoutBoundary=up18
+The hit test result at that offset is: HitTestResult(RenderPointerListener#b21f8@Offset(63.4, 14.4), RenderSemanticsAnnotations#cbe6c@Offset(63.4, 14.4), RenderMouseRegion#b398e@Offset(63.4, 14.4), RenderSemanticsAnnotations#265d7@Offset(63.4, 14.4), _RenderInkFeatures#5e47f@Offset(63.4, 14.4), RenderCustomPaint#2fe2b@Offset(63.4, 14.4), RenderPhysicalShape#dc9b9@Offset(63.4, 14.4), RenderPositionedBox#ad698@Offset(63.4, 24.0), RenderSemanticsAnnotations#e853b@Offset(63.4, 24.0), RenderPadding#46fb6@Offset(63.4, 24.0), RenderRepaintBoundary#7b95d@Offset(63.4, 24.0), RenderIndexedSemantics#93339@Offset(63.4, 24.0), RenderSliverList@(mainAxis: 366.34999999999997, crossAxis: 24.0), RenderSliverPadding@(mainAxis: 366.34999999999997, crossAxis: 24.0), RenderViewport#dc825@Offset(366.3, 24.0), RenderIgnorePointer#b0f34@Offset(366.3, 24.0), RenderSemanticsAnnotations#ccbff@Offset(366.3, 24.0), RenderPointerListener#c7585@Offset(366.3, 24.0), RenderSemanticsGestureHandler#38504@Offset(366.3, 24.0), RenderPointerListener#33618@Offset(366.3, 24.0), _RenderScrollSemantics#14ae6@Offset(366.3, 24.0), RenderClipRect#35b7e@Offset(366.3, 24.0), RenderConstrainedBox#420cb@Offset(366.3, 24.0), RenderFlex#7cf8a@Offset(366.3, 143.0), RenderCustomMultiChildLayoutBox#58faf@Offset(366.3, 199.0), _RenderInkFeatures#b7f15@Offset(366.3, 199.0), RenderPhysicalModel#39869@Offset(366.3, 199.0), RenderStack#8a66d@Offset(366.3, 199.0), _RenderLayoutBuilder#67188@Offset(366.3, 199.0), _RenderColoredBox#f5a7c@Offset(366.3, 199.0), RenderSemanticsAnnotations#9512c@Offset(366.3, 199.0), RenderRepaintBoundary#a7cb0@Offset(366.3, 199.0), RenderIgnorePointer#05c96@Offset(366.3, 199.0), RenderAnimatedOpacity#e5a99@Offset(366.3, 199.0), RenderAnimatedOpacity#44377@Offset(366.3, 199.0), _RenderColoredBox#f466d@Offset(366.3, 199.0), RenderAnimatedOpacity#4aff3@Offset(366.3, 199.0), RenderIgnorePointer#5c18a@Offset(366.3, 199.0), RenderAnimatedOpacity#c4b83@Offset(366.3, 199.0), RenderRepaintBoundary#2fb56@Offset(366.3, 199.0), RenderSemanticsAnnotations#82e4b@Offset(366.3, 199.0), RenderOffstage#d4143@Offset(366.3, 199.0), RenderSemanticsAnnotations#dde41@Offset(366.3, 199.0), _RenderTheater#0bcdc@Offset(366.3, 199.0), RenderAbsorbPointer#cb189@Offset(366.3, 199.0), RenderPointerListener#58a46@Offset(366.3, 199.0), RenderSemanticsAnnotations#fabc5@Offset(366.3, 199.0), RenderCustomPaint#d4af3@Offset(366.3, 199.0), RenderSemanticsAnnotations#646b5@Offset(366.3, 199.0), RenderSemanticsAnnotations#17c36@Offset(366.3, 199.0), RenderSemanticsAnnotations#646ad@Offset(366.3, 199.0), RenderTapRegionSurface#49488@Offset(366.3, 199.0), RenderSemanticsAnnotations#65cce@Offset(366.3, 199.0), RenderSemanticsAnnotations#70fdf@Offset(366.3, 199.0), HitTestEntry<HitTestTarget>#82ad3(_ReusableRenderView#8161b), HitTestEntry<HitTestTarget>#3d2e3(<AutomatedTestWidgetsFlutterBinding>))
+#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2158:25)
+#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1942:12)
+#2      WidgetController.tap (package:flutter_test/src/controller.dart:1075:7)
+#3      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:605:20)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+#6      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+To silence this warning, pass "warnIfMissed: false" to "tap()".
+To make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.
+
+00:11 +2 -1: date picker resolves semantic copy live, preserves its choice, and dismisses cleanly across locale changes
+00:14 +3 -1: Todo quick-add draft keeps controller, selection, and focus through locale changes and duplicate submit triggers
+00:16 +4 -1: time-log draft and semantic time picker retain user choices through locale changes and dismissal
+00:20 +5 -1: time-entry category selection flows through its typed callback and saves
+00:21 +6 -1: same account owner cannot submit Todo or time-log drafts from an invalidated account generation
+00:22 +7 -1: an invalidated time-entry origin cannot push a category menu
+00:22 +8 -1: an open category menu cannot apply after account switch or pop an unrelated route
+00:23 +9 -1: quick-add submission does not outlive its Calendar caller route
+00:24 +10 -1: held Todo submit completes safely after its caller and widget tree are removed
+00:24 +11 -1: pending time-log submit disables nested picker controls and cannot leave a duplicate draft
+00:25 +12 -1: Some tests failed.
