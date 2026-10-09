@@ -1,0 +1,57 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart
+00:00 +0: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: mounted plan rebuilds across locales and keeps supplied copy literal
+00:01 +1: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: plan summaries and recurrence labels localize without changing domain JSON
+00:01 +2: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: relative rule selections survive a zh/en rebuild and save
+00:02 +3: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: weekly rule weekdays survive an open-sheet locale rebuild
+00:03 +4: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: recurrence fields, selected frequency, selection, and focus survive locale changes
+00:04 +5: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: open date picker heading and selected mode update with locale
+00:05 +6: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: account change leaves a nested picker on top and blocks recurrence result
+00:05 +7: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: account change before a reminder rule save yields no onChanged
+00:06 +8: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: removing the original plan caller prevents a late onChanged
+00:06 +9: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: a stale surviving rule sheet cannot open its type route or apply a draft
+00:06 +10: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: an open type menu relocalizes without changing its selected enum
+00:07 +11: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: clear end date tooltip relocalizes and preserves other recurrence fields
+00:08 +12: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: removing the recurrence caller turns its late result into null
+00:08 +13: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: reverse dismissal releases picker controllers and locale listeners
+00:08 +14: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart: 320-wide enlarged text keeps the open reminder sheet usable
+00:09 +15: loading /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/recurrence_picker_static_test.dart
+00:10 +15: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/recurrence_picker_static_test.dart: RecurrencePicker exposes manual max occurrence editing
+00:10 +16: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/recurrence_picker_static_test.dart: Todo detail recurrence subtitle uses the complete rule label
+00:10 +17: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/recurrence_picker_static_test.dart: Goal edit hides max occurrences because goal engine is date-based
+00:10 +18: loading /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_plan_editor_test.dart
+00:12 +18: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_plan_editor_test.dart: ReminderPlanEditor 开启时补入默认 rule
+00:14 +19: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_plan_editor_test.dart: ReminderPlanEditor 隐藏提醒方式时仍使用 defaultKind
+00:14 +20: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_plan_editor_test.dart: ReminderPlanEditor 允许闹钟时默认全屏提醒
+00:14 +21: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_plan_editor_test.dart: ReminderPlanEditor can hide type and kind selectors
+00:15 +22: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_plan_editor_test.dart: ReminderPlanEditor exposes notification popup alarm and can turn off
+00:16 +23: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_plan_editor_test.dart: ReminderPlanEditor normalizes legacy email to notification
+00:16 +24: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_plan_editor_test.dart: ReminderPlanEditor selected controls use readable text colors
+00:16 +25: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_plan_editor_test.dart: ReminderPlanEditor narrow hidden header keeps enable visible
+00:17 +26: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_plan_editor_test.dart: ReminderPlanEditor narrow sheet keeps reminder time on one row
+00:17 +27: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_plan_editor_test.dart: nextHalfHourTimeOfDay 使用向后最近半小时点
+00:17 +28: loading /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/recurrence_interval_test.dart
+00:18 +28: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/recurrence_interval_test.dart: RecurrenceRule interval semantics weekly single weekday respects interval
+00:18 +29: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/recurrence_interval_test.dart: RecurrenceRule interval semantics weekly multiple weekdays keeps later day in current active week
+00:18 +30: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/recurrence_interval_test.dart: RecurrenceRule interval semantics date-only endDate includes occurrences on that whole day
+00:18 +31: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/recurrence_interval_test.dart: RecurrenceRule interval semantics weekly recurrence checks endDate before returning next weekday
+00:18 +32: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/recurrence_interval_test.dart: RecurrenceRule interval semantics label includes weekdays, end date and max occurrences
+00:18 +33: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/recurrence_interval_test.dart: RecurrenceRule interval semantics none label stays compact
+00:18 +34: loading /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/reminder_offset_preset_test.dart
+00:19 +34: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/reminder_offset_preset_test.dart: Reminder offset presets cover common before-due reminder templates
+00:19 +35: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/reminder_offset_preset_test.dart: Reminder offset presets relative reminders keep exact minute offsets through JSON
+00:19 +36: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/reminder_offset_preset_test.dart: Reminder offset presets ReminderPlanEditor reuses the shared preset source
+00:20 +37: loading /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/reminder_plan_json_compat_test.dart
+00:21 +37: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/reminder_plan_json_compat_test.dart: ReminderPlan JSON compatibility fromLegacy preserves the legacy reminder mirror
+00:21 +38: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/reminder_plan_json_compat_test.dart: ReminderPlan JSON compatibility ReminderPlan toJson/fromJson roundtrip is stable
+00:21 +39: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/reminder_plan_json_compat_test.dart: ReminderPlan JSON compatibility push rule JSON and copyWith cannot keep dirty fullScreen=true
+00:21 +40: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/reminder_plan_json_compat_test.dart: ReminderPlan JSON compatibility off reminder kind preserves compatibility but disables delivery
+00:21 +41: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/reminder_plan_json_compat_test.dart: ReminderPlan JSON compatibility TodoItem and GoalItem persist reminderPlan together with legacy reminder
+00:21 +42: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/models/reminder_plan_json_compat_test.dart: ReminderPlan JSON compatibility Habit persists reminderPlan and migrates legacy habit reminder
+00:21 +43: loading /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/services/recurrence_engine_pbt_test.dart
+00:22 +43: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/services/recurrence_engine_pbt_test.dart: P8 - weekly frequency bound 1d ≤ next - anchor ≤ 7k d
+00:22 +44: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/services/recurrence_engine_pbt_test.dart: P11 - endDate upper bound next = null ∨ next ≤ endDate
+00:22 +45: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/services/recurrence_engine_pbt_test.dart: P10 - random stable within yearWeek 同 goalId 同 yearWeek 两次调用返回相同日期
+00:22 +46: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/services/recurrence_engine_pbt_test.dart: P9 - skipHolidays 返回的 next 不在节假日上（除非整窗口节假日，则 null）
+00:22 +47: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/services/recurrence_engine_pbt_test.dart: frequency = none 返回 null none 无论 anchor 都返回 null
+00:22 +48: /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/services/recurrence_engine_pbt_test.dart: 目标空开始日期语义 materializeTodayFromRecurring 用创建日期作为有效开始日期并包含当天
+00:22 +49: All tests passed!

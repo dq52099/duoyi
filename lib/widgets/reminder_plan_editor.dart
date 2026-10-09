@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../core/design_tokens.dart';
+import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
+import '../core/reminder_editor_ui_copy.dart';
 import '../models/goal.dart';
+import '../services/account_local_data_cleaner.dart';
 import 'app_time_picker.dart';
 import 'surface_components.dart';
 
 class ReminderPlanEditor extends StatelessWidget {
   final ReminderPlan plan;
   final ValueChanged<ReminderPlan> onChanged;
-  final String title;
+  final String? _customTitle;
   final String? subtitle;
   final bool showHeader;
   final bool allowAlarm;
@@ -26,7 +29,7 @@ class ReminderPlanEditor extends StatelessWidget {
     super.key,
     required this.plan,
     required this.onChanged,
-    this.title = '提醒',
+    String? title,
     this.subtitle,
     this.showHeader = true,
     this.allowAlarm = true,
@@ -38,65 +41,74 @@ class ReminderPlanEditor extends StatelessWidget {
     this.defaultKind = ReminderKind.push,
     this.showTypeSelector = true,
     this.showKindSelector = true,
-  });
+  }) : _customTitle = title;
+
+  String get title => _customTitle ?? ReminderEditorUiCopy.defaultPlanTitle;
 
   @override
   Widget build(BuildContext context) {
-    final rules = plan.rules;
-    final cs = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (showHeader) ...[
-          _ReminderSwitchTile(
-            value: plan.enabled,
-            title: title,
-            subtitle: subtitle ?? reminderPlanSummary(plan),
-            onChanged: _toggleEnabled,
-          ),
-        ] else
-          _ReminderSwitchTile(
-            value: plan.enabled,
-            title: '开启提醒',
-            subtitle: reminderPlanSummary(plan),
-            onChanged: _toggleEnabled,
-          ),
-        if (plan.enabled) ...[
-          if (rules.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: DesignTokens.spaceSm,
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) {
+        final rules = plan.rules;
+        final cs = Theme.of(context).colorScheme;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (showHeader) ...[
+              _ReminderSwitchTile(
+                value: plan.enabled,
+                title: title,
+                subtitle: subtitle ?? reminderPlanSummary(plan),
+                onChanged: _toggleEnabled,
               ),
-              child: Text(
-                '未添加提醒',
-                style: TextStyle(
-                  color: cs.onSurface.withValues(alpha: 0.58),
-                  fontSize: DesignTokens.fontSizeSm,
+            ] else
+              _ReminderSwitchTile(
+                value: plan.enabled,
+                title: ReminderEditorUiCopy.enableReminders,
+                subtitle: reminderPlanSummary(plan),
+                onChanged: _toggleEnabled,
+              ),
+            if (plan.enabled) ...[
+              if (rules.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: DesignTokens.spaceSm,
+                  ),
+                  child: Text(
+                    ReminderEditorUiCopy.noReminders,
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.58),
+                      fontSize: DesignTokens.fontSizeSm,
+                    ),
+                  ),
+                )
+              else
+                ...rules.map(
+                  (rule) => Padding(
+                    padding: const EdgeInsets.only(
+                      bottom: DesignTokens.spaceXs,
+                    ),
+                    child: _ReminderRuleTile(
+                      rule: rule,
+                      onTap: () => _editRule(context, rule),
+                      onDelete: () => _deleteRule(rule.id),
+                    ),
+                  ),
                 ),
-              ),
-            )
-          else
-            ...rules.map(
-              (rule) => Padding(
-                padding: const EdgeInsets.only(bottom: DesignTokens.spaceXs),
-                child: _ReminderRuleTile(
-                  rule: rule,
-                  onTap: () => _editRule(context, rule),
-                  onDelete: () => _deleteRule(rule.id),
+              if (maxRules == null || rules.length < maxRules!)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _editRule(context, null),
+                    icon: const Icon(Icons.add_alarm, size: 18),
+                    label: Text(ReminderEditorUiCopy.addReminder),
+                  ),
                 ),
-              ),
-            ),
-          if (maxRules == null || rules.length < maxRules!)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: () => _editRule(context, null),
-                icon: const Icon(Icons.add_alarm, size: 18),
-                label: const Text('添加提醒'),
-              ),
-            ),
-        ],
-      ],
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -127,6 +139,15 @@ class ReminderPlanEditor extends StatelessWidget {
   }
 
   Future<void> _editRule(BuildContext context, ReminderRule? rule) async {
+    if (!context.mounted) return;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    bool isOriginValid() {
+      return context.mounted &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          );
+    }
+
     final edited = await showAppModalSheet<ReminderRule>(
       context: context,
       builder: (_) => _ReminderRuleSheet(
@@ -139,8 +160,16 @@ class ReminderPlanEditor extends StatelessWidget {
         defaultKind: defaultKind,
         showTypeSelector: showTypeSelector,
         showKindSelector: showKindSelector,
+        accountGeneration: accountGeneration,
+        originValidator: isOriginValid,
       ),
     );
+    if (!context.mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     if (edited == null) return;
     final nextRules = [...plan.rules];
     final index = nextRules.indexWhere((r) => r.id == edited.id);
@@ -159,11 +188,11 @@ class ReminderPlanEditor extends StatelessWidget {
 }
 
 String reminderPlanSummary(ReminderPlan plan) {
-  if (!plan.enabled) return '已关闭';
+  if (!plan.enabled) return ReminderEditorUiCopy.planSummaryDisabled;
   final enabledRules = plan.rules.where((r) => r.enabled).toList();
-  if (enabledRules.isEmpty) return '无启用规则';
+  if (enabledRules.isEmpty) return ReminderEditorUiCopy.planSummaryNoRules;
   if (enabledRules.length == 1) return _ruleSummary(enabledRules.single);
-  return '${enabledRules.length} 条提醒';
+  return ReminderEditorUiCopy.planSummaryCount(enabledRules.length);
 }
 
 class _ReminderSwitchTile extends StatelessWidget {
@@ -283,7 +312,7 @@ class _ReminderRuleTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             trailing: IconButton(
-              tooltip: '删除',
+              tooltip: ReminderEditorUiCopy.delete,
               icon: const Icon(Icons.close, size: 18),
               onPressed: onDelete,
             ),
@@ -304,6 +333,8 @@ class _ReminderRuleSheet extends StatefulWidget {
   final ReminderKind defaultKind;
   final bool showTypeSelector;
   final bool showKindSelector;
+  final int? accountGeneration;
+  final bool Function()? originValidator;
 
   const _ReminderRuleSheet({
     required this.initial,
@@ -315,6 +346,8 @@ class _ReminderRuleSheet extends StatefulWidget {
     required this.defaultKind,
     required this.showTypeSelector,
     required this.showKindSelector,
+    this.accountGeneration,
+    this.originValidator,
   });
 
   @override
@@ -322,6 +355,7 @@ class _ReminderRuleSheet extends StatefulWidget {
 }
 
 class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
+  late int _accountGeneration;
   late bool _enabled;
   late ReminderRuleType _type;
   late ReminderKind _kind;
@@ -332,6 +366,21 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
   late bool _fullScreen;
   late int _snoozeMinutes;
   late int _repeatCount;
+
+  ModalRoute<dynamic>? _ownedRoute;
+  NavigatorState? _ownedNavigator;
+  bool _pendingDismissal = false;
+
+  bool get _isOriginValid {
+    if (!mounted) return false;
+    final customValidator = widget.originValidator;
+    if (customValidator != null && !customValidator()) {
+      return false;
+    }
+    return AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      _accountGeneration,
+    );
+  }
 
   List<ReminderRuleType> get _availableTypes {
     final types = <ReminderRuleType>[
@@ -346,6 +395,12 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
   @override
   void initState() {
     super.initState();
+    _accountGeneration =
+        widget.accountGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    AccountLocalDataCleaner.accountDataGenerationListenable.addListener(
+      _onAccountGenerationChanged,
+    );
     final r = widget.initial;
     _enabled = r?.enabled ?? true;
     _type =
@@ -375,214 +430,76 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return AppModalSheet(
-      title: widget.initial == null ? '添加提醒' : '编辑提醒',
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(onPressed: _save, child: const Text('保存')),
-      ],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: _enabled,
-            title: const Text('启用'),
-            onChanged: (v) => setState(() {
-              _enabled = v;
-              if (v && _kind == ReminderKind.off) {
-                _kind = widget.defaultKind == ReminderKind.off
-                    ? ReminderKind.push
-                    : widget.defaultKind;
-              }
-            }),
-          ),
-          if (widget.showTypeSelector) ...[
-            AppDropdownField<ReminderRuleType>(
-              initialValue: _type,
-              labelText: '提醒类型',
-              prefixIcon: const Icon(Icons.tune, size: 20),
-              items: [
-                for (final type in _availableTypes)
-                  DropdownMenuItem(value: type, child: Text(_typeLabel(type))),
-              ],
-              onChanged: (v) {
-                if (v != null) setState(() => _type = v);
-              },
-            ),
-            const SizedBox(height: DesignTokens.spaceMd),
-          ],
-          _ReminderTimeField(time: _time, onTap: _pickTime),
-          if (_type == ReminderRuleType.relativeToDue) ...[
-            const SizedBox(height: DesignTokens.spaceSm),
-            Text('提前时间', style: _labelStyle(context)),
-            const SizedBox(height: DesignTokens.spaceXs),
-            Wrap(
-              spacing: DesignTokens.spaceXs,
-              runSpacing: DesignTokens.spaceXs,
-              children: ReminderRule.relativeOffsetPresetMinutes.map((minutes) {
-                final offset = minutes.abs();
-                final selected = _offsetMinutes == minutes;
-                return ChoiceChip(
-                  label: Text(_durationLabel(offset)),
-                  selected: selected,
-                  selectedColor: _selectedControlColor(context),
-                  checkmarkColor: _selectedControlTextColor(context),
-                  labelStyle: _selectedChipLabelStyle(context, selected),
-                  onSelected: (_) => setState(() => _offsetMinutes = minutes),
-                );
-              }).toList(),
-            ),
-          ],
-          if (_type == ReminderRuleType.weeklyTime) ...[
-            const SizedBox(height: DesignTokens.spaceSm),
-            Text('每周', style: _labelStyle(context)),
-            const SizedBox(height: DesignTokens.spaceXs),
-            Wrap(
-              spacing: DesignTokens.spaceXs,
-              runSpacing: DesignTokens.spaceXs,
-              children: List.generate(7, (i) {
-                final day = i + 1;
-                final selected = _weekdays.contains(day);
-                return FilterChip(
-                  label: Text(_weekdayNames[i]),
-                  selected: selected,
-                  selectedColor: _selectedControlColor(context),
-                  checkmarkColor: _selectedControlTextColor(context),
-                  labelStyle: _selectedChipLabelStyle(context, selected),
-                  showCheckmark: false,
-                  onSelected: (_) {
-                    final next = {..._weekdays};
-                    if (selected) {
-                      next.remove(day);
-                    } else {
-                      next.add(day);
-                    }
-                    if (next.isEmpty) next.add(day);
-                    setState(() => _weekdays = next.toList()..sort());
-                  },
-                );
-              }),
-            ),
-          ],
-          const SizedBox(height: DesignTokens.spaceMd),
-          if (widget.allowAlarm && widget.showKindSelector) ...[
-            Text('提醒方式', style: _labelStyle(context)),
-            const SizedBox(height: DesignTokens.spaceXs),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SegmentedButton<ReminderKind>(
-                style: _selectedSegmentStyle(context),
-                segments: const [
-                  ButtonSegment(
-                    value: ReminderKind.push,
-                    label: Text('通知'),
-                    icon: Icon(Icons.notifications_outlined),
-                  ),
-                  ButtonSegment(
-                    value: ReminderKind.popup,
-                    label: Text('弹出框'),
-                    icon: Icon(Icons.open_in_new_outlined),
-                  ),
-                  ButtonSegment(
-                    value: ReminderKind.alarm,
-                    label: Text('闹钟'),
-                    icon: Icon(Icons.alarm_outlined),
-                  ),
-                  ButtonSegment(
-                    value: ReminderKind.off,
-                    label: Text('关闭'),
-                    icon: Icon(Icons.notifications_off_outlined),
-                  ),
-                ],
-                selected: {_kind},
-                onSelectionChanged: (s) => setState(() {
-                  _kind = s.first;
-                  _enabled = _kind != ReminderKind.off;
-                }),
-              ),
-            ),
-          ],
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: _vibrate,
-            title: const Text('震动'),
-            onChanged: (v) => setState(() => _vibrate = v),
-          ),
-          if (_kind == ReminderKind.alarm)
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _fullScreen,
-              title: const Text('全屏提醒'),
-              subtitle: const Text('仅闹钟方式生效'),
-              onChanged: (v) => setState(() => _fullScreen = v),
-            ),
-          if (widget.allowSnooze) ...[
-            const SizedBox(height: DesignTokens.spaceXs),
-            Text('稍后提醒', style: _labelStyle(context)),
-            const SizedBox(height: DesignTokens.spaceXs),
-            Wrap(
-              spacing: DesignTokens.spaceXs,
-              runSpacing: DesignTokens.spaceXs,
-              children:
-                  const [
-                    (0, '关闭'),
-                    (5, '5 分钟'),
-                    (10, '10 分钟'),
-                    (15, '15 分钟'),
-                    (30, '30 分钟'),
-                  ].map((preset) {
-                    final selected = _snoozeMinutes == preset.$1;
-                    return ChoiceChip(
-                      label: Text(preset.$2),
-                      selected: selected,
-                      selectedColor: _selectedControlColor(context),
-                      checkmarkColor: _selectedControlTextColor(context),
-                      labelStyle: _selectedChipLabelStyle(context, selected),
-                      onSelected: (_) =>
-                          setState(() => _snoozeMinutes = preset.$1),
-                    );
-                  }).toList(),
-            ),
-            const SizedBox(height: DesignTokens.spaceSm),
-            Text('重复次数', style: _labelStyle(context)),
-            const SizedBox(height: DesignTokens.spaceXs),
-            Wrap(
-              spacing: DesignTokens.spaceXs,
-              children: [0, 1, 2, 3].map((count) {
-                final selected = _repeatCount == count;
-                return ChoiceChip(
-                  label: Text(count == 0 ? '不重复' : '$count 次'),
-                  selected: selected,
-                  selectedColor: _selectedControlColor(context),
-                  checkmarkColor: _selectedControlTextColor(context),
-                  labelStyle: _selectedChipLabelStyle(context, selected),
-                  onSelected: (_) => setState(() => _repeatCount = count),
-                );
-              }).toList(),
-            ),
-          ],
-        ],
-      ),
-    );
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextRoute = ModalRoute.of(context);
+    if (_ownedRoute != nextRoute) {
+      _ownedRoute?.secondaryAnimation?.removeStatusListener(
+        _onSecondaryAnimationStatusChanged,
+      );
+      _ownedRoute = nextRoute;
+      _ownedRoute?.secondaryAnimation?.addStatusListener(
+        _onSecondaryAnimationStatusChanged,
+      );
+    }
+    _ownedNavigator ??= Navigator.maybeOf(context);
   }
 
-  Future<void> _pickTime() async {
-    final picked = await AppTimePicker.show(
-      context,
-      initialTime: _time,
-      title: '提醒时间',
-      subtitle: '上下滚动选择，或用快捷按钮调整半小时',
-      minuteStep: 5,
+  void _onSecondaryAnimationStatusChanged(AnimationStatus status) {
+    if (!mounted) return;
+    if (status == AnimationStatus.dismissed && _pendingDismissal) {
+      _safeDismissOwnedRoute();
+    }
+  }
+
+  void _onAccountGenerationChanged() {
+    if (!mounted) return;
+    if (_isOriginValid) return;
+    _handleStaleAccount();
+  }
+
+  void _handleStaleAccount() {
+    if (!mounted) return;
+    _pendingDismissal = true;
+    _safeDismissOwnedRoute();
+  }
+
+  void _safeDismissOwnedRoute([ReminderRule? result]) {
+    if (!mounted) return;
+    final route = _ownedRoute;
+    final navigator = _ownedNavigator;
+    if (route == null || navigator == null || !route.isActive) return;
+
+    if (route.isCurrent) {
+      _pendingDismissal = false;
+      navigator.pop(result);
+    } else {
+      _pendingDismissal = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ownedRoute?.secondaryAnimation?.removeStatusListener(
+      _onSecondaryAnimationStatusChanged,
     );
-    if (picked != null) setState(() => _time = picked);
+    AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
+      _onAccountGenerationChanged,
+    );
+    super.dispose();
+  }
+
+  void _cancel() {
+    if (!mounted) return;
+    _safeDismissOwnedRoute();
   }
 
   void _save() {
+    if (!mounted) return;
+    if (!_isOriginValid) {
+      _safeDismissOwnedRoute();
+      return;
+    }
     final type = _type;
     final kind = widget.showKindSelector && widget.allowAlarm
         ? _kind
@@ -605,7 +522,328 @@ class _ReminderRuleSheetState extends State<_ReminderRuleSheet> {
       snoozeMinutes: _snoozeMinutes,
       repeatCount: _repeatCount,
     );
-    Navigator.pop(context, rule);
+    _safeDismissOwnedRoute(rule);
+  }
+
+  Future<void> _pickTime() async {
+    if (!mounted) return;
+    if (!_isOriginValid) {
+      _safeDismissOwnedRoute();
+      return;
+    }
+    final picked = await AppTimePicker.show(
+      context,
+      initialTime: _time,
+      titleKey: ReminderEditorUiCopy.timePickerTitleKey,
+      subtitleKey: ReminderEditorUiCopy.timePickerSubtitleKey,
+      minuteStep: 5,
+    );
+    if (!mounted) return;
+    if (!_isOriginValid || _pendingDismissal) {
+      _safeDismissOwnedRoute();
+      return;
+    }
+    if (picked != null) setState(() => _time = picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) {
+        return AppModalSheet(
+          title: widget.initial == null
+              ? ReminderEditorUiCopy.addReminder
+              : ReminderEditorUiCopy.editReminder,
+          actions: [
+            TextButton(
+              onPressed: _cancel,
+              child: Text(ReminderEditorUiCopy.cancel),
+            ),
+            FilledButton(
+              onPressed: _save,
+              child: Text(ReminderEditorUiCopy.save),
+            ),
+          ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _enabled,
+                title: Text(ReminderEditorUiCopy.enabled),
+                onChanged: (v) {
+                  if (!mounted) return;
+                  if (!_isOriginValid) {
+                    _safeDismissOwnedRoute();
+                    return;
+                  }
+                  setState(() {
+                    _enabled = v;
+                    if (v && _kind == ReminderKind.off) {
+                      _kind = widget.defaultKind == ReminderKind.off
+                          ? ReminderKind.push
+                          : widget.defaultKind;
+                    }
+                  });
+                },
+              ),
+              if (widget.showTypeSelector) ...[
+                AppDropdownField<ReminderRuleType>(
+                  initialValue: _type,
+                  labelText: ReminderEditorUiCopy.reminderType,
+                  isInteractionAllowed: () {
+                    if (!mounted) return false;
+                    if (!_isOriginValid) {
+                      _safeDismissOwnedRoute();
+                      return false;
+                    }
+                    return true;
+                  },
+                  prefixIcon: const Icon(Icons.tune, size: 20),
+                  items: [
+                    for (final type in _availableTypes)
+                      DropdownMenuItem(
+                        value: type,
+                        child: ValueListenableBuilder<AppLocale>(
+                          valueListenable: I18n.localeListenable,
+                          builder: (context, _, _) => Text(_typeLabel(type)),
+                        ),
+                      ),
+                  ],
+                  onChanged: (v) {
+                    if (!mounted) return;
+                    if (!_isOriginValid) {
+                      _safeDismissOwnedRoute();
+                      return;
+                    }
+                    if (v != null) setState(() => _type = v);
+                  },
+                ),
+                const SizedBox(height: DesignTokens.spaceMd),
+              ],
+              _ReminderTimeField(time: _time, onTap: _pickTime),
+              if (_type == ReminderRuleType.relativeToDue) ...[
+                const SizedBox(height: DesignTokens.spaceSm),
+                Text(
+                  ReminderEditorUiCopy.advanceTime,
+                  style: _labelStyle(context),
+                ),
+                const SizedBox(height: DesignTokens.spaceXs),
+                Wrap(
+                  spacing: DesignTokens.spaceXs,
+                  runSpacing: DesignTokens.spaceXs,
+                  key: const ValueKey('reminder_relative_offset_presets'),
+                  children: ReminderRule.relativeOffsetPresetMinutes.map((
+                    minutes,
+                  ) {
+                    final offset = minutes.abs();
+                    final selected = _offsetMinutes == minutes;
+                    return ChoiceChip(
+                      label: Text(_durationLabel(offset)),
+                      selected: selected,
+                      selectedColor: _selectedControlColor(context),
+                      checkmarkColor: _selectedControlTextColor(context),
+                      labelStyle: _selectedChipLabelStyle(context, selected),
+                      onSelected: (_) {
+                        if (!mounted) return;
+                        if (!_isOriginValid) {
+                          _safeDismissOwnedRoute();
+                          return;
+                        }
+                        setState(() => _offsetMinutes = minutes);
+                      },
+                    );
+                  }).toList(),
+                ),
+              ],
+              if (_type == ReminderRuleType.weeklyTime) ...[
+                const SizedBox(height: DesignTokens.spaceSm),
+                Text(ReminderEditorUiCopy.weekly, style: _labelStyle(context)),
+                const SizedBox(height: DesignTokens.spaceXs),
+                Wrap(
+                  spacing: DesignTokens.spaceXs,
+                  runSpacing: DesignTokens.spaceXs,
+                  children: List.generate(7, (i) {
+                    final day = i + 1;
+                    final selected = _weekdays.contains(day);
+                    return FilterChip(
+                      label: Text(_weekdayNames[i]),
+                      selected: selected,
+                      selectedColor: _selectedControlColor(context),
+                      checkmarkColor: _selectedControlTextColor(context),
+                      labelStyle: _selectedChipLabelStyle(context, selected),
+                      showCheckmark: false,
+                      onSelected: (_) {
+                        if (!mounted) return;
+                        if (!_isOriginValid) {
+                          _safeDismissOwnedRoute();
+                          return;
+                        }
+                        final next = {..._weekdays};
+                        if (selected) {
+                          next.remove(day);
+                        } else {
+                          next.add(day);
+                        }
+                        if (next.isEmpty) next.add(day);
+                        setState(() => _weekdays = next.toList()..sort());
+                      },
+                    );
+                  }),
+                ),
+              ],
+              const SizedBox(height: DesignTokens.spaceMd),
+              if (widget.allowAlarm && widget.showKindSelector) ...[
+                Text(
+                  ReminderEditorUiCopy.reminderMethod,
+                  style: _labelStyle(context),
+                ),
+                const SizedBox(height: DesignTokens.spaceXs),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SegmentedButton<ReminderKind>(
+                    style: _selectedSegmentStyle(context),
+                    segments: [
+                      ButtonSegment(
+                        value: ReminderKind.push,
+                        label: Text(
+                          ReminderEditorUiCopy.ruleKindLabelByName('push'),
+                        ),
+                        icon: const Icon(Icons.notifications_outlined),
+                      ),
+                      ButtonSegment(
+                        value: ReminderKind.popup,
+                        label: Text(
+                          ReminderEditorUiCopy.ruleKindLabelByName('popup'),
+                        ),
+                        icon: const Icon(Icons.open_in_new_outlined),
+                      ),
+                      ButtonSegment(
+                        value: ReminderKind.alarm,
+                        label: Text(
+                          ReminderEditorUiCopy.ruleKindLabelByName('alarm'),
+                        ),
+                        icon: const Icon(Icons.alarm_outlined),
+                      ),
+                      ButtonSegment(
+                        value: ReminderKind.off,
+                        label: Text(
+                          ReminderEditorUiCopy.ruleKindLabelByName('off'),
+                        ),
+                        icon: const Icon(Icons.notifications_off_outlined),
+                      ),
+                    ],
+                    selected: {_kind},
+                    onSelectionChanged: (s) {
+                      if (!mounted) return;
+                      if (!_isOriginValid) {
+                        _safeDismissOwnedRoute();
+                        return;
+                      }
+                      setState(() {
+                        _kind = s.first;
+                        _enabled = _kind != ReminderKind.off;
+                      });
+                    },
+                  ),
+                ),
+              ],
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _vibrate,
+                title: Text(ReminderEditorUiCopy.vibrate),
+                onChanged: (v) {
+                  if (!mounted) return;
+                  if (!_isOriginValid) {
+                    _safeDismissOwnedRoute();
+                    return;
+                  }
+                  setState(() => _vibrate = v);
+                },
+              ),
+              if (_kind == ReminderKind.alarm)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _fullScreen,
+                  title: Text(ReminderEditorUiCopy.fullScreenReminder),
+                  subtitle: Text(
+                    ReminderEditorUiCopy.fullScreenReminderSubtitle,
+                  ),
+                  onChanged: (v) {
+                    if (!mounted) return;
+                    if (!_isOriginValid) {
+                      _safeDismissOwnedRoute();
+                      return;
+                    }
+                    setState(() => _fullScreen = v);
+                  },
+                ),
+              if (widget.allowSnooze) ...[
+                const SizedBox(height: DesignTokens.spaceXs),
+                Text(ReminderEditorUiCopy.snooze, style: _labelStyle(context)),
+                const SizedBox(height: DesignTokens.spaceXs),
+                Wrap(
+                  spacing: DesignTokens.spaceXs,
+                  runSpacing: DesignTokens.spaceXs,
+                  key: const ValueKey('reminder_snooze_presets'),
+                  children: [0, 5, 10, 15, 30].map((preset) {
+                    final selected = _snoozeMinutes == preset;
+                    return ChoiceChip(
+                      label: Text(
+                        ReminderEditorUiCopy.snoozePresetLabel(preset),
+                      ),
+                      selected: selected,
+                      selectedColor: _selectedControlColor(context),
+                      checkmarkColor: _selectedControlTextColor(context),
+                      labelStyle: _selectedChipLabelStyle(context, selected),
+                      onSelected: (_) {
+                        if (!mounted) return;
+                        if (!_isOriginValid) {
+                          _safeDismissOwnedRoute();
+                          return;
+                        }
+                        setState(() => _snoozeMinutes = preset);
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: DesignTokens.spaceSm),
+                Text(
+                  ReminderEditorUiCopy.repeatCount,
+                  style: _labelStyle(context),
+                ),
+                const SizedBox(height: DesignTokens.spaceXs),
+                Wrap(
+                  spacing: DesignTokens.spaceXs,
+                  key: const ValueKey('reminder_repeat_count_presets'),
+                  children: [0, 1, 2, 3].map((count) {
+                    final selected = _repeatCount == count;
+                    return ChoiceChip(
+                      label: Text(
+                        ReminderEditorUiCopy.repeatCountPresetLabel(count),
+                      ),
+                      selected: selected,
+                      selectedColor: _selectedControlColor(context),
+                      checkmarkColor: _selectedControlTextColor(context),
+                      labelStyle: _selectedChipLabelStyle(context, selected),
+                      onSelected: (_) {
+                        if (!mounted) return;
+                        if (!_isOriginValid) {
+                          _safeDismissOwnedRoute();
+                          return;
+                        }
+                        setState(() => _repeatCount = count);
+                      },
+                    );
+                  }).toList(),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -626,7 +864,9 @@ class _ReminderTimeField extends StatelessWidget {
     return Semantics(
       key: const ValueKey('reminder_time_compact_field'),
       button: true,
-      label: '提醒时间 ${_formatTimeOfDay(time)}',
+      label: ReminderEditorUiCopy.reminderTimeCompactSemantics(
+        _formatTimeOfDay(time),
+      ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -646,7 +886,7 @@ class _ReminderTimeField extends StatelessWidget {
                   const SizedBox(width: DesignTokens.spaceSm),
                   Expanded(
                     child: Text(
-                      '提醒时间',
+                      ReminderEditorUiCopy.reminderTime,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium,
@@ -775,43 +1015,39 @@ IconData _ruleIcon(ReminderRule rule) {
 }
 
 String _ruleTitle(ReminderRule rule) {
-  final mode = switch (normalizeUserSelectableReminderKind(rule.kind)) {
-    ReminderKind.alarm => '闹钟',
-    ReminderKind.popup => '弹出框',
-    ReminderKind.off => '关闭',
-    ReminderKind.push => '通知',
-    ReminderKind.email => '通知',
-  };
-  return '${_typeLabel(rule.type)} · $mode';
+  final mode = ReminderEditorUiCopy.ruleKindLabelByName(
+    normalizeUserSelectableReminderKind(rule.kind).name,
+  );
+  return ReminderEditorUiCopy.ruleTitle(_typeLabel(rule.type), mode);
 }
 
 String _ruleSummary(ReminderRule rule) {
   final pieces = <String>[_formatHm(rule.hour, rule.minute)];
   if (rule.type == ReminderRuleType.relativeToDue) {
-    pieces.add('提前 ${_durationLabel((rule.offsetMinutes ?? 0).abs())}');
+    pieces.add(
+      ReminderEditorUiCopy.advanceDurationSummary(
+        _durationLabel((rule.offsetMinutes ?? 0).abs()),
+      ),
+    );
   }
   if (rule.type == ReminderRuleType.weeklyTime && rule.weekdays.isNotEmpty) {
     pieces.add(rule.weekdays.map(_weekdayLabel).join('/'));
   }
   if (rule.snoozeMinutes > 0) {
-    pieces.add('稍后 ${rule.snoozeMinutes} 分钟');
+    pieces.add(ReminderEditorUiCopy.snoozeSummary(rule.snoozeMinutes));
   }
   if (rule.repeatCount > 0) {
-    pieces.add('重复 ${rule.repeatCount} 次');
+    pieces.add(ReminderEditorUiCopy.repeatCountSummary(rule.repeatCount));
   }
-  if (!rule.enabled) pieces.add('已停用');
+  if (!rule.enabled) pieces.add(ReminderEditorUiCopy.disabledSummary);
   return pieces.join(' · ');
 }
 
-String _typeLabel(ReminderRuleType type) => switch (type) {
-  ReminderRuleType.absolute => '到期提醒',
-  ReminderRuleType.relativeToDue => '提前提醒',
-  ReminderRuleType.dailyTime => '每日提醒',
-  ReminderRuleType.weeklyTime => '每周提醒',
-};
+String _typeLabel(ReminderRuleType type) =>
+    ReminderEditorUiCopy.ruleTypeLabelByName(type.name);
 
 String _formatHm(int? hour, int? minute) {
-  if (hour == null || minute == null) return '未设置时间';
+  if (hour == null || minute == null) return ReminderEditorUiCopy.timeNotSet;
   return I18nDateFormat.timeOfDay(hour: hour, minute: minute);
 }
 
@@ -827,17 +1063,9 @@ TimeOfDay nextHalfHourTimeOfDay([DateTime? from]) {
   return TimeOfDay(hour: (now.hour + 1) % 24, minute: 0);
 }
 
-String _durationLabel(int minutes) {
-  if (minutes >= 1440 && minutes % 1440 == 0) {
-    return '${minutes ~/ 1440} 天';
-  }
-  if (minutes >= 60 && minutes % 60 == 0) return '${minutes ~/ 60} 小时';
-  return '$minutes 分钟';
-}
+String _durationLabel(int minutes) =>
+    ReminderEditorUiCopy.durationLabel(minutes);
 
-String _weekdayLabel(int day) {
-  if (day < 1 || day > 7) return '周?';
-  return '周${_weekdayNames[day - 1]}';
-}
+String _weekdayLabel(int day) => ReminderEditorUiCopy.weekdayLabel(day);
 
-const _weekdayNames = <String>['一', '二', '三', '四', '五', '六', '日'];
+List<String> get _weekdayNames => ReminderEditorUiCopy.weekdayNamesShort;

@@ -1,0 +1,331 @@
+{
+  "started_utc": "2026-10-09T06:59:59.972641+00:00",
+  "evidence_dir": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-legacy-regression-oct9",
+  "flutter": "/home/ubuntu/flutter/bin/flutter",
+  "execution_order": [
+    "calendar",
+    "reminder"
+  ],
+  "notes": [
+    "Commands ran sequentially, Calendar before Reminder, with no retry.",
+    "TMPDIR, TMP, and TEMP each pointed to the named private runtime directory for that worktree.",
+    "No production source or test fixture files were edited by this runner.",
+    "Raw stdout and stderr were combined byte-for-byte into the corresponding command log."
+  ],
+  "worktrees": {
+    "calendar": {
+      "cwd": "/home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009",
+      "temp_dir": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-legacy-regression-oct9/runtime/calendar",
+      "test_fixtures": [
+        "test/screens/calendar_inline_time_entry_static_test.dart",
+        "test/screens/calendar_project_detail_static_test.dart",
+        "test/screens/calendar_project_filter_test.dart",
+        "test/screens/calendar_year_view_test.dart",
+        "test/screens/calendar_three_day_static_test.dart",
+        "test/widgets/surface_components_layout_test.dart",
+        "test/widgets/surface_secondary_control_static_test.dart"
+      ],
+      "additional_frozen_fixtures": [
+        "test/screens/calendar_content_locale_state_test.dart"
+      ],
+      "production_and_build_inputs": [
+        "lib/core/calendar_ui_copy.dart",
+        "lib/core/i18n.dart",
+        "lib/screens/calendar_screen.dart",
+        "lib/widgets/surface_components.dart",
+        "lib/services/account_local_data_cleaner.dart",
+        "lib/widgets/app_date_picker.dart",
+        "lib/widgets/app_time_picker.dart",
+        "pubspec.yaml",
+        "pubspec.lock"
+      ],
+      "hash_paths": [
+        "lib/core/calendar_ui_copy.dart",
+        "lib/core/i18n.dart",
+        "lib/screens/calendar_screen.dart",
+        "lib/widgets/surface_components.dart",
+        "lib/services/account_local_data_cleaner.dart",
+        "lib/widgets/app_date_picker.dart",
+        "lib/widgets/app_time_picker.dart",
+        "pubspec.yaml",
+        "pubspec.lock",
+        "test/screens/calendar_inline_time_entry_static_test.dart",
+        "test/screens/calendar_project_detail_static_test.dart",
+        "test/screens/calendar_project_filter_test.dart",
+        "test/screens/calendar_year_view_test.dart",
+        "test/screens/calendar_three_day_static_test.dart",
+        "test/widgets/surface_components_layout_test.dart",
+        "test/widgets/surface_secondary_control_static_test.dart",
+        "test/screens/calendar_content_locale_state_test.dart"
+      ],
+      "sha256_before": {
+        "lib/core/calendar_ui_copy.dart": "82276c4c43f1afd470919cccfd3e11baf64225d4efd25b3332b75982def31029",
+        "lib/core/i18n.dart": "0f92b6dc9222a836508aefa15e47dc17edaf3193498fc3e256f395fcf4fffd3f",
+        "lib/screens/calendar_screen.dart": "bc35b8ad9f03889144332ef811f3c345f2f8d74a3fac697e8a82b5d3a6c1a244",
+        "lib/widgets/surface_components.dart": "9ea733e62913e0f818f8c7c9d7e54bb5d99de3b053ec2973bd800ac4aec2c591",
+        "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+        "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+        "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+        "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+        "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413",
+        "test/screens/calendar_inline_time_entry_static_test.dart": "6e82091af9a5a38500b2b5d887412abbb69a3e0b945ba65366bd492e4705181e",
+        "test/screens/calendar_project_detail_static_test.dart": "f93385dca88fb39b2503a08e0b4790df06a37ba55e0751057f8e45209d0ffc3b",
+        "test/screens/calendar_project_filter_test.dart": "c581aff8a4134560ce335ac31bdd1bf20d9066e1dfaaaf1222487f7de58b8780",
+        "test/screens/calendar_year_view_test.dart": "6d440efde04813fedf233fd620ea6a0ac45841060ee34c9c4b59710bb50198b4",
+        "test/screens/calendar_three_day_static_test.dart": "8f88d6163410d4eb2ec7e97b1541e09adb17c4203d8b9ee8e33313be850f80b7",
+        "test/widgets/surface_components_layout_test.dart": "2337a06610c077445462045a39692ba932273cbaebd9bf9e75a627c1df57122f",
+        "test/widgets/surface_secondary_control_static_test.dart": "d932bff20be1883f836e7b8b6302bf4df9205731b565b83dab840bc67d7dba6c",
+        "test/screens/calendar_content_locale_state_test.dart": "4a5e219c6ffa0a031c574ac1d242e8b0451988ac76aa6b3bd830a105f9492ea1"
+      },
+      "git_status_before": {
+        "exit_code": 0,
+        "text": [
+          " M lib/core/i18n.dart",
+          " M lib/screens/calendar_screen.dart",
+          " M lib/widgets/surface_components.dart",
+          "?? lib/core/calendar_ui_copy.dart",
+          "?? test/screens/calendar_content_locale_state_test.dart"
+        ]
+      },
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "test/screens/calendar_inline_time_entry_static_test.dart",
+        "test/screens/calendar_project_detail_static_test.dart",
+        "test/screens/calendar_project_filter_test.dart",
+        "test/screens/calendar_year_view_test.dart",
+        "test/screens/calendar_three_day_static_test.dart",
+        "test/widgets/surface_components_layout_test.dart",
+        "test/widgets/surface_secondary_control_static_test.dart"
+      ],
+      "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-legacy-regression-oct9/calendar-legacy-test.log",
+      "started_utc": "2026-10-09T07:00:00.032781+00:00",
+      "finished_utc": "2026-10-09T07:00:45.392866+00:00",
+      "duration_seconds": 45.36,
+      "exit_code": 1,
+      "log_sha256": "c93d5ca76a76b21b7df3f6fa657347e7257063f51afaf4ff11bf33cd074af49f",
+      "log_bytes": 702910,
+      "test_case_count": 33,
+      "passed_case_count": 28,
+      "failed_case_count": 5,
+      "summary_line": "+28 -5: Some tests failed.",
+      "failure_details": [
+        {
+          "test": "calendar quick time entry captures a real time segment",
+          "fixture_location": "test/screens/calendar_inline_time_entry_static_test.dart:9",
+          "expected": "source contains title: const Text('记录一段时间')",
+          "actual": "calendar_screen.dart source has moved the user-facing string behind calendar_ui_copy.dart; raw log preserves the matcher output"
+        },
+        {
+          "test": "calendar project detail is a separate project action",
+          "fixture_location": "test/screens/calendar_project_detail_static_test.dart:9",
+          "expected": "source contains label: const Text('项目详情')",
+          "actual": "literal is now supplied through calendar_ui_copy.dart; raw log preserves the matcher output"
+        },
+        {
+          "test": "calendar detail area and paging are widened for dense views",
+          "fixture_location": "test/screens/calendar_project_detail_static_test.dart:98",
+          "expected": ".clamp(360.0, 680.0) in calendar_screen.dart",
+          "actual": "source text matcher did not find the old expression; raw log preserves the inspected source"
+        },
+        {
+          "test": "calendar exposes shared workspace filters",
+          "fixture_location": "test/screens/calendar_project_detail_static_test.dart:142",
+          "expected": "source contains label: const Text('全部空间')",
+          "actual": "workspace copy is supplied through calendar_ui_copy.dart; raw log preserves the matcher output"
+        },
+        {
+          "test": "日历提供一等三日视图入口和导航",
+          "fixture_location": "test/screens/calendar_three_day_static_test.dart:11",
+          "expected": "source contains AppSecondaryMenuText('三日视图')",
+          "actual": "display text is supplied through calendar_ui_copy.dart; raw log preserves the matcher output"
+        }
+      ],
+      "sha256_after": {
+        "lib/core/calendar_ui_copy.dart": "82276c4c43f1afd470919cccfd3e11baf64225d4efd25b3332b75982def31029",
+        "lib/core/i18n.dart": "0f92b6dc9222a836508aefa15e47dc17edaf3193498fc3e256f395fcf4fffd3f",
+        "lib/screens/calendar_screen.dart": "bc35b8ad9f03889144332ef811f3c345f2f8d74a3fac697e8a82b5d3a6c1a244",
+        "lib/widgets/surface_components.dart": "9ea733e62913e0f818f8c7c9d7e54bb5d99de3b053ec2973bd800ac4aec2c591",
+        "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+        "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+        "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+        "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+        "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413",
+        "test/screens/calendar_inline_time_entry_static_test.dart": "6e82091af9a5a38500b2b5d887412abbb69a3e0b945ba65366bd492e4705181e",
+        "test/screens/calendar_project_detail_static_test.dart": "f93385dca88fb39b2503a08e0b4790df06a37ba55e0751057f8e45209d0ffc3b",
+        "test/screens/calendar_project_filter_test.dart": "c581aff8a4134560ce335ac31bdd1bf20d9066e1dfaaaf1222487f7de58b8780",
+        "test/screens/calendar_year_view_test.dart": "6d440efde04813fedf233fd620ea6a0ac45841060ee34c9c4b59710bb50198b4",
+        "test/screens/calendar_three_day_static_test.dart": "8f88d6163410d4eb2ec7e97b1541e09adb17c4203d8b9ee8e33313be850f80b7",
+        "test/widgets/surface_components_layout_test.dart": "2337a06610c077445462045a39692ba932273cbaebd9bf9e75a627c1df57122f",
+        "test/widgets/surface_secondary_control_static_test.dart": "d932bff20be1883f836e7b8b6302bf4df9205731b565b83dab840bc67d7dba6c",
+        "test/screens/calendar_content_locale_state_test.dart": "4a5e219c6ffa0a031c574ac1d242e8b0451988ac76aa6b3bd830a105f9492ea1"
+      },
+      "source_and_fixture_unchanged": true,
+      "git_status_after": {
+        "exit_code": 0,
+        "text": [
+          " M lib/core/i18n.dart",
+          " M lib/screens/calendar_screen.dart",
+          " M lib/widgets/surface_components.dart",
+          "?? lib/core/calendar_ui_copy.dart",
+          "?? test/screens/calendar_content_locale_state_test.dart"
+        ]
+      },
+      "git_status_unchanged": true
+    },
+    "reminder": {
+      "cwd": "/home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009",
+      "temp_dir": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-legacy-regression-oct9/runtime/reminder",
+      "test_fixtures": [
+        "test/widgets/recurrence_picker_static_test.dart",
+        "test/widgets/reminder_plan_editor_test.dart",
+        "test/models/recurrence_interval_test.dart",
+        "test/models/reminder_offset_preset_test.dart",
+        "test/models/reminder_plan_json_compat_test.dart",
+        "test/services/recurrence_engine_pbt_test.dart"
+      ],
+      "additional_frozen_fixtures": [
+        "test/widgets/reminder_editor_locale_state_test.dart"
+      ],
+      "production_and_build_inputs": [
+        "lib/core/reminder_editor_ui_copy.dart",
+        "lib/core/i18n.dart",
+        "lib/core/i18n_date_format.dart",
+        "lib/models/recurrence.dart",
+        "lib/widgets/recurrence_picker.dart",
+        "lib/widgets/reminder_plan_editor.dart",
+        "lib/widgets/surface_components.dart",
+        "lib/services/account_local_data_cleaner.dart",
+        "lib/widgets/app_date_picker.dart",
+        "lib/widgets/app_time_picker.dart",
+        "pubspec.yaml",
+        "pubspec.lock"
+      ],
+      "hash_paths": [
+        "lib/core/reminder_editor_ui_copy.dart",
+        "lib/core/i18n.dart",
+        "lib/core/i18n_date_format.dart",
+        "lib/models/recurrence.dart",
+        "lib/widgets/recurrence_picker.dart",
+        "lib/widgets/reminder_plan_editor.dart",
+        "lib/widgets/surface_components.dart",
+        "lib/services/account_local_data_cleaner.dart",
+        "lib/widgets/app_date_picker.dart",
+        "lib/widgets/app_time_picker.dart",
+        "pubspec.yaml",
+        "pubspec.lock",
+        "test/widgets/recurrence_picker_static_test.dart",
+        "test/widgets/reminder_plan_editor_test.dart",
+        "test/models/recurrence_interval_test.dart",
+        "test/models/reminder_offset_preset_test.dart",
+        "test/models/reminder_plan_json_compat_test.dart",
+        "test/services/recurrence_engine_pbt_test.dart",
+        "test/widgets/reminder_editor_locale_state_test.dart"
+      ],
+      "sha256_before": {
+        "lib/core/reminder_editor_ui_copy.dart": "a2168543f919e739e6f729f08f095072ab319ff4de1690e4513da106ab5cf42f",
+        "lib/core/i18n.dart": "df7a2f149409a063077f53f7f60d661b53d7623fd0e0d7970e33a1c084c301a9",
+        "lib/core/i18n_date_format.dart": "b92bbe21b07751d8bb21bab9a3abbe24407efa4ec35b00b8dc654b33d5bfd9b3",
+        "lib/models/recurrence.dart": "f952bb3a8e9f2219000ee7ca9f690c63f6aa26ce7ea7e1a5def9b7dac48456f7",
+        "lib/widgets/recurrence_picker.dart": "036b8dba3709816c101f860d1f3aabc9cc4833b1c503db8ce5b536d1fcec5418",
+        "lib/widgets/reminder_plan_editor.dart": "37d90d6fca3de70289bb8715dbef6cf549ced5c9c678747d17346e184a21ee3b",
+        "lib/widgets/surface_components.dart": "9ea733e62913e0f818f8c7c9d7e54bb5d99de3b053ec2973bd800ac4aec2c591",
+        "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+        "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+        "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+        "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+        "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413",
+        "test/widgets/recurrence_picker_static_test.dart": "13ee3489a70a45ae5ae83044e6a47762d88435f9836d228ef6e70037066903f7",
+        "test/widgets/reminder_plan_editor_test.dart": "8faf5ae8f2a4f27527dac740b17c79228d8b3785c70df266e9ad7f67355bb1c5",
+        "test/models/recurrence_interval_test.dart": "7f2e8aae5225a17255d14467e3da3c647ba5ecf4c7e2ec3cca78168c62c78844",
+        "test/models/reminder_offset_preset_test.dart": "a0e5f8e851006f1e9b6c7d906e52d60400d50ac90e8dd052d450857a15b71edd",
+        "test/models/reminder_plan_json_compat_test.dart": "550638b6d45fb0c39396e810423e35e8b1d125df03a4e2df70dfb217204075ed",
+        "test/services/recurrence_engine_pbt_test.dart": "b462836dd59b379f4b6fa82514ee0d98f6c2919b7f199f18f3e4c15a13d9c698",
+        "test/widgets/reminder_editor_locale_state_test.dart": "fe6ca3eeb6a1897738b9b1620442a3b8f844b47c4cb6e513f5b22c6df153b964"
+      },
+      "git_status_before": {
+        "exit_code": 0,
+        "text": [
+          " M lib/models/recurrence.dart",
+          " M lib/widgets/recurrence_picker.dart",
+          " M lib/widgets/reminder_plan_editor.dart",
+          " M lib/widgets/surface_components.dart",
+          "?? lib/core/reminder_editor_ui_copy.dart",
+          "?? test/widgets/reminder_editor_locale_state_test.dart"
+        ]
+      },
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "test/widgets/recurrence_picker_static_test.dart",
+        "test/widgets/reminder_plan_editor_test.dart",
+        "test/models/recurrence_interval_test.dart",
+        "test/models/reminder_offset_preset_test.dart",
+        "test/models/reminder_plan_json_compat_test.dart",
+        "test/services/recurrence_engine_pbt_test.dart"
+      ],
+      "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-legacy-regression-oct9/reminder-legacy-test.log",
+      "started_utc": "2026-10-09T07:00:45.404677+00:00",
+      "finished_utc": "2026-10-09T07:01:14.515958+00:00",
+      "duration_seconds": 29.111,
+      "exit_code": 1,
+      "log_sha256": "e65944fe347793b7323616a8e33ebb4d3aba600cdf0da510074035a457517ed2",
+      "log_bytes": 36203,
+      "test_case_count": 34,
+      "passed_case_count": 32,
+      "failed_case_count": 2,
+      "summary_line": "+32 -2: Some tests failed.",
+      "failure_details": [
+        {
+          "test": "RecurrencePicker exposes manual max occurrence editing",
+          "fixture_location": "test/widgets/recurrence_picker_static_test.dart:23",
+          "expected": "source contains '每周哪几天'",
+          "actual": "picker imports reminder_editor_ui_copy.dart, where the copy is now supplied; raw log preserves the matcher output"
+        },
+        {
+          "test": "RecurrenceRule interval semantics label includes weekdays, end date and max occurrences",
+          "fixture_location": "test/models/recurrence_interval_test.dart:61",
+          "expected": "每 2 周 · 一/三 · 至 2026-05-20 · 共 10 次",
+          "actual": "每 2 周 · 一/三 · 至 2026年5月20日 · 共 10 次"
+        }
+      ],
+      "sha256_after": {
+        "lib/core/reminder_editor_ui_copy.dart": "a2168543f919e739e6f729f08f095072ab319ff4de1690e4513da106ab5cf42f",
+        "lib/core/i18n.dart": "df7a2f149409a063077f53f7f60d661b53d7623fd0e0d7970e33a1c084c301a9",
+        "lib/core/i18n_date_format.dart": "b92bbe21b07751d8bb21bab9a3abbe24407efa4ec35b00b8dc654b33d5bfd9b3",
+        "lib/models/recurrence.dart": "f952bb3a8e9f2219000ee7ca9f690c63f6aa26ce7ea7e1a5def9b7dac48456f7",
+        "lib/widgets/recurrence_picker.dart": "036b8dba3709816c101f860d1f3aabc9cc4833b1c503db8ce5b536d1fcec5418",
+        "lib/widgets/reminder_plan_editor.dart": "37d90d6fca3de70289bb8715dbef6cf549ced5c9c678747d17346e184a21ee3b",
+        "lib/widgets/surface_components.dart": "9ea733e62913e0f818f8c7c9d7e54bb5d99de3b053ec2973bd800ac4aec2c591",
+        "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+        "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+        "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+        "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+        "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413",
+        "test/widgets/recurrence_picker_static_test.dart": "13ee3489a70a45ae5ae83044e6a47762d88435f9836d228ef6e70037066903f7",
+        "test/widgets/reminder_plan_editor_test.dart": "8faf5ae8f2a4f27527dac740b17c79228d8b3785c70df266e9ad7f67355bb1c5",
+        "test/models/recurrence_interval_test.dart": "7f2e8aae5225a17255d14467e3da3c647ba5ecf4c7e2ec3cca78168c62c78844",
+        "test/models/reminder_offset_preset_test.dart": "a0e5f8e851006f1e9b6c7d906e52d60400d50ac90e8dd052d450857a15b71edd",
+        "test/models/reminder_plan_json_compat_test.dart": "550638b6d45fb0c39396e810423e35e8b1d125df03a4e2df70dfb217204075ed",
+        "test/services/recurrence_engine_pbt_test.dart": "b462836dd59b379f4b6fa82514ee0d98f6c2919b7f199f18f3e4c15a13d9c698",
+        "test/widgets/reminder_editor_locale_state_test.dart": "fe6ca3eeb6a1897738b9b1620442a3b8f844b47c4cb6e513f5b22c6df153b964"
+      },
+      "source_and_fixture_unchanged": true,
+      "git_status_after": {
+        "exit_code": 0,
+        "text": [
+          " M lib/models/recurrence.dart",
+          " M lib/widgets/recurrence_picker.dart",
+          " M lib/widgets/reminder_plan_editor.dart",
+          " M lib/widgets/surface_components.dart",
+          "?? lib/core/reminder_editor_ui_copy.dart",
+          "?? test/widgets/reminder_editor_locale_state_test.dart"
+        ]
+      },
+      "git_status_unchanged": true
+    }
+  },
+  "finished_utc": "2026-10-09T07:01:14.589960+00:00"
+}

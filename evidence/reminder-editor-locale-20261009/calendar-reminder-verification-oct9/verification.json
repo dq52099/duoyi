@@ -1,0 +1,576 @@
+{
+  "started": "2026-10-09T06:46:04.812272+00:00",
+  "flutter": "/home/ubuntu/flutter/bin/flutter",
+  "evidence_dir": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-verification-oct9",
+  "execution_order": [
+    "calendar:pub_get",
+    "calendar:analyze",
+    "calendar:focused_test",
+    "reminder:pub_get",
+    "reminder:analyze",
+    "reminder:focused_test"
+  ],
+  "worktrees": {
+    "calendar": {
+      "cwd": "/home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009",
+      "temp_dir": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-verification-oct9/runtime/calendar",
+      "hash_paths": [
+        "lib/core/calendar_ui_copy.dart",
+        "lib/core/i18n.dart",
+        "lib/screens/calendar_screen.dart",
+        "lib/widgets/surface_components.dart",
+        "lib/services/account_local_data_cleaner.dart",
+        "lib/widgets/app_date_picker.dart",
+        "lib/widgets/app_time_picker.dart",
+        "test/screens/calendar_content_locale_state_test.dart",
+        "pubspec.yaml",
+        "pubspec.lock"
+      ],
+      "source_sha256_before": {
+        "lib/core/calendar_ui_copy.dart": "82276c4c43f1afd470919cccfd3e11baf64225d4efd25b3332b75982def31029",
+        "lib/core/i18n.dart": "0f92b6dc9222a836508aefa15e47dc17edaf3193498fc3e256f395fcf4fffd3f",
+        "lib/screens/calendar_screen.dart": "172f21f3c6c42b948a8a90017184f31b26348dd0be2b77817e4f857a7d582b11",
+        "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+        "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+        "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+        "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+        "test/screens/calendar_content_locale_state_test.dart": "c9ad51d8545c4252bec56a7e05d2f31a33ec7daa36b8bbbb9c74427a3fadb31e",
+        "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+        "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+      },
+      "git_status_before": {
+        "exit_code": 0,
+        "text": [
+          " M lib/core/i18n.dart",
+          " M lib/screens/calendar_screen.dart",
+          " M lib/widgets/surface_components.dart",
+          "?? lib/core/calendar_ui_copy.dart",
+          "?? test/screens/calendar_content_locale_state_test.dart"
+        ]
+      },
+      "commands": [
+        {
+          "stage": "pub_get",
+          "started": "2026-10-09T06:46:05.171380+00:00",
+          "argv": [
+            "/home/ubuntu/flutter/bin/flutter",
+            "pub",
+            "get"
+          ],
+          "command": "/home/ubuntu/flutter/bin/flutter pub get",
+          "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-verification-oct9/calendar-pub_get.log",
+          "hashes_before": {
+            "lib/core/calendar_ui_copy.dart": "82276c4c43f1afd470919cccfd3e11baf64225d4efd25b3332b75982def31029",
+            "lib/core/i18n.dart": "0f92b6dc9222a836508aefa15e47dc17edaf3193498fc3e256f395fcf4fffd3f",
+            "lib/screens/calendar_screen.dart": "172f21f3c6c42b948a8a90017184f31b26348dd0be2b77817e4f857a7d582b11",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/screens/calendar_content_locale_state_test.dart": "c9ad51d8545c4252bec56a7e05d2f31a33ec7daa36b8bbbb9c74427a3fadb31e",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "pid": 2400979,
+          "finished": "2026-10-09T06:46:09.513255+00:00",
+          "exit_code": 0,
+          "duration_seconds": 4.341,
+          "hashes_after": {
+            "lib/core/calendar_ui_copy.dart": "82276c4c43f1afd470919cccfd3e11baf64225d4efd25b3332b75982def31029",
+            "lib/core/i18n.dart": "0f92b6dc9222a836508aefa15e47dc17edaf3193498fc3e256f395fcf4fffd3f",
+            "lib/screens/calendar_screen.dart": "172f21f3c6c42b948a8a90017184f31b26348dd0be2b77817e4f857a7d582b11",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/screens/calendar_content_locale_state_test.dart": "c9ad51d8545c4252bec56a7e05d2f31a33ec7daa36b8bbbb9c74427a3fadb31e",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "git_status_after": {
+            "exit_code": 0,
+            "text": [
+              " M lib/core/i18n.dart",
+              " M lib/screens/calendar_screen.dart",
+              " M lib/widgets/surface_components.dart",
+              "?? lib/core/calendar_ui_copy.dart",
+              "?? test/screens/calendar_content_locale_state_test.dart"
+            ]
+          },
+          "log_sha256": "5f41c30f82ef1500c539ecf5d5e762831af6dff315fbdef8bf0331a719f3538b",
+          "log_bytes": 4044,
+          "test_case_count": null,
+          "success_marker_present": null
+        },
+        {
+          "stage": "analyze",
+          "started": "2026-10-09T06:46:09.531719+00:00",
+          "argv": [
+            "/home/ubuntu/flutter/bin/flutter",
+            "analyze",
+            "--no-pub",
+            "lib/core/calendar_ui_copy.dart",
+            "lib/core/i18n.dart",
+            "lib/screens/calendar_screen.dart",
+            "lib/widgets/surface_components.dart",
+            "test/screens/calendar_content_locale_state_test.dart"
+          ],
+          "command": "/home/ubuntu/flutter/bin/flutter analyze --no-pub lib/core/calendar_ui_copy.dart lib/core/i18n.dart lib/screens/calendar_screen.dart lib/widgets/surface_components.dart test/screens/calendar_content_locale_state_test.dart",
+          "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-verification-oct9/calendar-analyze.log",
+          "hashes_before": {
+            "lib/core/calendar_ui_copy.dart": "82276c4c43f1afd470919cccfd3e11baf64225d4efd25b3332b75982def31029",
+            "lib/core/i18n.dart": "0f92b6dc9222a836508aefa15e47dc17edaf3193498fc3e256f395fcf4fffd3f",
+            "lib/screens/calendar_screen.dart": "172f21f3c6c42b948a8a90017184f31b26348dd0be2b77817e4f857a7d582b11",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/screens/calendar_content_locale_state_test.dart": "c9ad51d8545c4252bec56a7e05d2f31a33ec7daa36b8bbbb9c74427a3fadb31e",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "pid": 2401108,
+          "finished": "2026-10-09T06:46:57.273798+00:00",
+          "exit_code": 1,
+          "duration_seconds": 47.742,
+          "hashes_after": {
+            "lib/core/calendar_ui_copy.dart": "82276c4c43f1afd470919cccfd3e11baf64225d4efd25b3332b75982def31029",
+            "lib/core/i18n.dart": "0f92b6dc9222a836508aefa15e47dc17edaf3193498fc3e256f395fcf4fffd3f",
+            "lib/screens/calendar_screen.dart": "172f21f3c6c42b948a8a90017184f31b26348dd0be2b77817e4f857a7d582b11",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/screens/calendar_content_locale_state_test.dart": "c9ad51d8545c4252bec56a7e05d2f31a33ec7daa36b8bbbb9c74427a3fadb31e",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "git_status_after": {
+            "exit_code": 0,
+            "text": [
+              " M lib/core/i18n.dart",
+              " M lib/screens/calendar_screen.dart",
+              " M lib/widgets/surface_components.dart",
+              "?? lib/core/calendar_ui_copy.dart",
+              "?? test/screens/calendar_content_locale_state_test.dart"
+            ]
+          },
+          "log_sha256": "cd231c3e1dac2a8071df3bbca1bc07e14bdcb0efda260092321095dabd612d26",
+          "log_bytes": 918,
+          "test_case_count": null,
+          "success_marker_present": null,
+          "failure_excerpt": "Analyzing 5 items...                                            \n\n   info \u2022 Unnecessary use of multiple underscores \u2022 lib/screens/calendar_screen.dart:1292:29 \u2022 unnecessary_underscores\nwarning \u2022 A value for optional parameter 'style' isn't ever given \u2022 lib/screens/calendar_screen.dart:1301:50 \u2022 unused_element_parameter\n   info \u2022 Unnecessary use of multiple underscores \u2022 lib/screens/calendar_screen.dart:1307:29 \u2022 unnecessary_underscores\n   info \u2022 Unnecessary use of multiple underscores \u2022 lib/screens/calendar_screen.dart:1321:29 \u2022 unnecessary_underscores\n   info \u2022 Statements in an if should be enclosed in a block \u2022 lib/screens/calendar_screen.dart:1677:21 \u2022 curly_braces_in_flow_control_structures\nwarning \u2022 Unused import: 'package:duoyi/widgets/app_date_picker.dart' \u2022 test/screens/calendar_content_locale_state_test.dart:25:8 \u2022 unused_import\n\n6 issues found. (ran in 45.4s)",
+          "analysis_summary": {
+            "exit_code": 1,
+            "summary": "6 issues found: 2 warnings and 4 infos; no error-severity diagnostic.",
+            "issues": [
+              "warning lib/screens/calendar_screen.dart:1301:50 unused_element_parameter (optional style parameter is never supplied)",
+              "warning test/screens/calendar_content_locale_state_test.dart:25:8 unused_import (app_date_picker.dart)",
+              "info lib/screens/calendar_screen.dart:1292:29 unnecessary_underscores",
+              "info lib/screens/calendar_screen.dart:1307:29 unnecessary_underscores",
+              "info lib/screens/calendar_screen.dart:1321:29 unnecessary_underscores",
+              "info lib/screens/calendar_screen.dart:1677:21 curly_braces_in_flow_control_structures"
+            ]
+          }
+        },
+        {
+          "stage": "focused_test",
+          "started": "2026-10-09T06:46:57.312196+00:00",
+          "argv": [
+            "/home/ubuntu/flutter/bin/flutter",
+            "test",
+            "--no-pub",
+            "test/screens/calendar_content_locale_state_test.dart"
+          ],
+          "command": "/home/ubuntu/flutter/bin/flutter test --no-pub test/screens/calendar_content_locale_state_test.dart",
+          "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-verification-oct9/calendar-focused_test.log",
+          "hashes_before": {
+            "lib/core/calendar_ui_copy.dart": "82276c4c43f1afd470919cccfd3e11baf64225d4efd25b3332b75982def31029",
+            "lib/core/i18n.dart": "0f92b6dc9222a836508aefa15e47dc17edaf3193498fc3e256f395fcf4fffd3f",
+            "lib/screens/calendar_screen.dart": "172f21f3c6c42b948a8a90017184f31b26348dd0be2b77817e4f857a7d582b11",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/screens/calendar_content_locale_state_test.dart": "c9ad51d8545c4252bec56a7e05d2f31a33ec7daa36b8bbbb9c74427a3fadb31e",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "pid": 2403376,
+          "finished": "2026-10-09T06:49:00.962985+00:00",
+          "exit_code": 1,
+          "duration_seconds": 123.651,
+          "hashes_after": {
+            "lib/core/calendar_ui_copy.dart": "82276c4c43f1afd470919cccfd3e11baf64225d4efd25b3332b75982def31029",
+            "lib/core/i18n.dart": "0f92b6dc9222a836508aefa15e47dc17edaf3193498fc3e256f395fcf4fffd3f",
+            "lib/screens/calendar_screen.dart": "172f21f3c6c42b948a8a90017184f31b26348dd0be2b77817e4f857a7d582b11",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/screens/calendar_content_locale_state_test.dart": "c9ad51d8545c4252bec56a7e05d2f31a33ec7daa36b8bbbb9c74427a3fadb31e",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "git_status_after": {
+            "exit_code": 0,
+            "text": [
+              " M lib/core/i18n.dart",
+              " M lib/screens/calendar_screen.dart",
+              " M lib/widgets/surface_components.dart",
+              "?? lib/core/calendar_ui_copy.dart",
+              "?? test/screens/calendar_content_locale_state_test.dart"
+            ]
+          },
+          "log_sha256": "1a0e472796c684902ab074effca52e7671c65b655e8c48de0622ce81f7e577f8",
+          "log_bytes": 13625,
+          "test_case_count": 13,
+          "success_marker_present": false,
+          "failure_excerpt": "00:00 +0: loading /home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart\n00:00 +0: Calendar date, filter, year, and three-day counts refresh in Chinese and English\n\u2550\u2550\u2561 EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK \u255e\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\nThe following TestFailure was thrown running a test:\nExpected: exactly one matching candidate\n  Actual: _AncestorWidgetFinder:<Found 0 widgets with type \"FilterChip\" that are ancestors of\nwidgets with text \"literal workspace 4\": []>\n   Which: means none were found but one was expected\n\nWhen the exception was thrown, this was the stack:\n#4      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:348:7)\n<asynchronous suspension>\n#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided one frame from package:stack_trace)\n\nThis was caught by the test expectation on the following line:\n  file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart line 348\nThe test description was:\n  Calendar date, filter, year, and three-day counts refresh in Chinese and English\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n00:12 +0 -1: Calendar date, filter, year, and three-day counts refresh in Chinese and English [E]\n  Test failed. See exception logs above.\n  The test description was: Calendar date, filter, year, and three-day counts refresh in Chinese and English\n  \n00:12 +0 -1: mounted quick-add menu and project detail sheet keep state and literal content across locales\n\u2550\u2550\u2561 EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK \u255e\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\nThe following TestFailure was thrown running a test:\nExpected: exactly one matching candidate\n  Actual: _TypeWidgetFinder:<Found 0 widgets with type \"CupertinoNavigationBarBackButton\": []>\n   Which: means none were found but one was expected\nOne back button expected on screen\n\nWhen the exception was thrown, this was the stack:\n#0      fail (package:matcher/src/expect/expect.dart:187:31)\n#1      _expect (package:matcher/src/expect/expect.dart:182:3)\n#2      expect (package:matcher/src/expect/expect.dart:65:3)\n#3      expectSync (package:flutter_test/src/widget_tester.dart:486:18)\n#4      WidgetTester.pageBack.<anonymous closure> (package:flutter_test/src/widget_tester.dart:1177:7)\n#7      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:74:41)\n#8      WidgetTester.pageBack (package:flutter_test/src/widget_tester.dart:1171:27)\n#9      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:456:20)\n<asynchronous suspension>\n#10     testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#11     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from dart:async and package:stack_trace)\n\nThe test description was:\n  mounted quick-add menu and project detail sheet keep state and literal content across locales\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n00:18 +0 -2: mounted quick-add menu and project detail sheet keep state and literal content across locales [E]\n  Test failed. See exception logs above.\n  The test description was: mounted quick-add menu and project detail sheet keep state and literal content across locales\n  \n00:18 +0 -2: normalized project filter IDs select the same literal tasks in the agenda and detail sheet\n\nWarning: A call to tap() with finder \"Found 1 widget with text \"\u9879\u76ee\u8be6\u60c5\": [\n  Text(\"\u9879\u76ee\u8be6\u60c5\", dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery, _ScrollableScope]),\n]\" derived an Offset (Offset(366.3, 199.0)) that would not hit test on the specified widget.\nMaybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.\nThe finder corresponds to this RenderBox: RenderParagraph#f166a relayoutBoundary=up18\nThe hit test result at that offset is: HitTestResult(RenderPointerListener#d5879@Offset(63.4, 14.4), RenderSemanticsAnnotations#9d83a@Offset(63.4, 14.4), RenderMouseRegion#f8e33@Offset(63.4, 14.4), RenderSemanticsAnnotations#31bf7@Offset(63.4, 14.4), _RenderInkFeatures#671d0@Offset(63.4, 14.4), RenderCustomPaint#f472a@Offset(63.4, 14.4), RenderPhysicalShape#01ace@Offset(63.4, 14.4), RenderPositionedBox#ed47f@Offset(63.4, 24.0), RenderSemanticsAnnotations#3b538@Offset(63.4, 24.0), RenderPadding#01f55@Offset(63.4, 24.0), RenderRepaintBoundary#8f17e@Offset(63.4, 24.0), RenderIndexedSemantics#95381@Offset(63.4, 24.0), RenderSliverList@(mainAxis: 366.34999999999997, crossAxis: 24.0), RenderSliverPadding@(mainAxis: 366.34999999999997, crossAxis: 24.0), RenderViewport#ae452@Offset(366.3, 24.0), RenderIgnorePointer#531f8@Offset(366.3, 24.0), RenderSemanticsAnnotations#7ddac@Offset(366.3, 24.0), RenderPointerListener#89aef@Offset(366.3, 24.0), RenderSemanticsGestureHandler#b16b3@Offset(366.3, 24.0), RenderPointerListener#d81c9@Offset(366.3, 24.0), _RenderScrollSemantics#7b043@Offset(366.3, 24.0), RenderClipRect#54c36@Offset(366.3, 24.0), RenderConstrainedBox#f506b@Offset(366.3, 24.0), RenderFlex#a8a58@Offset(366.3, 143.0), RenderCustomMultiChildLayoutBox#2dc28@Offset(366.3, 199.0), _RenderInkFeatures#6beb0@Offset(366.3, 199.0), RenderPhysicalModel#2eeae@Offset(366.3, 199.0), RenderStack#5537f@Offset(366.3, 199.0), _RenderLayoutBuilder#2b387@Offset(366.3, 199.0), _RenderColoredBox#540c6@Offset(366.3, 199.0), RenderSemanticsAnnotations#2c5fe@Offset(366.3, 199.0), RenderRepaintBoundary#e75e1@Offset(366.3, 199.0), RenderIgnorePointer#df06d@Offset(366.3, 199.0), RenderAnimatedOpacity#1994d@Offset(366.3, 199.0), RenderAnimatedOpacity#8565f@Offset(366.3, 199.0), _RenderColoredBox#643ac@Offset(366.3, 199.0), RenderAnimatedOpacity#f0e8e@Offset(366.3, 199.0), RenderIgnorePointer#207d5@Offset(366.3, 199.0), RenderAnimatedOpacity#58768@Offset(366.3, 199.0), RenderRepaintBoundary#1810c@Offset(366.3, 199.0), RenderSemanticsAnnotations#c0988@Offset(366.3, 199.0), RenderOffstage#6e3e6@Offset(366.3, 199.0), RenderSemanticsAnnotations#4370a@Offset(366.3, 199.0), _RenderTheater#43950@Offset(366.3, 199.0), RenderAbsorbPointer#bed88@Offset(366.3, 199.0), RenderPointerListener#6fbf5@Offset(366.3, 199.0), RenderSemanticsAnnotations#b052c@Offset(366.3, 199.0), RenderCustomPaint#0dad5@Offset(366.3, 199.0), RenderSemanticsAnnotations#f6988@Offset(366.3, 199.0), RenderSemanticsAnnotations#7be30@Offset(366.3, 199.0), RenderSemanticsAnnotations#352d7@Offset(366.3, 199.0), RenderTapRegionSurface#e260f@Offset(366.3, 199.0), RenderSemanticsAnnotations#97a5b@Offset(366.3, 199.0), RenderSemanticsAnnotations#bfdea@Offset(366.3, 199.0), HitTestEntry<HitTestTarget>#3f18f(_ReusableRenderView#af9c2), HitTestEntry<HitTestTarget>#f2a2e(<AutomatedTestWidgetsFlutterBinding>))\n#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2158:25)\n#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1942:12)\n#2      WidgetController.tap (package:flutter_test/src/controller.dart:1075:7)\n#3      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:579:20)\n<asynchronous suspension>\n#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n#6      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)\n<asynchronous suspension>\nTo silence this warning, pass \"warnIfMissed: false\" to \"tap()\".\nTo make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.\n\n00:20 +1 -2: date picker resolves semantic copy live, preserves its choice, and dismisses cleanly across locale changes\n00:25 +2 -2: Todo quick-add draft keeps controller, selection, and focus through locale changes and duplicate submit triggers\n00:29 +3 -2: time-log draft and semantic time picker retain user choices through locale changes and dismissal\n00:32 +4 -2: time-entry category selection flows through its typed callback and saves\n00:35 +5 -2: same account owner cannot submit Todo or time-log drafts from an invalidated account generation\n00:37 +6 -2: an invalidated time-entry origin cannot push a category menu\n00:38 +7 -2: an open category menu cannot apply after account switch or pop an unrelated route\n\u2550\u2550\u2561 EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK \u255e\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\nThe following TestFailure was thrown running a test:\nExpected: false\n  Actual: <true>\n\nWhen the exception was thrown, this was the stack:\n#4      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:1145:7)\n<asynchronous suspension>\n#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided one frame from package:stack_trace)\n\nThis was caught by the test expectation on the following line:\n  file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart line 1145\nThe test description was:\n  an open category menu cannot apply after account switch or pop an unrelated route\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n00:44 +7 -3: an open category menu cannot apply after account switch or pop an unrelated route [E]\n  Test failed. See exception logs above.\n  The test description was: an open category menu cannot apply after account switch or pop an unrelated route\n  \n00:44 +7 -3: quick-add submission does not outlive its Calendar caller route\n00:44 +8 -3: held Todo submit completes safely after its caller and widget tree are removed\n00:45 +9 -3: pending time-log submit disables nested picker controls and cannot leave a duplicate draft\n\u2550\u2550\u2561 EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK \u255e\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\nThe following assertion was thrown running a test:\npumpAndSettle timed out\n\nWhen the exception was thrown, this was the stack:\n#0      WidgetTester.pumpAndSettle.<anonymous closure> (package:flutter_test/src/widget_tester.dart:717:11)\n<asynchronous suspension>\n#1      TestAsyncUtils.guard.<anonymous closure> (package:flutter_test/src/test_async_utils.dart:130:27)\n<asynchronous suspension>\n#2      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/calendar-content-locale-20261009/test/screens/calendar_content_locale_state_test.dart:1269:7)\n<asynchronous suspension>\n#3      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#4      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided one frame from package:stack_trace)\n\nThe test description was:\n  pending time-log submit disables nested picker controls and cannot leave a duplicate draft\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n00:53 +9 -4: pending time-log submit disables nested picker controls and cannot leave a duplicate draft [E]\n  Test failed. See exception logs above.\n  The test description was: pending time-log submit disables nested picker controls and cannot leave a duplicate draft\n  \n00:53 +9 -4: Some tests failed.",
+          "passed_case_count": 9,
+          "failed_case_count": 4,
+          "failure_summary": [
+            {
+              "test": "Calendar date, filter, year, and three-day counts refresh in Chinese and English",
+              "expected_actual": "Expected exactly one FilterChip ancestor for text \"literal workspace 4\"; found zero.",
+              "location": "test/screens/calendar_content_locale_state_test.dart:348"
+            },
+            {
+              "test": "mounted quick-add menu and project detail sheet keep state and literal content across locales",
+              "expected_actual": "WidgetTester.pageBack expected one CupertinoNavigationBarBackButton; found zero.",
+              "location": "test/screens/calendar_content_locale_state_test.dart:456"
+            },
+            {
+              "test": "an open category menu cannot apply after account switch or pop an unrelated route",
+              "expected_actual": "Expected dialogRoute.isActive to be false; actual true.",
+              "location": "test/screens/calendar_content_locale_state_test.dart:1145"
+            },
+            {
+              "test": "pending time-log submit disables nested picker controls and cannot leave a duplicate draft",
+              "expected_actual": "pumpAndSettle timed out.",
+              "location": "test/screens/calendar_content_locale_state_test.dart:1269"
+            }
+          ]
+        }
+      ],
+      "source_sha256_after": {
+        "lib/core/calendar_ui_copy.dart": "82276c4c43f1afd470919cccfd3e11baf64225d4efd25b3332b75982def31029",
+        "lib/core/i18n.dart": "0f92b6dc9222a836508aefa15e47dc17edaf3193498fc3e256f395fcf4fffd3f",
+        "lib/screens/calendar_screen.dart": "172f21f3c6c42b948a8a90017184f31b26348dd0be2b77817e4f857a7d582b11",
+        "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+        "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+        "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+        "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+        "test/screens/calendar_content_locale_state_test.dart": "c9ad51d8545c4252bec56a7e05d2f31a33ec7daa36b8bbbb9c74427a3fadb31e",
+        "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+        "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+      },
+      "source_unchanged": true,
+      "git_status_after": {
+        "exit_code": 0,
+        "text": [
+          " M lib/core/i18n.dart",
+          " M lib/screens/calendar_screen.dart",
+          " M lib/widgets/surface_components.dart",
+          "?? lib/core/calendar_ui_copy.dart",
+          "?? test/screens/calendar_content_locale_state_test.dart"
+        ]
+      },
+      "finished": "2026-10-09T06:49:00.991281+00:00",
+      "git_status_unchanged": true
+    },
+    "reminder": {
+      "cwd": "/home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009",
+      "temp_dir": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-verification-oct9/runtime/reminder",
+      "hash_paths": [
+        "lib/core/reminder_editor_ui_copy.dart",
+        "lib/core/i18n.dart",
+        "lib/core/i18n_date_format.dart",
+        "lib/models/recurrence.dart",
+        "lib/widgets/recurrence_picker.dart",
+        "lib/widgets/reminder_plan_editor.dart",
+        "lib/widgets/surface_components.dart",
+        "lib/services/account_local_data_cleaner.dart",
+        "lib/widgets/app_date_picker.dart",
+        "lib/widgets/app_time_picker.dart",
+        "test/widgets/reminder_editor_locale_state_test.dart",
+        "pubspec.yaml",
+        "pubspec.lock"
+      ],
+      "source_sha256_before": {
+        "lib/core/reminder_editor_ui_copy.dart": "a2168543f919e739e6f729f08f095072ab319ff4de1690e4513da106ab5cf42f",
+        "lib/core/i18n.dart": "df7a2f149409a063077f53f7f60d661b53d7623fd0e0d7970e33a1c084c301a9",
+        "lib/core/i18n_date_format.dart": "b92bbe21b07751d8bb21bab9a3abbe24407efa4ec35b00b8dc654b33d5bfd9b3",
+        "lib/models/recurrence.dart": "f952bb3a8e9f2219000ee7ca9f690c63f6aa26ce7ea7e1a5def9b7dac48456f7",
+        "lib/widgets/recurrence_picker.dart": "036b8dba3709816c101f860d1f3aabc9cc4833b1c503db8ce5b536d1fcec5418",
+        "lib/widgets/reminder_plan_editor.dart": "ef2be0025c93771d6c63b53722cebd33db3ab15eadfdb584c449d322de3f759a",
+        "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+        "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+        "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+        "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+        "test/widgets/reminder_editor_locale_state_test.dart": "1da757745ddf913bc620dd35acf8c7ebf286528a197d614715e0f30eac83fe79",
+        "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+        "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+      },
+      "git_status_before": {
+        "exit_code": 0,
+        "text": [
+          " M lib/models/recurrence.dart",
+          " M lib/widgets/recurrence_picker.dart",
+          " M lib/widgets/reminder_plan_editor.dart",
+          " M lib/widgets/surface_components.dart",
+          "?? lib/core/reminder_editor_ui_copy.dart",
+          "?? test/widgets/reminder_editor_locale_state_test.dart"
+        ]
+      },
+      "commands": [
+        {
+          "stage": "pub_get",
+          "started": "2026-10-09T06:49:01.235574+00:00",
+          "argv": [
+            "/home/ubuntu/flutter/bin/flutter",
+            "pub",
+            "get"
+          ],
+          "command": "/home/ubuntu/flutter/bin/flutter pub get",
+          "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-verification-oct9/reminder-pub_get.log",
+          "hashes_before": {
+            "lib/core/reminder_editor_ui_copy.dart": "a2168543f919e739e6f729f08f095072ab319ff4de1690e4513da106ab5cf42f",
+            "lib/core/i18n.dart": "df7a2f149409a063077f53f7f60d661b53d7623fd0e0d7970e33a1c084c301a9",
+            "lib/core/i18n_date_format.dart": "b92bbe21b07751d8bb21bab9a3abbe24407efa4ec35b00b8dc654b33d5bfd9b3",
+            "lib/models/recurrence.dart": "f952bb3a8e9f2219000ee7ca9f690c63f6aa26ce7ea7e1a5def9b7dac48456f7",
+            "lib/widgets/recurrence_picker.dart": "036b8dba3709816c101f860d1f3aabc9cc4833b1c503db8ce5b536d1fcec5418",
+            "lib/widgets/reminder_plan_editor.dart": "ef2be0025c93771d6c63b53722cebd33db3ab15eadfdb584c449d322de3f759a",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/widgets/reminder_editor_locale_state_test.dart": "1da757745ddf913bc620dd35acf8c7ebf286528a197d614715e0f30eac83fe79",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "pid": 2406484,
+          "finished": "2026-10-09T06:49:04.309181+00:00",
+          "exit_code": 0,
+          "duration_seconds": 3.073,
+          "hashes_after": {
+            "lib/core/reminder_editor_ui_copy.dart": "a2168543f919e739e6f729f08f095072ab319ff4de1690e4513da106ab5cf42f",
+            "lib/core/i18n.dart": "df7a2f149409a063077f53f7f60d661b53d7623fd0e0d7970e33a1c084c301a9",
+            "lib/core/i18n_date_format.dart": "b92bbe21b07751d8bb21bab9a3abbe24407efa4ec35b00b8dc654b33d5bfd9b3",
+            "lib/models/recurrence.dart": "f952bb3a8e9f2219000ee7ca9f690c63f6aa26ce7ea7e1a5def9b7dac48456f7",
+            "lib/widgets/recurrence_picker.dart": "036b8dba3709816c101f860d1f3aabc9cc4833b1c503db8ce5b536d1fcec5418",
+            "lib/widgets/reminder_plan_editor.dart": "ef2be0025c93771d6c63b53722cebd33db3ab15eadfdb584c449d322de3f759a",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/widgets/reminder_editor_locale_state_test.dart": "1da757745ddf913bc620dd35acf8c7ebf286528a197d614715e0f30eac83fe79",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "git_status_after": {
+            "exit_code": 0,
+            "text": [
+              " M lib/models/recurrence.dart",
+              " M lib/widgets/recurrence_picker.dart",
+              " M lib/widgets/reminder_plan_editor.dart",
+              " M lib/widgets/surface_components.dart",
+              "?? lib/core/reminder_editor_ui_copy.dart",
+              "?? test/widgets/reminder_editor_locale_state_test.dart"
+            ]
+          },
+          "log_sha256": "5f41c30f82ef1500c539ecf5d5e762831af6dff315fbdef8bf0331a719f3538b",
+          "log_bytes": 4044,
+          "test_case_count": null,
+          "success_marker_present": null
+        },
+        {
+          "stage": "analyze",
+          "started": "2026-10-09T06:49:04.342186+00:00",
+          "argv": [
+            "/home/ubuntu/flutter/bin/flutter",
+            "analyze",
+            "--no-pub",
+            "lib/core/reminder_editor_ui_copy.dart",
+            "lib/models/recurrence.dart",
+            "lib/widgets/recurrence_picker.dart",
+            "lib/widgets/reminder_plan_editor.dart",
+            "lib/widgets/surface_components.dart",
+            "test/widgets/reminder_editor_locale_state_test.dart"
+          ],
+          "command": "/home/ubuntu/flutter/bin/flutter analyze --no-pub lib/core/reminder_editor_ui_copy.dart lib/models/recurrence.dart lib/widgets/recurrence_picker.dart lib/widgets/reminder_plan_editor.dart lib/widgets/surface_components.dart test/widgets/reminder_editor_locale_state_test.dart",
+          "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-verification-oct9/reminder-analyze.log",
+          "hashes_before": {
+            "lib/core/reminder_editor_ui_copy.dart": "a2168543f919e739e6f729f08f095072ab319ff4de1690e4513da106ab5cf42f",
+            "lib/core/i18n.dart": "df7a2f149409a063077f53f7f60d661b53d7623fd0e0d7970e33a1c084c301a9",
+            "lib/core/i18n_date_format.dart": "b92bbe21b07751d8bb21bab9a3abbe24407efa4ec35b00b8dc654b33d5bfd9b3",
+            "lib/models/recurrence.dart": "f952bb3a8e9f2219000ee7ca9f690c63f6aa26ce7ea7e1a5def9b7dac48456f7",
+            "lib/widgets/recurrence_picker.dart": "036b8dba3709816c101f860d1f3aabc9cc4833b1c503db8ce5b536d1fcec5418",
+            "lib/widgets/reminder_plan_editor.dart": "ef2be0025c93771d6c63b53722cebd33db3ab15eadfdb584c449d322de3f759a",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/widgets/reminder_editor_locale_state_test.dart": "1da757745ddf913bc620dd35acf8c7ebf286528a197d614715e0f30eac83fe79",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "pid": 2406639,
+          "finished": "2026-10-09T06:49:31.364469+00:00",
+          "exit_code": 1,
+          "duration_seconds": 27.022,
+          "hashes_after": {
+            "lib/core/reminder_editor_ui_copy.dart": "a2168543f919e739e6f729f08f095072ab319ff4de1690e4513da106ab5cf42f",
+            "lib/core/i18n.dart": "df7a2f149409a063077f53f7f60d661b53d7623fd0e0d7970e33a1c084c301a9",
+            "lib/core/i18n_date_format.dart": "b92bbe21b07751d8bb21bab9a3abbe24407efa4ec35b00b8dc654b33d5bfd9b3",
+            "lib/models/recurrence.dart": "f952bb3a8e9f2219000ee7ca9f690c63f6aa26ce7ea7e1a5def9b7dac48456f7",
+            "lib/widgets/recurrence_picker.dart": "036b8dba3709816c101f860d1f3aabc9cc4833b1c503db8ce5b536d1fcec5418",
+            "lib/widgets/reminder_plan_editor.dart": "ef2be0025c93771d6c63b53722cebd33db3ab15eadfdb584c449d322de3f759a",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/widgets/reminder_editor_locale_state_test.dart": "1da757745ddf913bc620dd35acf8c7ebf286528a197d614715e0f30eac83fe79",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "git_status_after": {
+            "exit_code": 0,
+            "text": [
+              " M lib/models/recurrence.dart",
+              " M lib/widgets/recurrence_picker.dart",
+              " M lib/widgets/reminder_plan_editor.dart",
+              " M lib/widgets/surface_components.dart",
+              "?? lib/core/reminder_editor_ui_copy.dart",
+              "?? test/widgets/reminder_editor_locale_state_test.dart"
+            ]
+          },
+          "log_sha256": "c3b3f76e233c02aa31b46c0471627e385817e3066e1dc38b2da340a1cc4aabbe",
+          "log_bytes": 309,
+          "test_case_count": null,
+          "success_marker_present": null,
+          "failure_excerpt": "Analyzing 6 items...                                            \n\nwarning \u2022 The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' \u2022 test/widgets/reminder_editor_locale_state_test.dart:825:52 \u2022 invalid_use_of_protected_member\n\n1 issue found. (ran in 25.8s)",
+          "analysis_summary": {
+            "exit_code": 1,
+            "summary": "1 issue found: 1 warning; no error-severity diagnostic.",
+            "issues": [
+              "warning test/widgets/reminder_editor_locale_state_test.dart:825:52 invalid_use_of_protected_member (ChangeNotifier.hasListeners)"
+            ]
+          }
+        },
+        {
+          "stage": "focused_test",
+          "started": "2026-10-09T06:49:31.383192+00:00",
+          "argv": [
+            "/home/ubuntu/flutter/bin/flutter",
+            "test",
+            "--no-pub",
+            "test/widgets/reminder_editor_locale_state_test.dart"
+          ],
+          "command": "/home/ubuntu/flutter/bin/flutter test --no-pub test/widgets/reminder_editor_locale_state_test.dart",
+          "log": "/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/calendar-reminder-verification-oct9/reminder-focused_test.log",
+          "hashes_before": {
+            "lib/core/reminder_editor_ui_copy.dart": "a2168543f919e739e6f729f08f095072ab319ff4de1690e4513da106ab5cf42f",
+            "lib/core/i18n.dart": "df7a2f149409a063077f53f7f60d661b53d7623fd0e0d7970e33a1c084c301a9",
+            "lib/core/i18n_date_format.dart": "b92bbe21b07751d8bb21bab9a3abbe24407efa4ec35b00b8dc654b33d5bfd9b3",
+            "lib/models/recurrence.dart": "f952bb3a8e9f2219000ee7ca9f690c63f6aa26ce7ea7e1a5def9b7dac48456f7",
+            "lib/widgets/recurrence_picker.dart": "036b8dba3709816c101f860d1f3aabc9cc4833b1c503db8ce5b536d1fcec5418",
+            "lib/widgets/reminder_plan_editor.dart": "ef2be0025c93771d6c63b53722cebd33db3ab15eadfdb584c449d322de3f759a",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/widgets/reminder_editor_locale_state_test.dart": "1da757745ddf913bc620dd35acf8c7ebf286528a197d614715e0f30eac83fe79",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "pid": 2407349,
+          "finished": "2026-10-09T06:50:02.302541+00:00",
+          "exit_code": 1,
+          "duration_seconds": 30.919,
+          "hashes_after": {
+            "lib/core/reminder_editor_ui_copy.dart": "a2168543f919e739e6f729f08f095072ab319ff4de1690e4513da106ab5cf42f",
+            "lib/core/i18n.dart": "df7a2f149409a063077f53f7f60d661b53d7623fd0e0d7970e33a1c084c301a9",
+            "lib/core/i18n_date_format.dart": "b92bbe21b07751d8bb21bab9a3abbe24407efa4ec35b00b8dc654b33d5bfd9b3",
+            "lib/models/recurrence.dart": "f952bb3a8e9f2219000ee7ca9f690c63f6aa26ce7ea7e1a5def9b7dac48456f7",
+            "lib/widgets/recurrence_picker.dart": "036b8dba3709816c101f860d1f3aabc9cc4833b1c503db8ce5b536d1fcec5418",
+            "lib/widgets/reminder_plan_editor.dart": "ef2be0025c93771d6c63b53722cebd33db3ab15eadfdb584c449d322de3f759a",
+            "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+            "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+            "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+            "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+            "test/widgets/reminder_editor_locale_state_test.dart": "1da757745ddf913bc620dd35acf8c7ebf286528a197d614715e0f30eac83fe79",
+            "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+            "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+          },
+          "git_status_after": {
+            "exit_code": 0,
+            "text": [
+              " M lib/models/recurrence.dart",
+              " M lib/widgets/recurrence_picker.dart",
+              " M lib/widgets/reminder_plan_editor.dart",
+              " M lib/widgets/surface_components.dart",
+              "?? lib/core/reminder_editor_ui_copy.dart",
+              "?? test/widgets/reminder_editor_locale_state_test.dart"
+            ]
+          },
+          "log_sha256": "ed072e1746be28899bf87891e412bd469830643a60a92df75655915019852271",
+          "log_bytes": 4922,
+          "test_case_count": 15,
+          "success_marker_present": false,
+          "failure_excerpt": "00:00 +0: loading /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart\n00:00 +0: mounted plan rebuilds across locales and keeps supplied copy literal\n00:01 +1: plan summaries and recurrence labels localize without changing domain JSON\n00:01 +2: relative rule selections survive a zh/en rebuild and save\n\u2550\u2550\u2561 EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK \u255e\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\nThe following TestFailure was thrown running a test:\nExpected: exactly one matching candidate\n  Actual: _TextWidgetFinder:<Found 0 widgets with text \"21:35\": []>\n   Which: means none were found but one was expected\n\nWhen the exception was thrown, this was the stack:\n#4      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart:139:5)\n<asynchronous suspension>\n#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided one frame from package:stack_trace)\n\nThis was caught by the test expectation on the following line:\n  file:///home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart line 139\nThe test description was:\n  relative rule selections survive a zh/en rebuild and save\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n00:03 +2 -1: relative rule selections survive a zh/en rebuild and save [E]\n  Test failed. See exception logs above.\n  The test description was: relative rule selections survive a zh/en rebuild and save\n  \n00:03 +2 -1: weekly rule weekdays survive an open-sheet locale rebuild\n\u2550\u2550\u2561 EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK \u255e\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\nThe following TestFailure was thrown running a test:\nExpected: exactly one matching candidate\n  Actual: _TextWidgetFinder:<Found 0 widgets with text \"06:45\": []>\n   Which: means none were found but one was expected\n\nWhen the exception was thrown, this was the stack:\n#4      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart:201:5)\n<asynchronous suspension>\n#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided one frame from package:stack_trace)\n\nThis was caught by the test expectation on the following line:\n  file:///home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart line 201\nThe test description was:\n  weekly rule weekdays survive an open-sheet locale rebuild\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n00:04 +2 -2: weekly rule weekdays survive an open-sheet locale rebuild [E]\n  Test failed. See exception logs above.\n  The test description was: weekly rule weekdays survive an open-sheet locale rebuild\n  \n00:04 +2 -2: recurrence fields, selected frequency, selection, and focus survive locale changes\n00:05 +3 -2: open date picker heading and selected mode update with locale\n00:05 +4 -2: account change leaves a nested picker on top and blocks recurrence result\n00:07 +5 -2: account change before a reminder rule save yields no onChanged\n00:07 +6 -2: removing the original plan caller prevents a late onChanged\n00:07 +7 -2: a stale surviving rule sheet cannot open its type route or apply a draft\n00:07 +8 -2: an open type menu relocalizes without changing its selected enum\n00:08 +9 -2: clear end date tooltip relocalizes and preserves other recurrence fields\n00:09 +10 -2: removing the recurrence caller turns its late result into null\n00:10 +11 -2: reverse dismissal releases picker controllers and locale listeners\n00:10 +12 -2: 320-wide enlarged text keeps the open reminder sheet usable\n00:11 +13 -2: Some tests failed.",
+          "passed_case_count": 13,
+          "failed_case_count": 2,
+          "failure_summary": [
+            {
+              "test": "relative rule selections survive a zh/en rebuild and save",
+              "expected_actual": "Expected exactly one text widget \"21:35\"; found zero.",
+              "location": "test/widgets/reminder_editor_locale_state_test.dart:139"
+            },
+            {
+              "test": "weekly rule weekdays survive an open-sheet locale rebuild",
+              "expected_actual": "Expected exactly one text widget \"06:45\"; found zero.",
+              "location": "test/widgets/reminder_editor_locale_state_test.dart:201"
+            }
+          ]
+        }
+      ],
+      "source_sha256_after": {
+        "lib/core/reminder_editor_ui_copy.dart": "a2168543f919e739e6f729f08f095072ab319ff4de1690e4513da106ab5cf42f",
+        "lib/core/i18n.dart": "df7a2f149409a063077f53f7f60d661b53d7623fd0e0d7970e33a1c084c301a9",
+        "lib/core/i18n_date_format.dart": "b92bbe21b07751d8bb21bab9a3abbe24407efa4ec35b00b8dc654b33d5bfd9b3",
+        "lib/models/recurrence.dart": "f952bb3a8e9f2219000ee7ca9f690c63f6aa26ce7ea7e1a5def9b7dac48456f7",
+        "lib/widgets/recurrence_picker.dart": "036b8dba3709816c101f860d1f3aabc9cc4833b1c503db8ce5b536d1fcec5418",
+        "lib/widgets/reminder_plan_editor.dart": "ef2be0025c93771d6c63b53722cebd33db3ab15eadfdb584c449d322de3f759a",
+        "lib/widgets/surface_components.dart": "8d29632be8bddd5ac3177e71ef2c6b75dd6330acb78b48c6e66c2199497862fa",
+        "lib/services/account_local_data_cleaner.dart": "5ed7b9831db9cd4b64839c2dba1f1d6fc33fe6a834bd88572091f96f474edc57",
+        "lib/widgets/app_date_picker.dart": "0ba00e30a6dc5b3e845f181a66cddc46655f1bf157d46d227fda58b61fdb061e",
+        "lib/widgets/app_time_picker.dart": "6d64e0e84cf7c51a9db1a0a1d43659e52e6b8fa35dbde95afabe014c0d3ee0d0",
+        "test/widgets/reminder_editor_locale_state_test.dart": "1da757745ddf913bc620dd35acf8c7ebf286528a197d614715e0f30eac83fe79",
+        "pubspec.yaml": "29699f641f77286332242ecb1120b649ae7f01cca6bc19202619570a39f34396",
+        "pubspec.lock": "ab2e40d2c196d7df544eec709e38c389b3de176a88b48f45576ec9472530d413"
+      },
+      "source_unchanged": true,
+      "git_status_after": {
+        "exit_code": 0,
+        "text": [
+          " M lib/models/recurrence.dart",
+          " M lib/widgets/recurrence_picker.dart",
+          " M lib/widgets/reminder_plan_editor.dart",
+          " M lib/widgets/surface_components.dart",
+          "?? lib/core/reminder_editor_ui_copy.dart",
+          "?? test/widgets/reminder_editor_locale_state_test.dart"
+        ]
+      },
+      "finished": "2026-10-09T06:50:02.358630+00:00",
+      "git_status_unchanged": true
+    }
+  },
+  "notes": [
+    "Flutter commands were invoked serially: all calendar commands, then all reminder commands.",
+    "Raw stdout and stderr are combined unchanged into one log per command.",
+    "TMPDIR, TMP, and TEMP point to private named runtime directories under evidence_dir.",
+    "No source or fixture edits were made by this runner."
+  ],
+  "finished": "2026-10-09T06:50:02.360075+00:00"
+}

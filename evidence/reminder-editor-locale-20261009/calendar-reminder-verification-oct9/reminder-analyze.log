@@ -1,0 +1,5 @@
+Analyzing 6 items...                                            
+
+warning • The member 'hasListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • test/widgets/reminder_editor_locale_state_test.dart:825:52 • invalid_use_of_protected_member
+
+1 issue found. (ran in 25.8s)

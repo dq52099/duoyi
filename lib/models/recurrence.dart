@@ -1,3 +1,5 @@
+import '../core/reminder_editor_ui_copy.dart';
+
 /// 重复规则：配合 TodoItem / Habit / Anniversary 使用。
 /// 支持 日/周/月/年 四种频次 + 间隔 + 结束日期/次数。
 enum RecurrenceFrequency { none, daily, weekly, monthly, yearly }
@@ -115,37 +117,14 @@ class RecurrenceRule {
     return DateTime(value.year, value.month, value.day);
   }
 
-  String get label {
-    final base = switch (frequency) {
-      RecurrenceFrequency.none => '不重复',
-      RecurrenceFrequency.daily => interval == 1 ? '每天' : '每 $interval 天',
-      RecurrenceFrequency.weekly => interval == 1 ? '每周' : '每 $interval 周',
-      RecurrenceFrequency.monthly => interval == 1 ? '每月' : '每 $interval 月',
-      RecurrenceFrequency.yearly => interval == 1 ? '每年' : '每 $interval 年',
-    };
-    if (frequency == RecurrenceFrequency.none) return base;
-    final pieces = <String>[base];
-    if (frequency == RecurrenceFrequency.weekly &&
-        byWeekdays != null &&
-        byWeekdays!.isNotEmpty) {
-      const names = ['一', '二', '三', '四', '五', '六', '日'];
-      final days = ([...byWeekdays!]..sort()).map((d) => names[d]).join('/');
-      pieces.add(days);
-    }
-    if (endDate != null) {
-      pieces.add('至 ${_formatDate(endDate!)}');
-    }
-    if (maxOccurrences != null && maxOccurrences! > 0) {
-      pieces.add('共 $maxOccurrences 次');
-    }
-    return pieces.join(' · ');
-  }
-
-  static String _formatDate(DateTime value) {
-    final month = value.month.toString().padLeft(2, '0');
-    final day = value.day.toString().padLeft(2, '0');
-    return '${value.year}-$month-$day';
-  }
+  String get label => ReminderEditorUiCopy.recurrenceRuleLabel(
+    frequencyIndex: frequency.index,
+    interval: interval,
+    byWeekdays: byWeekdays,
+    byMonthDay: byMonthDay,
+    endDate: endDate,
+    maxOccurrences: maxOccurrences,
+  );
 
   Map<String, dynamic> toJson() => {
     'frequency': frequency.index,

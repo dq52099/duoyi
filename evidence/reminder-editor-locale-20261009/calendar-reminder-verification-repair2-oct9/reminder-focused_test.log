@@ -1,0 +1,17 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart
+00:00 +0: mounted plan rebuilds across locales and keeps supplied copy literal
+00:00 +1: plan summaries and recurrence labels localize without changing domain JSON
+00:00 +2: relative rule selections survive a zh/en rebuild and save
+00:02 +3: weekly rule weekdays survive an open-sheet locale rebuild
+00:03 +4: recurrence fields, selected frequency, selection, and focus survive locale changes
+00:04 +5: open date picker heading and selected mode update with locale
+00:04 +6: account change leaves a nested picker on top and blocks recurrence result
+00:06 +7: account change before a reminder rule save yields no onChanged
+00:06 +8: removing the original plan caller prevents a late onChanged
+00:06 +9: a stale surviving rule sheet cannot open its type route or apply a draft
+00:07 +10: an open type menu relocalizes without changing its selected enum
+00:08 +11: clear end date tooltip relocalizes and preserves other recurrence fields
+00:09 +12: removing the recurrence caller turns its late result into null
+00:09 +13: reverse dismissal releases picker controllers and locale listeners
+00:09 +14: 320-wide enlarged text keeps the open reminder sheet usable
+00:09 +15: All tests passed!

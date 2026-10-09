@@ -58,7 +58,7 @@ void main() {
         maxOccurrences: 10,
       );
 
-      expect(rule.label, '每 2 周 · 一/三 · 至 2026-05-20 · 共 10 次');
+      expect(rule.label, '每 2 周 · 一/三 · 至 2026年5月20日 · 共 10 次');
     });
 
     test('none label stays compact', () {

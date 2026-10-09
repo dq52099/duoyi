@@ -1,0 +1,67 @@
+00:00 +0: loading /home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart
+00:00 +0: mounted plan rebuilds across locales and keeps supplied copy literal
+00:01 +1: plan summaries and recurrence labels localize without changing domain JSON
+00:01 +2: relative rule selections survive a zh/en rebuild and save
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "21:35": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart:139:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart line 139
+The test description was:
+  relative rule selections survive a zh/en rebuild and save
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:03 +2 -1: relative rule selections survive a zh/en rebuild and save [E]
+  Test failed. See exception logs above.
+  The test description was: relative rule selections survive a zh/en rebuild and save
+  
+00:03 +2 -1: weekly rule weekdays survive an open-sheet locale rebuild
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "06:45": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart:201:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/ubuntu/duoyi-worktrees/reminder-editor-locale-20261009/test/widgets/reminder_editor_locale_state_test.dart line 201
+The test description was:
+  weekly rule weekdays survive an open-sheet locale rebuild
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:04 +2 -2: weekly rule weekdays survive an open-sheet locale rebuild [E]
+  Test failed. See exception logs above.
+  The test description was: weekly rule weekdays survive an open-sheet locale rebuild
+  
+00:04 +2 -2: recurrence fields, selected frequency, selection, and focus survive locale changes
+00:05 +3 -2: open date picker heading and selected mode update with locale
+00:05 +4 -2: account change leaves a nested picker on top and blocks recurrence result
+00:07 +5 -2: account change before a reminder rule save yields no onChanged
+00:07 +6 -2: removing the original plan caller prevents a late onChanged
+00:07 +7 -2: a stale surviving rule sheet cannot open its type route or apply a draft
+00:07 +8 -2: an open type menu relocalizes without changing its selected enum
+00:08 +9 -2: clear end date tooltip relocalizes and preserves other recurrence fields
+00:09 +10 -2: removing the recurrence caller turns its late result into null
+00:10 +11 -2: reverse dismissal releases picker controllers and locale listeners
+00:10 +12 -2: 320-wide enlarged text keeps the open reminder sheet usable
+00:11 +13 -2: Some tests failed.
