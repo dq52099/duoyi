@@ -1,0 +1,26 @@
+{
+  "updated_at": "2026-10-09T06:28:12.134861+00:00",
+  "scope": "Android strict document/envelope, immutable request digest, pure ownership transitions, SQLite durable store implementation foundation",
+  "production_manifest": {
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationDocument.kt": "940a7e6181fe0ca8f3b83d892b57f342aaef0a5cfb48c0b040bb29a3e8f6087e",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationEnvelope.kt": "4e815f7c2c0df318a5da21533fe8c784cbcee2afb28b2a9a7e53e8032a501a3d",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationTransition.kt": "25caec35ca9c6133b9ec82bd4ee21210d742ee5644ae8eeec4b9fdc0fd496111",
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationStore.kt": "e9df08b1f029d71f7ee6678d73c424302e6ac5d0df194ede6fcdc1d1f8635950",
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetPublicationDocumentTest.kt": "0e355b1fb4764be0a7e8ccd3a956c42edd6145b3a9ca6b72f1e4499af9c5aafa"
+  },
+  "compiler_exit_code": 0,
+  "existing_document_cases": 10,
+  "source_unchanged_during_verification": true,
+  "source_review_repairs": [
+    "same applied presentation revision forbids changed brand/theme values",
+    "NO_LOCALIZED_COLLATORS suppresses implicit pre-validation metadata writes"
+  ],
+  "transition_runtime_verified": false,
+  "sqlite_runtime_verified": false,
+  "native_bridge_wired": false,
+  "native_renderers_wired": false,
+  "dart_publisher_wired": false,
+  "ios_store_implemented": false,
+  "deployed": false,
+  "goal_complete": false
+}
