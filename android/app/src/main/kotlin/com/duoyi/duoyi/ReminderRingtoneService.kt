@@ -43,9 +43,11 @@ class ReminderRingtoneService : Service() {
             return START_NOT_STICKY
         }
 
+        val copy = ReminderNativeCopy(intent?.getStringExtra("locale"))
+        val locale = copy.locale
         val id = intent?.getIntExtra("id", 0) ?: 0
-        val title = intent?.getStringExtra("title") ?: "多仪提醒"
-        val body = intent?.getStringExtra("body") ?: "提醒时间到了"
+        val title = intent?.getStringExtra("title") ?: copy.reminderTitle
+        val body = intent?.getStringExtra("body") ?: copy.reminderBody
         val payload = intent?.getStringExtra("payload")
         val fullScreen = intent?.getBooleanExtra("fullScreen", false) ?: false
         val shouldVibrate = intent?.getBooleanExtra("vibrate", true) ?: true
@@ -67,6 +69,7 @@ class ReminderRingtoneService : Service() {
                 vibrate = shouldVibrate,
                 snoozeMinutes = snoozeMinutes,
                 repeatCount = repeatRemaining,
+                locale = locale,
             )
             stopSelf()
             return START_NOT_STICKY
@@ -90,10 +93,11 @@ class ReminderRingtoneService : Service() {
                     snoozeMinutes = snoozeMinutes,
                     repeatRemaining = repeatRemaining,
                     rootId = rootId,
+                    locale = locale,
                 ),
             )
-            if (fullScreen && !launchFullScreenReminder(id, title, body, payload, rootId)) {
-                ReminderRingtoneReceiver.showFallbackNotification(this, id, title, body, payload, true, rootId)
+            if (fullScreen && !launchFullScreenReminder(id, title, body, payload, rootId, locale)) {
+                ReminderRingtoneReceiver.showFallbackNotification(this, id, title, body, payload, true, rootId, locale)
             }
             cancelFlutterPluginNotificationSoon(this, id)
             if (rootId != id) cancelFlutterPluginNotificationSoon(this, rootId)
@@ -116,7 +120,7 @@ class ReminderRingtoneService : Service() {
                 cancelFlutterPluginNotification(this, rootId)
             }
             activeReminderId = null
-            ReminderRingtoneReceiver.showFallbackNotification(this, id, title, body, payload, fullScreen, rootId)
+            ReminderRingtoneReceiver.showFallbackNotification(this, id, title, body, payload, fullScreen, rootId, locale)
             cancelFlutterPluginNotificationSoon(this, id)
             if (rootId != id) cancelFlutterPluginNotificationSoon(this, rootId)
             stopSelf()
@@ -124,7 +128,7 @@ class ReminderRingtoneService : Service() {
         }
         stopRunnable?.let { handler.removeCallbacks(it) }
         stopRunnable = Runnable {
-            scheduleAutoRepeat(rootId, title, body, payload, fullScreen, shouldVibrate, snoozeMinutes, repeatRemaining)
+            scheduleAutoRepeat(rootId, title, body, payload, fullScreen, shouldVibrate, snoozeMinutes, repeatRemaining, locale)
             stopSelf()
         }
         handler.postDelayed(stopRunnable!!, 30_000L)
@@ -337,10 +341,12 @@ class ReminderRingtoneService : Service() {
         snoozeMinutes: Int,
         repeatRemaining: Int,
         rootId: Int,
+        locale: String,
     ): android.app.Notification {
         ensureChannel()
-        val displayTitle = notificationDisplayTitle()
-        val displayBody = notificationDisplayBody(title, body)
+        val copy = ReminderNativeCopy(locale)
+        val displayTitle = copy.ringing
+        val displayBody = copy.displayBody(title, body)
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val contentIntent = PendingIntent.getActivity(
             this,
@@ -351,7 +357,7 @@ class ReminderRingtoneService : Service() {
         val fullScreenIntent = PendingIntent.getActivity(
             this,
             id + 3_000_000,
-            ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload),
+            ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload, locale),
             flags,
         )
         val stopIntent = PendingIntent.getService(
@@ -375,7 +381,8 @@ class ReminderRingtoneService : Service() {
                     .putExtra("snoozeMinutes", snoozeMinutes)
                     .putExtra("delayMinutes", snoozeMinutes)
                     .putExtra("repeatRemaining", repeatRemaining)
-                    .putExtra("rootId", rootId),
+                    .putExtra("rootId", rootId)
+                    .putExtra("locale", copy.locale),
                 flags,
             )
         } else {
@@ -395,21 +402,11 @@ class ReminderRingtoneService : Service() {
             .setFullScreenIntent(fullScreenIntent, fullScreen)
             .setDeleteIntent(stopIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(0, "停止闹钟", stopIntent)
+            .addAction(0, copy.stopAlarm, stopIntent)
         if (snoozeIntent != null) {
-            builder.addAction(0, "稍后提醒 $snoozeMinutes 分钟", snoozeIntent)
+            builder.addAction(0, copy.snooze(snoozeMinutes), snoozeIntent)
         }
         return builder.build()
-    }
-
-    private fun notificationDisplayTitle(): String {
-        return "多仪 · 强提醒正在响铃"
-    }
-
-    private fun notificationDisplayBody(title: String, body: String): String {
-        val cleanTitle = title.ifBlank { "多仪提醒" }
-        val cleanBody = body.ifBlank { "提醒时间到了" }
-        return if (cleanBody == cleanTitle) cleanTitle else "$cleanTitle：$cleanBody"
     }
 
     private fun launchFullScreenReminder(
@@ -418,9 +415,10 @@ class ReminderRingtoneService : Service() {
         body: String,
         payload: String?,
         rootId: Int,
+        locale: String,
     ): Boolean {
         return runCatching {
-            startActivity(ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload))
+            startActivity(ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload, locale))
             true
         }.onFailure { error ->
             Log.w("ReminderRingtoneService", "full-screen reminder launch failed", error)
@@ -442,6 +440,7 @@ class ReminderRingtoneService : Service() {
         shouldVibrate: Boolean,
         snoozeMinutes: Int,
         repeatRemaining: Int,
+        locale: String,
     ) {
         if (repeatRemaining <= 0) return
         val delayMinutes = if (snoozeMinutes > 0) snoozeMinutes else 5
@@ -457,6 +456,7 @@ class ReminderRingtoneService : Service() {
             vibrate = shouldVibrate,
             snoozeMinutes = snoozeMinutes,
             repeatCount = repeatRemaining - 1,
+            locale = locale,
         )
     }
 
@@ -902,6 +902,7 @@ class ReminderRingtoneService : Service() {
             snoozeMinutes: Int = 0,
             repeatCount: Int = 0,
             rootId: Int = id,
+            locale: String = "zh",
         ): Intent {
             return Intent(context, ReminderRingtoneService::class.java)
                 .putExtra("id", id)
@@ -914,6 +915,7 @@ class ReminderRingtoneService : Service() {
                 .putExtra("snoozeMinutes", snoozeMinutes.coerceIn(0, 120))
                 .putExtra("repeatCount", repeatCount.coerceIn(0, 10))
                 .putExtra("repeatRemaining", repeatCount.coerceIn(0, 10))
+                .putExtra("locale", ReminderNativeCopy(locale).locale)
         }
     }
 }

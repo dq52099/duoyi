@@ -29,8 +29,8 @@ class ReminderFullScreenActivity : Activity() {
     private var dateView: TextView? = null
     private val clockHandler = Handler(Looper.getMainLooper())
     // 时钟每秒刷新一次，格式化器复用以避免每次 tick 重新分配。
-    private val clockFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-    private val dateFormat = SimpleDateFormat("M月d日 EEEE", Locale.getDefault())
+    private var clockFormat = SimpleDateFormat("HH:mm", Locale.SIMPLIFIED_CHINESE)
+    private var dateFormat = SimpleDateFormat("M月d日 EEEE", Locale.SIMPLIFIED_CHINESE)
     private val clockTicker = object : Runnable {
         override fun run() {
             updateClock()
@@ -91,12 +91,15 @@ class ReminderFullScreenActivity : Activity() {
     }
 
     private fun render() {
+        val copy = ReminderNativeCopy(intent.getStringExtra(extraLocale))
+        clockFormat = SimpleDateFormat("HH:mm", copy.javaLocale)
+        dateFormat = SimpleDateFormat(copy.datePattern, copy.javaLocale)
         val reminderTitle = intent.getStringExtra(extraTitle)
             ?.takeIf { it.isNotBlank() }
-            ?: "多仪提醒"
+            ?: copy.reminderTitle
         val reminderBody = intent.getStringExtra(extraBody)
             ?.takeIf { it.isNotBlank() }
-            ?: "提醒时间到了"
+            ?: copy.reminderBody
 
         val backgroundDrawable = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
@@ -129,7 +132,7 @@ class ReminderFullScreenActivity : Activity() {
         updateClock()
 
         val badge = TextView(this).apply {
-            text = "多仪 · 强提醒正在响铃"
+            text = copy.ringing
             setTextColor(Color.rgb(45, 212, 191))
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
@@ -146,7 +149,7 @@ class ReminderFullScreenActivity : Activity() {
             ellipsize = TextUtils.TruncateAt.END
         }
         val bodyLabel = TextView(this).apply {
-            text = "提醒内容"
+            text = copy.bodyLabel
             setTextColor(Color.rgb(148, 163, 184))
             textSize = 13f
             gravity = Gravity.CENTER
@@ -164,10 +167,10 @@ class ReminderFullScreenActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val stopButton = actionButton("停止闹钟", filled = false).apply {
+        val stopButton = actionButton(copy.stopAlarm, filled = false).apply {
             setOnClickListener { stopRingtoneAndFinish() }
         }
-        val openButton = actionButton("打开详情", filled = true).apply {
+        val openButton = actionButton(copy.openDetails, filled = true).apply {
             setOnClickListener { openMainActivityAndFinish() }
         }
 
@@ -260,6 +263,7 @@ class ReminderFullScreenActivity : Activity() {
         private const val extraTitle = "duoyi.extra.REMINDER_TITLE"
         private const val extraBody = "duoyi.extra.REMINDER_BODY"
         private const val extraPayload = "duoyi.extra.REMINDER_PAYLOAD"
+        private const val extraLocale = "duoyi.extra.REMINDER_LOCALE"
 
         fun intent(
             context: Context,
@@ -268,6 +272,7 @@ class ReminderFullScreenActivity : Activity() {
             title: String,
             body: String,
             payload: String?,
+            locale: String = "zh",
         ): Intent {
             return Intent(context, ReminderFullScreenActivity::class.java)
                 .addFlags(
@@ -280,6 +285,7 @@ class ReminderFullScreenActivity : Activity() {
                 .putExtra(extraTitle, title)
                 .putExtra(extraBody, body)
                 .putExtra(extraPayload, payload)
+                .putExtra(extraLocale, ReminderNativeCopy(locale).locale)
         }
 
         fun launch(
@@ -289,9 +295,10 @@ class ReminderFullScreenActivity : Activity() {
             title: String,
             body: String,
             payload: String?,
+            locale: String = "zh",
         ): Boolean {
             return runCatching {
-                context.startActivity(intent(context, id, rootId, title, body, payload))
+                context.startActivity(intent(context, id, rootId, title, body, payload, locale))
             }.isSuccess
         }
 

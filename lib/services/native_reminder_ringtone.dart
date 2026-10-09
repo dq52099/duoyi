@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../core/local_timezone_resolver.dart';
+import '../core/i18n.dart';
 
 class NativeReminderRingtone {
   NativeReminderRingtone._();
@@ -32,6 +33,9 @@ class NativeReminderRingtone {
   );
   static int _previewGeneration = 0;
 
+  @visibleForTesting
+  static bool? debugIsAndroidOverride;
+
   static Future<void> showNow({
     required int id,
     required String title,
@@ -41,6 +45,7 @@ class NativeReminderRingtone {
     bool vibrate = true,
     int snoozeMinutes = 0,
     int repeatCount = 0,
+    AppLocale? locale,
   }) async {
     if (!_isAndroid) return;
     await _invoke('showNow', <String, Object?>{
@@ -52,6 +57,7 @@ class NativeReminderRingtone {
       'vibrate': vibrate,
       'snoozeMinutes': snoozeMinutes,
       'repeatCount': repeatCount,
+      'locale': (locale ?? I18n.current).storageValue,
     });
   }
 
@@ -65,6 +71,7 @@ class NativeReminderRingtone {
     bool vibrate = true,
     int snoozeMinutes = 0,
     int repeatCount = 0,
+    AppLocale? locale,
   }) async {
     if (!_isAndroid) return;
     await _invoke('scheduleOnce', <String, Object?>{
@@ -77,6 +84,7 @@ class NativeReminderRingtone {
       'vibrate': vibrate,
       'snoozeMinutes': snoozeMinutes,
       'repeatCount': repeatCount,
+      'locale': (locale ?? I18n.current).storageValue,
     });
     await _verifyPending(id, 'scheduleOnce');
   }
@@ -93,6 +101,7 @@ class NativeReminderRingtone {
     bool vibrate = true,
     int snoozeMinutes = 0,
     int repeatCount = 0,
+    AppLocale? locale,
   }) async {
     if (!_isAndroid) return;
     await _invoke('scheduleDaily', <String, Object?>{
@@ -108,6 +117,7 @@ class NativeReminderRingtone {
       'vibrate': vibrate,
       'snoozeMinutes': snoozeMinutes,
       'repeatCount': repeatCount,
+      'locale': (locale ?? I18n.current).storageValue,
     });
     await _verifyPending(id, 'scheduleDaily');
   }
@@ -318,6 +328,8 @@ class NativeReminderRingtone {
 
   static bool get _isAndroid {
     if (kIsWeb) return false;
+    final override = debugIsAndroidOverride;
+    if (override != null) return override;
     try {
       return Platform.isAndroid;
     } catch (_) {

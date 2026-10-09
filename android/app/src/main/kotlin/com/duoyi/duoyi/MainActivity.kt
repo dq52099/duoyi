@@ -225,16 +225,25 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 val arguments = call.arguments as? Map<*, *>
                 val id = (arguments?.get("id") as? Number)?.toInt() ?: 0
-                val title = call.argument<String>("title") ?: "多仪提醒"
-                val body = call.argument<String>("body") ?: "提醒时间到了"
                 val payload = call.argument<String>("payload")
                 val fullScreen = call.argument<Boolean>("fullScreen") ?: false
                 val vibrate = call.argument<Boolean>("vibrate") ?: true
                 val snoozeMinutes = call.argument<Int>("snoozeMinutes") ?: 0
                 val repeatCount = call.argument<Int>("repeatCount") ?: 0
+                val rawLocale = arguments?.get("locale")
+                if (call.method in setOf("showNow", "scheduleOnce", "scheduleDaily") &&
+                    arguments?.containsKey("locale") == true && rawLocale != "zh" && rawLocale != "en"
+                ) {
+                    result.error("invalid_locale", "locale must be zh or en", null)
+                    return@setMethodCallHandler
+                }
+                val copy = ReminderNativeCopy(rawLocale as? String)
+                val locale = copy.locale
+                val title = call.argument<String>("title") ?: copy.reminderTitle
+                val body = call.argument<String>("body") ?: copy.reminderBody
                 when (call.method) {
                     "showNow" -> {
-                        val ok = ReminderRingtoneScheduler.showNow(this, id, title, body, payload, fullScreen, vibrate, snoozeMinutes, repeatCount)
+                        val ok = ReminderRingtoneScheduler.showNow(this, id, title, body, payload, fullScreen, vibrate, snoozeMinutes, repeatCount, locale)
                         if (ok) {
                             result.success(true)
                         } else {
@@ -256,6 +265,7 @@ class MainActivity : FlutterActivity() {
                             vibrate,
                             snoozeMinutes,
                             repeatCount,
+                            locale,
                         )
                         if (ok) {
                             result.success(true)
@@ -285,6 +295,7 @@ class MainActivity : FlutterActivity() {
                             vibrate,
                             snoozeMinutes,
                             repeatCount,
+                            locale,
                         )
                         if (ok) {
                             result.success(true)

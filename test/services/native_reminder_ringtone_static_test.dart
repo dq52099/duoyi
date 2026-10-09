@@ -19,6 +19,9 @@ void main() {
     final scheduler = File(
       'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneScheduler.kt',
     ).readAsStringSync();
+    final nativeCopy = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderNativeCopy.kt',
+    ).readAsStringSync();
     final alarmService = File(
       'lib/services/alarm_service.dart',
     ).readAsStringSync().replaceAll('\r\n', '\n');
@@ -403,18 +406,20 @@ void main() {
     expect(fullScreenActivityManifest, contains('android:turnScreenOn="true"'));
     expect(
       service,
-      contains('launchFullScreenReminder(id, title, body, payload, rootId)'),
+      contains(
+        'launchFullScreenReminder(id, title, body, payload, rootId, locale)',
+      ),
     );
     expect(
       service,
       contains(
-        'ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload)',
+        'ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload, locale)',
       ),
     );
     expect(
       receiver,
       contains(
-        'ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload)',
+        'ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload, locale)',
       ),
     );
     expect(
@@ -432,14 +437,22 @@ void main() {
     expect(service, contains('NotificationCompat.PRIORITY_HIGH'));
     expect(service, isNot(contains('setOnlyAlertOnce(true)')));
     expect(service, contains('longArrayOf(0, 220, 420, 220)'));
-    expect(service, contains('addAction(0, "停止闹钟"'));
+    expect(service, contains('addAction(0, copy.stopAlarm, stopIntent)'));
     expect(service, contains('.setAction(actionStop)'));
     expect(service, contains('.putExtra("id", id)'));
     expect(service, contains('cancelStatusNotification'));
-    expect(service, contains(r'addAction(0, "稍后提醒 $snoozeMinutes 分钟"'));
-    expect(service, contains('notificationDisplayTitle()'));
-    expect(service, contains('多仪 · 强提醒正在响铃'));
-    expect(service, contains('notificationDisplayBody(title, body)'));
+    expect(
+      service,
+      contains(
+        'builder.addAction(0, copy.snooze(snoozeMinutes), snoozeIntent)',
+      ),
+    );
+    expect(service, contains('val copy = ReminderNativeCopy(locale)'));
+    expect(service, contains('val displayTitle = copy.ringing'));
+    expect(
+      service,
+      contains('val displayBody = copy.displayBody(title, body)'),
+    );
     expect(
       service,
       contains('NotificationCompat.BigTextStyle().bigText(displayBody)'),
@@ -477,10 +490,24 @@ void main() {
     expect(
       receiver,
       contains(
-        'ReminderRingtoneService.intent(context, id, title, body, payload, fullScreen, vibrate, snoozeMinutes, repeatRemaining, rootId)',
+        'ReminderRingtoneService.intent(context, id, title, body, payload, fullScreen, vibrate, snoozeMinutes, repeatRemaining, rootId, locale)',
       ),
     );
     expect(scheduler, contains('fun scheduleFollowUpOnce('));
+    expect(nativeCopy, contains('class ReminderNativeCopy(language: String?)'));
+    expect(
+      nativeCopy,
+      contains('val locale = if (language == "en") "en" else "zh"'),
+    );
+    expect(nativeCopy, contains('val ringing ='));
+    expect(nativeCopy, contains('val stopAlarm ='));
+    expect(nativeCopy, contains('val openDetails ='));
+    expect(nativeCopy, contains('val bodyLabel ='));
+    expect(nativeCopy, contains('fun snooze(minutes: Int): String'));
+    expect(
+      nativeCopy,
+      contains('fun displayBody(title: String, body: String): String'),
+    );
     expect(scheduler, contains('const val FOLLOW_UP_SNOOZE = "snooze"'));
     expect(
       scheduler,
@@ -692,12 +719,14 @@ void main() {
     expect(
       service,
       contains(
-        'ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload)',
+        'ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload, locale)',
       ),
     );
     expect(
       service,
-      contains('launchFullScreenReminder(id, title, body, payload, rootId)'),
+      contains(
+        'launchFullScreenReminder(id, title, body, payload, rootId, locale)',
+      ),
     );
     expect(fullScreenActivity, contains('setShowWhenLocked(true)'));
     expect(fullScreenActivity, contains('setTurnScreenOn(true)'));
@@ -851,13 +880,13 @@ void main() {
     expect(
       service,
       contains(
-        'if (fullScreen && !launchFullScreenReminder(id, title, body, payload, rootId))',
+        'if (fullScreen && !launchFullScreenReminder(id, title, body, payload, rootId, locale))',
       ),
     );
     expect(
       service,
       contains(
-        'ReminderRingtoneReceiver.showFallbackNotification(this, id, title, body, payload, true, rootId)',
+        'ReminderRingtoneReceiver.showFallbackNotification(this, id, title, body, payload, true, rootId, locale)',
       ),
     );
     expect(service, contains('): Boolean'));
@@ -865,14 +894,30 @@ void main() {
 
     expect(fullScreenActivity, contains('ScrollView'));
     expect(fullScreenActivity, contains('isFillViewport = true'));
-    expect(fullScreenActivity, contains('多仪 · 强提醒正在响铃'));
-    expect(fullScreenActivity, contains('提醒内容'));
-    expect(fullScreenActivity, contains('停止闹钟'));
-    expect(fullScreenActivity, contains('打开详情'));
+    expect(
+      fullScreenActivity,
+      contains(
+        'val copy = ReminderNativeCopy(intent.getStringExtra(extraLocale))',
+      ),
+    );
+    expect(fullScreenActivity, contains('text = copy.ringing'));
+    expect(fullScreenActivity, contains('text = copy.bodyLabel'));
+    expect(
+      fullScreenActivity,
+      contains('actionButton(copy.stopAlarm, filled = false)'),
+    );
+    expect(
+      fullScreenActivity,
+      contains('actionButton(copy.openDetails, filled = true)'),
+    );
     expect(fullScreenActivity, contains('letterSpacing = 0f'));
     expect(fullScreenActivity, isNot(contains('🔔')));
-    expect(receiver, contains('notificationDisplayTitle()'));
-    expect(receiver, contains('notificationDisplayBody(title, body)'));
+    expect(receiver, contains('val copy = ReminderNativeCopy(locale)'));
+    expect(receiver, contains('val displayTitle = copy.ringing'));
+    expect(
+      receiver,
+      contains('val displayBody = copy.displayBody(title, body)'),
+    );
     expect(
       receiver,
       contains('NotificationCompat.BigTextStyle().bigText(displayBody)'),
@@ -2237,5 +2282,118 @@ void main() {
     expect(pending, contains('_plugin.pendingNotificationRequests()'));
     expect(pending, contains('NativeReminderRingtone.pendingIdsOrThrow()'));
     expect(pending, isNot(contains('return const [];')));
+  });
+
+  test('原生提醒 locale 随队列恢复和后续通知动作传递', () {
+    final scheduler = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneScheduler.kt',
+    ).readAsStringSync();
+    final service = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneService.kt',
+    ).readAsStringSync();
+    final receiver = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneReceiver.kt',
+    ).readAsStringSync();
+    final fullScreenActivity = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/ReminderFullScreenActivity.kt',
+    ).readAsStringSync();
+    final mainActivity = File(
+      'android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt',
+    ).readAsStringSync();
+
+    expect(
+      scheduler,
+      contains(
+        '.put("repeatRemaining", intent.getIntExtra("repeatRemaining", 0))',
+      ),
+    );
+    expect(scheduler, contains('.put("locale", copy.locale)'));
+
+    final restoreStart = scheduler.indexOf('private fun restoreOne(');
+    final encodeStart = scheduler.indexOf(
+      'private fun encodeEntry(',
+      restoreStart,
+    );
+    expect(restoreStart, greaterThanOrEqualTo(0));
+    expect(encodeStart, greaterThan(restoreStart));
+    final restore = scheduler.substring(restoreStart, encodeStart);
+    expect(
+      restore,
+      contains('val copy = ReminderNativeCopy(json.optString("locale", "zh"))'),
+    );
+    expect(restore, contains('val locale = copy.locale'));
+    expect(restore, contains('locale = locale'));
+    expect(
+      restore,
+      contains(
+        'scheduleOnce(context, id, title, body, triggerAtMillis, payload, fullScreen, vibrate, snoozeMinutes, repeatCount, locale)',
+      ),
+    );
+
+    expect(
+      receiver,
+      contains(
+        'val copy = ReminderNativeCopy(intent.getStringExtra("locale"))',
+      ),
+    );
+    expect(receiver, contains('val locale = copy.locale'));
+    expect(
+      receiver,
+      contains(
+        'ReminderRingtoneService.intent(context, id, title, body, payload, fullScreen, vibrate, snoozeMinutes, repeatRemaining, rootId, locale)',
+      ),
+    );
+    expect(
+      receiver,
+      contains(
+        'showFallbackNotification(context, id, title, body, payload, fullScreen, rootId, locale)',
+      ),
+    );
+    expect(
+      receiver,
+      contains(
+        'ReminderFullScreenActivity.launch(context, id, rootId, title, body, payload, locale)',
+      ),
+    );
+
+    final notificationStart = service.indexOf('private fun buildNotification(');
+    final launchStart = service.indexOf(
+      'private fun launchFullScreenReminder(',
+      notificationStart,
+    );
+    expect(notificationStart, greaterThanOrEqualTo(0));
+    expect(launchStart, greaterThan(notificationStart));
+    final notificationBuilder = service.substring(
+      notificationStart,
+      launchStart,
+    );
+    expect(notificationBuilder, contains('.putExtra("locale", copy.locale)'));
+    expect(
+      service,
+      contains(
+        'scheduleAutoRepeat(rootId, title, body, payload, fullScreen, shouldVibrate, snoozeMinutes, repeatRemaining, locale)',
+      ),
+    );
+    expect(
+      fullScreenActivity,
+      contains('SimpleDateFormat("HH:mm", copy.javaLocale)'),
+    );
+    expect(
+      fullScreenActivity,
+      contains('SimpleDateFormat(copy.datePattern, copy.javaLocale)'),
+    );
+
+    expect(
+      mainActivity,
+      contains(
+        'arguments?.containsKey("locale") == true && rawLocale != "zh" && rawLocale != "en"',
+      ),
+    );
+    expect(
+      mainActivity,
+      contains(
+        'result.error("invalid_locale", "locale must be zh or en", null)',
+      ),
+    );
   });
 }

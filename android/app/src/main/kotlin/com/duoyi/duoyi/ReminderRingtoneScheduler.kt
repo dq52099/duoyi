@@ -56,6 +56,7 @@ object ReminderRingtoneScheduler {
         vibrate: Boolean = true,
         snoozeMinutes: Int = 0,
         repeatCount: Int = 0,
+        locale: String = "zh",
     ): Boolean {
         cancelScheduledOnly(context, id)
         prepareDeliveryInfrastructure(context)
@@ -70,6 +71,7 @@ object ReminderRingtoneScheduler {
             snoozeMinutes,
             repeatCount,
             id,
+            locale,
         )
         // `showNow` is user/test initiated. The scheduled receiver keeps its
         // own duplicate-delivery guard, but applying the same 45s guard here
@@ -84,6 +86,7 @@ object ReminderRingtoneScheduler {
             body,
             payload,
             fullScreen,
+            locale = locale,
         )
     }
 
@@ -98,6 +101,7 @@ object ReminderRingtoneScheduler {
         vibrate: Boolean = true,
         snoozeMinutes: Int = 0,
         repeatCount: Int = 0,
+        locale: String = "zh",
     ): Boolean {
         if (triggerAtMillis <= System.currentTimeMillis()) {
             cancelScheduledOnly(context, id)
@@ -116,6 +120,7 @@ object ReminderRingtoneScheduler {
             snoozeMinutes,
             repeatCount,
             deliveryToken = buildDeliveryToken(id, id, triggerAtMillis, "once"),
+            locale = locale,
         )
         if (!schedule(context, id, triggerAtMillis, intent)) return false
         rememberSchedule(context, id, triggerAtMillis, intent)
@@ -134,6 +139,7 @@ object ReminderRingtoneScheduler {
         vibrate: Boolean = true,
         snoozeMinutes: Int = 0,
         repeatCount: Int = 0,
+        locale: String = "zh",
     ): Boolean {
         if (rootId == 0) return false
         val id = followUpId(rootId, followUpKind)
@@ -156,6 +162,7 @@ object ReminderRingtoneScheduler {
             repeatCount,
             rootId,
             buildDeliveryToken(rootId, id, triggerAtMillis, followUpKind),
+            locale,
         ).putExtra("followUpKind", followUpKind)
         if (!schedule(context, id, triggerAtMillis, intent)) return false
         rememberSchedule(context, id, triggerAtMillis, intent)
@@ -215,6 +222,7 @@ object ReminderRingtoneScheduler {
         vibrate: Boolean = true,
         snoozeMinutes: Int = 0,
         repeatCount: Int = 0,
+        locale: String = "zh",
     ): Boolean {
         val normalized = weekdays.filter { it in 1..7 }.distinct().toIntArray()
         val zoneId = normalizeTimeZone(timezoneId)
@@ -232,6 +240,7 @@ object ReminderRingtoneScheduler {
             snoozeMinutes,
             repeatCount,
             deliveryToken = buildDeliveryToken(id, id, triggerAtMillis, "daily"),
+            locale = locale,
         )
             .putExtra("repeat", true)
             .putExtra("hour", hour)
@@ -244,13 +253,14 @@ object ReminderRingtoneScheduler {
     }
 
     fun rescheduleFromReceiver(context: Context, source: Intent) {
+        val copy = ReminderNativeCopy(source.getStringExtra("locale"))
         val id = source.getIntExtra("id", 0)
         if (id == 0) return
         scheduleDaily(
             context = context,
             id = id,
-            title = source.getStringExtra("title") ?: "多仪提醒",
-            body = source.getStringExtra("body") ?: "提醒时间到了",
+            title = source.getStringExtra("title") ?: copy.reminderTitle,
+            body = source.getStringExtra("body") ?: copy.reminderBody,
             hour = source.getIntExtra("hour", 9),
             minute = source.getIntExtra("minute", 0),
             weekdays = source.getIntArrayExtra("weekdays") ?: intArrayOf(),
@@ -260,6 +270,7 @@ object ReminderRingtoneScheduler {
             vibrate = source.getBooleanExtra("vibrate", true),
             snoozeMinutes = source.getIntExtra("snoozeMinutes", 0),
             repeatCount = source.getIntExtra("repeatCount", 0),
+            locale = copy.locale,
         )
     }
 
@@ -651,6 +662,7 @@ object ReminderRingtoneScheduler {
         repeatCount: Int = 0,
         rootId: Int = id,
         deliveryToken: String = buildDeliveryToken(rootId, id, System.currentTimeMillis(), "manual"),
+        locale: String = "zh",
     ): Intent {
         return Intent(context, ReminderRingtoneReceiver::class.java)
             .setAction(actionRing)
@@ -665,6 +677,7 @@ object ReminderRingtoneScheduler {
             .putExtra("repeatCount", repeatCount.coerceIn(0, 10))
             .putExtra("repeatRemaining", repeatCount.coerceIn(0, 10))
             .putExtra(deliveryTokenExtra, deliveryToken)
+            .putExtra("locale", ReminderNativeCopy(locale).locale)
     }
 
     private fun buildDeliveryToken(
@@ -783,8 +796,10 @@ object ReminderRingtoneScheduler {
     private fun restoreOne(context: Context, id: Int, deliverExpired: Boolean) {
         val raw = prefs(context).getString("${entryPrefix}$id", null) ?: return
         val json = runCatching { JSONObject(raw) }.getOrNull() ?: return
-        val title = json.optString("title", "多仪提醒")
-        val body = json.optString("body", "提醒时间到了")
+        val copy = ReminderNativeCopy(json.optString("locale", "zh"))
+        val locale = copy.locale
+        val title = json.optString("title", copy.reminderTitle)
+        val body = json.optString("body", copy.reminderBody)
         val payload = json.optString("payload").ifBlank { null }
         val rootId = json.optInt("rootId", id)
         val followUpKind = json.optString("followUpKind").ifBlank { null }
@@ -814,6 +829,7 @@ object ReminderRingtoneScheduler {
                 vibrate = vibrate,
                 snoozeMinutes = snoozeMinutes,
                 repeatCount = repeatCount,
+                locale = locale,
             )
             return
         }
@@ -833,9 +849,10 @@ object ReminderRingtoneScheduler {
                     vibrate,
                     snoozeMinutes,
                     repeatCount,
+                    locale,
                 )
             } else {
-                scheduleOnce(context, id, title, body, triggerAtMillis, payload, fullScreen, vibrate, snoozeMinutes, repeatCount)
+                scheduleOnce(context, id, title, body, triggerAtMillis, payload, fullScreen, vibrate, snoozeMinutes, repeatCount, locale)
             }
         } else {
             val intent = ReminderRingtoneService.intent(
@@ -849,6 +866,7 @@ object ReminderRingtoneScheduler {
                 snoozeMinutes,
                 repeatCount,
                 rootId,
+                locale,
             )
             cancelScheduledOnly(context, id)
             if (rootId != id) {
@@ -870,6 +888,7 @@ object ReminderRingtoneScheduler {
                         payload,
                         fullScreen,
                         rootId,
+                        locale,
                     )
                 }
             }
@@ -877,13 +896,14 @@ object ReminderRingtoneScheduler {
     }
 
     private fun encodeEntry(triggerAtMillis: Long, intent: Intent): String {
+        val copy = ReminderNativeCopy(intent.getStringExtra("locale"))
         val weekdays = intent.getIntArrayExtra("weekdays") ?: intArrayOf()
         val id = intent.getIntExtra("id", 0)
         val rootId = intent.getIntExtra("rootId", id)
         val followUpKind = intent.getStringExtra("followUpKind") ?: ""
         return JSONObject()
-            .put("title", intent.getStringExtra("title") ?: "多仪提醒")
-            .put("body", intent.getStringExtra("body") ?: "提醒时间到了")
+            .put("title", intent.getStringExtra("title") ?: copy.reminderTitle)
+            .put("body", intent.getStringExtra("body") ?: copy.reminderBody)
             .put("payload", intent.getStringExtra("payload") ?: "")
             .put("rootId", rootId)
             .put("followUpKind", followUpKind)
@@ -896,6 +916,8 @@ object ReminderRingtoneScheduler {
             .put("vibrate", intent.getBooleanExtra("vibrate", true))
             .put("snoozeMinutes", intent.getIntExtra("snoozeMinutes", 0))
             .put("repeatCount", intent.getIntExtra("repeatCount", 0))
+            .put("repeatRemaining", intent.getIntExtra("repeatRemaining", 0))
+            .put("locale", copy.locale)
             .put("triggerAtMillis", triggerAtMillis)
             .put("repeat", intent.getBooleanExtra("repeat", false))
             .put("hour", intent.getIntExtra("hour", 9))

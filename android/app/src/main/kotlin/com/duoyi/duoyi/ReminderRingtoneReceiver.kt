@@ -17,9 +17,11 @@ import androidx.core.content.ContextCompat
 
 class ReminderRingtoneReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val copy = ReminderNativeCopy(intent.getStringExtra("locale"))
+        val locale = copy.locale
         val id = intent.getIntExtra("id", 0)
-        val title = intent.getStringExtra("title") ?: "多仪提醒"
-        val body = intent.getStringExtra("body") ?: "提醒时间到了"
+        val title = intent.getStringExtra("title") ?: copy.reminderTitle
+        val body = intent.getStringExtra("body") ?: copy.reminderBody
         val payload = intent.getStringExtra("payload")
         val fullScreen = intent.getBooleanExtra("fullScreen", false)
         val vibrate = intent.getBooleanExtra("vibrate", true)
@@ -49,7 +51,7 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
             ReminderRingtoneService.cancelFlutterPluginNotificationSoon(context, rootId)
         }
         ReminderRingtoneScheduler.recordNotificationPermissionIssueIfDenied(context, id)
-        val serviceIntent = ReminderRingtoneService.intent(context, id, title, body, payload, fullScreen, vibrate, snoozeMinutes, repeatRemaining, rootId)
+        val serviceIntent = ReminderRingtoneService.intent(context, id, title, body, payload, fullScreen, vibrate, snoozeMinutes, repeatRemaining, rootId, locale)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(serviceIntent)
@@ -73,8 +75,8 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
                 ReminderRingtoneService.cancelNotification(context, rootId)
                 ReminderRingtoneService.cancelFlutterPluginNotification(context, rootId)
             }
-            showFallbackNotification(context, id, title, body, payload, fullScreen, rootId)
-            if (fullScreen && !ReminderFullScreenActivity.launch(context, id, rootId, title, body, payload)) {
+            showFallbackNotification(context, id, title, body, payload, fullScreen, rootId, locale)
+            if (fullScreen && !ReminderFullScreenActivity.launch(context, id, rootId, title, body, payload, locale)) {
                 ReminderRingtoneScheduler.recordDeliveryIssue(
                     context,
                     id,
@@ -120,6 +122,7 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
             payload: String?,
             fullScreen: Boolean,
             rootId: Int = id,
+            locale: String = "zh",
         ): Boolean {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -137,15 +140,16 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
             ensureFallbackNotificationChannel(context)
             val fallbackSoundName = selectedFallbackSoundName(context)
             val fallbackSoundUri = fallbackSoundUri(context, fallbackSoundName)
-            val displayTitle = notificationDisplayTitle()
-            val displayBody = notificationDisplayBody(title, body)
+            val copy = ReminderNativeCopy(locale)
+            val displayTitle = copy.ringing
+            val displayBody = copy.displayBody(title, body)
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             val openIntent = ReminderFullScreenActivity.mainActivityIntent(context, payload, stopRingtone = true)
             val contentIntent = PendingIntent.getActivity(context, id, openIntent, flags)
             val fullScreenIntent = PendingIntent.getActivity(
                 context,
                 id + 4_000_000,
-                ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload),
+                ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload, locale),
                 flags,
             )
             val notification = NotificationCompat.Builder(context, fallbackChannelId)
@@ -174,16 +178,6 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
                     "系统未接受闹钟兜底通知，请检查通知权限、后台限制和渠道声音。",
                 )
             }.getOrDefault(false)
-        }
-
-        private fun notificationDisplayTitle(): String {
-            return "多仪 · 强提醒正在响铃"
-        }
-
-        private fun notificationDisplayBody(title: String, body: String): String {
-            val cleanTitle = title.ifBlank { "多仪提醒" }
-            val cleanBody = body.ifBlank { "提醒时间到了" }
-            return if (cleanBody == cleanTitle) cleanTitle else "$cleanTitle：$cleanBody"
         }
 
         fun ensureFallbackNotificationChannel(context: Context) {

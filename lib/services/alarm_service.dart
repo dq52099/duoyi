@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../core/local_timezone_resolver.dart';
+import '../core/i18n.dart';
 import '../core/platform_info.dart';
 import 'local_notifications.dart';
 import 'native_reminder_ringtone.dart';
@@ -643,6 +644,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     int snoozeMinutes = 5,
     int repeatCount = 0,
   }) async {
+    final nativeLocale = I18n.current;
     if (!_initialized) await init();
     clearScheduleIssue(id: id);
     if (!when.isAfter(DateTime.now())) {
@@ -677,6 +679,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         id: id,
         scheduledTime: when,
         action: () => NativeReminderRingtone.scheduleOnce(
+          locale: nativeLocale,
           id: id,
           title: title,
           body: body,
@@ -772,6 +775,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       );
       if (!_isAndroid) {
         await NativeReminderRingtone.scheduleOnce(
+          locale: nativeLocale,
           id: id,
           title: title,
           body: body,
@@ -833,6 +837,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
           );
           if (!_isAndroid) {
             await NativeReminderRingtone.scheduleOnce(
+              locale: nativeLocale,
               id: id,
               title: title,
               body: body,
@@ -935,6 +940,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     String body = '如果你看到弹屏、听到声音并有震动，强提醒通道正常。',
     String payload = 'duoyi://alarm-test',
   }) async {
+    final nativeLocale = I18n.current;
     if (!_initialized) await init();
     String? channelIssueMessage;
     var nativeRingtoneOk = true;
@@ -952,6 +958,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         issueMessage: '内置铃声测试未能启动，已继续发送系统通知测试。请检查通知权限、渠道声音或系统后台限制。',
         id: id,
         action: () => NativeReminderRingtone.showNow(
+          locale: nativeLocale,
           id: id,
           title: title,
           body: body,
@@ -992,6 +999,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     );
     if (!_isAndroid) {
       await NativeReminderRingtone.showNow(
+        locale: nativeLocale,
         id: id,
         title: title,
         body: body,
@@ -1023,6 +1031,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     int snoozeMinutes = 5,
     int repeatCount = 0,
   }) async {
+    final nativeLocale = I18n.current;
     if (!_initialized) await init();
     final normalizedWeekdays = weekdays == null || weekdays.isEmpty
         ? const <int>[]
@@ -1051,6 +1060,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         issueMessage: '系统未接受内置重复铃声调度，已继续注册系统通知提醒。请检查后台限制或系统闹钟权限。',
         id: id,
         action: () => NativeReminderRingtone.scheduleDaily(
+          locale: nativeLocale,
           id: id,
           title: title,
           body: body,
@@ -1129,6 +1139,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         scheduledIds.add(scheduleId);
         if (!_isAndroid) {
           await NativeReminderRingtone.scheduleDaily(
+            locale: nativeLocale,
             id: scheduleId,
             title: title,
             body: body,
@@ -1180,6 +1191,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
             scheduledIds.add(scheduleId);
             if (!_isAndroid) {
               await NativeReminderRingtone.scheduleDaily(
+                locale: nativeLocale,
                 id: scheduleId,
                 title: title,
                 body: body,

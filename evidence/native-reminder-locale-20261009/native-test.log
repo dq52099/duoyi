@@ -1,0 +1,346 @@
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/runtime-native-locale-oct9
+
+Welcome to Gradle 8.14!
+
+Here are the highlights of this release:
+ - Java 24 support
+ - GraalVM Native Image toolchain selection
+ - Enhancements to test reporting
+ - Build Authoring improvements
+
+For more details see https://docs.gradle.org/8.14/release-notes.html
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :gradle:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle:compileKotlin UP-TO-DATE
+> Task :gradle:compileJava NO-SOURCE
+> Task :gradle:compileGroovy NO-SOURCE
+> Task :gradle:pluginDescriptors UP-TO-DATE
+> Task :gradle:processResources UP-TO-DATE
+> Task :gradle:classes UP-TO-DATE
+> Task :gradle:jar UP-TO-DATE
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:compileFlutterBuildDebug
+> Task :app:packJniLibsflutterBuildDebug UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :audioplayers_android:preBuild UP-TO-DATE
+> Task :audioplayers_android:preDebugBuild UP-TO-DATE
+> Task :audioplayers_android:writeDebugAarMetadata UP-TO-DATE
+> Task :connectivity_plus:preBuild UP-TO-DATE
+> Task :connectivity_plus:preDebugBuild UP-TO-DATE
+> Task :connectivity_plus:writeDebugAarMetadata UP-TO-DATE
+> Task :file_selector_android:preBuild UP-TO-DATE
+> Task :file_selector_android:preDebugBuild UP-TO-DATE
+> Task :file_selector_android:writeDebugAarMetadata UP-TO-DATE
+> Task :flutter_local_notifications:preBuild UP-TO-DATE
+> Task :flutter_local_notifications:preDebugBuild UP-TO-DATE
+> Task :flutter_local_notifications:writeDebugAarMetadata UP-TO-DATE
+> Task :flutter_timezone:preBuild UP-TO-DATE
+> Task :flutter_timezone:preDebugBuild UP-TO-DATE
+> Task :flutter_timezone:writeDebugAarMetadata UP-TO-DATE
+> Task :home_widget:preBuild UP-TO-DATE
+> Task :home_widget:preDebugBuild UP-TO-DATE
+> Task :home_widget:writeDebugAarMetadata UP-TO-DATE
+> Task :integration_test:preBuild UP-TO-DATE
+> Task :integration_test:preDebugBuild UP-TO-DATE
+> Task :integration_test:writeDebugAarMetadata UP-TO-DATE
+> Task :jni:preBuild UP-TO-DATE
+> Task :jni:preDebugBuild UP-TO-DATE
+> Task :jni:writeDebugAarMetadata UP-TO-DATE
+> Task :jni_flutter:preBuild UP-TO-DATE
+> Task :jni_flutter:preDebugBuild UP-TO-DATE
+> Task :jni_flutter:writeDebugAarMetadata UP-TO-DATE
+> Task :permission_handler_android:preBuild UP-TO-DATE
+> Task :permission_handler_android:preDebugBuild UP-TO-DATE
+> Task :permission_handler_android:writeDebugAarMetadata UP-TO-DATE
+> Task :share_plus:preBuild UP-TO-DATE
+> Task :share_plus:preDebugBuild UP-TO-DATE
+> Task :share_plus:writeDebugAarMetadata UP-TO-DATE
+> Task :shared_preferences_android:preBuild UP-TO-DATE
+> Task :shared_preferences_android:preDebugBuild UP-TO-DATE
+> Task :shared_preferences_android:writeDebugAarMetadata UP-TO-DATE
+> Task :url_launcher_android:preBuild UP-TO-DATE
+> Task :url_launcher_android:preDebugBuild UP-TO-DATE
+> Task :url_launcher_android:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:cleanMergeDebugAssets
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :audioplayers_android:mergeDebugShaders UP-TO-DATE
+> Task :audioplayers_android:compileDebugShaders NO-SOURCE
+> Task :audioplayers_android:generateDebugAssets UP-TO-DATE
+> Task :audioplayers_android:mergeDebugAssets UP-TO-DATE
+> Task :connectivity_plus:mergeDebugShaders UP-TO-DATE
+> Task :connectivity_plus:compileDebugShaders NO-SOURCE
+> Task :connectivity_plus:generateDebugAssets UP-TO-DATE
+> Task :connectivity_plus:mergeDebugAssets UP-TO-DATE
+> Task :file_selector_android:mergeDebugShaders UP-TO-DATE
+> Task :file_selector_android:compileDebugShaders NO-SOURCE
+> Task :file_selector_android:generateDebugAssets UP-TO-DATE
+> Task :file_selector_android:mergeDebugAssets UP-TO-DATE
+> Task :flutter_local_notifications:mergeDebugShaders UP-TO-DATE
+> Task :flutter_local_notifications:compileDebugShaders NO-SOURCE
+> Task :flutter_local_notifications:generateDebugAssets UP-TO-DATE
+> Task :flutter_local_notifications:mergeDebugAssets UP-TO-DATE
+> Task :flutter_timezone:mergeDebugShaders UP-TO-DATE
+> Task :flutter_timezone:compileDebugShaders NO-SOURCE
+> Task :flutter_timezone:generateDebugAssets UP-TO-DATE
+> Task :flutter_timezone:mergeDebugAssets UP-TO-DATE
+> Task :home_widget:mergeDebugShaders UP-TO-DATE
+> Task :home_widget:compileDebugShaders NO-SOURCE
+> Task :home_widget:generateDebugAssets UP-TO-DATE
+> Task :home_widget:mergeDebugAssets UP-TO-DATE
+> Task :integration_test:mergeDebugShaders UP-TO-DATE
+> Task :integration_test:compileDebugShaders NO-SOURCE
+> Task :integration_test:generateDebugAssets UP-TO-DATE
+> Task :integration_test:mergeDebugAssets UP-TO-DATE
+> Task :jni:mergeDebugShaders UP-TO-DATE
+> Task :jni:compileDebugShaders NO-SOURCE
+> Task :jni:generateDebugAssets UP-TO-DATE
+> Task :jni:mergeDebugAssets UP-TO-DATE
+> Task :jni_flutter:mergeDebugShaders UP-TO-DATE
+> Task :jni_flutter:compileDebugShaders NO-SOURCE
+> Task :jni_flutter:generateDebugAssets UP-TO-DATE
+> Task :jni_flutter:mergeDebugAssets UP-TO-DATE
+> Task :permission_handler_android:mergeDebugShaders UP-TO-DATE
+> Task :permission_handler_android:compileDebugShaders NO-SOURCE
+> Task :permission_handler_android:generateDebugAssets UP-TO-DATE
+> Task :permission_handler_android:mergeDebugAssets UP-TO-DATE
+> Task :share_plus:mergeDebugShaders UP-TO-DATE
+> Task :share_plus:compileDebugShaders NO-SOURCE
+> Task :share_plus:generateDebugAssets UP-TO-DATE
+> Task :share_plus:mergeDebugAssets UP-TO-DATE
+> Task :shared_preferences_android:mergeDebugShaders UP-TO-DATE
+> Task :shared_preferences_android:compileDebugShaders NO-SOURCE
+> Task :shared_preferences_android:generateDebugAssets UP-TO-DATE
+> Task :shared_preferences_android:mergeDebugAssets UP-TO-DATE
+> Task :url_launcher_android:mergeDebugShaders UP-TO-DATE
+> Task :url_launcher_android:compileDebugShaders NO-SOURCE
+> Task :url_launcher_android:generateDebugAssets UP-TO-DATE
+> Task :url_launcher_android:mergeDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:copyFlutterAssetsDebug
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :audioplayers_android:generateDebugResValues UP-TO-DATE
+> Task :audioplayers_android:generateDebugResources UP-TO-DATE
+> Task :audioplayers_android:packageDebugResources UP-TO-DATE
+> Task :connectivity_plus:generateDebugResValues UP-TO-DATE
+> Task :connectivity_plus:generateDebugResources UP-TO-DATE
+> Task :connectivity_plus:packageDebugResources UP-TO-DATE
+> Task :file_selector_android:generateDebugResValues UP-TO-DATE
+> Task :file_selector_android:generateDebugResources UP-TO-DATE
+> Task :file_selector_android:packageDebugResources UP-TO-DATE
+> Task :flutter_local_notifications:generateDebugResValues UP-TO-DATE
+> Task :flutter_local_notifications:generateDebugResources UP-TO-DATE
+> Task :flutter_local_notifications:packageDebugResources UP-TO-DATE
+> Task :flutter_timezone:generateDebugResValues UP-TO-DATE
+> Task :flutter_timezone:generateDebugResources UP-TO-DATE
+> Task :flutter_timezone:packageDebugResources UP-TO-DATE
+> Task :home_widget:generateDebugResValues UP-TO-DATE
+> Task :home_widget:generateDebugResources UP-TO-DATE
+> Task :home_widget:packageDebugResources UP-TO-DATE
+> Task :integration_test:generateDebugResValues UP-TO-DATE
+> Task :integration_test:generateDebugResources UP-TO-DATE
+> Task :integration_test:packageDebugResources UP-TO-DATE
+> Task :jni:generateDebugResValues UP-TO-DATE
+> Task :jni:generateDebugResources UP-TO-DATE
+> Task :jni:packageDebugResources UP-TO-DATE
+> Task :jni_flutter:generateDebugResValues UP-TO-DATE
+> Task :jni_flutter:generateDebugResources UP-TO-DATE
+> Task :jni_flutter:packageDebugResources UP-TO-DATE
+> Task :permission_handler_android:generateDebugResValues UP-TO-DATE
+> Task :permission_handler_android:generateDebugResources UP-TO-DATE
+> Task :permission_handler_android:packageDebugResources UP-TO-DATE
+> Task :share_plus:generateDebugResValues UP-TO-DATE
+> Task :share_plus:generateDebugResources UP-TO-DATE
+> Task :share_plus:packageDebugResources UP-TO-DATE
+> Task :shared_preferences_android:generateDebugResValues UP-TO-DATE
+> Task :shared_preferences_android:generateDebugResources UP-TO-DATE
+> Task :shared_preferences_android:packageDebugResources UP-TO-DATE
+> Task :url_launcher_android:generateDebugResValues UP-TO-DATE
+> Task :url_launcher_android:generateDebugResources UP-TO-DATE
+> Task :url_launcher_android:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :audioplayers_android:extractDeepLinksDebug UP-TO-DATE
+> Task :audioplayers_android:processDebugManifest UP-TO-DATE
+> Task :connectivity_plus:extractDeepLinksDebug UP-TO-DATE
+> Task :connectivity_plus:processDebugManifest UP-TO-DATE
+> Task :file_selector_android:extractDeepLinksDebug UP-TO-DATE
+> Task :file_selector_android:processDebugManifest UP-TO-DATE
+> Task :flutter_local_notifications:extractDeepLinksDebug UP-TO-DATE
+> Task :flutter_local_notifications:processDebugManifest UP-TO-DATE
+> Task :flutter_timezone:extractDeepLinksDebug UP-TO-DATE
+> Task :flutter_timezone:processDebugManifest UP-TO-DATE
+> Task :home_widget:extractDeepLinksDebug UP-TO-DATE
+> Task :home_widget:processDebugManifest UP-TO-DATE
+> Task :integration_test:extractDeepLinksDebug UP-TO-DATE
+> Task :integration_test:processDebugManifest UP-TO-DATE
+> Task :jni:extractDeepLinksDebug UP-TO-DATE
+> Task :jni:processDebugManifest UP-TO-DATE
+> Task :jni_flutter:extractDeepLinksDebug UP-TO-DATE
+> Task :jni_flutter:processDebugManifest UP-TO-DATE
+> Task :permission_handler_android:extractDeepLinksDebug UP-TO-DATE
+> Task :permission_handler_android:processDebugManifest UP-TO-DATE
+> Task :share_plus:extractDeepLinksDebug UP-TO-DATE
+> Task :share_plus:processDebugManifest UP-TO-DATE
+> Task :shared_preferences_android:extractDeepLinksDebug UP-TO-DATE
+> Task :shared_preferences_android:processDebugManifest UP-TO-DATE
+> Task :url_launcher_android:extractDeepLinksDebug UP-TO-DATE
+> Task :url_launcher_android:processDebugManifest UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:outputDebugAppLinkSettings UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :audioplayers_android:compileDebugLibraryResources UP-TO-DATE
+> Task :audioplayers_android:parseDebugLocalResources UP-TO-DATE
+> Task :audioplayers_android:generateDebugRFile UP-TO-DATE
+> Task :connectivity_plus:compileDebugLibraryResources UP-TO-DATE
+> Task :connectivity_plus:parseDebugLocalResources UP-TO-DATE
+> Task :connectivity_plus:generateDebugRFile UP-TO-DATE
+> Task :file_selector_android:compileDebugLibraryResources UP-TO-DATE
+> Task :file_selector_android:parseDebugLocalResources UP-TO-DATE
+> Task :file_selector_android:generateDebugRFile UP-TO-DATE
+> Task :flutter_local_notifications:compileDebugLibraryResources UP-TO-DATE
+> Task :flutter_local_notifications:parseDebugLocalResources UP-TO-DATE
+> Task :flutter_local_notifications:generateDebugRFile UP-TO-DATE
+> Task :flutter_timezone:compileDebugLibraryResources UP-TO-DATE
+> Task :flutter_timezone:parseDebugLocalResources UP-TO-DATE
+> Task :flutter_timezone:generateDebugRFile UP-TO-DATE
+> Task :home_widget:compileDebugLibraryResources UP-TO-DATE
+> Task :home_widget:parseDebugLocalResources UP-TO-DATE
+> Task :home_widget:generateDebugRFile UP-TO-DATE
+> Task :integration_test:compileDebugLibraryResources UP-TO-DATE
+> Task :integration_test:parseDebugLocalResources UP-TO-DATE
+> Task :integration_test:generateDebugRFile UP-TO-DATE
+> Task :jni:compileDebugLibraryResources UP-TO-DATE
+> Task :jni:parseDebugLocalResources UP-TO-DATE
+> Task :jni:generateDebugRFile UP-TO-DATE
+> Task :jni_flutter:compileDebugLibraryResources UP-TO-DATE
+> Task :jni_flutter:parseDebugLocalResources UP-TO-DATE
+> Task :jni_flutter:generateDebugRFile UP-TO-DATE
+> Task :permission_handler_android:compileDebugLibraryResources UP-TO-DATE
+> Task :permission_handler_android:parseDebugLocalResources UP-TO-DATE
+> Task :permission_handler_android:generateDebugRFile UP-TO-DATE
+> Task :share_plus:compileDebugLibraryResources UP-TO-DATE
+> Task :share_plus:parseDebugLocalResources UP-TO-DATE
+> Task :share_plus:generateDebugRFile UP-TO-DATE
+> Task :shared_preferences_android:compileDebugLibraryResources UP-TO-DATE
+> Task :shared_preferences_android:parseDebugLocalResources UP-TO-DATE
+> Task :shared_preferences_android:generateDebugRFile UP-TO-DATE
+> Task :url_launcher_android:compileDebugLibraryResources UP-TO-DATE
+> Task :url_launcher_android:parseDebugLocalResources UP-TO-DATE
+> Task :url_launcher_android:generateDebugRFile UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :audioplayers_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :audioplayers_android:compileDebugKotlin UP-TO-DATE
+> Task :audioplayers_android:javaPreCompileDebug UP-TO-DATE
+> Task :audioplayers_android:compileDebugJavaWithJavac NO-SOURCE
+> Task :audioplayers_android:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :connectivity_plus:javaPreCompileDebug UP-TO-DATE
+> Task :connectivity_plus:compileDebugJavaWithJavac UP-TO-DATE
+> Task :connectivity_plus:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :file_selector_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :file_selector_android:compileDebugKotlin UP-TO-DATE
+> Task :file_selector_android:javaPreCompileDebug UP-TO-DATE
+> Task :file_selector_android:compileDebugJavaWithJavac UP-TO-DATE
+> Task :file_selector_android:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :flutter_local_notifications:javaPreCompileDebug UP-TO-DATE
+> Task :flutter_local_notifications:compileDebugJavaWithJavac UP-TO-DATE
+> Task :flutter_local_notifications:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :flutter_timezone:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :flutter_timezone:compileDebugKotlin UP-TO-DATE
+> Task :flutter_timezone:javaPreCompileDebug UP-TO-DATE
+> Task :flutter_timezone:compileDebugJavaWithJavac NO-SOURCE
+> Task :flutter_timezone:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :home_widget:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :home_widget:compileDebugKotlin UP-TO-DATE
+> Task :home_widget:javaPreCompileDebug UP-TO-DATE
+> Task :home_widget:compileDebugJavaWithJavac NO-SOURCE
+> Task :home_widget:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :integration_test:javaPreCompileDebug UP-TO-DATE
+> Task :integration_test:compileDebugJavaWithJavac UP-TO-DATE
+> Task :integration_test:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :jni:javaPreCompileDebug UP-TO-DATE
+> Task :jni:compileDebugJavaWithJavac UP-TO-DATE
+> Task :jni:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :jni_flutter:javaPreCompileDebug UP-TO-DATE
+> Task :jni_flutter:compileDebugJavaWithJavac UP-TO-DATE
+> Task :jni_flutter:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :permission_handler_android:javaPreCompileDebug UP-TO-DATE
+> Task :permission_handler_android:compileDebugJavaWithJavac UP-TO-DATE
+> Task :permission_handler_android:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :share_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :share_plus:compileDebugKotlin UP-TO-DATE
+> Task :share_plus:javaPreCompileDebug UP-TO-DATE
+> Task :share_plus:compileDebugJavaWithJavac NO-SOURCE
+> Task :share_plus:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :shared_preferences_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared_preferences_android:compileDebugKotlin UP-TO-DATE
+> Task :shared_preferences_android:javaPreCompileDebug UP-TO-DATE
+> Task :shared_preferences_android:compileDebugJavaWithJavac UP-TO-DATE
+> Task :shared_preferences_android:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :url_launcher_android:generateDebugBuildConfig UP-TO-DATE
+> Task :url_launcher_android:javaPreCompileDebug UP-TO-DATE
+> Task :url_launcher_android:compileDebugJavaWithJavac UP-TO-DATE
+> Task :url_launcher_android:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:processDebugUnitTestJavaRes
+> Task :audioplayers_android:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :audioplayers_android:processDebugJavaRes UP-TO-DATE
+> Task :connectivity_plus:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :connectivity_plus:processDebugJavaRes NO-SOURCE
+> Task :file_selector_android:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :file_selector_android:processDebugJavaRes UP-TO-DATE
+> Task :flutter_local_notifications:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :flutter_local_notifications:processDebugJavaRes NO-SOURCE
+> Task :flutter_timezone:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :flutter_timezone:processDebugJavaRes UP-TO-DATE
+> Task :home_widget:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :home_widget:processDebugJavaRes UP-TO-DATE
+> Task :integration_test:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :integration_test:processDebugJavaRes NO-SOURCE
+> Task :jni:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :jni:processDebugJavaRes NO-SOURCE
+> Task :jni_flutter:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :jni_flutter:processDebugJavaRes NO-SOURCE
+> Task :permission_handler_android:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :permission_handler_android:processDebugJavaRes NO-SOURCE
+> Task :share_plus:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :share_plus:processDebugJavaRes UP-TO-DATE
+> Task :shared_preferences_android:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :shared_preferences_android:processDebugJavaRes UP-TO-DATE
+> Task :url_launcher_android:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :url_launcher_android:processDebugJavaRes NO-SOURCE
+
+> Task :app:testDebugUnitTest
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/home/ubuntu/duoyi_deploy_backups/widget-refinement-20261006/runtime-native-locale-oct9
+
+[Incubating] Problems report is available at: file:///home/ubuntu/duoyi-worktrees/native-locale-20261009/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 6m 5s
+238 actionable tasks: 10 executed, 228 up-to-date
