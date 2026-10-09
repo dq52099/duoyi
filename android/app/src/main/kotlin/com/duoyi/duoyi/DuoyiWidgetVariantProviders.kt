@@ -227,7 +227,16 @@ object DuoyiWidgetProviderRegistry {
         if (restoredCount > 0) {
             Log.i(tag, "restore_enabled_providers count=$restoredCount")
         }
+        // Resume also reaches this path when provider enablement needed no repair.
+        DuoyiWidgetDayBoundaryScheduler.reconcile(context, force = true)
         return restoredCount
+    }
+
+    fun installedWidgetCount(context: Context): Int {
+        val manager = AppWidgetManager.getInstance(context)
+        return allWidgetProviderClasses().sumOf { providerClass ->
+            manager.getAppWidgetIds(ComponentName(context, providerClass)).size
+        }
     }
 
     private fun pendingEntry(requestId: String, component: ComponentName): String {
@@ -362,18 +371,22 @@ object DuoyiWidgetProviderRegistry {
     private fun requestUpdateComponents(context: Context, components: List<ComponentName>): Int {
         val manager = AppWidgetManager.getInstance(context)
         var updatedCount = 0
-        for (component in components) {
-            val ids = manager.getAppWidgetIds(component)
-            if (ids.isEmpty()) continue
-            ensureProviderEnabled(context, component)
-            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
-                setComponent(component)
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+        try {
+            for (component in components) {
+                val ids = manager.getAppWidgetIds(component)
+                if (ids.isEmpty()) continue
+                ensureProviderEnabled(context, component)
+                val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
+                    setComponent(component)
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+                }
+                context.sendBroadcast(intent)
+                updatedCount += ids.size
             }
-            context.sendBroadcast(intent)
-            updatedCount += ids.size
+            return updatedCount
+        } finally {
+            DuoyiWidgetDayBoundaryScheduler.reconcile(context)
         }
-        return updatedCount
     }
 
     private fun hasPendingVariantProvider(context: Context, component: ComponentName): Boolean {

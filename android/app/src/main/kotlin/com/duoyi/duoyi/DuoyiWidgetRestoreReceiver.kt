@@ -10,9 +10,14 @@ class DuoyiWidgetRestoreReceiver : BroadcastReceiver() {
         val action = intent.action ?: return
         if (action !in supportedActions) return
         val appContext = context.applicationContext
-        val restored = DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(appContext)
-        val updated = DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(appContext)
-        Log.i(tag, "restore action=$action restoredProviders=$restored updatedWidgets=$updated")
+        DuoyiWidgetDayBoundaryScheduler.invalidate()
+        try {
+            val restored = DuoyiWidgetProviderRegistry.restoreEnabledProvidersForExistingWidgets(appContext)
+            val updated = DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(appContext)
+            Log.i(tag, "restore action=$action restoredProviders=$restored updatedWidgets=$updated")
+        } finally {
+            DuoyiWidgetDayBoundaryScheduler.reconcile(appContext)
+        }
     }
 
     companion object {

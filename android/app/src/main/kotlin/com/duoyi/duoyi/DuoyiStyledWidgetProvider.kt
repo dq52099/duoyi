@@ -4,11 +4,22 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import es.antonborri.home_widget.HomeWidgetPlugin
 
 open class DuoyiStyledWidgetProvider : AppWidgetProvider() {
+    override fun onReceive(context: Context, intent: Intent) {
+        try {
+            super.onReceive(context, intent)
+        } finally {
+            if (DuoyiWidgetDayBoundaryScheduler.isWidgetLifecycleAction(intent.action)) {
+                DuoyiWidgetDayBoundaryScheduler.reconcile(context)
+            }
+        }
+    }
+
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         super.onDeleted(context, appWidgetIds)
         DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(

@@ -21,9 +21,15 @@ import java.util.Locale
  */
 class DuoyiWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-            DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(context)
+        try {
+            super.onReceive(context, intent)
+            if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+                DuoyiWidgetProviderRegistry.requestUpdateForAllWidgets(context)
+            }
+        } finally {
+            if (DuoyiWidgetDayBoundaryScheduler.isWidgetLifecycleAction(intent.action)) {
+                DuoyiWidgetDayBoundaryScheduler.reconcile(context)
+            }
         }
     }
 

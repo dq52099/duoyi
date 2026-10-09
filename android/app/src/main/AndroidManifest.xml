@@ -142,6 +142,10 @@
             android:name=".DuoyiWidgetPinResultReceiver"
             android:exported="false" />
         <receiver
+            android:name=".DuoyiWidgetDayBoundaryReceiver"
+            android:exported="false"
+            android:enabled="true" />
+        <receiver
             android:name=".DuoyiWidgetRestoreReceiver"
             android:exported="true"
             android:enabled="true">
