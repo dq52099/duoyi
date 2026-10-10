@@ -93,333 +93,344 @@ class MineScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.select<ThemeProvider, _MineThemeSlice>(
-      (provider) =>
-          (strings: provider.brand.strings, brandName: provider.brand.name),
-    );
-    final s = theme.strings;
-    final cs = Theme.of(context).colorScheme;
-    final routeBackground = Theme.of(context).brightness == Brightness.dark
-        ? cs.surface
-        : cs.surfaceContainerLowest;
-    final scaffoldBackground = useShellBackground
-        ? Colors.transparent
-        : routeBackground;
-    final toolbarBackground = useShellBackground
-        ? Colors.transparent
-        : routeBackground.withValues(alpha: 0.96);
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final theme = context.select<ThemeProvider, _MineThemeSlice>(
+          (provider) =>
+              (strings: provider.brand.strings, brandName: provider.brand.name),
+        );
+        final s = theme.strings;
+        final cs = Theme.of(context).colorScheme;
+        final routeBackground = Theme.of(context).brightness == Brightness.dark
+            ? cs.surface
+            : cs.surfaceContainerLowest;
+        final scaffoldBackground = useShellBackground
+            ? Colors.transparent
+            : routeBackground;
+        final toolbarBackground = useShellBackground
+            ? Colors.transparent
+            : routeBackground.withValues(alpha: 0.96);
 
-    final mineHeader = _MineHeaderSection(
-      onShowAvatarPreview: _showAvatarPreview,
-      onPickAndSaveAvatar: _pickAndSaveAvatar,
-      onConfirmLogout: _confirmLogout,
-      onOpenProfileEditor: _openProfileEditor,
-    );
+        final mineHeader = _MineHeaderSection(
+          onShowAvatarPreview: _showAvatarPreview,
+          onPickAndSaveAvatar: _pickAndSaveAvatar,
+          onConfirmLogout: _confirmLogout,
+          onOpenProfileEditor: _openProfileEditor,
+        );
 
-    const mineStats = _MineStatsSection();
+        final mineStats = _MineStatsSection();
 
-    const aiAssistant = _MineAiAssistantSection();
+        final aiAssistant = _MineAiAssistantSection();
 
-    return Scaffold(
-      backgroundColor: scaffoldBackground,
-      appBar: AppBar(
-        title: Text(s.mineTitle),
-        backgroundColor: toolbarBackground,
-        surfaceTintColor: Colors.transparent,
-        actions: [
-          IconButton(
-            tooltip: I18n.tr('quick.menu.search'),
-            icon: const Icon(Icons.search),
-            onPressed: () => _openBrandedRoute(context, const SearchScreen()),
+        return Scaffold(
+          backgroundColor: scaffoldBackground,
+          appBar: AppBar(
+            title: Text(s.mineTitle),
+            backgroundColor: toolbarBackground,
+            surfaceTintColor: Colors.transparent,
+            actions: [
+              IconButton(
+                tooltip: I18n.tr('quick.menu.search'),
+                icon: const Icon(Icons.search),
+                onPressed: () =>
+                    _openBrandedRoute(context, const SearchScreen()),
+              ),
+            ],
           ),
-        ],
-      ),
-      body: ListView.builder(
-        key: const PageStorageKey<String>('mine_screen_list'),
-        restorationId: 'mine_screen_list',
-        itemCount: 10,
-        itemBuilder: (context, index) {
-          switch (index) {
-            case 0:
-              return mineHeader;
-            case 1:
-              return mineStats;
-            case 2:
-              return aiAssistant;
-            case 3:
-              return const SizedBox(height: 12);
-            case 4:
-              return _TileGroup(
-                title: I18n.tr('mine.group.action_plan'),
-                children: [
-                  _Tile(
-                    icon: Icons.flag_circle_outlined,
-                    label: I18n.tr('goal.title'),
-                    color: Colors.orange,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            const BrandRouteSurface(child: GoalScreen()),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.timer,
-                    label: I18n.tr('mine.tile.pomodoro'),
-                    color: Colors.red,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const BrandRouteSurface(
-                          child: PomodoroScreen(useShellBackground: true),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.apps_outlined,
-                    label: I18n.tr('mine.tile.more_apps'),
-                    subtitle: I18n.tr('mine.tile.more_apps.subtitle'),
-                    color: Colors.blueGrey,
-                    onTap: () => _openMoreApplications(context),
-                  ),
-                ],
-              );
-            case 5:
-              return const _MineRecordReviewGroup();
-            case 6:
-              return _TileGroup(
-                title: I18n.tr('mine.group.schedule'),
-                children: [
-                  _Tile(
-                    icon: Icons.school_outlined,
-                    label: I18n.tr('mine.tile.courses'),
-                    color: Colors.blue,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const BrandRouteSurface(
-                          child: CourseScheduleScreen(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.calendar_month_outlined,
-                    label: I18n.tr('today.almanac.title'),
-                    color: Colors.green,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const BrandRouteSurface(
-                          child: AlmanacScreen(
-                            initialMode: AlmanacEntryMode.calendar,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.hourglass_bottom_outlined,
-                    label: I18n.tr('countdown.title'),
-                    color: Colors.deepOrange,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            const BrandRouteSurface(child: CountdownScreen()),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.event_available_outlined,
-                    label: I18n.tr('anniversary.title'),
-                    color: Colors.pink,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const BrandRouteSurface(
-                          child: anniversary.MemorialAnniversaryScreen(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.cake_outlined,
-                    label: I18n.tr('anniversary.birthday'),
-                    color: Colors.purple,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const BrandRouteSurface(
-                          child: anniversary.BirthdayScreen(),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            case 7:
-              return _TileGroup(
-                title: I18n.tr('mine.group.personal'),
-                children: [
-                  _Tile(
-                    icon: Icons.palette,
-                    label: s.mineThemeLabel,
-                    color: cs.primary,
-                    trailing: Text(
-                      theme.brandName,
-                      style: TextStyle(color: cs.primary, fontSize: 11),
-                    ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            const BrandRouteSurface(child: ThemePickerScreen()),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.tune,
-                    label: I18n.tr('preferences.title'),
-                    color: Colors.indigo,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            const BrandRouteSurface(child: PreferencesScreen()),
-                      ),
-                    ),
-                  ),
-                  _Tile(
-                    icon: Icons.lock_outline,
-                    label: I18n.tr('app_lock.title'),
-                    color: Colors.red.shade400,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const BrandRouteSurface(
-                          child: LockSettingsScreen(),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            case 8:
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 云同步状态卡：上次同步时间 / 进行中 / 未同步角标 / 失败原因
-                  // 与自动重试提示，紧贴"数据协作"分组（含同步冲突记录入口）上方。
-                  const SyncStatusCard(),
-                  _TileGroup(
-                    title: I18n.tr('mine.group.data'),
+          body: ListView.builder(
+            key: const PageStorageKey<String>('mine_screen_list'),
+            restorationId: 'mine_screen_list',
+            itemCount: 10,
+            itemBuilder: (context, index) {
+              switch (index) {
+                case 0:
+                  return mineHeader;
+                case 1:
+                  return mineStats;
+                case 2:
+                  return aiAssistant;
+                case 3:
+                  return const SizedBox(height: 12);
+                case 4:
+                  return _TileGroup(
+                    title: I18n.tr('mine.group.action_plan'),
                     children: [
                       _Tile(
-                        icon: Icons.groups_2_outlined,
-                        label: I18n.tr('share.title'),
-                        color: Colors.cyan,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const BrandRouteSurface(child: ShareScreen()),
-                          ),
-                        ),
-                      ),
-                      _Tile(
-                        icon: Icons.extension_outlined,
-                        label: I18n.tr('mine.tile.integrations'),
-                        color: Colors.deepPurple,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const BrandRouteSurface(
-                              child: IntegrationsScreen(),
-                            ),
-                          ),
-                        ),
-                      ),
-                      _Tile(
-                        icon: Icons.sync_problem_outlined,
-                        label: I18n.tr('sync_conflict.title'),
+                        icon: Icons.flag_circle_outlined,
+                        label: I18n.tr('goal.title'),
                         color: Colors.orange,
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const BrandRouteSurface(
-                              child: SyncConflictLogScreen(),
-                            ),
-                          ),
-                        ),
-                      ),
-                      _Tile(
-                        icon: Icons.event_note_outlined,
-                        label: I18n.tr('export.title'),
-                        color: Colors.lightBlue,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
                             builder: (_) =>
-                                const BrandRouteSurface(child: ExportScreen()),
+                                const BrandRouteSurface(child: GoalScreen()),
                           ),
                         ),
                       ),
                       _Tile(
-                        icon: Icons.backup_outlined,
-                        label: I18n.tr('mine.tile.backup'),
-                        color: Colors.brown,
+                        icon: Icons.timer,
+                        label: I18n.tr('mine.tile.pomodoro'),
+                        color: Colors.red,
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => const BrandRouteSurface(
-                              child: BackupScreen(
-                                initialMode: BackupEntryMode.backup,
+                              child: PomodoroScreen(useShellBackground: true),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _Tile(
+                        icon: Icons.apps_outlined,
+                        label: I18n.tr('mine.tile.more_apps'),
+                        subtitle: I18n.tr('mine.tile.more_apps.subtitle'),
+                        color: Colors.blueGrey,
+                        onTap: () => _openMoreApplications(context),
+                      ),
+                    ],
+                  );
+                case 5:
+                  return _MineRecordReviewGroup();
+                case 6:
+                  return _TileGroup(
+                    title: I18n.tr('mine.group.schedule'),
+                    children: [
+                      _Tile(
+                        icon: Icons.school_outlined,
+                        label: I18n.tr('mine.tile.courses'),
+                        color: Colors.blue,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BrandRouteSurface(
+                              child: CourseScheduleScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _Tile(
+                        icon: Icons.calendar_month_outlined,
+                        label: I18n.tr('today.almanac.title'),
+                        color: Colors.green,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BrandRouteSurface(
+                              child: AlmanacScreen(
+                                initialMode: AlmanacEntryMode.calendar,
                               ),
                             ),
                           ),
                         ),
                       ),
                       _Tile(
-                        icon: Icons.restore_outlined,
-                        label: I18n.tr('mine.tile.restore'),
-                        color: Colors.blueGrey,
+                        icon: Icons.hourglass_bottom_outlined,
+                        label: I18n.tr('countdown.title'),
+                        color: Colors.deepOrange,
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => const BrandRouteSurface(
-                              child: BackupScreen(
-                                initialMode: BackupEntryMode.restore,
-                              ),
+                              child: CountdownScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _Tile(
+                        icon: Icons.event_available_outlined,
+                        label: I18n.tr('anniversary.title'),
+                        color: Colors.pink,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BrandRouteSurface(
+                              child: anniversary.MemorialAnniversaryScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _Tile(
+                        icon: Icons.cake_outlined,
+                        label: I18n.tr('anniversary.birthday'),
+                        color: Colors.purple,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BrandRouteSurface(
+                              child: anniversary.BirthdayScreen(),
                             ),
                           ),
                         ),
                       ),
                     ],
-                  ),
-                ],
-              );
-            case 9:
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _MineNotificationSupportGroup(
-                    aboutLabel: s.mineAboutLabel,
-                    onOpenNotificationHistory: _openNotificationHistory,
-                    onOpenNotificationSettings: _openNotificationSettings,
-                    onOpenFeedback: _openFeedback,
-                    onShowUpdateDialog: _showUpdateDialog,
-                    onAbout: _aboutDialog,
-                  ),
-                  const SizedBox(height: 32),
-                ],
-              );
-          }
-          return const SizedBox.shrink();
-        },
-      ),
+                  );
+                case 7:
+                  return _TileGroup(
+                    title: I18n.tr('mine.group.personal'),
+                    children: [
+                      _Tile(
+                        icon: Icons.palette,
+                        label: s.mineThemeLabel,
+                        color: cs.primary,
+                        trailing: Text(
+                          theme.brandName,
+                          style: TextStyle(color: cs.primary, fontSize: 11),
+                        ),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BrandRouteSurface(
+                              child: ThemePickerScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _Tile(
+                        icon: Icons.tune,
+                        label: I18n.tr('preferences.title'),
+                        color: Colors.indigo,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BrandRouteSurface(
+                              child: PreferencesScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _Tile(
+                        icon: Icons.lock_outline,
+                        label: I18n.tr('app_lock.title'),
+                        color: Colors.red.shade400,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BrandRouteSurface(
+                              child: LockSettingsScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                case 8:
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 云同步状态卡：上次同步时间 / 进行中 / 未同步角标 / 失败原因
+                      // 与自动重试提示，紧贴"数据协作"分组（含同步冲突记录入口）上方。
+                      const SyncStatusCard(),
+                      _TileGroup(
+                        title: I18n.tr('mine.group.data'),
+                        children: [
+                          _Tile(
+                            icon: Icons.groups_2_outlined,
+                            label: I18n.tr('share.title'),
+                            color: Colors.cyan,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: ShareScreen(),
+                                ),
+                              ),
+                            ),
+                          ),
+                          _Tile(
+                            icon: Icons.extension_outlined,
+                            label: I18n.tr('mine.tile.integrations'),
+                            color: Colors.deepPurple,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: IntegrationsScreen(),
+                                ),
+                              ),
+                            ),
+                          ),
+                          _Tile(
+                            icon: Icons.sync_problem_outlined,
+                            label: I18n.tr('sync_conflict.title'),
+                            color: Colors.orange,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: SyncConflictLogScreen(),
+                                ),
+                              ),
+                            ),
+                          ),
+                          _Tile(
+                            icon: Icons.event_note_outlined,
+                            label: I18n.tr('export.title'),
+                            color: Colors.lightBlue,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: ExportScreen(),
+                                ),
+                              ),
+                            ),
+                          ),
+                          _Tile(
+                            icon: Icons.backup_outlined,
+                            label: I18n.tr('mine.tile.backup'),
+                            color: Colors.brown,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: BackupScreen(
+                                    initialMode: BackupEntryMode.backup,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          _Tile(
+                            icon: Icons.restore_outlined,
+                            label: I18n.tr('mine.tile.restore'),
+                            color: Colors.blueGrey,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: BackupScreen(
+                                    initialMode: BackupEntryMode.restore,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                case 9:
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _MineNotificationSupportGroup(
+                        aboutLabel: s.mineAboutLabel,
+                        onOpenNotificationHistory: _openNotificationHistory,
+                        onOpenNotificationSettings: _openNotificationSettings,
+                        onOpenFeedback: _openFeedback,
+                        onShowUpdateDialog: _showUpdateDialog,
+                        onAbout: _aboutDialog,
+                      ),
+                      const SizedBox(height: 32),
+                    ],
+                  );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -428,6 +439,7 @@ class MineScreen extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (_) => BrandRouteSurface(
+          remountOnLocaleChange: false,
           child: ProfileScreen(openAvatarSheetOnStart: avatarOnly),
         ),
       ),
@@ -437,21 +449,24 @@ class MineScreen extends StatelessWidget {
   Future<void> _confirmLogout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AppDialog(
-        icon: const Icon(Icons.logout),
-        title: Text(I18n.tr('mine.logout.confirm_title')),
-        content: Text(I18n.tr('mine.logout.confirm_content')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(I18n.tr('action.cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: appSecondaryFilledButtonStyle(ctx),
-            child: Text(I18n.tr('auth.logout')),
-          ),
-        ],
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (dialogCtx, locale, _) => AppDialog(
+          icon: const Icon(Icons.logout),
+          title: Text(I18n.tr('mine.logout.confirm_title')),
+          content: Text(I18n.tr('mine.logout.confirm_content')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: appSecondaryFilledButtonStyle(ctx),
+              child: Text(I18n.tr('auth.logout')),
+            ),
+          ],
+        ),
       ),
     );
     if (confirmed != true || !context.mounted) return;
@@ -548,13 +563,8 @@ class MineScreen extends StatelessWidget {
             auth.state.username,
             profile.displayName,
             profile.username,
-            I18n.tr('mine.me_fallback'),
           ])
-        : _firstNonEmpty([
-            profile.displayName,
-            profile.username,
-            I18n.tr('mine.me_fallback'),
-          ]);
+        : _firstNonEmpty([profile.displayName, profile.username]);
     final avatar = auth.state.isLoggedIn
         ? _firstNonEmpty([
             auth.state.avatar,
@@ -580,204 +590,226 @@ class MineScreen extends StatelessWidget {
     showDialog(
       context: context,
       barrierDismissible: !u.mustUpdate,
-      builder: (ctx) => Consumer<AppUpdateService>(
-        builder: (context, updater, _) {
-          if (kIsWeb) {
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (dialogCtx, locale, _) => Consumer<AppUpdateService>(
+          builder: (context, updater, _) {
+            if (kIsWeb) {
+              return PopScope(
+                canPop: true,
+                child: AppDialog(
+                  title: Text(I18n.tr('mine.update.check_title')),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${I18n.tr('mine.update.current_version_prefix')}${updater.currentVersion}',
+                      ),
+                      if (updater.latestVersion != null &&
+                          updater.latestVersion!.isNotEmpty)
+                        Text(
+                          '${I18n.tr('mine.update.remote_version_prefix')}${updater.latestVersion}',
+                        ),
+                      if (updater.checking) ...[
+                        const SizedBox(height: 12),
+                        const LinearProgressIndicator(),
+                        const SizedBox(height: 6),
+                        Text(
+                          I18n.tr('mine.update.checking'),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                      if (updater.error != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          AccountUiCopy.formatError(updater.error),
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                      if (updater.hasUpdate) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          I18n.tr('mine.update.web_available'),
+                          style: const TextStyle(fontWeight: FontWeight.normal),
+                        ),
+                      ] else if (updater.error == null &&
+                          !updater.checking) ...[
+                        const SizedBox(height: 12),
+                        Text(I18n.tr('mine.update.up_to_date')),
+                      ],
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(I18n.tr('action.close')),
+                    ),
+                    FilledButton(
+                      onPressed: () => reloadWebPage(),
+                      child: Text(I18n.tr('mine.update.web_refresh')),
+                    ),
+                  ],
+                ),
+              );
+            }
+            final notes = updater.latestNotesForDisplay;
             return PopScope(
-              canPop: true,
+              canPop: !updater.mustUpdate && !updater.busy,
               child: AppDialog(
-                title: const Text('检查更新'),
+                title: Text(
+                  I18n.tr(
+                    updater.mustUpdate
+                        ? 'mine.update.required_title'
+                        : 'mine.update.check_title',
+                  ),
+                ),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('当前版本: ${updater.currentVersion}'),
-                    if (updater.latestVersion != null &&
-                        updater.latestVersion!.isNotEmpty)
-                      Text('远端版本: ${updater.latestVersion}'),
-                    if (updater.checking) ...[
+                    Text(
+                      '${I18n.tr('mine.update.current_version_prefix')}${updater.currentVersion}',
+                    ),
+                    Text(
+                      "${I18n.tr('mine.update.remote_version_prefix')}${updater.latestVersion ?? '—'}",
+                    ),
+                    if (updater.minimumSupportedVersion != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        "${I18n.tr('mine.update.min_supported_prefix')}${updater.minimumSupportedVersion}",
+                      ),
+                    ],
+                    if (updater.mustUpdate) ...[
                       const SizedBox(height: 12),
-                      const LinearProgressIndicator(),
-                      const SizedBox(height: 6),
-                      const Text('正在检查更新...', style: TextStyle(fontSize: 12)),
+                      AppInfoBanner(
+                        icon: Icons.system_update_alt_outlined,
+                        title: I18n.tr('mine.update.force_banner_title'),
+                        message: I18n.tr('mine.update.force_banner_message'),
+                        color: Theme.of(context).colorScheme.error,
+                        margin: EdgeInsets.zero,
+                      ),
                     ],
                     if (updater.error != null) ...[
                       const SizedBox(height: 8),
                       Text(
-                        updater.error!,
+                        AccountUiCopy.formatError(updater.error),
                         style: const TextStyle(color: Colors.red, fontSize: 12),
                       ),
                     ],
                     if (updater.hasUpdate) ...[
                       const SizedBox(height: 12),
-                      const Text(
-                        '发现网页新版本，刷新网页即可载入最新代码。',
-                        style: TextStyle(fontWeight: FontWeight.normal),
+                      Text(
+                        I18n.tr('mine.update.available'),
+                        style: const TextStyle(fontWeight: FontWeight.normal),
                       ),
                     ] else if (updater.error == null && !updater.checking) ...[
                       const SizedBox(height: 12),
-                      const Text('已是最新版本'),
+                      Text(I18n.tr('mine.update.up_to_date')),
+                    ],
+                    if (notes.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        I18n.tr('mine.update.notes'),
+                        style: const TextStyle(fontWeight: FontWeight.normal),
+                      ),
+                      const SizedBox(height: 6),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 220),
+                        child: Scrollbar(
+                          thumbVisibility: true,
+                          child: SingleChildScrollView(
+                            child: SelectableText(
+                              notes,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                height: 1.45,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (updater.hasUpdate &&
+                        updater.latestAssetName != null) ...[
+                      const SizedBox(height: 8),
+                      _UpdatePackageInfo(assetName: updater.latestAssetName!),
+                    ],
+                    if ((updater.mustUpdate || updater.hasUpdate) &&
+                        updater.latestUrl == null &&
+                        !updater.hasDownloadedInstaller) ...[
+                      const SizedBox(height: 12),
+                      AppInfoBanner(
+                        icon: Icons.link_off_outlined,
+                        title: I18n.tr('mine.update.package_missing_title'),
+                        message: updater.forceUpdateBlockedReason == null
+                            ? I18n.tr('mine.update.package_missing_message')
+                            : "${I18n.tr('mine.update.package_broken_prefix')}${updater.forceUpdateBlockedReason}${I18n.tr('mine.update.package_broken_suffix')}",
+                        color: Theme.of(context).colorScheme.error,
+                        margin: EdgeInsets.zero,
+                      ),
+                    ],
+                    if (updater.hasUpdate && updater.downloading) ...[
+                      const SizedBox(height: 12),
+                      LinearProgressIndicator(value: updater.downloadProgress),
+                      const SizedBox(height: 6),
+                      Text(
+                        updater.downloadProgress == null
+                            ? I18n.tr('mine.update.downloading')
+                            : "${I18n.tr('mine.update.downloading_progress_prefix')}${(updater.downloadProgress! * 100).clamp(0, 100).toStringAsFixed(0)}%",
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ] else if (updater.hasUpdate && updater.installing) ...[
+                      const SizedBox(height: 12),
+                      const LinearProgressIndicator(),
+                      const SizedBox(height: 6),
+                      Text(I18n.tr('mine.update.installing')),
                     ],
                   ],
                 ),
                 actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('关闭'),
-                  ),
-                  FilledButton(
-                    onPressed: () => reloadWebPage(),
-                    child: const Text('刷新网页'),
-                  ),
-                ],
-              ),
-            );
-          }
-          final notes = updater.latestNotesForDisplay;
-          return PopScope(
-            canPop: !updater.mustUpdate && !updater.busy,
-            child: AppDialog(
-              title: Text(
-                I18n.tr(
-                  updater.mustUpdate
-                      ? 'mine.update.required_title'
-                      : 'mine.update.check_title',
-                ),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${I18n.tr('mine.update.current_version_prefix')}${updater.currentVersion}',
-                  ),
-                  Text(
-                    "${I18n.tr('mine.update.remote_version_prefix')}${updater.latestVersion ?? '—'}",
-                  ),
-                  if (updater.minimumSupportedVersion != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      "${I18n.tr('mine.update.min_supported_prefix')}${updater.minimumSupportedVersion}",
+                  if (!updater.mustUpdate)
+                    TextButton(
+                      onPressed: updater.busy ? null : () => Navigator.pop(ctx),
+                      child: Text(I18n.tr('action.close')),
                     ),
-                  ],
-                  if (updater.mustUpdate) ...[
-                    const SizedBox(height: 12),
-                    AppInfoBanner(
-                      icon: Icons.system_update_alt_outlined,
-                      title: I18n.tr('mine.update.force_banner_title'),
-                      message: I18n.tr('mine.update.force_banner_message'),
-                      color: Theme.of(context).colorScheme.error,
-                      margin: EdgeInsets.zero,
-                    ),
-                  ],
-                  if (updater.error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      updater.error!,
-                      style: const TextStyle(color: Colors.red, fontSize: 12),
-                    ),
-                  ],
-                  if (updater.hasUpdate) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      I18n.tr('mine.update.available'),
-                      style: const TextStyle(fontWeight: FontWeight.normal),
-                    ),
-                  ] else if (updater.error == null && !updater.checking) ...[
-                    const SizedBox(height: 12),
-                    Text(I18n.tr('mine.update.up_to_date')),
-                  ],
-                  if (notes.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      I18n.tr('mine.update.notes'),
-                      style: const TextStyle(fontWeight: FontWeight.normal),
-                    ),
-                    const SizedBox(height: 6),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 220),
-                      child: Scrollbar(
-                        thumbVisibility: true,
-                        child: SingleChildScrollView(
-                          child: SelectableText(
-                            notes,
-                            style: const TextStyle(fontSize: 12, height: 1.45),
-                          ),
+                  if (updater.hasUpdate &&
+                      (updater.latestUrl != null ||
+                          updater.hasDownloadedInstaller) &&
+                      AppUpdateInstaller.supportsInstall)
+                    FilledButton.icon(
+                      onPressed: updater.busy
+                          ? null
+                          : () async {
+                              await updater.downloadAndInstallLatest();
+                              if (!context.mounted) return;
+                              if (updater.error != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      AccountUiCopy.formatError(updater.error),
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                      icon: const Icon(Icons.download_for_offline_outlined),
+                      label: Text(
+                        I18n.tr(
+                          updater.hasDownloadedInstaller
+                              ? 'mine.update.install_downloaded'
+                              : 'mine.update.download_and_install',
                         ),
                       ),
                     ),
-                  ],
-                  if (updater.hasUpdate && updater.latestAssetName != null) ...[
-                    const SizedBox(height: 8),
-                    _UpdatePackageInfo(assetName: updater.latestAssetName!),
-                  ],
-                  if ((updater.mustUpdate || updater.hasUpdate) &&
-                      updater.latestUrl == null &&
-                      !updater.hasDownloadedInstaller) ...[
-                    const SizedBox(height: 12),
-                    AppInfoBanner(
-                      icon: Icons.link_off_outlined,
-                      title: I18n.tr('mine.update.package_missing_title'),
-                      message: updater.forceUpdateBlockedReason == null
-                          ? I18n.tr('mine.update.package_missing_message')
-                          : "${I18n.tr('mine.update.package_broken_prefix')}${updater.forceUpdateBlockedReason}${I18n.tr('mine.update.package_broken_suffix')}",
-                      color: Theme.of(context).colorScheme.error,
-                      margin: EdgeInsets.zero,
-                    ),
-                  ],
-                  if (updater.hasUpdate && updater.downloading) ...[
-                    const SizedBox(height: 12),
-                    LinearProgressIndicator(value: updater.downloadProgress),
-                    const SizedBox(height: 6),
-                    Text(
-                      updater.downloadProgress == null
-                          ? I18n.tr('mine.update.downloading')
-                          : "${I18n.tr('mine.update.downloading_progress_prefix')}${(updater.downloadProgress! * 100).clamp(0, 100).toStringAsFixed(0)}%",
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ] else if (updater.hasUpdate && updater.installing) ...[
-                    const SizedBox(height: 12),
-                    const LinearProgressIndicator(),
-                    const SizedBox(height: 6),
-                    Text(I18n.tr('mine.update.installing')),
-                  ],
                 ],
               ),
-              actions: [
-                if (!updater.mustUpdate)
-                  TextButton(
-                    onPressed: updater.busy ? null : () => Navigator.pop(ctx),
-                    child: Text(I18n.tr('action.close')),
-                  ),
-                if (updater.hasUpdate &&
-                    (updater.latestUrl != null ||
-                        updater.hasDownloadedInstaller) &&
-                    AppUpdateInstaller.supportsInstall)
-                  FilledButton.icon(
-                    onPressed: updater.busy
-                        ? null
-                        : () async {
-                            await updater.downloadAndInstallLatest();
-                            if (!context.mounted) return;
-                            if (updater.error != null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(updater.error!)),
-                              );
-                            }
-                          },
-                    icon: const Icon(Icons.download_for_offline_outlined),
-                    label: Text(
-                      I18n.tr(
-                        updater.hasDownloadedInstaller
-                            ? 'mine.update.install_downloaded'
-                            : 'mine.update.download_and_install',
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -830,29 +862,32 @@ class MineScreen extends StatelessWidget {
   void _aboutDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: Text(I18n.tr('mine.about.title')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              "${I18n.tr('mine.about.version_prefix')}${AppVersion.display}",
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (dialogCtx, locale, _) => AppDialog(
+          title: Text(I18n.tr('mine.about.title')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "${I18n.tr('mine.about.version_prefix')}${AppVersion.display}",
+              ),
+              const SizedBox(height: 4),
+              Text(I18n.tr('mine.about.tagline')),
+              const SizedBox(height: 4),
+              Text(I18n.tr('nav.todo')),
+              Text(I18n.tr('nav.habit')),
+              Text(I18n.tr('nav.calendar')),
+              Text(I18n.tr('mine.tile.pomodoro')),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(I18n.tr('mine.about.ok')),
             ),
-            const SizedBox(height: 4),
-            Text(I18n.tr('mine.about.tagline')),
-            const SizedBox(height: 4),
-            Text(I18n.tr('nav.todo')),
-            Text(I18n.tr('nav.habit')),
-            Text(I18n.tr('nav.calendar')),
-            Text(I18n.tr('mine.tile.pomodoro')),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(I18n.tr('mine.about.ok')),
-          ),
-        ],
       ),
     );
   }
@@ -922,6 +957,14 @@ class _MineHeaderSection extends StatelessWidget {
             (provider) => provider.coinBalance,
           );
     final cs = Theme.of(context).colorScheme;
+    final realDisplayName = auth.isLoggedIn
+        ? _firstNonEmpty([
+            auth.displayName,
+            profile.displayName,
+            auth.username,
+            profile.username,
+          ])
+        : _firstNonEmpty([profile.displayName, profile.username]);
     final localDisplayName = _firstNonEmpty([
       profile.displayName,
       profile.username,
@@ -973,7 +1016,7 @@ class _MineHeaderSection extends StatelessWidget {
                 ? baseHeaderHeight * textScale.clamp(1.0, 1.55)
                 : baseHeaderHeight;
             final avatar = SizedBox(
-              width: avatarSize + 6,
+              width: avatarSize + 30,
               height: avatarSize + 6,
               child: Stack(
                 clipBehavior: Clip.none,
@@ -1022,7 +1065,7 @@ class _MineHeaderSection extends StatelessWidget {
                               tag: 'mine-avatar-preview',
                               child: _ProfileAvatar(
                                 avatar: avatarValue,
-                                displayName: displayName,
+                                displayName: realDisplayName,
                                 radius: compact ? 26 : 30,
                                 cacheKey: _avatarCacheKey(
                                   avatarValue,
@@ -1036,8 +1079,8 @@ class _MineHeaderSection extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    right: -12,
-                    bottom: -12,
+                    right: 0,
+                    bottom: 0,
                     child: SizedBox.square(
                       key: const ValueKey('mine_avatar_edit_button'),
                       dimension: 44,
@@ -1645,9 +1688,8 @@ class _ProfileAvatar extends StatelessWidget {
     final fallback = (networkUrl != null || localPath != null)
         ? displayName
         : (value.isNotEmpty ? value : displayName);
-    final letter = fallback.isNotEmpty
-        ? fallback.characters.first
-        : I18n.tr('mine.me_fallback');
+    final hasUserText = fallback.trim().isNotEmpty;
+    final letter = hasUserText ? fallback.trim().characters.first : '';
     final avatarPixels = _avatarDecodePixels(context, radius * 2);
 
     return CircleAvatar(
@@ -1683,13 +1725,10 @@ class _ProfileAvatar extends StatelessWidget {
                 ),
               ),
             )
-          : Text(
-              letter,
-              style: TextStyle(
-                fontSize: radius * 0.62,
-                color: cs.onPrimary,
-                fontWeight: FontWeight.normal,
-              ),
+          : _ProfileAvatarLetter(
+              letter: letter,
+              radius: radius,
+              color: cs.onPrimary,
             ),
     );
   }
@@ -1819,29 +1858,37 @@ class _AvatarPreviewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        titleTextStyle: appSecondaryRouteTitleTextStyle(
-          context,
-        ).copyWith(color: Colors.white),
-        title: Text(I18n.tr('mine.avatar.title')),
-        actions: [
-          if (onEdit != null)
-            IconButton(
-              tooltip: I18n.tr('mine.avatar.edit'),
-              onPressed: () {
-                Navigator.of(context).pop();
-                WidgetsBinding.instance.addPostFrameCallback((_) => onEdit!());
-              },
-              icon: const Icon(Icons.edit_outlined),
-            ),
-        ],
-      ),
-      body: Center(
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, child) {
+        return Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            surfaceTintColor: Colors.transparent,
+            titleTextStyle: appSecondaryRouteTitleTextStyle(
+              context,
+            ).copyWith(color: Colors.white),
+            title: Text(I18n.tr('mine.avatar.title')),
+            actions: [
+              if (onEdit != null)
+                IconButton(
+                  tooltip: I18n.tr('mine.avatar.edit'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    WidgetsBinding.instance.addPostFrameCallback(
+                      (_) => onEdit!(),
+                    );
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+            ],
+          ),
+          body: child!,
+        );
+      },
+      child: Center(
         child: Hero(
           tag: 'mine-avatar-preview',
           child: _ProfileAvatarFullImage(
@@ -1906,9 +1953,8 @@ class _ProfileAvatarFullImage extends StatelessWidget {
     final fallback = (networkUrl != null || localPath != null)
         ? displayName
         : (value.isNotEmpty ? value : displayName);
-    final letter = fallback.isNotEmpty
-        ? fallback.characters.first
-        : I18n.tr('mine.me_fallback');
+    final hasUserText = fallback.trim().isNotEmpty;
+    final letter = hasUserText ? fallback.trim().characters.first : '';
     return CircleAvatar(
       radius: radius,
       backgroundColor: Theme.of(context).colorScheme.primary,
@@ -1934,6 +1980,9 @@ class _ProfileAvatarLetter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (letter.trim().isEmpty) {
+      return Icon(Icons.person, size: radius * 1.15, color: color);
+    }
     return Text(
       letter,
       style: TextStyle(

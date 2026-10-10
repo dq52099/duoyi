@@ -353,6 +353,7 @@ const Map<String, String> _zh = <String, String>{
   'auth.email_code': '邮箱验证码',
   'auth.email_code.optional': '邮箱验证码（可选）',
   'auth.email_code.sent': '验证码已发送，请查收邮箱',
+  'auth.email_code.sent_check_email': '验证码已发送，请查看邮箱。',
   'auth.email_code.code_prefix': '验证码：',
   'auth.display_name.optional': '昵称（可选）',
   'auth.forgot_password': '忘记密码？',
@@ -1091,6 +1092,9 @@ const Map<String, String> _zh = <String, String>{
   'mine.avatar.title': '头像',
   'profile.avatar.file_empty': '头像文件为空',
   'profile.avatar.save_failed_prefix': '头像保存失败：',
+  'profile.avatar.preview': '查看头像',
+  'profile.avatar.edit': '修改头像',
+  'profile.avatar.title': '头像',
   // 我的页：检查更新
   'mine.update.badge': '有更新',
   'mine.update.badge_version_prefix': '新版 ',
@@ -1115,6 +1119,9 @@ const Map<String, String> _zh = <String, String>{
   'mine.update.install_downloaded': '安装已下载包',
   'mine.update.download_and_install': '下载并安装',
   'mine.update.package_label': '安装包',
+  'mine.update.checking': '正在检查更新...',
+  'mine.update.web_available': '发现网页新版本，刷新网页即可载入最新代码。',
+  'mine.update.web_refresh': '刷新网页',
   // 我的页：关于
   'mine.about.title': '多仪',
   'mine.about.version_prefix': '版本: ',
@@ -1494,6 +1501,8 @@ const Map<String, String> _en = <String, String>{
   'auth.email_code': 'Email code',
   'auth.email_code.optional': 'Email code (optional)',
   'auth.email_code.sent': 'Verification code sent. Check your email.',
+  'auth.email_code.sent_check_email':
+      'Verification code sent. Check your email.',
   'auth.email_code.code_prefix': 'Code: ',
   'auth.display_name.optional': 'Nickname (optional)',
   'auth.forgot_password': 'Forgot password?',
@@ -2282,6 +2291,9 @@ const Map<String, String> _en = <String, String>{
   'mine.avatar.title': 'Avatar',
   'profile.avatar.file_empty': 'Avatar file is empty',
   'profile.avatar.save_failed_prefix': 'Failed to save avatar: ',
+  'profile.avatar.preview': 'View avatar',
+  'profile.avatar.edit': 'Edit avatar',
+  'profile.avatar.title': 'Avatar',
   // Me page: updates
   'mine.update.badge': 'Update',
   'mine.update.badge_version_prefix': 'New ',
@@ -2309,6 +2321,10 @@ const Map<String, String> _en = <String, String>{
   'mine.update.install_downloaded': 'Install downloaded package',
   'mine.update.download_and_install': 'Download and install',
   'mine.update.package_label': 'Package',
+  'mine.update.checking': 'Checking for updates...',
+  'mine.update.web_available':
+      'A new web version is available. Refresh to load the latest version.',
+  'mine.update.web_refresh': 'Refresh page',
   // Me page: about
   'mine.about.title': 'Duoyi',
   'mine.about.version_prefix': 'Version: ',

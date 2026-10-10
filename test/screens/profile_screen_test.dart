@@ -346,14 +346,19 @@ void main() {
       source,
       contains("key: const ValueKey('profile_avatar_edit_button')"),
     );
-    expect(source, contains("message: '查看头像'"));
-    expect(source, contains("message: '修改头像'"));
+    expect(source, contains("message: I18n.tr('profile.avatar.preview')"));
+    expect(source, contains("label: I18n.tr('profile.avatar.preview')"));
+    expect(source, contains("message: I18n.tr('profile.avatar.edit')"));
+    expect(source, contains("label: I18n.tr('profile.avatar.edit')"));
     expect(source, contains('MaterialPageRoute<void>('));
     expect(fullScreen, contains('return Scaffold('));
     expect(fullScreen, contains('backgroundColor: Colors.black'));
-    expect(fullScreen, contains("title: const Text('头像')"));
+    expect(
+      fullScreen,
+      contains("title: Text(I18n.tr('profile.avatar.title'))"),
+    );
     expect(fullScreen, contains('actions: ['));
-    expect(fullScreen, contains("tooltip: '修改头像'"));
+    expect(fullScreen, contains("tooltip: I18n.tr('profile.avatar.edit')"));
     expect(
       fullScreen,
       contains('WidgetsBinding.instance.addPostFrameCallback'),

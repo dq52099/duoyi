@@ -34,12 +34,21 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLoggedIn = context.select<AuthProvider, bool>(
-      (auth) => auth.state.isLoggedIn,
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final isLoggedIn = context.select<AuthProvider, bool>(
+          (auth) => auth.state.isLoggedIn,
+        );
+        return isLoggedIn
+            ? _AccountProfileEditor(
+                openAvatarSheetOnStart: openAvatarSheetOnStart,
+              )
+            : _LocalProfileEditor(
+                openAvatarSheetOnStart: openAvatarSheetOnStart,
+              );
+      },
     );
-    return isLoggedIn
-        ? _AccountProfileEditor(openAvatarSheetOnStart: openAvatarSheetOnStart)
-        : _LocalProfileEditor(openAvatarSheetOnStart: openAvatarSheetOnStart);
   }
 }
 
@@ -65,7 +74,8 @@ class _ProfileAvatarPreview extends StatelessWidget {
     final fallback = (networkUrl != null || localPath != null)
         ? displayName
         : (value.isNotEmpty ? value : displayName);
-    final letter = fallback.isNotEmpty ? fallback.characters.first : '我';
+    final hasUserText = fallback.trim().isNotEmpty;
+    final letter = hasUserText ? fallback.trim().characters.first : '';
 
     return CircleAvatar(
       radius: radius,
@@ -120,6 +130,9 @@ class _ProfileAvatarLetter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (letter.trim().isEmpty) {
+      return Icon(Icons.person, size: radius * 1.15, color: color);
+    }
     return Text(
       letter,
       style: TextStyle(
@@ -228,10 +241,10 @@ class _ProfileAvatarWithEdit extends StatelessWidget {
         children: [
           Positioned.fill(
             child: Tooltip(
-              message: '查看头像',
+              message: I18n.tr('profile.avatar.preview'),
               child: Semantics(
                 button: true,
-                label: '查看头像',
+                label: I18n.tr('profile.avatar.preview'),
                 child: InkWell(
                   key: const ValueKey('profile_avatar_preview_button'),
                   customBorder: const CircleBorder(),
@@ -245,10 +258,10 @@ class _ProfileAvatarWithEdit extends StatelessWidget {
             right: -1,
             bottom: -1,
             child: Tooltip(
-              message: '修改头像',
+              message: I18n.tr('profile.avatar.edit'),
               child: Semantics(
                 button: true,
-                label: '修改头像',
+                label: I18n.tr('profile.avatar.edit'),
                 child: SizedBox.square(
                   key: const ValueKey('profile_avatar_edit_button'),
                   dimension: 44,
@@ -303,29 +316,37 @@ class _ProfileAvatarFullScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        titleTextStyle: appSecondaryRouteTitleTextStyle(
-          context,
-        ).copyWith(color: Colors.white),
-        title: const Text('头像'),
-        actions: [
-          if (onEdit != null)
-            IconButton(
-              tooltip: '修改头像',
-              onPressed: () {
-                Navigator.of(context).pop();
-                WidgetsBinding.instance.addPostFrameCallback((_) => onEdit!());
-              },
-              icon: const Icon(Icons.edit_outlined),
-            ),
-        ],
-      ),
-      body: Center(
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, child) {
+        return Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            surfaceTintColor: Colors.transparent,
+            titleTextStyle: appSecondaryRouteTitleTextStyle(
+              context,
+            ).copyWith(color: Colors.white),
+            title: Text(I18n.tr('profile.avatar.title')),
+            actions: [
+              if (onEdit != null)
+                IconButton(
+                  tooltip: I18n.tr('profile.avatar.edit'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    WidgetsBinding.instance.addPostFrameCallback(
+                      (_) => onEdit!(),
+                    );
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+            ],
+          ),
+          body: child!,
+        );
+      },
+      child: Center(
         child: Hero(
           tag: 'profile-avatar-preview',
           child: _ProfileAvatarFullImage(
@@ -390,7 +411,8 @@ class _ProfileAvatarFullImage extends StatelessWidget {
     final fallback = (networkUrl != null || localPath != null)
         ? displayName
         : (value.isNotEmpty ? value : displayName);
-    final letter = fallback.isNotEmpty ? fallback.characters.first : '我';
+    final hasUserText = fallback.trim().isNotEmpty;
+    final letter = hasUserText ? fallback.trim().characters.first : '';
     return CircleAvatar(
       radius: radius,
       backgroundColor: Theme.of(context).colorScheme.primary,
@@ -402,6 +424,113 @@ class _ProfileAvatarFullImage extends StatelessWidget {
     );
   }
 }
+
+sealed class _ProfileStateText {
+  const _ProfileStateText();
+
+  String resolve();
+
+  const factory _ProfileStateText.key(String key) = _ProfileKeyText;
+  const factory _ProfileStateText.error(Object? error) = _ProfileErrorText;
+  const factory _ProfileStateText.raw(String text) = _ProfileRawText;
+  const factory _ProfileStateText.copy(String Function() resolver) =
+      _ProfileCopyText;
+  const factory _ProfileStateText.emailCodeSent({
+    required String devCode,
+    String? rawMessage,
+  }) = _ProfileEmailCodeSentText;
+}
+
+class _ProfileKeyText extends _ProfileStateText {
+  final String key;
+  const _ProfileKeyText(this.key);
+
+  @override
+  String resolve() => I18n.tr(key);
+}
+
+class _ProfileErrorText extends _ProfileStateText {
+  final Object? error;
+  const _ProfileErrorText(this.error);
+
+  @override
+  String resolve() => AccountUiCopy.formatError(error);
+}
+
+class _ProfileRawText extends _ProfileStateText {
+  final String text;
+  const _ProfileRawText(this.text);
+
+  @override
+  String resolve() => text;
+}
+
+class _ProfileCopyText extends _ProfileStateText {
+  final String Function() resolver;
+  const _ProfileCopyText(this.resolver);
+
+  @override
+  String resolve() => resolver();
+}
+
+class _ProfileEmailCodeSentText extends _ProfileStateText {
+  final String devCode;
+  final String? rawMessage;
+  const _ProfileEmailCodeSentText({required this.devCode, this.rawMessage});
+
+  @override
+  String resolve() {
+    final trimmed = rawMessage?.trim();
+    final String msg;
+    if (trimmed == null || trimmed.isEmpty) {
+      msg = I18n.tr('auth.email_code.sent');
+    } else if (trimmed == '验证码已发送，请查看邮箱。' || trimmed == '验证码已发送，请查看邮箱') {
+      msg = I18n.tr('auth.email_code.sent_check_email');
+    } else if (trimmed == '验证码已发送，请查收邮箱' ||
+        trimmed == '验证码已发送，请查收邮箱。' ||
+        trimmed == 'Verification code sent. Check your email.' ||
+        trimmed == 'Verification code sent. Check your email') {
+      msg = I18n.tr('auth.email_code.sent');
+    } else if (trimmed == '验证码已发送' ||
+        trimmed == '验证码已发送。' ||
+        trimmed == 'Code sent' ||
+        trimmed == 'Code sent.') {
+      msg = AccountUiCopy.feedbackCodeSent;
+    } else {
+      msg = rawMessage!;
+    }
+
+    if (devCode.trim().isEmpty) return msg;
+    return '$msg ${I18n.tr('auth.email_code.code_prefix')}$devCode';
+  }
+}
+
+class _ProfileLocaleText extends StatelessWidget {
+  final String? keyName;
+  final _ProfileStateText? stateText;
+  final TextStyle? style;
+
+  const _ProfileLocaleText(this.keyName, {super.key, this.style})
+    : stateText = null;
+
+  const _ProfileLocaleText.state(this.stateText, {super.key, this.style})
+    : keyName = null;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final text = keyName != null
+            ? I18n.tr(keyName!)
+            : (stateText?.resolve() ?? '');
+        return Text(text, style: style);
+      },
+    );
+  }
+}
+
+String _feedbackAvatarSaved() => AccountUiCopy.feedbackAvatarSaved;
 
 class _ChangePasswordDialog extends StatefulWidget {
   const _ChangePasswordDialog();
@@ -418,14 +547,25 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
   bool _obscureCurrent = true;
   bool _obscureNew = true;
   bool _obscureConfirm = true;
-  String? _error;
+  _ProfileStateText? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    I18n.localeListenable.addListener(_handleLocaleChanged);
+  }
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_handleLocaleChanged);
     _currentCtrl.dispose();
     _newCtrl.dispose();
     _confirmCtrl.dispose();
     super.dispose();
+  }
+
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _submit() async {
@@ -433,15 +573,25 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
     final next = _newCtrl.text;
     final confirm = _confirmCtrl.text;
     if (current.isEmpty) {
-      setState(() => _error = I18n.tr('profile.current_password'));
+      setState(
+        () => _error = const _ProfileStateText.key('profile.current_password'),
+      );
       return;
     }
     if (next.length < 6) {
-      setState(() => _error = I18n.tr('auth.error.new_password_short'));
+      setState(
+        () => _error = const _ProfileStateText.key(
+          'auth.error.new_password_short',
+        ),
+      );
       return;
     }
     if (next != confirm) {
-      setState(() => _error = I18n.tr('auth.error.new_password_mismatch'));
+      setState(
+        () => _error = const _ProfileStateText.key(
+          'auth.error.new_password_mismatch',
+        ),
+      );
       return;
     }
     setState(() {
@@ -456,9 +606,9 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
       if (!mounted) return;
       Navigator.pop(context, true);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -540,7 +690,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
               AppInfoBanner(
                 icon: Icons.error_outline,
                 title: I18n.tr('profile.save_failed'),
-                message: _error!,
+                message: _error!.resolve(),
                 color: Theme.of(context).colorScheme.error,
                 margin: EdgeInsets.zero,
               ),
@@ -595,12 +745,13 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
   bool _binding = false;
   int _cooldownSeconds = 0;
   Timer? _cooldownTimer;
-  String? _message;
-  String? _error;
+  _ProfileStateText? _message;
+  _ProfileStateText? _error;
 
   @override
   void initState() {
     super.initState();
+    I18n.localeListenable.addListener(_handleLocaleChanged);
     _emailCtrl = TextEditingController(text: widget.initialEmail);
     _emailCodeCtrl = TextEditingController();
     _emailCtrl.addListener(_refresh);
@@ -608,11 +759,16 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_handleLocaleChanged);
     _cooldownTimer?.cancel();
     _emailCtrl.removeListener(_refresh);
     _emailCtrl.dispose();
     _emailCodeCtrl.dispose();
     super.dispose();
+  }
+
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   void _refresh() {
@@ -641,11 +797,15 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
     if (_sending || _binding || _cooldownSeconds > 0) return;
     final email = _emailCtrl.text.trim();
     if (email.isEmpty) {
-      setState(() => _error = I18n.tr('auth.error.email_required'));
+      setState(
+        () => _error = const _ProfileStateText.key('auth.error.email_required'),
+      );
       return;
     }
     if (!_looksLikeEmail(email)) {
-      setState(() => _error = I18n.tr('auth.error.email_invalid'));
+      setState(
+        () => _error = const _ProfileStateText.key('auth.error.email_invalid'),
+      );
       return;
     }
     setState(() {
@@ -658,19 +818,19 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
         email: email,
       );
       final devCode = (result['dev_code'] ?? '').toString();
-      final message = (result['message'] ?? I18n.tr('auth.email_code.sent'))
-          .toString();
+      final rawMessage = result['message']?.toString();
       if (!mounted) return;
       _startCooldown();
       setState(() {
-        _message = devCode.isEmpty
-            ? message
-            : '$message ${I18n.tr('auth.email_code.code_prefix')}$devCode';
+        _message = _ProfileStateText.emailCodeSent(
+          devCode: devCode,
+          rawMessage: rawMessage,
+        );
       });
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -681,15 +841,23 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
     final email = _emailCtrl.text.trim();
     final code = _emailCodeCtrl.text.trim();
     if (email.isEmpty) {
-      setState(() => _error = I18n.tr('auth.error.email_required'));
+      setState(
+        () => _error = const _ProfileStateText.key('auth.error.email_required'),
+      );
       return;
     }
     if (!_looksLikeEmail(email)) {
-      setState(() => _error = I18n.tr('auth.error.email_invalid'));
+      setState(
+        () => _error = const _ProfileStateText.key('auth.error.email_invalid'),
+      );
       return;
     }
     if (code.isEmpty) {
-      setState(() => _error = I18n.tr('auth.error.email_code_required'));
+      setState(
+        () => _error = const _ProfileStateText.key(
+          'auth.error.email_code_required',
+        ),
+      );
       return;
     }
     setState(() {
@@ -702,9 +870,9 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
       if (!mounted) return;
       Navigator.pop(context, true);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } finally {
       if (mounted) setState(() => _binding = false);
     }
@@ -773,7 +941,7 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
               AppInfoBanner(
                 icon: Icons.check_circle_outline,
                 title: I18n.tr('profile.saved'),
-                message: _message!,
+                message: _message!.resolve(),
                 color: Colors.green,
                 margin: EdgeInsets.zero,
               ),
@@ -783,7 +951,7 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
               AppInfoBanner(
                 icon: Icons.error_outline,
                 title: I18n.tr('profile.save_failed'),
-                message: _error!,
+                message: _error!.resolve(),
                 color: Theme.of(context).colorScheme.error,
                 margin: EdgeInsets.zero,
               ),
@@ -922,12 +1090,13 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   bool _hasLocalProfileEdits = false;
   bool _busy = false;
   bool _avatarBusy = false;
-  String? _error;
-  String? _message;
+  _ProfileStateText? _error;
+  _ProfileStateText? _message;
 
   @override
   void initState() {
     super.initState();
+    I18n.localeListenable.addListener(_handleLocaleChanged);
     final state = context.read<AuthProvider>().state;
     _usernameCtrl = TextEditingController(text: state.username ?? '');
     _displayNameCtrl = TextEditingController(text: state.displayName ?? '');
@@ -961,6 +1130,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_handleLocaleChanged);
     _authProvider?.removeListener(_handleAuthStateChanged);
     for (final controller in [
       _usernameCtrl,
@@ -975,6 +1145,10 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     _avatarCtrl.dispose();
     _bioCtrl.dispose();
     super.dispose();
+  }
+
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   void _refreshPreview() {
@@ -1059,13 +1233,19 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       final bytes = await file.readAsBytes();
       if (bytes.isEmpty) {
         if (mounted) {
-          setState(() => _error = I18n.tr('profile.avatar.empty'));
+          setState(
+            () => _error = const _ProfileStateText.key('profile.avatar.empty'),
+          );
         }
         return;
       }
       if (bytes.length > 3 * 1024 * 1024) {
         if (mounted) {
-          setState(() => _error = I18n.tr('profile.avatar.too_large'));
+          setState(
+            () => _error = const _ProfileStateText.key(
+              'profile.avatar.too_large',
+            ),
+          );
         }
         return;
       }
@@ -1085,11 +1265,13 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         bio: state.bio ?? '',
       );
       if (!mounted) return;
-      setState(() => _message = AccountUiCopy.feedbackAvatarSaved);
+      setState(
+        () => _message = const _ProfileStateText.copy(_feedbackAvatarSaved),
+      );
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } finally {
       if (mounted) setState(() => _avatarBusy = false);
     }
@@ -1102,7 +1284,6 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
       _usernameCtrl.text,
       context.read<AuthProvider>().state.displayName,
       context.read<AuthProvider>().state.username,
-      I18n.tr('profile.default_user'),
     ]);
     final avatar = _avatarCtrl.text.trim().isEmpty
         ? context.read<AuthProvider>().state.avatar
@@ -1127,7 +1308,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     );
     if (!mounted || changed != true) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(I18n.tr('profile.password.updated'))),
+      const SnackBar(content: _ProfileLocaleText('profile.password.updated')),
     );
   }
 
@@ -1161,11 +1342,11 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     if (!mounted) return;
     setState(() {
       _error = null;
-      _message = I18n.tr('profile.updated');
+      _message = const _ProfileStateText.key('profile.updated');
     });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(I18n.tr('profile.updated'))));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: _ProfileLocaleText('profile.updated')),
+    );
   }
 
   Future<void> _save() async {
@@ -1197,14 +1378,14 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         bio: state.bio ?? '',
       );
       if (!mounted) return;
-      setState(() => _message = I18n.tr('profile.updated'));
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(I18n.tr('profile.updated'))));
+      setState(() => _message = const _ProfileStateText.key('profile.updated'));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: _ProfileLocaleText('profile.updated')),
+      );
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1322,9 +1503,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                           tag: 'profile-avatar-preview',
                           child: _ProfileAvatarPreview(
                             avatar: previewAvatar,
-                            displayName: displayName.isEmpty
-                                ? '我'
-                                : displayName,
+                            displayName: displayName,
                             radius: (avatarSize / 2) - 2,
                             cacheKey: avatarCacheKey,
                           ),
@@ -1515,7 +1694,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
             AppInfoBanner(
               icon: Icons.check_circle_outline,
               title: I18n.tr('profile.saved'),
-              message: _message!,
+              message: _message!.resolve(),
               color: Colors.green,
             ),
           ],
@@ -1524,7 +1703,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
             AppInfoBanner(
               icon: Icons.error_outline,
               title: I18n.tr('profile.save_failed'),
-              message: _error!,
+              message: _error!.resolve(),
               color: Colors.red,
             ),
           ],
@@ -1551,12 +1730,13 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
   late final TextEditingController _bioCtrl;
   bool _busy = false;
   bool _avatarBusy = false;
-  String? _error;
-  String? _message;
+  _ProfileStateText? _error;
+  _ProfileStateText? _message;
 
   @override
   void initState() {
     super.initState();
+    I18n.localeListenable.addListener(_handleLocaleChanged);
     final profile = context.read<UserProvider>().profile;
     _usernameCtrl = TextEditingController(text: profile.username);
     _displayNameCtrl = TextEditingController(text: profile.displayName);
@@ -1577,6 +1757,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_handleLocaleChanged);
     _usernameCtrl.removeListener(_refreshPreview);
     _displayNameCtrl.removeListener(_refreshPreview);
     _avatarCtrl.removeListener(_refreshPreview);
@@ -1588,6 +1769,10 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     _emailCtrl.dispose();
     _bioCtrl.dispose();
     super.dispose();
+  }
+
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   void _refreshPreview() {
@@ -1620,9 +1805,11 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
       });
       await _save(showSnackBar: false);
       if (!mounted) return;
-      setState(() => _message = I18n.tr('profile.avatar.saved'));
+      setState(
+        () => _message = const _ProfileStateText.key('profile.avatar.saved'),
+      );
     } catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } finally {
       if (mounted) setState(() => _avatarBusy = false);
     }
@@ -1633,7 +1820,6 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     final displayName = _firstNonEmptyProfileText([
       _displayNameCtrl.text,
       _usernameCtrl.text,
-      I18n.tr('profile.default_user'),
     ]);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -1654,7 +1840,11 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
         ? currentProfile.username.trim()
         : _usernameCtrl.text.trim();
     if (username.isEmpty) {
-      setState(() => _error = I18n.tr('profile.error.nickname_required'));
+      setState(
+        () => _error = const _ProfileStateText.key(
+          'profile.error.nickname_required',
+        ),
+      );
       return;
     }
     final displayName = _displayNameCtrl.text.trim();
@@ -1680,14 +1870,16 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
         bio: _bioCtrl.text.trim(),
       );
       if (!mounted) return;
-      setState(() => _message = I18n.tr('profile.local.updated'));
+      setState(
+        () => _message = const _ProfileStateText.key('profile.local.updated'),
+      );
       if (showSnackBar) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(I18n.tr('profile.local.updated'))),
+          const SnackBar(content: _ProfileLocaleText('profile.local.updated')),
         );
       }
     } catch (e) {
-      if (mounted) setState(() => _error = AccountUiCopy.formatError(e));
+      if (mounted) setState(() => _error = _ProfileStateText.error(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1719,6 +1911,10 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final realDisplayName = _firstNonEmptyProfileText([
+      _displayNameCtrl.text,
+      _usernameCtrl.text,
+    ]);
     final displayName = _firstNonEmptyProfileText([
       _displayNameCtrl.text,
       _usernameCtrl.text,
@@ -1761,7 +1957,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                     tag: 'profile-avatar-preview',
                     child: _ProfileAvatarPreview(
                       avatar: previewAvatar,
-                      displayName: displayName,
+                      displayName: realDisplayName,
                       radius: avatarSize / 2 - 2,
                       cacheKey: avatarCacheKey,
                     ),
@@ -1896,7 +2092,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
             AppInfoBanner(
               icon: Icons.error_outline,
               title: I18n.tr('profile.save_failed'),
-              message: _error!,
+              message: _error!.resolve(),
               color: Colors.red,
             ),
           ],
@@ -1905,7 +2101,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
             AppInfoBanner(
               icon: Icons.check_circle_outline,
               title: I18n.tr('profile.saved'),
-              message: _message!,
+              message: _message!.resolve(),
               color: Colors.green,
             ),
           ],

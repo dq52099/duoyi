@@ -299,7 +299,7 @@ void main() {
       final mineBody = mine.substring(mineBodyStart, mineBodyEnd);
       final bodyGroupMarkers = [
         "title: I18n.tr('mine.group.action_plan')",
-        'const _MineRecordReviewGroup()',
+        '_MineRecordReviewGroup()',
         "title: I18n.tr('mine.group.schedule')",
         "title: I18n.tr('mine.group.personal')",
         "title: I18n.tr('mine.group.data')",
