@@ -432,7 +432,6 @@ sealed class _ProfileStateText {
 
   const factory _ProfileStateText.key(String key) = _ProfileKeyText;
   const factory _ProfileStateText.error(Object? error) = _ProfileErrorText;
-  const factory _ProfileStateText.raw(String text) = _ProfileRawText;
   const factory _ProfileStateText.copy(String Function() resolver) =
       _ProfileCopyText;
   const factory _ProfileStateText.emailCodeSent({
@@ -455,14 +454,6 @@ class _ProfileErrorText extends _ProfileStateText {
 
   @override
   String resolve() => AccountUiCopy.formatError(error);
-}
-
-class _ProfileRawText extends _ProfileStateText {
-  final String text;
-  const _ProfileRawText(this.text);
-
-  @override
-  String resolve() => text;
 }
 
 class _ProfileCopyText extends _ProfileStateText {
@@ -506,25 +497,16 @@ class _ProfileEmailCodeSentText extends _ProfileStateText {
 }
 
 class _ProfileLocaleText extends StatelessWidget {
-  final String? keyName;
-  final _ProfileStateText? stateText;
-  final TextStyle? style;
+  final String keyName;
 
-  const _ProfileLocaleText(this.keyName, {super.key, this.style})
-    : stateText = null;
-
-  const _ProfileLocaleText.state(this.stateText, {super.key, this.style})
-    : keyName = null;
+  const _ProfileLocaleText(this.keyName);
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<AppLocale>(
       valueListenable: I18n.localeListenable,
       builder: (context, locale, _) {
-        final text = keyName != null
-            ? I18n.tr(keyName!)
-            : (stateText?.resolve() ?? '');
-        return Text(text, style: style);
+        return Text(I18n.tr(keyName));
       },
     );
   }
