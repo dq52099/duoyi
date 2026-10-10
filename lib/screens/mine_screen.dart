@@ -155,6 +155,7 @@ class MineScreen extends StatelessWidget {
                 case 4:
                   return _TileGroup(
                     title: I18n.tr('mine.group.action_plan'),
+                    icon: Icons.explore_outlined,
                     children: [
                       _Tile(
                         icon: Icons.flag_circle_outlined,
@@ -195,6 +196,7 @@ class MineScreen extends StatelessWidget {
                 case 6:
                   return _TileGroup(
                     title: I18n.tr('mine.group.schedule'),
+                    icon: Icons.calendar_today_outlined,
                     children: [
                       _Tile(
                         icon: Icons.school_outlined,
@@ -268,6 +270,7 @@ class MineScreen extends StatelessWidget {
                 case 7:
                   return _TileGroup(
                     title: I18n.tr('mine.group.personal'),
+                    icon: Icons.tune_outlined,
                     children: [
                       _Tile(
                         icon: Icons.palette,
@@ -323,6 +326,7 @@ class MineScreen extends StatelessWidget {
                       const SyncStatusCard(),
                       _TileGroup(
                         title: I18n.tr('mine.group.data'),
+                        icon: Icons.hub_outlined,
                         children: [
                           _Tile(
                             icon: Icons.groups_2_outlined,
@@ -1382,6 +1386,7 @@ class _MineRecordReviewGroup extends StatelessWidget {
     );
     return _TileGroup(
       title: I18n.tr('mine.group.review'),
+      icon: Icons.insights_outlined,
       children: [
         _Tile(
           icon: Icons.access_time,
@@ -1506,6 +1511,7 @@ class _MineNotificationSupportGroup extends StatelessWidget {
     );
     return _TileGroup(
       title: I18n.tr('mine.group.notifications'),
+      icon: Icons.support_agent_outlined,
       children: [
         _Tile(
           icon: Icons.history_toggle_off_outlined,
@@ -2364,32 +2370,19 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
 
 class _TileGroup extends StatelessWidget {
   final String title;
+  final IconData icon;
   final List<Widget> children;
 
-  const _TileGroup({required this.title, required this.children});
+  const _TileGroup({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = Theme.of(context).colorScheme;
-    final sectionIcon = switch (title) {
-      '行动计划' => Icons.explore_outlined,
-      '记录回顾' => Icons.insights_outlined,
-      '日程日期' => Icons.calendar_today_outlined,
-      '个性安全' => Icons.tune_outlined,
-      '数据协作' => Icons.hub_outlined,
-      '通知支持' => Icons.support_agent_outlined,
-      _ when title == I18n.tr('mine.group.action_plan') =>
-        Icons.explore_outlined,
-      _ when title == I18n.tr('mine.group.review') => Icons.insights_outlined,
-      _ when title == I18n.tr('mine.group.schedule') =>
-        Icons.calendar_today_outlined,
-      _ when title == I18n.tr('mine.group.personal') => Icons.tune_outlined,
-      _ when title == I18n.tr('mine.group.data') => Icons.hub_outlined,
-      _ when title == I18n.tr('mine.group.notifications') =>
-        Icons.support_agent_outlined,
-      _ => Icons.dashboard_customize_outlined,
-    };
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       child: Column(
@@ -2399,11 +2392,7 @@ class _TileGroup extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 7),
             child: Row(
               children: [
-                Icon(
-                  sectionIcon,
-                  size: 15,
-                  color: cs.primary.withValues(alpha: 0.82),
-                ),
+                Icon(icon, size: 15, color: cs.primary.withValues(alpha: 0.82)),
                 const SizedBox(width: 6),
                 Text(
                   title,
