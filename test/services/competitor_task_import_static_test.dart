@@ -28,8 +28,8 @@ void main() {
       screen,
       contains('Future<CompetitorFieldMapping?> _editCompetitorFieldMapping'),
     );
-    expect(screen, contains("label: const Text('高级字段映射')"));
-    expect(screen, contains("hintText: '来源字段名'"));
+    expect(screen, contains('DataSettingsUiCopy.advancedFieldMapping'));
+    expect(screen, contains('DataSettingsUiCopy.sourceFieldNameHint'));
     expect(screen, contains('CompetitorFieldMapping({'));
     expect(screen, contains('_fieldMappingSummary(fieldMapping)'));
     expect(screen, contains('_fieldMappingSummary(draft.fieldMapping)'));
@@ -55,15 +55,15 @@ void main() {
     );
     expect(screen, contains('Future<void> _rollbackCompetitorImport('));
     expect(screen, contains('clearMissing: true'));
-    expect(screen, contains('已撤销本次导入'));
-    expect(screen, contains('导入预览'));
-    expect(screen, contains('我已确认预览和重复项处理策略'));
-    expect(screen, contains('重复项策略：导入时会按本机已有标题、日期、内容等字段自动去重'));
-    expect(screen, contains('导入完成'));
-    expect(screen, contains('提醒未完全注册'));
-    expect(screen, contains('部分提醒未注册，请打开对应事项重新保存'));
-    expect(screen, contains('撤销本次导入'));
-    expect(screen, contains('恢复到导入前的本地快照'));
+    expect(screen, contains('DataSettingsUiCopy.undoImportSuccess'));
+    expect(screen, contains('DataSettingsUiCopy.importPreviewTitle'));
+    expect(screen, contains('DataSettingsUiCopy.confirmImportPolicyCheckbox'));
+    expect(screen, contains('DataSettingsUiCopy.duplicatePolicyNotice'));
+    expect(screen, contains('DataSettingsUiCopy.importCompletedTitle'));
+    expect(screen, contains('DataSettingsUiCopy.reminderNotFullyRegistered'));
+    expect(screen, contains('DataSettingsUiCopy.reminderMoreNeedResaving'));
+    expect(screen, contains('DataSettingsUiCopy.undoImport'));
+    expect(screen, contains('DataSettingsUiCopy.rollbackHint'));
     expect(
       screen,
       contains('final todoProvider = context.read<TodoProvider>();'),
@@ -106,8 +106,7 @@ void main() {
       contains('final countdownProvider = context.read<CountdownProvider>();'),
     );
     expect(screen, contains('importCountdowns(parsed.countdowns)'));
-    expect(screen, contains("_importPreviewChip('倒数日'"));
-    expect(screen, contains("_importResultLine('倒数日'"));
+    expect(screen, contains('DataSettingsUiCopy.moduleCountdown'));
     expect(
       screen,
       contains('timeAuditProvider.importTimeEntries(parsed.timeEntries)'),
@@ -122,18 +121,22 @@ void main() {
         '? const CalendarEventImportSummary(inserted: 0, skippedDuplicates: 0)',
       ),
     );
-    expect(screen, contains('从其他 App 导入待办'));
-    expect(screen, contains('从其他 App 导入待办/习惯/笔记/日程/纪念日/倒数日'));
-    expect(screen, contains('从文件导入其他 App 数据'));
     expect(
       screen,
+      contains('DataSettingsUiCopy.importTasksFromOtherAppsButton'),
+    );
+    expect(screen, contains('importProductivityFromOtherAppsButton'));
+    expect(screen, contains('DataSettingsUiCopy.importProductivityFileButton'));
+    expect(screen, contains('DataSettingsUiCopy.competitorImportPasteHint'));
+    final copy = File('lib/core/data_settings_ui_copy.dart').readAsStringSync();
+    expect(
+      copy,
       contains(
-        '支持 type=task/habit/note/event/birthday/anniversary/countdown/time_entry',
+        'type=task/habit/note/event/birthday/anniversary/countdown/time_entry',
       ),
     );
-    expect(screen, contains('_importPreviewChip(\'时间足迹\''));
-    expect(screen, contains('_importResultLine(\'时间足迹\''));
-    expect(screen, contains('CSV / JSON 迁移待办、习惯、笔记、日程、纪念日、倒数日和时间足迹'));
+    expect(screen, contains('DataSettingsUiCopy.moduleTimeEntry'));
+    expect(screen, contains('DataSettingsUiCopy.restoreSectionSubtitle'));
   });
 
   test('TodoProvider exposes duplicate-safe bulk todo import', () {

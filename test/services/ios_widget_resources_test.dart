@@ -470,8 +470,11 @@ void main() {
       final dayInvalidated = push.indexOf(
         "_saveWidgetPayloadValue('widget_snapshot_day', '')",
       );
-      final noncePublished = push.indexOf(
+      final noncePrepared = push.indexOf(
         "'widget_account_nonce': _accountActionNonce ?? ''",
+      );
+      final payloadPublished = push.indexOf(
+        'final saveResult = await _saveWidgetPayload(payload);',
       );
       final offsetPublished = push.indexOf(
         "'widget_snapshot_utc_offset_minutes'",
@@ -480,11 +483,13 @@ void main() {
         "_saveWidgetPayloadValue('widget_snapshot_day', day)",
       );
       expect(dayInvalidated, greaterThanOrEqualTo(0));
-      expect(noncePublished, greaterThanOrEqualTo(0));
+      expect(noncePrepared, greaterThanOrEqualTo(0));
+      expect(payloadPublished, greaterThanOrEqualTo(0));
       expect(offsetPublished, greaterThanOrEqualTo(0));
       expect(dayPublished, greaterThanOrEqualTo(0));
-      expect(dayInvalidated, lessThan(noncePublished));
-      expect(noncePublished, lessThan(offsetPublished));
+      expect(noncePrepared, lessThan(dayInvalidated));
+      expect(dayInvalidated, lessThan(payloadPublished));
+      expect(payloadPublished, lessThan(offsetPublished));
       expect(offsetPublished, lessThan(dayPublished));
 
       expect(entry, contains('isDailyFresh: fresh,'));

@@ -100,7 +100,8 @@ void main() {
       expect(stableGrid, contains('RepaintBoundary('));
       expect(stableGrid, contains("ValueKey('mine_stats_stable_grid')"));
       expect(stableGrid, contains('SizedBox('));
-      expect(stableGrid, contains('height: compact ? 70 : 64'));
+      expect(stableGrid, contains('final baseHeight = compact ? 70.0 : 64.0'));
+      expect(stableGrid, contains('height: rowHeight'));
       expect(stableGrid, contains('Row('));
       expect(stableGrid, isNot(contains('shrinkWrap: true')));
       expect(stableGrid, isNot(contains('NeverScrollableScrollPhysics')));

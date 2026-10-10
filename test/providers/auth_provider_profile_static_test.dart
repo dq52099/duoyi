@@ -208,7 +208,7 @@ void main() {
         'uploadAvatarBytes(',
         'bytes.length > 3 * 1024 * 1024',
         "I18n.tr('profile.avatar.too_large')",
-        "I18n.tr('profile.avatar.saved')",
+        "const _ProfileStateText.key('profile.avatar.saved')",
         'sendBindEmailCode(',
         'bindEmail(email: email, code: code)',
         'final userProvider = context.read<UserProvider>()',
@@ -234,9 +234,9 @@ void main() {
         'onPreview: _showAvatarPreview',
         'onEdit: _uploadAvatar',
         'onEdit: _pickLocalAvatar',
-        "message: '查看头像'",
-        "message: '修改头像'",
-        "title: const Text('头像')",
+        "message: I18n.tr('profile.avatar.preview')",
+        "message: I18n.tr('profile.avatar.edit')",
+        "title: Text(I18n.tr('profile.avatar.title'))",
         'titleTextStyle: appSecondaryRouteTitleTextStyle(',
         ').copyWith(color: Colors.white)',
         "tag: 'profile-avatar-preview'",
@@ -253,7 +253,7 @@ void main() {
         'String? _localAvatarPath(String value)',
         'Future<String> _copyLocalAvatarFile(XFile file)',
         "final dir = Directory('\${root.path}/profile_avatars')",
-        "I18n.tr('profile.local.updated')",
+        "const _ProfileStateText.key('profile.local.updated')",
         "I18n.tr('profile.account_security')",
       ]) {
         expect(source, contains(field));
@@ -262,7 +262,10 @@ void main() {
       expect(source, contains("I18n.tr('profile.change_password')"));
       expect(source, contains('class _ChangePasswordDialog'));
       expect(source, contains('changePassword('));
-      expect(source, contains("I18n.tr('profile.password.updated')"));
+      expect(
+        source,
+        contains("_ProfileLocaleText('profile.password.updated')"),
+      );
       final fullImageStart = source.indexOf('class _ProfileAvatarFullImage');
       final fullImageEnd = source.indexOf(
         'class _ChangePasswordDialog',
@@ -456,7 +459,7 @@ void main() {
       'button: true',
       'class _ProfileAvatarFullScreen',
       'void _showAvatarPreview()',
-      "tooltip: '修改头像'",
+      "tooltip: I18n.tr('profile.avatar.edit')",
       'WidgetsBinding.instance.addPostFrameCallback',
       'onPreview: _showAvatarPreview',
       'onEdit: _uploadAvatar',
@@ -470,7 +473,7 @@ void main() {
       'const double _profileActionButtonWidth = 68',
       'const double _profileLongActionButtonWidth = 96',
       'height: _profileActionButtonHeight',
-      "setState(() => _error = I18n.tr('auth.error.email_invalid'))",
+      "() => _error = const _ProfileStateText.key('auth.error.email_invalid')",
       '_cooldownSeconds > 0',
       "'\${_cooldownSeconds}s'",
       'appSecondaryFilledButtonStyle(context)',

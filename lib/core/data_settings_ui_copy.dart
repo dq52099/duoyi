@@ -372,6 +372,14 @@ class DataSettingsUiCopy {
       isEn ? 'Failed to save theme settings' : '主题保存失败';
   static String get rewardShopReason =>
       isEn ? 'Reward shop theme decoration' : '奖励商店主题装饰';
+  static String redeemThemeTitle(String name) =>
+      isEn ? 'Redeem theme: $name' : '兑换主题：$name';
+  static String redeemFocusBackdropTitle(String name) =>
+      isEn ? 'Redeem focus backdrop: $name' : '兑换专注背景：$name';
+  static String redeemAvatarFrameTitle(String name) =>
+      isEn ? 'Redeem avatar frame: $name' : '兑换头像框：$name';
+  static String redeemCardSkinTitle(String name) =>
+      isEn ? 'Redeem card skin: $name' : '兑换卡片皮肤：$name';
 
   static String insufficientCoins(int diff) =>
       isEn ? 'Not enough Time Coins, need $diff more' : '时光币不足，还差 $diff';

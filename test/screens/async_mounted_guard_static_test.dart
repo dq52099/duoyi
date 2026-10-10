@@ -84,7 +84,9 @@ void main() {
     );
     expect(
       source,
-      contains('if (!mounted) return;\n      _backupPage = backupPage;'),
+      contains(
+        'if (!mounted || serial != _loadSerial) return;\n      _backupEnabled = data',
+      ),
     );
   });
 

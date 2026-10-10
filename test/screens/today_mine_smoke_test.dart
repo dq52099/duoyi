@@ -298,10 +298,10 @@ void main() {
     // 仍保留"行动计划 → 记录回顾 → 日程日期"的主 build 视觉先后这一约束意图。
     expect(
       mine.indexOf("title: I18n.tr('mine.group.action_plan')"),
-      lessThan(mine.indexOf("const _MineRecordReviewGroup()")),
+      lessThan(mine.indexOf("return _MineRecordReviewGroup();")),
     );
     expect(
-      mine.indexOf("const _MineRecordReviewGroup()"),
+      mine.indexOf("return _MineRecordReviewGroup();"),
       lessThan(mine.indexOf("title: I18n.tr('mine.group.schedule')")),
     );
     expect(

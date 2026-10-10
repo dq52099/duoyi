@@ -57,6 +57,9 @@ import 'services/deep_link_service.dart';
 import 'services/daily_digest_reminder_sync.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
+import 'services/widget_publication.dart';
+import 'services/widget_publication_client.dart';
+import 'services/widget_publication_controller.dart';
 import 'services/widget_quick_todo_action.dart';
 import 'services/widget_action_scope.dart';
 import 'services/widget_action_message.dart';
@@ -621,6 +624,11 @@ void main() async {
   final notificationService = NotificationService();
   final systemTray = SystemTrayService();
   final authProvider = AuthProvider();
+  final widgetPublicationController = WidgetPublicationController();
+  authProvider.onWidgetPublicationAuthorityRevoked = () {
+    widgetPublicationController.revoke();
+    HomeWidgetService.invalidatePushSignature();
+  };
   final countdownProvider = CountdownProvider();
   final noteProvider = NoteProvider();
   final anniversaryProvider = AnniversaryProvider();
@@ -649,6 +657,53 @@ void main() async {
   );
   var cloudSyncStartSerial = 0;
 
+  WidgetDevicePresentation widgetPresentation(Map<String, Object> source) {
+    final complete = <String, Object>{
+      for (final key in WidgetPublication.valueKeys)
+        key:
+            source[key] ??
+            (throw FormatException('Missing widget publication value: $key')),
+    };
+    return WidgetDevicePresentation(
+      locale: I18n.current,
+      completeValues: complete,
+    );
+  }
+
+  WidgetDevicePresentation currentWidgetPresentation() {
+    final strings = themeProvider.brand.strings;
+    return widgetPresentation({
+      ...HomeWidgetService.accountPayloadDefaults,
+      ...HomeWidgetThemePayload.fromThemeProvider(themeProvider).payloadValues,
+      'brand_app_title': strings.appTitle,
+      'nav_todo': strings.navTodo,
+      'nav_habit': strings.navHabit,
+      'nav_calendar': strings.navCalendar,
+      'nav_focus': strings.navFocus,
+    });
+  }
+
+  HomeWidgetService.publicationActionValidator = (uri) async {
+    final read = await WidgetPublicationClient().read();
+    final snapshot = read.snapshot;
+    final document = snapshot?.document;
+    if (snapshot?.active != true ||
+        document?.state != WidgetPublicationState.published) {
+      return false;
+    }
+    final now = DateTime.now().toLocal();
+    final day =
+        '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    return document!.snapshotDay == day &&
+        document.snapshotUtcOffsetMinutes == now.timeZoneOffset.inMinutes &&
+        uri.queryParameters['widget_day'] == day &&
+        uri.queryParameters['widget_offset'] ==
+            now.timeZoneOffset.inMinutes.toString() &&
+        uri.queryParameters['widget_account'] == snapshot!.ownerEpoch;
+  };
+
   Future<void> flushPendingLocalChangesBeforeAccountChange({
     required String reason,
   }) async {
@@ -666,6 +721,28 @@ void main() async {
   Future<void> clearAccountLocalData({required String reason}) async {
     debugPrint('[auth] clear local account data reason=$reason');
     await flushPendingLocalChangesBeforeAccountChange(reason: reason);
+    widgetPublicationController.revoke();
+    try {
+      if (PlatformInfo.isAndroid) {
+        widgetPublicationController.selectPresentation(
+          currentWidgetPresentation(),
+        );
+        final result = await widgetPublicationController.invalidate();
+        if (!result.barrierConfirmed) {
+          throw StateError('native widget barrier: ${result.status}');
+        }
+      }
+      HomeWidgetService.resetAccountCache();
+      if (!await HomeWidgetService.waitForAccountClear()) {
+        throw StateError('legacy widget storage clear failed');
+      }
+    } catch (error, stackTrace) {
+      debugPrint('[auth] widget cleanup blocked: $error\n$stackTrace');
+      Error.throwWithStackTrace(
+        const AccountLocalDataCleanupBlockedException('小组件账号数据未能安全清除，请重试切换账号。'),
+        stackTrace,
+      );
+    }
     cloudSyncStartSerial++;
     Object? criticalCleanupError;
     StackTrace? criticalCleanupStackTrace;
@@ -859,13 +936,6 @@ void main() async {
         }, critical: true);
       });
 
-      HomeWidgetService.resetAccountCache();
-      final widgetCleared = await HomeWidgetService.waitForAccountClear();
-      if (!widgetCleared) {
-        throw const AccountLocalDataCleanupBlockedException(
-          '小组件账号数据清除失败，请重试切换账号',
-        );
-      }
       unawaited(() async {
         await Future<void>.delayed(const Duration(seconds: 8));
         await guarded('home widget refresh', () async {
@@ -1130,6 +1200,9 @@ void main() async {
       final initialized = await HomeWidgetService.init();
       if (!initialized) {
         debugPrint('[HomeWidget] startup init completed with failures');
+      }
+      if (PlatformInfo.isAndroid) {
+        await HomeWidgetService.refreshPublishedWidgets();
       }
     }();
     return homeWidgetLaunchStartup!;
@@ -2282,6 +2355,74 @@ void main() async {
     themeProvider,
   );
 
+  HomeWidgetService.publicationWriter = (payload, capturedAt) async {
+    if (!PlatformInfo.isAndroid ||
+        !deferredLocalStorageHydrated ||
+        _widgetAccountUnavailable(authProvider)) {
+      return false;
+    }
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    final selectedLocale = I18n.current;
+    final selectedTheme = _homeWidgetThemeSignature(themeProvider);
+    final accountIdentity = authProvider.validatedWidgetAccountIdentity;
+    if (authProvider.state.isLoggedIn && accountIdentity == null) return false;
+    final binding = accountIdentity == null
+        ? WidgetWorkspaceBinding(kind: 'guest', key: 'local-device')
+        : WidgetWorkspaceBinding(kind: 'account', key: accountIdentity);
+    bool isCurrent() =>
+        deferredLocalStorageHydrated &&
+        !_widgetAccountUnavailable(authProvider) &&
+        I18n.current == selectedLocale &&
+        _homeWidgetThemeSignature(themeProvider) == selectedTheme &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation) &&
+        (accountIdentity == null
+            ? !authProvider.state.isLoggedIn
+            : authProvider.validatedWidgetAccountIdentity == accountIdentity);
+    final workspace = ValidatedWidgetWorkspace(
+      binding: binding,
+      accountGeneration: generation,
+      isCurrent: isCurrent,
+    );
+    final presentation = widgetPresentation(payload);
+    widgetPublicationController.selectPresentation(presentation);
+    if (!widgetPublicationController.ready) {
+      await widgetPublicationController.advancePresentation();
+    }
+    if (!widgetPublicationController.ready) {
+      var opened = await widgetPublicationController.openWorkspace(
+        workspace,
+        forceReset: false,
+      );
+      if (opened.status == 'barrierRequired') {
+        final sealed = await widgetPublicationController.invalidate();
+        if (!sealed.barrierConfirmed || !isCurrent()) return false;
+        opened = await widgetPublicationController.openWorkspace(
+          workspace,
+          forceReset: false,
+        );
+      }
+      if (!opened.storeCommitted || !widgetPublicationController.ready) {
+        debugPrint('[HomeWidget] native workspace open: ${opened.status}');
+        return false;
+      }
+    }
+    if (!isCurrent()) return false;
+    final complete = <String, Object>{
+      for (final key in WidgetPublication.valueKeys) key: payload[key]!,
+    };
+    final capture = widgetPublicationController.capture(
+      complete,
+      capturedAt: capturedAt,
+    );
+    if (capture == null) return false;
+    final published = await widgetPublicationController.publish(capture);
+    if (!published.storeCommitted || !isCurrent()) {
+      debugPrint('[HomeWidget] native publication: ${published.status}');
+      return false;
+    }
+    return HomeWidgetService.refreshPublishedWidgets();
+  };
+
   HomeWidgetService.dashboardDataRefresher = () async {
     final generation = AccountLocalDataCleaner.accountDataGeneration;
     await ensureDeferredLocalStorageStartup();
@@ -2315,6 +2456,7 @@ void main() async {
   DateTime? lastHomeWidgetPushStartedAt;
   var homeWidgetPushInFlight = false;
   var homeWidgetPushQueued = false;
+  var homeWidgetPushRetries = 0;
 
   String homeWidgetThemeSignature() => _homeWidgetThemeSignature(themeProvider);
 
@@ -2371,11 +2513,15 @@ void main() async {
         final pushed = await pushHomeWidgetNow();
         if (!pushed) {
           lastHomeWidgetDataSignature = '';
+          if (++homeWidgetPushRetries <= 3) homeWidgetPushQueued = true;
           debugPrint('[HomeWidget] queued push completed with failures');
+        } else {
+          homeWidgetPushRetries = 0;
         }
       }
     } catch (e, st) {
       lastHomeWidgetDataSignature = '';
+      if (++homeWidgetPushRetries <= 3) homeWidgetPushQueued = true;
       debugPrint('[HomeWidget] queued push failed: $e\n$st');
     } finally {
       homeWidgetPushInFlight = false;
@@ -2390,10 +2536,26 @@ void main() async {
 
   void queueHomeWidgetPush() {
     if (!deferredLocalStorageHydrated) return;
+    homeWidgetPushRetries = 0;
     scheduleHomeWidgetPushDebounce(homeWidgetPushDelay(), () {
       unawaited(runQueuedHomeWidgetPush());
     });
   }
+
+  String? widgetOwnerSignature() => authProvider.state.isLoggedIn
+      ? authProvider.validatedWidgetAccountIdentity
+      : _widgetAccountUnavailable(authProvider)
+      ? null
+      : 'guest';
+  var lastWidgetOwnerSignature = widgetOwnerSignature();
+  authProvider.addListener(() {
+    final current = widgetOwnerSignature();
+    if (current == lastWidgetOwnerSignature) return;
+    lastWidgetOwnerSignature = current;
+    HomeWidgetService.invalidatePushSignature();
+    lastHomeWidgetDataSignature = '';
+    if (current != null) queueHomeWidgetPush();
+  });
 
   Future<void> updateHomeWidgetThemeNow({required String reason}) async {
     final signature = homeWidgetThemeSignature();

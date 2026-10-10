@@ -10,6 +10,7 @@ void main() {
     final screen = File(
       'lib/screens/integrations_screen.dart',
     ).readAsStringSync();
+    final copy = File('lib/core/notification_ui_copy.dart').readAsStringSync();
     final exportScreen = File(
       'lib/screens/export_screen.dart',
     ).readAsStringSync();
@@ -35,24 +36,31 @@ void main() {
       service,
       contains("return 'Basic \${base64Encode(utf8.encode(raw))}'"),
     );
-    expect(screen, contains('CalDAV 写回目标'));
-    expect(screen, contains('Authorization header'));
-    expect(screen, contains('测试写回'));
+    expect(screen, contains('NotificationUiCopy.calDavTargetTitle'));
+    expect(copy, contains('CalDAV 写回目标'));
+    expect(screen, contains('NotificationUiCopy.authHeaderLabel'));
+    expect(copy, contains('Authorization header'));
+    expect(screen, contains('NotificationUiCopy.calDavTestWriteback'));
+    expect(copy, contains('测试写回'));
     expect(screen, contains('_CalDavWriteTargetCard'));
     expect(screen, contains('_showICloudCalDavDialog'));
-    expect(screen, contains('配置 iCloud 日历写回'));
+    expect(screen, contains('NotificationUiCopy.iCloudDialogTitle'));
+    expect(copy, contains('配置 iCloud 日历写回'));
     expect(screen, contains('Apple ID'));
-    expect(screen, contains('App 专用密码'));
+    expect(screen, contains('NotificationUiCopy.appSpecificPasswordLabel'));
+    expect(copy, contains('App 专用密码'));
     expect(screen, contains('CalDavCredentialHelper.basicAuthorizationHeader'));
-    expect(screen, contains('Google / Outlook / Apple iCloud 公开日历'));
+    expect(screen, contains('NotificationUiCopy.oauthCardTitle'));
     expect(service, contains('pushEventsToCalDav'));
     expect(service, contains('_calDavUidFor'));
     expect(service, contains('_calDavPushedUidsKey'));
     expect(service, contains('previousUids.difference(currentUids)'));
     expect(service, contains('await writer.deleteEvent('));
     expect(service, contains('staleUid,'));
-    expect(screen, contains('远端冲突处理'));
-    expect(screen, contains('跳过远端已修改事件'));
+    expect(screen, contains('NotificationUiCopy.conflictPolicyLabel'));
+    expect(copy, contains('远端冲突处理'));
+    expect(screen, contains('NotificationUiCopy.conflictPolicySkipItem'));
+    expect(copy, contains('跳过远端已修改事件'));
     expect(exportScreen, contains('export.caldav.conflict.middle'));
     expect(exportScreen, contains('export.caldav.conflict.suffix'));
     expect(exportScreen, contains('export.push_caldav'));
@@ -79,6 +87,7 @@ void main() {
     final screen = File(
       'lib/screens/integrations_screen.dart',
     ).readAsStringSync();
+    final copy = File('lib/core/notification_ui_copy.dart').readAsStringSync();
     final main = File('lib/main.dart').readAsStringSync();
     final deepLinkService = File(
       'lib/services/deep_link_service.dart',
@@ -124,7 +133,8 @@ void main() {
     expect(service, isNot(contains('sourceId: eventId')));
     expect(service, isNot(contains('sourceId: uid')));
 
-    expect(screen, contains('Google / Outlook OAuth 日历'));
+    expect(screen, contains('NotificationUiCopy.oauthCardTitle'));
+    expect(copy, contains('Google / Outlook OAuth 日历'));
     expect(screen, contains('initialOAuthCallbackUri'));
     expect(screen, contains('_OAuthCalendarCard'));
     expect(screen, contains('_OAuthCalendarTile'));
@@ -135,16 +145,20 @@ void main() {
     expect(screen, contains('buildOAuthAuthorizationUri'));
     expect(screen, contains('oauthState'));
     expect(screen, contains("callbackUri.queryParameters['state']"));
-    expect(screen, contains('OAuth 回调 state 不匹配，请重新授权'));
+    expect(screen, contains('NotificationUiCopy.oauthStateMismatch'));
+    expect(copy, contains('OAuth 回调 state 不匹配，请重新授权'));
     expect(screen, contains('state: oauthState'));
     expect(screen, contains('loadPendingOAuthAuthorization'));
     expect(screen, contains('savePendingOAuthAuthorization'));
     expect(screen, contains('clearPendingOAuthAuthorization'));
     expect(screen, contains('duoyi://oauth/calendar'));
-    expect(screen, contains('授权链接'));
+    expect(screen, contains('NotificationUiCopy.authUrlSectionTitle'));
+    expect(copy, contains('授权链接'));
     expect(screen, contains('Client ID'));
-    expect(screen, contains('Client Secret（可选）'));
-    expect(screen, contains('授权码或回调 URL'));
+    expect(screen, contains('NotificationUiCopy.clientSecretOptionalLabel'));
+    expect(copy, contains('Client Secret（可选）'));
+    expect(screen, contains('NotificationUiCopy.authCodeLabel'));
+    expect(copy, contains('授权码或回调 URL'));
     expect(screen, contains('addOAuthAccountFromCode'));
     expect(screen, contains('updateOAuthAccount'));
     expect(screen, contains('removeOAuthAccount'));

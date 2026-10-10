@@ -43,10 +43,10 @@ void main() {
     expect(screen, contains('Future<void> _configureWebDavBackup()'));
     expect(screen, contains('Future<void> _uploadWebDavBackup()'));
     expect(screen, contains('Future<void> _restoreFromWebDav'));
-    expect(screen, contains('WebDAV 云盘备份'));
-    expect(screen, contains('上传备份'));
-    expect(screen, contains('云端合并'));
-    expect(screen, contains('云端覆盖'));
+    expect(screen, contains('DataSettingsUiCopy.webDavSectionTitle'));
+    expect(screen, contains('DataSettingsUiCopy.webDavUploadButton'));
+    expect(screen, contains('DataSettingsUiCopy.webDavMergeButton'));
+    expect(screen, contains('DataSettingsUiCopy.webDavOverwriteButton'));
     // 4 处调用：粘贴导入(:_import)、文件导入(:_importBackupFile)、
     // WebDAV 恢复(:_restoreFromWebDav) + 竞品导入回滚路径。
     expect(
@@ -109,9 +109,9 @@ void main() {
       reason: '粘贴导入 / 文件导入 / WebDAV 恢复都应透传 merge: merge',
     );
     expect(screen, contains('backup.overwrite.will_delete_missing'));
-    expect(screen, contains('文件合并'));
-    expect(screen, contains('文件覆盖'));
-    expect(screen, contains('从文件导入其他 App 数据'));
+    expect(screen, contains('DataSettingsUiCopy.fileMergeButton'));
+    expect(screen, contains('DataSettingsUiCopy.fileOverwriteButton'));
+    expect(screen, contains('DataSettingsUiCopy.importProductivityFileButton'));
   });
 
   test('Parity docs mark cloud-drive backup as implemented with WebDAV', () {

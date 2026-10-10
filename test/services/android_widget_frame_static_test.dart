@@ -37,29 +37,29 @@ void main() {
     }
   });
 
-  test(
-    'snapshot initializes styles before capture and keeps one commit site',
-    () {
-      final source = _source('DuoyiWidgetSnapshot');
-      expect(
-        source,
-        contains('saveForWidgetIfMissing(backing, id, initialStyle)'),
-      );
-      expect(
-        source.indexOf('saveForWidgetIfMissing('),
-        lessThan(source.indexOf('DuoyiWidgetFrameAttempts.run(')),
-      );
-      expect(
-        source,
-        contains('Looper.myLooper() != android.os.Looper.getMainLooper()'),
-      );
-      expect(RegExp(r'updateAppWidget\(').allMatches(source), hasLength(1));
-      expect(source, contains('frame.core.rejectionReason(backing.all'));
-      expect(source, isNot(contains('SharedPreferences by backing')));
-      expect(source, isNot(contains('.putString(')));
-      expect(source, isNot(contains('requestUpdateForAllWidgets(')));
-    },
-  );
+  test('snapshot initializes styles before reading the native publication', () {
+    final source = _source('DuoyiWidgetSnapshot');
+    expect(
+      source,
+      contains('saveForWidgetIfMissing(backing, id, initialStyle)'),
+    );
+    expect(
+      source.indexOf('saveForWidgetIfMissing('),
+      lessThan(source.indexOf('val read = store.read(nonBlocking = true)')),
+    );
+    expect(
+      source,
+      contains('Looper.myLooper() != android.os.Looper.getMainLooper()'),
+    );
+    expect(source, contains('read.envelope?.document?.toFlatValues()'));
+    expect(source, contains('store.acceptSnapshot(read.envelope)'));
+    expect(source, contains('frame.core.rejectionReason(values(latest'));
+    expect(source, contains('manager.updateAppWidget(id, built.views)'));
+    expect(source, contains('if (!accepted) return@repeat'));
+    expect(source, isNot(contains('SharedPreferences by backing')));
+    expect(source, isNot(contains('.putString(')));
+    expect(source, isNot(contains('requestUpdateForAllWidgets(')));
+  });
 
   test('raw values and dimensions are checked before any accepted effect', () {
     final source = _source('DuoyiWidgetFrameCore');

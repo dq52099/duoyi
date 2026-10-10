@@ -163,7 +163,7 @@ class ThemePickerScreen extends StatelessWidget {
       final ok = await achievementProvider.spendCoins(
         coins: cost,
         title: title,
-        reason: '奖励商店主题装饰',
+        reason: DataSettingsUiCopy.rewardShopReason,
       );
       if (!context.mounted || !isCurrent()) return false;
       if (!ok) {
@@ -223,7 +223,7 @@ class ThemePickerScreen extends StatelessWidget {
       achievementProvider: achievementProvider,
       itemType: 'brand',
       itemId: brand.id,
-      title: '兑换主题：${_styleName(brand)}',
+      title: DataSettingsUiCopy.redeemThemeTitle(_styleName(brand)),
       cost: cost,
       isUnlocked: isUnlocked,
       applyLocal: (isCurrent) async {
@@ -268,7 +268,9 @@ class ThemePickerScreen extends StatelessWidget {
       achievementProvider: achievementProvider,
       itemType: 'focus_backdrop',
       itemId: backdrop.id,
-      title: '兑换专注背景：${backdrop.name}',
+      title: DataSettingsUiCopy.redeemFocusBackdropTitle(
+        DataSettingsUiCopy.focusBackdropName(backdrop.id, backdrop.name),
+      ),
       cost: backdrop.cost,
       isUnlocked: isUnlocked,
       applyLocal: (isCurrent) async {
@@ -317,7 +319,9 @@ class ThemePickerScreen extends StatelessWidget {
       achievementProvider: achievementProvider,
       itemType: 'avatar_frame',
       itemId: frame.id,
-      title: '兑换头像框：${frame.name}',
+      title: DataSettingsUiCopy.redeemAvatarFrameTitle(
+        DataSettingsUiCopy.avatarFrameName(frame.id, frame.name),
+      ),
       cost: frame.cost,
       isUnlocked: isUnlocked,
       applyLocal: (isCurrent) async {
@@ -366,7 +370,9 @@ class ThemePickerScreen extends StatelessWidget {
       achievementProvider: achievementProvider,
       itemType: 'card_skin',
       itemId: skin.id,
-      title: '兑换卡片皮肤：${skin.name}',
+      title: DataSettingsUiCopy.redeemCardSkinTitle(
+        DataSettingsUiCopy.cardSkinName(skin.id, skin.name),
+      ),
       cost: skin.cost,
       isUnlocked: isUnlocked,
       applyLocal: (isCurrent) async {

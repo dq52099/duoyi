@@ -40,7 +40,6 @@ class HomeWidgetService {
 
   /// 账号清理（登出/切号）时写回小组件的兜底 payload。文案值经 I18n 取词：
   /// en 用户登出后小组件不应回退为中文占位；其余为与语言无关的默认数值。
-  @visibleForTesting
   static Map<String, Object> get accountPayloadDefaults => <String, Object>{
     'widget_account_nonce': '',
     'widget_snapshot_day': '',
@@ -140,10 +139,23 @@ class HomeWidgetService {
   };
   static Future<bool> Function()? dashboardDataRefresher;
 
+  /// Android publishes one complete native snapshot instead of exposing
+  /// partially updated HomeWidget preference keys to launcher readers.
+  static Future<bool> Function(Map<String, Object> values, DateTime capturedAt)?
+  publicationWriter;
+  static Future<bool> Function(Uri uri)? publicationActionValidator;
+
   static Future<bool> refreshDashboardData() async {
     if (!_supported) return false;
     final refresh = dashboardDataRefresher;
     return refresh == null ? false : await refresh();
+  }
+
+  static Future<bool> refreshPublishedWidgets() => _updateAllWidgets();
+
+  static void invalidatePushSignature() {
+    _lastPushSignature = '';
+    _refreshPending = true;
   }
 
   @visibleForTesting
@@ -197,6 +209,17 @@ class HomeWidgetService {
 
   static Future<bool> isCurrentWidgetAction(Uri uri) async {
     if (uri.queryParameters['source'] != 'widget') return true;
+    final nativeValidator = publicationActionValidator;
+    if (PlatformInfo.isAndroid && nativeValidator != null) {
+      try {
+        return await nativeValidator(uri);
+      } catch (error, stackTrace) {
+        debugPrint(
+          '[HomeWidget] action validation failed: $error\n$stackTrace',
+        );
+        return false;
+      }
+    }
     final generation = _accountGeneration;
     if (!await init() || generation != _accountGeneration) return false;
     final now = DateTime.now();
@@ -251,6 +274,7 @@ class HomeWidgetService {
 
   static Future<bool> updateTheme(HomeWidgetThemePayload theme) async {
     if (!_supported) return true;
+    if (PlatformInfo.isAndroid && publicationWriter != null) return true;
     final generation = _accountGeneration;
     await _drainPendingAccountClear();
     return _serializePayload(() async {
@@ -438,10 +462,11 @@ class HomeWidgetService {
     final generation = _accountGeneration;
     await _drainPendingAccountClear();
     return _serializePayload(() async {
+      final nativeWriter = PlatformInfo.isAndroid ? publicationWriter : null;
       if (generation != _accountGeneration || locale != I18n.current) {
         return false;
       }
-      if (!await init() ||
+      if ((nativeWriter == null && !await init()) ||
           generation != _accountGeneration ||
           locale != I18n.current) {
         return false;
@@ -497,10 +522,7 @@ class HomeWidgetService {
         // A reader must never treat a partially written snapshot as today's data.
         _refreshPending = true;
         _lastPushSignature = '';
-        if (!await _saveWidgetPayloadValue('widget_snapshot_day', '')) {
-          return false;
-        }
-        final saveResult = await _saveWidgetPayload({
+        final payload = <String, Object>{
           'widget_account_nonce': _accountActionNonce ?? '',
           'widget_locale': locale.name,
           'todo_count': todoCount,
@@ -658,7 +680,23 @@ class HomeWidgetService {
           'habit_quick_check_id': habitQuickCheckId,
           'habit_quick_check_label': resolvedHabitQuickCheckLabel,
           ...theme.payloadValues,
-        });
+        };
+        if (nativeWriter != null) {
+          final ok = await nativeWriter(payload, now);
+          if (ok &&
+              generation == _accountGeneration &&
+              locale == I18n.current) {
+            _refreshPending = false;
+            _lastPushSignature = datedSignature;
+            _lastThemeSignature = theme.signature;
+            return true;
+          }
+          return false;
+        }
+        if (!await _saveWidgetPayloadValue('widget_snapshot_day', '')) {
+          return false;
+        }
+        final saveResult = await _saveWidgetPayload(payload);
         if (!saveResult.ok ||
             generation != _accountGeneration ||
             locale != I18n.current) {

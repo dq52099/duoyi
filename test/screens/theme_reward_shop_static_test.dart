@@ -10,6 +10,7 @@ void main() {
     final themeScreen = File(
       'lib/screens/theme_picker_screen.dart',
     ).readAsStringSync();
+    final copy = File('lib/core/data_settings_ui_copy.dart').readAsStringSync();
     final achievementProvider = File(
       'lib/providers/achievement_provider.dart',
     ).readAsStringSync();
@@ -61,18 +62,25 @@ void main() {
     expect(themeScreen, contains('themeProvider.applyShopStateFromServer'));
     expect(themeScreen, contains('achievementProvider.applyRewardsSnapshot'));
     expect(themeScreen, contains('achievementProvider.spendCoins('));
-    expect(themeScreen, contains('时光币'));
+    expect(themeScreen, contains('DataSettingsUiCopy.coinCount('));
+    expect(copy, contains('时光币'));
     expect(themeScreen, contains('Icons.lock_outline'));
-    expect(themeScreen, contains('专注背景'));
-    expect(themeScreen, contains('兑换专注背景'));
+    expect(
+      themeScreen,
+      contains('DataSettingsUiCopy.focusBackdropSectionTitle'),
+    );
+    expect(
+      themeScreen,
+      contains('DataSettingsUiCopy.redeemFocusBackdropTitle('),
+    );
     expect(themeScreen, contains('_focusBackdropPreview'));
-    expect(themeScreen, contains('头像框'));
-    expect(themeScreen, contains('兑换头像框'));
+    expect(themeScreen, contains('DataSettingsUiCopy.avatarFrameSectionTitle'));
+    expect(themeScreen, contains('DataSettingsUiCopy.redeemAvatarFrameTitle('));
     expect(themeScreen, contains('_avatarFramePreview'));
-    expect(themeScreen, contains('卡片皮肤'));
-    expect(themeScreen, contains('兑换卡片皮肤'));
+    expect(themeScreen, contains('DataSettingsUiCopy.cardSkinSectionTitle'));
+    expect(themeScreen, contains('DataSettingsUiCopy.redeemCardSkinTitle('));
     expect(themeScreen, contains('_cardSkinPreview'));
-    expect(themeScreen, contains('小组件主题'));
+    expect(themeScreen, contains('DataSettingsUiCopy.widgetSyncNoticeTitle'));
     expect(themeScreen, contains('_widgetThemeSection'));
     expect(themeScreen, contains('themeProvider.setWidgetBackgroundBrand'));
     expect(themeScreen, contains('themeProvider.setWidgetCardSkin'));

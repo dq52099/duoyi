@@ -115,8 +115,11 @@ void main() {
     expect(screen, contains('保存失败'));
 
     expect(calendar, contains("import 'ai_schedule_screen.dart';"));
-    expect(calendar, contains("title: const Text('AI 创建日程')"));
-    expect(calendar, contains('AiScheduleScreen(initialDate: _selectedDay)'));
+    expect(screen, contains("title: const Text('AI 创建日程')"));
+    expect(
+      calendar,
+      contains('AiScheduleScreen(initialDate: origin.selectedDay)'),
+    );
 
     expect(quickFab, contains("import '../screens/ai_schedule_screen.dart';"));
     expect(

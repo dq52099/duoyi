@@ -27,14 +27,18 @@ object DuoyiWidgetSnapshot {
         )
     }
 
-    private fun capture(manager: AppWidgetManager, backing: SharedPreferences, id: Int): DuoyiWidgetRenderFrame {
-        val raw = backing.all
-        return DuoyiWidgetRenderFrame(DuoyiWidgetFrameCore(
-            raw, clock(), options(manager, id), id, Locale.getDefault().toLanguageTag(),
-        ))
+    private fun values(read: DuoyiWidgetPublicationRead, backing: SharedPreferences, id: Int): Map<String, Any?> {
+        val raw = LinkedHashMap<String, Any?>()
+        read.envelope?.document?.toFlatValues()?.let { raw.putAll(it) }
+        // Launcher layout choices are device-owned and may live in preferences.
+        val display = backing.all
+        for (key in listOf("widget_display_mode", "widget_display_mode_$id")) {
+            display[key]?.let { raw[key] = it }
+        }
+        return raw
     }
 
-    /** Keep validation and commit in the same main-looper segment as native writers. */
+    /** Hold the store's read lock across a published frame's final commit. */
     fun renderWidget(
         context: Context,
         manager: AppWidgetManager,
@@ -49,21 +53,42 @@ object DuoyiWidgetSnapshot {
         }
         try {
             DuoyiWidgetDisplayMode.saveForWidgetIfMissing(backing, id, initialStyle)
-            return DuoyiWidgetFrameAttempts.run(
-                capture = { capture(manager, backing, id) },
-                build = { frame -> build(frame).also { finishRender(it.views, frame) } },
-                rejectionReason = { frame ->
-                    frame.core.rejectionReason(backing.all, clock(), options(manager, id),
-                        Locale.getDefault().toLanguageTag())
-                },
-                commit = { built -> manager.updateAppWidget(id, built.views) },
-                acceptedEffect = { _, built ->
-                    try { built.acceptedEffect?.invoke() } catch (_: RuntimeException) {
-                        android.util.Log.w("DuoyiWidgetFrame", "effect_failed widgetId=$id")
+            val store = DuoyiWidgetPublicationStore.forContext(context)
+            repeat(2) {
+                val read = store.read(nonBlocking = true)
+                val frame = DuoyiWidgetRenderFrame(DuoyiWidgetFrameCore(
+                    values(read, backing, id), clock(), options(manager, id), id,
+                    Locale.getDefault().toLanguageTag(),
+                ))
+                val built = build(frame)
+                finishRender(built.views, frame)
+                val latest = store.read(nonBlocking = true)
+                val reason = frame.core.rejectionReason(values(latest, backing, id), clock(),
+                    options(manager, id), Locale.getDefault().toLanguageTag())
+                if (reason != null || latest.status != read.status) {
+                    android.util.Log.i("DuoyiWidgetFrame", "render_rejected widgetId=$id reason=${reason ?: "store_changed"}")
+                    return@repeat
+                }
+                val accepted = if (read.envelope != null) {
+                    store.acceptSnapshot(read.envelope) {
+                        manager.updateAppWidget(id, built.views)
+                        true
                     }
-                },
-                rejected = { reason -> android.util.Log.i("DuoyiWidgetFrame", "render_rejected widgetId=$id reason=$reason") },
-            )
+                } else {
+                    // An absent or unreadable store may only render an empty frame.
+                    val finalRead = store.read(nonBlocking = true)
+                    if (finalRead.status == read.status && finalRead.envelope == null) {
+                        manager.updateAppWidget(id, built.views)
+                        true
+                    } else false
+                }
+                if (!accepted) return@repeat
+                try { built.acceptedEffect?.invoke() } catch (_: RuntimeException) {
+                    android.util.Log.w("DuoyiWidgetFrame", "effect_failed widgetId=$id")
+                }
+                return true
+            }
+            return false
         } catch (_: RuntimeException) {
             // A failed build/Binder call never runs an effect or blocks the next id.
             android.util.Log.w("DuoyiWidgetFrame", "render_failed widgetId=$id")

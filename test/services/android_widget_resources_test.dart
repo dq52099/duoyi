@@ -2305,7 +2305,9 @@ void main() {
         );
         expect(
           snapshot.indexOf('saveForWidgetIfMissing('),
-          lessThan(snapshot.indexOf('DuoyiWidgetFrameAttempts.run(')),
+          lessThan(
+            snapshot.indexOf('val read = store.read(nonBlocking = true)'),
+          ),
           reason: '${widget.title} style must be saved before frame capture.',
         );
         expect(compact, contains('android:minWidth="110dp"'));

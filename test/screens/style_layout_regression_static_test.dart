@@ -474,12 +474,13 @@ void main() {
       calendar.indexOf('Future<void> _showQuickAddTimeEntry'),
     );
     expect(quickMenu, contains('showAppModalSheet<void>('));
-    expect(quickMenu, contains('AppModalSheet('));
+    expect(calendar, contains('class _QuickAddMenuSheetState'));
+    expect(calendar, contains('return AppModalSheet('));
     expect(quickMenu, isNot(contains('showModalBottomSheet')));
     expect(quickMenu, contains('BrandRouteSurface('));
     expect(
       quickMenu,
-      contains('child: AiScheduleScreen(initialDate: _selectedDay)'),
+      contains('child: AiScheduleScreen(initialDate: origin.selectedDay)'),
     );
 
     final todo = File('lib/screens/todo_screen.dart').readAsStringSync();
@@ -513,13 +514,13 @@ void main() {
     expect(attachmentPicker, isNot(contains('ListTile(')));
 
     final projectDetail = calendar.substring(
-      calendar.indexOf('Future<void> _showProjectDetail'),
-      calendar.indexOf('void _showQuickAddMenu'),
+      calendar.indexOf('class _ProjectDetailSheetState'),
+      calendar.indexOf('class _ProjectStat'),
     );
     expect(projectDetail, contains('scrollable: false'));
     expect(projectDetail, contains("'calendar_project_detail_scroll_region'"));
     expect(projectDetail, contains('ListView.separated('));
-    expect(projectDetail, contains('itemCount: todos.length'));
+    expect(projectDetail, contains('itemCount: widget.todos.length'));
     expect(projectDetail, isNot(contains('.take(8)')));
 
     final habit = File('lib/screens/habit_screen.dart').readAsStringSync();

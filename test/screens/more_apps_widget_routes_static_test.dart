@@ -159,6 +159,30 @@ void main() {
       final source = File(
         'android/app/src/main/kotlin/com/duoyi/duoyi/${entry.value.fileName}',
       ).readAsStringSync();
+      if (entry.key == 'anniversary') {
+        final content = File(
+          'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetContent.kt',
+        ).readAsStringSync();
+        expect(source, contains('DuoyiWidgetContent.resolveAnniversaryItems('));
+        expect(
+          source,
+          contains('Uri.parse(item1?.target ?: "duoyi://anniversary")'),
+        );
+        expect(
+          source,
+          contains('Uri.parse(item2?.target ?: "duoyi://anniversary")'),
+        );
+        expect(
+          source,
+          contains('Uri.parse(item3?.target ?: "duoyi://anniversary")'),
+        );
+        expect(content, contains('fun parseAnniversaryTarget('));
+        expect(
+          content,
+          contains(r'return "duoyi://anniversary/$encoded" to raw'),
+        );
+        continue;
+      }
       expect(source, contains('detailUri(prefs, key, fallback)'));
       expect(
         source,
