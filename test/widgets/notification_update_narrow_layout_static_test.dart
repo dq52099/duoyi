@@ -74,9 +74,10 @@ void main() {
 
     expect(
       appBar,
-      contains("ValueKey('notification_history_mark_all_read_button')"),
+      contains("'notification_history_mark_all_read_button'"),
     );
-    expect(appBar, contains("tooltip: '全部标为已读'"));
+    expect(appBar, contains("'Mark all as read'"));
+    expect(appBar, contains("'全部标为已读'"));
     expect(appBar, isNot(contains('TextButton.icon(')));
 
     final filterStart = source.indexOf('class _NotificationHistoryFilters');

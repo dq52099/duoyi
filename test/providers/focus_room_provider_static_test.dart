@@ -185,7 +185,7 @@ void main() {
       );
       expect(
         provider.lastRemoteError,
-        contains('focus room server unavailable'),
+        '自习室服务暂不可用，请稍后重试或联系管理员。',
       );
 
       final ranking = provider.effectiveRankingFor(
@@ -270,7 +270,7 @@ void main() {
     await provider.leaveRoom(room.id);
 
     expect(requests, ['POST /api/focus-rooms/${room.id}/leave']);
-    expect(provider.lastRemoteError, contains('focus room leave unavailable'));
+    expect(provider.lastRemoteError, '自习室服务暂不可用，请稍后重试或联系管理员。');
     expect(provider.joinedRoomIds, isNot(contains(room.id)));
   });
 

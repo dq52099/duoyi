@@ -706,10 +706,12 @@ void main() {
     final calendarScreen = File(
       'lib/screens/calendar_screen.dart',
     ).readAsStringSync();
-    final quickAddStart = calendarScreen.indexOf('void _showQuickAddTodo()');
+    final quickAddStart = calendarScreen.indexOf(
+      'class _QuickAddTodoDialogState extends State<_QuickAddTodoDialog>',
+    );
     expect(quickAddStart, greaterThanOrEqualTo(0));
     final quickAddEnd = calendarScreen.indexOf(
-      'void _previousMonth()',
+      'class _QuickAddTimeEntryDialog',
       quickAddStart,
     );
     expect(quickAddEnd, greaterThan(quickAddStart));

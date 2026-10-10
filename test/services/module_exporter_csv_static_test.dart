@@ -33,15 +33,19 @@ void main() {
     () {
       final screen = File('lib/screens/backup_screen.dart').readAsStringSync();
 
-      expect(screen, contains("title: '单模块导出'"));
-      expect(screen, contains("subtitle: 'CSV / Markdown 格式'"));
-      expect(screen, contains("待办 · CSV"));
-      expect(screen, contains("习惯 · CSV"));
-      expect(screen, contains("时间足迹 · CSV"));
-      expect(screen, contains("笔记 · CSV"));
-      expect(screen, contains("日记 · CSV"));
-      expect(screen, contains("纪念日 · CSV"));
-      expect(screen, contains("目标 · CSV"));
+      expect(screen, contains('DataSettingsUiCopy.singleModuleExportTitle'));
+      expect(screen, contains('DataSettingsUiCopy.singleModuleExportSubtitle'));
+      for (final name in const [
+        'exportChipTodoCsv',
+        'exportChipHabitCsv',
+        'exportChipTimeEntryCsv',
+        'exportChipNoteCsv',
+        'exportChipDiaryCsv',
+        'exportChipAnniversaryCsv',
+        'exportChipGoalCsv',
+      ]) {
+        expect(screen, contains('DataSettingsUiCopy.$name'));
+      }
 
       expect(screen, contains('ModuleExporter.timeEntriesCsv(entries)'));
       expect(screen, contains('ModuleExporter.notesCsv(ns)'));

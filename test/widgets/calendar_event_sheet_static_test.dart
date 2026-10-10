@@ -176,7 +176,7 @@ void main() {
       contains('onEdit: () => showPomodoroSessionEditor(context, s)'),
     );
     expect(card, contains('final VoidCallback? onEdit;'));
-    expect(card, contains("message: '编辑记录'"));
+    expect(card, contains('message: MainUiCopy.pomodoroEditRecord'));
     expect(card, contains('icon: const Icon(Icons.edit_outlined)'));
   });
 }

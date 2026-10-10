@@ -491,7 +491,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsLanguageDescription.
   ///
   /// In zh, this message translates to:
-  /// **'说明：当前 v2 阶段已迁移高频公共词条（按钮、导航、提醒、共享）。剩余页面文案随后续迭代逐步翻译，未翻译部分会回退到中文显示。'**
+  /// **'选择界面语言。你的待办、笔记和其他记录会保留原文。'**
   String get settingsLanguageDescription;
 
   /// No description provided for @preferencesTitle.
@@ -6199,6 +6199,180 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'备份中不存在的本机数据将被删除。'**
   String get backupOverwriteWillDeleteMissing;
+
+  /// No description provided for @calendarContentDatePickerSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'手动跳转到指定日期'**
+  String get calendarContentDatePickerSubtitle;
+
+  /// No description provided for @calendarContentDatePickerTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择日期'**
+  String get calendarContentDatePickerTitle;
+
+  /// No description provided for @calendarContentTimePickerStartTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始时间'**
+  String get calendarContentTimePickerStartTime;
+
+  /// No description provided for @pickerActionToday.
+  ///
+  /// In zh, this message translates to:
+  /// **'今天'**
+  String get pickerActionToday;
+
+  /// No description provided for @pickerDateIgnoreYear.
+  ///
+  /// In zh, this message translates to:
+  /// **'忽略年份'**
+  String get pickerDateIgnoreYear;
+
+  /// No description provided for @pickerDateIgnoreYearDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'适合生日、纪念日每年重复'**
+  String get pickerDateIgnoreYearDesc;
+
+  /// No description provided for @pickerDateNextMonth.
+  ///
+  /// In zh, this message translates to:
+  /// **'下个月'**
+  String get pickerDateNextMonth;
+
+  /// No description provided for @pickerDatePrevMonth.
+  ///
+  /// In zh, this message translates to:
+  /// **'上个月'**
+  String get pickerDatePrevMonth;
+
+  /// No description provided for @pickerDateTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择日期'**
+  String get pickerDateTitle;
+
+  /// No description provided for @pickerLunarDay.
+  ///
+  /// In zh, this message translates to:
+  /// **'日'**
+  String get pickerLunarDay;
+
+  /// No description provided for @pickerLunarLeapMonth.
+  ///
+  /// In zh, this message translates to:
+  /// **'闰月'**
+  String get pickerLunarLeapMonth;
+
+  /// No description provided for @pickerLunarMonth.
+  ///
+  /// In zh, this message translates to:
+  /// **'月'**
+  String get pickerLunarMonth;
+
+  /// No description provided for @pickerTimeEarlier30m.
+  ///
+  /// In zh, this message translates to:
+  /// **'提前 30 分'**
+  String get pickerTimeEarlier30m;
+
+  /// No description provided for @pickerTimeLater30m.
+  ///
+  /// In zh, this message translates to:
+  /// **'延后 30 分'**
+  String get pickerTimeLater30m;
+
+  /// No description provided for @pickerTimePresetEvening.
+  ///
+  /// In zh, this message translates to:
+  /// **'晚上 20:00'**
+  String get pickerTimePresetEvening;
+
+  /// No description provided for @pickerTimePresetMorning.
+  ///
+  /// In zh, this message translates to:
+  /// **'上午 09:00'**
+  String get pickerTimePresetMorning;
+
+  /// No description provided for @pickerTimePresetNextSlot.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一提醒点'**
+  String get pickerTimePresetNextSlot;
+
+  /// No description provided for @pickerTimePresetNoon.
+  ///
+  /// In zh, this message translates to:
+  /// **'中午 12:00'**
+  String get pickerTimePresetNoon;
+
+  /// No description provided for @pickerTimePresetNow.
+  ///
+  /// In zh, this message translates to:
+  /// **'现在'**
+  String get pickerTimePresetNow;
+
+  /// No description provided for @pickerTimeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择时间'**
+  String get pickerTimeTitle;
+
+  /// No description provided for @pickerWeekdayFri.
+  ///
+  /// In zh, this message translates to:
+  /// **'五'**
+  String get pickerWeekdayFri;
+
+  /// No description provided for @pickerWeekdayMon.
+  ///
+  /// In zh, this message translates to:
+  /// **'一'**
+  String get pickerWeekdayMon;
+
+  /// No description provided for @pickerWeekdaySat.
+  ///
+  /// In zh, this message translates to:
+  /// **'六'**
+  String get pickerWeekdaySat;
+
+  /// No description provided for @pickerWeekdaySun.
+  ///
+  /// In zh, this message translates to:
+  /// **'日'**
+  String get pickerWeekdaySun;
+
+  /// No description provided for @pickerWeekdayThu.
+  ///
+  /// In zh, this message translates to:
+  /// **'四'**
+  String get pickerWeekdayThu;
+
+  /// No description provided for @pickerWeekdayTue.
+  ///
+  /// In zh, this message translates to:
+  /// **'二'**
+  String get pickerWeekdayTue;
+
+  /// No description provided for @pickerWeekdayWed.
+  ///
+  /// In zh, this message translates to:
+  /// **'三'**
+  String get pickerWeekdayWed;
+
+  /// No description provided for @widgetHabitNoneToday.
+  ///
+  /// In zh, this message translates to:
+  /// **'今天没有安排习惯'**
+  String get widgetHabitNoneToday;
+
+  /// No description provided for @widgetHabitView.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看习惯'**
+  String get widgetHabitView;
 }
 
 class _AppLocalizationsDelegate

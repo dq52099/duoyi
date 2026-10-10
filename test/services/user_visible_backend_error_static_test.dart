@@ -35,7 +35,14 @@ void main() {
       'lib/screens/admin_screen.dart',
     ]) {
       final source = File(path).readAsStringSync();
-      expect(source, contains('userVisibleApiError('), reason: path);
+      expect(
+        source,
+        anyOf(
+          contains('userVisibleApiError('),
+          contains('AccountUiCopy.formatError('),
+        ),
+        reason: path,
+      );
       expect(source, isNot(contains('e.message')), reason: path);
       expect(
         source,

@@ -58,7 +58,7 @@ void main() {
     expect(source, contains('compact: clampedHeight < 88'));
     expect(source, contains('final bool compact'));
     expect(source, contains('_buildCompactContent(context, e)'));
-    expect(source, contains('_buildRegularContent(context, e)'));
+    expect(source, contains('_buildRegularContent('));
     expect(source, contains('_DraggableEventCard('));
   });
 
@@ -73,7 +73,8 @@ void main() {
     for (final source in [agenda, week]) {
       expect(source, contains('TodoVisualState.completed'));
       expect(source, contains('TodoVisualState.overdue'));
-      expect(source, contains("label: isCompleted ? '已完成' : '逾期'"));
+      expect(source, contains('MainUiCopy.calendarStatusCompleted'));
+      expect(source, contains('MainUiCopy.calendarStatusOverdue'));
       expect(source, contains('dueAt.isBefore(DateTime.now())'));
       expect(source, contains('Color.alphaBlend('));
       expect(source, contains('statusColor.withValues(alpha: 0.24)'));

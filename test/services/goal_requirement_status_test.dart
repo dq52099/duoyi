@@ -124,7 +124,7 @@ void main() {
       expect(second.exitCode, 0, reason: _combinedOutput(second));
       expect(
         File('${outputDir.path}/status.tsv').readAsLinesSync(),
-        hasLength(11),
+        hasLength(15),
       );
     },
   );
@@ -146,7 +146,7 @@ REQ-404\tclosed\tok\t1/8 404 and route contracts\tduplicate
     expect(result.exitCode, isNot(0));
     expect(
       _combinedOutput(result),
-      contains('status.tsv must contain exactly 10 requirement rows'),
+      contains('status.tsv must contain exactly 14 requirement rows'),
     );
     expect(
       _combinedOutput(result),

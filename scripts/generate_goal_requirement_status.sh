@@ -144,8 +144,8 @@ while IFS= read -r line; do
 done < "$MATRIX_FILE"
 
 row_count=$(( $(wc -l < "$STATUS_TSV") - 1 ))
-if [[ "$row_count" -ne 10 ]]; then
-  fail "status.tsv must contain exactly 10 requirement rows, found $row_count"
+if [[ "$row_count" -ne 14 ]]; then
+  fail "status.tsv must contain exactly 14 requirement rows, found $row_count"
 fi
 
 if [[ "$failures" -gt 0 ]]; then

@@ -397,7 +397,7 @@ void main() {
     expect(loginScreen, contains('Widget _emailCodeSendField({'));
     expect(
       loginScreen,
-      contains('final actionWidth = constraints.maxWidth < 360 ? 64.0 : 72.0'),
+      contains('final actionWidth = constraints.maxWidth < 360 ? 68.0 : 76.0'),
     );
     expect(
       surfaceComponents,

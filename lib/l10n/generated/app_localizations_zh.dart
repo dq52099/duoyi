@@ -204,8 +204,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLanguageEn => 'English';
 
   @override
-  String get settingsLanguageDescription =>
-      '说明：当前 v2 阶段已迁移高频公共词条（按钮、导航、提醒、共享）。剩余页面文案随后续迭代逐步翻译，未翻译部分会回退到中文显示。';
+  String get settingsLanguageDescription => '选择界面语言。你的待办、笔记和其他记录会保留原文。';
 
   @override
   String get preferencesTitle => '个性设置';
@@ -3082,4 +3081,91 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get backupOverwriteWillDeleteMissing => '备份中不存在的本机数据将被删除。';
+
+  @override
+  String get calendarContentDatePickerSubtitle => '手动跳转到指定日期';
+
+  @override
+  String get calendarContentDatePickerTitle => '选择日期';
+
+  @override
+  String get calendarContentTimePickerStartTime => '开始时间';
+
+  @override
+  String get pickerActionToday => '今天';
+
+  @override
+  String get pickerDateIgnoreYear => '忽略年份';
+
+  @override
+  String get pickerDateIgnoreYearDesc => '适合生日、纪念日每年重复';
+
+  @override
+  String get pickerDateNextMonth => '下个月';
+
+  @override
+  String get pickerDatePrevMonth => '上个月';
+
+  @override
+  String get pickerDateTitle => '选择日期';
+
+  @override
+  String get pickerLunarDay => '日';
+
+  @override
+  String get pickerLunarLeapMonth => '闰月';
+
+  @override
+  String get pickerLunarMonth => '月';
+
+  @override
+  String get pickerTimeEarlier30m => '提前 30 分';
+
+  @override
+  String get pickerTimeLater30m => '延后 30 分';
+
+  @override
+  String get pickerTimePresetEvening => '晚上 20:00';
+
+  @override
+  String get pickerTimePresetMorning => '上午 09:00';
+
+  @override
+  String get pickerTimePresetNextSlot => '下一提醒点';
+
+  @override
+  String get pickerTimePresetNoon => '中午 12:00';
+
+  @override
+  String get pickerTimePresetNow => '现在';
+
+  @override
+  String get pickerTimeTitle => '选择时间';
+
+  @override
+  String get pickerWeekdayFri => '五';
+
+  @override
+  String get pickerWeekdayMon => '一';
+
+  @override
+  String get pickerWeekdaySat => '六';
+
+  @override
+  String get pickerWeekdaySun => '日';
+
+  @override
+  String get pickerWeekdayThu => '四';
+
+  @override
+  String get pickerWeekdayTue => '二';
+
+  @override
+  String get pickerWeekdayWed => '三';
+
+  @override
+  String get widgetHabitNoneToday => '今天没有安排习惯';
+
+  @override
+  String get widgetHabitView => '查看习惯';
 }

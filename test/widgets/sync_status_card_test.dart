@@ -176,7 +176,8 @@ void main() {
       await cloud.loadFromStorage();
       await cloud.syncNow();
     });
-    expect(cloud.lastError, contains('local upload failed'));
+    expect(cloud.lastError, '云同步暂不可用，请稍后重试或联系管理员');
+    expect(cloud.lastError, isNot(contains('local upload failed')));
     expect(cloud.hasPendingChanges, isTrue);
 
     final controller = SyncStatusController(source: cloud);

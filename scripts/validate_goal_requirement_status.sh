@@ -94,6 +94,10 @@ expected_ids=(
   REQ-NOTIFY
   REQ-WIDGET
   REQ-DEVICE
+  REQ-DEFAULT-IOS
+  REQ-I18N
+  REQ-SETTINGS
+  REQ-FLUENCY
 )
 
 if [[ -f "$STATUS_TSV" ]]; then
@@ -103,8 +107,8 @@ if [[ -f "$STATUS_TSV" ]]; then
   fi
 
   row_count=$(( $(wc -l < "$STATUS_TSV") - 1 ))
-  if [[ "$row_count" -ne 10 ]]; then
-    fail "status.tsv must contain exactly 10 requirement rows, found $row_count"
+  if [[ "$row_count" -ne "${#expected_ids[@]}" ]]; then
+    fail "status.tsv must contain exactly ${#expected_ids[@]} requirement rows, found $row_count"
   fi
 
   for id in "${expected_ids[@]}"; do

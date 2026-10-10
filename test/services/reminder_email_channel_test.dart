@@ -141,10 +141,9 @@ void main() {
       expect(editor, contains('value: ReminderKind.popup'));
       expect(editor, contains('value: ReminderKind.alarm'));
       expect(editor, contains('value: ReminderKind.off'));
-      expect(editor, contains("label: Text('通知')"));
-      expect(editor, contains("label: Text('弹出框')"));
-      expect(editor, contains("label: Text('闹钟')"));
-      expect(editor, contains("label: Text('关闭')"));
+      for (final kind in const ['push', 'popup', 'alarm', 'off']) {
+        expect(editor, contains("ReminderEditorUiCopy.ruleKindLabelByName('$kind')"));
+      }
       expect(editor, isNot(contains("label: Text('邮件')")));
     },
   );

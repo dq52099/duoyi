@@ -44,10 +44,10 @@ void main() {
       'lib/widgets/calendar_event_sheet.dart',
     ).readAsStringSync();
 
-    expect(screen, contains("title: const Text('新建日程')"));
+    expect(screen, contains('title: Text(CalendarUiCopy.quickAddNewEventTitle)'));
     expect(screen, contains('showLocalCalendarEventEditor('));
     expect(screen, contains('initialDate: _selectedDay'));
-    expect(screen, contains('workspaceId: _activeWorkspaceId'));
+    expect(screen, contains('workspaceId: origin.activeWorkspaceId'));
 
     expect(sheet, contains('Future<void> showLocalCalendarEventEditor'));
     expect(sheet, contains("title: Text(event == null ? '新建日程' : '编辑日程')"));

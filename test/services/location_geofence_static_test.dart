@@ -108,10 +108,10 @@ void main() {
     expect(restoreReceiver, contains('Intent.ACTION_BOOT_COMPLETED'));
     expect(restoreReceiver, contains('Intent.ACTION_MY_PACKAGE_REPLACED'));
 
-    expect(integrations, contains('Android 已接入系统 geofence 调度'));
+    expect(integrations, contains('NotificationUiCopy.locationHeaderDescription'));
     expect(model, contains('Android 通过原生 geofence 调度接入系统后台触发'));
     expect(model, isNot(contains('本期先做模型 + 前台触发能力，后续接入')));
-    expect(integrations, contains('授权后台位置'));
+    expect(integrations, contains('NotificationUiCopy.grantBackgroundLocationAction'));
     expect(
       integrations,
       contains('LocationGeofenceService.requestPermissions'),

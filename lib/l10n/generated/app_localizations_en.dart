@@ -205,7 +205,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsLanguageDescription =>
-      'In v2, common terms such as actions, navigation, reminders, and sharing have English translations. Untranslated page copy falls back to Chinese while coverage expands.';
+      'Choose the interface language. Your tasks, notes, and other records keep their original text.';
 
   @override
   String get preferencesTitle => 'Personal settings';
@@ -3213,4 +3213,92 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get backupOverwriteWillDeleteMissing =>
       'Local data that is missing from the backup will be deleted.';
+
+  @override
+  String get calendarContentDatePickerSubtitle => 'Jump to specified date';
+
+  @override
+  String get calendarContentDatePickerTitle => 'Select date';
+
+  @override
+  String get calendarContentTimePickerStartTime => 'Start time';
+
+  @override
+  String get pickerActionToday => 'Today';
+
+  @override
+  String get pickerDateIgnoreYear => 'Ignore year';
+
+  @override
+  String get pickerDateIgnoreYearDesc =>
+      'Ideal for birthdays and recurring annual dates';
+
+  @override
+  String get pickerDateNextMonth => 'Next month';
+
+  @override
+  String get pickerDatePrevMonth => 'Previous month';
+
+  @override
+  String get pickerDateTitle => 'Select date';
+
+  @override
+  String get pickerLunarDay => 'Day';
+
+  @override
+  String get pickerLunarLeapMonth => 'Leap Month';
+
+  @override
+  String get pickerLunarMonth => 'Month';
+
+  @override
+  String get pickerTimeEarlier30m => '-30 min';
+
+  @override
+  String get pickerTimeLater30m => '+30 min';
+
+  @override
+  String get pickerTimePresetEvening => '8:00 PM';
+
+  @override
+  String get pickerTimePresetMorning => '9:00 AM';
+
+  @override
+  String get pickerTimePresetNextSlot => 'Next reminder';
+
+  @override
+  String get pickerTimePresetNoon => '12:00 PM';
+
+  @override
+  String get pickerTimePresetNow => 'Now';
+
+  @override
+  String get pickerTimeTitle => 'Select time';
+
+  @override
+  String get pickerWeekdayFri => 'Fri';
+
+  @override
+  String get pickerWeekdayMon => 'Mon';
+
+  @override
+  String get pickerWeekdaySat => 'Sat';
+
+  @override
+  String get pickerWeekdaySun => 'Sun';
+
+  @override
+  String get pickerWeekdayThu => 'Thu';
+
+  @override
+  String get pickerWeekdayTue => 'Tue';
+
+  @override
+  String get pickerWeekdayWed => 'Wed';
+
+  @override
+  String get widgetHabitNoneToday => 'No habits scheduled today';
+
+  @override
+  String get widgetHabitView => 'View habits';
 }
