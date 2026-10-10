@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/heatmap_calendar.dart';
 import '../core/heatmap_ui_copy.dart';
+import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import 'habit_heatmap.dart';
 import 'surface_components.dart';
@@ -22,24 +23,32 @@ class ActivityHeatmapCard extends StatelessWidget {
       final window = HeatmapCalendarWindow(weeks: weeks, today: today);
       final summary = window.summarize(heatmapData);
       return AppSurfaceCard(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-        borderRadius: BorderRadius.circular(16),
+        padding: const EdgeInsets.fromLTRB(
+          DesignTokens.spaceMd,
+          DesignTokens.spaceMd,
+          DesignTokens.spaceMd,
+          DesignTokens.spaceSm,
+        ),
+        borderRadius: DesignTokens.borderRadiusLg,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               copy.activityTitle,
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: DesignTokens.fontSizeBase,
                 fontWeight: FontWeight.normal,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: DesignTokens.spaceXs),
             Text(
               copy.activitySubtitle,
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeCaption,
+                color: cs.onSurfaceVariant,
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: DesignTokens.spaceSm),
             Wrap(
               spacing: 12,
               runSpacing: 4,
@@ -47,21 +56,28 @@ class ActivityHeatmapCard extends StatelessWidget {
                 Text(
                   copy.activeDays(summary.activeDays),
                   key: const ValueKey('heatmap_active_days'),
-                  style: TextStyle(fontSize: 12, color: cs.primary),
+                  style: TextStyle(
+                    fontSize: DesignTokens.fontSizeSecondary,
+                    color: cs.primary,
+                  ),
                 ),
                 Text(
                   copy.maximum(summary.maximumLevel),
                   key: const ValueKey('heatmap_maximum_level'),
-                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: DesignTokens.fontSizeSecondary,
+                    color: cs.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: DesignTokens.spaceMd),
             HabitHeatmap(
               heatmapData: heatmapData,
               weeks: weeks,
               today: window.today,
               metric: HeatmapMetric.activity,
+              showSummary: false,
             ),
           ],
         ),

@@ -31,6 +31,10 @@ class HeatmapUiCopy {
       ? 'Select a day to inspect it. Use arrow keys to move between days.'
       : '选择日期查看详情，方向键可切换日期。';
   String get moodHint => _en ? 'Each color represents a mood.' : '每种颜色代表一种心情。';
+  String get emptyProgress => _en ? 'No check-ins in this period' : '此周期暂无打卡记录';
+  String get emptyActivity =>
+      _en ? 'No activity recorded in this period' : '此周期暂无活动记录';
+  String get emptyMood => _en ? 'No diary entries in this period' : '此周期暂无日记记录';
   String get low => _en ? 'Low' : '低';
   String get high => _en ? 'High' : '高';
   String metricTitle(HeatmapMetric metric) => metric == HeatmapMetric.activity
@@ -46,6 +50,8 @@ class HeatmapUiCopy {
   String activeDays(int days) =>
       _en ? '$days active ${days == 1 ? 'day' : 'days'}' : '$days 天活跃';
   String maximum(int level) => _en ? 'Peak level $level/5' : '最高 $level/5 级';
+  String loggedDays(int days) =>
+      _en ? '$days diary ${days == 1 ? 'day' : 'days'}' : '$days 天有日记';
 
   String mood(Mood value) => I18n.tr('diary.mood.${value.name}');
 

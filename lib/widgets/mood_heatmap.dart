@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/heatmap_calendar.dart';
 import '../core/heatmap_ui_copy.dart';
 import '../core/i18n.dart';
+import '../core/design_tokens.dart';
 import 'calendar_heatmap.dart';
 import '../models/diary_entry.dart';
 
@@ -64,6 +65,9 @@ class MoodHeatmap extends StatelessWidget {
       final window = HeatmapCalendarWindow(weeks: weeks, today: today);
       DiaryEntry? entryFor(DateTime day) =>
           entriesByDate[HeatmapCalendarWindow.dateKey(day)];
+      final loggedDays = window.visibleDays
+          .where((day) => entryFor(day) != null)
+          .length;
       String describe(DateTime day) {
         final entry = entryFor(day);
         if (entry == null) return copy.noEntry;
@@ -91,7 +95,7 @@ class MoodHeatmap extends StatelessWidget {
             height: 12,
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(3),
+              borderRadius: BorderRadius.circular(DesignTokens.radiusXs),
               border: Border.all(
                 color: cs.outlineVariant.withValues(alpha: 0.24),
                 width: 0.5,
@@ -102,7 +106,10 @@ class MoodHeatmap extends StatelessWidget {
           Flexible(
             child: Text(
               label,
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeCaption,
+                color: cs.onSurfaceVariant,
+              ),
             ),
           ),
         ],
@@ -118,6 +125,14 @@ class MoodHeatmap extends StatelessWidget {
           CalendarHeatmap(
             window: window,
             title: copy.moodTitle,
+            summary: Text(
+              copy.loggedDays(loggedDays),
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeSecondary,
+                color: cs.primary,
+              ),
+            ),
+            emptyLabel: loggedDays == 0 ? copy.emptyMood : null,
             describeDay: describe,
             colorForDay: colorFor,
             onOpenDay: onOpenDay,

@@ -7,6 +7,7 @@ import '../core/heatmap_calendar.dart';
 import '../core/heatmap_ui_copy.dart';
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
+import '../core/design_tokens.dart';
 import 'app_date_picker.dart';
 
 /// Shared calendar geometry and date inspection. Compact cells have one keyboard
@@ -17,6 +18,8 @@ class CalendarHeatmap extends StatefulWidget {
   final String Function(DateTime) describeDay;
   final Color Function(DateTime) colorForDay;
   final Widget legend;
+  final Widget? summary;
+  final String? emptyLabel;
   final ValueChanged<DateTime>? onOpenDay;
   final String Function(DateTime)? openDayLabel;
 
@@ -27,6 +30,8 @@ class CalendarHeatmap extends StatefulWidget {
     required this.describeDay,
     required this.colorForDay,
     required this.legend,
+    this.summary,
+    this.emptyLabel,
     this.onOpenDay,
     this.openDayLabel,
   });
@@ -127,7 +132,7 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
       final copy = HeatmapUiCopy(locale);
       final cs = Theme.of(context).colorScheme;
       final textStyle = TextStyle(
-        fontSize: 11,
+        fontSize: DesignTokens.fontSizeCaption,
         color: cs.onSurfaceVariant,
         fontWeight: FontWeight.normal,
       );
@@ -137,9 +142,13 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
         children: [
           Text(
             copy.range(widget.window.start, widget.window.today),
-            style: textStyle,
+            style: textStyle.copyWith(fontSize: DesignTokens.fontSizeCaption),
           ),
-          const SizedBox(height: 8),
+          if (widget.summary != null) ...[
+            const SizedBox(height: DesignTokens.spaceSm),
+            _summaryBanner(context, widget.summary!),
+          ],
+          const SizedBox(height: DesignTokens.spaceSm),
           LayoutBuilder(
             builder: (context, constraints) {
               final scale = MediaQuery.textScalerOf(context).scale(11) / 11;
@@ -235,7 +244,9 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
                         hint: copy.inspectHint,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(
+                              DesignTokens.radiusSm,
+                            ),
                             border: Border.all(
                               color: _focus.hasFocus
                                   ? cs.primary
@@ -301,9 +312,9 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
               );
             },
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: DesignTokens.spaceMd),
           widget.legend,
-          const SizedBox(height: 8),
+          const SizedBox(height: DesignTokens.spaceSm),
           Row(
             children: [
               IconButton(
@@ -362,12 +373,32 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
             label:
                 '${I18nDateFormat.date(_selected)} · ${widget.describeDay(_selected)}',
             excludeSemantics: true,
-            child: Text(
-              widget.describeDay(_selected),
-              key: const ValueKey('heatmap_selected_detail'),
-              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            child: AnimatedSwitcher(
+              duration: DesignTokens.durationFast,
+              child: KeyedSubtree(
+                key: ValueKey(HeatmapCalendarWindow.dateKey(_selected)),
+                child: Text(
+                  widget.describeDay(_selected),
+                  key: const ValueKey('heatmap_selected_detail'),
+                  style: TextStyle(
+                    fontSize: DesignTokens.fontSizeSecondary,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
             ),
           ),
+          if (widget.emptyLabel != null) ...[
+            const SizedBox(height: DesignTokens.spaceXs),
+            Text(
+              widget.emptyLabel!,
+              key: const ValueKey('heatmap_empty_hint'),
+              style: TextStyle(
+                fontSize: DesignTokens.fontSizeCaption,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ],
           Wrap(
             spacing: 8,
             children: [
@@ -384,6 +415,29 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
       );
     },
   );
+
+  Widget _summaryBanner(BuildContext context, Widget child) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: dark ? 0.12 : 0.07),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        border: Border.all(
+          color: cs.primary.withValues(alpha: dark ? 0.22 : 0.12),
+          width: 0.6,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.spaceMd,
+          vertical: DesignTokens.spaceSm,
+        ),
+        child: child,
+      ),
+    );
+  }
 
   Widget _cell(
     BuildContext context,
@@ -426,7 +480,7 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
                   padding: const EdgeInsets.all(1),
                   decoration: BoxDecoration(
                     color: selected ? cs.surface : Colors.transparent,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
                     border: Border.all(
                       color: selected ? cs.onSurface : Colors.transparent,
                       width: 1,
@@ -438,7 +492,9 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
                     ),
                     decoration: BoxDecoration(
                       color: color,
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(
+                        DesignTokens.radiusXs,
+                      ),
                       border: Border.all(
                         color: cs.outlineVariant.withValues(alpha: 0.24),
                         width: 0.5,
