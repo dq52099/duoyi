@@ -848,6 +848,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authEmailCodeSent => 'Verification code sent. Check your email.';
 
   @override
+  String get authEmailCodeSentCheckEmail =>
+      'Verification code sent. Check your email.';
+
+  @override
   String get authEmailCodeCodePrefix => 'Code: ';
 
   @override
@@ -3075,6 +3079,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileAvatarSaveFailedPrefix => 'Failed to save avatar: ';
 
   @override
+  String get profileAvatarPreview => 'View avatar';
+
+  @override
+  String get profileAvatarEdit => 'Edit avatar';
+
+  @override
+  String get profileAvatarTitle => 'Avatar';
+
+  @override
   String get mineUpdateBadge => 'Update';
 
   @override
@@ -3143,6 +3156,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mineUpdatePackageLabel => 'Package';
+
+  @override
+  String get mineUpdateChecking => 'Checking for updates...';
+
+  @override
+  String get mineUpdateWebAvailable =>
+      'A new web version is available. Refresh to load the latest version.';
+
+  @override
+  String get mineUpdateWebRefresh => 'Refresh page';
 
   @override
   String get mineAboutTitle => 'Duoyi';

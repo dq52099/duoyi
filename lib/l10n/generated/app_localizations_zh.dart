@@ -803,6 +803,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authEmailCodeSent => '验证码已发送，请查收邮箱';
 
   @override
+  String get authEmailCodeSentCheckEmail => '验证码已发送，请查看邮箱。';
+
+  @override
   String get authEmailCodeCodePrefix => '验证码：';
 
   @override
@@ -2948,6 +2951,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileAvatarSaveFailedPrefix => '头像保存失败：';
 
   @override
+  String get profileAvatarPreview => '查看头像';
+
+  @override
+  String get profileAvatarEdit => '修改头像';
+
+  @override
+  String get profileAvatarTitle => '头像';
+
+  @override
   String get mineUpdateBadge => '有更新';
 
   @override
@@ -3014,6 +3026,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get mineUpdatePackageLabel => '安装包';
+
+  @override
+  String get mineUpdateChecking => '正在检查更新...';
+
+  @override
+  String get mineUpdateWebAvailable => '发现网页新版本，刷新网页即可载入最新代码。';
+
+  @override
+  String get mineUpdateWebRefresh => '刷新网页';
 
   @override
   String get mineAboutTitle => '多仪';

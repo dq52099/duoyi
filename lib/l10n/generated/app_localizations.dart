@@ -1658,6 +1658,12 @@ abstract class AppLocalizations {
   /// **'验证码已发送，请查收邮箱'**
   String get authEmailCodeSent;
 
+  /// No description provided for @authEmailCodeSentCheckEmail.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码已发送，请查看邮箱。'**
+  String get authEmailCodeSentCheckEmail;
+
   /// No description provided for @authEmailCodeCodePrefix.
   ///
   /// In zh, this message translates to:
@@ -5936,6 +5942,24 @@ abstract class AppLocalizations {
   /// **'头像保存失败：'**
   String get profileAvatarSaveFailedPrefix;
 
+  /// No description provided for @profileAvatarPreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看头像'**
+  String get profileAvatarPreview;
+
+  /// No description provided for @profileAvatarEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'修改头像'**
+  String get profileAvatarEdit;
+
+  /// No description provided for @profileAvatarTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像'**
+  String get profileAvatarTitle;
+
   /// No description provided for @mineUpdateBadge.
   ///
   /// In zh, this message translates to:
@@ -6067,6 +6091,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'安装包'**
   String get mineUpdatePackageLabel;
+
+  /// No description provided for @mineUpdateChecking.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在检查更新...'**
+  String get mineUpdateChecking;
+
+  /// No description provided for @mineUpdateWebAvailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'发现网页新版本，刷新网页即可载入最新代码。'**
+  String get mineUpdateWebAvailable;
+
+  /// No description provided for @mineUpdateWebRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新网页'**
+  String get mineUpdateWebRefresh;
 
   /// No description provided for @mineAboutTitle.
   ///
