@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
+import '../core/app_brand.dart';
 import '../core/brand_strings.dart';
 import '../core/i18n.dart';
 import '../core/platform_info.dart';
@@ -122,19 +123,19 @@ class HomeWidgetService {
     'widget_theme_brand_id': 'defaultBrand',
     'widget_theme_card_skin_id': 'plain_card',
     'widget_theme_dark': false,
-    'widget_theme_primary': '#FFFF6B6B',
-    'widget_theme_background': '#FFFFFFFF',
+    'widget_theme_primary': '#FFC85656',
+    'widget_theme_background': '#FFF6F7F9',
     'widget_theme_surface': '#FFFFFFFF',
-    'widget_theme_nav_background': '#FFFFF6F2',
-    'widget_theme_border': '#22FF6B6B',
-    'widget_theme_text': '#FF333333',
-    'widget_theme_muted_text': '#FF666666',
+    'widget_theme_nav_background': '#FFF1F3F6',
+    'widget_theme_border': '#00C85656',
+    'widget_theme_text': '#FF1F2933',
+    'widget_theme_muted_text': '#FF667085',
     'widget_theme_on_primary': '#FFFFFFFF',
-    'widget_theme_accent_start': '#FFFF6B6B',
-    'widget_theme_accent_end': '#FFFFB088',
+    'widget_theme_accent_start': '#FFC85656',
+    'widget_theme_accent_end': '#FF2F8F83',
     'widget_theme_background_asset_key': '',
-    'widget_theme_corner_radius_dp': 13,
-    'widget_theme_control_radius_dp': 8,
+    'widget_theme_corner_radius_dp': 16,
+    'widget_theme_control_radius_dp': 12,
     'widget_theme_border_width_dp': 0,
   };
   static Future<bool> Function()? dashboardDataRefresher;
@@ -985,11 +986,13 @@ class HomeWidgetThemePayload {
       accentStart.withValues(alpha: usesCardSkin ? (dark ? 0.50 : 0.34) : 0.18),
       cs.outlineVariant,
     );
+    final defaultIosStyle =
+        brand.id == AppBrands.defaultBrand.id && !usesCardSkin;
     final cornerRadiusDp = switch (cardSkin.id) {
       'paper_card' => 14,
       'mint_card' => 15,
       'starlight_card' => 16,
-      _ => 13,
+      _ => defaultIosStyle ? 16 : 13,
     };
     return HomeWidgetThemePayload(
       brandId: brand.id,
@@ -1007,7 +1010,7 @@ class HomeWidgetThemePayload {
       accentEnd: accentEnd,
       backgroundAssetKey: _backgroundAssetKey(brand.backgroundAsset),
       cornerRadiusDp: cornerRadiusDp,
-      controlRadiusDp: 8,
+      controlRadiusDp: defaultIosStyle ? 12 : 8,
       borderWidthDp: usesCardSkin ? 1 : 0,
     );
   }

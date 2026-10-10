@@ -491,9 +491,9 @@ class MineScreen extends StatelessWidget {
   Future<void> _pickAndSaveAvatar(BuildContext context) async {
     try {
       final file = await openFile(
-        acceptedTypeGroups: const [
+        acceptedTypeGroups: [
           XTypeGroup(
-            label: 'Image',
+            label: I18n.tr('mine.avatar.title'),
             extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
             mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
           ),

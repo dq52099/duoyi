@@ -978,27 +978,27 @@ private struct DuoyiWidgetTheme {
     let accentEnd: Color
 
     static let fallback = DuoyiWidgetTheme(
-        primary: color("#FFFF6B6B"),
-        background: color("#FFFFFFFF"),
+        primary: color("#FFC85656"),
+        background: color("#FFF6F7F9"),
         surface: color("#FFFFFFFF"),
-        navBackground: color("#FFFFF6F2"),
-        text: color("#FF333333"),
-        mutedText: color("#FF666666"),
+        navBackground: color("#FFF1F3F6"),
+        text: color("#FF1F2933"),
+        mutedText: color("#FF667085"),
         onPrimary: color("#FFFFFFFF"),
-        accentStart: color("#FFFF6B6B"),
-        accentEnd: color("#FFFFB088")
+        accentStart: color("#FFC85656"),
+        accentEnd: color("#FF2F8F83")
     )
 
     init(values: [String: Any]) {
-        self.primary = Self.read(values, key: "widget_theme_primary", fallback: "#FFFF6B6B")
-        self.background = Self.read(values, key: "widget_theme_background", fallback: "#FFFFFFFF")
+        self.primary = Self.read(values, key: "widget_theme_primary", fallback: "#FFC85656")
+        self.background = Self.read(values, key: "widget_theme_background", fallback: "#FFF6F7F9")
         self.surface = Self.read(values, key: "widget_theme_surface", fallback: "#FFFFFFFF")
-        self.navBackground = Self.read(values, key: "widget_theme_nav_background", fallback: "#FFFFF6F2")
-        self.text = Self.read(values, key: "widget_theme_text", fallback: "#FF333333")
-        self.mutedText = Self.read(values, key: "widget_theme_muted_text", fallback: "#FF666666")
+        self.navBackground = Self.read(values, key: "widget_theme_nav_background", fallback: "#FFF1F3F6")
+        self.text = Self.read(values, key: "widget_theme_text", fallback: "#FF1F2933")
+        self.mutedText = Self.read(values, key: "widget_theme_muted_text", fallback: "#FF667085")
         self.onPrimary = Self.read(values, key: "widget_theme_on_primary", fallback: "#FFFFFFFF")
-        self.accentStart = Self.read(values, key: "widget_theme_accent_start", fallback: "#FFFF6B6B")
-        self.accentEnd = Self.read(values, key: "widget_theme_accent_end", fallback: "#FFFFB088")
+        self.accentStart = Self.read(values, key: "widget_theme_accent_start", fallback: "#FFC85656")
+        self.accentEnd = Self.read(values, key: "widget_theme_accent_end", fallback: "#FF2F8F83")
     }
 
     private init(
@@ -1035,10 +1035,10 @@ private struct DuoyiWidgetTheme {
         } else if clean.count == 8 {
             normalized = clean
         } else {
-            normalized = "FFFF6B6B"
+            normalized = "FFC85656"
         }
         guard let value = UInt64(normalized, radix: 16) else {
-            return Color(red: 1.0, green: 0.42, blue: 0.42)
+            return Color(red: 0.784, green: 0.337, blue: 0.337)
         }
         let alpha = Double((value >> 24) & 0xFF) / 255.0
         let red = Double((value >> 16) & 0xFF) / 255.0
@@ -1496,7 +1496,7 @@ private struct DuoyiWidgetView: View {
                 .fill(entry.theme.primary)
                 .frame(width: 8, height: 8)
             Text(entry.config.title)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(entry.theme.text)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -1654,7 +1654,7 @@ private struct DuoyiWidgetView: View {
         VStack(alignment: .leading, spacing: 4) {
             if entry.focusTimerRunning, let endDate = entry.focusTimerEndDate, endDate > Date() {
                 Text(endDate, style: .timer)
-                    .font(.system(size: primarySize, weight: .bold, design: .rounded))
+                    .font(.system(size: primarySize, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                     .truncationMode(.tail)

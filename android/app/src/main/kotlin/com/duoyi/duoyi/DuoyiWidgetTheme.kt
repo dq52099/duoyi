@@ -40,16 +40,16 @@ data class DuoyiWidgetThemePalette(
 )
 
 object DuoyiWidgetTheme {
-    private const val defaultPrimary = "#FFFF6B6B"
-    private const val defaultBackground = "#FFFFFFFF"
+    private const val defaultPrimary = "#FFC85656"
+    private const val defaultBackground = "#FFF6F7F9"
     private const val defaultSurface = "#FFFFFFFF"
-    private const val defaultNavBackground = "#FFFFF6F2"
-    private const val defaultBorder = "#22FF6B6B"
-    private const val defaultText = "#FF333333"
-    private const val defaultMutedText = "#FF666666"
+    private const val defaultNavBackground = "#FFF1F3F6"
+    private const val defaultBorder = "#00C85656"
+    private const val defaultText = "#FF1F2933"
+    private const val defaultMutedText = "#FF667085"
     private const val defaultOnPrimary = "#FFFFFFFF"
-    private const val defaultAccentStart = "#FFFF6B6B"
-    private const val defaultAccentEnd = "#FFFFB088"
+    private const val defaultAccentStart = "#FFC85656"
+    private const val defaultAccentEnd = "#FF2F8F83"
     private const val maxBackgroundBitmapCacheEntries = 8
     private val backgroundBitmapCache =
         object : LinkedHashMap<BackgroundBitmapCacheKey, Bitmap>(
@@ -78,8 +78,8 @@ object DuoyiWidgetTheme {
             accentStart = readColor(prefs, "widget_theme_accent_start", defaultAccentStart),
             accentEnd = readColor(prefs, "widget_theme_accent_end", defaultAccentEnd),
             backgroundAssetKey = prefs.getString("widget_theme_background_asset_key", "") ?: "",
-            cornerRadiusDp = readInt(prefs, "widget_theme_corner_radius_dp", 13),
-            controlRadiusDp = readInt(prefs, "widget_theme_control_radius_dp", 8),
+            cornerRadiusDp = readInt(prefs, "widget_theme_corner_radius_dp", 16),
+            controlRadiusDp = readInt(prefs, "widget_theme_control_radius_dp", 12),
             borderWidthDp = readInt(prefs, "widget_theme_border_width_dp", 0),
         )
     }
@@ -256,10 +256,14 @@ object DuoyiWidgetTheme {
     }
 
     private fun widgetBackgroundResource(radiusDp: Int, strokeWidthDp: Int): Int {
+        if (strokeWidthDp <= 0) {
+            if (radiusDp >= 16) return R.drawable.widget_bg_round_16_plain
+            if (radiusDp >= 12) return R.drawable.widget_bg_round_12_plain
+            return R.drawable.widget_bg_plain
+        }
         if (radiusDp >= 16) return R.drawable.widget_bg_round_16
         if (radiusDp >= 15) return R.drawable.widget_bg_round_15
         if (radiusDp >= 14) return R.drawable.widget_bg_round_14
-        if (strokeWidthDp <= 0) return R.drawable.widget_bg_plain
         return R.drawable.widget_bg
     }
 
