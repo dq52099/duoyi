@@ -189,7 +189,11 @@ class AccountLocalDataCleaner {
 
     Future<void> removeKey(String key) async {
       try {
-        await prefs.remove(key);
+        if (!prefs.containsKey(key)) return;
+        final removed = await prefs.remove(key);
+        if (!removed || prefs.containsKey(key)) {
+          throw StateError('Account preference cleanup failed: $key');
+        }
       } catch (e, st) {
         firstError ??= e;
         firstStackTrace ??= st;
@@ -204,6 +208,15 @@ class AccountLocalDataCleaner {
     );
     for (final key in dynamicKeys.toList(growable: false)) {
       await removeKey(key);
+    }
+    final remaining = prefs.getKeys().where(
+      (key) =>
+          accountScopedKeys.contains(key) ||
+          accountScopedPrefixes.any((prefix) => key.startsWith(prefix)),
+    );
+    if (remaining.isNotEmpty) {
+      firstError ??= StateError('Account preferences remain after cleanup');
+      firstStackTrace ??= StackTrace.current;
     }
     final error = firstError;
     final stackTrace = firstStackTrace;

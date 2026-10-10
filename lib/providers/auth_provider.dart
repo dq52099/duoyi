@@ -138,6 +138,7 @@ class AuthProvider extends ChangeNotifier {
   bool _isDisposed = false;
   bool _accountTransitionInProgress = false;
   bool _localAccountDataBlocked = false;
+  String? _verifiedWidgetOwnerIdentity;
   Future<void> _accountWritebackTail = Future<void>.value();
   int _refreshMeRequestSerial = 0;
   int _lastAppliedRefreshMeRequestSerial = 0;
@@ -159,9 +160,29 @@ class AuthProvider extends ChangeNotifier {
   Future<void> Function()? onBeforeAccountLogout;
   Future<void> Function()? onAccountLoggedOut;
 
+  /// Synchronously revokes a widget writer before an account owner write.
+  void Function()? onWidgetPublicationAuthorityRevoked;
+
   AuthState get state => _state;
   bool get isAccountTransitionInProgress => _accountTransitionInProgress;
   bool get isLocalAccountDataBlocked => _localAccountDataBlocked;
+
+  /// Available only after auth and owner writes report success and the owner
+  /// readback matches the current stable identity.
+  /// The widget publisher must also check its captured account generation.
+  String? get validatedWidgetAccountIdentity {
+    if (_isDisposed ||
+        _accountTransitionInProgress ||
+        _localAccountDataBlocked ||
+        !_state.isLoggedIn) {
+      return null;
+    }
+    final current = _stableAccountIdentity(_state);
+    return current != null && current == _verifiedWidgetOwnerIdentity
+        ? current
+        : null;
+  }
+
   String get baseUrl => _baseUrl;
   Map<String, dynamic> get serverConfig => _serverConfig;
   bool get inviteCodeRequired =>
@@ -221,6 +242,7 @@ class AuthProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _verifiedWidgetOwnerIdentity = null;
     _sessionEpoch++;
     _stateMutationSerial++;
     _refreshMeInFlight = null;
@@ -244,6 +266,7 @@ class AuthProvider extends ChangeNotifier {
     }
     // Remain closed if hydration or its cleanup barrier fails or times out.
     _localAccountDataBlocked = true;
+    _verifiedWidgetOwnerIdentity = null;
     _accountTransitionInProgress = true;
     _sessionEpoch++;
     _markAccountMutation('storage_hydration');
@@ -371,7 +394,15 @@ class AuthProvider extends ChangeNotifier {
       allowTransition: allowTransition,
     );
     if (!isCurrent()) return false;
-    await prefs.setString('auth_state', json.encode(state.toJson()));
+    _revokeVerifiedWidgetOwnerIdentity();
+    try {
+      if (!await prefs.setString('auth_state', json.encode(state.toJson()))) {
+        throw const AccountLocalDataCleanupBlockedException('账号状态未能安全保存，请重试。');
+      }
+    } catch (_) {
+      _blockLocalAccountData();
+      rethrow;
+    }
     if (!isCurrent()) return false;
     await _persistAccountDataOwner(prefs, state);
     if (!isCurrent()) return false;
@@ -414,6 +445,7 @@ class AuthProvider extends ChangeNotifier {
     // Claim the transition before queuing. A cloud writeback must never queue
     // a refresh behind this transition while cleanup waits for that writeback.
     _accountTransitionInProgress = true;
+    _verifiedWidgetOwnerIdentity = null;
     _sessionEpoch++;
     _markAccountMutation(reason);
     notifyListeners();
@@ -655,6 +687,7 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
     _accountTransitionInProgress = true;
+    _verifiedWidgetOwnerIdentity = null;
     _sessionEpoch++;
     _markAccountMutation('logout_cleanup');
     notifyListeners();
@@ -712,6 +745,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _clearLocalSession() async {
     if (_isDisposed || _accountTransitionInProgress) return;
     _accountTransitionInProgress = true;
+    _verifiedWidgetOwnerIdentity = null;
     _sessionEpoch++;
     _markAccountMutation('session_cleanup');
     notifyListeners();
@@ -749,6 +783,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _resetLocalSession() async {
     if (_isDisposed) return;
+    _verifiedWidgetOwnerIdentity = null;
     _state = const AuthState();
     _markAccountMutation('logout');
     _client = ApiClient(baseUrl: _baseUrl);
@@ -812,7 +847,10 @@ class AuthProvider extends ChangeNotifier {
       await _notifyAccountIdentityChanging(const AuthState(), loadedState);
       return;
     }
-    if (storedOwner == currentOwner) return;
+    if (storedOwner == currentOwner ||
+        _isUsernameOwnerRefinement(storedOwner, loadedState)) {
+      return;
+    }
     debugPrint(
       '[auth] stored account data owner mismatch: $storedOwner -> $currentOwner',
     );
@@ -931,12 +969,46 @@ class AuthProvider extends ChangeNotifier {
     SharedPreferences prefs,
     AuthState state,
   ) async {
+    _revokeVerifiedWidgetOwnerIdentity();
     final owner = _stableAccountIdentity(state);
-    if (state.isLoggedIn && owner != null) {
-      await prefs.setString(AccountLocalDataCleaner.accountDataOwnerKey, owner);
-    } else {
-      await prefs.remove(AccountLocalDataCleaner.accountDataOwnerKey);
+    try {
+      if (state.isLoggedIn && owner != null) {
+        if (!await prefs.setString(
+              AccountLocalDataCleaner.accountDataOwnerKey,
+              owner,
+            ) ||
+            prefs.getString(AccountLocalDataCleaner.accountDataOwnerKey) !=
+                owner) {
+          throw const AccountLocalDataCleanupBlockedException(
+            '账号归属未能安全保存，请重试。',
+          );
+        }
+        _verifiedWidgetOwnerIdentity = owner;
+      } else {
+        if (!await prefs.remove(AccountLocalDataCleaner.accountDataOwnerKey) ||
+            prefs.containsKey(AccountLocalDataCleaner.accountDataOwnerKey)) {
+          throw const AccountLocalDataCleanupBlockedException(
+            '账号归属未能安全清除，请重试。',
+          );
+        }
+      }
+    } catch (_) {
+      _blockLocalAccountData();
+      rethrow;
     }
+  }
+
+  void _revokeVerifiedWidgetOwnerIdentity() {
+    if (_verifiedWidgetOwnerIdentity == null) return;
+    _verifiedWidgetOwnerIdentity = null;
+    if (!_isDisposed) onWidgetPublicationAuthorityRevoked?.call();
+  }
+
+  void _blockLocalAccountData() {
+    final wasBlocked = _localAccountDataBlocked;
+    _localAccountDataBlocked = true;
+    _verifiedWidgetOwnerIdentity = null;
+    if (!_isDisposed && !wasBlocked) notifyListeners();
   }
 
   Future<void> refreshMe({String reason = 'manual', bool force = false}) {
@@ -1809,6 +1881,18 @@ class AuthProvider extends ChangeNotifier {
     final email = state.email?.trim().toLowerCase();
     if (email != null && email.isNotEmpty) return 'email:$email';
     return null;
+  }
+
+  /// Legacy sessions may gain their server ID after the username owner was
+  /// saved. A crash between the auth and owner writes leaves this exact pair.
+  bool _isUsernameOwnerRefinement(String storedOwner, AuthState state) {
+    if (!state.isLoggedIn || state.userId?.trim().isNotEmpty != true) {
+      return false;
+    }
+    final username = state.username?.trim().toLowerCase();
+    return username != null &&
+        username.isNotEmpty &&
+        storedOwner == 'username:$username';
   }
 }
 
