@@ -1,5 +1,7 @@
 import 'package:duoyi/providers/notification_service.dart';
 import 'package:duoyi/providers/preferences_provider.dart';
+import 'package:duoyi/providers/theme_provider.dart';
+import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/screens/notification_history_screen.dart';
 import 'package:duoyi/models/goal.dart' show ReminderKind;
 import 'package:duoyi/services/reminder_scheduler.dart';
@@ -234,7 +236,7 @@ void main() {
     _expectNoLayoutException(tester);
   });
 
-  testWidgets('通知记录点击卡片打开详情，右侧按钮才切换已读', (tester) async {
+  testWidgets('通知记录详情按钮查看内容，卡片打开关联事项并标记已读', (tester) async {
     await _setNarrowPhone(tester);
     final service = NotificationService();
     addTearDown(service.dispose);
@@ -251,8 +253,12 @@ void main() {
     );
 
     await tester.pumpWidget(
-      ChangeNotifierProvider<NotificationService>.value(
-        value: service,
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<NotificationService>.value(value: service),
+          ChangeNotifierProvider(create: (_) => TodoProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ],
         child: const MaterialApp(home: NotificationHistoryScreen()),
       ),
     );
@@ -261,7 +267,9 @@ void main() {
     expect(service.unreadCount, 1);
 
     await tester.tap(
-      find.byKey(const ValueKey('notification_record_detail-unread')),
+      find.byKey(
+        const ValueKey('notification_record_detail_button_detail-unread'),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -274,10 +282,23 @@ void main() {
     await tester.tapAt(const Offset(10, 10));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('标为已读'));
+    await tester.tap(
+      find.byKey(const ValueKey('notification_record_detail-unread')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('这个待办不存在或已被删除'), findsOneWidget);
+    expect(service.unreadCount, 0);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        const ValueKey('notification_record_toggle_read_detail-unread'),
+      ),
+    );
     await _pumpFixedFrames(tester, frames: 3);
 
-    expect(service.unreadCount, 0);
+    expect(service.unreadCount, 1);
     _expectNoLayoutException(tester);
   });
 
