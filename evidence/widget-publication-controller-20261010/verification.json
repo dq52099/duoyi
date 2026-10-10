@@ -1,0 +1,17 @@
+{
+  "checked_utc": "2026-10-10T06:32:03.537341+00:00",
+  "head": "2bd2c0ff3dd3aefdfde5193f21e3e9203a76c226",
+  "argv": [
+    "/home/ubuntu/flutter/bin/flutter",
+    "analyze",
+    "--no-pub",
+    "lib/services/widget_publication_controller.dart"
+  ],
+  "exit_code": 0,
+  "output": "Analyzing widget_publication_controller.dart...                 \nNo issues found! (ran in 10.7s)\n",
+  "sha256": {
+    "lib/services/widget_publication_controller.dart": "fc90fcc082f68c3b46f1cf59d0258af9595e96a887b9da1f0fb9e01657ac0079",
+    "docs/widget-publication-channel.md": "c38b3c83626ac2323ee5d3be8283e51079e5ce77f2fcb4022933185d7da1951c"
+  },
+  "scope": "targeted static analysis only; no runtime/native/device verification"
+}

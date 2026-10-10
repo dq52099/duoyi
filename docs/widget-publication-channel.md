@@ -7,9 +7,13 @@ operation survives messenger disposal and can be recovered by its receipt.
 
 ## Current integration status
 
-The native store, Android bridge and Dart wire adapter are implemented. Flutter bootstrap, publisher and
-cleanup paths, Android renderer reads and the equivalent iOS store are not yet
-switched to this protocol. Existing widgets still use the existing path.
+The native store, Android bridge, Dart wire adapter and a standalone authority
+controller are implemented. The controller starts blocked, serializes requests,
+fences stale account/presentation captures and requires a confirmed native clear
+before a revoked workspace can reopen. It is not yet connected to Flutter auth,
+publisher or cleanup paths. Android renderer reads and the equivalent iOS store
+are also not yet switched to this protocol. Existing widgets still use the
+existing path.
 An `applied` response confirms canonical storage, not launcher display.
 The adapter currently returns `refreshRequested: false` for mutation results.
 
@@ -27,8 +31,12 @@ native transaction. A mutation channel error or deadline returns
 `responseUnknown`; malformed responses return `invalidResponse`. Neither is
 permission to advance an accepted cache, retry with new expectations or fall
 back to preference data. The adapter performs no automatic retries, workspace
-bootstrap, account-generation checks or launcher refresh. Those responsibilities
-remain with the forthcoming publication controller and renderer integration.
+bootstrap, account-generation checks or launcher refresh. The standalone
+`WidgetPublicationController` provides bootstrap, generation and exact-retry
+guards, but is not yet connected to host flows or launcher refresh. It can retain
+one exact request for retry; an ordered healthy native read can drain an
+uncertain call before a new clear operation.
+Neither route treats a read as a source of writer capability.
 
 ## Read
 
