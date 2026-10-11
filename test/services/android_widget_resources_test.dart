@@ -3318,7 +3318,7 @@ void main() {
         final branch = _widgetUriBranch(main, host);
         expect(
           branch,
-          contains('state.navigateTo(0, allowHidden: true)'),
+          contains('_navigateWidgetSection(state, ctx, 0)'),
           reason:
               'duoyi://$host should keep hidden Today/detail routes reachable',
         );
@@ -3330,7 +3330,20 @@ void main() {
           reason: 'duoyi://tab/$tab should be routed through tab branch',
         );
       }
-      expect(main, contains('state.navigateTo(idx, allowHidden: true);'));
+      expect(main, contains('_navigateWidgetSection(state, ctx, idx);'));
+      final sectionNavigation = main.substring(
+        main.indexOf('void _navigateWidgetSection('),
+        main.indexOf('void _routeHydratedWidgetUri('),
+      );
+      expect(
+        sectionNavigation,
+        contains('state.navigateTo(index, allowHidden: true);'),
+      );
+      expect(sectionNavigation, contains('context != null && context.mounted'));
+      expect(
+        sectionNavigation,
+        contains('_widgetCalendarRoutes.showSection(Navigator.of(context));'),
+      );
       expect(main, contains('_builtTabs.add(target)'));
       expect(main, contains('_builtTabs.add(safeIndex)'));
       expect(main, contains('bool _hasExplicitNavigation = false'));
@@ -3355,7 +3368,7 @@ void main() {
       final startPomodoroBranch = _widgetActionBranch(main, 'start_pomodoro');
       expect(
         startPomodoroBranch,
-        contains('state.navigateTo(4, allowHidden: true)'),
+        contains('_navigateWidgetSection(state, ctx, 4)'),
         reason: '桌面专注动作应能进入隐藏的专注页',
       );
       expect(startPomodoroBranch, contains('pomodoro.startIfIdle()'));
@@ -3364,7 +3377,7 @@ void main() {
       final quickTodoBranch = _widgetActionBranch(main, 'quick_todo');
       expect(
         quickTodoBranch,
-        contains('state.navigateTo(1, allowHidden: true)'),
+        contains('_navigateWidgetSection(state, ctx, 1)'),
         reason: '桌面快捷待办动作应能进入隐藏的待办页',
       );
       expect(quickTodoBranch, contains('_createQuickTodoFromAction'));
@@ -3396,7 +3409,7 @@ void main() {
       final completeTodoBranch = _widgetActionBranch(main, 'complete_todo');
       expect(
         completeTodoBranch,
-        contains('state.navigateTo(1, allowHidden: true)'),
+        contains('_navigateWidgetSection(state, ctx, 1)'),
         reason: '桌面待办完成动作应先进入待办页，并直接完成后反馈',
       );
       expect(completeTodoBranch, contains('_completeTodoFromWidgetAction'));
@@ -3450,7 +3463,7 @@ void main() {
       final checkinHabitBranch = _widgetActionBranch(main, 'checkin_habit');
       expect(
         checkinHabitBranch,
-        contains('state.navigateTo(2, allowHidden: true)'),
+        contains('_navigateWidgetSection(state, ctx, 2)'),
         reason: '桌面习惯打卡动作应先进入习惯页',
       );
       expect(checkinHabitBranch, contains('_showWidgetActionFeedback'));
@@ -3547,9 +3560,7 @@ void main() {
         if (entry.key == 'anniversary') {
           expect(
             source,
-            contains(
-              'DuoyiWidgetContent.resolveAnniversaryItems(',
-            ),
+            contains('DuoyiWidgetContent.resolveAnniversaryItems('),
             reason:
                 'Anniversary selection must preserve each displayed text and its target as one item.',
           );

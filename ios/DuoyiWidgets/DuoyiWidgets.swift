@@ -302,11 +302,11 @@ private struct DuoyiWidgetSnapshot {
         guard fields.count == 3,
               let year = Int(fields[0]), let month = Int(fields[1]), let dateDay = Int(fields[2]),
               year > 0, (1...12).contains(month), (1...31).contains(dateDay) else { return false }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        guard let date = calendar.date(from: DateComponents(year: year, month: month, day: dateDay, hour: 12)) else { return false }
-        let resolved = calendar.dateComponents([.year, .month, .day], from: date)
-        return resolved.year == year && resolved.month == month && resolved.day == dateDay
+        // Validate the same proleptic Gregorian civil dates as Flutter, without
+        // Foundation's historical Gregorian cutover or date normalization.
+        let isLeap = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)
+        let monthDays = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        return dateDay <= monthDays[month - 1]
     }
 
     func isFresh(at date: Date) -> Bool {
@@ -342,7 +342,19 @@ private struct DuoyiWidgetSnapshot {
         let host = components.host?.lowercased() ?? ""
         let isEntity = entityHosts.contains(host) &&
             components.percentEncodedPath.split(separator: "/").first != nil
-        guard host == "action" || isEntity else { return components.url }
+        let queryItems = components.queryItems ?? []
+        let datedItems = queryItems.filter { $0.name == "date" }
+        let isDatedCalendar = host == "calendar" && !datedItems.isEmpty
+        let bindingKeys = Set(["source", "widget_day", "widget_offset", "widget_account", "widget_delivery"])
+        if isDatedCalendar {
+            guard components.percentEncodedPath.isEmpty,
+                  components.user == nil, components.password == nil,
+                  components.port == nil, components.fragment == nil,
+                  datedItems.count == 1, let selectedDay = datedItems.first?.value,
+                  Self.isValidDay(selectedDay),
+                  queryItems.allSatisfy({ $0.name == "date" || bindingKeys.contains($0.name) }) else { return nil }
+        }
+        guard host == "action" || isEntity || isDatedCalendar else { return components.url }
         // Flutter dispatches the first decoded path segment, including when
         // extra trailing segments are present. Decode after splitting so an
         // encoded slash does not create a different action.
@@ -356,10 +368,11 @@ private struct DuoyiWidgetSnapshot {
         // Opening quick entry and requesting refresh are recoverable navigation.
         let mutates = isEntity || ["complete_todo", "checkin_habit", "start_pomodoro"].contains(action) ||
             (action == "quick_todo" && hasQuickText)
-        guard mutates else { return components.url }
+        // A selected calendar date also belongs to the snapshot's account/day;
+        // stale cells must fall back through the enclosing calendar root URL.
+        guard mutates || isDatedCalendar else { return components.url }
         guard isFresh(at: date, calendar: calendar), let offset = utcOffsetMinutes else { return nil }
-        let bindingKeys = Set(["source", "widget_day", "widget_offset", "widget_account", "widget_delivery"])
-        var items = (components.queryItems ?? []).filter { !bindingKeys.contains($0.name) }
+        var items = queryItems.filter { !bindingKeys.contains($0.name) }
         items.append(contentsOf: [
             URLQueryItem(name: "source", value: "widget"),
             URLQueryItem(name: "widget_day", value: day),

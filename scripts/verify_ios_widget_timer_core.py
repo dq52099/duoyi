@@ -33,12 +33,14 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _resolve_executable(value: str) -> str | None:
+    # Swift selects its driver mode from argv[0]; keep the `swift` symlink
+    # name instead of resolving it to the underlying `swift-driver` binary.
     candidate = shutil.which(value)
     if candidate:
-        return str(Path(candidate).resolve())
+        return str(Path(candidate).absolute())
     path = Path(value).expanduser()
     if path.is_file() and os.access(path, os.X_OK):
-        return str(path.resolve())
+        return str(path.absolute())
     return None
 
 

@@ -4,7 +4,9 @@ import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
-import java.util.Calendar
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -26,7 +28,12 @@ data class DuoyiMonthCell(
     val dayNumber: Int,
     val isToday: Boolean,
     val text: String,
-)
+    val dateKey: String? = null,
+) {
+    /** A civil navigation target; the producer must still add frame bindings. */
+    val target: String?
+        get() = dateKey?.let { "duoyi://calendar?date=$it" }
+}
 
 data class DuoyiMonthGridModel(
     val year: Int,
@@ -390,16 +397,18 @@ object DuoyiWidgetContent {
         timeZone: TimeZone,
         isZh: Boolean,
     ): DuoyiMonthGridModel {
-        val cal = Calendar.getInstance(timeZone, Locale.ROOT)
-        cal.time = anchorDate
-
-        val year = cal.get(Calendar.YEAR)
-        val month = cal.get(Calendar.MONTH) + 1
-        val todayDay = cal.get(Calendar.DAY_OF_MONTH)
-
-        return buildMonthGrid(year, month, todayDay, isZh, timeZone)
+        val anchorMillis = anchorDate.time
+        // Resolve this instance's offset at the instant, including custom IDs,
+        // adjusted raw offsets and DST, without rounding away milliseconds.
+        val day = Instant.ofEpochMilli(anchorMillis)
+            .plusMillis(timeZone.getOffset(anchorMillis).toLong())
+            .atOffset(ZoneOffset.UTC).toLocalDate()
+        return buildMonthGrid(day.year, day.monthValue, day.dayOfMonth, isZh, timeZone)
     }
 
+    // Retain the zone argument for existing callers; a resolved civil month
+    // has the same Gregorian weekdays and date keys in every time zone.
+    @Suppress("UNUSED_PARAMETER")
     fun buildMonthGrid(
         year: Int,
         month: Int,
@@ -407,14 +416,11 @@ object DuoyiWidgetContent {
         isZh: Boolean,
         timeZone: TimeZone = TimeZone.getDefault(),
     ): DuoyiMonthGridModel {
-        val cal = Calendar.getInstance(timeZone, Locale.ROOT)
-        cal.clear()
-        cal.set(Calendar.YEAR, year)
-        cal.set(Calendar.MONTH, month - 1)
-        cal.set(Calendar.DAY_OF_MONTH, 1)
-
-        val firstWeekdayOffset = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
-        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        require(year in 1..9999) { "Calendar year must be within 1..9999" }
+        require(month in 1..12) { "Calendar month must be within 1..12" }
+        val first = LocalDate.of(year, month, 1)
+        val firstWeekdayOffset = first.dayOfWeek.value - 1
+        val daysInMonth = first.lengthOfMonth()
 
         val cells = ArrayList<DuoyiMonthCell>(42)
         for (i in 0 until 42) {
@@ -424,7 +430,12 @@ object DuoyiWidgetContent {
                 val day = i - firstWeekdayOffset + 1
                 val isToday = (day == todayDay)
                 val text = day.toString().padStart(2, ' ')
-                cells.add(DuoyiMonthCell(dayNumber = day, isToday = isToday, text = text))
+                cells.add(DuoyiMonthCell(
+                    dayNumber = day,
+                    isToday = isToday,
+                    text = text,
+                    dateKey = first.withDayOfMonth(day).toString(),
+                ))
             }
         }
 

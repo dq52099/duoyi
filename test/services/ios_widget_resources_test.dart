@@ -532,7 +532,9 @@ void main() {
       expect(actionURL, contains('(action == "quick_todo" && hasQuickText)'));
       expect(
         actionURL,
-        contains('guard mutates else { return components.url }'),
+        contains(
+          'guard mutates || isDatedCalendar else { return components.url }',
+        ),
       );
       expect(
         actionURL,
@@ -770,20 +772,20 @@ void main() {
         const handlingByKind = {
           'DuoyiTodoWidget': [
             "uri.host == 'todo'",
-            'state.navigateTo(1, allowHidden: true);',
+            '_navigateWidgetSection(state, ctx, 1);',
             'TodayDetailRouter.open(ctx, TodaySectionKind.todos, id: id)',
             "action == 'quick_todo'",
             "action == 'complete_todo'",
           ],
           'DuoyiFocusWidget': [
             "action == 'start_pomodoro'",
-            'state.navigateTo(4, allowHidden: true);',
+            '_navigateWidgetSection(state, ctx, 4);',
             'pomodoro.startIfIdle()',
             'WidgetActionNotice.focusRunning',
           ],
           'DuoyiHabitWidget': [
             "uri.host == 'habit'",
-            'state.navigateTo(2, allowHidden: true);',
+            '_navigateWidgetSection(state, ctx, 2);',
             'TodayDetailRouter.open(ctx, TodaySectionKind.habits, id: id)',
             "action == 'checkin_habit'",
           ],
@@ -916,9 +918,25 @@ void main() {
         expect(main, contains("uri.host == 'focus'"));
         expect(
           main,
-          contains('state.navigateTo(idx, allowHidden: true);'),
+          contains('_navigateWidgetSection(state, ctx, idx);'),
           reason:
               'WidgetKit footer links must keep hidden bottom-nav destinations reachable.',
+        );
+        final sectionNavigation = main.substring(
+          main.indexOf('void _navigateWidgetSection('),
+          main.indexOf('void _routeHydratedWidgetUri('),
+        );
+        expect(
+          sectionNavigation,
+          contains('state.navigateTo(index, allowHidden: true);'),
+        );
+        expect(
+          sectionNavigation,
+          contains('context != null && context.mounted'),
+        );
+        expect(
+          sectionNavigation,
+          contains('_widgetCalendarRoutes.showSection(Navigator.of(context));'),
         );
       },
     );

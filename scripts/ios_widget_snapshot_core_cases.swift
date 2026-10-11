@@ -100,6 +100,14 @@ private func snapshotPercentEncodedComponents(
     return components
 }
 
+private func snapshotCalendarComponents(queryItems: [URLQueryItem] = []) -> URLComponents {
+    var components = URLComponents()
+    components.scheme = "duoyi"
+    components.host = "calendar"
+    components.queryItems = queryItems.isEmpty ? nil : queryItems
+    return components
+}
+
 private func snapshotQueryItems(_ url: URL) -> [URLQueryItem] {
     guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
         fatalError("FAIL: could not parse returned action URL")
@@ -617,6 +625,241 @@ snapshotRunCase("iOS buffer leaves plain links unchanged and refuses oversized o
     snapshotExpect(buffer.receive(url: widget).delivery != nil, "ACK makes room for the next tap")
     let oversized = URL(string: "duoyi://todo/task?source=widget&text=" + String(repeating: "x", count: 8192))!
     snapshotExpect(buffer.receive(url: oversized).delivery == nil, "oversized launch is rejected")
+}
+
+snapshotRunCase("dated Calendar targets bind the published session across time zones") {
+    let zones: [(String, TimeZone, Int)] = [
+        ("UTC", snapshotTimeZone("UTC"), 0),
+        ("East-8", snapshotTimeZone("Asia/Shanghai"), 480),
+        ("half-hour", snapshotTimeZone("Asia/Kolkata"), 330),
+    ]
+
+    for (name, timeZone, offset) in zones {
+        let calendar = snapshotGregorianCalendar(timeZone)
+        let capturedAt = snapshotLocalDate(2026, 4, 5, hour: 12, calendar: calendar)
+        let selectedDate = "2030-12-31"
+        let snapshot = DuoyiWidgetSnapshot(values: snapshotValues(
+            day: snapshotCanonicalDay(capturedAt, timeZone: timeZone),
+            offset: offset,
+            nonce: "calendar-\(name)"
+        ))
+        let components = snapshotCalendarComponents(queryItems: [
+            URLQueryItem(name: "date", value: selectedDate)
+        ])
+        let url = snapshot.actionURL(components, at: capturedAt, calendar: calendar)
+
+        snapshotAssertBindings(
+            url,
+            day: "2026-04-05",
+            offset: offset,
+            nonce: "calendar-\(name)",
+            context: "dated Calendar target in \(name)"
+        )
+        let items = snapshotQueryItems(url!)
+        let dates = items.filter { $0.name == "date" }
+        snapshotExpect(dates.count == 1 && dates.first?.value == selectedDate,
+                       "\(name) preserves its selected Calendar date")
+        snapshotExpect(items.allSatisfy { $0.name != "widget_delivery" },
+                       "\(name) does not fabricate a delivery ID")
+    }
+}
+
+snapshotRunCase("dated Calendar targets replace prior bindings and delivery IDs") {
+    let timeZone = snapshotTimeZone("Asia/Shanghai")
+    let calendar = snapshotGregorianCalendar(timeZone)
+    let capturedAt = snapshotLocalDate(2026, 4, 5, hour: 12, calendar: calendar)
+    let snapshot = DuoyiWidgetSnapshot(values: snapshotValues(
+        day: "2026-04-05",
+        offset: 480,
+        nonce: "frozen-calendar-account"
+    ))
+    let components = snapshotCalendarComponents(queryItems: [
+        URLQueryItem(name: "date", value: "2025-11-09"),
+        URLQueryItem(name: "source", value: "stale-source-a"),
+        URLQueryItem(name: "source", value: "stale-source-b"),
+        URLQueryItem(name: "widget_day", value: "stale-day"),
+        URLQueryItem(name: "widget_offset", value: "-300"),
+        URLQueryItem(name: "widget_account", value: "stale-account"),
+        URLQueryItem(name: "widget_delivery", value: "old-delivery"),
+    ])
+    let url = snapshot.actionURL(components, at: capturedAt, calendar: calendar)
+
+    snapshotAssertBindings(
+        url,
+        day: "2026-04-05",
+        offset: 480,
+        nonce: "frozen-calendar-account",
+        context: "Calendar target with stale query bindings"
+    )
+    let items = snapshotQueryItems(url!)
+    let dates = items.filter { $0.name == "date" }
+    snapshotExpect(dates.count == 1 && dates.first?.value == "2025-11-09",
+                   "binding preserves the selected date separately from widget_day")
+    snapshotExpect(!items.contains { $0.name == "widget_delivery" },
+                   "binding removes a prior delivery ID")
+}
+
+snapshotRunCase("stale and unpublished dated Calendar targets are withheld while undated links stay plain") {
+    let calendar = snapshotGregorianCalendar(snapshotTimeZone("UTC"))
+    let capturedAt = snapshotLocalDate(2026, 4, 5, hour: 12, calendar: calendar)
+    let dated = snapshotCalendarComponents(queryItems: [
+        URLQueryItem(name: "date", value: "2026-04-06")
+    ])
+    let stale = DuoyiWidgetSnapshot(values: snapshotValues(
+        day: "2026-04-04",
+        offset: 0,
+        nonce: "stale-calendar"
+    ))
+    let unpublished = DuoyiWidgetSnapshot(values: snapshotValues(day: nil))
+
+    snapshotExpect(stale.actionURL(dated, at: capturedAt, calendar: calendar) == nil,
+                   "stale dated Calendar target is withheld")
+    snapshotExpect(unpublished.actionURL(dated, at: capturedAt, calendar: calendar) == nil,
+                   "unpublished dated Calendar target is withheld")
+
+    let undated = snapshotCalendarComponents()
+    let undatedURL = stale.actionURL(undated, at: capturedAt, calendar: calendar)
+    snapshotExpect(undatedURL == undated.url, "undated Calendar URL remains ordinary navigation")
+    snapshotAssertNoBindings(undatedURL!, context: "undated Calendar URL")
+}
+
+snapshotRunCase("Calendar target dates use ASCII proleptic Gregorian leap rules") {
+    let calendar = snapshotGregorianCalendar(snapshotTimeZone("UTC"))
+    let capturedAt = snapshotLocalDate(2026, 4, 5, hour: 12, calendar: calendar)
+    let snapshot = DuoyiWidgetSnapshot(values: snapshotValues(
+        day: "2026-04-05",
+        offset: 0,
+        nonce: "gregorian-calendar"
+    ))
+
+    for selectedDate in ["1600-02-29", "2000-02-29", "2400-02-29"] {
+        let components = snapshotCalendarComponents(queryItems: [
+            URLQueryItem(name: "date", value: selectedDate)
+        ])
+        let url = snapshot.actionURL(components, at: capturedAt, calendar: calendar)
+        snapshotExpect(url != nil, "proleptic Gregorian leap date \(selectedDate) is accepted")
+        snapshotAssertBindings(url, day: "2026-04-05", offset: 0,
+                               nonce: "gregorian-calendar", context: selectedDate)
+        snapshotExpect(snapshotQueryItems(url!).contains {
+            $0.name == "date" && $0.value == selectedDate
+        }, "selected date \(selectedDate) is preserved")
+    }
+
+    for selectedDate in ["1500-02-29", "1900-02-29", "2100-02-29"] {
+        let components = snapshotCalendarComponents(queryItems: [
+            URLQueryItem(name: "date", value: selectedDate)
+        ])
+        snapshotExpect(snapshot.actionURL(components, at: capturedAt, calendar: calendar) == nil,
+                       "non-leap century date \(selectedDate) is rejected")
+    }
+
+    for day in 5...14 {
+        let selectedDate = String(format: "1582-10-%02d", day)
+        let components = snapshotCalendarComponents(queryItems: [
+            URLQueryItem(name: "date", value: selectedDate)
+        ])
+        let url = snapshot.actionURL(components, at: capturedAt, calendar: calendar)
+        snapshotExpect(url != nil, "proleptic Gregorian date \(selectedDate) is accepted")
+    }
+
+    for selectedDate in ["0001-01-01", "9999-12-31"] {
+        let components = snapshotCalendarComponents(queryItems: [
+            URLQueryItem(name: "date", value: selectedDate)
+        ])
+        let url = snapshot.actionURL(components, at: capturedAt, calendar: calendar)
+        snapshotExpect(url != nil, "four-digit Gregorian endpoint \(selectedDate) is accepted")
+        snapshotExpect(snapshotQueryItems(url!).contains {
+            $0.name == "date" && $0.value == selectedDate
+        }, "endpoint date \(selectedDate) is preserved")
+    }
+
+    for selectedDate in [
+        "٢٠٢٦-04-05", "２０２６-０４-０５", "2026-4-05", "2026-04-5",
+        "0000-01-01", "10000-01-01", "2026-04-31", "2026-00-01",
+        "2026-13-01", "2026-04-00",
+    ] {
+        let components = snapshotCalendarComponents(queryItems: [
+            URLQueryItem(name: "date", value: selectedDate)
+        ])
+        snapshotExpect(snapshot.actionURL(components, at: capturedAt, calendar: calendar) == nil,
+                       "invalid Calendar date \(selectedDate) is rejected")
+    }
+}
+
+snapshotRunCase("malformed Calendar targets reject extra query data and URL authority or suffixes") {
+    let calendar = snapshotGregorianCalendar(snapshotTimeZone("UTC"))
+    let capturedAt = snapshotLocalDate(2026, 4, 5, hour: 12, calendar: calendar)
+    let snapshot = DuoyiWidgetSnapshot(values: snapshotValues())
+    let validDate = URLQueryItem(name: "date", value: "2026-04-06")
+
+    let duplicateDate = snapshotCalendarComponents(queryItems: [
+        validDate,
+        URLQueryItem(name: "date", value: "2026-04-07"),
+    ])
+    let duplicateSameDate = snapshotCalendarComponents(queryItems: [
+        validDate,
+        validDate,
+    ])
+    let encodedDuplicateDate = URLComponents(
+        string: "duoyi://calendar?%64ate=2026-04-06&date=2026-04-06"
+    )!
+    let unknownQuery = snapshotCalendarComponents(queryItems: [
+        validDate,
+        URLQueryItem(name: "view", value: "month"),
+    ])
+    let missingDateValue = snapshotCalendarComponents(queryItems: [
+        URLQueryItem(name: "date", value: nil),
+    ])
+    let emptyDateValue = snapshotCalendarComponents(queryItems: [
+        URLQueryItem(name: "date", value: ""),
+    ])
+    var path = snapshotCalendarComponents(queryItems: [validDate])
+    path.path = "/week"
+    var userInfo = snapshotCalendarComponents(queryItems: [validDate])
+    userInfo.user = "someone"
+    var port = snapshotCalendarComponents(queryItems: [validDate])
+    port.port = 443
+    var fragment = snapshotCalendarComponents(queryItems: [validDate])
+    fragment.fragment = "month"
+
+    for (name, components) in [
+        ("duplicate date", duplicateDate),
+        ("duplicate same date", duplicateSameDate),
+        ("percent-encoded duplicate date key", encodedDuplicateDate),
+        ("unknown query key", unknownQuery),
+        ("missing date value", missingDateValue),
+        ("empty date value", emptyDateValue),
+        ("path", path),
+        ("user information", userInfo),
+        ("port", port),
+        ("fragment", fragment),
+    ] {
+        snapshotExpect(snapshot.actionURL(components, at: capturedAt, calendar: calendar) == nil,
+                       "Calendar URL with \(name) is rejected")
+    }
+}
+
+snapshotRunCase("dated Calendar targets become stale when daylight-saving offset changes") {
+    let timeZone = snapshotTimeZone("America/New_York")
+    let calendar = snapshotGregorianCalendar(timeZone)
+    let beforeTransition = snapshotLocalDate(2026, 3, 8, hour: 1, minute: 59, calendar: calendar)
+    let afterTransition = snapshotLocalDate(2026, 3, 8, hour: 3, minute: 0, calendar: calendar)
+    let beforeOffset = timeZone.secondsFromGMT(for: beforeTransition) / 60
+    let snapshot = DuoyiWidgetSnapshot(values: snapshotValues(
+        day: "2026-03-08",
+        offset: beforeOffset,
+        nonce: "dst-calendar"
+    ))
+    let selectedDate = snapshotCalendarComponents(queryItems: [
+        URLQueryItem(name: "date", value: "2026-03-09")
+    ])
+
+    snapshotExpect(beforeOffset == -300, "Calendar fixture starts on New York standard time")
+    let freshURL = snapshot.actionURL(selectedDate, at: beforeTransition, calendar: calendar)
+    snapshotAssertBindings(freshURL, day: "2026-03-08", offset: -300,
+                           nonce: "dst-calendar", context: "pre-transition Calendar target")
+    snapshotExpect(snapshot.actionURL(selectedDate, at: afterTransition, calendar: calendar) == nil,
+                   "dated Calendar target is withheld after the published offset becomes stale")
 }
 
 print("PASS: all production-extracted snapshot and launch core cases")
