@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/account_preference_writes.dart';
+
 /// Clears data that belongs to the signed-in account.
 ///
 /// Device-level settings such as locale and app lock are intentionally not
@@ -29,6 +31,7 @@ class AccountLocalDataCleaner {
   }
 
   static void invalidateInFlightAccountWrites() {
+    AccountPreferenceWrites.invalidate();
     _accountDataGeneration++;
     _accountDataGenerationNotifier.value = _accountDataGeneration;
   }
@@ -181,7 +184,13 @@ class AccountLocalDataCleaner {
     'avatar_cache',
   };
 
-  static Future<void> clearSharedPreferences() async {
+  static Future<T> runPreferenceBoundary<T>(Future<T> Function() operation) =>
+      AccountPreferenceWrites.boundary(operation);
+
+  static Future<void> clearSharedPreferences() =>
+      AccountPreferenceWrites.boundary(_clearSharedPreferences);
+
+  static Future<void> _clearSharedPreferences() async {
     invalidateInFlightAccountWrites();
     final prefs = await SharedPreferences.getInstance();
     Object? firstError;

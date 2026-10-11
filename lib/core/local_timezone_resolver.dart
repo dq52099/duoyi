@@ -7,6 +7,7 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'platform_info.dart';
+import 'account_preference_writes.dart';
 
 /// 统一的本地时区解析器。
 ///
@@ -45,6 +46,8 @@ class LocalTimezoneResolver {
 
   static bool _initialized = false;
   static String _currentIana = defaultIana;
+  static int _locationGeneration = 0;
+  static Future<void> _latestLocationUpdate = Future<void>.value();
 
   /// 解析出的 IANA 名，例如 `Asia/Shanghai`。
   static String get currentIana => _currentIana;
@@ -56,12 +59,8 @@ class LocalTimezoneResolver {
   ///
   /// 应在 `runApp` 之前、`main()` 初始化阶段调用一次。
   static Future<void> init() async {
-    // tz 数据库是进程级全局的，允许多次调用，但只有第一次生效。
     tzdata.initializeTimeZones();
-
-    final name = await _resolveIanaName();
-    _setLocation(name);
-    _initialized = true;
+    await _updateLocation(_resolveIanaName);
   }
 
   /// 重新探测并应用当前系统时区。返回新的 IANA 名。
@@ -69,27 +68,81 @@ class LocalTimezoneResolver {
   /// 用于 `AppLifecycleState.resumed` 时对比缓存值，若变化则触发
   /// `ReminderScheduler.resyncAll`。
   static Future<String> refresh() async {
-    final name = await _resolveIanaName();
-    _setLocation(name);
+    await _updateLocation(_resolveIanaName);
     return _currentIana;
   }
 
-  static Future<void> setApplicationTimeZone(String name) async {
-    tzdata.initializeTimeZones();
+  static Future<void> setApplicationTimeZone(
+    String name,
+  ) => AccountPreferenceWrites.run((token) async {
     final p = await SharedPreferences.getInstance();
-    if (name == followSystemValue) {
-      await p.setString(modePreferenceKey, followSystemValue);
-      await p.remove(preferenceKey);
-      final resolved = await _resolveIanaName();
-      _setLocation(resolved);
-      _initialized = true;
+    token.ensureCurrent();
+    final transaction = AccountPreferenceTransaction(p, () => token.isCurrent);
+    try {
+      await persistApplicationTimeZone(transaction, name);
+      await applyApplicationTimeZone(name, isCurrent: () => token.isCurrent);
+    } on AccountPreferenceWriteCanceled {
+      await transaction.rollback(canceledBeforeCleanup: true);
       return;
+    } catch (_) {
+      await transaction.rollback();
+      rethrow;
     }
-    final next = _canResolve(name) && !_isUtcLike(name) ? name : defaultIana;
-    await p.setString(modePreferenceKey, fixedValue);
-    await p.setString(preferenceKey, next);
-    _setLocation(next);
-    _initialized = true;
+  });
+
+  static Future<void> persistApplicationTimeZone(
+    AccountPreferenceTransaction preferences,
+    String name,
+  ) async {
+    if (name == followSystemValue) {
+      await preferences.setString(modePreferenceKey, followSystemValue);
+      await preferences.remove(preferenceKey);
+    } else {
+      final next = _canResolve(name) && !_isUtcLike(name) ? name : defaultIana;
+      await preferences.setString(modePreferenceKey, fixedValue);
+      await preferences.setString(preferenceKey, next);
+    }
+  }
+
+  /// Apply a stored choice without rewriting account preferences during reload.
+  static Future<void> applyApplicationTimeZone(
+    String name, {
+    bool Function()? isCurrent,
+  }) {
+    tzdata.initializeTimeZones();
+    return _updateLocation(
+      () async => name == followSystemValue
+          ? await _resolveIanaName()
+          : _canResolve(name) && !_isUtcLike(name)
+          ? name
+          : defaultIana,
+      isCurrent: isCurrent,
+    );
+  }
+
+  static Future<void> _updateLocation(
+    Future<String> Function() resolve, {
+    bool Function()? isCurrent,
+  }) {
+    final revision = ++_locationGeneration;
+    final accountGeneration = AccountPreferenceWrites.generation;
+    final update = () async {
+      final next = await resolve();
+      if (accountGeneration != AccountPreferenceWrites.generation ||
+          (isCurrent != null && !isCurrent())) {
+        return;
+      }
+      if (revision != _locationGeneration) {
+        // A lifecycle refresh may supersede a setting during system lookup.
+        // Wait before the setting snapshots the resulting process timezone.
+        await _latestLocationUpdate;
+        return;
+      }
+      _setLocation(next);
+      _initialized = true;
+    }();
+    _latestLocationUpdate = update;
+    return update;
   }
 
   static Future<String> _resolveIanaName() async {
@@ -103,7 +156,6 @@ class LocalTimezoneResolver {
           _canResolve(saved)) {
         if (_isUtcLike(saved)) {
           _log('固定应用时区为 UTC 类时区，改用 $defaultIana');
-          await p.setString(preferenceKey, defaultIana);
           return defaultIana;
         }
         return saved;

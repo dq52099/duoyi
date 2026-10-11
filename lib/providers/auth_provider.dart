@@ -1812,12 +1812,12 @@ class AuthProvider extends ChangeNotifier {
       if (callback == null) {
         await AccountLocalDataCleaner.clearSharedPreferences();
       } else {
-        await callback(previous, next);
-        _requireNotDisposed();
-        // The app-level callback resets provider memory and native schedulers.
-        // Run a final prefs pass here as a hard account boundary in case an
-        // in-flight account-scoped write raced with that cleanup.
-        await AccountLocalDataCleaner.clearSharedPreferences();
+        await AccountLocalDataCleaner.runPreferenceBoundary(() async {
+          await callback(previous, next);
+          _requireNotDisposed();
+          // Keep user writes suspended through the app and final cleanup passes.
+          await AccountLocalDataCleaner.clearSharedPreferences();
+        });
       }
     } catch (e, st) {
       debugPrint('[auth] account switch cleanup failed: $e\n$st');
@@ -1832,9 +1832,11 @@ class AuthProvider extends ChangeNotifier {
       if (callback == null) {
         await AccountLocalDataCleaner.clearSharedPreferences();
       } else {
-        await callback();
-        _requireNotDisposed();
-        await AccountLocalDataCleaner.clearSharedPreferences();
+        await AccountLocalDataCleaner.runPreferenceBoundary(() async {
+          await callback();
+          _requireNotDisposed();
+          await AccountLocalDataCleaner.clearSharedPreferences();
+        });
       }
     } catch (e, st) {
       debugPrint('[auth] account logout cleanup failed: $e\n$st');
