@@ -102,7 +102,7 @@ class ShareProvider extends ChangeNotifier {
     for (final workspace in _workspaces) {
       if (workspace.id == workspaceId) return workspace.roleFor(userId);
     }
-    return WorkspaceRole.owner;
+    return WorkspaceRole.viewer;
   }
 
   bool canEdit(String? workspaceId) {
