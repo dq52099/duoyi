@@ -1,0 +1,5 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/services/native_widget_launch_static_test.dart
+00:00 +0: Android cold and warm Intents enter the app queue before plugin hooks
+00:00 +1: Android launch bridge validates URI shape and replaces transport keys
+00:00 +2: iOS configured scene owns each cold URL context without URI coalescing
+00:00 +3: All tests passed!

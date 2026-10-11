@@ -300,6 +300,305 @@ class DuoyiWidgetPinResultStoreTest {
         assertNull(store.read(secondId))
     }
 
+    @Test
+    fun orphanBudgetKeeps64AndEvictsOldestArrivalInsteadOfIncomingAfterWallClockRollback() {
+        val preferences = MemorySharedPreferences()
+        val clock = FakeMonotonicClock()
+        val store = DuoyiWidgetPinResultStore(
+            preferences,
+            DuoyiWidgetPinResultRetention(orphanLimit = 64, nowMillis = clock::now),
+        )
+        val receipts = (0..64).map { index ->
+            // Simulate a wall-clock rollback: arrival order, not confirmedAt, owns retention order.
+            pin(
+                "orphan-$index",
+                kind = "todo",
+                style = "standard",
+                widgetId = index,
+                confirmedAt = 10_000L - index,
+            )
+        }
+
+        receipts.forEach(store::record)
+
+        assertNull(store.read(receipts.first().requestId))
+        receipts.drop(1).forEach { receipt ->
+            assertEquals(receipt.toPayload(), store.read(receipt.requestId))
+        }
+    }
+
+    @Test
+    fun handoffProtectsReceiptUntilMonotonicExpiryThenPruneRestoresOrphanBudget() {
+        val preferences = MemorySharedPreferences()
+        val clock = FakeMonotonicClock(startMillis = 1_000L)
+        val store = DuoyiWidgetPinResultStore(
+            preferences,
+            DuoyiWidgetPinResultRetention(orphanLimit = 1, nowMillis = clock::now),
+        )
+        val protected = pin("handoff-old", "todo", "compact", 101, confirmedAt = 100L)
+        val orphan = pin("handoff-new", "habit", "detailed", 102, confirmedAt = 200L)
+
+        store.record(protected)
+        store.reserveHandoff(protected.requestId, durationMillis = 100L)
+        store.record(orphan)
+
+        assertEquals(protected.toPayload(), store.read(protected.requestId))
+        assertEquals(orphan.toPayload(), store.read(orphan.requestId))
+        assertEquals(100L, store.nextCleanupDelayMillis())
+
+        clock.advanceBy(99L)
+        assertEquals(1L, store.nextCleanupDelayMillis())
+        store.prune()
+        assertEquals(protected.toPayload(), store.read(protected.requestId))
+
+        clock.advanceBy(1L)
+        store.prune()
+
+        assertNull(store.read(protected.requestId))
+        assertEquals(orphan.toPayload(), store.read(orphan.requestId))
+        assertNull(store.nextCleanupDelayMillis())
+    }
+
+    @Test
+    fun monotonicRollbackDoesNotExpireHandoffOrEvictItsReceiptEarly() {
+        val preferences = MemorySharedPreferences()
+        val clock = FakeMonotonicClock(startMillis = 50_000L)
+        val store = DuoyiWidgetPinResultStore(
+            preferences,
+            DuoyiWidgetPinResultRetention(orphanLimit = 1, nowMillis = clock::now),
+        )
+        val protected = pin("rollback-protected", "calendar", "standard", 111)
+        val incoming = pin(
+            "rollback-incoming",
+            "note",
+            "compact",
+            112,
+            confirmedAt = Long.MIN_VALUE,
+        )
+
+        store.record(protected)
+        store.reserveHandoff(protected.requestId, durationMillis = 200L)
+        clock.set(10L)
+        store.prune()
+        store.record(incoming)
+
+        assertEquals(200L, store.nextCleanupDelayMillis())
+        assertEquals(protected.toPayload(), store.read(protected.requestId))
+        assertEquals(incoming.toPayload(), store.read(incoming.requestId))
+
+        clock.set(50_199L)
+        assertEquals(1L, store.nextCleanupDelayMillis())
+        clock.set(50_200L)
+        store.prune()
+
+        assertNull(store.read(protected.requestId))
+        assertEquals(incoming.toPayload(), store.read(incoming.requestId))
+    }
+
+    @Test
+    fun releaseHandoffRemovesProtectionAndPrunesOnlyAfterExplicitRelease() {
+        val preferences = MemorySharedPreferences()
+        val clock = FakeMonotonicClock()
+        val store = DuoyiWidgetPinResultStore(
+            preferences,
+            DuoyiWidgetPinResultRetention(orphanLimit = 1, nowMillis = clock::now),
+        )
+        val handedOff = pin("released-handoff", "note", "compact", 116, confirmedAt = 10L)
+        val neighbor = pin("handoff-neighbor", "todo", "standard", 117, confirmedAt = 20L)
+
+        store.record(handedOff)
+        store.reserveHandoff(handedOff.requestId, durationMillis = 1_000L)
+        store.record(neighbor)
+        assertEquals(handedOff.toPayload(), store.read(handedOff.requestId))
+        assertEquals(1_000L, store.nextCleanupDelayMillis())
+
+        store.releaseHandoff(handedOff.requestId)
+
+        assertNull(store.read(handedOff.requestId))
+        assertEquals(neighbor.toPayload(), store.read(neighbor.requestId))
+        assertNull(store.nextCleanupDelayMillis())
+    }
+
+    @Test
+    fun activeWaitTokensDoNotTimeoutAndOldOrMismatchedEndCannotReleaseNewWait() {
+        val preferences = MemorySharedPreferences()
+        val clock = FakeMonotonicClock()
+        val store = DuoyiWidgetPinResultStore(
+            preferences,
+            DuoyiWidgetPinResultRetention(orphanLimit = 1, nowMillis = clock::now),
+        )
+        val waiting = pin("active-wait", "diary", "standard", 121)
+        val firstOrphan = pin("active-orphan-1", "todo", "compact", 122)
+        val secondOrphan = pin("active-orphan-2", "todo", "compact", 123)
+        val finalOrphan = pin("active-orphan-3", "todo", "compact", 124)
+
+        store.record(waiting)
+        store.reserveHandoff(waiting.requestId, durationMillis = 10L)
+        val firstToken = store.beginWait(waiting.requestId, "screen-owner", timeoutMillis = 1L)
+        assertTrue(firstToken != null)
+        assertNull(store.nextCleanupDelayMillis()) // beginWait transfers and removes the handoff.
+
+        clock.advanceBy(1_000L) // The accepted wait is engine-owned and has no timeout deadline.
+        store.prune()
+        store.record(firstOrphan)
+        store.record(secondOrphan)
+        assertEquals(waiting.toPayload(), store.read(waiting.requestId))
+
+        val secondToken = requireNotNull(
+            store.beginWait(waiting.requestId, "screen-owner", timeoutMillis = 1L),
+        )
+        assertFalse(firstToken == secondToken)
+        store.endWait(waiting.requestId, "screen-owner", firstToken!!)
+        store.endWait(waiting.requestId, "different-owner", secondToken)
+        store.endWait("different-request", "screen-owner", secondToken)
+        store.record(finalOrphan)
+
+        assertEquals(waiting.toPayload(), store.read(waiting.requestId))
+        store.endWait(waiting.requestId, "screen-owner", secondToken)
+        store.prune()
+        assertNull(store.read(waiting.requestId))
+        assertEquals(finalOrphan.toPayload(), store.read(finalOrphan.requestId))
+    }
+
+    @Test
+    fun releaseOwnerReleasesOnlyItsWaitsAndInvalidWaitRequestsAreRejected() {
+        val preferences = MemorySharedPreferences()
+        val store = DuoyiWidgetPinResultStore(
+            preferences,
+            DuoyiWidgetPinResultRetention(orphanLimit = 1),
+        )
+        val first = pin("owner-a", "todo", "compact", 131, confirmedAt = 10L)
+        val second = pin("owner-b", "habit", "standard", 132, confirmedAt = 20L)
+        val later = pin("owner-later", "calendar", "detailed", 133, confirmedAt = 30L)
+
+        store.record(first)
+        assertNull(store.beginWait("", "owner-a", timeoutMillis = 1L))
+        assertNull(store.beginWait("nonblank", " ", timeoutMillis = 1L))
+        assertNull(store.beginWait("nonblank", "owner-a", timeoutMillis = 0L))
+        assertNull(store.beginWait("nonblank", "owner-a", timeoutMillis = -1L))
+        val firstToken = store.beginWait(first.requestId, "owner-a", timeoutMillis = 10L)
+        val secondToken = store.beginWait(second.requestId, "owner-b", timeoutMillis = 10L)
+        assertTrue(firstToken != null)
+        assertTrue(secondToken != null)
+        store.record(second)
+
+        store.releaseOwner("owner-a")
+        store.record(later)
+
+        assertNull(store.read(first.requestId))
+        assertEquals(second.toPayload(), store.read(second.requestId))
+        assertEquals(later.toPayload(), store.read(later.requestId))
+        store.releaseOwner("owner-b")
+        store.prune()
+        assertNull(store.read(second.requestId))
+    }
+
+    @Test
+    fun recreatedStoreSharesRetentionOnlyWhenStateIsSharedAndRestartPrunesExpiredLeases() {
+        val preferences = MemorySharedPreferences()
+        val clock = FakeMonotonicClock()
+        val sameProcessRetention = DuoyiWidgetPinResultRetention(
+            orphanLimit = 1,
+            nowMillis = clock::now,
+        )
+        val originalStore = DuoyiWidgetPinResultStore(preferences, sameProcessRetention)
+        val protected = pin("volatile-wait", "todo", "compact", 141, confirmedAt = 100L)
+        val newer = pin("persisted-neighbor", "habit", "detailed", 142, confirmedAt = 200L)
+
+        originalStore.record(protected)
+        val token = originalStore.beginWait(protected.requestId, "owner", timeoutMillis = 1L)
+        assertTrue(token != null)
+        originalStore.record(newer)
+
+        val sameProcessStore = DuoyiWidgetPinResultStore(preferences, sameProcessRetention)
+        assertEquals(protected.toPayload(), sameProcessStore.read(protected.requestId))
+        assertEquals(newer.toPayload(), sameProcessStore.read(newer.requestId))
+
+        // A new process has persisted receipts but no live wait token; startup pruning reclaims it.
+        val restartedStore = DuoyiWidgetPinResultStore(
+            preferences,
+            DuoyiWidgetPinResultRetention(orphanLimit = 1, nowMillis = clock::now),
+        )
+        restartedStore.prune()
+
+        assertNull(restartedStore.read(protected.requestId))
+        assertEquals(newer.toPayload(), restartedStore.read(newer.requestId))
+    }
+
+    @Test
+    fun malformedOwnedNamespaceCountsTowardBudgetWhileUnknownAndLegacyKeysSurvive() {
+        val malformedId = "malformed-owned"
+        val malformedKeys = DuoyiWidgetPinResultCore.keysFor(malformedId)
+        val legacyId = "legacy-protected"
+        val legacy = legacyValues(legacyId, kind = "diary", style = "standard", widgetId = 151)
+        val unknownKey = "receipt:unparseable:keep-this"
+        val initial = linkedMapOf<String, Any>().apply {
+            put(malformedKeys.getValue("requestId"), 999) // Wrong marker type still counts as owned.
+            put(malformedKeys.getValue("kind"), "todo")
+            put(malformedKeys.getValue("confirmedAt"), 10L)
+            putAll(legacy)
+            put(unknownKey, "unowned")
+        }
+        val preferences = MemorySharedPreferences(initial)
+        val store = DuoyiWidgetPinResultStore(
+            preferences,
+            DuoyiWidgetPinResultRetention(orphanLimit = 1),
+        )
+        val incoming = pin("malformed-incoming", "calendar", "compact", 152, confirmedAt = 20L)
+
+        assertNull(store.read(malformedId))
+        assertEquals(legacyPayload(legacy), store.read(legacyId))
+        store.record(incoming)
+
+        val persisted = preferences.snapshot()
+        assertTrue(malformedKeys.values.none(persisted::containsKey))
+        assertEquals("unowned", persisted[unknownKey])
+        assertEquals(legacy, legacyValuesFrom(persisted))
+        assertEquals(legacyPayload(legacy), store.read(legacyId))
+        assertEquals(incoming.toPayload(), store.read(incoming.requestId))
+    }
+
+    @Test
+    fun incomingRecordAndOldestEvictionShareOneApplyAndKeepNativeSixFieldPayload() {
+        val preferences = MemorySharedPreferences()
+        val store = DuoyiWidgetPinResultStore(
+            preferences,
+            DuoyiWidgetPinResultRetention(orphanLimit = 1),
+        )
+        val oldest = pin("atomic-oldest", "todo", "standard", 161, confirmedAt = 1L)
+        val incoming = pin(
+            "atomic-incoming",
+            "focus",
+            "detailed",
+            162,
+            status = "confirmed_unverified",
+            confirmedAt = 2L,
+        )
+        store.record(oldest)
+        val appliesBeforeOverflow = preferences.applyCount
+
+        store.record(incoming)
+
+        assertEquals(appliesBeforeOverflow + 1, preferences.applyCount)
+        assertNull(store.read(oldest.requestId))
+        assertEquals(incoming.toPayload(), store.read(incoming.requestId))
+        val values = preferences.snapshot()
+        val keys = DuoyiWidgetPinResultCore.keysFor(incoming.requestId)
+        assertEquals(
+            setOf("requestId", "kind", "style", "widgetId", "status", "confirmedAt"),
+            keys.keys,
+        )
+        assertEquals(6, keys.values.count(values::containsKey))
+        assertEquals(incoming.requestId, values[keys.getValue("requestId")])
+        assertEquals(incoming.kind, values[keys.getValue("kind")])
+        assertEquals(incoming.style, values[keys.getValue("style")])
+        assertEquals(incoming.widgetId, values[keys.getValue("widgetId")])
+        assertEquals(incoming.status, values[keys.getValue("status")])
+        assertEquals(incoming.confirmedAt, values[keys.getValue("confirmedAt")])
+        assertTrue(values[keys.getValue("widgetId")] is Int)
+        assertTrue(values[keys.getValue("confirmedAt")] is Long)
+    }
+
     private fun pin(
         requestId: String,
         kind: String,
@@ -346,9 +645,25 @@ class DuoyiWidgetPinResultStoreTest {
         "confirmedAt" to values.getValue("confirmed_at"),
     )
 
+    private class FakeMonotonicClock(startMillis: Long = 0L) {
+        private var currentMillis = startMillis
+
+        fun now(): Long = currentMillis
+
+        fun advanceBy(deltaMillis: Long) {
+            currentMillis += deltaMillis
+        }
+
+        fun set(value: Long) {
+            currentMillis = value
+        }
+    }
+
     /** Writable SharedPreferences fake with apply() updates visible in memory immediately. */
     private class MemorySharedPreferences(initialValues: Map<String, Any> = emptyMap()) : SharedPreferences {
         private val lock = Any()
+        var applyCount: Int = 0
+            private set
         private val values = linkedMapOf<String, Any>().apply {
             initialValues.forEach { (key, value) -> put(key, copyValue(value)) }
         }
@@ -428,7 +743,10 @@ class DuoyiWidgetPinResultStoreTest {
                 return true
             }
 
-            override fun apply() = applyWrites()
+            override fun apply() {
+                applyWrites()
+                applyCount++
+            }
 
             private fun put(key: String?, value: Any): SharedPreferences.Editor {
                 val resolved = requireNotNull(key)

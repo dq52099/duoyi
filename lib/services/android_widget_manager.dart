@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -145,6 +146,12 @@ class AndroidWidgetManager {
   AndroidWidgetManager._();
 
   static const MethodChannel _channel = MethodChannel('duoyi/widgets');
+  static const MethodChannel _pinResultsChannel = MethodChannel(
+    'duoyi/widget_pin_results',
+  );
+
+  @visibleForTesting
+  static bool? debugIsAndroidOverride;
 
   static Future<bool> canRequestPinWidget() async {
     if (!_isAndroid) return false;
@@ -250,7 +257,10 @@ class AndroidWidgetManager {
         'requestId': requestId,
       });
     } catch (e, st) {
-      debugPrint('[AndroidWidgetManager] clearPinResult failed: $e\n$st');
+      debugPrint(
+        '[AndroidWidgetManager] clearPinResult failed '
+        'requestId=$requestId: $e\n$st',
+      );
     }
   }
 
@@ -298,25 +308,93 @@ class AndroidWidgetManager {
     Duration timeout = const Duration(minutes: 2),
     Duration pollInterval = const Duration(milliseconds: 700),
   }) async {
-    final deadline = DateTime.now().add(timeout);
-    while (DateTime.now().isBefore(deadline)) {
-      final result = await lastPinResult(requestId);
-      if (result != null) return result;
-      await Future<void>.delayed(pollInterval);
+    final stopwatch = clock.stopwatch()..start();
+    if (pollInterval <= Duration.zero) {
+      throw ArgumentError.value(
+        pollInterval,
+        'pollInterval',
+        'Must be positive',
+      );
     }
-    debugPrint(
-      '[AndroidWidgetManager] pin result timed out; keep pending request '
-      'alive for late launcher callback requestId=$requestId',
-    );
-    return AndroidWidgetPinConfirmation(
-      status: AndroidWidgetPinFinalStatus.timeout,
-      requestId: requestId,
-    );
+    if (requestId.trim().isEmpty || !_isAndroid) {
+      return AndroidWidgetPinConfirmation(
+        status: AndroidWidgetPinFinalStatus.unavailable,
+        requestId: requestId,
+      );
+    }
+    if (timeout <= Duration.zero) {
+      return AndroidWidgetPinConfirmation(
+        status: AndroidWidgetPinFinalStatus.timeout,
+        requestId: requestId,
+      );
+    }
+
+    final String? token;
+    try {
+      token = await _pinResultsChannel
+          .invokeMethod<String>('beginWait', <String, Object?>{
+            'requestId': requestId,
+            'timeoutMillis': timeout.inMilliseconds > 0
+                ? timeout.inMilliseconds
+                : 1,
+          });
+    } catch (e, st) {
+      debugPrint(
+        '[AndroidWidgetManager] beginWait failed requestId=$requestId: $e\n$st',
+      );
+      return AndroidWidgetPinConfirmation(
+        status: AndroidWidgetPinFinalStatus.unavailable,
+        requestId: requestId,
+      );
+    }
+    if (token == null || token.isEmpty) {
+      return AndroidWidgetPinConfirmation(
+        status: AndroidWidgetPinFinalStatus.unavailable,
+        requestId: requestId,
+      );
+    }
+
+    try {
+      while (stopwatch.elapsed < timeout) {
+        final result = await lastPinResult(requestId);
+        if (result != null && result.requestId == requestId) {
+          // Keep protection until the matching receipt has been acknowledged.
+          await clearPinResult(requestId);
+          return result;
+        }
+        final remaining = timeout - stopwatch.elapsed;
+        if (remaining <= Duration.zero) break;
+        await Future<void>.delayed(
+          pollInterval < remaining ? pollInterval : remaining,
+        );
+      }
+      debugPrint(
+        '[AndroidWidgetManager] pin result timed out; keep pending request '
+        'alive for late launcher callback requestId=$requestId',
+      );
+      return AndroidWidgetPinConfirmation(
+        status: AndroidWidgetPinFinalStatus.timeout,
+        requestId: requestId,
+      );
+    } finally {
+      try {
+        await _pinResultsChannel.invokeMethod<void>(
+          'endWait',
+          <String, Object?>{'requestId': requestId, 'token': token},
+        );
+      } catch (e, st) {
+        debugPrint(
+          '[AndroidWidgetManager] endWait failed '
+          'requestId=$requestId: $e\n$st',
+        );
+      }
+      stopwatch.stop();
+    }
   }
 
   static bool get _isAndroid {
     if (kIsWeb) return false;
-    return PlatformInfo.isAndroid;
+    return debugIsAndroidOverride ?? PlatformInfo.isAndroid;
   }
 }
 

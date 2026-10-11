@@ -1,0 +1,10 @@
+COMMAND: java -Xmx512m -cp /home/ubuntu/duoyi/.dart_tool/task-temp-20261011/widget-pin-retention-jvm-final/classes:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.2.20/5380b19fa1924399b62ce3a1faffebb2b4f82272/kotlin-stdlib-2.2.20.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/junit/junit/4.13.2/8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12/junit-4.13.2.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/42a25dc3219429f0e5d060061f71acb49bf010a0/hamcrest-core-1.3.jar:/home/ubuntu/android-sdk/platforms/android-35/android.jar org.junit.runner.JUnitCore com.duoyi.duoyi.DuoyiWidgetPublicationDocumentTest com.duoyi.duoyi.DuoyiWidgetFrameCoreTest com.duoyi.duoyi.DuoyiFrozenWidgetPreferencesTest com.duoyi.duoyi.DuoyiWidgetDeviceDisplayValuesTest com.duoyi.duoyi.DuoyiWidgetPinResultStoreTest
+EXIT: 0
+--- stdout ---
+JUnit version 4.13.2
+...................................................................
+Time: 0.744
+
+OK (67 tests)
+
+--- stderr ---

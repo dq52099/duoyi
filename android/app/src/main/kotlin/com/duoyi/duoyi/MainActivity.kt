@@ -128,6 +128,9 @@ class MainActivity : FlutterActivity() {
         if (!flutterEngine.plugins.has(DuoyiWidgetPublicationBridge::class.java)) {
             flutterEngine.plugins.add(DuoyiWidgetPublicationBridge())
         }
+        if (!flutterEngine.plugins.has(DuoyiWidgetPinResultPlugin::class.java)) {
+            flutterEngine.plugins.add(DuoyiWidgetPinResultPlugin(flutterEngine))
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, platformInfoChannel)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -701,21 +704,26 @@ class MainActivity : FlutterActivity() {
                     .putExtra(DuoyiWidgetPinResultReceiver.extraRequestId, requestId),
                 callbackFlags,
             )
+            DuoyiWidgetPinResults.reserveHandoff(this, requestId)
             if (manager.requestPinAppWidget(provider, options, callback)) {
+                DuoyiWidgetPinResults.reserveHandoff(this, requestId)
                 DuoyiWidgetProviderRegistry.rememberPendingVariantProvider(this, requestId, provider)
                 "requested:$requestId"
             } else {
+                DuoyiWidgetPinResults.releaseHandoff(this, requestId)
                 Log.w("DuoyiWidgetPin", "request_blocked requestId=$requestId kind=$kind style=${pinStyle.id} provider=${provider.className}")
                 DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(this, provider)
                 DuoyiWidgetProviderRegistry.requestUpdateForProvider(this, provider.className)
                 "confirmation_blocked"
             }
         } catch (e: SecurityException) {
+            DuoyiWidgetPinResults.releaseHandoff(this, requestId)
             Log.w("DuoyiWidgetPin", "permission_denied requestId=$requestId kind=$kind style=${pinStyle.id} provider=${provider.className}", e)
             DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(this, provider)
             DuoyiWidgetProviderRegistry.requestUpdateForProvider(this, provider.className)
             "permission_denied"
         } catch (e: Exception) {
+            DuoyiWidgetPinResults.releaseHandoff(this, requestId)
             Log.w("DuoyiWidgetPin", "unavailable requestId=$requestId kind=$kind style=${pinStyle.id} provider=${provider.className}", e)
             DuoyiWidgetProviderRegistry.disableVariantProviderIfUnused(this, provider)
             DuoyiWidgetProviderRegistry.requestUpdateForProvider(this, provider.className)
@@ -724,17 +732,11 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun lastWidgetPinResult(requestId: String): Map<String, Any?>? {
-        return widgetPinResultStore().read(requestId)
+        return DuoyiWidgetPinResults.read(this, requestId)
     }
 
     private fun clearWidgetPinResult(requestId: String) {
-        widgetPinResultStore().clear(requestId)
-    }
-
-    private fun widgetPinResultStore(): DuoyiWidgetPinResultStore {
-        return DuoyiWidgetPinResultStore(
-            getSharedPreferences(DuoyiWidgetPinResultReceiver.prefsName, Context.MODE_PRIVATE),
-        )
+        DuoyiWidgetPinResults.clear(this, requestId)
     }
 
     private fun widgetProviderFor(kind: String, style: String): ComponentName? {

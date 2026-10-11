@@ -1720,6 +1720,15 @@ void main() {
       final pinResultCore = File(
         'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultCore.kt',
       ).readAsStringSync();
+      final pinResults = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResults.kt',
+      ).readAsStringSync();
+      final pinResultPlugin = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultPlugin.kt',
+      ).readAsStringSync();
+      final pinResultRetention = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultRetention.kt',
+      ).readAsStringSync();
       final styledProvider = File(
         'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiStyledWidgetProvider.kt',
       ).readAsStringSync();
@@ -1822,7 +1831,10 @@ void main() {
       expect(mainActivity, contains('return "unsupported_platform"'));
       expect(manager, isNot(contains("import 'dart:io'")));
       expect(manager, contains("import '../core/platform_info.dart';"));
-      expect(manager, contains('return PlatformInfo.isAndroid;'));
+      expect(
+        manager,
+        contains('return debugIsAndroidOverride ?? PlatformInfo.isAndroid;'),
+      );
       expect(mainActivity, contains('DuoyiWidgetPinStyle.fromId(styleId)'));
       expect(
         mainActivity,
@@ -2109,25 +2121,54 @@ void main() {
               'Keep the former single-slot field constants for receipt compatibility.',
         );
       }
-      expect(callbackReceiver, contains('DuoyiWidgetPinResultStore('));
+      expect(callbackReceiver, contains('DuoyiWidgetPinResults.record('));
       expect(callbackReceiver, contains('DuoyiWidgetPinResultCore.Record('));
       expect(
         RegExp(
-          r'DuoyiWidgetPinResultStore\(\s*context\.getSharedPreferences\(prefsName,\s*Context\.MODE_PRIVATE\),?\s*\)\.record\(\s*DuoyiWidgetPinResultCore\.Record\(',
+          r'DuoyiWidgetPinResults\.record\(\s*context,\s*DuoyiWidgetPinResultCore\.Record\(',
           multiLine: true,
         ).hasMatch(callbackReceiver),
         isTrue,
         reason:
-            'Pin callbacks should persist request-scoped records through the store adapter.',
+            'Pin callbacks must share the application retention state with waiting engines.',
       );
       expect(callbackReceiver, contains('recordResult('));
       expect(callbackReceiver, contains('"confirmed"'));
       expect(
         mainActivity,
-        contains('return widgetPinResultStore().read(requestId)'),
+        contains('return DuoyiWidgetPinResults.read(this, requestId)'),
       );
-      expect(mainActivity, contains('widgetPinResultStore().clear(requestId)'));
-      expect(mainActivity, contains('DuoyiWidgetPinResultStore('));
+      expect(
+        mainActivity,
+        contains('DuoyiWidgetPinResults.clear(this, requestId)'),
+      );
+      expect(
+        mainActivity,
+        contains('DuoyiWidgetPinResultPlugin(flutterEngine)'),
+      );
+      expect(
+        mainActivity,
+        contains('DuoyiWidgetPinResults.reserveHandoff(this, requestId)'),
+      );
+      expect(
+        mainActivity,
+        contains('DuoyiWidgetPinResults.releaseHandoff(this, requestId)'),
+      );
+      expect(pinResults, contains('store ?: DuoyiWidgetPinResultStore('));
+      expect(
+        pinResults,
+        contains('context.applicationContext.getSharedPreferences('),
+      );
+      expect(pinResults, contains('SystemClock::uptimeMillis'));
+      expect(pinResults, contains('handler.postDelayed(task, delay)'));
+      expect(pinResultRetention, contains('private val orphanLimit: Int = 64'));
+      expect(pinResultPlugin, contains('"duoyi/widget_pin_results"'));
+      expect(pinResultPlugin, contains('override fun onPreEngineRestart()'));
+      expect(pinResultPlugin, contains('override fun onEngineWillDestroy()'));
+      expect(pinResultPlugin, contains('override fun onDetachedFromEngine('));
+      expect(manager, contains('clock.stopwatch()..start()'));
+      expect(manager, contains("'beginWait'"));
+      expect(manager, contains("'endWait'"));
       expect(
         pinResultStore,
         contains('DuoyiWidgetPinResultCore.read(preferences.all, requestId)'),

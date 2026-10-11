@@ -1,6 +1,10 @@
-# Pin receipt retention — next implementation decision
+# Pin receipt retention — decision and implementation
 
-Date: 2026-10-11 UTC. This is a source audit and proposed implementation contract, not an implemented or verified retention policy.
+Date: 2026-10-11 UTC. The original audit and proposal below are historical. Implementation is now accepted for JVM, Flutter and Android compilation; see [final scoped acceptance](widget-pin-retention-final-acceptance-20261011.md). Real launcher/device acceptance remains pending.
+
+## Final protection contract
+
+The implementation uses a 120-second monotonic handoff reservation before launcher submission. Actual waits register independent engine-owned tokens; these tokens do **not** expire at the Dart timeout and protect issued RPCs through awaited acknowledgement. Exact token release or engine detach/destroy/restart ends them; Activity recreation does not. Idle handoff expiry also triggers cleanup. The unattended budget is 64, incoming retained, plus protected/legacy/unknown data. This final lifecycle supersedes the proposal below that described protection expiring with custom wait timeouts.
 
 ## Confirmed lifecycle gap
 

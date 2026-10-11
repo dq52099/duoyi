@@ -36,6 +36,24 @@ object DuoyiWidgetPinResultCore {
         return legacyKeys.mapValues { (_, field) -> prefix + field }
     }
 
+    /** Identify ownership from keys even if a receipt's embedded ID is damaged. */
+    fun namespaceIds(values: Map<String, *>): Set<String> =
+        values.keys.mapNotNullTo(linkedSetOf()) { key ->
+            if (!key.startsWith("receipt:")) return@mapNotNullTo null
+            val separator = key.indexOf(':', startIndex = "receipt:".length)
+            if (separator < 0) return@mapNotNullTo null
+            val length = key.substring("receipt:".length, separator).toIntOrNull()
+                ?: return@mapNotNullTo null
+            val start = separator + 1
+            if (length <= 0 || length >= key.length - start) return@mapNotNullTo null
+            val end = start + length
+            if (key[end] != ':' || key.substring(end + 1) !in legacyKeys.values) {
+                return@mapNotNullTo null
+            }
+            val requestId = key.substring(start, end)
+            if (requestId.isBlank() || key !in keysFor(requestId).values) null else requestId
+        }
+
     fun read(values: Map<String, *>, requestId: String): Record? {
         if (requestId.isBlank()) return null
         val keys = keysFor(requestId)

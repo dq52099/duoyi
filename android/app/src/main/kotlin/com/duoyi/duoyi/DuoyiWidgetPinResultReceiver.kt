@@ -84,9 +84,8 @@ class DuoyiWidgetPinResultReceiver : BroadcastReceiver() {
         status: String,
     ) {
         if (requestId.isNullOrBlank()) return
-        DuoyiWidgetPinResultStore(
-            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE),
-        ).record(
+        DuoyiWidgetPinResults.record(
+            context,
             DuoyiWidgetPinResultCore.Record(
                 requestId = requestId,
                 kind = kind.orEmpty(),
