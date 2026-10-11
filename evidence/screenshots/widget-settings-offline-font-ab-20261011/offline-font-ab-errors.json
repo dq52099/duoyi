@@ -1,0 +1,860 @@
+{
+  "fatalErrors": [],
+  "scenarios": [
+    {
+      "id": "A-block-local-dejavu-zh-mobile-390x844",
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "reason": "A arm blocks the local DejaVu TTF"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ]
+    },
+    {
+      "id": "A-block-local-dejavu-zh-desktop-1440x900",
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "reason": "A arm blocks the local DejaVu TTF"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ]
+    },
+    {
+      "id": "A-block-local-dejavu-en-mobile-390x844",
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "reason": "A arm blocks the local DejaVu TTF"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ]
+    },
+    {
+      "id": "A-block-local-dejavu-en-desktop-1440x900",
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "reason": "A arm blocks the local DejaVu TTF"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ]
+    },
+    {
+      "id": "B-allow-local-dejavu-zh-mobile-390x844",
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ]
+    },
+    {
+      "id": "B-allow-local-dejavu-zh-desktop-1440x900",
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ]
+    },
+    {
+      "id": "B-allow-local-dejavu-en-mobile-390x844",
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ]
+    },
+    {
+      "id": "B-allow-local-dejavu-en-desktop-1440x900",
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ]
+    }
+  ]
+}

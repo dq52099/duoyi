@@ -1,0 +1,2008 @@
+{
+  "startedAtUtc": "2026-10-11T07:56:09.925011+00:00",
+  "buildDir": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web",
+  "buildIndexSha256": "dbb9336b491b42b296be0432f5b29157eb019bbc3b53e866e05a966ad4753d87",
+  "outputDir": "/home/ubuntu/duoyi/evidence/screenshots/widget-settings-offline-font-ab-20261011",
+  "appPath": "/duoyi/",
+  "localePreference": {
+    "key": "flutter.duoyi_locale_v1",
+    "values": [
+      "zh",
+      "en"
+    ],
+    "scope": "only the app's device-level locale; no account/auth state"
+  },
+  "networkPolicy": {
+    "allow": "loopback /duoyi/ GET/HEAD and exact CanvasKit CDN assets fulfilled from this --build-dir",
+    "block": "all other outbound requests and all non-read methods",
+    "canvasKitLocalRoot": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit"
+  },
+  "scenarios": [
+    {
+      "id": "A-block-local-dejavu-zh-mobile-390x844",
+      "arm": "A-block-local-dejavu",
+      "armDescription": "Abort the local DejaVuSans.ttf request.",
+      "locale": {
+        "name": "zh",
+        "browser": "zh-CN",
+        "preference": "zh"
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "responseStatus": 200,
+      "elapsedMs": 12238,
+      "state": {
+        "title": "多仪",
+        "readyState": "complete",
+        "url": "http://127.0.0.1:36143/duoyi/",
+        "baseHref": "/duoyi/",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "flutterViewCount": 1,
+        "glassPaneCount": 1,
+        "canvasCount": 1,
+        "canvasRects": [
+          {
+            "width": 390,
+            "height": 844
+          }
+        ],
+        "bodyText": "",
+        "fontStatus": "loaded"
+      },
+      "readiness": {
+        "appHttp200": true,
+        "documentComplete": true,
+        "flutterViewMounted": true,
+        "canvasMounted": true,
+        "baseHrefUsesDuoyiPath": true,
+        "sameBuildCanvasKitFulfillments": 2,
+        "localDejaVuGetResponses": 0
+      },
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "reason": "A arm blocks the local DejaVu TTF"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ],
+      "canvasKitSubstitutions": [
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.wasm",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.wasm",
+          "sha256": "2bf5ea09d70b8eadb22bb0471c9edfd7b2bee909dbf84456c32480d944660418",
+          "bytes": 5686880,
+          "action": "fulfilled-from-same-build"
+        },
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.js",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.js",
+          "sha256": "ff8dcd85cee325699499ee23ffd7567bc8086e9592c24d4d8d411f951c16bda4",
+          "bytes": 86496,
+          "action": "fulfilled-from-same-build"
+        }
+      ],
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "blocked-local-dejavu-in-A",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": [],
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "screenshot": "/home/ubuntu/duoyi/evidence/screenshots/widget-settings-offline-font-ab-20261011/A-block-local-dejavu-zh-mobile-390x844.png"
+    },
+    {
+      "id": "A-block-local-dejavu-zh-desktop-1440x900",
+      "arm": "A-block-local-dejavu",
+      "armDescription": "Abort the local DejaVuSans.ttf request.",
+      "locale": {
+        "name": "zh",
+        "browser": "zh-CN",
+        "preference": "zh"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "responseStatus": 200,
+      "elapsedMs": 25481,
+      "state": {
+        "title": "多仪",
+        "readyState": "complete",
+        "url": "http://127.0.0.1:36143/duoyi/",
+        "baseHref": "/duoyi/",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "flutterViewCount": 1,
+        "glassPaneCount": 1,
+        "canvasCount": 1,
+        "canvasRects": [
+          {
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "bodyText": "",
+        "fontStatus": "loaded"
+      },
+      "readiness": {
+        "appHttp200": true,
+        "documentComplete": true,
+        "flutterViewMounted": true,
+        "canvasMounted": true,
+        "baseHrefUsesDuoyiPath": true,
+        "sameBuildCanvasKitFulfillments": 2,
+        "localDejaVuGetResponses": 0
+      },
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "reason": "A arm blocks the local DejaVu TTF"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ],
+      "canvasKitSubstitutions": [
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.wasm",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.wasm",
+          "sha256": "2bf5ea09d70b8eadb22bb0471c9edfd7b2bee909dbf84456c32480d944660418",
+          "bytes": 5686880,
+          "action": "fulfilled-from-same-build"
+        },
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.js",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.js",
+          "sha256": "ff8dcd85cee325699499ee23ffd7567bc8086e9592c24d4d8d411f951c16bda4",
+          "bytes": 86496,
+          "action": "fulfilled-from-same-build"
+        }
+      ],
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "blocked-local-dejavu-in-A",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": [],
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "screenshot": "/home/ubuntu/duoyi/evidence/screenshots/widget-settings-offline-font-ab-20261011/A-block-local-dejavu-zh-desktop-1440x900.png"
+    },
+    {
+      "id": "A-block-local-dejavu-en-mobile-390x844",
+      "arm": "A-block-local-dejavu",
+      "armDescription": "Abort the local DejaVuSans.ttf request.",
+      "locale": {
+        "name": "en",
+        "browser": "en-US",
+        "preference": "en"
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "responseStatus": 200,
+      "elapsedMs": 23395,
+      "state": {
+        "title": "Duoyi",
+        "readyState": "complete",
+        "url": "http://127.0.0.1:36143/duoyi/",
+        "baseHref": "/duoyi/",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "flutterViewCount": 1,
+        "glassPaneCount": 1,
+        "canvasCount": 1,
+        "canvasRects": [
+          {
+            "width": 390,
+            "height": 844
+          }
+        ],
+        "bodyText": "",
+        "fontStatus": "loaded"
+      },
+      "readiness": {
+        "appHttp200": true,
+        "documentComplete": true,
+        "flutterViewMounted": true,
+        "canvasMounted": true,
+        "baseHrefUsesDuoyiPath": true,
+        "sameBuildCanvasKitFulfillments": 2,
+        "localDejaVuGetResponses": 0
+      },
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "reason": "A arm blocks the local DejaVu TTF"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ],
+      "canvasKitSubstitutions": [
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.wasm",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.wasm",
+          "sha256": "2bf5ea09d70b8eadb22bb0471c9edfd7b2bee909dbf84456c32480d944660418",
+          "bytes": 5686880,
+          "action": "fulfilled-from-same-build"
+        },
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.js",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.js",
+          "sha256": "ff8dcd85cee325699499ee23ffd7567bc8086e9592c24d4d8d411f951c16bda4",
+          "bytes": 86496,
+          "action": "fulfilled-from-same-build"
+        }
+      ],
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "blocked-local-dejavu-in-A",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": [],
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "screenshot": "/home/ubuntu/duoyi/evidence/screenshots/widget-settings-offline-font-ab-20261011/A-block-local-dejavu-en-mobile-390x844.png"
+    },
+    {
+      "id": "A-block-local-dejavu-en-desktop-1440x900",
+      "arm": "A-block-local-dejavu",
+      "armDescription": "Abort the local DejaVuSans.ttf request.",
+      "locale": {
+        "name": "en",
+        "browser": "en-US",
+        "preference": "en"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "responseStatus": 200,
+      "elapsedMs": 10503,
+      "state": {
+        "title": "Duoyi",
+        "readyState": "complete",
+        "url": "http://127.0.0.1:36143/duoyi/",
+        "baseHref": "/duoyi/",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "flutterViewCount": 1,
+        "glassPaneCount": 1,
+        "canvasCount": 1,
+        "canvasRects": [
+          {
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "bodyText": "",
+        "fontStatus": "loaded"
+      },
+      "readiness": {
+        "appHttp200": true,
+        "documentComplete": true,
+        "flutterViewMounted": true,
+        "canvasMounted": true,
+        "baseHrefUsesDuoyiPath": true,
+        "sameBuildCanvasKitFulfillments": 2,
+        "localDejaVuGetResponses": 0
+      },
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "reason": "A arm blocks the local DejaVu TTF"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ],
+      "canvasKitSubstitutions": [
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.wasm",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.wasm",
+          "sha256": "2bf5ea09d70b8eadb22bb0471c9edfd7b2bee909dbf84456c32480d944660418",
+          "bytes": 5686880,
+          "action": "fulfilled-from-same-build"
+        },
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.js",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.js",
+          "sha256": "ff8dcd85cee325699499ee23ffd7567bc8086e9592c24d4d8d411f951c16bda4",
+          "bytes": 86496,
+          "action": "fulfilled-from-same-build"
+        }
+      ],
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "blocked-local-dejavu-in-A",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": [],
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        },
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "screenshot": "/home/ubuntu/duoyi/evidence/screenshots/widget-settings-offline-font-ab-20261011/A-block-local-dejavu-en-desktop-1440x900.png"
+    },
+    {
+      "id": "B-allow-local-dejavu-zh-mobile-390x844",
+      "arm": "B-allow-local-dejavu",
+      "armDescription": "Allow the local DejaVuSans.ttf request and record its GET response status and SHA-256.",
+      "locale": {
+        "name": "zh",
+        "browser": "zh-CN",
+        "preference": "zh"
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "responseStatus": 200,
+      "elapsedMs": 9731,
+      "state": {
+        "title": "多仪",
+        "readyState": "complete",
+        "url": "http://127.0.0.1:36143/duoyi/",
+        "baseHref": "/duoyi/",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "flutterViewCount": 1,
+        "glassPaneCount": 1,
+        "canvasCount": 1,
+        "canvasRects": [
+          {
+            "width": 390,
+            "height": 844
+          }
+        ],
+        "bodyText": "",
+        "fontStatus": "loaded"
+      },
+      "readiness": {
+        "appHttp200": true,
+        "documentComplete": true,
+        "flutterViewMounted": true,
+        "canvasMounted": true,
+        "baseHrefUsesDuoyiPath": true,
+        "sameBuildCanvasKitFulfillments": 2,
+        "localDejaVuGetResponses": 1
+      },
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ],
+      "canvasKitSubstitutions": [
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.wasm",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.wasm",
+          "sha256": "2bf5ea09d70b8eadb22bb0471c9edfd7b2bee909dbf84456c32480d944660418",
+          "bytes": 5686880,
+          "action": "fulfilled-from-same-build"
+        },
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.js",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.js",
+          "sha256": "ff8dcd85cee325699499ee23ffd7567bc8086e9592c24d4d8d411f951c16bda4",
+          "bytes": 86496,
+          "action": "fulfilled-from-same-build"
+        }
+      ],
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "status": 200,
+          "bytes": 757076,
+          "sha256": "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648"
+        }
+      ],
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "screenshot": "/home/ubuntu/duoyi/evidence/screenshots/widget-settings-offline-font-ab-20261011/B-allow-local-dejavu-zh-mobile-390x844.png"
+    },
+    {
+      "id": "B-allow-local-dejavu-zh-desktop-1440x900",
+      "arm": "B-allow-local-dejavu",
+      "armDescription": "Allow the local DejaVuSans.ttf request and record its GET response status and SHA-256.",
+      "locale": {
+        "name": "zh",
+        "browser": "zh-CN",
+        "preference": "zh"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "responseStatus": 200,
+      "elapsedMs": 7493,
+      "state": {
+        "title": "多仪",
+        "readyState": "complete",
+        "url": "http://127.0.0.1:36143/duoyi/",
+        "baseHref": "/duoyi/",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "flutterViewCount": 1,
+        "glassPaneCount": 1,
+        "canvasCount": 1,
+        "canvasRects": [
+          {
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "bodyText": "",
+        "fontStatus": "loaded"
+      },
+      "readiness": {
+        "appHttp200": true,
+        "documentComplete": true,
+        "flutterViewMounted": true,
+        "canvasMounted": true,
+        "baseHrefUsesDuoyiPath": true,
+        "sameBuildCanvasKitFulfillments": 2,
+        "localDejaVuGetResponses": 1
+      },
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ],
+      "canvasKitSubstitutions": [
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.wasm",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.wasm",
+          "sha256": "2bf5ea09d70b8eadb22bb0471c9edfd7b2bee909dbf84456c32480d944660418",
+          "bytes": 5686880,
+          "action": "fulfilled-from-same-build"
+        },
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.js",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.js",
+          "sha256": "ff8dcd85cee325699499ee23ffd7567bc8086e9592c24d4d8d411f951c16bda4",
+          "bytes": 86496,
+          "action": "fulfilled-from-same-build"
+        }
+      ],
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "status": 200,
+          "bytes": 757076,
+          "sha256": "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648"
+        }
+      ],
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "screenshot": "/home/ubuntu/duoyi/evidence/screenshots/widget-settings-offline-font-ab-20261011/B-allow-local-dejavu-zh-desktop-1440x900.png"
+    },
+    {
+      "id": "B-allow-local-dejavu-en-mobile-390x844",
+      "arm": "B-allow-local-dejavu",
+      "armDescription": "Allow the local DejaVuSans.ttf request and record its GET response status and SHA-256.",
+      "locale": {
+        "name": "en",
+        "browser": "en-US",
+        "preference": "en"
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "responseStatus": 200,
+      "elapsedMs": 9474,
+      "state": {
+        "title": "Duoyi",
+        "readyState": "complete",
+        "url": "http://127.0.0.1:36143/duoyi/",
+        "baseHref": "/duoyi/",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "flutterViewCount": 1,
+        "glassPaneCount": 1,
+        "canvasCount": 1,
+        "canvasRects": [
+          {
+            "width": 390,
+            "height": 844
+          }
+        ],
+        "bodyText": "",
+        "fontStatus": "loaded"
+      },
+      "readiness": {
+        "appHttp200": true,
+        "documentComplete": true,
+        "flutterViewMounted": true,
+        "canvasMounted": true,
+        "baseHrefUsesDuoyiPath": true,
+        "sameBuildCanvasKitFulfillments": 2,
+        "localDejaVuGetResponses": 1
+      },
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ],
+      "canvasKitSubstitutions": [
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.wasm",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.wasm",
+          "sha256": "2bf5ea09d70b8eadb22bb0471c9edfd7b2bee909dbf84456c32480d944660418",
+          "bytes": 5686880,
+          "action": "fulfilled-from-same-build"
+        },
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.js",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.js",
+          "sha256": "ff8dcd85cee325699499ee23ffd7567bc8086e9592c24d4d8d411f951c16bda4",
+          "bytes": 86496,
+          "action": "fulfilled-from-same-build"
+        }
+      ],
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        }
+      ],
+      "fontAssetResponses": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "status": 200,
+          "bytes": 757076,
+          "sha256": "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648"
+        }
+      ],
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "screenshot": "/home/ubuntu/duoyi/evidence/screenshots/widget-settings-offline-font-ab-20261011/B-allow-local-dejavu-en-mobile-390x844.png"
+    },
+    {
+      "id": "B-allow-local-dejavu-en-desktop-1440x900",
+      "arm": "B-allow-local-dejavu",
+      "armDescription": "Allow the local DejaVuSans.ttf request and record its GET response status and SHA-256.",
+      "locale": {
+        "name": "en",
+        "browser": "en-US",
+        "preference": "en"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "responseStatus": 200,
+      "elapsedMs": 10971,
+      "state": {
+        "title": "Duoyi",
+        "readyState": "complete",
+        "url": "http://127.0.0.1:36143/duoyi/",
+        "baseHref": "/duoyi/",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "flutterViewCount": 1,
+        "glassPaneCount": 1,
+        "canvasCount": 1,
+        "canvasRects": [
+          {
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "bodyText": "",
+        "fontStatus": "loaded"
+      },
+      "readiness": {
+        "appHttp200": true,
+        "documentComplete": true,
+        "flutterViewMounted": true,
+        "canvasMounted": true,
+        "baseHrefUsesDuoyiPath": true,
+        "sameBuildCanvasKitFulfillments": 2,
+        "localDejaVuGetResponses": 1
+      },
+      "blockedRequests": [
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "reason": "Offline policy allows only loopback /duoyi/ GET/HEAD and same-build CanvasKit fulfillments"
+        }
+      ],
+      "canvasKitSubstitutions": [
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.wasm",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.wasm",
+          "sha256": "2bf5ea09d70b8eadb22bb0471c9edfd7b2bee909dbf84456c32480d944660418",
+          "bytes": 5686880,
+          "action": "fulfilled-from-same-build"
+        },
+        {
+          "url": "https://www.gstatic.com/flutter-canvaskit/42d3d75a56efe1a2e9902f52dc8006099c45d937/chromium/canvaskit.js",
+          "method": "GET",
+          "status": 200,
+          "localPath": "/home/ubuntu/duoyi/.dart_tool/task-temp-20261011/font-candidate-4dbf766/build/web/canvaskit/chromium/canvaskit.js",
+          "sha256": "ff8dcd85cee325699499ee23ffd7567bc8086e9592c24d4d8d411f951c16bda4",
+          "bytes": 86496,
+          "action": "fulfilled-from-same-build"
+        }
+      ],
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "status": 200,
+          "bytes": 757076,
+          "sha256": "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648"
+        }
+      ],
+      "errors": [
+        {
+          "type": "request-failed",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "method": "GET",
+          "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "type": "console-error",
+          "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+        }
+      ],
+      "screenshot": "/home/ubuntu/duoyi/evidence/screenshots/widget-settings-offline-font-ab-20261011/B-allow-local-dejavu-en-desktop-1440x900.png"
+    }
+  ],
+  "fatalErrors": [],
+  "baseUrl": "http://127.0.0.1:36143/duoyi/",
+  "finishedAtUtc": "2026-10-11T07:58:10.436098+00:00"
+}

@@ -1,0 +1,652 @@
+{
+  "scenarios": [
+    {
+      "id": "A-block-local-dejavu-zh-mobile-390x844",
+      "arm": "A-block-local-dejavu",
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "blocked-local-dejavu-in-A",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": []
+    },
+    {
+      "id": "A-block-local-dejavu-zh-desktop-1440x900",
+      "arm": "A-block-local-dejavu",
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "blocked-local-dejavu-in-A",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.114.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.119.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.115.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.116.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.106.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.111.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.109.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.50.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.107.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.118.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYkldv7JjxkkgFsFSSOPMOkySAZ73y9ViAt3acb8NexQ2w.117.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": []
+    },
+    {
+      "id": "A-block-local-dejavu-en-mobile-390x844",
+      "arm": "A-block-local-dejavu",
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "blocked-local-dejavu-in-A",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": []
+    },
+    {
+      "id": "A-block-local-dejavu-en-desktop-1440x900",
+      "arm": "A-block-local-dejavu",
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "blocked-local-dejavu-in-A",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/notosanssymbols/v43/rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": []
+    },
+    {
+      "id": "B-allow-local-dejavu-zh-mobile-390x844",
+      "arm": "B-allow-local-dejavu",
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "status": 200,
+          "bytes": 757076,
+          "sha256": "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648"
+        }
+      ]
+    },
+    {
+      "id": "B-allow-local-dejavu-zh-desktop-1440x900",
+      "arm": "B-allow-local-dejavu",
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "status": 200,
+          "bytes": 757076,
+          "sha256": "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648"
+        }
+      ]
+    },
+    {
+      "id": "B-allow-local-dejavu-en-mobile-390x844",
+      "arm": "B-allow-local-dejavu",
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        }
+      ],
+      "fontAssetResponses": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "status": 200,
+          "bytes": 757076,
+          "sha256": "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648"
+        }
+      ]
+    },
+    {
+      "id": "B-allow-local-dejavu-en-desktop-1440x900",
+      "arm": "B-allow-local-dejavu",
+      "fontRequests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/fonts/MaterialIcons-Regular.otf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DroidSansFallbackFull.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+          "resourceType": "fetch",
+          "action": "allowed-loopback-build-read",
+          "expectedByOfflinePolicy": false
+        },
+        {
+          "method": "GET",
+          "url": "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2",
+          "resourceType": "fetch",
+          "action": "blocked-outbound-request",
+          "expectedByOfflinePolicy": true
+        }
+      ],
+      "fontAssetResponses": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:36143/duoyi/assets/assets/fonts/DejaVuSans.ttf",
+          "status": 200,
+          "bytes": 757076,
+          "sha256": "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648"
+        }
+      ]
+    }
+  ]
+}
