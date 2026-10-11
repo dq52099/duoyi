@@ -13,6 +13,7 @@ import '../providers/habit_provider.dart';
 import '../providers/note_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
@@ -43,14 +44,20 @@ class _SearchScreenState extends State<SearchScreen> {
   void initState() {
     super.initState();
     _ctrl.addListener(_syncControllerState);
+    I18n.localeListenable.addListener(_onLocaleChanged);
   }
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     _ctrl.removeListener(_syncControllerState);
     _ctrl.dispose();
     _debounce?.cancel();
     super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   void _syncControllerState() {
@@ -92,11 +99,16 @@ class _SearchScreenState extends State<SearchScreen> {
   void _open(SearchHit h) {
     switch (h.kind) {
       case SearchKind.todo:
+        final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                BrandRouteSurface(child: TodoDetailScreen(todoId: h.sourceId)),
+            builder: (_) => BrandRouteSurface(
+              child: TodoDetailScreen(
+                todoId: h.sourceId,
+                accountGeneration: accountGeneration,
+              ),
+            ),
           ),
         );
         break;

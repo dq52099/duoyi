@@ -46,6 +46,10 @@ void main() {
     expect(searchScreen, contains("import 'countdown_screen.dart';"));
     expect(
       searchScreen,
+      contains("import '../services/account_local_data_cleaner.dart';"),
+    );
+    expect(
+      searchScreen,
       contains("import '../providers/countdown_provider.dart';"),
     );
     expect(
@@ -57,6 +61,16 @@ void main() {
       contains('AnniversaryScreen(initialAnniversaryId: h.sourceId)'),
     );
     expect(searchScreen, contains('case SearchKind.calendarEvent:'));
+    expect(searchScreen, contains('final accountGeneration ='));
+    expect(
+      searchScreen,
+      contains('AccountLocalDataCleaner.accountDataGeneration;'),
+    );
+    expect(
+      searchScreen,
+      contains('accountGeneration: accountGeneration,'),
+      reason: 'Search must bind the lazy Todo route to the current account',
+    );
     expect(searchScreen, contains('CalendarScreen(initialDate: h.when)'));
     expect(searchScreen, contains("I18n.tr('search.hint')"));
     expect(searchScreen, contains("I18n.tr('search.empty')"));
