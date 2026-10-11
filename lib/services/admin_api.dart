@@ -1,4 +1,5 @@
 import 'api_client.dart';
+import 'admin_response_error.dart';
 
 class AdminPage {
   final List<Map<String, dynamic>> items;
@@ -22,12 +23,12 @@ class AdminPage {
   }) {
     final rawItems = json['items'];
     if (rawItems is! List) {
-      throw const ApiException('接口返回结构错误：分页 items 需要列表');
+      throw const AdminResponseException(AdminResponseFailure.itemsNotList);
     }
     final items = <Map<String, dynamic>>[];
     for (final item in rawItems) {
       if (item is! Map) {
-        throw const ApiException('接口返回结构错误：分页 items 只能包含对象');
+        throw const AdminResponseException(AdminResponseFailure.itemNotObject);
       }
       items.add(Map<String, dynamic>.from(item));
     }
@@ -122,10 +123,16 @@ class AdminApi {
           fallbackOffset: offset,
         );
       }
-      throw ApiException('接口返回结构错误：$base 缺少 items 分页字段');
+      throw AdminResponseException(
+        AdminResponseFailure.missingItems,
+        endpoint: base,
+      );
     }
     if (raw is! List) {
-      throw ApiException('接口返回结构错误：$base 需要分页对象或列表');
+      throw AdminResponseException(
+        AdminResponseFailure.invalidPage,
+        endpoint: base,
+      );
     }
     return AdminPage.fromItems(
       raw.cast<Map<String, dynamic>>(),
@@ -363,7 +370,9 @@ class AdminApi {
     final lifetime = response['lifetime'];
     final serverVersion = response['server_version'];
     if (balance is! num || lifetime is! num || serverVersion is! num) {
-      throw const ApiException('接口返回结构错误：时光币调整缺少余额字段');
+      throw const AdminResponseException(
+        AdminResponseFailure.missingCoinBalance,
+      );
     }
     return response;
   }
@@ -411,7 +420,8 @@ class AdminApi {
         last404 = e;
       }
     }
-    throw last404 ?? const ApiException('404: 接口不存在');
+    throw last404 ??
+        const AdminResponseException(AdminResponseFailure.routeMissing);
   }
 
   Future<List<Map<String, dynamic>>> listGroups() async {
@@ -430,9 +440,14 @@ class AdminApi {
         ? raw['items']
         : raw;
     if (items is! List) {
-      throw const ApiException('接口返回结构错误：用户组需要列表');
+      throw const AdminResponseException(AdminResponseFailure.groupsNotList);
     }
-    return items.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+    return items.map((item) {
+      if (item is! Map) {
+        throw const AdminResponseException(AdminResponseFailure.groupNotObject);
+      }
+      return Map<String, dynamic>.from(item);
+    }).toList();
   }
 
   Future<Map<String, dynamic>> saveGroup({
@@ -491,9 +506,14 @@ class AdminApi {
   Future<List<Map<String, dynamic>>> listRoles() async {
     final raw = await client.getRaw('/api/admin/roles');
     if (raw is! List) {
-      throw const ApiException('接口返回结构错误：角色需要列表');
+      throw const AdminResponseException(AdminResponseFailure.rolesNotList);
     }
-    return raw.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+    return raw.map((item) {
+      if (item is! Map) {
+        throw const AdminResponseException(AdminResponseFailure.roleNotObject);
+      }
+      return Map<String, dynamic>.from(item);
+    }).toList();
   }
 
   Future<Map<String, dynamic>> saveRole({
@@ -571,7 +591,8 @@ class AdminApi {
         last404 = e;
       }
     }
-    throw last404 ?? const ApiException('404: 接口不存在');
+    throw last404 ??
+        const AdminResponseException(AdminResponseFailure.routeMissing);
   }
 
   // ---- Announcements ----

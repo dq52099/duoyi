@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+import '../core/i18n.dart';
+
 /// 跨平台 HTTP 封装(web/android/linux 通用)。
 class ApiClient {
   static const String requiredApiContractVersion = '2026-06-01.2';
@@ -505,6 +507,11 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// Typed app-owned errors may provide a safe message for the selected locale.
+abstract interface class UserVisibleApiException {
+  String get userVisibleMessage;
+}
+
 const defaultUserVisibleBackendErrorMessage = '服务暂不可用，请稍后重试或联系管理员';
 
 bool isBackendCompatibilityDiagnosticMessage(String message) =>
@@ -517,13 +524,19 @@ bool isBackendCompatibilityDiagnosticMessage(String message) =>
     message.contains('可能是旧后端') ||
     message.contains('反向代理未转发 /api/*');
 
-String userVisibleApiError(
-  Object error, {
-  String fallbackMessage = defaultUserVisibleBackendErrorMessage,
-}) {
+String userVisibleApiError(Object error, {String? fallbackMessage}) {
+  final isEn = I18n.current == AppLocale.en;
+  final fallback =
+      fallbackMessage ??
+      (isEn
+          ? 'Service unavailable. Please try again later or contact an administrator.'
+          : defaultUserVisibleBackendErrorMessage);
   // Unexpected exceptions can contain URLs, tokens or implementation details.
   // Only API messages explicitly intended for presentation may reach the UI.
-  if (error is! ApiException) return fallbackMessage;
+  if (error is! ApiException) return fallback;
+  if (error is UserVisibleApiException) {
+    return (error as UserVisibleApiException).userVisibleMessage;
+  }
   final message = error.message;
   if (isBackendCompatibilityDiagnosticMessage(message) ||
       message.startsWith('接口返回不是有效 JSON') ||
@@ -533,18 +546,20 @@ String userVisibleApiError(
         r'<(?:!doctype|html|body)\b',
         caseSensitive: false,
       ).hasMatch(message)) {
-    return fallbackMessage;
+    return fallback;
   }
   if (message.startsWith('无法连接服务器')) {
-    return '无法连接服务器，请检查网络后重试';
+    return isEn
+        ? 'Could not connect to the server. Check your network and try again.'
+        : '无法连接服务器，请检查网络后重试';
   }
   if (message.startsWith('连接服务器超时')) {
-    return '连接超时，请稍后重试';
+    return isEn ? 'Connection timed out. Please try again.' : '连接超时，请稍后重试';
   }
   final httpStatus = RegExp(r'^(\d{3}):\s*').firstMatch(message);
   if (httpStatus != null) {
-    if (int.parse(httpStatus.group(1)!) >= 500) return fallbackMessage;
+    if (int.parse(httpStatus.group(1)!) >= 500) return fallback;
     return message.substring(httpStatus.end);
   }
-  return message.isEmpty ? fallbackMessage : message;
+  return message.isEmpty ? fallback : message;
 }

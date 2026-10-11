@@ -20,15 +20,12 @@ void main() {
     expect(adminApi, contains("response['balance']"));
     expect(adminApi, contains("response['lifetime']"));
     expect(adminApi, contains("response['server_version']"));
-    expect(adminApi, contains('时光币调整缺少余额字段'));
+    expect(adminApi, contains('AdminResponseFailure.missingCoinBalance'));
     expect(
       adminApi,
       contains('return _validateCoinAdjustmentResponse(response);'),
     );
-    expect(
-      adminApi,
-      contains("throw const ApiException('接口返回结构错误：时光币调整缺少余额字段')"),
-    );
+    expect(adminApi, contains('throw const AdminResponseException('));
     expect(adminApi, contains(r"'/api/admin/users/$userId/coins'"));
     expect(
       adminApi,
