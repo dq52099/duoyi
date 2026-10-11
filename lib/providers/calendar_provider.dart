@@ -269,7 +269,8 @@ class CalendarProvider extends ChangeNotifier {
     List<GoalItem>? goals,
     List<TimeEntry>? timeEntries,
   }) {
-    final key = _dateKey(date);
+    final civilQuery = _tryCivilQuery(date);
+    if (civilQuery == null) return List<CalendarEvent>.empty(growable: false);
     final events = CalendarAggregator.buildEvents(
       todos: todos,
       habits: habits,
@@ -283,11 +284,9 @@ class CalendarProvider extends ChangeNotifier {
       goals: goals,
       timeEntries: timeEntries,
     );
-    return [
-      ...events,
-      ..._localEvents,
-      ..._externalEvents,
-    ].where((event) => _eventOccursOnDate(event, key)).toList(growable: false);
+    return [...events, ..._localEvents, ..._externalEvents]
+        .where((event) => _eventOccursOnDate(event, civilQuery))
+        .toList(growable: false);
   }
 
   int _buildSignature(
@@ -607,9 +606,10 @@ class CalendarProvider extends ChangeNotifier {
     String? projectKey,
     String? workspaceId,
   }) {
-    final key = _dateKey(date);
+    final civilQuery = _tryCivilQuery(date);
+    if (civilQuery == null) return <CalendarEvent>[];
     return _events.where((e) {
-      if (!_eventOccursOnDate(e, key)) return false;
+      if (!_eventOccursOnDate(e, civilQuery)) return false;
       if (activeTypes != null && !activeTypes.contains(e.type)) return false;
       if (!_matchesProject(e, projectKey)) return false;
       if (!_matchesWorkspace(e, workspaceId)) return false;
@@ -690,8 +690,28 @@ class CalendarProvider extends ChangeNotifier {
     return eventWorkspaceId == workspaceId;
   }
 
-  bool _eventOccursOnDate(CalendarEvent event, String dateKey) {
-    return _eventDateKeys(event).contains(dateKey);
+  DateTime? _tryCivilQuery(DateTime date) {
+    try {
+      final civil = _utcCivilDay(date);
+      final local = DateTime(civil.year, civil.month, civil.day);
+      // A skipped local day must not match events on its normalized neighbor.
+      if (local.year != civil.year ||
+          local.month != civil.month ||
+          local.day != civil.day) {
+        return null;
+      }
+      return civil;
+    } on ArgumentError {
+      // A representable instant can have an unrepresentable civil midnight.
+      return null;
+    }
+  }
+
+  bool _eventOccursOnDate(CalendarEvent event, DateTime civilQuery) {
+    final start = _utcCivilDay(event.date);
+    final end = _eventVisibleEndDate(event, start);
+    final visibleEnd = end.isBefore(start) ? start : end;
+    return !civilQuery.isBefore(start) && !civilQuery.isAfter(visibleEnd);
   }
 
   List<DateTime> _eventDates(CalendarEvent event) {

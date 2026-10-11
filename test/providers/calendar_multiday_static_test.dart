@@ -8,7 +8,7 @@ void main() {
       'lib/providers/calendar_provider.dart',
     ).readAsStringSync();
 
-    expect(source, contains('_eventOccursOnDate(e, key)'));
+    expect(source, contains('_eventOccursOnDate(e, civilQuery)'));
     expect(source, contains('dates.addAll(_eventDates(e))'));
     expect(source, contains('for (final key in _eventDateKeys(e))'));
     expect(source, contains('List<DateTime> _eventDates(CalendarEvent event)'));
