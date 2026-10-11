@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/achievement_provider.dart';
@@ -37,16 +38,22 @@ import 'package:duoyi/screens/anniversary_screen.dart';
 import 'package:duoyi/screens/countdown_screen.dart';
 import 'package:duoyi/services/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:duoyi/core/app_brand.dart';
+import 'package:duoyi/core/design_tokens.dart';
+
+import '../support/widget_polish_screenshot_font.dart';
 
 Widget _wrap(
   Widget child, {
   AuthProvider? authProvider,
   TodoProvider? todoProvider,
+  ThemeData? theme,
 }) {
   return MultiProvider(
     providers: [
@@ -87,7 +94,7 @@ Widget _wrap(
         ),
       ),
     ],
-    child: MaterialApp(home: child),
+    child: MaterialApp(theme: theme, home: child),
   );
 }
 
@@ -173,6 +180,14 @@ void main() {
     (tester) async {
       addTearDown(tester.view.reset);
       final widths = <double>[320, 390, 430, 1440];
+      await tester.runAsync(loadWidgetPolishScreenshotFonts);
+      final theme = AppBrands.defaultBrand.theme;
+      final screenshotTheme = theme.copyWith(
+        textTheme: theme.textTheme.apply(
+          fontFamily: 'DuoyiScreenshotLatin',
+          fontFamilyFallback: const ['DuoyiScreenshot'],
+        ),
+      );
 
       for (final width in widths) {
         tester.view.physicalSize = Size(width, width >= 900 ? 900 : 820);
@@ -195,10 +210,44 @@ void main() {
           TodoItem(title: '无截止布局任务', date: today.add(const Duration(days: 3))),
         );
 
+        final boundaryKey = GlobalKey();
         await tester.pumpWidget(
-          _wrap(const TodayScreen(), todoProvider: todoProvider),
+          _wrap(
+            RepaintBoundary(
+              key: boundaryKey,
+              child: const ColoredBox(
+                color: DesignTokens.defaultPageBackground,
+                child: TodayScreen(),
+              ),
+            ),
+            todoProvider: todoProvider,
+            theme: screenshotTheme,
+          ),
         );
         await _pumpTodayLayoutFrame(tester);
+        final almanac = find.textContaining(I18n.tr('today.almanac.title'));
+        final cardInk = find
+            .ancestor(of: almanac, matching: find.byType(Ink))
+            .first;
+        expect(
+          (tester.widget<Ink>(cardInk).decoration! as BoxDecoration).boxShadow,
+          isEmpty,
+        );
+        if (Platform.environment['DUOYI_CAPTURE_TODAY_SCREENSHOTS'] == '1') {
+          await tester.runAsync(() async {
+            final boundary =
+                boundaryKey.currentContext!.findRenderObject()!
+                    as RenderRepaintBoundary;
+            final image = await boundary.toImage();
+            final data = await image.toByteData(format: ui.ImageByteFormat.png);
+            image.dispose();
+            final file = File(
+              'evidence/screenshots/home-calendar-20261011/home-${width.toInt()}.png',
+            );
+            file.parent.createSync(recursive: true);
+            file.writeAsBytesSync(data!.buffer.asUint8List());
+          });
+        }
 
         final list = find.byKey(const ValueKey('today_screen_list'));
         final appBar = find.byType(AppBar);

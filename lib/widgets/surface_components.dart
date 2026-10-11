@@ -36,6 +36,7 @@ class AppSurfaceCard extends StatelessWidget {
   final BorderRadius? borderRadius;
   final Border? border;
   final double elevation;
+  final List<BoxShadow>? boxShadow;
 
   const AppSurfaceCard({
     super.key,
@@ -48,6 +49,7 @@ class AppSurfaceCard extends StatelessWidget {
     this.borderRadius,
     this.border,
     this.elevation = 0,
+    this.boxShadow,
   });
 
   @override
@@ -126,15 +128,19 @@ class AppSurfaceCard extends StatelessWidget {
                 )
               : surfaceStyle?.cardBorder ??
                     Border.all(color: cardBorderColor, width: 0.55)),
-      boxShadow: elevation <= 0
-          ? (surfaceStyle?.cardShadow ?? const [])
-          : [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.035),
-                blurRadius: 5.5 + elevation,
-                offset: const Offset(0, 1.5),
-              ),
-            ],
+      boxShadow:
+          boxShadow ??
+          (elevation <= 0
+              ? (surfaceStyle?.cardShadow ?? const [])
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: isDark ? 0.12 : 0.035,
+                    ),
+                    blurRadius: 5.5 + elevation,
+                    offset: const Offset(0, 1.5),
+                  ),
+                ]),
     );
 
     final content = Ink(

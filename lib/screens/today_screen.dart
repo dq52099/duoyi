@@ -1181,7 +1181,9 @@ class _TodayAlmanacCard extends StatelessWidget {
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final brand = context.watch<ThemeProvider>().brand;
-    final radius = BorderRadius.circular(DesignTokens.radiusCard);
+    final radius = BorderRadius.circular(
+      appSurfaceStyleOf(context)?.cardRadius ?? DesignTokens.radiusCard,
+    );
     final foreground = isDark ? Colors.white : cs.onSurface;
     final muted = foreground.withValues(alpha: isDark ? 0.74 : 0.68);
     final accent = cs.primary;
@@ -1189,7 +1191,7 @@ class _TodayAlmanacCard extends StatelessWidget {
         ? 'Lunar'
         : I18n.tr('calendar.chinese_lunar_calendar');
     final backgroundAsset = brand.backgroundAsset;
-    final panelFill = foreground.withValues(alpha: isDark ? 0.09 : 0.055);
+    final panelFill = foreground.withValues(alpha: isDark ? 0.045 : 0.018);
     final panelBorder = foreground.withValues(alpha: isDark ? 0.13 : 0.09);
 
     final fallbackGradient = LinearGradient(
@@ -1197,11 +1199,11 @@ class _TodayAlmanacCard extends StatelessWidget {
       end: Alignment.bottomRight,
       colors: [
         Color.alphaBlend(
-          accent.withValues(alpha: isDark ? 0.26 : 0.16),
+          accent.withValues(alpha: isDark ? 0.12 : 0.045),
           cs.surface,
         ),
         Color.alphaBlend(
-          cs.secondary.withValues(alpha: isDark ? 0.20 : 0.12),
+          cs.secondary.withValues(alpha: isDark ? 0.09 : 0.025),
           cs.surface,
         ),
       ],
@@ -1231,7 +1233,8 @@ class _TodayAlmanacCard extends StatelessWidget {
             : cs.outlineVariant.withValues(alpha: 0.18),
         width: 0.55,
       ),
-      elevation: 2,
+      elevation: 0,
+      boxShadow: const [],
       child: ClipRRect(
         borderRadius: radius,
         child: Stack(
@@ -1459,13 +1462,6 @@ class _TodayDateBadge extends StatelessWidget {
           color: foreground.withValues(alpha: isDark ? 0.12 : 0.10),
           width: 0.55,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.045),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
       ),
       child: Column(
         children: [
