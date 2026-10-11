@@ -141,6 +141,8 @@ class AccountPreferenceTransaction {
       _write(key, () => _preferences.setBool(key, value));
   Future<bool> setInt(String key, int value) =>
       _write(key, () => _preferences.setInt(key, value));
+  Future<bool> setDouble(String key, double value) =>
+      _write(key, () => _preferences.setDouble(key, value));
   Future<bool> setString(String key, String value) =>
       _write(key, () => _preferences.setString(key, value));
   Future<bool> setStringList(String key, List<String> value) =>

@@ -1,8 +1,51 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/account_preference_writes.dart';
+import 'account_local_data_cleaner.dart';
+
 /// 本地全量备份 / 恢复。导出/导入 JSON 文本；所有备份键列表集中在这。
 class BackupService {
+  static Future<void> _writeTail = Future<void>.value();
+
+  static Future<T> _write<T>(
+    Future<T> Function(
+      SharedPreferences preferences,
+      AccountPreferenceTransaction transaction,
+    )
+    operation,
+  ) {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    final previous = _writeTail;
+    final result = AccountPreferenceWrites.runResult<T>((token) async {
+      await previous;
+      token.ensureCurrent();
+      final preferences = await SharedPreferences.getInstance();
+      final transaction = AccountPreferenceTransaction(
+        preferences,
+        () =>
+            token.isCurrent &&
+            AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation),
+      );
+      try {
+        transaction.ensureCurrent();
+        final value = await operation(preferences, transaction);
+        transaction.commit();
+        return value;
+      } catch (error) {
+        await transaction.rollback(
+          canceledBeforeCleanup: error is AccountPreferenceWriteCanceled,
+        );
+        rethrow;
+      }
+    }, canceledResult: () => throw const AccountPreferenceWriteCanceled());
+    _writeTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
   /// 偏好/提醒设置键（与 cloud_sync_provider 的 _preference*Keys 对齐）。
   /// 不纳入这些键会导致换机恢复后提醒时刻表与个性化设置全部归零。
   static const List<String> _preferenceKeys = [
@@ -114,7 +157,15 @@ class BackupService {
 
   /// 导出 JSON 字符串。
   static Future<String> exportAll() async {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    await AccountPreferenceWrites.waitForBoundary();
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      throw const AccountPreferenceWriteCanceled();
+    }
     final p = await SharedPreferences.getInstance();
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      throw const AccountPreferenceWriteCanceled();
+    }
     final map = <String, dynamic>{};
     for (final k in _keys) {
       // 设备相关偏好不进备份（如时区），避免把 A 设备的设置写死到 B 设备。
@@ -159,66 +210,69 @@ class BackupService {
     final data = obj['data'];
     if (data is! Map) throw const FormatException('备份文件损坏: data 字段缺失');
 
-    final p = await SharedPreferences.getInstance();
-    int count = 0;
+    return _write<int>((p, transaction) async {
+      int count = 0;
 
-    if (clearMissing && !merge) {
-      for (final key in _keys) {
-        if (!data.containsKey(key)) {
-          await p.remove(key);
+      if (clearMissing && !merge) {
+        for (final key in _keys) {
+          if (!data.containsKey(key)) {
+            await transaction.remove(key);
+          }
         }
       }
-    }
 
-    for (final entry in data.entries) {
-      final key = entry.key.toString();
-      if (!_keys.contains(key)) continue; // 忽略未知键
-      // 设备相关偏好（时区）即使出现在备份文件里也不写入本机。
-      if (_deviceSpecificPreferenceKeys.contains(key)) continue;
-      final v = entry.value;
-      if (v is! Map) continue;
-      final type = v['type'];
-      final value = v['value'];
+      for (final entry in data.entries) {
+        final key = entry.key.toString();
+        if (!_keys.contains(key)) continue; // 忽略未知键
+        // 设备相关偏好（时区）即使出现在备份文件里也不写入本机。
+        if (_deviceSpecificPreferenceKeys.contains(key)) continue;
+        final v = entry.value;
+        if (v is! Map) continue;
+        final type = v['type'];
+        final value = v['value'];
 
-      if (type == 'stringList' && value is List) {
-        final list = value.map((e) => e.toString()).toList();
-        // 偏好键（提醒重复星期/底部导航布局）在合并导入时也整体覆盖：
-        // 云同步对这些键是时间戳门控的 LWW 整体写入（cloud_sync_provider
-        // 的 _writePreferencesPayload 不做并集），并集会让另一台设备的
-        // 重复星期/隐藏导航项只增不减地渗入本机设置。
-        if (merge && !_preferenceKeys.contains(key)) {
-          final existing = p.getStringList(key) ?? const <String>[];
-          await p.setStringList(key, _mergeStringLists(existing, list));
-        } else {
-          await p.setStringList(key, list);
+        if (type == 'stringList' && value is List) {
+          final list = value.map((e) => e.toString()).toList();
+          // 偏好键（提醒重复星期/底部导航布局）在合并导入时也整体覆盖：
+          // 云同步对这些键是时间戳门控的 LWW 整体写入（cloud_sync_provider
+          // 的 _writePreferencesPayload 不做并集），并集会让另一台设备的
+          // 重复星期/隐藏导航项只增不减地渗入本机设置。
+          if (merge && !_preferenceKeys.contains(key)) {
+            final existing = p.getStringList(key) ?? const <String>[];
+            await transaction.setStringList(
+              key,
+              _mergeStringLists(existing, list),
+            );
+          } else {
+            await transaction.setStringList(key, list);
+          }
+          count++;
+        } else if (type == 'string' && value is String) {
+          // 对象类型(config/profile) 总是覆盖
+          await transaction.setString(key, value);
+          count++;
+        } else if (type == 'bool' && value is bool) {
+          await transaction.setBool(key, value);
+          count++;
+        } else if (type == 'int' && value is int) {
+          await transaction.setInt(key, value);
+          count++;
+        } else if (type == 'double' && value is num) {
+          // JSON 中 1.0 可能被解码为 int，统一按 double 落盘。
+          await transaction.setDouble(key, value.toDouble());
+          count++;
         }
-        count++;
-      } else if (type == 'string' && value is String) {
-        // 对象类型(config/profile) 总是覆盖
-        await p.setString(key, value);
-        count++;
-      } else if (type == 'bool' && value is bool) {
-        await p.setBool(key, value);
-        count++;
-      } else if (type == 'int' && value is int) {
-        await p.setInt(key, value);
-        count++;
-      } else if (type == 'double' && value is num) {
-        // JSON 中 1.0 可能被解码为 int，统一按 double 落盘。
-        await p.setDouble(key, value.toDouble());
-        count++;
       }
-    }
-    return count;
+      return count;
+    });
   }
 
   /// 清空全部本地数据(保留登录/服务器配置)。
-  static Future<void> wipeAll() async {
-    final p = await SharedPreferences.getInstance();
+  static Future<void> wipeAll() async => _write<void>((p, transaction) async {
     for (final k in _keys) {
-      await p.remove(k);
+      await transaction.remove(k);
     }
-  }
+  });
 
   static List<String> _mergeStringLists(
     List<String> existing,
