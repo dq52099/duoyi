@@ -68,9 +68,21 @@ The old UX decision record's claim that native render values omit publication st
 
 ## Next actions and goal status
 
-1. Resolve root's pending permission to take over the remaining frontend work and the Statistics 120-minute continuation question. Neither elapsed time nor silence grants that authority.
-2. After frontend ownership is settled, repair the known Habit live-form locale and Backup visible latest-Undo cases; finish remaining Todo/Focus/Statistics/Notification/Admin bilingual consumers and widget standard preview/neutral unpublished copy.
-3. AGY is expected to become available around **11:00 UTC**. Do not repeat quota-exhausted calls before that checkpoint; the time alone does not establish restored quota or authorize ownership transfer.
-4. Review the resulting accepted route changes with appropriate bounded bilingual/layout/action regressions, then complete Android launcher/iOS and device performance acceptance when the required platforms are available. Do not run publishing or closure gates before their actual prerequisites are met.
+1. Complete the confirmed pin-receipt retention lifecycle: page closure/timeout can leave new per-ID receipts unattended indefinitely. Implement protected waiting and bounded unattended storage under `widget-pin-receipt-retention-decision-20261011.md`; the isolation acceptance below does not close retention or authorize delivery.
+2. Keep AGY frontend ownership unless the existing takeover permission is answered or the actual dual-quota recovery rule applies. Resolve the remaining frontend and Statistics continuation decisions without treating silence as approval.
+3. AGY is expected to become available around **11:00 UTC**. Do not repeat quota-exhausted calls before that checkpoint; time alone does not establish restored quota. Its next widget batch includes standard preview geometry/neutral unpublished copy and the separately documented Android 24-hour count-up cap.
+4. Repair Habit live-form locale and Backup latest-Undo visibility; finish remaining Todo/Focus/Statistics/Notification/Admin bilingual consumers. Review route changes with bounded bilingual/layout/action regressions, then complete launcher/iOS and device performance acceptance when the required platforms are available. Publishing/closure still requires its real prerequisites.
 
 **The user's goal remains open.** Accepted Today/Calendar/Search/Focus/Todo/widget changes and scoped passing evidence are recorded above; the remaining frontend authority, live UI gaps, global bilingual completion, native platform acceptance, and final delivery are still outstanding.
+
+## Concurrent pin receipt continuation
+
+The preceding storage-cleanup turn is **progress**: another 2.877 GiB of generated Flutter/Android and Gradle conversion artifacts was removed, with 3,490 protected hashes and Git status/refs unchanged. Disk availability reached approximately 31 GiB. The native compilation below recreated roughly 2.8 GiB, leaving approximately 29 GiB at its completion; the cleanup checkpoint is not a promise that later builds leave disk usage unchanged.
+
+The native receiver previously shared one receipt slot across independently requestable catalog buttons. It now writes and reads by the complete request ID, clears only that ID, supports the matching legacy slot with its real Android invalid-ID default of 0, and assigns callbacks distinct Intent data identities. `confirmed_unverified`, style, timeout, late callback, and pending-provider behavior remain unchanged. See `widget-pin-receipts-acceptance-20261011.md` for the exact scope.
+
+The serial run passed **58 JVM tests** (47 existing plus 11 new actual-store tests), **92 Flutter tests** across eight suites, and clean nine-item analysis. Current Android Kotlin/resource compilation finished **10:30:16 UTC**, exit 0: 208 tasks, 277 unchanged input hashes, all 36 manifest widget components plus the receipt classes compiled. Final accepted-input recheck matched 285 files. These overlapping suites are separate scoped evidence, not a cumulative full-project test count or device acceptance.
+
+The independent consumer audit confirmed original request IDs reach polling and clearing. It also identified the retention regression: new namespaced receipts can accumulate when no consumer remains, whereas the former slot was limited to one. The protection/budget proposal is recorded for the next business/native batch and remains unimplemented. Another read-only audit established Android count-up display lacks the Flutter/iOS 86,400-second cap; `android-count-up-cap-contract-20261011.md` records source hashes and the pending AGY implementation contract without claiming a device observation.
+
+No packaged APK, push, release, version bump, deployment, or real Android/iOS performance/rendering acceptance was added by this continuation. Default iOS styling, full global bilingual routes, Mine/settings completeness, smooth interactions, retention, and final delivery remain open.

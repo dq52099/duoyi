@@ -84,15 +84,18 @@ class DuoyiWidgetPinResultReceiver : BroadcastReceiver() {
         status: String,
     ) {
         if (requestId.isNullOrBlank()) return
-        context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-            .edit()
-            .putString(keyRequestId, requestId)
-            .putString(keyKind, kind.orEmpty())
-            .putString(keyStyle, style)
-            .putInt(keyWidgetId, widgetId)
-            .putString(keyStatus, status)
-            .putLong(keyConfirmedAt, System.currentTimeMillis())
-            .apply()
+        DuoyiWidgetPinResultStore(
+            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE),
+        ).record(
+            DuoyiWidgetPinResultCore.Record(
+                requestId = requestId,
+                kind = kind.orEmpty(),
+                style = style,
+                widgetId = widgetId,
+                status = status,
+                confirmedAt = System.currentTimeMillis(),
+            ),
+        )
     }
 
     companion object {

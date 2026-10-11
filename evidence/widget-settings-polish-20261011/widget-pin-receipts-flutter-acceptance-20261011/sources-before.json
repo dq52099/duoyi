@@ -1,0 +1,19 @@
+{
+  "lib/services/android_widget_manager.dart": "1fbad48218492d539f2686342931e9bac89f2888913c0d7bc56a90084118bbbc",
+  "test/services/android_widget_resources_test.dart": "927e11dd995ba7edde1dbef92a90e87644fae2edfd69a1fb6fe57161d72ba19f",
+  "test/services/ios_widget_resources_test.dart": "6332a6dfa20fa95a8ecaba511ff0501f7be524470e8f31bebdbb5b9e087b2258",
+  "test/services/android_widget_frame_static_test.dart": "09bc7dcd88aaa8daa5ea8c351d1942a6cddc36e097493f567e9ad939260a7627",
+  "test/services/native_widget_launch_static_test.dart": "0c1b12d6f02287b1a337c83cffa7987e91a7c06e419a1a029f677186d6786eb2",
+  "test/services/widget_day_boundary_static_test.dart": "4f5962d1a857eeb280293d078cbe586555629f289c1e1b65c3759c1244f5deac",
+  "test/services/widget_launch_delivery_test.dart": "5c2663dcb384fc053931269145883fd0a0f9324d288ef79d94efb31db66c082f",
+  "test/services/home_widget_cold_start_test.dart": "930adfe709cf267bda9d6d8f9c3ad36fc8cec806576aefe63123bdc7c8ca9e11",
+  "test/services/widget_publication_test.dart": "8e876378b9dfb20845d06510736844db392bbde2028882ae175281a9e8fd0d76",
+  "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultCore.kt": "cf3f9ea589c71bbf51296d9517d1fc4720a509f76a2918cc2c01fc9c09235552",
+  "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultStore.kt": "e55e9a923af13247f9a1b64a821ae25957d637fdd0fe6ee74a27c5aae86f4477",
+  "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultReceiver.kt": "f5c9a9da716f24f5ef7020b5481f6c6a76c67b86674e5ca045621a9a88eb4a34",
+  "android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt": "e383dc9f31ecf2cb472f5c9f2e65d761d85c4a6fb4df89ac9488fb8311588a7b",
+  "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetVariantProviders.kt": "560fb98bc75928b5866c8f0de385a38a1461c95203bfbeb932693c4c0017027e",
+  "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetPinResultStoreTest.kt": "10291c985c6e5dbb094546d588d539cdf4b53239b1424a65734f3648da835a53",
+  "lib/services/widget_launch_service.dart": "c850240356953996ab35c1a659d904c4bab5cef1e7d8eb2249ebc13e0298c7ed",
+  "lib/services/home_widget_service.dart": "39cea8edbfa7149f4072f00ddde388af1638c579d1615802ad749d2802833a42"
+}

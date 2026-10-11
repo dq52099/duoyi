@@ -689,6 +689,13 @@ class MainActivity : FlutterActivity() {
                 this,
                 requestId.hashCode(),
                 Intent(this, DuoyiWidgetPinResultReceiver::class.java)
+                    .setData(
+                        Uri.Builder()
+                            .scheme("duoyi-widget-pin")
+                            .authority("result")
+                            .appendPath(requestId)
+                            .build(),
+                    )
                     .putExtra(DuoyiWidgetPinResultReceiver.extraKind, kind)
                     .putExtra(DuoyiWidgetPinResultReceiver.extraStyle, pinStyle.id)
                     .putExtra(DuoyiWidgetPinResultReceiver.extraRequestId, requestId),
@@ -717,25 +724,17 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun lastWidgetPinResult(requestId: String): Map<String, Any?>? {
-        if (requestId.isBlank()) return null
-        val prefs = getSharedPreferences(DuoyiWidgetPinResultReceiver.prefsName, Context.MODE_PRIVATE)
-        if (prefs.getString(DuoyiWidgetPinResultReceiver.keyRequestId, "") != requestId) return null
-        return mapOf(
-            "requestId" to requestId,
-            "kind" to prefs.getString(DuoyiWidgetPinResultReceiver.keyKind, ""),
-            "style" to prefs.getString(DuoyiWidgetPinResultReceiver.keyStyle, ""),
-            "widgetId" to prefs.getInt(DuoyiWidgetPinResultReceiver.keyWidgetId, AppWidgetManager.INVALID_APPWIDGET_ID),
-            "status" to prefs.getString(DuoyiWidgetPinResultReceiver.keyStatus, ""),
-            "confirmedAt" to prefs.getLong(DuoyiWidgetPinResultReceiver.keyConfirmedAt, 0L),
-        )
+        return widgetPinResultStore().read(requestId)
     }
 
     private fun clearWidgetPinResult(requestId: String) {
-        if (requestId.isBlank()) return
-        val prefs = getSharedPreferences(DuoyiWidgetPinResultReceiver.prefsName, Context.MODE_PRIVATE)
-        if (prefs.getString(DuoyiWidgetPinResultReceiver.keyRequestId, "") == requestId) {
-            prefs.edit().clear().apply()
-        }
+        widgetPinResultStore().clear(requestId)
+    }
+
+    private fun widgetPinResultStore(): DuoyiWidgetPinResultStore {
+        return DuoyiWidgetPinResultStore(
+            getSharedPreferences(DuoyiWidgetPinResultReceiver.prefsName, Context.MODE_PRIVATE),
+        )
     }
 
     private fun widgetProviderFor(kind: String, style: String): ComponentName? {

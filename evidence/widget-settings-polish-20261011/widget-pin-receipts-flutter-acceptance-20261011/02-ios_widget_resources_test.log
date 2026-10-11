@@ -1,0 +1,14 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/services/ios_widget_resources_test.dart
+00:00 +0: iOS WidgetKit resources declares 10 visible independent WidgetKit kinds
+00:00 +1: iOS WidgetKit resources shares the same app group and WidgetKit extension point
+00:00 +2: iOS WidgetKit resources Xcode project embeds the WidgetKit extension target
+00:00 +3: iOS WidgetKit resources uses the same payload keys written by HomeWidgetService
+00:00 +4: iOS WidgetKit resources focus widget renders the shared timer contract
+00:00 +5: iOS WidgetKit resources binds widget mutations to the captured snapshot contract
+00:00 +6: iOS WidgetKit resources refreshes daily data at midnight and focus timers at their end
+00:00 +7: iOS WidgetKit resources supports home screen and lock screen WidgetKit families
+00:00 +8: iOS WidgetKit resources keeps WidgetKit text compatible with iOS 14 and clipped in bounds
+00:00 +9: iOS WidgetKit resources Flutter side enables iOS home_widget updates
+00:00 +10: iOS WidgetKit resources exposes WidgetKit deep links for quick actions and footer navigation
+00:00 +11: iOS WidgetKit resources Runner forwards WidgetKit and OAuth deep links into Flutter
+00:00 +12: All tests passed!

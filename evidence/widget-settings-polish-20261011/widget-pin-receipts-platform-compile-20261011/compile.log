@@ -1,0 +1,396 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :gradle:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle:compileKotlin UP-TO-DATE
+> Task :gradle:compileJava NO-SOURCE
+> Task :gradle:compileGroovy NO-SOURCE
+> Task :gradle:pluginDescriptors UP-TO-DATE
+> Task :gradle:processResources UP-TO-DATE
+> Task :gradle:classes UP-TO-DATE
+> Task :gradle:jar UP-TO-DATE
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:packJniLibsflutterBuildDebug
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :audioplayers_android:preBuild UP-TO-DATE
+> Task :audioplayers_android:preDebugBuild UP-TO-DATE
+> Task :audioplayers_android:writeDebugAarMetadata
+> Task :connectivity_plus:preBuild UP-TO-DATE
+> Task :connectivity_plus:preDebugBuild UP-TO-DATE
+> Task :connectivity_plus:writeDebugAarMetadata
+> Task :file_selector_android:preBuild UP-TO-DATE
+> Task :file_selector_android:preDebugBuild UP-TO-DATE
+> Task :file_selector_android:writeDebugAarMetadata
+> Task :flutter_local_notifications:preBuild UP-TO-DATE
+> Task :flutter_local_notifications:preDebugBuild UP-TO-DATE
+> Task :flutter_local_notifications:writeDebugAarMetadata
+> Task :flutter_timezone:preBuild UP-TO-DATE
+> Task :flutter_timezone:preDebugBuild UP-TO-DATE
+> Task :flutter_timezone:writeDebugAarMetadata
+> Task :home_widget:preBuild UP-TO-DATE
+> Task :home_widget:preDebugBuild UP-TO-DATE
+> Task :home_widget:writeDebugAarMetadata
+> Task :integration_test:preBuild UP-TO-DATE
+> Task :integration_test:preDebugBuild UP-TO-DATE
+> Task :integration_test:writeDebugAarMetadata
+> Task :jni:preBuild UP-TO-DATE
+> Task :jni:preDebugBuild UP-TO-DATE
+> Task :jni:writeDebugAarMetadata
+> Task :jni_flutter:preBuild UP-TO-DATE
+> Task :jni_flutter:preDebugBuild UP-TO-DATE
+> Task :jni_flutter:writeDebugAarMetadata
+> Task :permission_handler_android:preBuild UP-TO-DATE
+> Task :permission_handler_android:preDebugBuild UP-TO-DATE
+> Task :permission_handler_android:writeDebugAarMetadata
+> Task :share_plus:preBuild UP-TO-DATE
+> Task :share_plus:preDebugBuild UP-TO-DATE
+> Task :share_plus:writeDebugAarMetadata
+> Task :shared_preferences_android:preBuild UP-TO-DATE
+> Task :shared_preferences_android:preDebugBuild UP-TO-DATE
+> Task :shared_preferences_android:writeDebugAarMetadata
+> Task :url_launcher_android:preBuild UP-TO-DATE
+> Task :url_launcher_android:preDebugBuild UP-TO-DATE
+> Task :url_launcher_android:writeDebugAarMetadata
+> Task :app:checkDebugAarMetadata
+> Task :app:cleanMergeDebugAssets UP-TO-DATE
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :audioplayers_android:mergeDebugShaders
+> Task :audioplayers_android:compileDebugShaders NO-SOURCE
+> Task :audioplayers_android:generateDebugAssets UP-TO-DATE
+> Task :audioplayers_android:mergeDebugAssets
+> Task :connectivity_plus:mergeDebugShaders
+> Task :connectivity_plus:compileDebugShaders NO-SOURCE
+> Task :connectivity_plus:generateDebugAssets UP-TO-DATE
+> Task :connectivity_plus:mergeDebugAssets
+> Task :file_selector_android:mergeDebugShaders
+> Task :file_selector_android:compileDebugShaders NO-SOURCE
+> Task :file_selector_android:generateDebugAssets UP-TO-DATE
+> Task :file_selector_android:mergeDebugAssets
+> Task :flutter_local_notifications:mergeDebugShaders
+> Task :flutter_local_notifications:compileDebugShaders NO-SOURCE
+> Task :flutter_local_notifications:generateDebugAssets UP-TO-DATE
+> Task :flutter_local_notifications:mergeDebugAssets
+> Task :flutter_timezone:mergeDebugShaders
+> Task :flutter_timezone:compileDebugShaders NO-SOURCE
+> Task :flutter_timezone:generateDebugAssets UP-TO-DATE
+> Task :flutter_timezone:mergeDebugAssets
+> Task :home_widget:mergeDebugShaders
+> Task :home_widget:compileDebugShaders NO-SOURCE
+> Task :home_widget:generateDebugAssets UP-TO-DATE
+> Task :home_widget:mergeDebugAssets
+> Task :integration_test:mergeDebugShaders
+> Task :integration_test:compileDebugShaders NO-SOURCE
+> Task :integration_test:generateDebugAssets UP-TO-DATE
+> Task :integration_test:mergeDebugAssets
+> Task :jni:mergeDebugShaders
+> Task :jni:compileDebugShaders NO-SOURCE
+> Task :jni:generateDebugAssets UP-TO-DATE
+> Task :jni:mergeDebugAssets
+> Task :jni_flutter:mergeDebugShaders
+> Task :jni_flutter:compileDebugShaders NO-SOURCE
+> Task :jni_flutter:generateDebugAssets UP-TO-DATE
+> Task :jni_flutter:mergeDebugAssets
+> Task :permission_handler_android:mergeDebugShaders
+> Task :permission_handler_android:compileDebugShaders NO-SOURCE
+> Task :permission_handler_android:generateDebugAssets UP-TO-DATE
+> Task :permission_handler_android:mergeDebugAssets
+> Task :share_plus:mergeDebugShaders
+> Task :share_plus:compileDebugShaders NO-SOURCE
+> Task :share_plus:generateDebugAssets UP-TO-DATE
+> Task :share_plus:mergeDebugAssets
+> Task :shared_preferences_android:mergeDebugShaders
+> Task :shared_preferences_android:compileDebugShaders NO-SOURCE
+> Task :shared_preferences_android:generateDebugAssets UP-TO-DATE
+> Task :shared_preferences_android:mergeDebugAssets
+> Task :url_launcher_android:mergeDebugShaders
+> Task :url_launcher_android:compileDebugShaders NO-SOURCE
+> Task :url_launcher_android:generateDebugAssets UP-TO-DATE
+> Task :url_launcher_android:mergeDebugAssets
+> Task :app:mergeDebugAssets
+> Task :app:copyFlutterAssetsDebug NO-SOURCE
+> Task :app:generateDebugResValues
+> Task :audioplayers_android:generateDebugResValues
+> Task :audioplayers_android:generateDebugResources
+> Task :audioplayers_android:packageDebugResources
+> Task :connectivity_plus:generateDebugResValues
+> Task :connectivity_plus:generateDebugResources
+> Task :connectivity_plus:packageDebugResources
+> Task :file_selector_android:generateDebugResValues
+> Task :file_selector_android:generateDebugResources
+> Task :file_selector_android:packageDebugResources
+> Task :flutter_local_notifications:generateDebugResValues
+> Task :flutter_local_notifications:generateDebugResources
+> Task :flutter_local_notifications:packageDebugResources
+> Task :flutter_timezone:generateDebugResValues
+> Task :flutter_timezone:generateDebugResources
+> Task :flutter_timezone:packageDebugResources
+> Task :home_widget:generateDebugResValues
+> Task :home_widget:generateDebugResources
+> Task :home_widget:packageDebugResources
+> Task :integration_test:generateDebugResValues
+> Task :integration_test:generateDebugResources
+> Task :integration_test:packageDebugResources
+> Task :jni:generateDebugResValues
+> Task :jni:generateDebugResources
+> Task :jni:packageDebugResources
+> Task :jni_flutter:generateDebugResValues
+> Task :jni_flutter:generateDebugResources
+> Task :jni_flutter:packageDebugResources
+> Task :permission_handler_android:generateDebugResValues
+> Task :permission_handler_android:generateDebugResources
+> Task :permission_handler_android:packageDebugResources
+> Task :share_plus:generateDebugResValues
+> Task :share_plus:generateDebugResources
+> Task :share_plus:packageDebugResources
+> Task :shared_preferences_android:generateDebugResValues
+> Task :shared_preferences_android:generateDebugResources
+> Task :shared_preferences_android:packageDebugResources
+> Task :url_launcher_android:generateDebugResValues
+> Task :url_launcher_android:generateDebugResources
+> Task :url_launcher_android:packageDebugResources
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:mergeDebugResources
+> Task :app:packageDebugResources
+> Task :app:parseDebugLocalResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :audioplayers_android:extractDeepLinksDebug
+
+> Task :audioplayers_android:processDebugManifest
+package="xyz.luan.audioplayers" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/audioplayers_android-5.2.1/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="xyz.luan.audioplayers" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/audioplayers_android-5.2.1/android/src/main/AndroidManifest.xml.
+
+> Task :connectivity_plus:extractDeepLinksDebug
+
+> Task :connectivity_plus:processDebugManifest
+package="dev.fluttercommunity.plus.connectivity" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/connectivity_plus-6.1.5/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="dev.fluttercommunity.plus.connectivity" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/connectivity_plus-6.1.5/android/src/main/AndroidManifest.xml.
+
+> Task :file_selector_android:extractDeepLinksDebug
+
+> Task :file_selector_android:processDebugManifest
+package="dev.flutter.packages.file_selector_android" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/file_selector_android-0.5.2+6/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="dev.flutter.packages.file_selector_android" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/file_selector_android-0.5.2+6/android/src/main/AndroidManifest.xml.
+
+> Task :flutter_local_notifications:extractDeepLinksDebug
+
+> Task :flutter_local_notifications:processDebugManifest
+package="com.dexterous.flutterlocalnotifications" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_local_notifications-18.0.1/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="com.dexterous.flutterlocalnotifications" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_local_notifications-18.0.1/android/src/main/AndroidManifest.xml.
+
+> Task :flutter_timezone:extractDeepLinksDebug
+
+> Task :flutter_timezone:processDebugManifest
+package="net.wolverinebeach.flutter_timezone" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_timezone-3.0.1/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="net.wolverinebeach.flutter_timezone" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/flutter_timezone-3.0.1/android/src/main/AndroidManifest.xml.
+
+> Task :home_widget:extractDeepLinksDebug
+
+> Task :home_widget:processDebugManifest
+package="es.antonborri.home_widget" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/home_widget-0.7.0+1/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="es.antonborri.home_widget" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/home_widget-0.7.0+1/android/src/main/AndroidManifest.xml.
+
+> Task :integration_test:extractDeepLinksDebug
+
+> Task :integration_test:processDebugManifest
+package="dev.flutter.integration_test" found in source AndroidManifest.xml: /home/ubuntu/flutter/packages/integration_test/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="dev.flutter.integration_test" from the source AndroidManifest.xml: /home/ubuntu/flutter/packages/integration_test/android/src/main/AndroidManifest.xml.
+
+> Task :jni:extractDeepLinksDebug
+
+> Task :jni:processDebugManifest
+package="com.github.dart_lang.jni" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/jni-1.0.0/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="com.github.dart_lang.jni" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/jni-1.0.0/android/src/main/AndroidManifest.xml.
+
+> Task :jni_flutter:extractDeepLinksDebug
+
+> Task :jni_flutter:processDebugManifest
+package="com.github.dart_lang.jni_flutter" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/jni_flutter-1.0.1/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="com.github.dart_lang.jni_flutter" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/jni_flutter-1.0.1/android/src/main/AndroidManifest.xml.
+
+> Task :permission_handler_android:extractDeepLinksDebug
+
+> Task :permission_handler_android:processDebugManifest
+package="com.baseflow.permissionhandler" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/permission_handler_android-12.1.0/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="com.baseflow.permissionhandler" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/permission_handler_android-12.1.0/android/src/main/AndroidManifest.xml.
+
+> Task :share_plus:extractDeepLinksDebug
+
+> Task :share_plus:processDebugManifest
+package="dev.fluttercommunity.plus.share" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/share_plus-11.1.0/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="dev.fluttercommunity.plus.share" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/share_plus-11.1.0/android/src/main/AndroidManifest.xml.
+
+> Task :shared_preferences_android:extractDeepLinksDebug
+
+> Task :shared_preferences_android:processDebugManifest
+package="io.flutter.plugins.sharedpreferences" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/shared_preferences_android-2.4.23/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.sharedpreferences" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/shared_preferences_android-2.4.23/android/src/main/AndroidManifest.xml.
+
+> Task :url_launcher_android:extractDeepLinksDebug
+
+> Task :url_launcher_android:processDebugManifest
+package="io.flutter.plugins.urllauncher" found in source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/url_launcher_android-6.3.29/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.urllauncher" from the source AndroidManifest.xml: /home/ubuntu/.pub-cache/hosted/pub.dev/url_launcher_android-6.3.29/android/src/main/AndroidManifest.xml.
+
+> Task :app:processDebugMainManifest
+[androidx.test.espresso:espresso-core:3.2.0] /home/ubuntu/duoyi-gradle-cache-20261010/caches/8.14/transforms/14fd6313d72ecd03d090b083ce7c5648/transformed/espresso-core-3.2.0/AndroidManifest.xml Warning:
+	Namespace 'androidx.test.espresso' is used in multiple modules and/or libraries: androidx.test.espresso:espresso-core:3.2.0, androidx.test.espresso:espresso-idling-resource:3.2.0. Please ensure that all modules and libraries have a unique namespace. For more information, See https://developer.android.com/studio/build/configure-app-module#set-namespace
+
+> Task :app:outputDebugAppLinkSettings
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+> Task :audioplayers_android:compileDebugLibraryResources
+> Task :audioplayers_android:parseDebugLocalResources
+> Task :audioplayers_android:generateDebugRFile
+> Task :connectivity_plus:compileDebugLibraryResources
+> Task :connectivity_plus:parseDebugLocalResources
+> Task :connectivity_plus:generateDebugRFile
+> Task :file_selector_android:compileDebugLibraryResources
+> Task :file_selector_android:parseDebugLocalResources
+> Task :file_selector_android:generateDebugRFile
+> Task :flutter_local_notifications:compileDebugLibraryResources
+> Task :flutter_local_notifications:parseDebugLocalResources
+> Task :flutter_local_notifications:generateDebugRFile
+> Task :flutter_timezone:compileDebugLibraryResources
+> Task :flutter_timezone:parseDebugLocalResources
+> Task :flutter_timezone:generateDebugRFile
+> Task :home_widget:compileDebugLibraryResources
+> Task :home_widget:parseDebugLocalResources
+> Task :home_widget:generateDebugRFile
+> Task :integration_test:compileDebugLibraryResources
+> Task :integration_test:parseDebugLocalResources
+> Task :integration_test:generateDebugRFile
+> Task :jni:compileDebugLibraryResources
+> Task :jni:parseDebugLocalResources
+> Task :jni:generateDebugRFile
+> Task :jni_flutter:compileDebugLibraryResources
+> Task :jni_flutter:parseDebugLocalResources
+> Task :jni_flutter:generateDebugRFile
+> Task :permission_handler_android:compileDebugLibraryResources
+> Task :permission_handler_android:parseDebugLocalResources
+> Task :permission_handler_android:generateDebugRFile
+> Task :share_plus:compileDebugLibraryResources
+> Task :share_plus:parseDebugLocalResources
+> Task :share_plus:generateDebugRFile
+> Task :shared_preferences_android:compileDebugLibraryResources
+> Task :shared_preferences_android:parseDebugLocalResources
+> Task :shared_preferences_android:generateDebugRFile
+> Task :url_launcher_android:compileDebugLibraryResources
+> Task :url_launcher_android:parseDebugLocalResources
+> Task :url_launcher_android:generateDebugRFile
+> Task :app:processDebugResources
+> Task :audioplayers_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :audioplayers_android:compileDebugKotlin
+w: file:///home/ubuntu/.pub-cache/hosted/pub.dev/audioplayers_android-5.2.1/android/src/main/kotlin/xyz/luan/audioplayers/AudioplayersPlugin.kt:72:30 'var isSpeakerphoneOn: Boolean' is deprecated. Deprecated in Java.
+w: file:///home/ubuntu/.pub-cache/hosted/pub.dev/audioplayers_android-5.2.1/android/src/main/kotlin/xyz/luan/audioplayers/player/WrappedPlayer.kt:172:22 'var isSpeakerphoneOn: Boolean' is deprecated. Deprecated in Java.
+
+> Task :audioplayers_android:javaPreCompileDebug
+> Task :audioplayers_android:compileDebugJavaWithJavac NO-SOURCE
+> Task :audioplayers_android:bundleLibCompileToJarDebug
+> Task :connectivity_plus:javaPreCompileDebug
+> Task :connectivity_plus:compileDebugJavaWithJavac
+> Task :connectivity_plus:bundleLibCompileToJarDebug
+> Task :file_selector_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :file_selector_android:compileDebugKotlin
+> Task :file_selector_android:javaPreCompileDebug
+> Task :file_selector_android:compileDebugJavaWithJavac
+> Task :file_selector_android:bundleLibCompileToJarDebug
+> Task :flutter_local_notifications:javaPreCompileDebug
+> Task :flutter_local_notifications:compileDebugJavaWithJavac
+> Task :flutter_local_notifications:bundleLibCompileToJarDebug
+> Task :flutter_timezone:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :flutter_timezone:compileDebugKotlin
+> Task :flutter_timezone:javaPreCompileDebug
+> Task :flutter_timezone:compileDebugJavaWithJavac NO-SOURCE
+> Task :flutter_timezone:bundleLibCompileToJarDebug
+> Task :home_widget:checkKotlinGradlePluginConfigurationErrors SKIPPED
+
+> Task :home_widget:compileDebugKotlin
+w: file:///home/ubuntu/.pub-cache/hosted/pub.dev/home_widget-0.7.0+1/android/src/main/kotlin/es/antonborri/home_widget/HomeWidgetBackgroundService.kt:7:8 'class JobIntentService : Service' is deprecated. Deprecated in Java.
+w: file:///home/ubuntu/.pub-cache/hosted/pub.dev/home_widget-0.7.0+1/android/src/main/kotlin/es/antonborri/home_widget/HomeWidgetBackgroundService.kt:17:70 'class JobIntentService : Service' is deprecated. Deprecated in Java.
+
+> Task :home_widget:javaPreCompileDebug
+> Task :home_widget:compileDebugJavaWithJavac NO-SOURCE
+> Task :home_widget:bundleLibCompileToJarDebug
+> Task :integration_test:javaPreCompileDebug
+> Task :integration_test:compileDebugJavaWithJavac
+> Task :integration_test:bundleLibCompileToJarDebug
+> Task :jni:javaPreCompileDebug
+> Task :jni:compileDebugJavaWithJavac
+> Task :jni:bundleLibCompileToJarDebug
+> Task :jni_flutter:javaPreCompileDebug
+> Task :jni_flutter:compileDebugJavaWithJavac
+> Task :jni_flutter:bundleLibCompileToJarDebug
+> Task :permission_handler_android:javaPreCompileDebug
+> Task :permission_handler_android:compileDebugJavaWithJavac
+> Task :permission_handler_android:bundleLibCompileToJarDebug
+> Task :share_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :share_plus:compileDebugKotlin
+> Task :share_plus:javaPreCompileDebug
+> Task :share_plus:compileDebugJavaWithJavac NO-SOURCE
+> Task :share_plus:bundleLibCompileToJarDebug
+> Task :shared_preferences_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared_preferences_android:compileDebugKotlin
+> Task :shared_preferences_android:javaPreCompileDebug
+> Task :shared_preferences_android:compileDebugJavaWithJavac
+> Task :shared_preferences_android:bundleLibCompileToJarDebug
+> Task :url_launcher_android:generateDebugBuildConfig
+> Task :url_launcher_android:javaPreCompileDebug
+> Task :url_launcher_android:compileDebugJavaWithJavac
+> Task :url_launcher_android:bundleLibCompileToJarDebug
+> Task :app:compileDebugKotlin
+w: file:///home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationEnvelope.kt:4:40 Non-public primary constructor is exposed via the generated 'copy()' method of the 'data' class.
+
+The generated 'copy()' will change its visibility in future releases.
+
+To suppress the warning do one of the following:
+- Annotate the data class with the '@ConsistentCopyVisibility' annotation.
+- Use the '-Xconsistent-data-class-copy-visibility' compiler flag.
+- Annotate the data class with the '@ExposedCopyVisibility' annotation 
+  (Discouraged, but can be used to keep binary compatibility).
+
+To learn more, see the documentation of the '@ConsistentCopyVisibility' and '@ExposedCopyVisibility' annotations.
+
+This will become an error in language version 2.5. See https://youtrack.jetbrains.com/issue/KT-11914.
+w: file:///home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationEnvelope.kt:18:43 Non-public primary constructor is exposed via the generated 'copy()' method of the 'data' class.
+
+The generated 'copy()' will change its visibility in future releases.
+
+To suppress the warning do one of the following:
+- Annotate the data class with the '@ConsistentCopyVisibility' annotation.
+- Use the '-Xconsistent-data-class-copy-visibility' compiler flag.
+- Annotate the data class with the '@ExposedCopyVisibility' annotation 
+  (Discouraged, but can be used to keep binary compatibility).
+
+To learn more, see the documentation of the '@ConsistentCopyVisibility' and '@ExposedCopyVisibility' annotations.
+
+This will become an error in language version 2.5. See https://youtrack.jetbrains.com/issue/KT-11914.
+w: file:///home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt:927:20 'fun unsafeCheckOpNoThrow(p0: String, p1: Int, p2: String): Int' is deprecated. Deprecated in Java.
+
+[Incubating] Problems report is available at: file:///home/ubuntu/duoyi/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 8m 6s
+208 actionable tasks: 203 executed, 5 up-to-date

@@ -1714,6 +1714,12 @@ void main() {
       final callbackReceiver = File(
         'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultReceiver.kt',
       ).readAsStringSync();
+      final pinResultStore = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultStore.kt',
+      ).readAsStringSync();
+      final pinResultCore = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultCore.kt',
+      ).readAsStringSync();
       final styledProvider = File(
         'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiStyledWidgetProvider.kt',
       ).readAsStringSync();
@@ -1876,6 +1882,31 @@ void main() {
       expect(mainActivity, contains('PendingIntent.getBroadcast'));
       expect(mainActivity, contains('UUID.randomUUID().toString()'));
       expect(mainActivity, contains('requestId.hashCode()'));
+      expect(
+        RegExp(
+          r'PendingIntent\.getBroadcast\([\s\S]*?Intent\(this,\s*DuoyiWidgetPinResultReceiver::class\.java\)\s*\.setData\(\s*Uri\.Builder\(\)\s*\.scheme\("duoyi-widget-pin"\)\s*\.authority\("result"\)\s*\.appendPath\(requestId\)\s*\.build\(\)',
+          multiLine: true,
+        ).hasMatch(mainActivity),
+        isTrue,
+        reason:
+            'The full request id in callback Intent data gives each pin request a distinct PendingIntent identity.',
+      );
+      expect(
+        mainActivity,
+        contains(
+          '.putExtra(DuoyiWidgetPinResultReceiver.extraRequestId, requestId)',
+        ),
+      );
+      expect(
+        mainActivity,
+        contains('.putExtra(DuoyiWidgetPinResultReceiver.extraKind, kind)'),
+      );
+      expect(
+        mainActivity,
+        contains(
+          '.putExtra(DuoyiWidgetPinResultReceiver.extraStyle, pinStyle.id)',
+        ),
+      );
       expect(
         mainActivity,
         isNot(contains(r'"${kind}_${pinStyle.id}".hashCode()')),
@@ -2063,15 +2094,53 @@ void main() {
         reason:
             'Some launchers confirm pinning without returning EXTRA_APPWIDGET_ID; keep that path successful and let pending-provider TTL reconcile later.',
       );
-      expect(callbackReceiver, contains('const val keyStatus = "status"'));
-      expect(callbackReceiver, contains('putString(keyStatus, status)'));
+      for (final entry in <String, String>{
+        'keyRequestId': 'request_id',
+        'keyKind': 'kind',
+        'keyStyle': 'style',
+        'keyWidgetId': 'widget_id',
+        'keyStatus': 'status',
+        'keyConfirmedAt': 'confirmed_at',
+      }.entries) {
+        expect(
+          callbackReceiver,
+          contains('const val ${entry.key} = "${entry.value}"'),
+          reason:
+              'Keep the former single-slot field constants for receipt compatibility.',
+        );
+      }
+      expect(callbackReceiver, contains('DuoyiWidgetPinResultStore('));
+      expect(callbackReceiver, contains('DuoyiWidgetPinResultCore.Record('));
+      expect(
+        RegExp(
+          r'DuoyiWidgetPinResultStore\(\s*context\.getSharedPreferences\(prefsName,\s*Context\.MODE_PRIVATE\),?\s*\)\.record\(\s*DuoyiWidgetPinResultCore\.Record\(',
+          multiLine: true,
+        ).hasMatch(callbackReceiver),
+        isTrue,
+        reason:
+            'Pin callbacks should persist request-scoped records through the store adapter.',
+      );
       expect(callbackReceiver, contains('recordResult('));
       expect(callbackReceiver, contains('"confirmed"'));
       expect(
         mainActivity,
-        contains(
-          '"status" to prefs.getString(DuoyiWidgetPinResultReceiver.keyStatus, "")',
-        ),
+        contains('return widgetPinResultStore().read(requestId)'),
+      );
+      expect(mainActivity, contains('widgetPinResultStore().clear(requestId)'));
+      expect(mainActivity, contains('DuoyiWidgetPinResultStore('));
+      expect(
+        pinResultStore,
+        contains('DuoyiWidgetPinResultCore.read(preferences.all, requestId)'),
+      );
+      expect(
+        pinResultStore,
+        contains('DuoyiWidgetPinResultCore.keysFor(requestId).values.forEach'),
+        reason: 'Clearing one receipt must remove only that request’s fields.',
+      );
+      expect(pinResultStore, isNot(contains('preferences.edit().clear()')));
+      expect(
+        pinResultCore,
+        contains(r'val prefix = "receipt:${requestId.length}:$requestId:"'),
       );
       expect(
         mainActivity,
@@ -2145,7 +2214,11 @@ void main() {
       );
       expect(callbackReceiver, contains('extraRequestId'));
       expect(callbackReceiver, contains('keyConfirmedAt'));
-      expect(callbackReceiver, contains('putInt(keyWidgetId, widgetId)'));
+      expect(callbackReceiver, contains('widgetId = widgetId,'));
+      expect(
+        pinResultStore,
+        contains('.putInt(keys.getValue("widgetId"), result.widgetId)'),
+      );
       expect(mainActivity, contains(r'"requested:$requestId"'));
       expect(mainActivity, contains('"lastPinResult"'));
       expect(mainActivity, contains('"clearPinResult"'));

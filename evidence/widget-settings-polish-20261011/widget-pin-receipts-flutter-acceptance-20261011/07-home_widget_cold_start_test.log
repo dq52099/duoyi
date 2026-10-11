@@ -1,0 +1,3 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/services/home_widget_cold_start_test.dart
+00:00 +0: cold start replaces a blank stored nonce before publishing
+00:00 +1: All tests passed!

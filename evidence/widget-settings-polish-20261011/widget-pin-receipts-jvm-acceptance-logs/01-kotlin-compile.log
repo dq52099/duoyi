@@ -1,0 +1,37 @@
+COMMAND: java -Xmx512m -cp /home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.2.20/bb8331b7585e36ea311825b01a1c06860c055fd1/kotlin-compiler-embeddable-2.2.20.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.2.20/5380b19fa1924399b62ce3a1faffebb2b4f82272/kotlin-stdlib-2.2.20.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.2.20/4c679cbeac0bb583b75c3a080013da8eaf240807/kotlin-script-runtime-2.2.20.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.2.20/feff12d48d7f1eb628742b0a721395e16f8755bf/kotlin-daemon-embeddable-2.2.20.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -jvm-target 17 -classpath /home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.2.20/5380b19fa1924399b62ce3a1faffebb2b4f82272/kotlin-stdlib-2.2.20.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/junit/junit/4.13.2/8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12/junit-4.13.2.jar:/home/ubuntu/duoyi-gradle-cache-20261010/caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/42a25dc3219429f0e5d060061f71acb49bf010a0/hamcrest-core-1.3.jar:/home/ubuntu/android-sdk/platforms/android-35/android.jar -d /home/ubuntu/duoyi/.dart_tool/task-temp-20261011/widget-pin-receipts-jvm/classes /home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationDocument.kt /home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationEnvelope.kt /home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetFrameCore.kt /home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiFrozenWidgetPreferences.kt /home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRenderFrame.kt /home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetCopy.kt /home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDisplayMode.kt /home/ubuntu/duoyi/android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetPublicationDocumentTest.kt /home/ubuntu/duoyi/android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetFrameCoreTest.kt /home/ubuntu/duoyi/android/app/src/test/java/com/duoyi/duoyi/DuoyiFrozenWidgetPreferencesTest.kt /home/ubuntu/duoyi/android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetDeviceDisplayValuesTest.kt /home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultCore.kt /home/ubuntu/duoyi/android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultStore.kt /home/ubuntu/duoyi/android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetPinResultStoreTest.kt
+EXIT: 0
+--- stdout ---
+--- stderr ---
+android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationEnvelope.kt:4:40: warning: non-public primary constructor is exposed via the generated 'copy()' method of the 'data' class.
+
+The generated 'copy()' will change its visibility in future releases.
+
+To suppress the warning do one of the following:
+- Annotate the data class with the '@ConsistentCopyVisibility' annotation.
+- Use the '-Xconsistent-data-class-copy-visibility' compiler flag.
+- Annotate the data class with the '@ExposedCopyVisibility' annotation 
+  (Discouraged, but can be used to keep binary compatibility).
+
+To learn more, see the documentation of the '@ConsistentCopyVisibility' and '@ExposedCopyVisibility' annotations.
+
+This will become an error in language version 2.5. See https://youtrack.jetbrains.com/issue/KT-11914.
+data class DuoyiWidgetWorkspaceBinding private constructor(val kind: String, val key: String) {
+                                       ^^^^^^^
+android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationEnvelope.kt:18:43: warning: non-public primary constructor is exposed via the generated 'copy()' method of the 'data' class.
+
+The generated 'copy()' will change its visibility in future releases.
+
+To suppress the warning do one of the following:
+- Annotate the data class with the '@ConsistentCopyVisibility' annotation.
+- Use the '-Xconsistent-data-class-copy-visibility' compiler flag.
+- Annotate the data class with the '@ExposedCopyVisibility' annotation 
+  (Discouraged, but can be used to keep binary compatibility).
+
+To learn more, see the documentation of the '@ConsistentCopyVisibility' and '@ExposedCopyVisibility' annotations.
+
+This will become an error in language version 2.5. See https://youtrack.jetbrains.com/issue/KT-11914.
+data class DuoyiWidgetDesiredPresentation private constructor(val revision: Long, val locale: String) {
+                                          ^^^^^^^
+android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetPublicationDocumentTest.kt:70:64: warning: unchecked cast of 'Any?' to 'Map<String, Any>'.
+        val copiedWireValues = mutableValues(wireMap["values"] as Map<String, Any>)
+                                                               ^^^^^^^^^^^^^^^^^^^

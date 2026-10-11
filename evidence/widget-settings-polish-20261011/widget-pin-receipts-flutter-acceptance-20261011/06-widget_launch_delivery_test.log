@@ -1,0 +1,52 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/services/widget_launch_delivery_test.dart
+00:00 +0: initial drain overlapping a hot delivery emits one copy and waits for ACK
+00:00 +1: distinct delivery IDs for the same action are both emitted
+00:00 +2: a failed ACK can be retried by a repeated terminal delivery
+[WidgetLaunch] acknowledgement failed: PlatformException(ack_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      WidgetLaunchService._acknowledgeId (package:duoyi/services/widget_launch_service.dart:132:7)
+<asynchronous suspension>
+#3      WidgetLaunchService.acknowledge (package:duoyi/services/widget_launch_service.dart:124:5)
+<asynchronous suspension>
+#4      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/widget_launch_delivery_test.dart:106:5)
+<asynchronous suspension>
+#5      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#6      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#7      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+00:00 +3: cancel invalidates an in-flight drain and reconnect drains the queue
+00:00 +4: failed subscription automatically drains after the retry timer
+[WidgetLaunch] subscription failed: PlatformException(subscribe_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      MethodChannel.invokeListMethod (package:flutter/src/services/platform_channel.dart:552:35)
+<asynchronous suspension>
+#3      WidgetLaunchService._drain (package:duoyi/services/widget_launch_service.dart:57:23)
+<asynchronous suspension>
+
+00:00 +5: failed ACK automatically re-drains and retries without re-emitting
+[WidgetLaunch] acknowledgement failed: PlatformException(ack_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      WidgetLaunchService._acknowledgeId (package:duoyi/services/widget_launch_service.dart:132:7)
+<asynchronous suspension>
+#3      WidgetLaunchService.acknowledge (package:duoyi/services/widget_launch_service.dart:124:5)
+<asynchronous suspension>
+#4      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/widget_launch_delivery_test.dart:231:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+#7      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+
+00:00 +6: corrupt envelopes with valid IDs are terminally ACKed without emission
+00:00 +7: All tests passed!
