@@ -405,6 +405,18 @@ struct DuoyiMonthCell: Equatable {
     let dayNumber: Int
     let isToday: Bool
     let text: String
+    let dateKey: String?
+
+    init(dayNumber: Int, isToday: Bool, text: String, dateKey: String? = nil) {
+        self.dayNumber = dayNumber
+        self.isToday = isToday
+        self.text = text
+        self.dateKey = dateKey
+    }
+
+    var target: String? {
+        dateKey.map { "duoyi://calendar?date=\($0)" }
+    }
 }
 
 struct DuoyiMonthGridModel: Equatable {
@@ -789,26 +801,53 @@ enum DuoyiWidgetDisplayCore {
         timeZone: TimeZone,
         isZh: Bool
     ) -> DuoyiMonthGridModel {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
+        let seconds = anchorDate.timeIntervalSince1970
+        guard seconds.isFinite else {
+            return unavailableMonthGrid(isZh: isZh)
+        }
+        let localSeconds = seconds + Double(timeZone.secondsFromGMT(for: anchorDate))
+        // Floor before converting: a negative fractional epoch day belongs to
+        // the previous day. Foundation calendars use a historical cutover.
+        let ordinal = floor(localSeconds / 86_400) + Double(daysBeforeYear(1970))
+        guard ordinal.isFinite, ordinal >= 0, ordinal < Double(daysBeforeYear(10000)) else {
+            return unavailableMonthGrid(isZh: isZh)
+        }
 
-        let comps = calendar.dateComponents([.year, .month, .day], from: anchorDate)
-        let year = comps.year ?? 2026
-        let month = comps.month ?? 1
-        let todayDay = comps.day ?? 1
+        let dayOrdinal = Int(ordinal)
+        var year = 1
+        var upperYear = 10000
+        while year + 1 < upperYear {
+            let candidate = year + (upperYear - year) / 2
+            if daysBeforeYear(candidate) <= dayOrdinal {
+                year = candidate
+            } else {
+                upperYear = candidate
+            }
+        }
+        let monthLengths = gregorianMonthLengths(year: year)
+        var remainingDays = dayOrdinal - daysBeforeYear(year)
+        var month = 1
+        while remainingDays >= monthLengths[month - 1] {
+            remainingDays -= monthLengths[month - 1]
+            month += 1
+        }
+        return buildMonthGrid(year: year, month: month, todayDay: remainingDays + 1, isZh: isZh)
+            ?? unavailableMonthGrid(isZh: isZh)
+    }
 
-        var firstDayComps = DateComponents()
-        firstDayComps.year = year
-        firstDayComps.month = month
-        firstDayComps.day = 1
-        firstDayComps.hour = 12
-
-        let firstDayDate = calendar.date(from: firstDayComps) ?? anchorDate
-        let weekday = calendar.component(.weekday, from: firstDayDate)
-        // In Gregorian: Sunday=1, Monday=2 ... Saturday=7. Monday-first offset:
-        let firstWeekdayOffset = (weekday + 5) % 7
-
-        let daysInMonth = calendar.range(of: .day, in: .month, for: firstDayDate)?.count ?? 30
+    static func buildMonthGrid(
+        year: Int,
+        month: Int,
+        todayDay: Int,
+        isZh: Bool
+    ) -> DuoyiMonthGridModel? {
+        guard (1...9999).contains(year), (1...12).contains(month) else {
+            return nil
+        }
+        let monthLengths = gregorianMonthLengths(year: year)
+        let daysInMonth = monthLengths[month - 1]
+        // Proleptic Gregorian 0001-01-01 was Monday.
+        let firstWeekdayOffset = (daysBeforeYear(year) + monthLengths.prefix(month - 1).reduce(0, +)) % 7
 
         var cells: [DuoyiMonthCell] = []
         cells.reserveCapacity(42)
@@ -820,21 +859,21 @@ enum DuoyiWidgetDisplayCore {
                 let day = index - firstWeekdayOffset + 1
                 let isToday = (day == todayDay)
                 let text = day < 10 ? " \(day)" : "\(day)"
-                cells.append(DuoyiMonthCell(dayNumber: day, isToday: isToday, text: text))
+                let dateKey = String(
+                    format: "%04d-%02d-%02d",
+                    locale: Locale(identifier: "en_US_POSIX"),
+                    year, month, day
+                )
+                cells.append(DuoyiMonthCell(dayNumber: day, isToday: isToday, text: text, dateKey: dateKey))
             }
         }
-
-        let weekdayHeaders = isZh
-            ? ["一", "二", "三", "四", "五", "六", "日"]
-            : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
 
         let monthTitle: String
         if isZh {
             monthTitle = "\(year)年\(month)月"
         } else {
             let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-            let mName = (1...12).contains(month) ? monthNames[month - 1] : "Month"
-            monthTitle = "\(mName) \(year)"
+            monthTitle = "\(monthNames[month - 1]) \(year)"
         }
 
         return DuoyiMonthGridModel(
@@ -844,8 +883,35 @@ enum DuoyiWidgetDisplayCore {
             firstWeekdayOffset: firstWeekdayOffset,
             daysInMonth: daysInMonth,
             cells: cells,
-            weekdayHeaders: weekdayHeaders,
+            weekdayHeaders: calendarWeekdayHeaders(isZh: isZh),
             monthTitle: monthTitle
+        )
+    }
+
+    private static func daysBeforeYear(_ year: Int) -> Int {
+        let previous = year - 1
+        return 365 * previous + previous / 4 - previous / 100 + previous / 400
+    }
+
+    private static func gregorianMonthLengths(year: Int) -> [Int] {
+        let isLeap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+        return [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    }
+
+    private static func calendarWeekdayHeaders(isZh: Bool) -> [String] {
+        isZh ? ["一", "二", "三", "四", "五", "六", "日"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+    }
+
+    private static func unavailableMonthGrid(isZh: Bool) -> DuoyiMonthGridModel {
+        DuoyiMonthGridModel(
+            year: 0,
+            month: 0,
+            todayDay: 0,
+            firstWeekdayOffset: 0,
+            daysInMonth: 0,
+            cells: Array(repeating: DuoyiMonthCell(dayNumber: 0, isToday: false, text: "  "), count: 42),
+            weekdayHeaders: calendarWeekdayHeaders(isZh: isZh),
+            monthTitle: isZh ? "日期不可用" : "Calendar unavailable"
         )
     }
 
