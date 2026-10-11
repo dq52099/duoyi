@@ -44,25 +44,38 @@ void main() {
       'lib/widgets/calendar_event_sheet.dart',
     ).readAsStringSync();
 
-    expect(screen, contains('title: Text(CalendarUiCopy.quickAddNewEventTitle)'));
+    expect(
+      screen,
+      contains('title: Text(CalendarUiCopy.quickAddNewEventTitle)'),
+    );
     expect(screen, contains('showLocalCalendarEventEditor('));
     expect(screen, contains('initialDate: _selectedDay'));
     expect(screen, contains('workspaceId: origin.activeWorkspaceId'));
 
     expect(sheet, contains('Future<void> showLocalCalendarEventEditor'));
-    expect(sheet, contains("title: Text(event == null ? '新建日程' : '编辑日程')"));
+    expect(
+      sheet,
+      contains(
+        'CalendarEventSheetUiCopy.editorTitle(isEditing: event != null)',
+      ),
+    );
     expect(sheet, contains('SwitchListTile('));
-    expect(sheet, contains("title: const Text('全天')"));
-    expect(sheet, contains("title: '开始日期'"));
-    expect(sheet, contains("title: '结束日期'"));
+    expect(sheet, contains('title: Text(CalendarEventSheetUiCopy.allDay)'));
+    expect(sheet, contains("titleKey: 'calendar.picker.start_date'"));
+    expect(sheet, contains("titleKey: 'calendar.picker.end_date'"));
     expect(sheet, contains('if (!allDay)'));
     expect(sheet, contains('_normalizeLocalEventTime('));
-    expect(sheet, contains('endDate.add(const Duration(days: 1))'));
+    expect(
+      sheet,
+      contains('DateTime(endDate.year, endDate.month, endDate.day + 1)'),
+    );
+    expect(sheet, contains('DateTime(end.year, end.month, end.day - 1)'));
     expect(sheet, contains('provider.addLocalEvent(next)'));
     expect(sheet, contains('provider.updateLocalEvent(next)'));
     expect(sheet, contains('CalendarEventType.event'));
     expect(sheet, contains('_editLocalEvent(context)'));
-    expect(sheet, contains('deleteLocalEvent(event.id)'));
+    expect(sheet, contains('deleteLocalEvent('));
+    expect(sheet, contains('widget.event.id,'));
   });
 
   test('Calendar separates shell and standalone route backgrounds', () {

@@ -54,10 +54,13 @@ void main() {
       'CalendarEventType.countdown',
     ]) {
       final block = _caseBlock(source, type);
-      expect(block, contains("label: '改期'"));
-      expect(block, contains('onPressed: () => _reschedule(context)'));
-      expect(block, contains("label: '删除'"));
-      expect(block, contains('onPressed: () => _delete(context)'));
+      expect(
+        block,
+        contains('label: CalendarEventSheetUiCopy.actionReschedule'),
+      );
+      expect(block, contains('canEdit ? () => _reschedule(context) : null'));
+      expect(block, contains('label: CalendarEventSheetUiCopy.actionDelete'));
+      expect(block, contains('canEdit ? () => _delete(context) : null'));
     }
 
     for (final type in [
@@ -69,8 +72,11 @@ void main() {
       'CalendarEventType.pomodoro',
     ]) {
       final block = _caseBlock(source, type);
-      expect(block, contains("label: '编辑'"));
-      expect(block, contains('onPressed: () => _editSourceEvent(context)'));
+      expect(block, contains('label: CalendarEventSheetUiCopy.actionEdit'));
+      expect(
+        block,
+        contains('canEdit ? () => _editSourceEvent(context) : null'),
+      );
     }
 
     for (final type in [
@@ -81,8 +87,8 @@ void main() {
       'CalendarEventType.timeEntry',
     ]) {
       final block = _caseBlock(source, type);
-      expect(block, contains("label: '删除'"));
-      expect(block, contains('onPressed: () => _delete(context)'));
+      expect(block, contains('label: CalendarEventSheetUiCopy.actionDelete'));
+      expect(block, contains('canEdit ? () => _delete(context) : null'));
     }
   });
 
@@ -124,7 +130,14 @@ void main() {
     );
     expect(sheet, contains('reminderSyncIssue = await provider.update(item)'));
     expect(sheet, contains('reminderSyncIssue = await provider.updateItem('));
-    expect(sheet, contains('日期已保存到本机，但提醒未注册'));
+    expect(
+      sheet,
+      contains('CalendarEventSheetUiCopy.reminderSyncIssue(issue)'),
+    );
+    final copy = File(
+      'lib/core/calendar_event_sheet_ui_copy.dart',
+    ).readAsStringSync();
+    expect(copy, contains('日期已保存到本机，但提醒未注册'));
     expect(
       sheet,
       contains('showCourseEditor(navigationContext, course: item)'),

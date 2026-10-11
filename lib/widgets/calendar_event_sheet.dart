@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/calendar_event_display_text.dart';
+import '../core/calendar_event_sheet_ui_copy.dart';
+import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
 import '../core/iterable_extensions.dart';
 import '../models/calendar_event.dart';
@@ -14,6 +17,7 @@ import '../providers/diary_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/pomodoro_provider.dart';
+import '../providers/share_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
 import '../screens/anniversary_screen.dart';
@@ -24,17 +28,295 @@ import '../screens/habit_detail_screen.dart';
 import '../screens/pomodoro_screen.dart';
 import '../screens/time_audit_screen.dart';
 import '../screens/today_detail_router.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/todo_completion_flow.dart';
 import 'app_date_picker.dart';
 import 'app_time_picker.dart';
 import 'surface_components.dart';
 
+bool _canEditWorkspace(BuildContext context, String? workspaceId) {
+  if (workspaceId == null || workspaceId.isEmpty || workspaceId == 'private') {
+    return true;
+  }
+  final share = Provider.of<ShareProvider?>(context, listen: false);
+  return share?.canEdit(workspaceId) ?? false;
+}
+
 Future<void> showCalendarEventSheet(BuildContext context, CalendarEvent event) {
+  final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
   return showAppModalSheet<void>(
     context: context,
-    builder: (_) => CalendarEventSheet(event: event),
+    builder: (_) => CalendarEventSheet(
+      event: event,
+      accountGeneration: accountGeneration,
+    ),
   );
+}
+
+class _LocalEventEditorDraft {
+  final String title;
+  final String note;
+  final DateTime startDate;
+  final DateTime endDate;
+  final bool allDay;
+  final TimeOfDay startTime;
+  final TimeOfDay endTime;
+  final Color color;
+
+  const _LocalEventEditorDraft({
+    required this.title,
+    required this.note,
+    required this.startDate,
+    required this.endDate,
+    required this.allDay,
+    required this.startTime,
+    required this.endTime,
+    required this.color,
+  });
+}
+
+class _LocalEventEditorDialog extends StatefulWidget {
+  final CalendarEvent? event;
+  final DateTime initialDate;
+  final int accountGeneration;
+
+  const _LocalEventEditorDialog({
+    required this.event,
+    required this.initialDate,
+    required this.accountGeneration,
+  });
+
+  @override
+  State<_LocalEventEditorDialog> createState() =>
+      _LocalEventEditorDialogState();
+}
+
+class _LocalEventEditorDialogState extends State<_LocalEventEditorDialog> {
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _noteCtrl;
+  late DateTime _startDate;
+  late DateTime _endDate;
+  late bool _allDay;
+  late TimeOfDay _startTime;
+  late TimeOfDay _endTime;
+  late Color _color;
+
+  @override
+  void initState() {
+    super.initState();
+    final event = widget.event;
+    _titleCtrl = TextEditingController(text: event?.title ?? '');
+    _noteCtrl = TextEditingController(text: event?.note ?? '');
+    _startDate = _dateOnly(widget.initialDate);
+    _endDate = _localEventInclusiveEndDate(event) ?? _startDate;
+    _allDay = event?.time == null;
+    _startTime = event?.time ?? const TimeOfDay(hour: 9, minute: 0);
+    _endTime = event?.endDate == null
+        ? const TimeOfDay(hour: 10, minute: 0)
+        : TimeOfDay.fromDateTime(event!.endDate!);
+    _color = event?.color ?? const Color(0xFF5B6EE1);
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSave() {
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      Navigator.pop(context, null);
+      return;
+    }
+    Navigator.pop(
+      context,
+      _LocalEventEditorDraft(
+        title: title,
+        note: _noteCtrl.text.trim(),
+        startDate: _startDate,
+        endDate: _endDate,
+        allDay: _allDay,
+        startTime: _startTime,
+        endTime: _endTime,
+        color: _color,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final event = widget.event;
+    final allDay = _allDay;
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) => AppDialog(
+        title: Text(
+          CalendarEventSheetUiCopy.editorTitle(isEditing: event != null),
+        ),
+        content: AppSecondaryControlTheme(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _titleCtrl,
+                  decoration: InputDecoration(
+                    labelText: CalendarEventSheetUiCopy.eventTitleLabel,
+                    prefixIcon: const Icon(Icons.event_note_outlined),
+                  ),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.today_outlined),
+                  title: Text(CalendarEventSheetUiCopy.allDay),
+                  subtitle: Text(CalendarEventSheetUiCopy.allDaySubtitle),
+                  value: _allDay,
+                  onChanged: (value) => setState(() => _allDay = value),
+                ),
+                _DatePickTile(
+                  icon: Icons.event_available_outlined,
+                  title: CalendarEventSheetUiCopy.startDate,
+                  value: _startDate,
+                  onTap: () async {
+                    final picked = await AppDatePicker.pickSolar(
+                      context,
+                      initialDate: _startDate,
+                      firstDate: DateTime(1900),
+                      lastDate: DateTime(2100),
+                      title: CalendarEventSheetUiCopy.startDate,
+                      titleKey: 'calendar.picker.start_date',
+                    );
+                    if (picked == null ||
+                        !context.mounted ||
+                        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                          widget.accountGeneration,
+                        )) {
+                      return;
+                    }
+                    setState(() {
+                      _startDate = _dateOnly(picked);
+                      if (_endDate.isBefore(_startDate)) {
+                        _endDate = _startDate;
+                      }
+                    });
+                  },
+                ),
+                _DatePickTile(
+                  icon: Icons.event_busy_outlined,
+                  title: CalendarEventSheetUiCopy.endDate,
+                  value: _endDate,
+                  onTap: () async {
+                    final picked = await AppDatePicker.pickSolar(
+                      context,
+                      initialDate: _endDate,
+                      firstDate: _startDate,
+                      lastDate: DateTime(2100),
+                      title: CalendarEventSheetUiCopy.endDate,
+                      titleKey: 'calendar.picker.end_date',
+                    );
+                    if (picked == null ||
+                        !context.mounted ||
+                        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                          widget.accountGeneration,
+                        )) {
+                      return;
+                    }
+                    setState(() => _endDate = _dateOnly(picked));
+                  },
+                ),
+                if (!allDay) ...[
+                  _TimePickTile(
+                    icon: Icons.schedule_outlined,
+                    title: CalendarEventSheetUiCopy.startTime,
+                    value: _startTime,
+                    onTap: () async {
+                      final picked = await AppTimePicker.show(
+                        context,
+                        initialTime: _startTime,
+                        title: CalendarEventSheetUiCopy.startTime,
+                        titleKey: 'calendar.picker.start_time',
+                        minuteStep: 5,
+                      );
+                      if (picked == null ||
+                          !context.mounted ||
+                          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                            widget.accountGeneration,
+                          )) {
+                        return;
+                      }
+                      setState(() => _startTime = picked);
+                    },
+                  ),
+                  _TimePickTile(
+                    icon: Icons.timelapse_outlined,
+                    title: CalendarEventSheetUiCopy.endTime,
+                    value: _endTime,
+                    onTap: () async {
+                      final picked = await AppTimePicker.show(
+                        context,
+                        initialTime: _endTime,
+                        title: CalendarEventSheetUiCopy.endTime,
+                        titleKey: 'calendar.picker.end_time',
+                        minuteStep: 5,
+                      );
+                      if (picked == null ||
+                          !context.mounted ||
+                          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                            widget.accountGeneration,
+                          )) {
+                        return;
+                      }
+                      setState(() => _endTime = picked);
+                    },
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final option in _localEventColors)
+                        _ColorChoice(
+                          color: option,
+                          selected: _color == option,
+                          onTap: () => setState(() => _color = option),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _noteCtrl,
+                  decoration: InputDecoration(
+                    labelText: CalendarEventSheetUiCopy.noteLabel,
+                    prefixIcon: const Icon(Icons.notes_outlined),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: Text(CalendarEventSheetUiCopy.cancel),
+          ),
+          FilledButton(
+            onPressed: _onSave,
+            child: Text(CalendarEventSheetUiCopy.save),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 Future<void> showLocalCalendarEventEditor(
@@ -43,386 +325,344 @@ Future<void> showLocalCalendarEventEditor(
   CalendarEvent? event,
   String? workspaceId,
 }) async {
+  final effectiveWorkspaceId = workspaceId ?? event?.workspaceId;
+  if (!_canEditWorkspace(context, effectiveWorkspaceId)) {
+    return;
+  }
   final provider = context.read<CalendarProvider>();
-  final titleCtrl = TextEditingController(text: event?.title ?? '');
-  final noteCtrl = TextEditingController(text: event?.note ?? '');
-  var startDate = _dateOnly(initialDate ?? event?.date ?? DateTime.now());
-  var endDate = _localEventInclusiveEndDate(event) ?? startDate;
-  var allDay = event?.time == null;
-  var startTime = event?.time ?? const TimeOfDay(hour: 9, minute: 0);
-  var endTime = event?.endDate == null
-      ? const TimeOfDay(hour: 10, minute: 0)
-      : TimeOfDay.fromDateTime(event!.endDate!);
-  var color = event?.color ?? const Color(0xFF5B6EE1);
+  final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+  final defaultDate = initialDate ?? event?.date ?? DateTime.now();
+
+  final draft = await showDialog<_LocalEventEditorDraft>(
+    context: context,
+    builder: (dialogContext) => _LocalEventEditorDialog(
+      event: event,
+      initialDate: defaultDate,
+      accountGeneration: accountGeneration,
+    ),
+  );
+
+  if (draft == null ||
+      !context.mounted ||
+      !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        accountGeneration,
+      ) ||
+      !_canEditWorkspace(context, effectiveWorkspaceId)) {
+    return;
+  }
+  final title = draft.title;
+  if (title.isEmpty) return;
+
+  final normalized = _normalizeLocalEventTime(
+    startDate: draft.startDate,
+    endDate: draft.endDate,
+    allDay: draft.allDay,
+    startTime: draft.startTime,
+    endTime: draft.endTime,
+  );
+  final next = CalendarEvent(
+    id: event?.id ?? '',
+    title: title,
+    date: normalized.start,
+    endDate: normalized.end,
+    type: CalendarEventType.event,
+    color: draft.color,
+    sourceId: event?.sourceId,
+    subtitle: draft.note.isEmpty ? null : draft.note,
+    workspaceId: effectiveWorkspaceId,
+    time: draft.allDay ? null : draft.startTime,
+    note: draft.note.isEmpty ? null : draft.note,
+    updatedAt: DateTime.now(),
+  );
+
+  if (!context.mounted ||
+      !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        accountGeneration,
+      ) ||
+      !_canEditWorkspace(context, effectiveWorkspaceId)) {
+    return;
+  }
 
   try {
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AppDialog(
-          title: Text(event == null ? '新建日程' : '编辑日程'),
-          content: AppSecondaryControlTheme(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '日程标题',
-                      prefixIcon: Icon(Icons.event_note_outlined),
-                    ),
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 12),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    secondary: const Icon(Icons.today_outlined),
-                    title: const Text('全天'),
-                    subtitle: const Text('适合假期、出差、生日等跨天安排'),
-                    value: allDay,
-                    onChanged: (value) => setDialogState(() => allDay = value),
-                  ),
-                  _DatePickTile(
-                    icon: Icons.event_available_outlined,
-                    title: '开始日期',
-                    value: startDate,
-                    onTap: () async {
-                      final picked = await AppDatePicker.pickSolar(
-                        dialogContext,
-                        initialDate: startDate,
-                        firstDate: DateTime(1900),
-                        lastDate: DateTime(2100),
-                        title: '开始日期',
-                      );
-                      if (picked == null || !dialogContext.mounted) return;
-                      setDialogState(() {
-                        startDate = _dateOnly(picked);
-                        if (endDate.isBefore(startDate)) {
-                          endDate = startDate;
-                        }
-                      });
-                    },
-                  ),
-                  _DatePickTile(
-                    icon: Icons.event_busy_outlined,
-                    title: '结束日期',
-                    value: endDate,
-                    onTap: () async {
-                      final picked = await AppDatePicker.pickSolar(
-                        dialogContext,
-                        initialDate: endDate,
-                        firstDate: startDate,
-                        lastDate: DateTime(2100),
-                        title: '结束日期',
-                      );
-                      if (picked == null || !dialogContext.mounted) return;
-                      setDialogState(() => endDate = _dateOnly(picked));
-                    },
-                  ),
-                  if (!allDay) ...[
-                    _TimePickTile(
-                      icon: Icons.schedule_outlined,
-                      title: '开始时间',
-                      value: startTime,
-                      onTap: () async {
-                        final picked = await AppTimePicker.show(
-                          dialogContext,
-                          initialTime: startTime,
-                          title: '开始时间',
-                          minuteStep: 5,
-                        );
-                        if (picked == null || !dialogContext.mounted) return;
-                        setDialogState(() => startTime = picked);
-                      },
-                    ),
-                    _TimePickTile(
-                      icon: Icons.timelapse_outlined,
-                      title: '结束时间',
-                      value: endTime,
-                      onTap: () async {
-                        final picked = await AppTimePicker.show(
-                          dialogContext,
-                          initialTime: endTime,
-                          title: '结束时间',
-                          minuteStep: 5,
-                        );
-                        if (picked == null || !dialogContext.mounted) return;
-                        setDialogState(() => endTime = picked);
-                      },
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final option in _localEventColors)
-                          _ColorChoice(
-                            color: option,
-                            selected: color == option,
-                            onTap: () => setDialogState(() => color = option),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: noteCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '备注',
-                      prefixIcon: Icon(Icons.notes_outlined),
-                    ),
-                    maxLines: 2,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('保存'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (saved != true || !context.mounted) return;
-    final title = titleCtrl.text.trim();
-    if (title.isEmpty) return;
-
-    final normalized = _normalizeLocalEventTime(
-      startDate: startDate,
-      endDate: endDate,
-      allDay: allDay,
-      startTime: startTime,
-      endTime: endTime,
-    );
-    final effectiveWorkspaceId = workspaceId ?? event?.workspaceId;
-    final next = CalendarEvent(
-      id: event?.id ?? '',
-      title: title,
-      date: normalized.start,
-      endDate: normalized.end,
-      type: CalendarEventType.event,
-      color: color,
-      sourceId: event?.sourceId,
-      subtitle: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
-      workspaceId: effectiveWorkspaceId,
-      time: allDay ? null : startTime,
-      note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
-      updatedAt: DateTime.now(),
-    );
     if (event == null) {
       await provider.addLocalEvent(next);
     } else {
       await provider.updateLocalEvent(next);
     }
-  } finally {
-    titleCtrl.dispose();
-    noteCtrl.dispose();
+  } catch (e) {
+    if (context.mounted &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${CalendarEventSheetUiCopy.saveFailed}: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
   }
 }
 
-class CalendarEventSheet extends StatelessWidget {
+class CalendarEventSheet extends StatefulWidget {
   final CalendarEvent event;
+  final int? accountGeneration;
 
-  const CalendarEventSheet({super.key, required this.event});
+  const CalendarEventSheet({
+    super.key,
+    required this.event,
+    this.accountGeneration,
+  });
+
+  @override
+  State<CalendarEventSheet> createState() => _CalendarEventSheetState();
+}
+
+class _CalendarEventSheetState extends State<CalendarEventSheet> {
+  late final int _originAccountGeneration;
+
+  @override
+  void initState() {
+    super.initState();
+    _originAccountGeneration =
+        widget.accountGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    AccountLocalDataCleaner.accountDataGenerationListenable.addListener(
+      _onAccountDataGenerationChanged,
+    );
+  }
+
+  @override
+  void dispose() {
+    AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
+      _onAccountDataGenerationChanged,
+    );
+    super.dispose();
+  }
+
+  void _onAccountDataGenerationChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  bool _canEditEvent(BuildContext context) =>
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        _originAccountGeneration,
+      ) &&
+      _canEditWorkspace(context, widget.event.workspaceId);
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return AppModalSheet(
-      title: event.title,
-      maxWidth: 860,
-      scrollable: false,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.68,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header row: icon + type tag + time + conflict warning
-            Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: event.color.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(_icon(event.type), color: event.color),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AppStatusBadge(
-                        label: event.type.label,
-                        color: event.color,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _timeText(event),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (event.hasConflict)
-                  Tooltip(
-                    message: '同一时间段还有 ${event.conflictCount} 个事项',
-                    child: Icon(
-                      Icons.warning_amber_rounded,
-                      color: cs.error,
-                      size: 20,
-                    ),
-                  ),
-              ],
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) {
+        final cs = Theme.of(context).colorScheme;
+        final displayTitle = CalendarEventDisplayText.resolveTitle(
+          widget.event,
+        );
+        final displaySubtitle = CalendarEventDisplayText.resolveSubtitle(
+          widget.event,
+        );
+        return AppModalSheet(
+          title: displayTitle,
+          maxWidth: 860,
+          scrollable: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.68,
             ),
-            Flexible(
-              child: SingleChildScrollView(
-                key: const ValueKey('calendar_event_detail_scroll_region'),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header row: icon + type tag + time + conflict warning
+                Row(
                   children: [
-                    if (event.subtitle != null &&
-                        event.subtitle!.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        event.subtitle!,
-                        style: TextStyle(
-                          color: cs.onSurface.withValues(alpha: 0.68),
-                          fontSize: 13,
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: widget.event.color.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _icon(widget.event.type),
+                        color: widget.event.color,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppStatusBadge(
+                            label: widget.event.type.label,
+                            color: widget.event.color,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _timeText(widget.event),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (widget.event.hasConflict)
+                      Tooltip(
+                        message: CalendarEventSheetUiCopy.conflictWarning(
+                          widget.event.conflictCount,
+                        ),
+                        child: Icon(
+                          Icons.warning_amber_rounded,
+                          color: cs.error,
+                          size: 20,
                         ),
                       ),
-                    ],
                   ],
                 ),
-              ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    key: const ValueKey('calendar_event_detail_scroll_region'),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (displaySubtitle != null &&
+                            displaySubtitle.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            displaySubtitle,
+                            style: TextStyle(
+                              color: cs.onSurface.withValues(alpha: 0.68),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Type-specific action buttons
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _buildActions(context),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            // Type-specific action buttons
-            Wrap(spacing: 8, runSpacing: 8, children: _buildActions(context)),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
   /// Build action buttons based on event type.
   List<Widget> _buildActions(BuildContext context) {
-    switch (event.type) {
+    final canEdit = _canEditEvent(context);
+    switch (widget.event.type) {
       case CalendarEventType.event:
         return [
           _actionButton(
             context,
             icon: Icons.edit_outlined,
-            label: '编辑',
-            onPressed: () => _editLocalEvent(context),
+            label: CalendarEventSheetUiCopy.actionEdit,
+            onPressed: canEdit ? () => _editLocalEvent(context) : null,
           ),
           _actionButton(
             context,
             icon: Icons.delete_outline,
-            label: '删除',
-            onPressed: () => _delete(context),
+            label: CalendarEventSheetUiCopy.actionDelete,
+            onPressed: canEdit ? () => _delete(context) : null,
             tonal: true,
           ),
         ];
       case CalendarEventType.todo:
         return [
-          if (!event.isCompleted)
+          if (!widget.event.isCompleted)
             _actionButton(
               context,
               icon: Icons.done,
-              label: '完成',
-              onPressed: () => _completeTodo(context),
+              label: CalendarEventSheetUiCopy.actionComplete,
+              onPressed: canEdit ? () => _completeTodo(context) : null,
             ),
           _actionButton(
             context,
             icon: Icons.event_repeat,
-            label: '改期',
-            onPressed: () => _reschedule(context),
+            label: CalendarEventSheetUiCopy.actionReschedule,
+            onPressed: canEdit ? () => _reschedule(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.schedule_outlined,
-            label: '调整时间',
-            onPressed: () => _adjustTodoTime(context),
+            label: CalendarEventSheetUiCopy.actionAdjustTime,
+            onPressed: canEdit ? () => _adjustTodoTime(context) : null,
           ),
           _actionButton(
             context,
             icon: Icons.edit_outlined,
-            label: '编辑',
-            onPressed: () => _openDetail(context),
+            label: CalendarEventSheetUiCopy.actionEdit,
+            onPressed: canEdit ? () => _openDetail(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.open_in_new,
-            label: '跳转详情',
-            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            label: CalendarEventSheetUiCopy.actionOpenDetail,
+            onPressed: widget.event.canOpen ? () => _openDetail(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.delete_outline,
-            label: '删除',
-            onPressed: () => _delete(context),
+            label: CalendarEventSheetUiCopy.actionDelete,
+            onPressed: canEdit ? () => _delete(context) : null,
             tonal: true,
           ),
         ];
       case CalendarEventType.habit:
-        final habit = event.sourceId == null
+        final habit = widget.event.sourceId == null
             ? null
             : context
                   .read<HabitProvider>()
                   .habits
-                  .where((h) => h.id == event.sourceId)
+                  .where((h) => h.id == widget.event.sourceId)
                   .firstOrNull;
         final isNegative = habit?.kind == HabitKind.negative;
         return [
-          if (!event.isCompleted)
+          if (!widget.event.isCompleted)
             _actionButton(
               context,
               icon: isNegative ? Icons.add_circle_outline : Icons.check,
-              label: isNegative ? '记录一次' : '打卡',
-              onPressed: () => _checkInHabit(context),
+              label: isNegative
+                  ? CalendarEventSheetUiCopy.actionLogOnce
+                  : CalendarEventSheetUiCopy.actionCheckIn,
+              onPressed: canEdit ? () => _checkInHabit(context) : null,
             ),
           _actionButton(
             context,
             icon: Icons.edit_outlined,
-            label: '编辑',
-            onPressed: () => _editSourceEvent(context),
+            label: CalendarEventSheetUiCopy.actionEdit,
+            onPressed: canEdit ? () => _editSourceEvent(context) : null,
           ),
           _actionButton(
             context,
             icon: Icons.open_in_new,
-            label: '跳转详情',
-            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            label: CalendarEventSheetUiCopy.actionOpenDetail,
+            onPressed: widget.event.canOpen ? () => _openDetail(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.delete_outline,
-            label: '删除',
-            onPressed: () => _delete(context),
+            label: CalendarEventSheetUiCopy.actionDelete,
+            onPressed: canEdit ? () => _delete(context) : null,
             tonal: true,
           ),
         ];
@@ -431,27 +671,27 @@ class CalendarEventSheet extends StatelessWidget {
           _actionButton(
             context,
             icon: Icons.play_arrow,
-            label: '开始专注',
+            label: CalendarEventSheetUiCopy.actionStartFocus,
             onPressed: () => _startFocus(context),
           ),
           _actionButton(
             context,
             icon: Icons.edit_outlined,
-            label: '编辑',
-            onPressed: () => _editSourceEvent(context),
+            label: CalendarEventSheetUiCopy.actionEdit,
+            onPressed: canEdit ? () => _editSourceEvent(context) : null,
           ),
           _actionButton(
             context,
             icon: Icons.open_in_new,
-            label: '跳转详情',
-            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            label: CalendarEventSheetUiCopy.actionOpenDetail,
+            onPressed: widget.event.canOpen ? () => _openDetail(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.delete_outline,
-            label: '删除',
-            onPressed: () => _delete(context),
+            label: CalendarEventSheetUiCopy.actionDelete,
+            onPressed: canEdit ? () => _delete(context) : null,
             tonal: true,
           ),
         ];
@@ -460,22 +700,22 @@ class CalendarEventSheet extends StatelessWidget {
           _actionButton(
             context,
             icon: Icons.event_repeat,
-            label: '改期',
-            onPressed: () => _reschedule(context),
+            label: CalendarEventSheetUiCopy.actionReschedule,
+            onPressed: canEdit ? () => _reschedule(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.open_in_new,
-            label: '跳转详情',
-            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            label: CalendarEventSheetUiCopy.actionOpenDetail,
+            onPressed: widget.event.canOpen ? () => _openDetail(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.delete_outline,
-            label: '删除',
-            onPressed: () => _delete(context),
+            label: CalendarEventSheetUiCopy.actionDelete,
+            onPressed: canEdit ? () => _delete(context) : null,
             tonal: true,
           ),
         ];
@@ -484,21 +724,21 @@ class CalendarEventSheet extends StatelessWidget {
           _actionButton(
             context,
             icon: Icons.edit_outlined,
-            label: '编辑',
-            onPressed: () => _editSourceEvent(context),
+            label: CalendarEventSheetUiCopy.actionEdit,
+            onPressed: canEdit ? () => _editSourceEvent(context) : null,
           ),
           _actionButton(
             context,
             icon: Icons.open_in_new,
-            label: '跳转详情',
-            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            label: CalendarEventSheetUiCopy.actionOpenDetail,
+            onPressed: widget.event.canOpen ? () => _openDetail(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.delete_outline,
-            label: '删除',
-            onPressed: () => _delete(context),
+            label: CalendarEventSheetUiCopy.actionDelete,
+            onPressed: canEdit ? () => _delete(context) : null,
             tonal: true,
           ),
         ];
@@ -507,28 +747,28 @@ class CalendarEventSheet extends StatelessWidget {
           _actionButton(
             context,
             icon: Icons.event_repeat,
-            label: '改期',
-            onPressed: () => _reschedule(context),
+            label: CalendarEventSheetUiCopy.actionReschedule,
+            onPressed: canEdit ? () => _reschedule(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.edit_outlined,
-            label: '编辑',
-            onPressed: () => _editSourceEvent(context),
+            label: CalendarEventSheetUiCopy.actionEdit,
+            onPressed: canEdit ? () => _editSourceEvent(context) : null,
           ),
           _actionButton(
             context,
             icon: Icons.open_in_new,
-            label: '跳转详情',
-            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            label: CalendarEventSheetUiCopy.actionOpenDetail,
+            onPressed: widget.event.canOpen ? () => _openDetail(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.delete_outline,
-            label: '删除',
-            onPressed: () => _delete(context),
+            label: CalendarEventSheetUiCopy.actionDelete,
+            onPressed: canEdit ? () => _delete(context) : null,
             tonal: true,
           ),
         ];
@@ -537,28 +777,28 @@ class CalendarEventSheet extends StatelessWidget {
           _actionButton(
             context,
             icon: Icons.event_repeat,
-            label: '改期',
-            onPressed: () => _reschedule(context),
+            label: CalendarEventSheetUiCopy.actionReschedule,
+            onPressed: canEdit ? () => _reschedule(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.edit_outlined,
-            label: '编辑',
-            onPressed: () => _editSourceEvent(context),
+            label: CalendarEventSheetUiCopy.actionEdit,
+            onPressed: canEdit ? () => _editSourceEvent(context) : null,
           ),
           _actionButton(
             context,
             icon: Icons.open_in_new,
-            label: '跳转详情',
-            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            label: CalendarEventSheetUiCopy.actionOpenDetail,
+            onPressed: widget.event.canOpen ? () => _openDetail(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.delete_outline,
-            label: '删除',
-            onPressed: () => _delete(context),
+            label: CalendarEventSheetUiCopy.actionDelete,
+            onPressed: canEdit ? () => _delete(context) : null,
             tonal: true,
           ),
         ];
@@ -567,58 +807,58 @@ class CalendarEventSheet extends StatelessWidget {
           _actionButton(
             context,
             icon: Icons.edit_outlined,
-            label: '编辑',
-            onPressed: () => _editSourceEvent(context),
+            label: CalendarEventSheetUiCopy.actionEdit,
+            onPressed: canEdit ? () => _editSourceEvent(context) : null,
           ),
           _actionButton(
             context,
             icon: Icons.open_in_new,
-            label: '跳转详情',
-            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            label: CalendarEventSheetUiCopy.actionOpenDetail,
+            onPressed: widget.event.canOpen ? () => _openDetail(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.delete_outline,
-            label: '删除',
-            onPressed: () => _delete(context),
+            label: CalendarEventSheetUiCopy.actionDelete,
+            onPressed: canEdit ? () => _delete(context) : null,
             tonal: true,
           ),
         ];
       case CalendarEventType.timeEntry:
-        if (event.sourceId == null) return const <Widget>[];
+        if (widget.event.sourceId == null) return const <Widget>[];
         return [
           _actionButton(
             context,
             icon: Icons.event_repeat,
-            label: '改期',
-            onPressed: () => _reschedule(context),
+            label: CalendarEventSheetUiCopy.actionReschedule,
+            onPressed: canEdit ? () => _reschedule(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.schedule_outlined,
-            label: '调整开始',
-            onPressed: () => _adjustTimeEntryStart(context),
+            label: CalendarEventSheetUiCopy.actionAdjustStart,
+            onPressed: canEdit ? () => _adjustTimeEntryStart(context) : null,
           ),
           _actionButton(
             context,
             icon: Icons.timer_outlined,
-            label: '调整时长',
-            onPressed: () => _adjustTimeEntryDuration(context),
+            label: CalendarEventSheetUiCopy.actionAdjustDuration,
+            onPressed: canEdit ? () => _adjustTimeEntryDuration(context) : null,
           ),
           _actionButton(
             context,
             icon: Icons.open_in_new,
-            label: '跳转详情',
-            onPressed: event.canOpen ? () => _openDetail(context) : null,
+            label: CalendarEventSheetUiCopy.actionOpenDetail,
+            onPressed: widget.event.canOpen ? () => _openDetail(context) : null,
             tonal: true,
           ),
           _actionButton(
             context,
             icon: Icons.delete_outline,
-            label: '删除',
-            onPressed: () => _delete(context),
+            label: CalendarEventSheetUiCopy.actionDelete,
+            onPressed: canEdit ? () => _delete(context) : null,
             tonal: true,
           ),
         ];
@@ -660,32 +900,103 @@ class CalendarEventSheet extends StatelessWidget {
   // ---- CalendarActionRouter: dispatches actions back to source providers ----
 
   Future<void> _completeTodo(BuildContext context) async {
-    final sourceId = event.sourceId;
+    final sourceId = widget.event.sourceId;
     if (sourceId == null) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
     final todo = context
         .read<TodoProvider>()
         .todos
         .where((t) => t.id == sourceId)
         .firstOrNull;
     if (todo == null) return;
-    await completeTodoWithOptionalTimeRecord(context, todo);
-    if (context.mounted) Navigator.pop(context);
+    try {
+      await completeTodoWithOptionalTimeRecord(context, todo);
+      if (mounted &&
+          context.mounted &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            _originAccountGeneration,
+          )) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted &&
+          context.mounted &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            _originAccountGeneration,
+          )) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${CalendarEventSheetUiCopy.actionCompleteFailed}: $e',
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _checkInHabit(BuildContext context) async {
-    final sourceId = event.sourceId;
+    final sourceId = widget.event.sourceId;
     if (sourceId == null) return;
-    await context.read<HabitProvider>().incrementHabitForDate(
-      sourceId,
-      event.date,
-    );
-    if (context.mounted) Navigator.pop(context);
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
+    try {
+      await context.read<HabitProvider>().incrementHabitForDate(
+        sourceId,
+        widget.event.date,
+      );
+      if (mounted &&
+          context.mounted &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            _originAccountGeneration,
+          )) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted &&
+          context.mounted &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            _originAccountGeneration,
+          )) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${CalendarEventSheetUiCopy.actionCheckInFailed}: $e',
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _startFocus(BuildContext context) async {
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      _originAccountGeneration,
+    )) {
+      return;
+    }
     final navigator = Navigator.of(context);
+    final hostContext = navigator.context;
     navigator.pop();
-    if (!navigator.mounted) return;
+    if (!hostContext.mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        )) {
+      return;
+    }
     await navigator.push(
       MaterialPageRoute(
         builder: (_) => const BrandRouteSurface(
@@ -696,13 +1007,23 @@ class CalendarEventSheet extends StatelessWidget {
   }
 
   Future<void> _openDetail(BuildContext context) async {
-    final sourceId = event.sourceId;
+    final sourceId = widget.event.sourceId;
     if (sourceId == null) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      _originAccountGeneration,
+    )) {
+      return;
+    }
     final navigator = Navigator.of(context);
     final navigationContext = navigator.context;
     navigator.pop();
-    if (!navigationContext.mounted) return;
-    switch (event.type) {
+    if (!navigationContext.mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        )) {
+      return;
+    }
+    switch (widget.event.type) {
       case CalendarEventType.todo:
         await TodayDetailRouter.open(
           navigationContext,
@@ -740,7 +1061,12 @@ class CalendarEventSheet extends StatelessWidget {
           id: sourceId,
         );
       case CalendarEventType.countdown:
-        if (!navigator.mounted) return;
+        if (!navigationContext.mounted ||
+            !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              _originAccountGeneration,
+            )) {
+          return;
+        }
         await navigator.push(
           MaterialPageRoute(
             builder: (_) => BrandRouteSurface(
@@ -750,7 +1076,12 @@ class CalendarEventSheet extends StatelessWidget {
         );
       case CalendarEventType.timeEntry:
       case CalendarEventType.pomodoro:
-        if (!navigator.mounted) return;
+        if (!navigationContext.mounted ||
+            !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              _originAccountGeneration,
+            )) {
+          return;
+        }
         await navigator.push(
           MaterialPageRoute(
             builder: (_) => const BrandRouteSurface(child: TimeAuditScreen()),
@@ -762,19 +1093,35 @@ class CalendarEventSheet extends StatelessWidget {
   }
 
   Future<void> _reschedule(BuildContext context) async {
-    final sourceId = event.sourceId;
-    if (sourceId == null) return;
+    final sourceId = widget.event.sourceId;
+    if (sourceId == null && widget.event.type != CalendarEventType.event) {
+      return;
+    }
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
     final picked = await AppDatePicker.pickSolar(
       context,
-      initialDate: event.date,
+      initialDate: widget.event.date,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      title: '调整日期',
+      title: CalendarEventSheetUiCopy.rescheduleDateTitle,
+      titleKey: 'calendar.picker.reschedule_date',
     );
-    if (picked == null || !context.mounted) return;
+    if (picked == null ||
+        !context.mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
 
     String? reminderSyncIssue;
-    switch (event.type) {
+    switch (widget.event.type) {
       case CalendarEventType.todo:
         final provider = context.read<TodoProvider>();
         final todo = provider.todos.where((t) => t.id == sourceId).firstOrNull;
@@ -829,7 +1176,7 @@ class CalendarEventSheet extends StatelessWidget {
       case CalendarEventType.event:
         final provider = context.read<CalendarProvider>();
         final original = provider.localEvents
-            .where((local) => local.id == event.id)
+            .where((local) => local.id == widget.event.id)
             .firstOrNull;
         if (original != null) {
           final duration = (original.endDate ?? original.date).difference(
@@ -843,14 +1190,17 @@ class CalendarEventSheet extends StatelessWidget {
       default:
         break;
     }
-    if (context.mounted) {
+    if (context.mounted &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        )) {
       final messenger = ScaffoldMessenger.maybeOf(context);
       final issue = reminderSyncIssue?.trim();
       Navigator.pop(context);
       if (issue != null && issue.isNotEmpty) {
         messenger?.showSnackBar(
           SnackBar(
-            content: Text('日期已保存到本机，但提醒未注册：$issue'),
+            content: Text(CalendarEventSheetUiCopy.reminderSyncIssue(issue)),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -859,38 +1209,83 @@ class CalendarEventSheet extends StatelessWidget {
   }
 
   Future<void> _adjustTimeEntryDuration(BuildContext context) async {
-    final sourceId = event.sourceId;
+    final sourceId = widget.event.sourceId;
     if (sourceId == null) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
     final provider = context.read<TimeAuditProvider>();
     final entry = provider.entries.where((e) => e.id == sourceId).firstOrNull;
     if (entry == null) return;
 
     final minutes = await showAppModalSheet<int>(
       context: context,
-      builder: (_) => AppPickerSheet<int>(
-        title: '调整时长',
-        subtitle: '保留开始时间，快速调整结束时间',
-        selectedValue: (entry.durationSeconds / 60).round(),
-        options: const [
-          AppPickerOption(value: 15, title: '15 分钟'),
-          AppPickerOption(value: 30, title: '30 分钟'),
-          AppPickerOption(value: 45, title: '45 分钟'),
-          AppPickerOption(value: 60, title: '60 分钟'),
-          AppPickerOption(value: 90, title: '90 分钟'),
-          AppPickerOption(value: 120, title: '120 分钟'),
-        ],
+      builder: (_) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (_, _, _) => AppPickerSheet<int>(
+          title: CalendarEventSheetUiCopy.adjustDurationTitle,
+          subtitle: CalendarEventSheetUiCopy.adjustDurationSubtitle,
+          selectedValue: (entry.durationSeconds / 60).round(),
+          options: [
+            AppPickerOption(
+              value: 15,
+              title: CalendarEventSheetUiCopy.durationOption(15),
+            ),
+            AppPickerOption(
+              value: 30,
+              title: CalendarEventSheetUiCopy.durationOption(30),
+            ),
+            AppPickerOption(
+              value: 45,
+              title: CalendarEventSheetUiCopy.durationOption(45),
+            ),
+            AppPickerOption(
+              value: 60,
+              title: CalendarEventSheetUiCopy.durationOption(60),
+            ),
+            AppPickerOption(
+              value: 90,
+              title: CalendarEventSheetUiCopy.durationOption(90),
+            ),
+            AppPickerOption(
+              value: 120,
+              title: CalendarEventSheetUiCopy.durationOption(120),
+            ),
+          ],
+        ),
       ),
     );
-    if (minutes == null || !context.mounted) return;
+    if (minutes == null ||
+        !context.mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
     await provider.update(
       entry.copyWith(endAt: entry.startAt.add(Duration(minutes: minutes))),
     );
-    if (context.mounted) Navigator.pop(context);
+    if (context.mounted &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        )) {
+      Navigator.pop(context);
+    }
   }
 
   Future<void> _adjustTimeEntryStart(BuildContext context) async {
-    final sourceId = event.sourceId;
+    final sourceId = widget.event.sourceId;
     if (sourceId == null) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
     final provider = context.read<TimeAuditProvider>();
     final entry = provider.entries.where((e) => e.id == sourceId).firstOrNull;
     if (entry == null) return;
@@ -898,10 +1293,19 @@ class CalendarEventSheet extends StatelessWidget {
     final picked = await AppTimePicker.show(
       context,
       initialTime: TimeOfDay.fromDateTime(entry.startAt),
-      title: '调整开始时间',
-      subtitle: '保留当前日期和时长，自动更新结束时间',
+      title: CalendarEventSheetUiCopy.adjustStartTimeTitle,
+      subtitle: CalendarEventSheetUiCopy.adjustStartTimeSubtitle,
+      titleKey: 'calendar.picker.adjust_start_time',
+      subtitleKey: 'calendar.picker.adjust_start_time_subtitle',
     );
-    if (picked == null || !context.mounted) return;
+    if (picked == null ||
+        !context.mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
 
     final startAt = DateTime(
       entry.startAt.year,
@@ -914,12 +1318,23 @@ class CalendarEventSheet extends StatelessWidget {
     await provider.update(
       entry.copyWith(startAt: startAt, endAt: startAt.add(duration)),
     );
-    if (context.mounted) Navigator.pop(context);
+    if (context.mounted &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        )) {
+      Navigator.pop(context);
+    }
   }
 
   Future<void> _adjustTodoTime(BuildContext context) async {
-    final sourceId = event.sourceId;
+    final sourceId = widget.event.sourceId;
     if (sourceId == null) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
     final provider = context.read<TodoProvider>();
     final todo = provider.todos.where((t) => t.id == sourceId).firstOrNull;
     if (todo == null) return;
@@ -928,10 +1343,19 @@ class CalendarEventSheet extends StatelessWidget {
     final picked = await AppTimePicker.show(
       context,
       initialTime: TimeOfDay.fromDateTime(base),
-      title: '调整时间',
-      subtitle: '保留当前日期，只调整当天截止时间',
+      title: CalendarEventSheetUiCopy.adjustDueTimeTitle,
+      subtitle: CalendarEventSheetUiCopy.adjustDueTimeSubtitle,
+      titleKey: 'calendar.picker.adjust_due_time',
+      subtitleKey: 'calendar.picker.adjust_due_time_subtitle',
     );
-    if (picked == null || !context.mounted) return;
+    if (picked == null ||
+        !context.mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
 
     final dueDate = DateTime(
       todo.date.year,
@@ -947,7 +1371,12 @@ class CalendarEventSheet extends StatelessWidget {
       todo.copyWith(dueDate: dueDate),
     );
     if (!saved) return;
-    if (context.mounted) Navigator.pop(context);
+    if (context.mounted &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        )) {
+      Navigator.pop(context);
+    }
   }
 
   Future<bool> _saveTodoFromCalendarSheet(
@@ -963,21 +1392,32 @@ class CalendarEventSheet extends StatelessWidget {
         next,
         waitForReminderSync: waitForReminderSync,
       );
-      if (!context.mounted) return false;
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            _originAccountGeneration,
+          )) {
+        return false;
+      }
       if (!saveResult.saved) {
-        _showTodoSaveIssue(context, '待办正在保存中，请稍后重试');
+        _showTodoSaveIssue(context, CalendarEventSheetUiCopy.todoSavingBusy);
         return false;
       }
       final reminderIssue = waitForReminderSync
           ? saveResult.reminderSync?.issue
           : null;
       if (reminderIssue != null) {
-        _showTodoSaveIssue(context, '待办已保存，但提醒未注册：$reminderIssue');
+        _showTodoSaveIssue(
+          context,
+          CalendarEventSheetUiCopy.todoReminderSyncIssue(reminderIssue),
+        );
       }
       return true;
     } catch (e) {
-      if (context.mounted) {
-        _showTodoSaveIssue(context, '待办保存失败：$e');
+      if (context.mounted &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            _originAccountGeneration,
+          )) {
+        _showTodoSaveIssue(context, CalendarEventSheetUiCopy.todoSaveFailed(e));
       }
       return false;
     }
@@ -1000,19 +1440,36 @@ class CalendarEventSheet extends StatelessWidget {
   }
 
   Future<void> _editLocalEvent(BuildContext context) async {
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
     final navigator = Navigator.of(context);
     final navigationContext = navigator.context;
     navigator.pop();
-    if (!navigationContext.mounted) return;
-    await showLocalCalendarEventEditor(navigationContext, event: event);
+    if (!navigationContext.mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        )) {
+      return;
+    }
+    await showLocalCalendarEventEditor(navigationContext, event: widget.event);
   }
 
   Future<void> _editSourceEvent(BuildContext context) async {
-    final sourceId = event.sourceId;
+    final sourceId = widget.event.sourceId;
     if (sourceId == null) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
+      return;
+    }
     final navigator = Navigator.of(context);
     final navigationContext = navigator.context;
-    switch (event.type) {
+    switch (widget.event.type) {
       case CalendarEventType.anniversary:
         final item = context
             .read<AnniversaryProvider>()
@@ -1021,7 +1478,12 @@ class CalendarEventSheet extends StatelessWidget {
             .firstOrNull;
         if (item == null) return;
         navigator.pop();
-        if (!navigationContext.mounted) return;
+        if (!navigationContext.mounted ||
+            !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              _originAccountGeneration,
+            )) {
+          return;
+        }
         await showAnniversaryEditor(navigationContext, item: item);
       case CalendarEventType.countdown:
         final item = context
@@ -1031,7 +1493,12 @@ class CalendarEventSheet extends StatelessWidget {
             .firstOrNull;
         if (item == null) return;
         navigator.pop();
-        if (!navigationContext.mounted) return;
+        if (!navigationContext.mounted ||
+            !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              _originAccountGeneration,
+            )) {
+          return;
+        }
         await showCountdownEditor(navigationContext, item: item);
       case CalendarEventType.course:
         final item = context
@@ -1041,7 +1508,12 @@ class CalendarEventSheet extends StatelessWidget {
             .firstOrNull;
         if (item == null) return;
         navigator.pop();
-        if (!navigationContext.mounted) return;
+        if (!navigationContext.mounted ||
+            !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              _originAccountGeneration,
+            )) {
+          return;
+        }
         await showCourseEditor(navigationContext, course: item);
       case CalendarEventType.diary:
         final item = context
@@ -1051,7 +1523,12 @@ class CalendarEventSheet extends StatelessWidget {
             .firstOrNull;
         if (item == null) return;
         navigator.pop();
-        if (!navigationContext.mounted) return;
+        if (!navigationContext.mounted ||
+            !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              _originAccountGeneration,
+            )) {
+          return;
+        }
         await showDiaryEditor(navigationContext, entry: item);
       case CalendarEventType.habit:
         final item = context
@@ -1061,7 +1538,12 @@ class CalendarEventSheet extends StatelessWidget {
             .firstOrNull;
         if (item == null) return;
         navigator.pop();
-        if (!navigationContext.mounted) return;
+        if (!navigationContext.mounted ||
+            !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              _originAccountGeneration,
+            )) {
+          return;
+        }
         await showHabitEditor(navigationContext, item);
       case CalendarEventType.pomodoro:
         final item = context
@@ -1071,7 +1553,12 @@ class CalendarEventSheet extends StatelessWidget {
             .firstOrNull;
         if (item == null) return;
         navigator.pop();
-        if (!navigationContext.mounted) return;
+        if (!navigationContext.mounted ||
+            !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              _originAccountGeneration,
+            )) {
+          return;
+        }
         await showPomodoroSessionEditor(navigationContext, item);
       default:
         break;
@@ -1079,36 +1566,69 @@ class CalendarEventSheet extends StatelessWidget {
   }
 
   Future<void> _delete(BuildContext context) async {
-    if (event.type == CalendarEventType.event) {
-      await context.read<CalendarProvider>().deleteLocalEvent(event.id);
-      if (context.mounted) Navigator.pop(context);
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          _originAccountGeneration,
+        ) ||
+        !_canEditEvent(context)) {
       return;
     }
-    final sourceId = event.sourceId;
-    if (sourceId == null) return;
-    switch (event.type) {
-      case CalendarEventType.todo:
-        await context.read<TodoProvider>().deleteTodo(sourceId);
-      case CalendarEventType.habit:
-        await context.read<HabitProvider>().deleteHabit(sourceId);
-      case CalendarEventType.goal:
-        await context.read<GoalProvider>().delete(sourceId);
-      case CalendarEventType.anniversary:
-        await context.read<AnniversaryProvider>().delete(sourceId);
-      case CalendarEventType.countdown:
-        await context.read<CountdownProvider>().deleteItem(sourceId);
-      case CalendarEventType.course:
-        await context.read<CourseProvider>().delete(sourceId);
-      case CalendarEventType.diary:
-        await context.read<DiaryProvider>().delete(sourceId);
-      case CalendarEventType.timeEntry:
-        await context.read<TimeAuditProvider>().delete(sourceId);
-      case CalendarEventType.pomodoro:
-        await context.read<PomodoroProvider>().deleteSession(sourceId);
-      default:
-        break;
+    try {
+      if (widget.event.type == CalendarEventType.event) {
+        await context.read<CalendarProvider>().deleteLocalEvent(
+          widget.event.id,
+        );
+        if (context.mounted &&
+            AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              _originAccountGeneration,
+            )) {
+          Navigator.pop(context);
+        }
+        return;
+      }
+      final sourceId = widget.event.sourceId;
+      if (sourceId == null) return;
+      switch (widget.event.type) {
+        case CalendarEventType.todo:
+          await context.read<TodoProvider>().deleteTodo(sourceId);
+        case CalendarEventType.habit:
+          await context.read<HabitProvider>().deleteHabit(sourceId);
+        case CalendarEventType.goal:
+          await context.read<GoalProvider>().delete(sourceId);
+        case CalendarEventType.anniversary:
+          await context.read<AnniversaryProvider>().delete(sourceId);
+        case CalendarEventType.countdown:
+          await context.read<CountdownProvider>().deleteItem(sourceId);
+        case CalendarEventType.course:
+          await context.read<CourseProvider>().delete(sourceId);
+        case CalendarEventType.diary:
+          await context.read<DiaryProvider>().delete(sourceId);
+        case CalendarEventType.timeEntry:
+          await context.read<TimeAuditProvider>().delete(sourceId);
+        case CalendarEventType.pomodoro:
+          await context.read<PomodoroProvider>().deleteSession(sourceId);
+        default:
+          break;
+      }
+      if (context.mounted &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            _originAccountGeneration,
+          )) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (context.mounted &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            _originAccountGeneration,
+          )) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${CalendarEventSheetUiCopy.deleteFailed}: $e'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
-    if (context.mounted) Navigator.pop(context);
   }
 
   DateTime _sameTime(DateTime date, DateTime time) {
@@ -1154,12 +1674,11 @@ class CalendarEventSheet extends StatelessWidget {
   }
 
   String _allDayText(CalendarEvent event) {
-    final start = I18nDateFormat.monthDay(event.date);
     final visibleEnd = _localEventInclusiveEndDate(event);
     if (visibleEnd == null || _dateOnly(event.date) == visibleEnd) {
-      return '$start 全天';
+      return CalendarEventSheetUiCopy.allDaySingle(event.date);
     }
-    return '$start - ${I18nDateFormat.monthDay(visibleEnd)} 全天';
+    return CalendarEventSheetUiCopy.allDayRange(event.date, visibleEnd);
   }
 }
 
@@ -1280,9 +1799,11 @@ _LocalEventTimeRange _normalizeLocalEventTime({
   required TimeOfDay endTime,
 }) {
   if (allDay) {
+    // Preserve local midnight across DST transitions while satisfying
+    // inclusive-end calendar semantics (legacy: endDate.add(const Duration(days: 1))).
     return _LocalEventTimeRange(
       start: startDate,
-      end: endDate.add(const Duration(days: 1)),
+      end: DateTime(endDate.year, endDate.month, endDate.day + 1),
     );
   }
   final start = DateTime(
@@ -1311,7 +1832,7 @@ DateTime? _localEventInclusiveEndDate(CalendarEvent? event) {
   if (event.time != null) return _dateOnly(endDate);
   final end = _dateOnly(endDate);
   if (end.isAfter(_dateOnly(event.date))) {
-    return end.subtract(const Duration(days: 1));
+    return DateTime(end.year, end.month, end.day - 1);
   }
   return end;
 }
