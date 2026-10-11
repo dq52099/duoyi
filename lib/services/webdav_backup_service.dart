@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/account_preference_writes.dart';
+import 'account_local_data_cleaner.dart';
 import 'backup_service.dart';
 
 class WebDavBackupConfig {
@@ -60,28 +62,70 @@ class WebDavBackupResult {
 
 class WebDavBackupService {
   final http.Client _client;
+  static Future<void> _configWriteTail = Future<void>.value();
 
   WebDavBackupService({http.Client? client})
     : _client = client ?? http.Client();
 
   static Future<WebDavBackupConfig> loadConfig() async {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    await AccountPreferenceWrites.waitForBoundary();
+    await _configWriteTail;
+    _ensureCurrentAccount(generation);
     final prefs = await SharedPreferences.getInstance();
+    _ensureCurrentAccount(generation);
     return WebDavBackupConfig.fromPrefs(prefs);
   }
 
   static Future<void> saveConfig(WebDavBackupConfig config) async {
-    final prefs = await SharedPreferences.getInstance();
-    for (final entry in config.toPrefs().entries) {
-      await prefs.setString(entry.key, entry.value);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    final previous = _configWriteTail;
+    final result = AccountPreferenceWrites.runResult<void>((token) async {
+      await previous;
+      token.ensureCurrent();
+      final prefs = await SharedPreferences.getInstance();
+      final transaction = AccountPreferenceTransaction(
+        prefs,
+        () =>
+            token.isCurrent &&
+            AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation),
+      );
+      try {
+        for (final entry in config.toPrefs().entries) {
+          await transaction.setString(entry.key, entry.value);
+        }
+        transaction.commit();
+      } catch (error) {
+        await transaction.rollback(
+          canceledBeforeCleanup: error is AccountPreferenceWriteCanceled,
+        );
+        rethrow;
+      }
+    }, canceledResult: () => throw const AccountPreferenceWriteCanceled());
+    _configWriteTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    await result;
+  }
+
+  static void _ensureCurrentAccount(int generation) {
+    if (AccountPreferenceWrites.isBoundaryActive ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      throw const AccountPreferenceWriteCanceled();
     }
   }
 
   Future<WebDavBackupResult> uploadCurrentBackup(
     WebDavBackupConfig config,
   ) async {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    _ensureCurrentAccount(generation);
     _validate(config);
     await _ensureCollection(config);
+    _ensureCurrentAccount(generation);
     final body = await BackupService.exportAll();
+    _ensureCurrentAccount(generation);
     final bytes = utf8.encode(body);
     final uri = uploadUri(config);
     final response = await _client.put(
@@ -92,6 +136,7 @@ class WebDavBackupService {
       },
       body: bytes,
     );
+    _ensureCurrentAccount(generation);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('WebDAV 上传失败: HTTP ${response.statusCode}');
     }
@@ -103,9 +148,12 @@ class WebDavBackupService {
   }
 
   Future<String> downloadLatestBackup(WebDavBackupConfig config) async {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    _ensureCurrentAccount(generation);
     _validate(config);
     final uri = uploadUri(config);
     final response = await _client.get(uri, headers: _authHeaders(config));
+    _ensureCurrentAccount(generation);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('WebDAV 下载失败: HTTP ${response.statusCode}');
     }

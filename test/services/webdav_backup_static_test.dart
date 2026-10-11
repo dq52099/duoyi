@@ -10,7 +10,7 @@ void main() {
     expect(service, contains('bool clearMissing = false'));
     expect(service, contains('if (clearMissing && !merge)'));
     expect(service, contains('if (!data.containsKey(key))'));
-    expect(service, contains('await p.remove(key)'));
+    expect(service, contains('await transaction.remove(key)'));
   });
 
   test('WebDAV backup service supports upload and restore primitives', () {
