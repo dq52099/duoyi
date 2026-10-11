@@ -1,6 +1,8 @@
 import '../models/calendar_event.dart';
+import '../models/habit.dart';
 import '../models/time_entry.dart';
 import 'diary_note_ui_copy.dart';
+import 'habit_ui_copy.dart';
 import 'i18n.dart';
 
 /// Helper to resolve live localized title and subtitle for system-generated calendar events,
@@ -26,6 +28,16 @@ class CalendarEventDisplayText {
   /// Resolves the event subtitle, localizing system-generated state/progress/unit descriptions live.
   static String? resolveSubtitle(CalendarEvent event) {
     final meta = event.displayMetadata;
+    if (meta is HabitDisplayMetadata && event.type == CalendarEventType.habit) {
+      return HabitUiCopy(I18n.current).countLabel(
+        count: meta.count,
+        target: meta.targetCount,
+        negative: meta.kind == HabitKind.negative,
+        flexible: meta.hasFlexRule,
+        authoredUnit: meta.unit,
+        flexProgressLabel: meta.flexProgress?.labelFor(I18n.current),
+      );
+    }
     if (meta is TodoDisplayMetadata) {
       if (meta.dueDate == null) return null;
       final due = meta.dueDate!;

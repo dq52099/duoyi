@@ -1,0 +1,53 @@
+# Habit model locale contract — 2026-10-11
+
+Root follow-up: the separate insight domain change was later accepted in
+`c8236fe`, with 15 passing checks and clean four-file analysis. See
+`habit-insights-locale-acceptance-20261011.md`. Earlier insight-gap statements
+below describe the audit checkpoint; surrounding Habit page copy and
+calendar day/week rendering remain frontend follow-ups.
+
+Read-only audit of Habit generated display strings and their consumers. The production owner is changing `lib/models/habit.dart` and a shared Habit copy helper; this document records the data and cache boundaries. No production code or tests were changed or run for this audit.
+
+## Model display contract
+
+| Value | Current source | Recommended contract |
+| --- | --- | --- |
+| Flex period progress | `HabitFlexProgress.labelPrefix` and `.label` hardcode `本周` / `本月` and append `completed/target` (`lib/models/habit.dart:135-140`). | Add `labelPrefixFor(AppLocale)` and `labelFor(AppLocale)`; the existing getters delegate to the selected locale. Preserve the exact Chinese output and numeric progress. |
+| Flex period goal | `Habit.flexPeriodGoalLabel` hardcodes `每周目标: N 次/周` / `每月目标: N 次/月` (`habit.dart:476-481`). | Add `flexPeriodGoalLabelFor(AppLocale)`; keep the getter live. Keep the empty result for habits without a flex rule and preserve the Chinese string byte for byte. English needs a natural singular period phrase, because the existing `habit.unit.week/month` translations are plural words used by streak labels. |
+| Daily count | `Habit.formatCountForDate(date)` uses `unit ?? '次'`, combines a flex progress label, and adds `已记录 ` for negative habits (`habit.dart:625-633`). | Keep the positional `date` call compatible and add an optional explicit locale. Localize the **null** unit fallback, flex framing, and negative recorded prefix. Keep a non-null `habit.unit` literal, including `次` or the empty string: it is user data. Preserve count, target, flex progress, separator, and existing Chinese layout. |
+| Streak unit | `Habit.streakUnitLabel` already calls `I18n.tr` for day/week/month (`habit.dart:468-474`). | Retain its current behavior; the numeric streak and rule semantics do not change. |
+
+An immutable `HabitUiCopy(AppLocale)` (or equivalent pure formatter) can supply those methods without mutating global locale. The current-locale getters should delegate to it; aggregation and export paths can request a locale explicitly. Existing translation keys cover `habit.flex.this_week/this_month`, `habit.flex.weekly_goal_prefix/monthly_goal_prefix`, `habit.unit.times`, `habit.recorded_prefix`, and streak units (`lib/core/i18n.dart:453-479,1618-1646`). Avoid using the plural streak translation `weeks` / `months` after a slash to form English goal units.
+
+These are display projections. `Habit.toJson` writes `kind.index`, `flexPeriod?.name`, `unit`, counts, dates, reminder plan, and the authored `name` (`habit.dart:311-370`); none should depend on locale. `Habit.fromJson` uses `未命名习惯` for a missing name (`:388`), which becomes a stored value. Do not translate an existing name by matching that text: a person could author the same string. Likewise preserve authored category, tags, and non-null unit. Flex calculations and completion thresholds remain numeric (`:557-633`).
+
+## Cached and downstream consumers
+
+| Consumer | Current behavior | Follow-up |
+| --- | --- | --- |
+| Habit page/card | `habit_weekly_card.dart:576` reads `formatCountForDate` when built. `habit_screen.dart:1536,1696,1731,1777` uses `labelPrefix` or `.label` inside additional Chinese badges and snackbars. | Live model getters update the count fragment on rebuild. The page owner must localize its surrounding copy and ensure a locale change repaints retained UI. A translated prefix alone still leaves Chinese suffixes. |
+| Detail page | `habit_detail_screen.dart:1190-1233` already has local copies of goal, progress, count, and trend-window formatting. | Prefer the shared model/copy helper for matching semantics; avoid two formatters diverging on null versus authored units or negative counts. `HabitTrendWindow.label` itself is a fixed Chinese enum field in `lib/core/habit_trend.dart:5-14`; the detail page already renders a localized alternative. |
+| Calendar | `CalendarAggregator._habitEvents` copies `h.formatCountForDate(date)` into `CalendarEvent.subtitle` (`lib/core/calendar_aggregator.dart:189-208`). `CalendarProvider.rebuild` skips unchanged signatures, which omit locale (`lib/providers/calendar_provider.dart:202-255,293-325`); the calendar screen also has a locale listener but a locale-free input signature (`lib/screens/calendar_screen.dart:88-94,123-165,190-213`). | Attach immutable, typed Habit subtitle metadata containing the date's count, target, kind, original unit, and optional flex progress. Keep the raw event subtitle explicitly in the legacy Chinese form and resolve its **display** through `CalendarEventDisplayText.resolveSubtitle(event)` at the current locale. Guard resolution by `event.type == CalendarEventType.habit`: `CalendarProvider._asLocalEvent` can copy metadata while changing type to a persisted local event (`calendar_provider.dart:178-189`). Preserve `event.title = h.name` literally. |
+| Calendar views | The event sheet already calls `resolveSubtitle` (`lib/widgets/calendar_event_sheet.dart:431-437`). Day agenda and week strip still use raw `e.subtitle` / `event.subtitle` (`calendar_day_agenda.dart:583,778-782`; `calendar_week_strip.dart:421`). | Route both visible text and subtitle-present/layout checks through the resolver. Their screen locale listeners must cause those rows to repaint. This page work is separate from the model change. |
+| Calendar JSON/data | `CalendarEvent.toJson` writes the raw subtitle; `fromJson` has no display metadata (`lib/models/calendar_event.dart:118-176`). Provider event hashing also reads raw subtitles. | Keep metadata runtime-only and raw subtitle stable across locale changes. Imported/persisted event subtitles without typed metadata remain literal; never infer generated Habit text from `type` or Chinese content alone. |
+| Home widget | `main.dart:3023-3044` builds the habit summary and quick-check prefix with `I18n.tr`, and appends the authored Habit name. Locale is in the widget input signature (`:224-245`), and locale changes queue a new push (`:2597-2606`). `HomeWidgetService.push` snapshots a locale and rejects a stale push (`lib/services/home_widget_service.dart:439-515`). | Preserve Habit IDs, authored names, and action URLs. This path does not use `formatCountForDate`; the model change should not alter the persisted widget payload schema. |
+| CSV | `ModuleExporter.habitsCsv` writes authored name/category/tags and stable kind/count fields (`lib/services/ics_exporter.dart:152-170`). | Keep this export byte-identical across locales. The existing all-export invariant checks this (`test/services/module_exporter_csv_static_test.dart:242-319`). |
+
+`HabitInsightEngine` is another generated-copy path: it constructs Chinese `HabitInsight.title/message` strings with authored habit names, scores, and `HabitTrendWindow.label` (`lib/core/habit_insights.dart:50-169`). The page displays those stored strings (`lib/screens/habit_screen.dart:978-987,1225-1233`). Localizing the Habit model getters does not affect insights. A separate insight change should keep kind, habit ID, score, ranking thresholds, and authored name as data, and either render typed insight fields at use or rebuild them for the selected locale. The current test asserts a Chinese overview fragment (`test/core/habit_insights_test.dart:45-52`).
+
+## Acceptance targets for the owner
+
+1. Switch Chinese → English → Chinese on the same Habit and HabitFlexProgress objects. Their display values follow locale, while the original Chinese values remain exact and `Habit.toJson()` stays identical. Check positive, negative, flex week/month, no flex rule, null unit, and authored units including `次` and `''`.
+2. Build a Habit calendar event once, switch locale without rebuilding the event object, and see the resolved subtitle change in the sheet, day agenda, and week strip. `event.subtitle`, `event.title`, `event.toJson()`, IDs, source ID, and completion status stay fixed. A JSON-round-tripped event with no metadata displays its literal subtitle.
+3. Confirm Habit CSV and widget payload data fields remain stable. The widget's generated copy updates through its existing locale-triggered push while its quick-check ID and authored Habit name remain literal.
+4. Treat insight localization as a separate acceptance item; its cached Chinese strings remain a known gap until typed or locale-driven rendering is added.
+
+Relevant existing targets: `test/models/habit_json_safety_test.dart`, `test/providers/habit_provider_test.dart`, `test/core/calendar_event_display_text_test.dart`, `test/core/habit_insights_test.dart`, and `test/services/module_exporter_csv_static_test.dart`.
+
+## Production diff review — 2026-10-11
+
+Read-only review of the six-file implementation (`habit_ui_copy.dart`, `habit.dart`, `calendar_event.dart`, `calendar_aggregator.dart`, `calendar_event_display_text.dart`, and `calendar_provider.dart`). No source or tests were changed or run for this review.
+
+The two provider cache edges identified during review are addressed. `_hashHabits` now includes `flexTarget` and `flexPeriod`, so a rule-only change reaches aggregation. `_habitDisplayEqual` compares the immutable Habit metadata facts, including progress period/bounds/count/target, after the ordinary event fields. It treats two null metadata values as equal, a null-versus-typed value as changed, and separately constructed equal-value metadata as equal. This catches a null-unit → authored `次` change even when the raw Chinese subtitle is identical, without causing notifications for equal snapshots. Non-Habit event comparison keeps its previous behavior.
+
+The formatter preserves the former Chinese count and flex strings, including the flex-rule case where period progress is null. It keeps every non-null authored unit literal and uses singular/plural English `time`/`times` only for the null fallback. Calendar aggregation freezes the raw subtitle in Chinese; the runtime resolver uses the immutable metadata and checks the event type, so `copyWith(type: CalendarEventType.event)` retains literal stored text. Metadata is not serialized, and provider event hashes continue to use raw title/subtitle. This bounded production diff has no additional blocking finding from static review. Calendar day/week row resolver use and Habit insight copy remain separate frontend/core follow-ups noted above.

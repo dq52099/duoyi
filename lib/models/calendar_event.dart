@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/i18n.dart';
+import 'habit.dart';
 import 'time_entry.dart';
 
 enum CalendarEventType {
@@ -257,6 +258,24 @@ class CourseDisplayMetadata extends CalendarEventDisplayMetadata {
     required this.timeRangeLabel,
     this.location = '',
     this.teacher = '',
+  });
+}
+
+class HabitDisplayMetadata extends CalendarEventDisplayMetadata {
+  final HabitKind kind;
+  final int count;
+  final int targetCount;
+  final String? unit;
+  final bool hasFlexRule;
+  final HabitFlexProgress? flexProgress;
+
+  const HabitDisplayMetadata({
+    required this.kind,
+    required this.count,
+    required this.targetCount,
+    this.unit,
+    this.hasFlexRule = false,
+    this.flexProgress,
   });
 }
 

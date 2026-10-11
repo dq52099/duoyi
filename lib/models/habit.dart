@@ -1,5 +1,6 @@
 import '../core/i18n.dart';
 import '../core/heatmap_calendar.dart';
+import '../core/habit_ui_copy.dart';
 import 'goal.dart'
     show ReminderKind, ReminderPlan, ReminderRule, ReminderRuleType;
 
@@ -132,12 +133,17 @@ class HabitFlexProgress {
   double get ratio =>
       target <= 0 ? 0 : (completed / target).clamp(0.0, 1.0).toDouble();
 
-  String get labelPrefix => switch (period) {
-    HabitFlexPeriod.week => '本周',
-    HabitFlexPeriod.month => '本月',
+  String labelPrefixFor(AppLocale locale) => switch (period) {
+    HabitFlexPeriod.week => HabitUiCopy(locale).weekPrefix,
+    HabitFlexPeriod.month => HabitUiCopy(locale).monthPrefix,
   };
 
-  String get label => '$labelPrefix $completed/$target';
+  String get labelPrefix => labelPrefixFor(I18n.current);
+
+  String labelFor(AppLocale locale) =>
+      '${labelPrefixFor(locale)} $completed/$target';
+
+  String get label => labelFor(I18n.current);
 }
 
 class Habit {
@@ -473,13 +479,16 @@ class Habit {
     };
   }
 
-  String get flexPeriodGoalLabel {
+  String flexPeriodGoalLabelFor(AppLocale locale) {
     if (!hasFlexRule) return '';
+    final copy = HabitUiCopy(locale);
     return switch (flexPeriod!) {
-      HabitFlexPeriod.week => '每周目标: $effectiveFlexTarget 次/周',
-      HabitFlexPeriod.month => '每月目标: $effectiveFlexTarget 次/月',
+      HabitFlexPeriod.week => copy.weekGoal(effectiveFlexTarget),
+      HabitFlexPeriod.month => copy.monthGoal(effectiveFlexTarget),
     };
   }
+
+  String get flexPeriodGoalLabel => flexPeriodGoalLabelFor(I18n.current);
 
   double progressForCount(int count) {
     if (kind == HabitKind.negative) {
@@ -623,14 +632,17 @@ class Habit {
   }
 
   /// 本地格式显示：  "2 杯 / 8 杯"
-  String formatCountForDate(DateTime d) {
+  String formatCountForDate(DateTime d, {AppLocale? locale}) {
+    final displayLocale = locale ?? I18n.current;
     final c = countForDate(d);
-    final u = unit ?? '次';
-    if (hasFlexRule) {
-      final progress = flexProgressForDate(d);
-      return progress == null ? '$c $u' : '$c $u · ${progress.label}';
-    }
-    return kind == HabitKind.positive ? '$c $u / $targetCount $u' : '已记录 $c $u';
+    return HabitUiCopy(displayLocale).countLabel(
+      count: c,
+      target: targetCount,
+      negative: kind == HabitKind.negative,
+      flexible: hasFlexRule,
+      authoredUnit: unit,
+      flexProgressLabel: flexProgressForDate(d)?.labelFor(displayLocale),
+    );
   }
 
   Map<String, int> heatmapData(int weeks, {DateTime? today}) {

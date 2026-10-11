@@ -373,6 +373,8 @@ class CalendarProvider extends ChangeNotifier {
           h.unit,
           Object.hashAll(h.activeWeekdays),
           h.weeklyTarget,
+          h.flexTarget,
+          h.flexPeriod,
           h.startDate?.millisecondsSinceEpoch,
           h.endDate?.millisecondsSinceEpoch,
           Object.hashAll(completions.map((e) => Object.hash(e.key, e.value))),
@@ -564,7 +566,33 @@ class CalendarProvider extends ChangeNotifier {
         a.conflictCount == b.conflictCount &&
         a.note == b.note &&
         a.updatedAt == b.updatedAt &&
-        _timeEqual(a.time, b.time);
+        _timeEqual(a.time, b.time) &&
+        _habitDisplayEqual(a, b);
+  }
+
+  bool _habitDisplayEqual(CalendarEvent a, CalendarEvent b) {
+    if (a.type != CalendarEventType.habit) return true;
+    final left = a.displayMetadata;
+    final right = b.displayMetadata;
+    if (identical(left, right)) return true;
+    if (left is! HabitDisplayMetadata || right is! HabitDisplayMetadata) {
+      return false;
+    }
+    final leftProgress = left.flexProgress;
+    final rightProgress = right.flexProgress;
+    return left.kind == right.kind &&
+        left.count == right.count &&
+        left.targetCount == right.targetCount &&
+        left.unit == right.unit &&
+        left.hasFlexRule == right.hasFlexRule &&
+        (identical(leftProgress, rightProgress) ||
+            (leftProgress != null &&
+                rightProgress != null &&
+                leftProgress.period == rightProgress.period &&
+                leftProgress.start == rightProgress.start &&
+                leftProgress.end == rightProgress.end &&
+                leftProgress.completed == rightProgress.completed &&
+                leftProgress.target == rightProgress.target));
   }
 
   bool _timeEqual(TimeOfDay? a, TimeOfDay? b) {

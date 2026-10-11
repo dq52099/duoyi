@@ -11,6 +11,7 @@ import '../models/pomodoro.dart';
 import '../models/time_entry.dart';
 import '../models/todo.dart';
 import 'completion_visibility_policy.dart';
+import 'i18n.dart';
 
 class CalendarAggregator {
   CalendarAggregator._();
@@ -198,12 +199,20 @@ class CalendarAggregator {
           CalendarEvent(
             id: 'habit_${h.id}_${entry.key}',
             title: h.name,
-            subtitle: h.formatCountForDate(date),
+            subtitle: h.formatCountForDate(date, locale: AppLocale.zh),
             date: date,
             type: CalendarEventType.habit,
             color: Color(h.colorValue),
             isCompleted: h.isCompletedForDate(date),
             sourceId: h.id,
+            displayMetadata: HabitDisplayMetadata(
+              kind: h.kind,
+              count: h.countForDate(date),
+              targetCount: h.targetCount,
+              unit: h.unit,
+              hasFlexRule: h.hasFlexRule,
+              flexProgress: h.flexProgressForDate(date),
+            ),
           ),
         );
       }
