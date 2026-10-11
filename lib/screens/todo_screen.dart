@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/completion_visibility_policy.dart';
 import '../core/design_tokens.dart';
+import '../core/desktop_tokens.dart';
 import '../core/i18n_date_format.dart';
 import '../core/iterable_extensions.dart';
 import '../core/i18n.dart';
@@ -931,6 +932,200 @@ class _TodoScreenState extends State<TodoScreen> {
         editableVisibleIds.isNotEmpty &&
         editableVisibleIds.every(_selectedTodoIds.contains);
 
+    final isWidescreen =
+        MediaQuery.widthOf(context) >= DesktopTokens.breakpointTwoColumn;
+    final isWidestTier =
+        MediaQuery.widthOf(context) >= DesktopTokens.breakpointThreeColumn;
+    final viewContent = filteredTodos.isEmpty
+        ? _TodoNoMatches(
+            onClear: () {
+              setState(
+                () => _filter =
+                    const TodoFilterState<EisenhowerQuadrant, TodoPriority>(),
+              );
+            },
+          )
+        : switch (_viewMode) {
+            _TodoViewMode.matrix => SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: EisenhowerMatrix(
+                quadrantGroups: quadrantGroups,
+                fourColumn: isWidestTier,
+                onQuadrantTap: (q) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => QuadrantListScreen(
+                        quadrant: q,
+                        filter: _filter,
+                        onCreateTodo: (quadrant) =>
+                            _showAddDialog(initialQuadrant: quadrant),
+                      ),
+                    ),
+                  );
+                },
+                // 长按拖动待办到目标象限，松手即换象限。
+                // 与 tile 级入口一致：只读成员不可拖拽换象限。
+                canEditTodo: (todo) =>
+                    context.read<ShareProvider>().canEdit(todo.workspaceId),
+                onTodoQuadrantChanged: (todo, target) {
+                  // 投放时点用最新权限复查，防止陈旧快照放行。
+                  if (!context.read<ShareProvider>().canEdit(
+                    todo.workspaceId,
+                  )) {
+                    return;
+                  }
+                  context.read<TodoProvider>().updateTodosQuadrant([
+                    todo.id,
+                  ], target);
+                },
+              ),
+            ),
+            _TodoViewMode.list => NotificationListener<ScrollNotification>(
+              onNotification: _dismissSwipeActionsOnScroll,
+              child: ValueListenableBuilder<int>(
+                valueListenable: _swipeDismissSerial,
+                builder: (context, swipeSerial, _) {
+                  Widget itemBuilder(BuildContext context, int index) {
+                    final row = listRows[index];
+                    if (row.isHeader) {
+                      return _ListGroupHeader(
+                        key: ValueKey('list-header-${row.groupName}'),
+                        groupName: row.groupName,
+                        todos: listGroups[row.groupName]!,
+                        expanded: !_collapsedListGroups.contains(row.groupName),
+                        onToggle: () => setState(() {
+                          if (_collapsedListGroups.contains(row.groupName)) {
+                            _collapsedListGroups.remove(row.groupName);
+                          } else {
+                            _collapsedListGroups.add(row.groupName);
+                          }
+                        }),
+                      );
+                    }
+                    final todo = row.todo!;
+                    return _TodoTile(
+                      key: ValueKey('list-todo-${todo.id}'),
+                      todo: todo,
+                      batchMode: _batchMode,
+                      selected: _selectedTodoIds.contains(todo.id),
+                      onToggleSelection: _toggleSelection,
+                      onEnterBatchMode: (id) => _enterBatchMode(todoId: id),
+                      swipeDismissSerial: swipeSerial,
+                      swipeDismissListenable: _swipeDismissSerial,
+                      trailing: canReorderList
+                          ? ReorderableDragStartListener(
+                              index: index,
+                              child: const Icon(Icons.drag_indicator),
+                            )
+                          : null,
+                    );
+                  }
+
+                  if (!canReorderList) {
+                    return ListView.builder(
+                      controller: _listScrollController,
+                      // ignore: deprecated_member_use
+                      cacheExtent: 640,
+                      itemCount: listRows.length,
+                      itemBuilder: itemBuilder,
+                    );
+                  }
+                  return ReorderableListView.builder(
+                    scrollController: _listScrollController,
+                    // ignore: deprecated_member_use
+                    cacheExtent: 640,
+                    buildDefaultDragHandles: false,
+                    itemCount: listRows.length,
+                    itemBuilder: itemBuilder,
+                    onReorder: (oldIndex, newIndex) {
+                      _reorderFlatListRows(listRows, oldIndex, newIndex);
+                    },
+                  );
+                },
+              ),
+            ),
+            _TodoViewMode.kanban => ValueListenableBuilder<int>(
+              valueListenable: _swipeDismissSerial,
+              builder: (context, swipeSerial, _) => _TodoKanbanView(
+                config: _kanbanConfig,
+                kanbanGroups: kanbanGroups,
+                batchMode: _batchMode,
+                selectedTodoIds: _selectedTodoIds,
+                onToggleSelection: _toggleSelection,
+                onEnterBatchMode: (id) => _enterBatchMode(todoId: id),
+                swipeDismissSerial: swipeSerial,
+                onScrollStart: _dismissSwipeActionsOnScroll,
+              ),
+            ),
+          };
+    final widescreenBody = Column(
+      children: [
+        if (cloudSyncNotice != null)
+          _TodoCloudSyncNoticeBanner(notice: cloudSyncNotice),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    _TodoViewSwitcher(
+                      selected: _viewMode,
+                      onChanged: (mode) => setState(() => _viewMode = mode),
+                    ),
+                    Expanded(child: viewContent),
+                  ],
+                ),
+              ),
+              const VerticalDivider(width: 1, thickness: 1),
+              SizedBox(
+                width: DesktopTokens.rightSidebarWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _TodoTodaySummaryCard(
+                      todos: baseTodos,
+                      habits: habitProvider.habits,
+                      activeGoalCount: goalProvider.activeGoals.length,
+                      now: now,
+                      onTodayTap: () => _setFilter(
+                        const TodoFilterState(
+                          todayOverview: true,
+                          completion: TodoCompletionFilter.all,
+                        ),
+                      ),
+                      onOverdueTap: () => _setFilter(
+                        const TodoFilterState(
+                          due: TodoDueFilter.overdue,
+                          completion: TodoCompletionFilter.active,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.only(
+                          bottom: DesignTokens.spaceLg,
+                        ),
+                        child: _TodoFilterBar(
+                          filter: _filter,
+                          totalCount: baseTodos.length,
+                          filteredCount: filteredTodos.length,
+                          availableTags: availableTags,
+                          availableListGroups: availableListGroups,
+                          onChanged: _setFilter,
+                          onClear: _clearFilter,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -1007,6 +1202,8 @@ class _TodoScreenState extends State<TodoScreen> {
                 ),
               ],
             )
+          : isWidescreen && !_batchMode
+          ? widescreenBody
           : Column(
               children: [
                 if (!_batchMode)
@@ -1044,161 +1241,7 @@ class _TodoScreenState extends State<TodoScreen> {
                   onChanged: _setFilter,
                   onClear: _clearFilter,
                 ),
-                Expanded(
-                  child: filteredTodos.isEmpty
-                      ? _TodoNoMatches(
-                          onClear: () {
-                            setState(
-                              () => _filter =
-                                  const TodoFilterState<
-                                    EisenhowerQuadrant,
-                                    TodoPriority
-                                  >(),
-                            );
-                          },
-                        )
-                      : switch (_viewMode) {
-                          _TodoViewMode.matrix => SingleChildScrollView(
-                            padding: const EdgeInsets.all(12),
-                            child: EisenhowerMatrix(
-                              quadrantGroups: quadrantGroups,
-                              onQuadrantTap: (q) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => QuadrantListScreen(
-                                      quadrant: q,
-                                      filter: _filter,
-                                      onCreateTodo: (quadrant) =>
-                                          _showAddDialog(
-                                            initialQuadrant: quadrant,
-                                          ),
-                                    ),
-                                  ),
-                                );
-                              },
-                              // 长按拖动待办到目标象限，松手即换象限。
-                              // 与 tile 级入口一致：只读成员不可拖拽换象限。
-                              canEditTodo: (todo) => context
-                                  .read<ShareProvider>()
-                                  .canEdit(todo.workspaceId),
-                              onTodoQuadrantChanged: (todo, target) {
-                                // 投放时点用最新权限复查，防止陈旧快照放行。
-                                if (!context.read<ShareProvider>().canEdit(
-                                  todo.workspaceId,
-                                )) {
-                                  return;
-                                }
-                                context
-                                    .read<TodoProvider>()
-                                    .updateTodosQuadrant([todo.id], target);
-                              },
-                            ),
-                          ),
-                          _TodoViewMode.list =>
-                            NotificationListener<ScrollNotification>(
-                              onNotification: _dismissSwipeActionsOnScroll,
-                              child: ValueListenableBuilder<int>(
-                                valueListenable: _swipeDismissSerial,
-                                builder: (context, swipeSerial, _) {
-                                  Widget itemBuilder(
-                                    BuildContext context,
-                                    int index,
-                                  ) {
-                                    final row = listRows[index];
-                                    if (row.isHeader) {
-                                      return _ListGroupHeader(
-                                        key: ValueKey(
-                                          'list-header-${row.groupName}',
-                                        ),
-                                        groupName: row.groupName,
-                                        todos: listGroups[row.groupName]!,
-                                        expanded: !_collapsedListGroups
-                                            .contains(row.groupName),
-                                        onToggle: () => setState(() {
-                                          if (_collapsedListGroups.contains(
-                                            row.groupName,
-                                          )) {
-                                            _collapsedListGroups.remove(
-                                              row.groupName,
-                                            );
-                                          } else {
-                                            _collapsedListGroups.add(
-                                              row.groupName,
-                                            );
-                                          }
-                                        }),
-                                      );
-                                    }
-                                    final todo = row.todo!;
-                                    return _TodoTile(
-                                      key: ValueKey('list-todo-${todo.id}'),
-                                      todo: todo,
-                                      batchMode: _batchMode,
-                                      selected: _selectedTodoIds.contains(
-                                        todo.id,
-                                      ),
-                                      onToggleSelection: _toggleSelection,
-                                      onEnterBatchMode: (id) =>
-                                          _enterBatchMode(todoId: id),
-                                      swipeDismissSerial: swipeSerial,
-                                      swipeDismissListenable:
-                                          _swipeDismissSerial,
-                                      trailing: canReorderList
-                                          ? ReorderableDragStartListener(
-                                              index: index,
-                                              child: const Icon(
-                                                Icons.drag_indicator,
-                                              ),
-                                            )
-                                          : null,
-                                    );
-                                  }
-
-                                  if (!canReorderList) {
-                                    return ListView.builder(
-                                      controller: _listScrollController,
-                                      // ignore: deprecated_member_use
-                                      cacheExtent: 640,
-                                      itemCount: listRows.length,
-                                      itemBuilder: itemBuilder,
-                                    );
-                                  }
-                                  return ReorderableListView.builder(
-                                    scrollController: _listScrollController,
-                                    // ignore: deprecated_member_use
-                                    cacheExtent: 640,
-                                    buildDefaultDragHandles: false,
-                                    itemCount: listRows.length,
-                                    itemBuilder: itemBuilder,
-                                    onReorder: (oldIndex, newIndex) {
-                                      _reorderFlatListRows(
-                                        listRows,
-                                        oldIndex,
-                                        newIndex,
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
-                          _TodoViewMode.kanban => ValueListenableBuilder<int>(
-                            valueListenable: _swipeDismissSerial,
-                            builder: (context, swipeSerial, _) =>
-                                _TodoKanbanView(
-                                  config: _kanbanConfig,
-                                  kanbanGroups: kanbanGroups,
-                                  batchMode: _batchMode,
-                                  selectedTodoIds: _selectedTodoIds,
-                                  onToggleSelection: _toggleSelection,
-                                  onEnterBatchMode: (id) =>
-                                      _enterBatchMode(todoId: id),
-                                  swipeDismissSerial: swipeSerial,
-                                  onScrollStart: _dismissSwipeActionsOnScroll,
-                                ),
-                          ),
-                        },
-                ),
+                Expanded(child: viewContent),
               ],
             ),
       bottomNavigationBar: _batchMode

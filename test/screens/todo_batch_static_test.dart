@@ -120,9 +120,9 @@ void main() {
     final source = File('lib/screens/todo_screen.dart').readAsStringSync();
 
     expect(
-      source,
+      source.replaceAll(RegExp(r'\s+'), ' '),
       contains(
-        '_TodoViewMode.list =>\n                            NotificationListener<ScrollNotification>',
+        '_TodoViewMode.list => NotificationListener<ScrollNotification>',
       ),
     );
     expect(source, contains('cacheExtent: 640'));

@@ -21,6 +21,25 @@ class DesktopTokens {
   /// 页面最大内容宽度
   static const double maxContentWidth = 1280;
 
+  /// 宽屏上次级屏（我的页：分组两列）最大内容宽度
+  static const double secondaryMaxContentWidth = 720;
+
+  /// 宽屏上报告型屏（统计页）最大内容宽度：KPI 网格 3 列所需的最小外宽
+  /// （KPI 内部以 ≥720 判 3 列，ListView 横向 padding 12×2 后仍需达标）
+  static const double reportMaxContentWidth = 960;
+
+  // ========== 壳层（NavigationRail 桌面壳） ==========
+
+  /// rail 展开标签的窗口宽度阈值（main.dart `extended` 判定）。
+  static const double railExtendedBreakpoint = 1120;
+
+  /// rail 展开态宽度（`minExtendedWidth` 与头部展开态宽度同源）。
+  static const double railExtendedWidth = 196;
+
+  /// rail 折叠态宽度（Material NavigationRail 图标档默认宽，用于 FAB
+  /// 对齐内容列右缘的估算，不做布局约束）。
+  static const double railCompactWidth = 80;
+
   /// 左侧边栏宽度（日历 + 快捷入口）
   static const double leftSidebarWidth = 420;
 
@@ -146,7 +165,8 @@ class DesktopTokens {
   // ========== 快捷判断 ==========
 
   /// 判断当前宽度是否支持三栏布局
-  static bool isThreeColumnLayout(double width) => width >= breakpointThreeColumn;
+  static bool isThreeColumnLayout(double width) =>
+      width >= breakpointThreeColumn;
 
   /// 判断当前宽度是否支持两栏布局
   static bool isTwoColumnLayout(double width) =>
