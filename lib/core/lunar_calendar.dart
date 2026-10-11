@@ -210,6 +210,27 @@ class LunarCalendar {
 
   static String dayName(int day) => _dayName(day);
 
+  /// The app's documented display range, independent of the library's wider
+  /// calculation range. A Solar date in January 1900 may belong to lunar 1899.
+  static bool isWithinDocumentedSolarRange(DateTime date) =>
+      date.year >= 1900 && date.year <= 2099;
+
+  /// Returns the library's conversion, or null when that civil day cannot be
+  /// represented or converted. Does not use [fromSolar]'s clamped fallback.
+  /// Outside [isWithinDocumentedSolarRange], the library's historical calendar
+  /// rules are not a guarantee of proleptic Gregorian astronomical accuracy.
+  static LunarDate? tryFromSolar(DateTime date) {
+    try {
+      final solarDate = _dateOnly(date);
+      if (!_sameSolarDay(solarDate, date)) {
+        return null;
+      }
+      return _lunarDateFromLunar(_lunarFor(solarDate));
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// 公历 → 农历
   static LunarDate fromSolar(DateTime date) {
     try {
@@ -343,6 +364,21 @@ class LunarCalendar {
     );
   }
 
+  /// Queries almanac data without changing the requested civil day or exposing
+  /// conversion errors to the UI. The documented display policy is separate.
+  static LunarAlmanacDetail? tryAlmanacDetail(DateTime date) {
+    try {
+      final solarDate = _dateOnly(date);
+      if (!_sameSolarDay(solarDate, date)) {
+        return null;
+      }
+      final detail = almanacDetail(solarDate);
+      return _sameSolarDay(detail.solarDate, date) ? detail : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static String almanacGanzhiLine(DateTime date, LunarDate lunar) {
     final day = _lunarFor(date);
     return _ganzhiLineForLunar(day);
@@ -409,6 +445,11 @@ class LunarCalendar {
 
   static DateTime _dateOnly(DateTime date) =>
       DateTime(date.year, date.month, date.day);
+
+  static bool _sameSolarDay(DateTime first, DateTime second) =>
+      first.year == second.year &&
+      first.month == second.month &&
+      first.day == second.day;
 
   static LunarDate _lunarDateFromLunar(lunar_pkg.Lunar lunar) {
     final month = lunar.getMonth();

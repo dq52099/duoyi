@@ -162,4 +162,185 @@ void main() {
     expect(detail.clash, '蛇日冲猪（己亥）煞东');
     expect(detail.hourFortunes.split(' '), hasLength(12));
   });
+
+  test('Solar policy只按公历年份判断文档范围，不按lunar year判断', () {
+    final fixtures = <(DateTime, bool)>[
+      (DateTime(1899, 12, 31), false),
+      (DateTime(1900, 1, 1), true),
+      (DateTime.utc(1900, 12, 31, 23, 30), true),
+      (DateTime(2099, 12, 31), true),
+      (DateTime.utc(2100, 1, 1), false),
+      (DateTime(1, 1, 1), false),
+      (DateTime(9999, 12, 31), false),
+    ];
+
+    for (final (date, expected) in fixtures) {
+      expect(
+        LunarCalendar.isWithinDocumentedSolarRange(date),
+        expected,
+        reason: 'Solar policy for $date follows its Gregorian year',
+      );
+    }
+  });
+
+  test(
+    'nullable conversion covers the Solar endpoints without rejecting lunar year 1899',
+    () {
+      final fixtures = <(DateTime, int, int, int)>[
+        (DateTime(1900, 1, 1), 1899, 12, 1),
+        (DateTime(1900, 1, 30), 1899, 12, 30),
+        (DateTime(1900, 1, 31), 1900, 1, 1),
+        (DateTime(2099, 12, 31), 2099, 11, 20),
+      ];
+
+      for (final (solarDate, year, month, day) in fixtures) {
+        final lunar = LunarCalendar.tryFromSolar(solarDate);
+        expect(
+          lunar,
+          isNotNull,
+          reason: '$solarDate is convertible by the primary library',
+        );
+        expect(
+          lunar!.year,
+          year,
+          reason: '$solarDate keeps its converted lunar year',
+        );
+        expect(
+          lunar.month,
+          month,
+          reason: '$solarDate keeps its converted lunar month',
+        );
+        expect(
+          lunar.day,
+          day,
+          reason: '$solarDate keeps its converted lunar day',
+        );
+        expect(lunar.isLeapMonth, isFalse);
+        expect(
+          LunarCalendar.isWithinDocumentedSolarRange(solarDate),
+          isTrue,
+          reason:
+              'policy is based on Solar year ${solarDate.year}, not lunar year $year',
+        );
+      }
+    },
+  );
+
+  test(
+    'nullable conversions preserve the input civil date for UTC and local DateTime values',
+    () {
+      final utcInput = DateTime.utc(2026, 6, 3, 23, 30);
+      final localInput = DateTime(2026, 6, 3, 23, 30);
+      final expectedCivilDate = DateTime(2026, 6, 3);
+
+      final utcLunar = LunarCalendar.tryFromSolar(utcInput);
+      final localLunar = LunarCalendar.tryFromSolar(localInput);
+      expect(utcLunar, isNotNull);
+      expect(localLunar, isNotNull);
+      for (final lunar in [utcLunar!, localLunar!]) {
+        expect(lunar.year, 2026);
+        expect(lunar.month, 4);
+        expect(lunar.day, 18);
+        expect(lunar.chineseText, '四月十八');
+      }
+      expect(utcLunar.year, localLunar.year);
+      expect(utcLunar.month, localLunar.month);
+      expect(utcLunar.day, localLunar.day);
+      expect(utcLunar.isLeapMonth, localLunar.isLeapMonth);
+
+      final utcDetail = LunarCalendar.tryAlmanacDetail(utcInput);
+      final localDetail = LunarCalendar.tryAlmanacDetail(localInput);
+      expect(utcDetail, isNotNull);
+      expect(localDetail, isNotNull);
+      for (final detail in [utcDetail!, localDetail!]) {
+        expect(detail.solarDate.year, expectedCivilDate.year);
+        expect(detail.solarDate.month, expectedCivilDate.month);
+        expect(detail.solarDate.day, expectedCivilDate.day);
+        expect(detail.lunarDate.chineseText, '四月十八');
+        expect(detail.ganzhiLine, '丙午马年癸巳月戊申日');
+        expect(detail.dayGanzhi, '戊申');
+        expect(detail.suitable, '祭祀 沐浴 移徙 破土 安葬 扫舍 平治道涂');
+        expect(detail.avoid, '祈福 嫁娶 入宅 安床 作灶');
+        expect(detail.fetalGod, '房床炉房内中');
+        expect(detail.pengZu, '戊不受田，田主不祥；申不安床，鬼祟入房');
+        expect(detail.fiveElements, '大驿土平执位');
+        expect(detail.mansion, '东方箕水豹-吉');
+        expect(detail.clash, '猴日冲虎（壬寅）煞南');
+      }
+      expect(utcDetail.solarDate.year, localDetail.solarDate.year);
+      expect(utcDetail.solarDate.month, localDetail.solarDate.month);
+      expect(utcDetail.solarDate.day, localDetail.solarDate.day);
+      expect(
+        utcDetail.lunarDate.chineseText,
+        localDetail.lunarDate.chineseText,
+      );
+      expect(utcDetail.ganzhiLine, localDetail.ganzhiLine);
+      expect(utcDetail.hourFortunes, localDetail.hourFortunes);
+    },
+  );
+
+  test(
+    'nullable APIs reject unconvertible cutover dates while legacy keeps its 1900 clamp',
+    () {
+      const legacyMinimum = LunarDate(1900, 1, 1);
+      for (final date in [DateTime(1582, 10, 5), DateTime(1582, 10, 14)]) {
+        expect(
+          LunarCalendar.tryFromSolar(date),
+          isNull,
+          reason: '$date is an unsupported historical cutover date',
+        );
+        expect(
+          LunarCalendar.tryAlmanacDetail(date),
+          isNull,
+          reason: '$date has no nullable almanac detail',
+        );
+        expect(LunarCalendar.isWithinDocumentedSolarRange(date), isFalse);
+
+        final legacy = LunarCalendar.fromSolar(date);
+        expect(legacy.year, legacyMinimum.year);
+        expect(legacy.month, legacyMinimum.month);
+        expect(legacy.day, legacyMinimum.day);
+        expect(legacy.isLeapMonth, legacyMinimum.isLeapMonth);
+      }
+    },
+  );
+
+  test(
+    '2100 conversion remains available beyond the documented Solar policy',
+    () {
+      final date = DateTime(2100, 1, 1);
+      expect(LunarCalendar.isWithinDocumentedSolarRange(date), isFalse);
+
+      final lunar = LunarCalendar.tryFromSolar(date);
+      expect(lunar, isNotNull);
+      expect(lunar!.year, 2099);
+      expect(lunar.month, 11);
+      expect(lunar.day, 21);
+    },
+  );
+
+  test(
+    'nullable conversion refuses a skipped local civil day when the host zone normalizes it',
+    () {
+      final localConstruction = DateTime(2011, 12, 30);
+      final normalizedAwayFromRequestedDay =
+          localConstruction.year != 2011 ||
+          localConstruction.month != 12 ||
+          localConstruction.day != 30;
+      final utcInput = DateTime.utc(2011, 12, 30, 23, 30);
+
+      if (normalizedAwayFromRequestedDay) {
+        expect(LunarCalendar.tryFromSolar(utcInput), isNull);
+        expect(LunarCalendar.tryAlmanacDetail(utcInput), isNull);
+      } else {
+        final lunar = LunarCalendar.tryFromSolar(utcInput);
+        final detail = LunarCalendar.tryAlmanacDetail(utcInput);
+        expect(lunar, isNotNull);
+        expect(detail, isNotNull);
+        expect(detail!.solarDate.year, 2011);
+        expect(detail.solarDate.month, 12);
+        expect(detail.solarDate.day, 30);
+      }
+    },
+  );
 }
