@@ -5549,9 +5549,6 @@ typedef _MainShellPreferencesSlice = ({
 class MainShellState extends State<MainShell> {
   static const _tabCount = 7;
   static const _fallbackVisibleTabs = <int>[0, 1, 2, 6];
-  static const _desktopShellBreakpoint = 900.0;
-  static const _desktopWideBreakpoint = 1200.0;
-  static const _desktopWideContentMaxWidth = DesktopTokens.maxContentWidth;
 
   int _currentIndex = 0; // Today first
   bool _allowHiddenCurrentIndex = false;
@@ -5753,21 +5750,12 @@ class MainShellState extends State<MainShell> {
         })
         .toList(growable: false);
 
-    if (WebTarget.isDesktopWebBuild) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth >= _desktopShellBreakpoint) {
-            return _buildDesktopWebShell(
-              context: context,
-              quickCaptureFab: prefs.quickCaptureFab,
-              safeIndex: safeIndex,
-              safeVisibleTabs: safeVisibleTabs,
-              selectedNavIndex: selectedNavIndex,
-              showingHiddenTab: showingHiddenTab,
-              destinations: navDestinations,
-            );
-          }
-          return _buildMobileShell(
+    // 宽屏外壳按运行时视口宽度分派；tab 集过滤仍按桌面 Web 构建档位处理。
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (WebTarget.isWidescreenLayout(constraints.maxWidth)) {
+          return _buildDesktopWebShell(
+            context: context,
             quickCaptureFab: prefs.quickCaptureFab,
             safeIndex: safeIndex,
             safeVisibleTabs: safeVisibleTabs,
@@ -5775,17 +5763,16 @@ class MainShellState extends State<MainShell> {
             showingHiddenTab: showingHiddenTab,
             destinations: navDestinations,
           );
-        },
-      );
-    }
-
-    return _buildMobileShell(
-      quickCaptureFab: prefs.quickCaptureFab,
-      safeIndex: safeIndex,
-      safeVisibleTabs: safeVisibleTabs,
-      selectedNavIndex: selectedNavIndex,
-      showingHiddenTab: showingHiddenTab,
-      destinations: navDestinations,
+        }
+        return _buildMobileShell(
+          quickCaptureFab: prefs.quickCaptureFab,
+          safeIndex: safeIndex,
+          safeVisibleTabs: safeVisibleTabs,
+          selectedNavIndex: selectedNavIndex,
+          showingHiddenTab: showingHiddenTab,
+          destinations: navDestinations,
+        );
+      },
     );
   }
 
@@ -5907,7 +5894,6 @@ class MainShellState extends State<MainShell> {
     required bool showingHiddenTab,
     required List<NavigationDestination> destinations,
   }) {
-    final cs = Theme.of(context).colorScheme;
     final appTitle = AppLocalizations.of(context).appTitle;
     final content = IndexedStack(
       index: safeIndex,
@@ -5936,86 +5922,94 @@ class MainShellState extends State<MainShell> {
           )
         : content;
 
+    // rail 几何一次算清（浮岛卡面四周各留 DesignTokens.spaceMd 一圈）：
+    // 内容列宽 = 窗口 - rail 卡宽 - 2×spaceMd，超过 maxContentWidth 后由
+    // Center 两侧留白；FAB 右距据此贴住内容列右缘。
+    final windowWidth = MediaQuery.widthOf(context);
+    final railExtended = windowWidth >= DesktopTokens.railExtendedBreakpoint;
+    final railWidth = railExtended
+        ? DesktopTokens.railExtendedWidth
+        : DesktopTokens.railCompactWidth;
+    final contentSpare =
+        windowWidth -
+        railWidth -
+        DesignTokens.spaceMd * 2 -
+        DesktopTokens.maxContentWidth;
+    // Scaffold endFloat 已自带 16px 右缘边距（kFloatingActionButtonMargin），
+    // FAB 右缘距窗右 = 16 + fabRightInset。宽屏下内容列距窗右 contentSpare/2，
+    // 贴缘即 fabRightInset = contentSpare/2 - 16；留白不足（≤16）时归零，
+    // 右距与移动壳一致（恰为 endFloat 的 16px）。
+    final double contentRightGap = contentSpare > 0 ? contentSpare / 2 : 0.0;
+    final double fabRightInset = contentRightGap > 16
+        ? contentRightGap - 16
+        : 0.0;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: BrandBackground(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= _desktopWideBreakpoint;
-            final shellBody = wide
-                ? Center(
-                    child: ConstrainedBox(
-                      key: const ValueKey('desktop_web_body_max_width'),
-                      constraints: const BoxConstraints(
-                        maxWidth: _desktopWideContentMaxWidth,
-                      ),
-                      child: SizedBox(width: double.infinity, child: body),
-                    ),
-                  )
-                : body;
-            return Row(
-              children: [
-                Material(
-                  color: cs.surface.withValues(alpha: 0.88),
-                  child: SafeArea(
-                    right: false,
-                    child: NavigationRail(
-                      selectedIndex: selectedNavIndex < 0
-                          ? null
-                          : selectedNavIndex,
-                      onDestinationSelected: (i) => setState(() {
-                        _currentIndex = safeVisibleTabs[i];
-                        _builtTabs.add(_currentIndex);
-                        _allowHiddenCurrentIndex = false;
-                        _hasExplicitNavigation = true;
-                      }),
-                      extended: wide,
-                      minWidth: 72,
-                      minExtendedWidth: 216,
-                      groupAlignment: -0.82,
-                      backgroundColor: Colors.transparent,
-                      leading: _DesktopRailHeader(
-                        appTitle: appTitle,
-                        extended: wide,
-                      ),
-                      destinations: destinations
-                          .map(
-                            (destination) => NavigationRailDestination(
-                              icon: Tooltip(
-                                message: destination.label,
-                                child: destination.icon,
-                              ),
-                              selectedIcon: Tooltip(
-                                message: destination.label,
-                                child: destination.selectedIcon,
-                              ),
-                              label: Text(
-                                destination.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(growable: false),
-                    ),
+        child: Row(
+          children: [
+            AppSurfaceCard(
+              margin: const EdgeInsets.all(DesignTokens.spaceMd),
+              padding: EdgeInsets.zero,
+              child: SafeArea(
+                right: false,
+                child: NavigationRail(
+                  selectedIndex: selectedNavIndex < 0 ? null : selectedNavIndex,
+                  onDestinationSelected: (i) => setState(() {
+                    _currentIndex = safeVisibleTabs[i];
+                    _builtTabs.add(_currentIndex);
+                    _allowHiddenCurrentIndex = false;
+                    _hasExplicitNavigation = true;
+                  }),
+                  extended: railExtended,
+                  minExtendedWidth: DesktopTokens.railExtendedWidth,
+                  backgroundColor: Colors.transparent,
+                  leading: _DesktopRailHeader(
+                    appTitle: appTitle,
+                    extended: railExtended,
                   ),
+                  destinations: destinations
+                      .map(
+                        (destination) => NavigationRailDestination(
+                          icon: Tooltip(
+                            message: destination.label,
+                            child: destination.icon,
+                          ),
+                          selectedIcon: Tooltip(
+                            message: destination.label,
+                            child: destination.selectedIcon,
+                          ),
+                          label: Text(
+                            destination.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
                 ),
-                VerticalDivider(
-                  width: 1,
-                  thickness: 1,
-                  color: cs.outlineVariant.withValues(alpha: 0.52),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  key: const ValueKey('desktop_web_body_max_width'),
+                  constraints: const BoxConstraints(
+                    maxWidth: DesktopTokens.maxContentWidth,
+                  ),
+                  child: SizedBox(width: double.infinity, child: body),
                 ),
-                Expanded(child: shellBody),
-              ],
-            );
-          },
+              ),
+            ),
+          ],
         ),
       ),
-      floatingActionButton:
-          safeIndex == 0 &&
-              quickCaptureFab &&
-              MediaQuery.sizeOf(context).width < 1200
-          ? const QuickCaptureFab()
+      floatingActionButton: safeIndex == 0 && quickCaptureFab
+          ? Padding(
+              padding: EdgeInsets.only(right: fabRightInset),
+              child: const QuickCaptureFab(),
+            )
           : null,
     );
   }
