@@ -1,4 +1,5 @@
 import '../core/focus_sound_catalog.dart';
+import '../core/i18n.dart';
 
 enum PomodoroType { focus, shortBreak, longBreak }
 
@@ -177,18 +178,21 @@ extension FocusPenaltyReasonX on FocusPenaltyReason {
     }
   }
 
-  String get label {
+  String get label => labelFor(I18n.current);
+
+  String labelFor(AppLocale locale) {
+    final isEn = locale == AppLocale.en;
     switch (this) {
       case FocusPenaltyReason.pause:
-        return '暂停专注';
+        return isEn ? 'Paused focus' : '暂停专注';
       case FocusPenaltyReason.skip:
-        return '跳过专注';
+        return isEn ? 'Skipped focus' : '跳过专注';
       case FocusPenaltyReason.reset:
-        return '重置专注';
+        return isEn ? 'Reset focus' : '重置专注';
       case FocusPenaltyReason.leaveApp:
-        return '离开应用';
+        return isEn ? 'Left the app' : '离开应用';
       case FocusPenaltyReason.distractingApp:
-        return '打开分心应用';
+        return isEn ? 'Opened a distracting app' : '打开分心应用';
     }
   }
 
@@ -226,7 +230,8 @@ class PomodoroFocusPenalty {
     'occurredAt': occurredAt.toIso8601String(),
     'updatedAt': occurredAt.toIso8601String(),
     'reason': reason.key,
-    'reasonLabel': reason.label,
+    // Keep the legacy payload stable while its UI label follows the locale.
+    'reasonLabel': reason.labelFor(AppLocale.zh),
     'affectedSeconds': affectedSeconds,
     'taskName': taskName,
     'tag': tag,

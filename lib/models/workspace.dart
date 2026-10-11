@@ -1,10 +1,14 @@
+import '../core/i18n.dart';
+
 enum WorkspaceRole { owner, editor, viewer }
 
 extension WorkspaceRoleX on WorkspaceRole {
-  String get label => switch (this) {
-    WorkspaceRole.owner => '拥有者',
-    WorkspaceRole.editor => '可编辑',
-    WorkspaceRole.viewer => '只读',
+  String get label => labelFor(I18n.current);
+
+  String labelFor(AppLocale locale) => switch (this) {
+    WorkspaceRole.owner => locale == AppLocale.en ? 'Owner' : '拥有者',
+    WorkspaceRole.editor => locale == AppLocale.en ? 'Can edit' : '可编辑',
+    WorkspaceRole.viewer => locale == AppLocale.en ? 'Read only' : '只读',
   };
 
   bool get canEdit =>
@@ -275,14 +279,18 @@ class WorkspaceActivity {
     required this.createdAt,
   });
 
-  String get label {
+  String get label => labelFor(I18n.current);
+
+  String labelFor(AppLocale locale) {
+    final isEn = locale == AppLocale.en;
     return switch (action) {
-      'workspace.create' => '创建了空间',
-      'workspace.invite' => '生成了邀请码',
-      'workspace.invite.accept' => '加入了空间',
-      'workspace.member.role' => '调整了成员权限',
-      'workspace.member.remove' => '移除了成员',
-      'workspace.comment' => '发表了评论',
+      'workspace.create' => isEn ? 'Created the workspace' : '创建了空间',
+      'workspace.invite' => isEn ? 'Created an invitation code' : '生成了邀请码',
+      'workspace.invite.accept' => isEn ? 'Joined the workspace' : '加入了空间',
+      'workspace.member.role' =>
+        isEn ? 'Changed member permissions' : '调整了成员权限',
+      'workspace.member.remove' => isEn ? 'Removed a member' : '移除了成员',
+      'workspace.comment' => isEn ? 'Posted a comment' : '发表了评论',
       _ => action,
     };
   }

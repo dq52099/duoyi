@@ -1,9 +1,19 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/models/workspace.dart';
 
 void main() {
   final now = DateTime(2026, 5, 15);
+  late AppLocale savedLocale;
+
+  setUp(() {
+    savedLocale = I18n.current;
+    I18n.setLocale(AppLocale.zh);
+  });
+  tearDown(() => I18n.setLocale(savedLocale));
 
   group('WorkspaceRole 权限', () {
     test('owner 与 editor 可编辑，viewer 不可', () {
@@ -23,7 +33,119 @@ void main() {
       expect(workspaceRoleFromJson(''), WorkspaceRole.viewer);
       expect(workspaceRoleFromJson('unknown'), WorkspaceRole.viewer);
     });
+
+    test('role labels localize while permissions and JSON stay stable', () {
+      final expected = <WorkspaceRole, List<String>>{
+        WorkspaceRole.owner: ['拥有者', 'Owner'],
+        WorkspaceRole.editor: ['可编辑', 'Can edit'],
+        WorkspaceRole.viewer: ['只读', 'Read only'],
+      };
+      final workspace = Workspace(
+        id: 'w-locale',
+        name: '作者空间',
+        ownerUserId: 'u-owner',
+        isPrivate: false,
+        createdAt: now,
+        updatedAt: now,
+        members: [
+          for (final role in WorkspaceRole.values)
+            WorkspaceMember(
+              workspaceId: 'w-locale',
+              userId: 'u-${role.name}',
+              username: '作者-${role.name}',
+              role: role,
+              joinedAt: now,
+            ),
+        ],
+      );
+      final encodedBefore = jsonEncode(workspace.toJson());
+
+      for (final locale in AppLocale.values) {
+        I18n.setLocale(locale);
+        final labelIndex = locale == AppLocale.zh ? 0 : 1;
+        for (final entry in expected.entries) {
+          expect(entry.key.labelFor(locale), entry.value[labelIndex]);
+          expect(entry.key.label, entry.value[labelIndex]);
+        }
+        expect(WorkspaceRole.values.map((role) => role.canEdit).toList(), [
+          true,
+          true,
+          false,
+        ]);
+        expect(workspace.members.map((member) => member.role.name).toList(), [
+          'owner',
+          'editor',
+          'viewer',
+        ]);
+        expect(jsonEncode(workspace.toJson()), encodedBefore);
+      }
+
+      I18n.setLocale(AppLocale.en);
+      expect(WorkspaceRole.owner.labelFor(AppLocale.zh), '拥有者');
+      expect(WorkspaceRole.viewer.labelFor(AppLocale.en), 'Read only');
+      expect(I18n.current, AppLocale.en);
+      expect(jsonEncode(workspace.toJson()), encodedBefore);
+    });
   });
+
+  test(
+    'WorkspaceActivity localizes known actions and preserves unknown data',
+    () {
+      final expected = <String, List<String>>{
+        'workspace.create': ['创建了空间', 'Created the workspace'],
+        'workspace.invite': ['生成了邀请码', 'Created an invitation code'],
+        'workspace.invite.accept': ['加入了空间', 'Joined the workspace'],
+        'workspace.member.role': ['调整了成员权限', 'Changed member permissions'],
+        'workspace.member.remove': ['移除了成员', 'Removed a member'],
+        'workspace.comment': ['发表了评论', 'Posted a comment'],
+      };
+      final activities = [
+        for (final action in expected.keys)
+          WorkspaceActivity(
+            id: expected.keys.toList().indexOf(action) + 1,
+            workspaceId: 'w-locale',
+            actorUserId: 'u-author',
+            actorName: '作者名字',
+            action: action,
+            detail: '作者提供的活动详情',
+            createdAt: now,
+          ),
+      ];
+      final unknown = WorkspaceActivity(
+        id: 99,
+        workspaceId: 'w-locale',
+        actorUserId: 'u-server',
+        actorName: '服务端成员名',
+        action: 'workspace.future-action',
+        detail: '未经翻译的服务端详情',
+        createdAt: now,
+      );
+
+      for (final locale in AppLocale.values) {
+        I18n.setLocale(locale);
+        final labelIndex = locale == AppLocale.zh ? 0 : 1;
+        for (final activity in activities) {
+          expect(
+            activity.labelFor(locale),
+            expected[activity.action]![labelIndex],
+          );
+          expect(activity.label, expected[activity.action]![labelIndex]);
+          expect(activity.actorName, '作者名字');
+          expect(activity.detail, '作者提供的活动详情');
+        }
+        expect(unknown.labelFor(locale), 'workspace.future-action');
+        expect(unknown.label, 'workspace.future-action');
+        expect(unknown.action, 'workspace.future-action');
+        expect(unknown.actorName, '服务端成员名');
+        expect(unknown.detail, '未经翻译的服务端详情');
+      }
+
+      I18n.setLocale(AppLocale.en);
+      expect(activities.first.labelFor(AppLocale.zh), '创建了空间');
+      expect(unknown.labelFor(AppLocale.zh), 'workspace.future-action');
+      expect(I18n.current, AppLocale.en);
+    },
+  );
 
   group('Workspace.roleFor', () {
     test('成员列表为空时，owner 用户得到 owner，其他得到 viewer', () {
