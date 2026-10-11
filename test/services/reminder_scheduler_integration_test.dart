@@ -6306,6 +6306,641 @@ void main() {
         expect(email.scheduled.single, initialEmail);
       },
     );
+
+    test(
+      'retained registered displays localize lazily without touching schedules',
+      () async {
+        final today = DateTime.now();
+        final futureDate = DateTime(
+          today.year,
+          today.month,
+          today.day,
+        ).add(const Duration(days: 4));
+        final todo = TodoItem(
+          id: 'display-locale-todo',
+          title: '  作者待办标题  ',
+          dueDate: DateTime(
+            futureDate.year,
+            futureDate.month,
+            futureDate.day,
+            9,
+            15,
+          ),
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'once',
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.push,
+                hour: 9,
+                minute: 15,
+              ),
+            ],
+          ),
+        );
+        final goal = GoalItem(
+          id: 'display-locale-goal',
+          title: '作者目标标题',
+          targetDate: futureDate,
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'repeat',
+                type: ReminderRuleType.weeklyTime,
+                kind: ReminderKind.push,
+                hour: 10,
+                minute: 25,
+                weekdays: const <int>[2, 4],
+              ),
+              ReminderRule(
+                id: 'once',
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.popup,
+                hour: 11,
+                minute: 30,
+              ),
+              ReminderRule(
+                id: 'alarm',
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.alarm,
+                hour: 12,
+                minute: 30,
+              ),
+              ReminderRule(
+                id: 'email',
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.email,
+                hour: 13,
+                minute: 35,
+              ),
+            ],
+          ),
+        );
+        final emptyTitleGoal = GoalItem(
+          id: 'display-locale-empty-goal-title',
+          title: '   ',
+          targetDate: futureDate,
+          reminderPlan: ReminderPlan(
+            enabled: true,
+            rules: [
+              ReminderRule(
+                id: 'once',
+                type: ReminderRuleType.absolute,
+                kind: ReminderKind.push,
+                hour: 12,
+                minute: 5,
+              ),
+            ],
+          ),
+        );
+        final habit = _pushHabit(
+          id: 'display-locale-habit',
+          name: '作者日常标题',
+          hour: 16,
+          minute: 20,
+          weekdays: const <int>[2, 4],
+        );
+        final weekdayHabits = [
+          for (var weekday = 1; weekday <= 7; weekday += 1)
+            _pushHabit(
+              id: 'display-locale-weekday-$weekday',
+              name: 'weekday-$weekday',
+              hour: 17,
+              minute: weekday,
+              weekdays: [weekday],
+            ),
+        ];
+        final everyDayHabit = _pushHabit(
+          id: 'display-locale-every-day',
+          name: 'every-day',
+          hour: 18,
+          minute: 0,
+          weekdays: const <int>[1, 2, 3, 4, 5, 6, 7],
+        );
+        final anniversaryDate = futureDate.add(const Duration(days: 30));
+        final anniversary = Anniversary(
+          id: 'display-locale-anniversary',
+          title: '作者纪念标题',
+          originDate: anniversaryDate,
+          type: AnniversaryType.normal,
+          remind: true,
+          remindDaysBefore: 2,
+          remindHour: 8,
+          remindMinute: 35,
+          reminderKind: ReminderKind.push,
+        );
+        final countdownDate = futureDate.add(const Duration(days: 45));
+        final countdown = CountdownItem(
+          id: 'display-locale-countdown',
+          title: '作者倒数标题',
+          targetDate: countdownDate,
+          remind: true,
+          remindDaysBefore: 3,
+          remindHour: 7,
+          remindMinute: 40,
+          reminderKind: ReminderKind.push,
+        );
+
+        await scheduler.syncTodos([todo]);
+        await scheduler.syncGoals([goal, emptyTitleGoal]);
+        await scheduler.syncHabits([habit, ...weekdayHabits, everyDayHabit]);
+        await scheduler.syncAnniversaries([anniversary]);
+        await scheduler.syncCountdowns([countdown]);
+
+        final retained = await scheduler.registeredRemindersSnapshot();
+        final byKey = {for (final entry in retained) entry.objectKey: entry};
+        final idsBefore = <String, Object?>{};
+        final copyJsonBefore = <String, Map<String, Object?>>{};
+        for (final objectType in const [
+          'todo',
+          'goal',
+          'habit',
+          'anniversary',
+          'countdown',
+        ]) {
+          idsBefore[objectType] = await registry.idsByObject(objectType);
+          final displays = await registry.displayByObject(objectType);
+          copyJsonBefore[objectType] = {
+            for (final entry in displays.entries)
+              entry.key: {
+                'title': entry.value.title,
+                'subtitle': entry.value.subtitle,
+                'kinds': entry.value.kinds.toSet(),
+                'acceptedIdSets': [
+                  for (final group in entry.value.acceptedIdSets) group.toSet(),
+                ],
+                'displayCopy': entry.value.displayCopy?.toJson(),
+              },
+          };
+        }
+        expect(
+          byKey.keys,
+          containsAll(<String>[
+            'todo:${todo.id}',
+            'goal:${goal.id}',
+            'goal:${emptyTitleGoal.id}',
+            'habit:${habit.id}',
+            'anniversary:${anniversary.id}',
+            'countdown:${countdown.id}',
+            for (final weekdayHabit in weekdayHabits)
+              'habit:${weekdayHabit.id}',
+            'habit:${everyDayHabit.id}',
+          ]),
+        );
+
+        ReminderScheduleSnapshotEntry entryFor(String type, String id) =>
+            byKey['$type:$id']!;
+        final todoEntry = entryFor('todo', todo.id);
+        final goalEntry = entryFor('goal', goal.id);
+        final emptyTitleGoalEntry = entryFor('goal', emptyTitleGoal.id);
+        final habitEntry = entryFor('habit', habit.id);
+        final anniversaryEntry = entryFor('anniversary', anniversary.id);
+        final countdownEntry = entryFor('countdown', countdown.id);
+        final retainedFacts = {
+          for (final entry in retained)
+            entry.objectKey: {
+              'objectType': entry.objectType,
+              'objectId': entry.objectId,
+              'ids': List<int>.of(entry.ids),
+              'acceptedIdSets': [
+                for (final group in entry.acceptedIdSets) group.toSet(),
+              ],
+              'kinds': entry.kinds.toSet(),
+            },
+        };
+
+        final todoDisplay = (await registry.displayByObject('todo'))[todo.id]!;
+        final goalDisplay = (await registry.displayByObject('goal'))[goal.id]!;
+        final habitDisplay = (await registry.displayByObject(
+          'habit',
+        ))[habit.id]!;
+        final anniversaryDisplay = (await registry.displayByObject(
+          'anniversary',
+        ))[anniversary.id]!;
+        final countdownDisplay = (await registry.displayByObject(
+          'countdown',
+        ))[countdown.id]!;
+        expect(todoDisplay.title, todo.title);
+        expect(todoDisplay.subtitle, '待办 · 一次提醒 · 普通通知 · 1 条规则');
+        expect(goalDisplay.title, goal.title);
+        expect(goalDisplay.subtitle, '目标 · 重复提醒 · 普通通知、弹出提醒、闹钟提醒、邮件提醒 · 4 条规则');
+        expect(habitDisplay.title, habit.name);
+        expect(habitDisplay.subtitle, '日常 · 普通通知 · 周二、周四 16:20');
+        expect(anniversaryDisplay.title, anniversary.title);
+        expect(anniversaryDisplay.subtitle, contains('纪念日 · 普通通知 · '));
+        expect(countdownDisplay.title, countdown.title);
+        expect(countdownDisplay.subtitle, contains('倒数日 · 普通通知 · '));
+
+        expect(todoEntry.displayCopy?.toJson(), {
+          'schemaVersion': 1,
+          'shape': 'rules',
+          'subject': 'todo',
+          'titleMode': 'literal',
+          'repeating': false,
+          'ruleCount': 1,
+        });
+        expect(todoEntry.acceptedIdSets, isNotEmpty);
+        expect(goalEntry.displayCopy?.toJson(), {
+          'schemaVersion': 1,
+          'shape': 'rules',
+          'subject': 'goal',
+          'titleMode': 'literal',
+          'repeating': true,
+          'ruleCount': 4,
+        });
+        expect(goalEntry.acceptedIdSets, isNotEmpty);
+        expect(emptyTitleGoalEntry.displayCopy?.toJson(), {
+          'schemaVersion': 1,
+          'shape': 'rules',
+          'subject': 'goal',
+          'titleMode': 'default',
+          'repeating': false,
+          'ruleCount': 1,
+        });
+        expect(habitEntry.displayCopy?.toJson(), {
+          'schemaVersion': 1,
+          'shape': 'habit',
+          'subject': 'habit',
+          'titleMode': 'literal',
+          'primaryKind': 'push',
+          'weekdays': [2, 4],
+          'hour': 16,
+          'minute': 20,
+        });
+        final everyDayEntry = entryFor('habit', everyDayHabit.id);
+
+        DateTime reminderAt(
+          DateTime date,
+          int daysBefore,
+          int hour,
+          int minute,
+        ) {
+          return DateTime(
+            date.year,
+            date.month,
+            date.day,
+            hour,
+            minute,
+          ).subtract(Duration(days: daysBefore));
+        }
+
+        final expectedAnniversaryAt = reminderAt(
+          anniversaryDate,
+          anniversary.remindDaysBefore,
+          anniversary.remindHour,
+          anniversary.remindMinute,
+        );
+        final expectedCountdownAt = reminderAt(
+          countdownDate,
+          countdown.remindDaysBefore,
+          countdown.remindHour,
+          countdown.remindMinute,
+        );
+        String capturedDateTimeText(DateTime value) {
+          final month = value.month.toString().padLeft(2, '0');
+          final day = value.day.toString().padLeft(2, '0');
+          final hour = value.hour.toString().padLeft(2, '0');
+          final minute = value.minute.toString().padLeft(2, '0');
+          return '$month-$day $hour:$minute';
+        }
+
+        String timeText(int hour, int minute) {
+          return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+        }
+
+        expect(anniversaryEntry.displayCopy?.toJson(), {
+          'schemaVersion': 1,
+          'shape': 'dated',
+          'subject': 'anniversary',
+          'titleMode': 'literal',
+          'primaryKind': 'push',
+          'year': expectedAnniversaryAt.year,
+          'month': expectedAnniversaryAt.month,
+          'day': expectedAnniversaryAt.day,
+          'hour': expectedAnniversaryAt.hour,
+          'minute': expectedAnniversaryAt.minute,
+        });
+        expect(countdownEntry.displayCopy?.toJson(), {
+          'schemaVersion': 1,
+          'shape': 'dated',
+          'subject': 'countdown',
+          'titleMode': 'literal',
+          'primaryKind': 'push',
+          'year': expectedCountdownAt.year,
+          'month': expectedCountdownAt.month,
+          'day': expectedCountdownAt.day,
+          'hour': expectedCountdownAt.hour,
+          'minute': expectedCountdownAt.minute,
+        });
+
+        final scheduledBefore = {
+          'notification': [
+            for (final entry in notif.scheduled) Map<String, Object?>.of(entry),
+          ],
+          'alarm': [
+            for (final entry in alarm.scheduled) Map<String, Object?>.of(entry),
+          ],
+          'popup': [
+            for (final entry in popup.scheduled) Map<String, Object?>.of(entry),
+          ],
+          'email': [
+            for (final entry in email.scheduled) Map<String, Object?>.of(entry),
+          ],
+        };
+        final cancelledBefore = {
+          'notification': List<int>.of(notif.cancelled),
+          'alarm': List<int>.of(alarm.cancelled),
+          'popup': List<int>.of(popup.cancelled),
+          'email': List<int>.of(email.cancelled),
+          'todo': List<String>.of(notif.cancelledTodos),
+          'habit': List<String>.of(notif.cancelledHabits),
+          'anniversary': List<String>.of(notif.cancelledAnniversaries),
+        };
+
+        I18n.setLocale(AppLocale.zh);
+        final zh = {
+          for (final entry in retained)
+            entry.objectKey: entry.displayFor(AppLocale.zh),
+        };
+        expect(todoEntry.title, '  作者待办标题  ');
+        expect(todoEntry.subtitle, contains('待办'));
+        expect(todoEntry.subtitle, contains('一次提醒'));
+        expect(todoEntry.subtitle, contains('1 条规则'));
+        expect(goalEntry.title, '作者目标标题');
+        expect(goalEntry.subtitle, contains('目标'));
+        expect(goalEntry.subtitle, contains('重复提醒'));
+        expect(goalEntry.subtitle, contains('闹钟提醒'));
+        expect(goalEntry.subtitle, contains('邮件提醒'));
+        expect(goalEntry.subtitle, contains('4 条规则'));
+        expect(emptyTitleGoalEntry.title, '目标提醒');
+        expect(habitEntry.title, '作者日常标题');
+        expect(habitEntry.subtitle, contains('周二、周四 16:20'));
+        expect(everyDayEntry.subtitle, contains('每天 18:00'));
+        const weekdaysZh = <int, String>{
+          1: '周一',
+          2: '周二',
+          3: '周三',
+          4: '周四',
+          5: '周五',
+          6: '周六',
+          7: '周日',
+        };
+        const weekdaysEn = <int, String>{
+          1: 'Mon',
+          2: 'Tue',
+          3: 'Wed',
+          4: 'Thu',
+          5: 'Fri',
+          6: 'Sat',
+          7: 'Sun',
+        };
+        for (var index = 0; index < weekdayHabits.length; index += 1) {
+          final weekday = index + 1;
+          final weekdayEntry = entryFor('habit', weekdayHabits[index].id);
+          expect(
+            zh[weekdayEntry.objectKey]!.subtitle,
+            contains('${weekdaysZh[weekday]} ${timeText(17, weekday)}'),
+          );
+        }
+        expect(anniversaryEntry.title, '作者纪念标题');
+        expect(anniversaryEntry.subtitle, contains('纪念日'));
+        expect(
+          anniversaryEntry.subtitle,
+          contains(capturedDateTimeText(expectedAnniversaryAt)),
+        );
+        expect(countdownEntry.title, '作者倒数标题');
+        expect(countdownEntry.subtitle, contains('倒数日'));
+
+        I18n.setLocale(AppLocale.en);
+        final en = {
+          for (final entry in retained)
+            entry.objectKey: entry.displayFor(AppLocale.en),
+        };
+        expect(I18n.current, AppLocale.en);
+        expect(todoEntry.title, '  作者待办标题  ');
+        expect(todoEntry.subtitle, contains('Todo'));
+        expect(todoEntry.subtitle, contains('One-time reminder'));
+        expect(todoEntry.subtitle, contains('Notification'));
+        expect(todoEntry.subtitle, contains('1 rule'));
+        expect(goalEntry.title, '作者目标标题');
+        expect(goalEntry.subtitle, contains('Goal'));
+        expect(goalEntry.subtitle, contains('Repeating reminder'));
+        expect(goalEntry.subtitle, contains('Notification'));
+        expect(goalEntry.subtitle, contains('Popup'));
+        expect(goalEntry.subtitle, contains('Alarm'));
+        expect(goalEntry.subtitle, contains('Email'));
+        expect(goalEntry.subtitle, contains('4 rules'));
+        expect(emptyTitleGoalEntry.title, 'Goal reminder');
+        expect(habitEntry.title, '作者日常标题');
+        expect(habitEntry.subtitle, contains('Habit'));
+        expect(habitEntry.subtitle, contains('Tue, Thu 16:20'));
+        expect(everyDayEntry.subtitle, contains('Every day 18:00'));
+        for (var index = 0; index < weekdayHabits.length; index += 1) {
+          final weekday = index + 1;
+          final weekdayEntry = entryFor('habit', weekdayHabits[index].id);
+          expect(
+            en[weekdayEntry.objectKey]!.subtitle,
+            contains('${weekdaysEn[weekday]} ${timeText(17, weekday)}'),
+          );
+        }
+        expect(anniversaryEntry.title, '作者纪念标题');
+        expect(anniversaryEntry.subtitle, contains('Anniversary'));
+        expect(anniversaryEntry.subtitle, contains('Notification'));
+        expect(
+          anniversaryEntry.subtitle,
+          contains(capturedDateTimeText(expectedAnniversaryAt)),
+        );
+        expect(countdownEntry.title, '作者倒数标题');
+        expect(countdownEntry.subtitle, contains('Countdown'));
+        expect(countdownEntry.subtitle, contains('Notification'));
+        expect(
+          countdownEntry.subtitle,
+          contains(capturedDateTimeText(expectedCountdownAt)),
+        );
+
+        I18n.setLocale(AppLocale.zh);
+        for (final entry in retained) {
+          expect(entry.title, zh[entry.objectKey]!.title);
+          expect(entry.subtitle, zh[entry.objectKey]!.subtitle);
+          expect(entry.displayFor(AppLocale.en), en[entry.objectKey]);
+        }
+        expect({
+          for (final objectType in idsBefore.keys)
+            objectType: await registry.idsByObject(objectType),
+        }, idsBefore);
+        final copyJsonAfter = <String, Map<String, Object?>>{};
+        for (final objectType in copyJsonBefore.keys) {
+          final displays = await registry.displayByObject(objectType);
+          copyJsonAfter[objectType] = {
+            for (final entry in displays.entries)
+              entry.key: {
+                'title': entry.value.title,
+                'subtitle': entry.value.subtitle,
+                'kinds': entry.value.kinds.toSet(),
+                'acceptedIdSets': [
+                  for (final group in entry.value.acceptedIdSets) group.toSet(),
+                ],
+                'displayCopy': entry.value.displayCopy?.toJson(),
+              },
+          };
+        }
+        expect(copyJsonAfter, copyJsonBefore);
+        expect({
+          'notification': [
+            for (final entry in notif.scheduled) Map<String, Object?>.of(entry),
+          ],
+          'alarm': [
+            for (final entry in alarm.scheduled) Map<String, Object?>.of(entry),
+          ],
+          'popup': [
+            for (final entry in popup.scheduled) Map<String, Object?>.of(entry),
+          ],
+          'email': [
+            for (final entry in email.scheduled) Map<String, Object?>.of(entry),
+          ],
+        }, scheduledBefore);
+        expect({
+          'notification': List<int>.of(notif.cancelled),
+          'alarm': List<int>.of(alarm.cancelled),
+          'popup': List<int>.of(popup.cancelled),
+          'email': List<int>.of(email.cancelled),
+          'todo': List<String>.of(notif.cancelledTodos),
+          'habit': List<String>.of(notif.cancelledHabits),
+          'anniversary': List<String>.of(notif.cancelledAnniversaries),
+        }, cancelledBefore);
+        expect({
+          for (final entry in retained)
+            entry.objectKey: {
+              'objectType': entry.objectType,
+              'objectId': entry.objectId,
+              'ids': List<int>.of(entry.ids),
+              'acceptedIdSets': [
+                for (final group in entry.acceptedIdSets) group.toSet(),
+              ],
+              'kinds': entry.kinds.toSet(),
+            },
+        }, retainedFacts);
+      },
+    );
+
+    test(
+      'IDs-only registered fallback localizes while legacy display stays literal',
+      () async {
+        final idsOnlyRegistry = InMemoryReminderScheduleRegistry();
+        final idsOnlyScheduler = ReminderScheduler(
+          notif,
+          alarm: alarm,
+          popup: popup,
+          email: email,
+          registry: idsOnlyRegistry,
+        );
+        const types = <String>[
+          'todo',
+          'goal',
+          'habit',
+          'anniversary',
+          'countdown',
+        ];
+        const ids = <String, int>{
+          'todo': 701,
+          'goal': 702,
+          'habit': 703,
+          'anniversary': 704,
+          'countdown': 705,
+        };
+        for (final type in types) {
+          await idsOnlyRegistry.replaceObject(type, 'generic-$type', {
+            ids[type]!,
+          });
+        }
+        const legacyTitle = ' 目标提醒 ';
+        const legacySubtitle = ' 目标 · 已登记到系统提醒队列 ';
+        await idsOnlyRegistry.replaceObject(
+          'todo',
+          'legacy-template',
+          const <int>{799},
+          display: const ReminderScheduleDisplayInfo(
+            title: legacyTitle,
+            subtitle: legacySubtitle,
+            kinds: <ReminderKind>{ReminderKind.push},
+            acceptedIdSets: <Set<int>>[
+              <int>{799},
+            ],
+          ),
+        );
+
+        final idsBefore = <String, Map<String, Set<int>>>{};
+        final displaysBefore =
+            <String, Map<String, ReminderScheduleDisplayInfo>>{};
+        for (final type in types) {
+          idsBefore[type] = await idsOnlyRegistry.idsByObject(type);
+          displaysBefore[type] = await idsOnlyRegistry.displayByObject(type);
+        }
+        final snapshot = await idsOnlyScheduler.registeredRemindersSnapshot();
+        final byKey = {for (final entry in snapshot) entry.objectKey: entry};
+        const localizedTitles = <String, List<String>>{
+          'todo': ['待办提醒', 'Todo reminder'],
+          'goal': ['目标提醒', 'Goal reminder'],
+          'habit': ['日常提醒', 'Habit reminder'],
+          'anniversary': ['纪念日提醒', 'Anniversary reminder'],
+          'countdown': ['倒数日提醒', 'Countdown reminder'],
+        };
+
+        I18n.setLocale(AppLocale.zh);
+        for (final type in types) {
+          final entry = byKey['$type:generic-$type']!;
+          expect(entry.displayCopy?.toJson(), {
+            'schemaVersion': 1,
+            'shape': 'registered',
+            'subject': type,
+            'titleMode': 'default',
+          });
+          expect(entry.title, localizedTitles[type]![0]);
+          expect(entry.subtitle, contains('已登记到系统提醒队列'));
+        }
+
+        final legacyEntry = byKey['todo:legacy-template']!;
+        final legacyDisplay = (await idsOnlyRegistry.displayByObject(
+          'todo',
+        ))['legacy-template']!;
+        expect(legacyDisplay.displayCopy, isNull);
+        expect(legacyEntry.displayCopy, isNull);
+        I18n.setLocale(AppLocale.en);
+        for (final type in types) {
+          final entry = byKey['$type:generic-$type']!;
+          expect(entry.title, localizedTitles[type]![1]);
+          expect(
+            entry.subtitle,
+            contains('Registered with the system reminder queue'),
+          );
+        }
+        expect(legacyEntry.title, legacyTitle);
+        expect(legacyEntry.subtitle, legacySubtitle);
+        expect(legacyEntry.displayFor(AppLocale.en).title, legacyTitle);
+        expect(legacyEntry.displayFor(AppLocale.en).subtitle, legacySubtitle);
+        I18n.setLocale(AppLocale.zh);
+        expect(legacyEntry.title, legacyTitle);
+        expect(legacyEntry.subtitle, legacySubtitle);
+
+        for (final type in types) {
+          expect(await idsOnlyRegistry.idsByObject(type), idsBefore[type]);
+          expect(
+            await idsOnlyRegistry.displayByObject(type),
+            displaysBefore[type],
+          );
+        }
+        expect(notif.scheduled, isEmpty);
+        expect(alarm.scheduled, isEmpty);
+        expect(popup.scheduled, isEmpty);
+        expect(email.scheduled, isEmpty);
+        expect(notif.cancelled, isEmpty);
+        expect(alarm.cancelled, isEmpty);
+        expect(popup.cancelled, isEmpty);
+        expect(email.cancelled, isEmpty);
+      },
+    );
   });
 }
 

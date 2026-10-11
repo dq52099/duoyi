@@ -1,0 +1,5 @@
+Analyzing 9 items...                                            
+
+   info • Use the null-aware marker '?' rather than a null check via an 'if' • test/services/reminder_schedule_display_registry_test.dart:347:11 • use_null_aware_elements
+
+1 issue found. (ran in 86.7s)

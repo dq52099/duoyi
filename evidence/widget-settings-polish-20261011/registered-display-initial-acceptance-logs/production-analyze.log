@@ -1,0 +1,11 @@
+Analyzing 2 items...                                            
+
+   info • Statements in an if should be enclosed in a block • lib/services/reminder_schedule_display_copy.dart:171:11 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/services/reminder_schedule_display_copy.dart:187:11 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/services/reminder_schedule_display_copy.dart:197:11 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/services/reminder_schedule_display_copy.dart:201:11 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/services/reminder_schedule_display_copy.dart:221:11 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/services/reminder_schedule_display_copy.dart:236:11 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/services/reminder_schedule_display_copy.dart:349:7 • curly_braces_in_flow_control_structures
+
+7 issues found. (ran in 49.6s)

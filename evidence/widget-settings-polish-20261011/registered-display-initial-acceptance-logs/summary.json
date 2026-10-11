@@ -1,0 +1,37 @@
+{
+  "sources": {
+    "lib/services/reminder_schedule_display_copy.dart": "62ad4ce827ecccd18d0d8ef16090009d5256431b509431aee8fa27d33fb6cf60",
+    "lib/services/reminder_scheduler.dart": "e0a443c48c825005a09455a61b6d128446d154e7a75a617012f19f402dd704bc",
+    "lib/services/reminder_delivery_copy.dart": "55a9353b53142040195656e88587e0dc0b828bf6742278a5757f220cf8b5f2a0",
+    "test/services/reminder_schedule_display_copy_test.dart": "455afe802567954564dfc10087f8fce2fe16eb9820039d1becb6bedb7cb46cd3",
+    "test/services/reminder_schedule_display_registry_test.dart": "3b0c85b47ddbc1a4dbbddf985b5ba09a30297fe5aa4962b8f0e5c8d78f43f624",
+    "test/services/reminder_scheduler_integration_test.dart": "893edec8e93e03d8f4e0fd3f0510614d65bafe1f6e138f2af7cf19678e727898",
+    "test/services/notification_scheduled_diagnostics_test.dart": "fd7dd19c231ac95a11c5ee98544e221bc561e347238d9e1fa4a4fd0201a2036a",
+    "test/services/reminder_delivery_copy_test.dart": "eedb501eee5f72bb12970ba330f8e61c0a1fedebdd7b5f90708d66d57d77b49c",
+    "test/services/reminder_scheduler_brand_titles_test.dart": "9af4d8dc9d87bfe0ed446ccb0715a701aef28996f3f387f28c89d57ad231bc96"
+  },
+  "test_files": [
+    "test/services/reminder_schedule_display_copy_test.dart",
+    "test/services/reminder_schedule_display_registry_test.dart",
+    "test/services/reminder_scheduler_integration_test.dart",
+    "test/services/notification_scheduled_diagnostics_test.dart",
+    "test/services/reminder_delivery_copy_test.dart",
+    "test/services/reminder_scheduler_brand_titles_test.dart"
+  ],
+  "started_utc": "2026-10-11T09:26:20Z",
+  "tests_exit_code": 1,
+  "analysis_exit_code": 1,
+  "sources_after": {
+    "lib/services/reminder_schedule_display_copy.dart": "62ad4ce827ecccd18d0d8ef16090009d5256431b509431aee8fa27d33fb6cf60",
+    "lib/services/reminder_scheduler.dart": "e0a443c48c825005a09455a61b6d128446d154e7a75a617012f19f402dd704bc",
+    "lib/services/reminder_delivery_copy.dart": "55a9353b53142040195656e88587e0dc0b828bf6742278a5757f220cf8b5f2a0",
+    "test/services/reminder_schedule_display_copy_test.dart": "455afe802567954564dfc10087f8fce2fe16eb9820039d1becb6bedb7cb46cd3",
+    "test/services/reminder_schedule_display_registry_test.dart": "3b0c85b47ddbc1a4dbbddf985b5ba09a30297fe5aa4962b8f0e5c8d78f43f624",
+    "test/services/reminder_scheduler_integration_test.dart": "893edec8e93e03d8f4e0fd3f0510614d65bafe1f6e138f2af7cf19678e727898",
+    "test/services/notification_scheduled_diagnostics_test.dart": "fd7dd19c231ac95a11c5ee98544e221bc561e347238d9e1fa4a4fd0201a2036a",
+    "test/services/reminder_delivery_copy_test.dart": "eedb501eee5f72bb12970ba330f8e61c0a1fedebdd7b5f90708d66d57d77b49c",
+    "test/services/reminder_scheduler_brand_titles_test.dart": "9af4d8dc9d87bfe0ed446ccb0715a701aef28996f3f387f28c89d57ad231bc96"
+  },
+  "source_hashes_unchanged": true,
+  "finished_utc": "2026-10-11T09:28:36Z"
+}

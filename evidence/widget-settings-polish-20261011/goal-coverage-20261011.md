@@ -48,6 +48,14 @@ Goal editing and open Pomodoro picker/session-editor routes still need explicit 
 
 The current AGY catalog was read again without a quota probe: latest Flash high is `gemini-3.8-flash-high`; Sonnet remains `claude-sonnet-4-6` without a separate high ID. The known unsupported high invocation does not establish Sonnet quota exhaustion or authorize frontend takeover. No build, version, push, APK or deployment was added by these metadata commits. The goal remains active and incomplete.
 
+## Registered reminder display continuation
+
+The registered-reminder diagnostic data contract now carries optional typed display facts through preferences, memory, accepted-ID copies and reconciliation batches. Retained snapshot getters follow the current locale without scheduling, cancellation or storage migration; authored titles and legacy/invalid-descriptor strings remain literal. The final serial six-suite run passed **189 tests** and nine-item analysis found no issues, with pre/post hashes matched ([registered-reminder-display-final-acceptance-20261011.md](registered-reminder-display-final-acceptance-20261011.md)). This is the current run's scoped count, not a sum with earlier overlapping scheduler/delivery acceptance.
+
+The initial new negative fixture incorrectly rejected the valid boolean `true`; that test-only mistake and one fixture analyzer suggestion were corrected and the full batch rerun. Their original logs remain. Registered page/detail-sheet locale subscriptions and mounted repaint still belong to the frontend continuation; data acceptance does not close that UI requirement or global Notification coverage.
+
+Follow-up cleanup removed another **0.808 GiB** of reconstructable build/cache directories. Total allocated storage removed is **26.646 GiB**; the latest disk check still shows approximately **31 GiB** available. No signed APK, version bump, push or deployment was added by this data-contract verification.
+
 ## Next actions and goal status
 
 1. Resolve root's pending permission to take over the remaining frontend work and the Statistics 120-minute continuation question. Neither elapsed time nor silence grants that authority.

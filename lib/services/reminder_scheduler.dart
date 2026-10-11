@@ -19,6 +19,7 @@ import 'todo_reminder_preflight_copy.dart';
 import 'reminder_issue_copy.dart';
 import 'reminder_sync_issue.dart';
 import 'reminder_delivery_copy.dart';
+import 'reminder_schedule_display_copy.dart';
 
 const Duration _sameMinuteReminderGrace = Duration(seconds: 70);
 
@@ -82,19 +83,39 @@ class ReminderScheduleSnapshotEntry {
   final String objectId;
   final List<int> ids;
   final List<Set<int>> acceptedIdSets;
-  final String title;
-  final String subtitle;
+  final String _rawTitle;
+  final String _rawSubtitle;
   final Set<ReminderKind> kinds;
+  final ReminderScheduleDisplayCopy? displayCopy;
 
   const ReminderScheduleSnapshotEntry({
     required this.objectType,
     required this.objectId,
     required this.ids,
     this.acceptedIdSets = const <Set<int>>[],
-    required this.title,
-    required this.subtitle,
+    required String title,
+    required String subtitle,
     this.kinds = const <ReminderKind>{},
-  });
+    this.displayCopy,
+  }) : _rawTitle = title,
+       _rawSubtitle = subtitle;
+
+  String get title => displayFor(I18n.current).title;
+  String get subtitle => displayFor(I18n.current).subtitle;
+
+  /// Rendering retained entries has no scheduling or persistence side effects.
+  ({String title, String subtitle}) displayFor(AppLocale locale) {
+    final copy = displayCopy;
+    if (copy == null || copy.subject.name != objectType) {
+      return (title: _rawTitle, subtitle: _rawSubtitle);
+    }
+    return copy.render(
+      title: _rawTitle,
+      subtitle: _rawSubtitle,
+      kinds: kinds,
+      locale: locale,
+    );
+  }
 
   int get idCount => ids.length;
   String get objectKey => '$objectType:$objectId';
@@ -106,12 +127,14 @@ class ReminderScheduleDisplayInfo {
   final String subtitle;
   final Set<ReminderKind> kinds;
   final List<Set<int>> acceptedIdSets;
+  final ReminderScheduleDisplayCopy? displayCopy;
 
   const ReminderScheduleDisplayInfo({
     required this.title,
     required this.subtitle,
     this.kinds = const <ReminderKind>{},
     this.acceptedIdSets = const <Set<int>>[],
+    this.displayCopy,
   });
 }
 
@@ -696,11 +719,15 @@ class SharedPreferencesReminderScheduleRegistry
           final cleanSubtitle = subtitle.trim();
           if (cleanTitle.isEmpty && cleanSubtitle.isEmpty) return;
           objects[objectId] = ReminderScheduleDisplayInfo(
-            title: cleanTitle,
-            subtitle: cleanSubtitle,
+            title: title,
+            subtitle: subtitle,
             kinds: _decodeReminderKinds(rawDisplay['kinds']),
             acceptedIdSets: _decodeAcceptedIdSets(
               rawDisplay['accepted_id_sets'],
+            ),
+            displayCopy: ReminderScheduleDisplayCopy.tryFromJson(
+              rawDisplay['display_copy'],
+              objectType: type,
             ),
           );
         });
@@ -798,6 +825,8 @@ class SharedPreferencesReminderScheduleRegistry
         objects[objectEntry.key] = {
           'title': objectEntry.value.title,
           'subtitle': objectEntry.value.subtitle,
+          if (objectEntry.value.displayCopy != null)
+            'display_copy': objectEntry.value.displayCopy!.toJson(),
           if (objectEntry.value.kinds.isNotEmpty)
             'kinds': objectEntry.value.kinds.map((kind) => kind.name).toList(),
           if (objectEntry.value.acceptedIdSets.isNotEmpty)
@@ -1511,6 +1540,7 @@ class ReminderScheduler {
             title: display.title,
             subtitle: display.subtitle,
             kinds: display.kinds,
+            displayCopy: display.displayCopy,
           ),
         );
       }
@@ -1558,6 +1588,9 @@ class ReminderScheduler {
     return ReminderScheduleDisplayInfo(
       title: '$typeLabel提醒',
       subtitle: '$typeLabel · 已登记到系统提醒队列',
+      displayCopy: ReminderScheduleDisplayCopy.registered(
+        ReminderScheduleSubject.values.byName(objectType),
+      ),
     );
   }
 
@@ -1568,9 +1601,10 @@ class ReminderScheduler {
   ) {
     final list = rules.toList(growable: false);
     final typeLabel = _objectTypeLabel(objectType);
-    final title = list
-        .map((rule) => rule.body.trim())
-        .firstWhere((value) => value.isNotEmpty, orElse: () => '$typeLabel提醒');
+    final userTitle = list
+        .map((rule) => rule.body)
+        .firstWhere((value) => value.trim().isNotEmpty, orElse: () => '');
+    final title = userTitle.isEmpty ? '$typeLabel提醒' : userTitle;
     final kinds = _kindsFromScheduledRules(list);
     final kindLabel = kinds.map(_kindLabel).toSet().join('、');
     final repeating = list.any((rule) => rule.mode == _DispatchMode.repeating);
@@ -1581,6 +1615,12 @@ class ReminderScheduler {
           '$typeLabel · $cadence · ${kindLabel.isEmpty ? '系统提醒' : kindLabel} · ${list.length} 条规则',
       kinds: kinds,
       acceptedIdSets: _normalizedAcceptedIdSets(acceptedIdSets),
+      displayCopy: ReminderScheduleDisplayCopy.rules(
+        ReminderScheduleSubject.values.byName(objectType),
+        defaultTitle: userTitle.isEmpty,
+        repeating: repeating,
+        ruleCount: list.length,
+      ),
     );
   }
 
@@ -1590,20 +1630,22 @@ class ReminderScheduler {
     required String title,
     required String subtitle,
     Set<ReminderKind> kinds = const <ReminderKind>{},
+    ReminderScheduleDisplayCopy? displayCopy,
   }) {
     final trimmedTitle = title.trim();
     _registeredReminderDisplay['$objectType:$objectId'] =
         ReminderScheduleDisplayInfo(
           title: trimmedTitle.isEmpty
               ? '${_objectTypeLabel(objectType)}提醒'
-              : trimmedTitle,
+              : title,
           subtitle: subtitle.trim().isEmpty
               ? '${_objectTypeLabel(objectType)} · 已登记到系统提醒队列'
-              : subtitle.trim(),
+              : subtitle,
           kinds: Set<ReminderKind>.unmodifiable(
             kinds.where((kind) => kind != ReminderKind.off),
           ),
           acceptedIdSets: const <Set<int>>[],
+          displayCopy: displayCopy,
         );
   }
 
@@ -1643,6 +1685,9 @@ class ReminderScheduler {
       title: '${_objectTypeLabel(objectType)}提醒',
       subtitle: '${_objectTypeLabel(objectType)} · 已登记到系统提醒队列',
       acceptedIdSets: _normalizedAcceptedIdSets(acceptedIdSets),
+      displayCopy: ReminderScheduleDisplayCopy.registered(
+        ReminderScheduleSubject.values.byName(objectType),
+      ),
     );
   }
 
@@ -1653,9 +1698,10 @@ class ReminderScheduler {
   ) {
     final list = rules.toList(growable: false);
     final typeLabel = _objectTypeLabel(objectType);
-    final title = list
-        .map((rule) => rule.body.trim())
-        .firstWhere((value) => value.isNotEmpty, orElse: () => '$typeLabel提醒');
+    final userTitle = list
+        .map((rule) => rule.body)
+        .firstWhere((value) => value.trim().isNotEmpty, orElse: () => '');
+    final title = userTitle.isEmpty ? '$typeLabel提醒' : userTitle;
     final kinds = _kindsFromResolvedRules(list);
     final kindLabel = kinds.map(_kindLabel).toSet().join('、');
     final repeating = list.any((rule) => rule.mode == _DispatchMode.repeating);
@@ -1666,6 +1712,12 @@ class ReminderScheduler {
           '$typeLabel · $cadence · ${kindLabel.isEmpty ? '系统提醒' : kindLabel} · ${list.length} 条规则',
       kinds: kinds,
       acceptedIdSets: _normalizedAcceptedIdSets(acceptedIdSets),
+      displayCopy: ReminderScheduleDisplayCopy.rules(
+        ReminderScheduleSubject.values.byName(objectType),
+        defaultTitle: userTitle.isEmpty,
+        repeating: repeating,
+        ruleCount: list.length,
+      ),
     );
   }
 
@@ -1680,6 +1732,7 @@ class ReminderScheduler {
       subtitle: display.subtitle,
       kinds: display.kinds,
       acceptedIdSets: normalized,
+      displayCopy: display.displayCopy,
     );
   }
 
@@ -1874,6 +1927,13 @@ class ReminderScheduler {
       subtitle:
           '日常 · ${_kindLabel(rule.kind)} · ${_weekdaysLabel(weekdays)} ${_timeLabel(rule.hour, rule.minute)}',
       kinds: kinds,
+      displayCopy: ReminderScheduleDisplayCopy.habit(
+        defaultTitle: habit.name.trim().isEmpty,
+        primaryKind: rule.kind,
+        weekdays: weekdays,
+        hour: _validTime(rule.hour, rule.minute) ? rule.hour : null,
+        minute: _validTime(rule.hour, rule.minute) ? rule.minute : null,
+      ),
     );
   }
 
@@ -1890,6 +1950,17 @@ class ReminderScheduler {
       kinds: item.reminderKind == ReminderKind.off
           ? const <ReminderKind>{}
           : <ReminderKind>{item.reminderKind},
+      displayCopy:
+          item.reminderKind == ReminderKind.off ||
+              remindAt.year < 1 ||
+              remindAt.year > 9999
+          ? null
+          : ReminderScheduleDisplayCopy.dated(
+              ReminderScheduleSubject.anniversary,
+              defaultTitle: item.title.trim().isEmpty,
+              primaryKind: item.reminderKind,
+              at: remindAt,
+            ),
     );
   }
 
@@ -1906,6 +1977,17 @@ class ReminderScheduler {
       kinds: item.reminderKind == ReminderKind.off
           ? const <ReminderKind>{}
           : <ReminderKind>{item.reminderKind},
+      displayCopy:
+          item.reminderKind == ReminderKind.off ||
+              remindAt.year < 1 ||
+              remindAt.year > 9999
+          ? null
+          : ReminderScheduleDisplayCopy.dated(
+              ReminderScheduleSubject.countdown,
+              defaultTitle: item.title.trim().isEmpty,
+              primaryKind: item.reminderKind,
+              at: remindAt,
+            ),
     );
   }
 
