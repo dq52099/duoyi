@@ -50,7 +50,9 @@ void main() {
 
     expect(source, contains('final Map<String, int> dateEventCounts'));
     expect(source, contains('final eventCount = dateEventCounts[key]'));
-    expect(source, contains("'\$count项'"));
+    expect(source, contains('CalendarAgendaUiCopy.monthEventBadge(count)'));
+    expect(source, contains('CalendarAgendaUiCopy.weekdayInitials'));
+    expect(source, contains('CalendarAgendaUiCopy.daySemanticLabel('));
     expect(source, contains('Widget _eventCountBadge('));
     expect(
       calendar,

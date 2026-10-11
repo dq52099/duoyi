@@ -17,8 +17,10 @@ import '../core/i18n_date_format.dart';
 import '../core/main_ui_copy.dart';
 import '../models/diary_entry.dart';
 import '../models/todo.dart';
+import '../core/calendar_agenda_ui_copy.dart';
 import '../core/lunar_calendar.dart';
 import '../screens/diary_screen.dart';
+import '../core/calendar_event_display_text.dart';
 import 'calendar_event_sheet.dart';
 
 class CalendarDayAgenda extends StatelessWidget {
@@ -99,13 +101,13 @@ class CalendarDayAgenda extends StatelessWidget {
 
       if (hitAnniversaries.isNotEmpty) ...[
         const SizedBox(height: 8),
-        _sectionTitle('🎉 今日纪念'),
+        _sectionTitle(CalendarAgendaUiCopy.anniversarySectionTitle),
         ...hitAnniversaries.map(
           (a) => _AnniversaryTile(
             title: a.title,
             color: Color(a.colorValue),
             subtitle: a.yearsPassed != null
-                ? '第 ${a.yearsPassed! + 1} 次'
+                ? CalendarAgendaUiCopy.anniversaryCount(a.yearsPassed! + 1)
                 : null,
           ),
         ),
@@ -113,7 +115,7 @@ class CalendarDayAgenda extends StatelessWidget {
 
       if (todayCourses.isNotEmpty) ...[
         const SizedBox(height: 12),
-        _sectionTitle('📚 今日课程'),
+        _sectionTitle(CalendarAgendaUiCopy.courseSectionTitle),
         ...todayCourses.map(
           (c) => Container(
             margin: const EdgeInsets.only(bottom: 6),
@@ -146,7 +148,7 @@ class CalendarDayAgenda extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '第${c.startSection}-${c.endSection}节${c.location.isNotEmpty ? ' · ${c.location}' : ''}${c.teacher.isNotEmpty ? ' · ${c.teacher}' : ''}',
+                        '${CalendarAgendaUiCopy.coursePeriod(c.startSection, c.endSection)}${c.location.isNotEmpty ? ' · ${c.location}' : ''}${c.teacher.isNotEmpty ? ' · ${c.teacher}' : ''}',
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.grey.shade600,
@@ -163,7 +165,7 @@ class CalendarDayAgenda extends StatelessWidget {
 
       if (timedEvents.isNotEmpty) ...[
         const SizedBox(height: 12),
-        _sectionTitle('🕘 时间线'),
+        _sectionTitle(CalendarAgendaUiCopy.timelineSectionTitle),
         _CalendarDayTimeGrid(
           date: date,
           events: timedEvents,
@@ -173,7 +175,7 @@ class CalendarDayAgenda extends StatelessWidget {
 
       if (untimedEvents.isNotEmpty) ...[
         const SizedBox(height: 12),
-        _sectionTitle('📝 全天/无时间'),
+        _sectionTitle(CalendarAgendaUiCopy.allDaySectionTitle),
         ..._buildTimeline(context, untimedEvents, todoById),
       ],
 
@@ -500,7 +502,7 @@ class _AgendaOverflowNotice extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 8),
       child: Text(
-        '还有 $hiddenCount 项，请切换到日视图查看完整日程',
+        CalendarAgendaUiCopy.overflowNotice(hiddenCount),
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 11,
@@ -577,10 +579,12 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
   @override
   Widget build(BuildContext context) {
     final e = widget.event;
+    final title = CalendarEventDisplayText.resolveTitle(e);
+    final subtitle = CalendarEventDisplayText.resolveSubtitle(e);
     final scaler = MediaQuery.textScalerOf(context);
     final regularHeight =
         scaler.scale(13) * 1.2 * 2 +
-        (e.subtitle?.isNotEmpty == true ? 3 + scaler.scale(11) * 1.2 : 0) +
+        (subtitle?.isNotEmpty == true ? 3 + scaler.scale(11) * 1.2 : 0) +
         (e.time != null ? 3 + scaler.scale(11) * 1.2 : 0) +
         16;
     final compact =
@@ -622,10 +626,12 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
           ),
         ),
         child: compact
-            ? _buildCompactContent(context, e)
+            ? _buildCompactContent(context, e, title: title)
             : _buildRegularContent(
                 context,
                 e,
+                title: title,
+                subtitle: subtitle,
                 limitedHeight: widget.timelineHeight != null,
               ),
       ),
@@ -640,7 +646,11 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
     );
   }
 
-  Widget _buildCompactContent(BuildContext context, CalendarEvent e) {
+  Widget _buildCompactContent(
+    BuildContext context,
+    CalendarEvent e, {
+    required String title,
+  }) {
     final visual = _eventVisualState(e);
     final eventVisual = _calendarEventVisual(e, widget.todoById);
     final cs = Theme.of(context).colorScheme;
@@ -672,7 +682,7 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
         const SizedBox(width: 5),
         Expanded(
           child: Text(
-            e.title,
+            title,
             key: ValueKey('calendar-compact-title-${e.id}'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -701,7 +711,7 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
         if (e.hasConflict) ...[
           const SizedBox(width: 4),
           Tooltip(
-            message: '时间冲突',
+            message: CalendarAgendaUiCopy.timeConflictTooltip,
             child: Icon(
               Icons.warning_amber_rounded,
               size: 14,
@@ -716,6 +726,8 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
   Widget _buildRegularContent(
     BuildContext context,
     CalendarEvent e, {
+    required String title,
+    required String? subtitle,
     required bool limitedHeight,
   }) {
     final visual = _eventVisualState(e);
@@ -741,7 +753,7 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                e.title,
+                title,
                 maxLines: limitedHeight ? 2 : null,
                 overflow: limitedHeight ? TextOverflow.ellipsis : null,
                 style: TextStyle(
@@ -760,13 +772,15 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
             if (statusColor != null) ...[
               const SizedBox(width: 6),
               _CalendarAgendaStatusBadge(
-                label: isCompleted ? '已完成' : '逾期',
+                label: isCompleted
+                    ? MainUiCopy.calendarStatusCompleted
+                    : MainUiCopy.calendarStatusOverdue,
                 color: statusColor,
               ),
             ],
             if (e.hasConflict)
               Tooltip(
-                message: '时间冲突',
+                message: CalendarAgendaUiCopy.timeConflictTooltip,
                 child: Icon(
                   Icons.warning_amber_rounded,
                   size: 16,
@@ -775,11 +789,11 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
               ),
           ],
         ),
-        if (e.subtitle != null && e.subtitle!.isNotEmpty)
+        if (subtitle != null && subtitle.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 3),
             child: Text(
-              e.subtitle!,
+              subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -854,7 +868,7 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
       );
       if (!context.mounted) return;
       if (!saveResult.saved) {
-        _showDragFailure(context, '待办正在保存中，请稍后重试');
+        _showDragFailure(context, CalendarAgendaUiCopy.dragTaskSavingBusy);
         return;
       }
       final reminderIssue = waitForReminderSync
@@ -863,14 +877,17 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
       if (reminderIssue != null) {
         _showDragFailure(
           context,
-          '已调整到 ${I18nDateFormat.time(next)}，但提醒未注册：$reminderIssue',
+          CalendarAgendaUiCopy.dragReminderWarning(
+            I18nDateFormat.time(next),
+            reminderIssue,
+          ),
         );
         return;
       }
       _showDragResult(context, next);
     } catch (e) {
       if (!context.mounted) return;
-      _showDragFailure(context, '待办保存失败：$e');
+      _showDragFailure(context, CalendarAgendaUiCopy.dragTaskSaveFailed(e));
     }
   }
 
@@ -905,7 +922,9 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
   void _showDragResult(BuildContext context, DateTime value) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('已调整到 ${I18nDateFormat.time(value)}'),
+        content: Text(
+          CalendarAgendaUiCopy.dragAdjustSuccess(I18nDateFormat.time(value)),
+        ),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 1),
       ),
@@ -1103,7 +1122,9 @@ class _DiaryQuickEntry extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                hasEntry ? entry!.title : '写下这一天的日记',
+                hasEntry
+                    ? entry!.title
+                    : CalendarAgendaUiCopy.emptyDiaryPrompt,
                 style: TextStyle(
                   fontSize: 13,
                   color: hasEntry ? cs.primary : Colors.grey.shade600,

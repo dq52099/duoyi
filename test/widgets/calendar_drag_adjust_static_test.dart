@@ -21,8 +21,8 @@ void main() {
     );
     expect(agenda, contains('saveResult.saved'));
     expect(agenda, contains('saveResult.reminderSync?.issue'));
-    expect(agenda, contains('待办正在保存中，请稍后重试'));
-    expect(agenda, contains('待办保存失败'));
-    expect(agenda, contains('但提醒未注册'));
+    expect(agenda, contains('CalendarAgendaUiCopy.dragTaskSavingBusy'));
+    expect(agenda, contains('CalendarAgendaUiCopy.dragTaskSaveFailed(e)'));
+    expect(agenda, contains('CalendarAgendaUiCopy.dragReminderWarning('));
   });
 }

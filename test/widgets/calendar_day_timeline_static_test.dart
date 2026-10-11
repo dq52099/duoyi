@@ -15,8 +15,14 @@ void main() {
     expect(source, contains('Wrap('));
     expect(source, contains('runSpacing: 5'));
     expect(source, contains('Widget _dayBadge('));
-    expect(source, contains('_sectionTitle(\'🕘 时间线\')'));
-    expect(source, contains('_sectionTitle(\'📝 全天/无时间\')'));
+    expect(
+      source,
+      contains('_sectionTitle(CalendarAgendaUiCopy.timelineSectionTitle)'),
+    );
+    expect(
+      source,
+      contains('_sectionTitle(CalendarAgendaUiCopy.allDaySectionTitle)'),
+    );
     expect(source, contains('_CalendarDayTimeGrid('));
     expect(source, contains('todoById: todoById'));
     expect(
@@ -57,7 +63,9 @@ void main() {
     expect(source, contains('math.max(30, end.difference(start).inMinutes)'));
     expect(source, contains('compact: clampedHeight < 88'));
     expect(source, contains('final bool compact'));
-    expect(source, contains('_buildCompactContent(context, e)'));
+    expect(source, contains('_buildCompactContent(context, e, title: title)'));
+    expect(source, contains('CalendarEventDisplayText.resolveTitle(e)'));
+    expect(source, contains('CalendarEventDisplayText.resolveSubtitle(e)'));
     expect(source, contains('_buildRegularContent('));
     expect(source, contains('_DraggableEventCard('));
   });

@@ -5,6 +5,7 @@ import '../core/i18n_date_format.dart';
 import '../core/main_ui_copy.dart';
 import '../models/calendar_event.dart';
 import '../providers/calendar_provider.dart';
+import '../core/calendar_event_display_text.dart';
 import 'calendar_event_sheet.dart';
 import 'surface_components.dart';
 
@@ -418,7 +419,8 @@ class _WeekEventTile extends StatelessWidget {
             hour: event.time!.hour,
             minute: event.time!.minute,
           );
-    final subtitle = event.subtitle;
+    final title = CalendarEventDisplayText.resolveTitle(event);
+    final subtitle = CalendarEventDisplayText.resolveSubtitle(event);
     final detail = switch ((time, subtitle)) {
       (final t?, final s?) when s.isNotEmpty => '$t · $s',
       (final t?, _) => t,
@@ -465,7 +467,7 @@ class _WeekEventTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      event.title,
+                      title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

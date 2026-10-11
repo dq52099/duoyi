@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/calendar_agenda_ui_copy.dart';
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../core/lunar_calendar.dart';
@@ -71,7 +72,7 @@ class CalendarMonthGrid extends StatelessWidget {
                 height: weekdayHeight,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: ['一', '二', '三', '四', '五', '六', '日']
+                  children: CalendarAgendaUiCopy.weekdayInitials
                       .map(
                         (d) => Expanded(
                           child: Center(
@@ -314,9 +315,12 @@ class CalendarMonthGrid extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.20), width: 0.45),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        padding: EdgeInsets.symmetric(
+          horizontal: CalendarAgendaUiCopy.isEn ? 4 : 6,
+          vertical: 2,
+        ),
         child: Text(
-          '$count项',
+          CalendarAgendaUiCopy.monthEventBadge(count),
           maxLines: 1,
           overflow: TextOverflow.clip,
           style: TextStyle(fontSize: 10, height: 1, color: textColor),
@@ -371,13 +375,12 @@ class CalendarMonthGrid extends StatelessWidget {
     required int eventCount,
     required String? subText,
   }) {
-    final parts = <String>[
-      '${date.year}年${date.month}月${date.day}日',
-      if (isToday) '今天',
-      if (isSelected) '已选中',
-      if (subText != null && subText.isNotEmpty) subText,
-      eventCount > 0 ? '$eventCount 个事项' : '无事项',
-    ];
-    return parts.join('，');
+    return CalendarAgendaUiCopy.daySemanticLabel(
+      date,
+      isToday: isToday,
+      isSelected: isSelected,
+      eventCount: eventCount,
+      subText: subText,
+    );
   }
 }
