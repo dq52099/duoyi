@@ -1,0 +1,18 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/widgets/widget_polish_interaction_test.dart
+00:00 +0: today habit detail opens and shows provider data at width 320.0 / 1.3x
+[HabitProvider] reminder sync skipped: scheduler missing
+00:01 +1: today habit detail opens and shows provider data at width 390.0 / 1.3x
+[HabitProvider] reminder sync skipped: scheduler missing
+00:01 +2: day detail updates live after a habit check-in
+[HabitProvider] reminder sync skipped: scheduler missing
+00:01 +3: future weekday cells are disabled
+00:02 +3 ~1: past date detail filters habits created after that date
+[HabitProvider] reminder sync skipped: scheduler missing
+[HabitProvider] reminder sync skipped: scheduler missing
+00:02 +4 ~1: generation invalidation removes the detail sheet once below a dialog
+[HabitProvider] reminder sync skipped: scheduler missing
+00:02 +5 ~1: admin overview KPIs fit at 320.0 px / 1.3x text scale
+00:03 +6 ~1: admin overview KPIs fit at 320.0 px / 1.6x text scale
+00:03 +7 ~1: admin overview KPIs fit at 390.0 px / 1.3x text scale
+00:04 +8 ~1: admin overview KPIs fit at 390.0 px / 1.6x text scale
+00:04 +9 ~1: All tests passed!

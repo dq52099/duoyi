@@ -42,13 +42,21 @@ class DuoyiWidgetRenderFrame(val core: DuoyiWidgetFrameCore) {
             val display = core.rawValues.toMutableMap()
             display["widget_locale"] = core.language
             display["widget_display_mode_${core.widgetId}"] = core.effectiveMode
+            val isPublished = core.publicationState == DuoyiWidgetPublicationDocument.State.PUBLISHED
             if (!core.fresh) {
                 val isZh = core.language == "zh"
                 dailyTextKeys.forEach { key ->
-                    display[key] = DuoyiWidgetCopy.staleMessage(key, isZh)
-                        ?: if (key == "calendar_month_summary") {
-                            if (isZh) "月历 · 安排日程" else "Month view · Plan your day"
-                        } else ""
+                    display[key] = if (isPublished) {
+                        DuoyiWidgetCopy.staleMessage(key, isZh)
+                            ?: if (key == "calendar_month_summary") {
+                                if (isZh) "月历 · 安排日程" else "Month view · Plan your day"
+                            } else ""
+                    } else {
+                        DuoyiWidgetCopy.unpublishedMessage(key, isZh)
+                            ?: if (key == "calendar_month_summary") {
+                                if (isZh) "月历 · 安排日程" else "Month view · Plan your day"
+                            } else ""
+                    }
                 }
                 core.rawValues.keys.filter { entityId.matches(it) || it == "habit_quick_check_id" }
                     .forEach { display[it] = "" }

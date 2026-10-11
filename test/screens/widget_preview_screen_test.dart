@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/screens/widget_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -318,5 +319,299 @@ void main() {
     expect(find.text('桌面查看与完成待办，支持快速记一笔'), findsOneWidget);
     expect(find.text('查看今日完成率、连续记录与快捷打卡'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Android 标准预览几何匹配 18/11 (180x110 dp) 且隐藏页脚，详细档保留页脚', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: widgetPolishScreenshotTheme(),
+        home: const Scaffold(
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                WidgetPreviewCard.todo(
+                  displayMode: WidgetDisplayMode.compact,
+                  platformOverride: TargetPlatform.android,
+                ),
+                WidgetPreviewCard.todo(
+                  displayMode: WidgetDisplayMode.standard,
+                  platformOverride: TargetPlatform.android,
+                ),
+                WidgetPreviewCard.todo(
+                  displayMode: WidgetDisplayMode.detailed,
+                  platformOverride: TargetPlatform.android,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    final compactCard = find.byWidgetPredicate(
+      (w) =>
+          w is WidgetPreviewCard && w.displayMode == WidgetDisplayMode.compact,
+    );
+    final standardCard = find.byWidgetPredicate(
+      (w) =>
+          w is WidgetPreviewCard && w.displayMode == WidgetDisplayMode.standard,
+    );
+    final detailedCard = find.byWidgetPredicate(
+      (w) =>
+          w is WidgetPreviewCard && w.displayMode == WidgetDisplayMode.detailed,
+    );
+
+    final compactRatio = tester.widget<AspectRatio>(
+      find.descendant(of: compactCard, matching: find.byType(AspectRatio)),
+    );
+    expect(compactRatio.aspectRatio, closeTo(1.0, 0.001));
+    expect(
+      find.descendant(
+        of: compactCard,
+        matching: find.byKey(const ValueKey('widget_preview_navigation')),
+      ),
+      findsNothing,
+    );
+
+    final standardRatio = tester.widget<AspectRatio>(
+      find.descendant(of: standardCard, matching: find.byType(AspectRatio)),
+    );
+    expect(standardRatio.aspectRatio, closeTo(18 / 11, 0.001));
+    expect(
+      find.descendant(
+        of: standardCard,
+        matching: find.byKey(const ValueKey('widget_preview_navigation')),
+      ),
+      findsNothing,
+    );
+
+    final detailedRatio = tester.widget<AspectRatio>(
+      find.descendant(of: detailedCard, matching: find.byType(AspectRatio)),
+    );
+    expect(detailedRatio.aspectRatio, closeTo(4 / 3, 0.001));
+    expect(
+      find.descendant(
+        of: detailedCard,
+        matching: find.byKey(const ValueKey('widget_preview_navigation')),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('iOS 预览标准 medium 保留页脚且宽高比为 1.5，紧凑档无页脚', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: widgetPolishScreenshotTheme(),
+        home: const Scaffold(
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                WidgetPreviewCard.todo(
+                  displayMode: WidgetDisplayMode.compact,
+                  platformOverride: TargetPlatform.iOS,
+                ),
+                WidgetPreviewCard.todo(
+                  displayMode: WidgetDisplayMode.standard,
+                  platformOverride: TargetPlatform.iOS,
+                ),
+                WidgetPreviewCard.todo(
+                  displayMode: WidgetDisplayMode.detailed,
+                  platformOverride: TargetPlatform.iOS,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    final compactCard = find.byWidgetPredicate(
+      (w) =>
+          w is WidgetPreviewCard && w.displayMode == WidgetDisplayMode.compact,
+    );
+    final standardCard = find.byWidgetPredicate(
+      (w) =>
+          w is WidgetPreviewCard && w.displayMode == WidgetDisplayMode.standard,
+    );
+    final detailedCard = find.byWidgetPredicate(
+      (w) =>
+          w is WidgetPreviewCard && w.displayMode == WidgetDisplayMode.detailed,
+    );
+
+    final compactRatio = tester.widget<AspectRatio>(
+      find.descendant(of: compactCard, matching: find.byType(AspectRatio)),
+    );
+    expect(compactRatio.aspectRatio, closeTo(1.0, 0.001));
+    expect(
+      find.descendant(
+        of: compactCard,
+        matching: find.byKey(const ValueKey('widget_preview_navigation')),
+      ),
+      findsNothing,
+    );
+
+    final standardRatio = tester.widget<AspectRatio>(
+      find.descendant(of: standardCard, matching: find.byType(AspectRatio)),
+    );
+    expect(standardRatio.aspectRatio, closeTo(1.5, 0.001));
+    expect(
+      find.descendant(
+        of: standardCard,
+        matching: find.byKey(const ValueKey('widget_preview_navigation')),
+      ),
+      findsOneWidget,
+    );
+
+    final detailedRatio = tester.widget<AspectRatio>(
+      find.descendant(of: detailedCard, matching: find.byType(AspectRatio)),
+    );
+    expect(detailedRatio.aspectRatio, closeTo(4 / 3, 0.001));
+    expect(
+      find.descendant(
+        of: detailedCard,
+        matching: find.byKey(const ValueKey('widget_preview_navigation')),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('默认非 Android 预览（无 override）保留 1.5 宽高比与标准页脚约定', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: widgetPolishScreenshotTheme(),
+        home: const Scaffold(
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                WidgetPreviewCard.todo(displayMode: WidgetDisplayMode.standard),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    final standardCard = find.byType(WidgetPreviewCard);
+    final ratio = tester.widget<AspectRatio>(
+      find.descendant(of: standardCard, matching: find.byType(AspectRatio)),
+    );
+    expect(ratio.aspectRatio, closeTo(1.5, 0.001));
+    expect(
+      find.descendant(
+        of: standardCard,
+        matching: find.byKey(const ValueKey('widget_preview_navigation')),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('所有十类小组件在中英双语、Android标准(18/11无页脚)与iOS标准(1.5含页脚)下无溢出', (
+    tester,
+  ) async {
+    final originalLocale = I18n.current;
+    addTearDown(() => I18n.setLocale(originalLocale));
+
+    await tester.binding.setSurfaceSize(const Size(320, 6000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+      for (final locale in [AppLocale.zh, AppLocale.en]) {
+        I18n.setLocale(locale);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: widgetPolishScreenshotTheme(),
+            home: MediaQuery(
+              data: const MediaQueryData(
+                size: Size(320, 6000),
+                textScaler: TextScaler.linear(1.6),
+              ),
+              child: Scaffold(
+                body: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      WidgetPreviewCard.todo(
+                        displayMode: WidgetDisplayMode.standard,
+                        platformOverride: platform,
+                      ),
+                      WidgetPreviewCard.focus(
+                        displayMode: WidgetDisplayMode.standard,
+                        platformOverride: platform,
+                      ),
+                      WidgetPreviewCard.habit(
+                        displayMode: WidgetDisplayMode.standard,
+                        platformOverride: platform,
+                      ),
+                      WidgetPreviewCard.calendar(
+                        displayMode: WidgetDisplayMode.standard,
+                        platformOverride: platform,
+                      ),
+                      WidgetPreviewCard.schedule(
+                        displayMode: WidgetDisplayMode.standard,
+                        platformOverride: platform,
+                      ),
+                      WidgetPreviewCard.goal(
+                        displayMode: WidgetDisplayMode.standard,
+                        platformOverride: platform,
+                      ),
+                      WidgetPreviewCard.course(
+                        displayMode: WidgetDisplayMode.standard,
+                        platformOverride: platform,
+                      ),
+                      WidgetPreviewCard.note(
+                        displayMode: WidgetDisplayMode.standard,
+                        platformOverride: platform,
+                      ),
+                      WidgetPreviewCard.anniversary(
+                        displayMode: WidgetDisplayMode.standard,
+                        platformOverride: platform,
+                      ),
+                      WidgetPreviewCard.diary(
+                        displayMode: WidgetDisplayMode.standard,
+                        platformOverride: platform,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(tester.takeException(), isNull);
+
+        // When Android standard, all 10 cards hide the bottom navigation footer.
+        // When iOS standard, all 10 cards show the bottom navigation footer.
+        if (platform == TargetPlatform.android) {
+          expect(
+            find.byKey(const ValueKey('widget_preview_navigation')),
+            findsNothing,
+          );
+        } else {
+          expect(
+            find.byKey(const ValueKey('widget_preview_navigation')),
+            findsNWidgets(10),
+          );
+        }
+      }
+    }
   });
 }

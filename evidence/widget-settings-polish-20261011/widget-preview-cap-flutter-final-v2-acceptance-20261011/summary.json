@@ -1,0 +1,226 @@
+{
+  "started_at_utc": "2026-10-11T12:02:06.988993+00:00",
+  "suites": [
+    {
+      "suite": "test/screens/widget_preview_screen_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/screens/widget_preview_screen_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 17.972,
+      "passed": 7,
+      "skipped": 0,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/01-widget_preview_screen_test.log"
+    },
+    {
+      "suite": "test/screens/widget_locale_layout_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/screens/widget_locale_layout_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 15.041,
+      "passed": 18,
+      "skipped": 0,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/02-widget_locale_layout_test.log"
+    },
+    {
+      "suite": "test/widgets/widget_polish_interaction_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/widgets/widget_polish_interaction_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 15.189,
+      "passed": 9,
+      "skipped": 1,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/03-widget_polish_interaction_test.log"
+    },
+    {
+      "suite": "test/services/android_widget_resources_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/android_widget_resources_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 8.503,
+      "passed": 39,
+      "skipped": 0,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/04-android_widget_resources_test.log"
+    },
+    {
+      "suite": "test/services/android_widget_pin_wait_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/android_widget_pin_wait_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 4.507,
+      "passed": 12,
+      "skipped": 0,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/05-android_widget_pin_wait_test.log"
+    },
+    {
+      "suite": "test/services/ios_widget_resources_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/ios_widget_resources_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 5.389,
+      "passed": 12,
+      "skipped": 0,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/06-ios_widget_resources_test.log"
+    },
+    {
+      "suite": "test/services/android_widget_frame_static_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/android_widget_frame_static_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 4.482,
+      "passed": 6,
+      "skipped": 0,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/07-android_widget_frame_static_test.log"
+    },
+    {
+      "suite": "test/services/native_widget_launch_static_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/native_widget_launch_static_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 4.953,
+      "passed": 3,
+      "skipped": 0,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/08-native_widget_launch_static_test.log"
+    },
+    {
+      "suite": "test/services/widget_day_boundary_static_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/widget_day_boundary_static_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 5.291,
+      "passed": 10,
+      "skipped": 0,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/09-widget_day_boundary_static_test.log"
+    },
+    {
+      "suite": "test/services/widget_launch_delivery_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/widget_launch_delivery_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 5.117,
+      "passed": 7,
+      "skipped": 0,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/10-widget_launch_delivery_test.log"
+    },
+    {
+      "suite": "test/services/home_widget_cold_start_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/home_widget_cold_start_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 6.516,
+      "passed": 1,
+      "skipped": 0,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/11-home_widget_cold_start_test.log"
+    },
+    {
+      "suite": "test/services/widget_publication_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/widget_publication_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 4.912,
+      "passed": 14,
+      "skipped": 0,
+      "log": "evidence/widget-settings-polish-20261011/widget-preview-cap-flutter-final-v2-acceptance-20261011/12-widget_publication_test.log"
+    }
+  ],
+  "analysis": {
+    "command": [
+      "/home/ubuntu/flutter/bin/flutter",
+      "analyze",
+      "--no-pub",
+      "lib/screens/widget_screen.dart",
+      "lib/services/android_widget_manager.dart",
+      "test/screens/widget_preview_screen_test.dart",
+      "test/screens/widget_locale_layout_test.dart",
+      "test/widgets/widget_polish_interaction_test.dart",
+      "test/services/android_widget_resources_test.dart",
+      "test/services/android_widget_pin_wait_test.dart",
+      "test/services/ios_widget_resources_test.dart",
+      "test/services/android_widget_frame_static_test.dart",
+      "test/services/native_widget_launch_static_test.dart",
+      "test/services/widget_day_boundary_static_test.dart",
+      "test/services/widget_launch_delivery_test.dart",
+      "test/services/home_widget_cold_start_test.dart",
+      "test/services/widget_publication_test.dart"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 67.973
+  },
+  "source_hashes_unchanged": true,
+  "changed_source_files": [],
+  "finished_at_utc": "2026-10-11T12:04:52.850841+00:00",
+  "skipped_total": 1,
+  "passed_total": 138,
+  "accepted": true
+}

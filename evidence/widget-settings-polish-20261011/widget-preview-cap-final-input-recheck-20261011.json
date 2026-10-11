@@ -1,0 +1,2225 @@
+{
+  "utc": "2026-10-11T12:12:32.385095+00:00",
+  "input_count": 363,
+  "changed_inputs": [],
+  "inputs": {
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationDocument.kt": {
+      "sha256": "76a0327ca702a423737b859f357d398c9a08b928046a041500e2edea2f050538",
+      "scopes": [
+        "jvm",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationEnvelope.kt": {
+      "sha256": "4e815f7c2c0df318a5da21533fe8c784cbcee2afb28b2a9a7e53e8032a501a3d",
+      "scopes": [
+        "jvm",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetFrameCore.kt": {
+      "sha256": "cfb315b220acf10781daedb6b24db125791f088f9cd50545a899e8ed1470f859",
+      "scopes": [
+        "jvm",
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiFrozenWidgetPreferences.kt": {
+      "sha256": "10cd1923c9ddd374bf3f1846dbaecb47841bcfbafe97342782487649214fd689",
+      "scopes": [
+        "jvm",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRenderFrame.kt": {
+      "sha256": "0f57bf5b4efd47f46dfba8df0f6d3f9dc778f77738e39dc128f53abd7f7cef49",
+      "scopes": [
+        "jvm",
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetCopy.kt": {
+      "sha256": "a650d6a0efd0784788ab7ea4da0c6a7eef405de3f766cbba187e0b6ce1d9bf37",
+      "scopes": [
+        "jvm",
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetContent.kt": {
+      "sha256": "d434821692778efe9e1966b024595756792592fdd102b0ab2d871c799cef5dee",
+      "scopes": [
+        "jvm",
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetContentTest.kt": {
+      "sha256": "1e73fc40f971b2f5aded5825a0fd8082565bb0d57122398821594732a5fdc6c5",
+      "scopes": [
+        "jvm",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDisplayMode.kt": {
+      "sha256": "2b91d2211c04ff381ea2db7dc4a535677781f4f0adc31f57f5a998eb24e2cfd6",
+      "scopes": [
+        "jvm",
+        "platform"
+      ]
+    },
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetPublicationDocumentTest.kt": {
+      "sha256": "7c257adab1d62b6336da897f19f7c009403f6bc7e78efa2df02773030ea32e7b",
+      "scopes": [
+        "jvm",
+        "platform"
+      ]
+    },
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetFrameCoreTest.kt": {
+      "sha256": "cf5e91bbbaa34fc71664b1bd9bf20560861bda8bedaa82d7d0356974cbe48410",
+      "scopes": [
+        "jvm",
+        "platform"
+      ]
+    },
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiFrozenWidgetPreferencesTest.kt": {
+      "sha256": "60a50233c59975e98f215560f13ac2df38a4446e62cc39b7adbdbd56d7b85021",
+      "scopes": [
+        "jvm",
+        "platform"
+      ]
+    },
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetDeviceDisplayValuesTest.kt": {
+      "sha256": "cabf2a474789ab6bfe4b3f9261e76fab98cd863a585f0457abbd1d82f69638d1",
+      "scopes": [
+        "jvm",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultCore.kt": {
+      "sha256": "01b81f467e8b03d7cbd6d488c8345d974e05488f531ccd1d36f2ddb014cacf57",
+      "scopes": [
+        "jvm",
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultRetention.kt": {
+      "sha256": "3c2588b94051cbd376bdb5db0488f178e139ebe75ed5b45d9ec858abebd60d32",
+      "scopes": [
+        "jvm",
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultStore.kt": {
+      "sha256": "b3bf23a625af5af0076414bf5d3db444fef252afd1ff765fe51272e7497fffae",
+      "scopes": [
+        "jvm",
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetPinResultStoreTest.kt": {
+      "sha256": "b8bf03d8173ae0ab58212d6d1e46b380217c2c2eaf3decb678a7998048e8a086",
+      "scopes": [
+        "jvm",
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetCountUpCapCore.kt": {
+      "sha256": "6072653c49620755b51e45e490f5115bf216f3251dfb762d1a4899722930cb2d",
+      "scopes": [
+        "jvm",
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetCountUpCapCoreTest.kt": {
+      "sha256": "08b12c201ba3d356392a265078573aa2610b72e42a386893f0d7b6ca84730d87",
+      "scopes": [
+        "jvm",
+        "platform"
+      ]
+    },
+    "lib/screens/widget_screen.dart": {
+      "sha256": "5e7fc865fadbd536156b1876056b2c7d67fca88fa412e897884504f1c3dbeeee",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "lib/services/android_widget_manager.dart": {
+      "sha256": "a957faf6a623b059d419856a45b39e8d1b5d2990ceb941f32da791157b5f3286",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    "test/screens/widget_preview_screen_test.dart": {
+      "sha256": "5db118c02128bba27508213d8148e9dfbbfc09b987a03d5d80f2f3db2f71e964",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "test/screens/widget_locale_layout_test.dart": {
+      "sha256": "514449fd98a000662b9b16600dc38ca1560618983e8c4f3eb6bbcca11bbb3c59",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "test/widgets/widget_polish_interaction_test.dart": {
+      "sha256": "46aaac76ffe083579b627e427ba502bd43f552fb2778519c16df6df6c8eb0eb0",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "test/services/android_widget_resources_test.dart": {
+      "sha256": "18b6fe1d3b9419bdabf890cca453f94487acffcc02bc2222cddde5a9b62838e9",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "test/services/android_widget_pin_wait_test.dart": {
+      "sha256": "38216d1cac7577eb6cd5de138f8acf11402822d95976753ab1e38b2b70345b20",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "test/services/ios_widget_resources_test.dart": {
+      "sha256": "6332a6dfa20fa95a8ecaba511ff0501f7be524470e8f31bebdbb5b9e087b2258",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "test/services/android_widget_frame_static_test.dart": {
+      "sha256": "09bc7dcd88aaa8daa5ea8c351d1942a6cddc36e097493f567e9ad939260a7627",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "test/services/native_widget_launch_static_test.dart": {
+      "sha256": "0c1b12d6f02287b1a337c83cffa7987e91a7c06e419a1a029f677186d6786eb2",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "test/services/widget_day_boundary_static_test.dart": {
+      "sha256": "4f5962d1a857eeb280293d078cbe586555629f289c1e1b65c3759c1244f5deac",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "test/services/widget_launch_delivery_test.dart": {
+      "sha256": "5c2663dcb384fc053931269145883fd0a0f9324d288ef79d94efb31db66c082f",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "test/services/home_widget_cold_start_test.dart": {
+      "sha256": "930adfe709cf267bda9d6d8f9c3ad36fc8cec806576aefe63123bdc7c8ca9e11",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "test/services/widget_publication_test.dart": {
+      "sha256": "8e876378b9dfb20845d06510736844db392bbde2028882ae175281a9e8fd0d76",
+      "scopes": [
+        "flutter"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResults.kt": {
+      "sha256": "fc1e3751fb797262dee32a710a759f949bc246df717d98fc1e58758fdf0d45a4",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultPlugin.kt": {
+      "sha256": "0fb42ac19415707c47a337d0911c55f0aaff11bb858e2d28b2e43b88a2465112",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinResultReceiver.kt": {
+      "sha256": "8cbefa954e9da1564475bd6ebb5fee12961dfa5b60944bf7cca50240e86be847",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/MainActivity.kt": {
+      "sha256": "dd2cb4f705f67c9974ff19f72f5608d06914216222f584260576bfb9c8756a21",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetVariantProviders.kt": {
+      "sha256": "560fb98bc75928b5866c8f0de385a38a1461c95203bfbeb932693c4c0017027e",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    "lib/services/widget_launch_service.dart": {
+      "sha256": "c850240356953996ab35c1a659d904c4bab5cef1e7d8eb2249ebc13e0298c7ed",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    "lib/services/home_widget_service.dart": {
+      "sha256": "39cea8edbfa7149f4072f00ddde388af1638c579d1615802ad749d2802833a42",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiCalendarWidgetProvider.kt": {
+      "sha256": "0dcfc9d2bb14e6e1c6d45b4d3cf320835dc020481482cae3227746e9fea72feb",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiAnniversaryWidgetProvider.kt": {
+      "sha256": "a94387828bed768d1fdc2d74a3fd520cab3188a3d1b7f90131a7f8338980606e",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetSnapshot.kt": {
+      "sha256": "9daa66b50db5efb39ebfe965430cf19d5a52019c1d27f0bb1b1ffb6ad50a7479",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiFocusHabitWidgetProvider.kt": {
+      "sha256": "7ff92c9303efc7c53fdb87dc16f502e2910cfddcd65d25019793cf432d90beb4",
+      "scopes": [
+        "flutter",
+        "platform"
+      ]
+    },
+    ".dart_tool/package_config.json": {
+      "sha256": "31daac3d440f1689a115ba724bb3581baf4aae7851f03c3000285d6b4d3ebf08",
+      "scopes": [
+        "platform"
+      ]
+    },
+    ".flutter-plugins-dependencies": {
+      "sha256": "50274b401e23090b808c03433a057c0a7235d5344b7ae53eb2da8bc9e784e043",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/.gitignore": {
+      "sha256": "b027c9de1011765c015e5819bf857c0d75bfcd0886fb01721c091159012e50f1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/build.gradle.kts": {
+      "sha256": "1b1e882319016d1ad638723421856e4469f11709cd9cda22eb415cd3dd75cee6",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/debug/AndroidManifest.xml": {
+      "sha256": "30b0832ed8b92dfbd6ae2abfa939ccf26333d37600056b1572bd4a397a18a74b",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/debug/res/xml/network_security_config.xml": {
+      "sha256": "6e6a06b764e9c34bdee613098c2c4c50e9e82105d72631d33fbb635fc8bb12db",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/AndroidManifest.xml": {
+      "sha256": "523101213474e26bd3f85eaa41f9fad80104e03d49a05a464d2761899ae8d887",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/dexterous/flutterlocalnotifications/DuoyiScheduledNotificationUpdateReceiver.kt": {
+      "sha256": "e724930439b9513ae3d0ca2a0f5f0cb000afa68ed0435e21aeafac96c23097a0",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiCourseWidgetProvider.kt": {
+      "sha256": "c2d4fa4f74f2a201b2822c069c3d605fc06d5bcd2060865853267a06f16610c5",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiDiaryWidgetProvider.kt": {
+      "sha256": "02c17a07b253ccc461b4492343edde82a95f18cefc4f20526d897aede52f15b9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiFocusBlockerAccessibilityService.kt": {
+      "sha256": "fac94993736ac4c4b5ed5840cafe9091491bbe88973d7fb14de2145d18c82c85",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiGoalWidgetProvider.kt": {
+      "sha256": "358f269435e968189007eb04f47a328ba1c37bf234d124e926357d98a5d494b7",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiHabitWidgetProvider.kt": {
+      "sha256": "1ed0d5e4267e5c1141a3041361c1d34e641007ce47b9b0776c60749e29a39e2a",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiNoteWidgetProvider.kt": {
+      "sha256": "217e72ee470156520b072534c4693c8561b44a7276e055b033c123205c3c7070",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiScheduleWidgetProvider.kt": {
+      "sha256": "98090c57df251c2c14d6921581df07eca1f6ef3cb49e11dac61fd79c81935fb5",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiStyledWidgetProvider.kt": {
+      "sha256": "d8d9d4eee5b3190950ab5682e97e8bf32f04a3faa6278efc2cee96575bf862af",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiTodoWidgetProvider.kt": {
+      "sha256": "9c1f47531066df893ff92c832cea9abd4da2b114c17d9c4c2a4c499275d5ae13",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetConfigActivity.kt": {
+      "sha256": "ecd353bcf58ec0580eb88a320c11d8f649d634be21ba10be355580a26740609a",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryPolicy.kt": {
+      "sha256": "0676a9afb784e3055bb3b3edc7fd5d288090ef5b5a30862ddcb483974e93fb1a",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryReceiver.kt": {
+      "sha256": "b28510c72406246451cb88613b2507186af3c9ed9e29f2b08f4b7295257d29a6",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetDayBoundaryScheduler.kt": {
+      "sha256": "3182d43f08ccbc33854245d218faae47ab5f3d5b4e766afab58c7e175eb57d79",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetLaunchBridge.kt": {
+      "sha256": "1e1cbca6bfd03658675c17e4224752b0796ed0ea7b0e0d44fc7469390f164d53",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetLaunchQueue.kt": {
+      "sha256": "213f7b5b13d6f55ffaa9bb23896183f7e23a79145766741ed5f9d30968b83b1e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPinStyle.kt": {
+      "sha256": "7baa795943d48c50214bd0ebbecb10082db4c4dbfcb9f00e99779c59db7e7317",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetProvider.kt": {
+      "sha256": "7dc4d3f59e823d9ff9e8b2757ff89784b7bca0e2190b017af1b3758d8999fb65",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationBridge.kt": {
+      "sha256": "5018022004df1dc0f8bc0f3bfc874c8732f8357db2a6b3cdd8c890e38baec385",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationStore.kt": {
+      "sha256": "e9df08b1f029d71f7ee6678d73c424302e6ac5d0df194ede6fcdc1d1f8635950",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetPublicationTransition.kt": {
+      "sha256": "25caec35ca9c6133b9ec82bd4ee21210d742ee5644ae8eeec4b9fdc0fd496111",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetRestoreReceiver.kt": {
+      "sha256": "a9a32a53f8a40c4f336547195fea86dfd6e674dc4a59e30af6fe670b8e09ec3e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetSurfaceResources.kt": {
+      "sha256": "731e4c62b8ce232bb8607f5a9794aaf7793de9f45dcd3e9c3aa8c93d0e475ae1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetTheme.kt": {
+      "sha256": "3eca28735758b414b15ba8c2752c3b61546412fa0cfdf83de9c31280140b10d5",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/LocationGeofenceReceiver.kt": {
+      "sha256": "4ce1c0bb2a9a4d194c16fd6617976faf30a8e4141541cc277da07479170a4281",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/LocationGeofenceRestoreReceiver.kt": {
+      "sha256": "912116ab28dbe1625f2b2c5bd39e2e98aba27cad8fd2878b64b5ac924b53df77",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/LocationGeofenceScheduler.kt": {
+      "sha256": "17aea0c701b3cbdeae9a9dc7130feeeae151fb98efd11b52a02b3f254916aa2c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/ReminderFullScreenActivity.kt": {
+      "sha256": "710012109990761965bd2d0c25b4a32865ddccd4e32c36fadc52c07fcdc2bcb7",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/ReminderNativeCopy.kt": {
+      "sha256": "e497d71ab1ab1add45778c19a42b8a436f6cf7c23f9e6ccc14ff91d06645675a",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneBootReceiver.kt": {
+      "sha256": "77416fcbf6caff1cf559d0cb0b39a0e2dead080fe291450fe594a27ed2d67667",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneReceiver.kt": {
+      "sha256": "a75b437a943ef23571e843b7f1f2cd0572e552f9ed9e9e2a8d712885f93b488b",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneScheduler.kt": {
+      "sha256": "e0d4b3c64c26a52f4d542a9e78df10a0dc8ca70154022799fd64f2532393516d",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/ReminderRingtoneService.kt": {
+      "sha256": "b1be37cfc57b1bc1d168775413c77c9016dbf077f03538422d33ebefbd12c565",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/kotlin/com/duoyi/duoyi/services/FocusSoundForegroundService.kt": {
+      "sha256": "ab4bb836560e5dd510952924cf6d1f6d439d92915028a41f0a05186bbc6a323f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/ic_stat_duoyi.xml": {
+      "sha256": "6698feef69cab6bc65eb01d14a74eabf712906d0c8729b8f3e61097ee33b9ef6",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/launch_background.xml": {
+      "sha256": "0de3e25b97c939b62b0936cc149b3d4297d144a39082fe8f49efb5a69fa3088c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_bg.xml": {
+      "sha256": "2afce6bc9c0d302d4370608d3ca61b89074270ac155f9865569905548aaf4171",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_bg_plain.xml": {
+      "sha256": "8d893094486ad88732cfb8466ce2c82f8d37208f6cc34d461968ea707486d4e9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_bg_round_12_plain.xml": {
+      "sha256": "6963b68b0667124483b17105c81342db3dddaf1e74bd140f44e0915adb1e91af",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_bg_round_13_plain.xml": {
+      "sha256": "8d893094486ad88732cfb8466ce2c82f8d37208f6cc34d461968ea707486d4e9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_bg_round_14.xml": {
+      "sha256": "71cd2a901e486be57527f656d722287a8f07b6f69d42e9194842dd1b38fb72e0",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_bg_round_14_plain.xml": {
+      "sha256": "8a09a93c0b8d29c7a1520f42535d2e1574062cc648d60b1d70aff445c98a80b8",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_bg_round_15.xml": {
+      "sha256": "7d191c9e3fa4c3490eb8680f3b73dd94602a014cc9053acdc2ec56f534b21b45",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_bg_round_15_plain.xml": {
+      "sha256": "b2c730ac6e7074f37b441d95d1fb78997ddf8fb1bf1b931fd37c2fa001c08cff",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_bg_round_16.xml": {
+      "sha256": "2afce6bc9c0d302d4370608d3ca61b89074270ac155f9865569905548aaf4171",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_bg_round_16_plain.xml": {
+      "sha256": "7a0799a481043fdb5acba3306810e968057a742eb1d0e5a71b30562ff9b992b7",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_btn_done.xml": {
+      "sha256": "a2723bacc5eb38f8d336649efdff649da6b8ce4b34dc1a492c3ae43e1d38b96c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_btn_primary.xml": {
+      "sha256": "18356002e24a038c5edd60fd46d384072469b1f82df30344f8c146408ddeceb6",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_btn_secondary.xml": {
+      "sha256": "b4589d917c8f63bb5762469d455857cc4f95033a5d1e057f069f83784e826296",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_nav_bg.xml": {
+      "sha256": "c312d3fd726e681e29d58b531bf6fd948e1f4b1a739ce3e8ded681cca6011252",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_000e4bd8a34bcba1.xml": {
+      "sha256": "36fb5d2934b9cb20056a54dd450721e8ddb1dd1ee0a0d219aaa8cb92f913e386",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_01909052ab660548.xml": {
+      "sha256": "e85d27f6f441d06c957a6b61585b4b68f4b17524c1675414b502820c78ae561e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_02275576b5bc4a21.xml": {
+      "sha256": "943940ef253ffe353768ff55c1ac6eb64c14e841fe6c1000323fab7ab0ea21da",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_0270931b59e0e86b.xml": {
+      "sha256": "9cfbe97e241eb56646f874aff41d6ae32437bc5489a5b351f8603a4b98df4d9d",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_02defe2c304333e1.xml": {
+      "sha256": "cb337db5e23dc36a4a55ae5f9065765f936597f10f82f84d0d5b6d70968c9a89",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_0737e6db878f9fbc.xml": {
+      "sha256": "4cb1f5d4f5ff8f2a30c2b49f275fc5fbae14a0903dd756872653dca50aeef85f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_0915a89057217d69.xml": {
+      "sha256": "96a537adbcbb8c227484467b02977538bd12bfd223327c88958bd5c1595e53ce",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_0f0154379edbc90a.xml": {
+      "sha256": "629cd0bca41fd556d4650f94356f5d649dd2d2ee391b975cb94f0f055716237b",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_0f122bbf59ff313e.xml": {
+      "sha256": "201ba10faf841e4490a009064b23463911d0e0e6eb67635858def0c8532e409f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_11d7473114c42b6c.xml": {
+      "sha256": "94009788235b01bca00846e52e39988c12f279c8c5ec59fc6ad730dd16886344",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_13dcd40f6578bf96.xml": {
+      "sha256": "1fd29745a59bfab8570a9a95866e4ae82a71b0a78665f73e15c27e083a761001",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_150e812fb3642cc1.xml": {
+      "sha256": "519ca9f441319a9142a595b3214f0d53e447be294cf42846ea7728326c353d01",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_1617ab0bbfe5fa3b.xml": {
+      "sha256": "9089f091930a704b188a78aaedc6006c3e029fd4abeac79d2582767e9f949427",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_164105183c2e3bbb.xml": {
+      "sha256": "d8f3535849353b9999d5f63a7b65e87a4678ff61d9d4df022c36dfb252699832",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_18ac143de2fd9b0b.xml": {
+      "sha256": "ea9aa9a7784808781977748bdb9951ca299468c65c93b9c0a07864d0c82ec753",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_18b7247e363d0fdb.xml": {
+      "sha256": "2edfe3f1a7a834813c42251bf521350c8ebf26513cd9031ba89bb9f80a27e225",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_194ccfe5cffc9a6f.xml": {
+      "sha256": "94b5c8b330756f1c12a8cacdd8a23613acce5c1e25f92ef8e871e9b926fd26f6",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_1d7ac0aa9dbf3149.xml": {
+      "sha256": "55c14fa3956bcd6d04eee22794699babf71bc602740785fc269e99cdf310d102",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_243e3cea2ff6896b.xml": {
+      "sha256": "b8384f783e6de43a9264734e459bd0afd0e3155cf9b921c7eadb2f3d71b17435",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_256fbf30365eff41.xml": {
+      "sha256": "6aafd16f42739183f496a406a08bc8cbadb0bdb00dbb176f43e29c444386cd3c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_2b53b27314342956.xml": {
+      "sha256": "3c25101d8fad8c0cf7070332de77974d5d3b77732e58bc80d9518dd384c41116",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_2e408fa1081c19ee.xml": {
+      "sha256": "dc419365029134fcd7c9ffecdbfd7e0ac3d602be50d569201428a285a79bfdca",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_2e42326b4abf8ce5.xml": {
+      "sha256": "4826317412e789cf6946ac4b7ac6a54d25d7719087dfe7590dd30371a1ba6a09",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_314122c61fcfbaad.xml": {
+      "sha256": "990ce17440c85bc95b2339a2fb3242bfaf4ad81bbad1f9d18b04f7f29d4ae542",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_3163fb20903def6e.xml": {
+      "sha256": "4801cbbcc1e322fab7e637844eb4ab6212680054d0a2b36ccc1638169c5f14f1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_362e3e9aee19d29c.xml": {
+      "sha256": "2daf18fe5752f947b216ed6f58d458999273bb5ef18e773fcb50167fb5657e37",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_3800bc88c3ac7843.xml": {
+      "sha256": "5fba98865ab86dbe99ef75cc057a8a494f385ad39b5571f33e7c94f57541d5c1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_3829c31209bc3d77.xml": {
+      "sha256": "eec091aaa51fa1a2f5a193f0efdf2bf32b45172a195ca5c6fd14900ebc7c7896",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_3e29ede083d5d5ab.xml": {
+      "sha256": "cd3fe45d7936aacf699002571457c3aa898d5453867fee15a8894313a3ee922d",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_40c5e832313fb5e7.xml": {
+      "sha256": "cec4559d925d52ef46e78ec0a29b3c77dc73c5a775f1690ee71a1b81152c3904",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_4589149db13721e9.xml": {
+      "sha256": "aa1dfb6d50c594374b2e40309e4e48c67c0e7bbd4e46fc8d196770e19b3999bf",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_471a576cfcba17ed.xml": {
+      "sha256": "ddeee67c6e36e86ac5548027e98386307e65f5827a4ea2d29c33ef9b0a708cc6",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_475f0203d77740b2.xml": {
+      "sha256": "fade4ed3fc8d42d20c45d8ab03b39516808dc413af647f42d51d6f4c2ff2a1b1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_49b793895e4f0da4.xml": {
+      "sha256": "65fee962719331f76b18e894dd078e9cbe5f45dfa9994f6c64a3bcd7361a200c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_4c31802bced4eeba.xml": {
+      "sha256": "726d4aae2a823450d0fcc2ccb730defb06909de8d4d71ad1cbca09982236d56f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_4e28caf347afa9de.xml": {
+      "sha256": "182631fb5d3e5ce9800e3508a73bff8de1d3c6943efaa07de91015993dd82410",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_4fbe59e0f38a414f.xml": {
+      "sha256": "0059e530d4240c08aa87c3de79275731dfaa4909631618f02f230600de79e1e7",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_502fad8a5c4a1f71.xml": {
+      "sha256": "358eebee0363eee1722d5fba2da94a35099a661e9f797b0120baa4a5d491315e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_506cb96681f58066.xml": {
+      "sha256": "1e61ed963ae4b2ca429b1577dfe8f39c48d02a98c210bba26d2643500e62ead9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_506d7e11d5ed1192.xml": {
+      "sha256": "960c57c3f3d2e37539f9c8d69edc10342e076b5c2e9297e4ab44a5d3ecebadee",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_50ac7e75b9b6bb96.xml": {
+      "sha256": "04486654d230f6218d595e123d4c1ad63644383b0e2fab074130e75485ceaea5",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_51e7454afe49fea9.xml": {
+      "sha256": "b018a1185fe45ef7a5dc2e3be5415243f400078570aec036fb7e0c477a7d9197",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_561b32f1cf2cf953.xml": {
+      "sha256": "61854934a767cb08bd49f0a15e09c4d91cd458e26a3bfc744815a9eb40a3caf1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_5c382781bb5dbab7.xml": {
+      "sha256": "092f279a2e3a10411584846d74f316db77ad72af815acc2edc8dc4003effcc15",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_5c5123a38c0c8a5e.xml": {
+      "sha256": "fbb42a72dc27bbd8a5984283a1bb9c9745704e2d6a29da4be352b86dbbd92cc1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_60ae2b225f69bec2.xml": {
+      "sha256": "dad041189de4c1d4578ac5615822083896012960f12af6802a4576f0c2c62517",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_60cd3ccc2bbe6a3c.xml": {
+      "sha256": "94807866053d8601c2742eda32ebef7ce30899dcaa1540fc733430827ee1cd02",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_65e9d3e2ad98745a.xml": {
+      "sha256": "7d39e3d24b937350096895903d95cd23412529a8a10a682b7b6308f3321a582d",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_67179a3f4487bbcc.xml": {
+      "sha256": "214f0b2955e96cd77b8811775edfd696f097818dd8a11d586a31cddb3e540ac5",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_68434114c56217fc.xml": {
+      "sha256": "d90aea868499514c336d7c4a1f292b3da045b3bb679ac33c267a8b09fec69c5d",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_6a289e16353eb078.xml": {
+      "sha256": "c8f7a494c0a44b0b63c03069aeeefc0d8099e6a263cb38dcb96e6ca0846633f1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_6af22fee187c1353.xml": {
+      "sha256": "d5895597e3d93ec736e1d73f3ac9064cc5d0095958aceccef8fea6c38198248e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_6fe6ada76fdd5327.xml": {
+      "sha256": "b029f1093067f7839b482ba12589844ac32bbaf2ad6b6206e539c666d1ce0e88",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_71be585fb61ce81d.xml": {
+      "sha256": "8ba335388ef26c8eda2d6663afcf707dc324817f5ef68d6ad55f498c4b345e89",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_7227f60de4a5a10e.xml": {
+      "sha256": "793b003295f4fa6e921742deb056ade352be29609459f0a84047ada216913559",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_74ab114f02be434e.xml": {
+      "sha256": "a0a06b03944866d41e7c458a0a01e2dcd0ebd9a2840b439decb6dbac0d3d5fc9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_79b1430961fbcdbc.xml": {
+      "sha256": "16e77867f1c02dd134ce27d13b635f5f6b96455e04f36b7404d4a16875a20266",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_7ae7be2251e9c1ba.xml": {
+      "sha256": "e55c957cbf4f361f6acd65b5665399e4f33821708e6d64bae3f04dbe8501ef6a",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_7da0bd73b1664d6b.xml": {
+      "sha256": "5bb16c3b9f44b4eb043013faa2f11effb7077dc7cd17d345c2aa1b2519a66388",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_7e197d0fc086ce62.xml": {
+      "sha256": "26b5377b12031b3a0ad4f959e1d5523a66f9120b7b007934af7b2d8e91a085cd",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_7fec34248af08393.xml": {
+      "sha256": "002fd6cea1e1414ac87ebf4fb0bca3686bf59fc86198765b401dd830c7a01032",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_809c190b7af43716.xml": {
+      "sha256": "491082f6761667e00c7d1e7664a74f2979cf6360163fb626998f224654953a5e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_81ae85fe4ac1638b.xml": {
+      "sha256": "fd3e0b1966a951279961c5b2cf974e280d908bb2f5c5e8823c04b8f806992b2b",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_85ec0578b640df83.xml": {
+      "sha256": "2d1705f85bce13cdf74924a88b40e2742bcb5860fe7bcb4499e7ff66a6fb0377",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_87f32d0c4c9fb5ea.xml": {
+      "sha256": "16e7836ebff388e4d754886dc8723bc434042293841c392896f17ceb2de9e242",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_8ad37439e3d3d711.xml": {
+      "sha256": "7f6534822b3281cad228088b225d685fbbc1698acce8b55fa9a9ad2b0c082101",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_8d94e77786fddf20.xml": {
+      "sha256": "26867064b71986e28a6b07a1485a7c19932e7a66afd0a12c3be5d08ac0e985bc",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_8f0de70619750f40.xml": {
+      "sha256": "a80ecffeea3c716f8f44e181adb1bcf4968e6a3e8d1cf5ff25406c9d28c96e62",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_92f8fd56e80b830d.xml": {
+      "sha256": "d1f2769204500ec0bcb68c67b80a26fe6f624c73e4363028e3cbf48a5c18762e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_9493b2805e072a1d.xml": {
+      "sha256": "c7525ce999b9463bdef47b826805e84297c1f466e88ec526ad4c99c66e36a466",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_94b556c983d31df4.xml": {
+      "sha256": "7eec3ec18fe9819ce2ae9c07fa8cecec716f98d92801906a9df27a0af7b3e12d",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_954fcc5fef906d0f.xml": {
+      "sha256": "c84c6a05aa569949a603f8ce762a4636271bfda382b0f9ab612d31cecd1b9d52",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_9632054832a1be6b.xml": {
+      "sha256": "3eb3afb32953848246b229bc7bf2bd80d97909ca2ea311e14e0960badf593303",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_9b3edb9c79bf1a90.xml": {
+      "sha256": "1b98fce8e4479587d3a6d50a929b686c4b1c7ff504ff93d36f85cf2d8344e09e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_9e7501d41fd1f26e.xml": {
+      "sha256": "00700be2a20747614d222f2d479d8c0c84b80a1c6716b5d78e47184a3ed65b3d",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_a0eddde863cb292a.xml": {
+      "sha256": "71f3a8f8978d3ad708239aec09e25e131f429cb485297d4d1d963a69d52c8897",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_a3223af82eeed438.xml": {
+      "sha256": "18e0cdeb074e766022aa76147ca9f5a129613b7f788235ae7ce92b9710bef85a",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_a6a0fc6df2641f09.xml": {
+      "sha256": "7fa5d70ddbcaf96b1679eada037732d6402b42b959e39a7717e72c5d2fabaff3",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_a959e1d3d29b2aad.xml": {
+      "sha256": "7fad9735baf0bb8de78ac502358ea200d1761761e75e66dfdb68becbb221024f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_ab251cf22c2c1548.xml": {
+      "sha256": "f6aa5f9a0502695dd04c9e3fd9b0c79efedf8c81082e8a3ad43b3c17d24bf0a3",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_abb1cafc12707cba.xml": {
+      "sha256": "832c172921244473a9c3f1cc7921f055d9baa162da19cfae8f8e6bc6effdf1a1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_abf01cfb5fa52320.xml": {
+      "sha256": "72d54718905d0dfa88941108bb117986be15788255722ea8ac14d8922e079a34",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_ae77c450cccee682.xml": {
+      "sha256": "36d64e93c5a707f4ac2e3ac62444f5383879f6dadadd0446f69fdd061df3fb30",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_b1062465faa49a88.xml": {
+      "sha256": "06667a6a4bf1ba79354d8c8c8781692499e48548c95c01b6b12d4c24b372b40c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_b15e09e733f5d244.xml": {
+      "sha256": "94fd9f9b82434bb61b30c4b65cfefd0c54636b3525c4d63d5b7fecb9039d8b3f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_b1a4d7bfd89792d8.xml": {
+      "sha256": "b2baf6f5de330f70bf4aaeaf6390a75b196501eca681945a32c9ed930f29a947",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_b77ad26b02a9c16b.xml": {
+      "sha256": "b824d94b666d1f7f9e0b656b5fcbcc371266c27b16b1fb4d2588e6d72126e765",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_b83354def049eb6b.xml": {
+      "sha256": "03a9b0292c2377f948b84129be1acf2c4037b20a93739dd259534e6e569fcd95",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_bbe24b7742af5a5c.xml": {
+      "sha256": "a49b1e44e7dc02269f39525c91279f9f0f412b2e7f57987be406357abf7a3766",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_bc7700d708989c41.xml": {
+      "sha256": "84375f665ffd9b04f1211574c81c29e738a1b021e7cef46538a658f584632181",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_bed985e389281b4c.xml": {
+      "sha256": "e5a7e31c1fbac4e031b071ab1fd6258dbcad8f33655160f2297a025a85117c9c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_c121253768f93555.xml": {
+      "sha256": "2f5e344273c572b0d4562bf2430be83441c1c448949716566753a4287bfc6d77",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_c1b23766f55138bb.xml": {
+      "sha256": "80f3f7d02981df1633d2a7b2c419fb040eb3878482f610695bce01da02d6cfe1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_c28a243a496a5fba.xml": {
+      "sha256": "6092fd22c91694085951870a0f676236c994e7595aeda5f674f12e8be67b0473",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_c6c633ea2c463e3c.xml": {
+      "sha256": "9c749dfbaaa2b39dbb0d1a8889b37fef866a8c3681a7162c3552d6fc60a4c81c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_c7ba24cadca8438d.xml": {
+      "sha256": "d421507304d1425df7cac884f84ba76469bc7545a8574fc22f3e12d8fcefec09",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_c7eea743c009ed21.xml": {
+      "sha256": "c26a393d5830341a0376e2e5cb6fefc1b82c91c2d9d7f6eb593877143084cb3c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_c8f305a8325df878.xml": {
+      "sha256": "29f7ef9a60fabcab6e9aeb9fbf2b00c9746ec3896062f9eb58a618fe1c81a849",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_cad4419aee32e26d.xml": {
+      "sha256": "ed2a28dfd0a30c49c25441d495d30fe95c9a86de0a8ade7b9ad072e296558fdb",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_caf98384921ff0d2.xml": {
+      "sha256": "b987ffdb85274c03c61b093c221cea30a776adda2ef56801962cf996c64d3699",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_cf5496892f2a0628.xml": {
+      "sha256": "1fa46a46ca618a2b15c986dc0cad252fa2be9d19ef3717d24582ed74e088ae65",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_d948d4a7e3842646.xml": {
+      "sha256": "752d33942a4dbc6b84df3ebc0bb5028a5f337ae5da341c0d82bb940b6a763381",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_da31dd218010d683.xml": {
+      "sha256": "4b06a568e0f78215e3ec2a72a74552a0b6ecee5ce3c89598cb6c03a0890a17f1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_dbc82c4c0c8876c4.xml": {
+      "sha256": "f376984bf6dfb3acfc3886e50e2dd0c29209937e9652ca87b5cff76c5217ed0e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_dc34b62cf1e16417.xml": {
+      "sha256": "f238f82e1825ef51d07db1db43823b850845212c9d099f99483da77d73764ce5",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_dedc3054407cade6.xml": {
+      "sha256": "2021ce73e1b31b6bc659ad3682901127689b2921f4e2b8522b9dad64f7c37be4",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_e057601944564978.xml": {
+      "sha256": "1e7d5434e0fcb391baabed0135b8270cc40800a2dd29b1bc83fd4b3fa3cb88eb",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_e264c970c1dbf466.xml": {
+      "sha256": "f5de396afff172fcda5ea579f21a9984542208f93af8c73e5f0bf5be28ed4594",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_eb2fc6cca1276bc5.xml": {
+      "sha256": "67f4de85dd0757800c5988b0263f4037a9e3600bf149f997c84607a58831a8c7",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_f00af0245359467c.xml": {
+      "sha256": "c9856a7df03def4ae64d76d1bb6efab0703ccfce5f258000b1af004b65872b0b",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_f0e21a25e95a2cae.xml": {
+      "sha256": "12d87442cc91b104f2ed0e8c8eda283c7dd09e7e2eb4cb5e5aef3f02639eeae9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_f2ab6e9e48245639.xml": {
+      "sha256": "64efb6bc17d9770de7daeb756483c903e31f7211d4272072c1cbb1f9a4e498e8",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_f9ea07348027802c.xml": {
+      "sha256": "0517c468c6a8cec4031802de7c21cb0484d3742e05eae24578d1a3386603747a",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_fa8941eb223336dd.xml": {
+      "sha256": "38cd1ead55945fed53ffacf688e338f758b9eaecc6a5643822ca49cddc96b2c9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_fb8dfb6cf4d66c5f.xml": {
+      "sha256": "70320866fedc9ccbffc52c53367fe7cd51644bf8da428ad86d6ef8a0ade69cd2",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_fdb5b21e815fc6eb.xml": {
+      "sha256": "cc1e75569bc2efc2033db509e84a8150cd74a3ded7bdc49f8f3a9ff2930ba913",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable/widget_surface_ff3622a6c664b786.xml": {
+      "sha256": "c55cfcef902a40ae57e5458bebab4ba061297ba83f563c7ff3c5f8269adf8cf0",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-hdpi/ic_launcher_foreground.png": {
+      "sha256": "685a3d31b7a73c7510d7f0ed69bbed44ae812bcb21bd362fd1dfbc9fb321e3ac",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-hdpi/launch_image.png": {
+      "sha256": "4bf48a8e910c2442d15a88ec6a437931aea1a39fbbe98de8fa37a7a38e4fbb23",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-hdpi/launch_splash_icon.png": {
+      "sha256": "90cfee4346516509906ab64e1b45b9a81f83662abe765ab4773da8b65eba8153",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-mdpi/ic_launcher_foreground.png": {
+      "sha256": "87c63fa44da7def9b5eee5a43f43c039293501d3ae49ad11377ab00fb89d9d1c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-mdpi/launch_image.png": {
+      "sha256": "7eba79c76ca5249530d4617afed10ae3072b467e32e4d99051f6fca22cbeb026",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-mdpi/launch_splash_icon.png": {
+      "sha256": "aa174cf0a4cc78d41437eb0234c0545365c6fea6beed9eb3d7d4435f8c4ba06d",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_anniversary_preview.png": {
+      "sha256": "74102077db990be1a2a99c77a4496cd06926ba04b776fd3115b037b0cf447e9c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_calendar_preview.png": {
+      "sha256": "bfe0f34176c3403895196032e285b4ad0da4d855926df54bebad55344e7fbd65",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_course_preview.png": {
+      "sha256": "43b2d5a225a9b56111abfa7245d637f9c325d6718d101a21f1bccb54f7caf31a",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_diary_preview.png": {
+      "sha256": "eaf48b86b1f8af84550e2a5c6a88ce3fa99972329e4c4fa4091eabf25d18eeb5",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_focus_habit_preview.png": {
+      "sha256": "95dfa41402f9448e8c6a44efe1e8a60c945df272ba7af6cb794855031ebba73c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_goal_preview.png": {
+      "sha256": "3dd7126856cdff5c3b94e35e16194cc7ad5f6072b87d0930f84753bf20ef0d56",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_habit_preview.png": {
+      "sha256": "158a2c729da2311c7ceb853559bde1ea6fbde6fa1001822acae2af35572a9859",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_note_preview.png": {
+      "sha256": "bfec9ead87547484c12fd72e0ab6ac44b0c42e2769e37b9163c7620a7f567121",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_preview.png": {
+      "sha256": "c7d057336d279e1128d4e4f4359567ebcca10ede74d6cf6853ff7b10da61dff5",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_schedule_preview.png": {
+      "sha256": "982984b7ac379ee7928b33315f07fe3f11667e739a7484c2f76250554a397c56",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_theme_botw.png": {
+      "sha256": "d8b96cc0c5bc8b90ca3b62063f0f36f95d76b35627beb3dfe9a379e315149fa0",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_theme_genshin.png": {
+      "sha256": "468e7082766888e48f43db0b0e836bf6211576ecc5ba85cb455f50523fc283ab",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_theme_re0.png": {
+      "sha256": "b0e04f33e5f09dc9893c0d51b53de613e2f7f2604619715dee8660f1e50d7e37",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_theme_star_rail.png": {
+      "sha256": "ba1bd4d85ce0d2915efbbe90fc1d217df644707fb80ac714c334e19b7b42ec52",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_theme_wuthering.png": {
+      "sha256": "e50c65a6d4a29fe120eec6cc8778aa23539c0cf0dab41c67c18415de44cc64f6",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_theme_yanyun.png": {
+      "sha256": "cf8ca75c68c4d0ebfc0f510837a85c1e4aa011a474ce8d9832ff1c73e64df443",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_theme_zzz.png": {
+      "sha256": "b35d5191cf611ff9356ea76326ff6743c858a1a6fba6191488e6e20a5268413c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-nodpi/widget_todo_preview.png": {
+      "sha256": "0576832b358a005d8bed037192700e2973ed60d5bc879d28b34fab1973367c67",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-v21/launch_background.xml": {
+      "sha256": "0de3e25b97c939b62b0936cc149b3d4297d144a39082fe8f49efb5a69fa3088c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-xhdpi/ic_launcher_foreground.png": {
+      "sha256": "b54b11c31508d48d5e053622292379040de4befa608a50ff704e1a82e9ad2df7",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-xhdpi/launch_image.png": {
+      "sha256": "e12aba6f895db65890ad02b28cbb638a0fa70100f84bceed90672b93134a9fde",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-xhdpi/launch_splash_icon.png": {
+      "sha256": "89be4176924df2483e92d5d54fc313072c4f104f76de4503e2a0c42c301b89d4",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-xxhdpi/ic_launcher_foreground.png": {
+      "sha256": "5db2e14a6d24042acb71ceadf441aa3bf19995cb66f04524f6cafc0d237e629e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-xxhdpi/launch_image.png": {
+      "sha256": "bd5277d050e1cb2766f1f537155a0d13bc41d9019d2aca2a990d8c1bf6aad143",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-xxhdpi/launch_splash_icon.png": {
+      "sha256": "f66cc05c02692121000ed5aa63840437a0ac1b5ee84970a124c6f3d52aa7c2e9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-xxxhdpi/ic_launcher_foreground.png": {
+      "sha256": "7c34d6012e6fb2021c158e9f8a177c4123b971e2ed0add7bbe5870e607fb8a72",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-xxxhdpi/launch_image.png": {
+      "sha256": "74e55f7545957bd1df88be6fcb312c89b86279cd8122c8b1d467fca9e432ce86",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/drawable-xxxhdpi/launch_splash_icon.png": {
+      "sha256": "9bbbf19a340bb190a67fef7b9b454f8d564bd3aebcfa39236bfaffc5e7b8145a",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_anniversary_widget.xml": {
+      "sha256": "7a14f84337010db37510eda4a4e569fcddd0d5b7025bf69ad873da7287aad326",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_calendar_widget.xml": {
+      "sha256": "e91d536511f4c25c7e51f5a05bc5623888c16bb828cbcde0657d5e1e39052a6e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_course_widget.xml": {
+      "sha256": "e5a55cdfe6a296302380c071ba22874ac311b8e02b4a9f88eeee03b2b5d7bbf2",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_diary_widget.xml": {
+      "sha256": "e3993a3617fba790cbff367555c072041474c4a470c8e8b861465b2412128465",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_focus_habit_widget.xml": {
+      "sha256": "915519f64763f7ef671494e4f4e519f8c8ec74a095edf0f7dcb495ee38872f8f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_goal_widget.xml": {
+      "sha256": "03be0bdc25f39cc7ad81924fdd00082775f34910f193caa5b24b1c81b4bcc04c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_habit_widget.xml": {
+      "sha256": "583b3569d08875142a93f38771fa699725f936e60bc6713062fa4b8217a33e0a",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_note_widget.xml": {
+      "sha256": "b36cb422fe0201dff8d36ce70ba05399aac5c81bd43514b4ee6108b0893ad221",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_schedule_widget.xml": {
+      "sha256": "38344c762bc12fe9d12d89b7203fac16f593ca1d357661f844cd6b8c93be3761",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_todo_widget.xml": {
+      "sha256": "30960e0d3c50a87142887c4e730c54bcea0a87b20a53b9e8c4006c95e0acf210",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_widget.xml": {
+      "sha256": "6b9e53897ad0de64da308bcdd772a451ab3b14406532a57bab68e91c972971be",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_widget_preview_compact.xml": {
+      "sha256": "c02ba335d1620ffc059c56417faf639cef89b8235a35402062930a824dc2c3ad",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_widget_preview_detailed.xml": {
+      "sha256": "590a526a129bae5bcb8850e92f98b8a334631e3ce97fb82e4e3827a011529037",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/layout/duoyi_widget_preview_standard.xml": {
+      "sha256": "eb22da995ceca47c230aac5469758892c5aa932338e5c28d64b3a723cbc4f897",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": {
+      "sha256": "fe16ab84762f42e1166a008c9c77227fa3ba8399088bf9667e83d04bc4322af1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/mipmap-hdpi/ic_launcher.png": {
+      "sha256": "698a5d153e1c8fd143831a8bc2380ffe1d500350373ae134c87a394b905deb24",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/mipmap-mdpi/ic_launcher.png": {
+      "sha256": "f86e22a16b46f7cbb2d90ebd379fbaa15204bfb827dda501e8c44f9b8c3fabb0",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/mipmap-xhdpi/ic_launcher.png": {
+      "sha256": "68c895162215da6449a4c032787d6bf97ee5e4cd45ce20d94e8e60ebb6580c6c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png": {
+      "sha256": "d7976308d02dfdbb6371ddb2fb332ee594b83e5f2a6d9b2961f12e773846e6e0",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": {
+      "sha256": "4c800d1ed3a5cf476239408b515683cd563c860a1f093b4b91e9b828a708c47c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_alarm.wav": {
+      "sha256": "46d0e704daa03b6f29d051ee58ee1a0e6445466fdce8296687798295b9d00575",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_bamboo.wav": {
+      "sha256": "bf5de248b86e0f8929dc2bc0a6c1018d01db28fa098569a214422394c95e36c1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_beep.wav": {
+      "sha256": "213651757ff3e5e290b3d07005379b352f8fa4cb74083db3b86d56fb45fb7e52",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_bell.wav": {
+      "sha256": "ff64f4713544f1368a8f5eb087bed6118048d08add2557799bb1598f0e8e8e6c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_cedar.wav": {
+      "sha256": "46b4951b01ba04120185bb2f85a4fb74607d2de1e3c3d2cefd4437639d56dc59",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_chime.wav": {
+      "sha256": "22effe91ddd565656ed8bd62bbfd811411730f03464e08f34dd0f664bc35eff4",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_classic.wav": {
+      "sha256": "5c6b09d483ff55049556a568bb9f513ecc4330419ee97c380a60d5784baa5487",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_cloud.wav": {
+      "sha256": "096598bf1fcb771e853b29a620cf557525c8f32a338491495e189cbbed15e0c9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_dawn.wav": {
+      "sha256": "df70feffc13c061bae55396f099ccd6902425dbfa28e617f8440f6b521653312",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_forest.wav": {
+      "sha256": "8bd096c00f6ba308be10007063600ce6156212d7bbdd03fb8227688e4b0222a8",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_glass.wav": {
+      "sha256": "16af14304d6f0a61c8315ef7a2fb8e271a923dbecf32eb5f2331c9bb4553c317",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_harp.wav": {
+      "sha256": "7687a1ded2f2e96da8a67d60f41869f8ca86cb9462eee7f0e724770fa85e8fe6",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_lull.wav": {
+      "sha256": "fa579819c588b9d58f617419442699f9ca3f54a5c22a7546180cb0258c0cd5be",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_marimba.wav": {
+      "sha256": "a760f6a87340cf083080eafdfa5ba7f4ca330bc05ed150082003638b52557b2b",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_mist.wav": {
+      "sha256": "0534bee7119037b8b05fcf356a10a6fbeadb1ac36be69005f3ce55e11fbaf6bf",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_moon.wav": {
+      "sha256": "42496fbe2d5e6abca36cc15fc5b06df36077f84651c2f92f0ffcb9630607f2e2",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_morning.wav": {
+      "sha256": "c3d308bf89aa1493ddaafc502b949233736c2b408b24207220bb1d0ebd243389",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_paper.wav": {
+      "sha256": "0ec08efa851ee2245cd074b3c01741f417d3e7e59b23af953c4f6ac24129a5ad",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_pearl.wav": {
+      "sha256": "1755293401cda7971bb721403047bbd793623ca10906b7dac92fff672f725696",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_pebble.wav": {
+      "sha256": "3f87f39469dda838e21cd437e7c9164bf0cfecdfea1100e59378bbc4ecb8dbad",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_sakura.wav": {
+      "sha256": "a1f4e61f1105aaa673febc530679089307a170f945f3c4141f554d116a4955ab",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_silver.wav": {
+      "sha256": "4d98f5ec50083c0d7f713002a77530292d10b9af512441ae1599f6569d10ff57",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_soft.wav": {
+      "sha256": "f1b637f2c82720d454de08048bddb33c7876f7c14dfb2347d1510bd2bd791ec7",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_star.wav": {
+      "sha256": "0bfaf5f1aaa7062a246e780eb350cf0dd0fa9f67a223c19b3c9d8194368e3fcd",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_stream.wav": {
+      "sha256": "2d7e9de2f915f5c799504bd2f23949ba1498ff29337c6bb49b60e077ad3acb88",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_tide.wav": {
+      "sha256": "859c503bfbf83bb66cf0e72e3697b8dc921feefccdde280cb7cef8fb05d1481d",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_water.wav": {
+      "sha256": "2027ab652970bdf22d8e7b3b228a62be2b128d9b61590484d41643eb3113c58f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/duoyi_wood.wav": {
+      "sha256": "f1f2ecd0ccfd8420a96a9f72a78a9fe58efcb1430b9445ff03fa2b65f584dce1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/raw/widget_surface_palettes.json": {
+      "sha256": "85e1c2718012d5b6788307988e708d06355704ff5985a4c4590a522c880bfa78",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/values/colors.xml": {
+      "sha256": "2cd70edab53af74efd3a685bdcef6e573b894f72be14af630e80c1211b6bb672",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/values/strings.xml": {
+      "sha256": "f3083bcd19b4ed050b2eca561502be8f256351a73284221b6ee5f28aa5bc15ae",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/values/styles.xml": {
+      "sha256": "6de33b02c26ee76774b4c615d261429913bc3dff0c31b68793e19d2a7c29dfd1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/values-en/strings.xml": {
+      "sha256": "7736783bb9132174d60e379c5b9ef87470fe5e07a780029ff332e2508129b7ce",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/values-night/colors.xml": {
+      "sha256": "1bdee756300944432fc0ace6af82d73da0fe3b51a2000bbf3342a158889793e6",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/values-night/styles.xml": {
+      "sha256": "8c5bad5152f217e837519f9c15211d19f39bd45f5f67faf6dd81cb4b299e518f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/values-night-v31/styles.xml": {
+      "sha256": "7aad27a98581894102484aca2bf8a21159571ae9f6e8132e7b50f109e55b4ffd",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/values-v31/styles.xml": {
+      "sha256": "265104fc26747ec0c202fa6181cb878bf70e11e3dde8c96b27b23653de906aae",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_anniversary_widget_info.xml": {
+      "sha256": "0eedf6b674d6b2e76575b4fd1c51e1dc02c56b4c0a89472dd7c880f705fd8623",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_anniversary_widget_info_compact.xml": {
+      "sha256": "0515d9cc3e7c25f15efb939a9c03fc1bb893433882a8d04b083d6655177701bd",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_anniversary_widget_info_detailed.xml": {
+      "sha256": "a4ed84c376d61566aa4a2f880c3e029040a3b2f2322aa4829fe1f3b681d8e2c1",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_calendar_widget_info.xml": {
+      "sha256": "4a8cabab66199a87db64ce857a7dcb80137c705426be8dfb850e3e743d82213f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_calendar_widget_info_compact.xml": {
+      "sha256": "ff19e7392f9e2f58bb285b9825a4e0161f14ee0ff97b13d5bbc7a06ce35cb06f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_calendar_widget_info_detailed.xml": {
+      "sha256": "3df73513de1094430ad221e8817a45fc96276d85d6233759f49a17424c636809",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_course_widget_info.xml": {
+      "sha256": "b64d7e52d5deddc75a1c4c5ed1edc15a70445e25c93882413504752736cc318f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_course_widget_info_compact.xml": {
+      "sha256": "3617b2c2df98776e53759cfbdc41f51ae362906c8a2c1e49be658adcb263e7b5",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_course_widget_info_detailed.xml": {
+      "sha256": "7bee356cf74ab6235012002bdc4f7d4ef1a534bf65b8bf6b1057e21d1eadd6df",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_diary_widget_info.xml": {
+      "sha256": "c93d060d6bf996c35d95b3ee628ce417a312028b2c7251131ed97785dcf935ac",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_diary_widget_info_compact.xml": {
+      "sha256": "44806aa918d53f3463716cff5e525e525c23197712a53f26e577df34e94ad4c7",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_diary_widget_info_detailed.xml": {
+      "sha256": "2e1d047722cdee318d0419893a42b9af8c29d87fdf2759bb7dfb5a61ed399ffb",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_focus_blocker_accessibility_service.xml": {
+      "sha256": "20387d30e9b7da84178f307e3ee3a2a2b06fdf6e68ccf91e83b0d040ea7b218e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_focus_habit_widget_info.xml": {
+      "sha256": "efa131a6f8e14ba43091c6483c131c0df9d47cecf90bbfdab88e3d8557fda6a4",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_focus_habit_widget_info_compact.xml": {
+      "sha256": "ed438a5ba313e180d1d1ac4f90cebab9ee497e52ce3aa4846ec8728e20f8a2c0",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_focus_habit_widget_info_detailed.xml": {
+      "sha256": "c45bec365a50f39f7f65dc84ae86183e1d77a803dd69898e69cb2a9e55aff003",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_goal_widget_info.xml": {
+      "sha256": "e8b99e0dac86e75de98a05dea31d410fbfc816928901db28c425e5c9fe8688e9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_goal_widget_info_compact.xml": {
+      "sha256": "c940ccd86a8375dc783784f07a9ed469a1cc538810f7bcb04dfde8f0e40e5de9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_goal_widget_info_detailed.xml": {
+      "sha256": "baf556bed9f386e3808aaca6306023336f1c81851d38bb80ae23bb552a937f7b",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_habit_widget_info.xml": {
+      "sha256": "ba58aa335c1219921b008a365ff0e3b0387b78a7c20b0e805170010e7557a1ac",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_habit_widget_info_compact.xml": {
+      "sha256": "cf4679b23b3b7e3a76ccecf2da351c76ab65cd802dd560653fc7ea1242efe2ed",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_habit_widget_info_detailed.xml": {
+      "sha256": "aebc9cce9cfcaf7b5b7ae031fc406b7a681734c85735785ae505ecc6673a2330",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_note_widget_info.xml": {
+      "sha256": "5e2e5a67785e30d08f8c4cf243f995a692e414b7ff12f4f33c3394cf4d1d5984",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_note_widget_info_compact.xml": {
+      "sha256": "2986503b2466a49c85625277fe1c3b14f5469e2f36a8fcdc54b044dedb8c14cb",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_note_widget_info_detailed.xml": {
+      "sha256": "0dbef7ecf66eed59520cc373d3fd96e3e7458b2eac04d6d2c3196b1b640630c7",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_schedule_widget_info.xml": {
+      "sha256": "6b869075d6c00639ab281f338178f9edd41630f061a1d49da83af3b5b8ab5e7f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_schedule_widget_info_compact.xml": {
+      "sha256": "c3de9672b0729dacf9941b1b5b90c2bd1efa25d77333dacbbe72064a9426e90c",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_schedule_widget_info_detailed.xml": {
+      "sha256": "b1cf29c2322c4ae6c35259ece02027e0684226ca19138a575fded95918e0f8b9",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_todo_widget_info.xml": {
+      "sha256": "c55748698d5aa690a044059c3ed35d99285be6786d176748524cfb1fad18940e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_todo_widget_info_compact.xml": {
+      "sha256": "603c923b3c6233e776d8a024905fb608526962f876df4bbf0234db52fbb2ebda",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_todo_widget_info_detailed.xml": {
+      "sha256": "3dffc01f396b528b88f1d5345e98c66bc95552855f65212ee5e331f22c42d377",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/duoyi_widget_info.xml": {
+      "sha256": "0fe45163ce49dde5211f3261d9a033980ae809b7200520fa7309d257c843de9e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/network_security_config.xml": {
+      "sha256": "a95efae209ecaa0c44b29e39ab12388f58550123bce055e0f0f6508f9355c4b7",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/main/res/xml/update_file_paths.xml": {
+      "sha256": "27f5d48ae352442ecb4789d5140209e906261ec61803ffbc2c70dc9e1f7505e8",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/profile/AndroidManifest.xml": {
+      "sha256": "30b0832ed8b92dfbd6ae2abfa939ccf26333d37600056b1572bd4a397a18a74b",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetDayBoundaryPolicyTest.kt": {
+      "sha256": "ad4a4271bd242315ef7eeda45cce7f236139ea26855ee0df407339cc256344a0",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/test/java/com/duoyi/duoyi/DuoyiWidgetLaunchQueueTest.kt": {
+      "sha256": "9ee2d411c69929d6c55435e734270db0ad09eba1100b274db75e43de607c7db0",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/app/src/test/java/com/duoyi/duoyi/ReminderNativeCopyTest.kt": {
+      "sha256": "5a82d53bff2e7893f7cdc50ccff31ca13921127a83993efc4f3b99793004b0a0",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/build.gradle.kts": {
+      "sha256": "6a26dba2cb8dfba1e74f540b0d17a89d96c1301d3c3bfda14348bed257fddcba",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/gradle/wrapper/gradle-wrapper.properties": {
+      "sha256": "297c9e63b6fa6e7e8b221900fa1787c1a0e38869d8957da66389fd0f6b00f78e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/gradle.properties": {
+      "sha256": "4922e39cd2ea910bd97156fd4320b0be9217df262fc45435ce408bad534a20d0",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/local.properties": {
+      "sha256": "58168b1ef7c1d3a11f452a89ff90735935d319115c8c9cdd40d96edf768a53fa",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "android/settings.gradle.kts": {
+      "sha256": "a9b5756048f668d4ebf355116678fd334cd5f2169b7d4518ad19b8df14d3af36",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "lib/main.dart": {
+      "sha256": "3a32dbeee5135fad5265cc5f87fc5462a61aa8d68b0ebecec505b14cca37406e",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "lib/services/widget_action_message.dart": {
+      "sha256": "ea6ac64ea3193a78dd20c17bb2a9c710a5fc6c36cf62a48d546bb65e50abdb99",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "lib/services/widget_action_scope.dart": {
+      "sha256": "caaf1b0f6d4d2c3e0a369b38cddced1c29bf2fa78d53f657a6abbb2d4d446ead",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "lib/services/widget_link_dispatch.dart": {
+      "sha256": "ab04c3f6270935cbe364bb17cd683e470fb5d87c2c1e53fc610de51dcc8ecf30",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "lib/services/widget_publication.dart": {
+      "sha256": "7e964491b57290079c7000f5ff5ba121ae17feb34ae72ab2b1d6c1548650e188",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "lib/services/widget_publication_client.dart": {
+      "sha256": "c56250f6776106e4941a70ebb2d0127b0566372d249c5928e89abb8243d6d126",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "lib/services/widget_publication_controller.dart": {
+      "sha256": "fc90fcc082f68c3b46f1cf59d0258af9595e96a887b9da1f0fb9e01657ac0079",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "lib/services/widget_quick_todo_action.dart": {
+      "sha256": "b5d99d781800c8cb0d596b23a50ce752c69d0d7c8bd8bd89e19ca157a8e0c2fa",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "lib/services/widget_schedule_projection.dart": {
+      "sha256": "e18e9a096b8d6c9f6745fc99f58883d792123100e3f55dcc8aa802d58ad93e6f",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "pubspec.lock": {
+      "sha256": "73b80135ea9e434f83d7ae0e4eb77664a69c8f810e3f0cb346298d4b070e2786",
+      "scopes": [
+        "platform"
+      ]
+    },
+    "pubspec.yaml": {
+      "sha256": "97c5396a7c1c36f3adf815ed1f099f997aa8afbdbe7cb1023f404f746af002ba",
+      "scopes": [
+        "platform"
+      ]
+    }
+  }
+}

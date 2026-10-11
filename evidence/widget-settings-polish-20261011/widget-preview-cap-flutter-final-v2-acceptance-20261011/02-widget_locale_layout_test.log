@@ -1,0 +1,20 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/screens/widget_locale_layout_test.dart
+00:00 +0: preview follows independent widget background and skin
+00:01 +1: all ten widget previews fit 320 / 1.6: zh-light-compact
+00:01 +2: all ten widget previews fit 320 / 1.6: zh-light-standard
+00:02 +3: all ten widget previews fit 320 / 1.6: zh-light-detailed
+00:02 +4: all ten widget previews fit 320 / 1.6: zh-dark-compact
+00:02 +5: all ten widget previews fit 320 / 1.6: zh-dark-standard
+00:03 +6: all ten widget previews fit 320 / 1.6: zh-dark-detailed
+00:03 +7: all ten widget previews fit 320 / 1.6: en-light-compact
+00:03 +8: all ten widget previews fit 320 / 1.6: en-light-standard
+00:03 +9: all ten widget previews fit 320 / 1.6: en-light-detailed
+00:04 +10: all ten widget previews fit 320 / 1.6: en-dark-compact
+00:04 +11: all ten widget previews fit 320 / 1.6: en-dark-standard
+00:04 +12: all ten widget previews fit 320 / 1.6: en-dark-detailed
+00:05 +13: standalone previews react to language changes
+00:05 +14: catalog changes language without resetting style or category
+00:08 +15: account cleanup keeps a pending saved style read from restoring old data
+00:08 +16: stale style retry cannot overwrite a newer selected style
+00:08 +17: failed style save restores the saved mode after a delayed initial load
+00:09 +18: All tests passed!

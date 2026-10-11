@@ -1,0 +1,9 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/screens/widget_preview_screen_test.dart
+00:00 +0: 小组件预览覆盖待办 o、月历和目标三档尺寸
+00:01 +1: 小组件预览窄屏 2x2、3x2、4x3 不溢出
+00:01 +2: WidgetScreen 支持类型筛选且切换不丢样式，320 宽 1.6 倍字体无溢出
+00:04 +3: Android 标准预览几何匹配 18/11 (180x110 dp) 且隐藏页脚，详细档保留页脚
+00:05 +4: iOS 预览标准 medium 保留页脚且宽高比为 1.5，紧凑档无页脚
+00:05 +5: 默认非 Android 预览（无 override）保留 1.5 宽高比与标准页脚约定
+00:05 +6: 所有十类小组件在中英双语、Android标准(18/11无页脚)与iOS标准(1.5含页脚)下无溢出
+00:05 +7: All tests passed!

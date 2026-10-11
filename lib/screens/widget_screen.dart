@@ -887,6 +887,13 @@ enum WidgetDisplayMode {
 
   String get label => WidgetUiCopy.displayModeLabel(id);
   String get description => WidgetUiCopy.displayModeDescription(id);
+
+  double aspectRatio({bool isAndroid = false}) {
+    if (this == WidgetDisplayMode.standard && isAndroid) {
+      return 18 / 11;
+    }
+    return previewAspectRatio;
+  }
 }
 
 class _WidgetDisplayModePanel extends StatelessWidget {
@@ -1222,47 +1229,65 @@ class _AddWidgetButtonState extends State<_AddWidgetButton> {
 class WidgetPreviewCard extends StatelessWidget {
   final WidgetPreviewKind kind;
   final WidgetDisplayMode displayMode;
+  final TargetPlatform? platformOverride;
 
   const WidgetPreviewCard.todo({
     super.key,
     this.displayMode = WidgetDisplayMode.standard,
+    this.platformOverride,
   }) : kind = WidgetPreviewKind.todo;
   const WidgetPreviewCard.focus({
     super.key,
     this.displayMode = WidgetDisplayMode.standard,
+    this.platformOverride,
   }) : kind = WidgetPreviewKind.focus;
   const WidgetPreviewCard.habit({
     super.key,
     this.displayMode = WidgetDisplayMode.standard,
+    this.platformOverride,
   }) : kind = WidgetPreviewKind.habit;
   const WidgetPreviewCard.calendar({
     super.key,
     this.displayMode = WidgetDisplayMode.standard,
+    this.platformOverride,
   }) : kind = WidgetPreviewKind.calendar;
   const WidgetPreviewCard.schedule({
     super.key,
     this.displayMode = WidgetDisplayMode.standard,
+    this.platformOverride,
   }) : kind = WidgetPreviewKind.schedule;
   const WidgetPreviewCard.goal({
     super.key,
     this.displayMode = WidgetDisplayMode.standard,
+    this.platformOverride,
   }) : kind = WidgetPreviewKind.goal;
   const WidgetPreviewCard.course({
     super.key,
     this.displayMode = WidgetDisplayMode.standard,
+    this.platformOverride,
   }) : kind = WidgetPreviewKind.course;
   const WidgetPreviewCard.note({
     super.key,
     this.displayMode = WidgetDisplayMode.standard,
+    this.platformOverride,
   }) : kind = WidgetPreviewKind.note;
   const WidgetPreviewCard.anniversary({
     super.key,
     this.displayMode = WidgetDisplayMode.standard,
+    this.platformOverride,
   }) : kind = WidgetPreviewKind.anniversary;
   const WidgetPreviewCard.diary({
     super.key,
     this.displayMode = WidgetDisplayMode.standard,
+    this.platformOverride,
   }) : kind = WidgetPreviewKind.diary;
+
+  bool _resolveIsAndroid(BuildContext context) {
+    if (platformOverride != null) {
+      return platformOverride == TargetPlatform.android;
+    }
+    return PlatformInfo.isAndroid;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1313,6 +1338,13 @@ class WidgetPreviewCard extends StatelessWidget {
         displayColor: widgetTheme.text,
       ),
     );
+    final isAndroidPlatform = _resolveIsAndroid(context);
+    final baseAspectRatio = displayMode.aspectRatio(
+      isAndroid: isAndroidPlatform,
+    );
+    final showFooter = isAndroidPlatform
+        ? displayMode == WidgetDisplayMode.detailed
+        : displayMode != WidgetDisplayMode.compact;
     return Semantics(
       label: '$title ${displayMode.previewCellLabel}',
       child: LayoutBuilder(
@@ -1329,7 +1361,7 @@ class WidgetPreviewCard extends StatelessWidget {
               width: width,
               child: AspectRatio(
                 aspectRatio:
-                    displayMode.previewAspectRatio /
+                    baseAspectRatio /
                     (MediaQuery.textScalerOf(context).scale(12) / 12).clamp(
                       1.0,
                       2.0,
@@ -1497,8 +1529,7 @@ class WidgetPreviewCard extends StatelessWidget {
                                       },
                                     ),
                                   ),
-                                  if (displayMode !=
-                                      WidgetDisplayMode.compact) ...[
+                                  if (showFooter) ...[
                                     const SizedBox(height: 10),
                                     _WidgetPreviewNav(
                                       selectedIndex: switch (kind) {

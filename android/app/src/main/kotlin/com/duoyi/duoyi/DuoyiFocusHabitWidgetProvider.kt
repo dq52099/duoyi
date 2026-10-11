@@ -17,7 +17,9 @@ import es.antonborri.home_widget.HomeWidgetPlugin
 open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED || intent.action == timerFinishedAction) {
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED ||
+            intent.action == timerFinishedAction ||
+            intent.action == timerCapAction) {
             requestUpdate(context)
         }
     }
@@ -115,8 +117,13 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                     (countUp || storedRemaining != totalSeconds)
                 val exactFinish = canScheduleExactTimerFinish(context)
                 val showEndTime = timerRunning && !countUp && !exactFinish && endsAt > 0L
-                val timerRemainingSeconds = if (countUp && timerRunning && startedAt > 0L) {
-                    ((now - startedAt).coerceAtLeast(0L) / 1000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                val isAtOrPastCap = countUp && DuoyiWidgetCountUpCapCore.isAtOrPastCap(startedAt, now)
+                val timerRemainingSeconds = if (countUp) {
+                    if (timerRunning && startedAt > 0L) {
+                        DuoyiWidgetCountUpCapCore.computeElapsedSeconds(startedAt, now)
+                    } else {
+                        DuoyiWidgetCountUpCapCore.clampPausedSeconds(storedRemaining)
+                    }
                 } else currentTimerRemainingSeconds(prefs, timerRunning, now)
                 val timerLabel = DuoyiWidgetCopy.localizeTimerLabel(
                     prefs.getString("focus_timer_label", if (isZh) "专注倒计时" else "Focus countdown")
@@ -147,12 +154,13 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                     timerLabel = timerLabel,
                     remainingSeconds = timerRemainingSeconds,
                     paused = paused,
-                    storedRemaining = storedRemaining,
+                    storedRemaining = if (countUp) DuoyiWidgetCountUpCapCore.clampPausedSeconds(storedRemaining) else storedRemaining,
                     expired = expired,
                     nextFocusLabel = nextFocusLabel,
                     appLocale = appLocale,
                     isZh = isZh,
-                    timeZone = java.util.TimeZone.getTimeZone(frame.core.clock.zone)
+                    timeZone = java.util.TimeZone.getTimeZone(frame.core.clock.zone),
+                    publicationState = frame.core.publicationState,
                 )
                 val timerHint = DuoyiWidgetCopy.focusTimerHint(
                     timerRunning = timerRunning,
@@ -183,7 +191,8 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                     R.id.widget_focus_streak_count,
                     timerText
                 )
-                val liveSupported = countUp || Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+                val liveSupported = if (countUp) DuoyiWidgetCountUpCapCore.isLiveCountUpEligible(startedAt, now)
+                    else Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
                 val live = sessionTrusted && timerRunning && liveSupported && !showEndTime
                 views.setViewVisibility(R.id.widget_focus_live_timer, if (live) View.VISIBLE else View.GONE)
                 views.setViewVisibility(R.id.widget_focus_streak_count, if (live) View.GONE else View.VISIBLE)
@@ -196,7 +205,55 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 views.setChronometer(R.id.widget_focus_live_timer, base, null, live)
                 // The accepted commit alone may update 14101; invalidated frames preserve it.
                 val timerAlarmEffect: (() -> Unit)? = if (sessionTrusted) {
-                    { scheduleTimerFinish(context, if (timerRunning && !countUp) endsAt else 0L) }
+                    {
+                        val store = DuoyiWidgetPublicationStore.forContext(context)
+                        val read = store.read(nonBlocking = true)
+                        val envelope = read.envelope
+                        if (envelope != null) {
+                            val doc = envelope.document
+                            val canonicalValues = doc.values
+                            val canonicalRunning = canonicalValues["focus_timer_running"] == true
+                            val canonicalCountUp = canonicalValues["focus_timer_count_up"] == true
+                            val canonicalStartedAt = (canonicalValues["focus_timer_started_at_millis"] as? Number)?.toLong() ?: 0L
+                            val canonicalEndsAt = (canonicalValues["focus_timer_ends_at_millis"] as? Number)?.toLong() ?: 0L
+                            val matches = DuoyiWidgetCountUpCapCore.isCanonicalMatch(
+                                canonicalStateWire = doc.state.wire,
+                                canonicalNonce = doc.ownerEpoch,
+                                canonicalRunning = canonicalRunning,
+                                canonicalCountUp = canonicalCountUp,
+                                canonicalStartedAt = canonicalStartedAt,
+                                canonicalEndsAt = canonicalEndsAt,
+                                frameNonce = frame.core.nonce,
+                                frameRunning = storedRunning,
+                                frameCountUp = countUp,
+                                frameStartedAt = startedAt,
+                                frameEndsAt = endsAt,
+                            )
+                            if (matches) {
+                                store.acceptSnapshot(envelope) {
+                                    scheduleTimerFinish(context, if (timerRunning && !countUp) endsAt else 0L)
+                                    val effectNow = System.currentTimeMillis()
+                                    val decision = DuoyiWidgetCountUpCapCore.evaluateCapEffect(
+                                        sessionTrusted = sessionTrusted,
+                                        storedRunning = timerRunning,
+                                        countUp = countUp,
+                                        startedAt = startedAt,
+                                        capturedAtCap = isAtOrPastCap,
+                                        effectNowMillis = effectNow,
+                                    )
+                                    if (decision.scheduleCapMillis != null) {
+                                        scheduleCountUpCap(context, decision.scheduleCapMillis)
+                                    } else if (decision.cancelAlarm) {
+                                        scheduleCountUpCap(context, 0L)
+                                    }
+                                    if (decision.needsRefresh) {
+                                        requestUpdate(context)
+                                    }
+                                    true
+                                }
+                            }
+                        }
+                    }
                 } else null
                 val timerOnly = DuoyiWidgetDisplayMode.isCompact(prefs, id) || timerRunning || paused || expired
                 views.setViewVisibility(R.id.widget_focus_count_column, if (timerOnly) View.GONE else View.VISIBLE)
@@ -329,6 +386,7 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
 
     companion object {
         private const val timerFinishedAction = "com.duoyi.duoyi.WIDGET_FOCUS_TIMER_FINISHED"
+        private const val timerCapAction = "com.duoyi.duoyi.WIDGET_FOCUS_COUNT_UP_CAP"
         private fun canScheduleExactTimerFinish(context: Context): Boolean {
             val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             return Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
@@ -345,6 +403,20 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 } else manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endsAt, pending)
             } catch (_: SecurityException) {
                 manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endsAt, pending)
+            }
+        }
+        private fun scheduleCountUpCap(context: Context, capMillis: Long) {
+            val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(context, DuoyiFocusHabitWidgetProvider::class.java).setAction(timerCapAction)
+            val pending = PendingIntent.getBroadcast(context, 14103, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            if (capMillis <= 0L) { manager.cancel(pending); return }
+            try {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
+                    manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, capMillis, pending)
+                } else manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, capMillis, pending)
+            } catch (_: SecurityException) {
+                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, capMillis, pending)
             }
         }
 

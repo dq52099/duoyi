@@ -469,6 +469,174 @@ class DuoyiWidgetContentTest {
         }
     }
 
+    @Test
+    fun anniversaryItemsUnpublishedStatesUseNeutralPromptAndSingleSlotAcrossBothLanguages() {
+        val states = listOf(
+            DuoyiWidgetPublicationDocument.State.CLEARED,
+            DuoyiWidgetPublicationDocument.State.BLOCKED,
+            null,
+        )
+        val languages = listOf(true to "打开多仪以更新小组件", false to "Open Duoyi to update this widget")
+        val slots = listOf(
+            slot("anniversary_highlight_1", "Private wedding anniversary", "anniv-1"),
+            slot("anniversary_highlight_2", "Private graduation", "anniv-2"),
+            slot("memorial_highlight_1", "Private birthday", "mem-1"),
+        )
+
+        for (state in states) {
+            for ((isZh, expectedPrompt) in languages) {
+                listOf(false, true).forEach { isFresh ->
+                    val items = DuoyiWidgetContent.resolveAnniversaryItems(
+                        slots = slots,
+                        isFresh = isFresh,
+                        isZh = isZh,
+                        publicationState = state,
+                    )
+                    assertEquals("Unpublished anniversary items must only contain 1 item (secondary rows empty)", 1, items.size)
+                    val first = items.single()
+                    assertEquals("anniversary_highlight_1", first.sourceKey)
+                    assertEquals(expectedPrompt, first.text)
+                    assertEquals("duoyi://anniversary", first.target)
+                    assertNull(first.identity)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun anniversaryItemsPublishedStaleVsPublishedFreshVsEmpty() {
+        val slots = listOf(
+            slot("anniversary_highlight_1", "Real anniversary", "anniv-1"),
+            slot("anniversary_highlight_2", "Real graduation", "anniv-2"),
+        )
+
+        listOf(
+            Triple(true, "日期数据待刷新", "· 暂无近期纪念日"),
+            Triple(false, "Dates pending refresh", "· No upcoming anniversaries"),
+        ).forEach { (isZh, expectedStale, expectedEmpty) ->
+            // Published stale
+            val staleItems = DuoyiWidgetContent.resolveAnniversaryItems(
+                slots = slots,
+                isFresh = false,
+                isZh = isZh,
+                publicationState = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+            )
+            assertEquals(1, staleItems.size)
+            assertEquals(expectedStale, staleItems.single().text)
+            assertEquals("duoyi://anniversary", staleItems.single().target)
+            assertNull(staleItems.single().identity)
+
+            // Default parameter matches published behavior
+            val defaultStaleItems = DuoyiWidgetContent.resolveAnniversaryItems(
+                slots = slots,
+                isFresh = false,
+                isZh = isZh,
+            )
+            assertEquals(staleItems, defaultStaleItems)
+
+            // Published fresh with real data
+            val freshItems = DuoyiWidgetContent.resolveAnniversaryItems(
+                slots = slots,
+                isFresh = true,
+                isZh = isZh,
+                publicationState = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+            )
+            assertEquals(2, freshItems.size)
+            assertEquals("Real anniversary", freshItems[0].text)
+            assertEquals("duoyi://anniversary/anniv-1", freshItems[0].target)
+            assertEquals("anniv-1", freshItems[0].identity)
+
+            // Published fresh with empty data
+            val emptyItems = DuoyiWidgetContent.resolveAnniversaryItems(
+                slots = emptyList(),
+                isFresh = true,
+                isZh = isZh,
+                publicationState = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+            )
+            assertFallback(emptyItems, expectedEmpty)
+        }
+    }
+
+    @Test
+    fun calendarSummaryUnpublishedStatesUseNeutralPromptAndGenericTargetAcrossBothLanguages() {
+        val states = listOf(
+            DuoyiWidgetPublicationDocument.State.CLEARED,
+            DuoyiWidgetPublicationDocument.State.BLOCKED,
+            null,
+        )
+        val languages = listOf(true to "打开多仪以更新小组件", false to "Open Duoyi to update this widget")
+
+        for (state in states) {
+            for ((isZh, expectedPrompt) in languages) {
+                listOf(false, true).forEach { isFresh ->
+                    val result = DuoyiWidgetContent.resolveCalendarSummaryAndTarget(
+                        rawSummary = "Private executive review",
+                        rawSchedule1Id = "duoyi://todo/private-id-123",
+                        isFresh = isFresh,
+                        isZh = isZh,
+                        publicationState = state,
+                    )
+                    assertEquals(expectedPrompt, result.summary)
+                    assertEquals("duoyi://calendar", result.target)
+                    assertFalse(result.isReal)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun calendarSummaryPublishedStaleVsPublishedFreshVsEmpty() {
+        listOf(
+            Triple(true, "今日数据待刷新", "今日没有日程"),
+            Triple(false, "Today’s data pending refresh", "No events today"),
+        ).forEach { (isZh, expectedStale, expectedEmpty) ->
+            // Published stale
+            val staleResult = DuoyiWidgetContent.resolveCalendarSummaryAndTarget(
+                rawSummary = "Real meeting",
+                rawSchedule1Id = "duoyi://todo/meet-42",
+                isFresh = false,
+                isZh = isZh,
+                publicationState = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+            )
+            assertEquals(expectedStale, staleResult.summary)
+            assertEquals("duoyi://calendar", staleResult.target)
+            assertFalse(staleResult.isReal)
+
+            // Default parameter matches published behavior
+            val defaultStaleResult = DuoyiWidgetContent.resolveCalendarSummaryAndTarget(
+                rawSummary = "Real meeting",
+                rawSchedule1Id = "duoyi://todo/meet-42",
+                isFresh = false,
+                isZh = isZh,
+            )
+            assertEquals(staleResult, defaultStaleResult)
+
+            // Published fresh with real content
+            val freshResult = DuoyiWidgetContent.resolveCalendarSummaryAndTarget(
+                rawSummary = "Real meeting",
+                rawSchedule1Id = "duoyi://todo/meet-42",
+                isFresh = true,
+                isZh = isZh,
+                publicationState = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+            )
+            assertEquals("Real meeting", freshResult.summary)
+            assertEquals("duoyi://todo/meet-42", freshResult.target)
+            assertTrue(freshResult.isReal)
+
+            // Published fresh with empty placeholder
+            val emptyResult = DuoyiWidgetContent.resolveCalendarSummaryAndTarget(
+                rawSummary = "· No events today",
+                rawSchedule1Id = "duoyi://todo/meet-42",
+                isFresh = true,
+                isZh = isZh,
+                publicationState = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+            )
+            assertEquals(expectedEmpty, emptyResult.summary)
+            assertEquals("duoyi://calendar", emptyResult.target)
+            assertFalse(emptyResult.isReal)
+        }
+    }
+
     private fun slot(sourceKey: String, text: String?, target: String?) =
         DuoyiAnniversaryRawSlot(sourceKey = sourceKey, text = text, target = target)
 

@@ -272,6 +272,220 @@ class DuoyiFrozenWidgetPreferencesTest {
         assertEquals("Trusted old timer", prefs.getString("focus_timer_label", null))
     }
 
+    @Test
+    fun unpublishedStatesClearedBlockedAndAbsentUseNeutralPromptAcrossBothLanguages() {
+        val states = listOf("cleared", "blocked", "invalid_wire", null)
+        val languages = listOf("zh" to true, "en" to false)
+
+        for (stateWire in states) {
+            for ((language, isZh) in languages) {
+                val values = linkedMapOf<String, Any?>(
+                    "widget_snapshot_day" to "2024-06-15",
+                    "widget_snapshot_utc_offset_minutes" to 0,
+                    "widget_account_nonce" to "session-nonce",
+                    "widget_locale" to language,
+                ).apply {
+                    if (stateWire != null) {
+                        put("widget_publication_state", stateWire)
+                    }
+                    dailyTextKeys().forEach { put(it, "private-old-content:$it") }
+                    listOf(
+                        "todo_count",
+                        "todo_top3_count",
+                        "habit_percent",
+                        "habit_active_count",
+                        "pomodoro_today",
+                        "focus_minutes_today",
+                    ).forEach { put(it, 42) }
+                    listOf(
+                        "todo_top3_1_id",
+                        "todo_top3_2_id",
+                        "habit_quick_check_id",
+                        "goal_highlight_1_id",
+                    ).forEach { put(it, "entity-$it") }
+                    put("focus_timer_running", true)
+                    put("focus_timer_ends_at_millis", 1718452900000L)
+                    put("next_focus_label", "Old account plan 45-min")
+                }
+
+                val frameCore = core(
+                    values = values,
+                    systemLocaleTag = if (isZh) "zh-CN" else "en-US",
+                )
+                val display = DuoyiWidgetRenderFrame.displayValues(frameCore)
+                val prefs = DuoyiFrozenWidgetPreferences(display)
+
+                // 1. Verify publicationState is non-published
+                val expectedDocState = when (stateWire) {
+                    "cleared" -> DuoyiWidgetPublicationDocument.State.CLEARED
+                    "blocked" -> DuoyiWidgetPublicationDocument.State.BLOCKED
+                    else -> null
+                }
+                assertEquals(expectedDocState, frameCore.publicationState)
+                assertFalse("Unpublished frame must not be trusted", frameCore.sessionTrusted)
+                assertFalse("Unpublished frame must not be fresh", frameCore.fresh)
+
+                // 2. Daily texts match neutral prompt for primary rows and empty for secondary
+                val expectedTexts = expectedUnpublishedText(isZh)
+                assertEquals(
+                    "State $stateWire ($language) daily texts mismatch",
+                    expectedTexts,
+                    dailyTextKeys().associateWith { display[it] as String },
+                )
+
+                // 3. Counters are zeroed
+                listOf(
+                    "todo_count",
+                    "todo_top3_count",
+                    "habit_percent",
+                    "habit_active_count",
+                    "pomodoro_today",
+                    "focus_minutes_today",
+                ).forEach { key ->
+                    assertEquals("Counter $key should be 0", 0, display[key])
+                }
+
+                // 4. Entity IDs are cleared
+                listOf(
+                    "todo_top3_1_id",
+                    "todo_top3_2_id",
+                    "habit_quick_check_id",
+                    "goal_highlight_1_id",
+                ).forEach { key ->
+                    assertEquals("Entity ID $key should be blank", "", display[key])
+                }
+
+                // 5. Timers stripped and safe next focus label
+                assertTrue(display.keys.none { it.startsWith("focus_timer_") })
+                assertEquals(
+                    if (isZh) "25 分钟专注" else "25-min focus",
+                    display["next_focus_label"],
+                )
+
+                // 6. No private account / business data leaked in daily display slots
+                dailyTextKeys().forEach { key ->
+                    assertFalse(display[key] == "private-old-content:$key")
+                }
+
+                // 7. Refresh accessibility matches neutral prompt
+                val neutralPrompt = if (isZh) "打开多仪以更新小组件" else "Open Duoyi to update this widget"
+                assertEquals(
+                    neutralPrompt,
+                    DuoyiWidgetCopy.refreshContentDescription(
+                        isFresh = frameCore.fresh,
+                        isZh = isZh,
+                        publicationState = frameCore.publicationState,
+                    ),
+                )
+
+                // 8. Focus summary matches neutral prompt
+                assertEquals(
+                    neutralPrompt,
+                    DuoyiWidgetCopy.focusSummary(
+                        raw = prefs.getString("focus_summary", null),
+                        isZh = isZh,
+                        publicationState = frameCore.publicationState,
+                    ),
+                )
+                assertEquals(
+                    neutralPrompt,
+                    DuoyiWidgetCopy.focusSummary(
+                        raw = prefs.getString("focus_summary", null),
+                        isZh = isZh,
+                    ),
+                )
+
+                // 9. Raw values in core were not modified
+                assertEquals(42, frameCore.rawValues["todo_count"])
+                assertEquals("entity-todo_top3_1_id", frameCore.rawValues["todo_top3_1_id"])
+                assertEquals("private-old-content:habit_summary", frameCore.rawValues["habit_summary"])
+            }
+        }
+    }
+
+    @Test
+    fun publishedStaleVsPublishedFreshVsUnpublishedDistinction() {
+        listOf("zh" to true, "en" to false).forEach { (language, isZh) ->
+            val neutralPrompt = if (isZh) "打开多仪以更新小组件" else "Open Duoyi to update this widget"
+            val normalEmptyFocus = if (isZh) "今日还未专注" else "No focus sessions today"
+            val staleFocus = if (isZh) "今日数据待刷新" else "Today’s data pending refresh"
+
+            // A. Published Fresh: retains real content; ordinary empty content is NOT treated as unpublished
+            val freshValues = baseValues(day = "2024-06-15", language = language).apply {
+                put("todo_top3_1", "Real active task")
+                put("focus_summary", "") // ordinary empty focus session
+            }
+            val freshCore = core(values = freshValues, systemLocaleTag = if (isZh) "zh-CN" else "en-US")
+            assertTrue("Fresh core must be fresh", freshCore.fresh)
+            assertEquals(DuoyiWidgetPublicationDocument.State.PUBLISHED, freshCore.publicationState)
+            val freshDisplay = DuoyiWidgetRenderFrame.displayValues(freshCore)
+            val freshPrefs = DuoyiFrozenWidgetPreferences(freshDisplay)
+
+            assertEquals("Real active task", freshDisplay["todo_top3_1"])
+            assertEquals(
+                normalEmptyFocus,
+                DuoyiWidgetCopy.focusSummary(freshPrefs.getString("focus_summary", null), isZh, freshCore.publicationState),
+            )
+            assertEquals(
+                normalEmptyFocus,
+                DuoyiWidgetCopy.focusSummary(freshPrefs.getString("focus_summary", null), isZh),
+            )
+            assertEquals(
+                if (isZh) "刷新小组件" else "Refresh widgets",
+                DuoyiWidgetCopy.refreshContentDescription(freshCore.fresh, isZh, freshCore.publicationState),
+            )
+
+            // B. Published Stale (day mismatch): retains pending-refresh stale texts
+            val staleValues = baseValues(day = "2024-06-14", language = language).apply {
+                dailyTextKeys().forEach { put(it, "old-business-content:$it") }
+            }
+            val staleCore = core(values = staleValues, systemLocaleTag = if (isZh) "zh-CN" else "en-US")
+            assertFalse("Stale core must not be fresh", staleCore.fresh)
+            assertEquals(DuoyiWidgetPublicationDocument.State.PUBLISHED, staleCore.publicationState)
+            val staleDisplay = DuoyiWidgetRenderFrame.displayValues(staleCore)
+            val stalePrefs = DuoyiFrozenWidgetPreferences(staleDisplay)
+
+            assertEquals(expectedStaleText(isZh), dailyTextKeys().associateWith { staleDisplay[it] as String })
+            assertEquals(
+                staleFocus,
+                DuoyiWidgetCopy.focusSummary(stalePrefs.getString("focus_summary", null), isZh, staleCore.publicationState),
+            )
+            assertEquals(
+                staleFocus,
+                DuoyiWidgetCopy.focusSummary(stalePrefs.getString("focus_summary", null), isZh),
+            )
+            assertEquals(
+                if (isZh) "数据待刷新，点按更新" else "Data pending refresh, tap to update",
+                DuoyiWidgetCopy.refreshContentDescription(staleCore.fresh, isZh, staleCore.publicationState),
+            )
+
+            // C. Unpublished (cleared): uses neutral prompt
+            val unpubValues = baseValues(day = "2024-06-15", language = language).apply {
+                put("widget_publication_state", "cleared")
+                dailyTextKeys().forEach { put(it, "old-business-content:$it") }
+            }
+            val unpubCore = core(values = unpubValues, systemLocaleTag = if (isZh) "zh-CN" else "en-US")
+            assertFalse("Unpublished core must not be fresh", unpubCore.fresh)
+            assertEquals(DuoyiWidgetPublicationDocument.State.CLEARED, unpubCore.publicationState)
+            val unpubDisplay = DuoyiWidgetRenderFrame.displayValues(unpubCore)
+            val unpubPrefs = DuoyiFrozenWidgetPreferences(unpubDisplay)
+
+            assertEquals(expectedUnpublishedText(isZh), dailyTextKeys().associateWith { unpubDisplay[it] as String })
+            assertEquals(
+                neutralPrompt,
+                DuoyiWidgetCopy.focusSummary(unpubPrefs.getString("focus_summary", null), isZh, unpubCore.publicationState),
+            )
+            assertEquals(
+                neutralPrompt,
+                DuoyiWidgetCopy.focusSummary(unpubPrefs.getString("focus_summary", null), isZh),
+            )
+            assertEquals(
+                neutralPrompt,
+                DuoyiWidgetCopy.refreshContentDescription(unpubCore.fresh, isZh, unpubCore.publicationState),
+            )
+        }
+    }
+
     private fun core(
         values: Map<String, *>,
         instant: String = "2024-06-15T12:00:00Z",
@@ -350,6 +564,31 @@ class DuoyiFrozenWidgetPreferencesTest {
             "diary_highlight" to pending,
             "anniversary_highlight" to if (isZh) "日期数据待刷新" else "Dates pending refresh",
             "memorial_highlight" to if (isZh) "日期数据待刷新" else "Dates pending refresh",
+        ).forEach { (prefix, firstSlot) ->
+            for (slot in 1..3) expected["${prefix}_$slot"] = if (slot == 1) firstSlot else ""
+        }
+        return expected
+    }
+
+    private fun expectedUnpublishedText(isZh: Boolean): Map<String, String> {
+        val message = if (isZh) "打开多仪以更新小组件" else "Open Duoyi to update this widget"
+        val expected = linkedMapOf(
+            "habit_summary" to message,
+            "streak_summary" to "",
+            "habit_quick_check_label" to "",
+            "focus_summary" to message,
+            "today_event_summary" to message,
+            "calendar_month_summary" to if (isZh) "月历 · 安排日程" else "Month view · Plan your day",
+        )
+        listOf(
+            "todo_top3" to message,
+            "goal_highlight" to message,
+            "schedule_highlight" to message,
+            "course_highlight" to message,
+            "note_highlight" to message,
+            "diary_highlight" to message,
+            "anniversary_highlight" to message,
+            "memorial_highlight" to message,
         ).forEach { (prefix, firstSlot) ->
             for (slot in 1..3) expected["${prefix}_$slot"] = if (slot == 1) firstSlot else ""
         }

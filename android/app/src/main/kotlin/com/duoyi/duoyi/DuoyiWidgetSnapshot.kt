@@ -183,7 +183,7 @@ object DuoyiWidgetSnapshot {
         }
         val isZh = DuoyiWidgetCopy.isZh(prefs)
         views.setContentDescription(R.id.widget_refresh,
-            DuoyiWidgetCopy.refreshContentDescription(frame.fresh, isZh))
+            DuoyiWidgetCopy.refreshContentDescription(frame.fresh, isZh, frame.core.publicationState))
         if (frame.fresh) return
         val numericIds = when (views.layoutId) {
             R.layout.duoyi_todo_widget -> intArrayOf(R.id.widget_todo_count)

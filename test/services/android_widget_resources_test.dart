@@ -2330,7 +2330,8 @@ void main() {
         ),
       );
       expect(widgetScreen, contains('AspectRatio('));
-      expect(widgetScreen, contains('displayMode.previewAspectRatio'));
+      expect(widgetScreen, contains('displayMode.aspectRatio('));
+      expect(widgetScreen, contains('isAndroid: isAndroidPlatform,'));
       expect(widgetScreen, contains('displayMode.previewCellLabel'));
       expect(
         mainActivity,
@@ -3547,11 +3548,12 @@ void main() {
           expect(
             source,
             contains(
-              'DuoyiWidgetContent.resolveAnniversaryItems(rawSlots, isFresh, isZh)',
+              'DuoyiWidgetContent.resolveAnniversaryItems(',
             ),
             reason:
                 'Anniversary selection must preserve each displayed text and its target as one item.',
           );
+          expect(source, contains('frame.core.publicationState,'));
           for (final key in [
             'anniversary_highlight_1',
             'anniversary_highlight_2',

@@ -1,0 +1,70 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/services/android_widget_pin_wait_test.dart
+00:00 +0: matching confirmation awaits clear acknowledgement before return
+00:00 +1: confirmed_unverified waits for clear acknowledgement before return
+00:00 +2: concurrent request ids retain independent receipt fields and wait tokens
+00:00 +3: custom timeout is registered and zero or blank requests do no channel work
+00:00 +4: begin registration time counts toward the timeout
+[AndroidWidgetManager] pin result timed out; keep pending request alive for late launcher callback requestId=slow-registration
+00:00 +5: keeps the active token until an in-flight poll RPC completes
+[AndroidWidgetManager] pin result timed out; keep pending request alive for late launcher callback requestId=slow-poll
+00:00 +6: late matching receipts succeed after clear acknowledgement
+00:00 +7: timeout ends retention without clearing or cancelling the pending pin
+[AndroidWidgetManager] pin result timed out; keep pending request alive for late launcher callback requestId=pin-timeout
+00:00 +8: mismatched receipt is ignored until matching id arrives
+00:00 +9: begin clear and end failures stay scoped to their request
+[AndroidWidgetManager] beginWait failed requestId=pin-begin-clear-error: PlatformException(begin_failed, pin-begin-clear-error, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      AndroidWidgetManager.waitForPinResult (package:duoyi/services/android_widget_manager.dart:334:15)
+<asynchronous suspension>
+#3      Future.wait.<anonymous closure> (dart:async/future.dart:546:21)
+<asynchronous suspension>
+#4      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/android_widget_pin_wait_test.dart:607:21)
+<asynchronous suspension>
+#5      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#6      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#7      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[AndroidWidgetManager] clearPinResult failed requestId=pin-clear-end-error: PlatformException(clear_failed, pin-clear-end-error, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      AndroidWidgetManager.clearPinResult (package:duoyi/services/android_widget_manager.dart:256:7)
+<asynchronous suspension>
+#3      AndroidWidgetManager.waitForPinResult (package:duoyi/services/android_widget_manager.dart:362:11)
+<asynchronous suspension>
+#4      Future.wait.<anonymous closure> (dart:async/future.dart:546:21)
+<asynchronous suspension>
+#5      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/android_widget_pin_wait_test.dart:607:21)
+<asynchronous suspension>
+#6      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#8      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[AndroidWidgetManager] endWait failed requestId=pin-clear-end-error: PlatformException(end_failed, pin-clear-end-error, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      AndroidWidgetManager.waitForPinResult (package:duoyi/services/android_widget_manager.dart:381:9)
+<asynchronous suspension>
+#3      Future.wait.<anonymous closure> (dart:async/future.dart:546:21)
+<asynchronous suspension>
+#4      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/android_widget_pin_wait_test.dart:607:21)
+<asynchronous suspension>
+#5      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#6      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#7      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+00:00 +10: lastPinResult reads a receipt without beginning retention or clearing it
+00:00 +11: clearPinResult remains idempotent for UI callers
+00:00 +12: All tests passed!

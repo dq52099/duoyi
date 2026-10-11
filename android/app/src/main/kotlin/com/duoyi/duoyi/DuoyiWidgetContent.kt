@@ -203,7 +203,20 @@ object DuoyiWidgetContent {
         slots: List<DuoyiAnniversaryRawSlot>,
         isFresh: Boolean,
         isZh: Boolean,
+        publicationState: DuoyiWidgetPublicationDocument.State? = DuoyiWidgetPublicationDocument.State.PUBLISHED,
     ): List<DuoyiAnniversaryItem> {
+        if (publicationState != DuoyiWidgetPublicationDocument.State.PUBLISHED) {
+            val neutralText = DuoyiWidgetCopy.unpublishedMessage(isZh)
+            return listOf(
+                DuoyiAnniversaryItem(
+                    sourceKey = "anniversary_highlight_1",
+                    text = neutralText,
+                    target = "duoyi://anniversary",
+                    identity = null,
+                )
+            )
+        }
+
         if (!isFresh) {
             val staleText = if (isZh) "日期数据待刷新" else "Dates pending refresh"
             return listOf(
@@ -317,7 +330,17 @@ object DuoyiWidgetContent {
         rawSchedule1Id: String?,
         isFresh: Boolean,
         isZh: Boolean,
+        publicationState: DuoyiWidgetPublicationDocument.State? = DuoyiWidgetPublicationDocument.State.PUBLISHED,
     ): DuoyiCalendarEventSummaryResult {
+        if (publicationState != DuoyiWidgetPublicationDocument.State.PUBLISHED) {
+            val neutralText = DuoyiWidgetCopy.unpublishedMessage(isZh)
+            return DuoyiCalendarEventSummaryResult(
+                summary = neutralText,
+                target = "duoyi://calendar",
+                isReal = false,
+            )
+        }
+
         if (!isFresh) {
             val staleText = if (isZh) "今日数据待刷新" else "Today’s data pending refresh"
             return DuoyiCalendarEventSummaryResult(

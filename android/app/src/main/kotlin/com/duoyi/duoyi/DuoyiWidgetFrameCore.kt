@@ -70,6 +70,11 @@ class DuoyiWidgetFrameCore(
         val endsAt = longCompat(rawValues["focus_timer_ends_at_millis"])
         if (sessionTrusted && running && !countUp && endsAt > clock.wallMillis &&
             endsAt <= currentClock.wallMillis) return "timer_expired"
+        val startedAt = longCompat(rawValues["focus_timer_started_at_millis"])
+        if (sessionTrusted && running && countUp &&
+            DuoyiWidgetCountUpCapCore.isCrossingCap(startedAt, clock.wallMillis, currentClock.wallMillis)) {
+            return "timer_capped"
+        }
         return null
     }
 

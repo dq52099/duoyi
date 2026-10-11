@@ -81,7 +81,12 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
                     DuoyiAnniversaryRawSlot("memorial_highlight_2", prefs.getString("memorial_highlight_2", null), prefs.getString("memorial_highlight_2_id", null)),
                     DuoyiAnniversaryRawSlot("memorial_highlight_3", prefs.getString("memorial_highlight_3", null), prefs.getString("memorial_highlight_3_id", null)),
                 )
-                val selectedItems = DuoyiWidgetContent.resolveAnniversaryItems(rawSlots, isFresh, isZh)
+                val selectedItems = DuoyiWidgetContent.resolveAnniversaryItems(
+                    rawSlots,
+                    isFresh,
+                    isZh,
+                    frame.core.publicationState,
+                )
 
                 val item1 = selectedItems.getOrNull(0)
                 val item2 = selectedItems.getOrNull(1)

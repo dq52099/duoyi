@@ -35,6 +35,29 @@ object DuoyiWidgetCopy {
         return raw
     }
 
+    fun unpublishedMessage(isZh: Boolean): String =
+        if (isZh) "打开多仪以更新小组件" else "Open Duoyi to update this widget"
+
+    fun unpublishedMessage(key: String, isZh: Boolean): String? {
+        val message = unpublishedMessage(isZh)
+        return when (key) {
+            "todo_top3_1", "habit_summary", "focus_summary", "today_event_summary",
+            "goal_highlight_1", "note_highlight_1", "diary_highlight_1",
+            "course_highlight_1", "schedule_highlight_1",
+            "anniversary_highlight_1", "memorial_highlight_1" -> message
+            "todo_top3_2", "todo_top3_3", "streak_summary",
+            "habit_quick_check_label",
+            "goal_highlight_2", "goal_highlight_3",
+            "note_highlight_2", "note_highlight_3",
+            "diary_highlight_2", "diary_highlight_3",
+            "course_highlight_2", "course_highlight_3",
+            "schedule_highlight_2", "schedule_highlight_3",
+            "anniversary_highlight_2", "anniversary_highlight_3",
+            "memorial_highlight_2", "memorial_highlight_3" -> ""
+            else -> null
+        }
+    }
+
     fun staleMessage(key: String, isZh: Boolean): String? {
         return if (isZh) {
             when (key) {
@@ -75,12 +98,14 @@ object DuoyiWidgetCopy {
         }
     }
 
-    fun refreshContentDescription(isFresh: Boolean, isZh: Boolean): String {
-        return if (isFresh) {
-            if (isZh) "刷新小组件" else "Refresh widgets"
-        } else {
-            if (isZh) "数据待刷新，点按更新" else "Data pending refresh, tap to update"
-        }
+    fun refreshContentDescription(
+        isFresh: Boolean,
+        isZh: Boolean,
+        publicationState: DuoyiWidgetPublicationDocument.State? = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+    ): String = when {
+        publicationState != DuoyiWidgetPublicationDocument.State.PUBLISHED -> unpublishedMessage(isZh)
+        isFresh -> if (isZh) "刷新小组件" else "Refresh widgets"
+        else -> if (isZh) "数据待刷新，点按更新" else "Data pending refresh, tap to update"
     }
 
     private fun navLabel(
@@ -143,7 +168,17 @@ object DuoyiWidgetCopy {
         else -> if (isZh) "下一轮" else "Next"
     }
 
-    fun focusSummary(raw: String?, isZh: Boolean): String {
+    fun focusSummary(
+        raw: String?,
+        isZh: Boolean,
+        publicationState: DuoyiWidgetPublicationDocument.State? = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+    ): String {
+        if (publicationState != DuoyiWidgetPublicationDocument.State.PUBLISHED) {
+            return unpublishedMessage(isZh)
+        }
+        if (raw == unpublishedMessage(true) || raw == unpublishedMessage(false)) {
+            return unpublishedMessage(isZh)
+        }
         if (raw.isNullOrBlank() || raw == "今日还未专注" || raw == "No focus sessions today") {
             return if (isZh) "今日还未专注" else "No focus sessions today"
         }
@@ -164,7 +199,9 @@ object DuoyiWidgetCopy {
         appLocale: Locale,
         isZh: Boolean,
         timeZone: TimeZone = TimeZone.getDefault(),
+        publicationState: DuoyiWidgetPublicationDocument.State? = DuoyiWidgetPublicationDocument.State.PUBLISHED,
     ): String = when {
+        publicationState != DuoyiWidgetPublicationDocument.State.PUBLISHED -> unpublishedMessage(isZh)
         !sessionTrusted -> if (isZh) "数据待刷新，打开多仪更新" else "Data pending refresh, open Duoyi to update"
         showEndTime -> {
             val timeStr = SimpleDateFormat("HH:mm", appLocale).apply { this.timeZone = timeZone }.format(Date(endsAt))
@@ -279,6 +316,10 @@ object DuoyiWidgetCopy {
         return raw
     }
     fun habitQuickCheckLabel(raw: String?, isZh: Boolean): String {
+        if (raw == "") return ""
+        if (raw == unpublishedMessage(isZh) || raw == unpublishedMessage(!isZh)) {
+            return raw
+        }
         if (raw == "打开习惯刷新" || raw == "Open habits to refresh") {
             return if (isZh) "打开习惯刷新" else "Open habits to refresh"
         }

@@ -119,6 +119,7 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
                     rawSchedule1Id = rawSchedule1Id,
                     isFresh = isFresh,
                     isZh = isZh,
+                    publicationState = frame.core.publicationState,
                 )
                 val canFitEventSummary = !compact && (height == 0 || height >= 140)
 

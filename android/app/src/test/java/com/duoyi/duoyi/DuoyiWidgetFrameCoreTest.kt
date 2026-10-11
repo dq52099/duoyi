@@ -259,6 +259,254 @@ class DuoyiWidgetFrameCoreTest {
     }
 
     @Test
+    fun runningCountUpCrossingItsCapRejectsTheFrame() {
+        val startMillis = Instant.parse("2024-06-15T12:00:00Z").toEpochMilli()
+        val capMillis = startMillis + DuoyiWidgetCountUpCapCore.COUNT_UP_CAP_MILLIS
+        val values = baseValues().apply {
+            put("focus_timer_running", true)
+            put("focus_timer_count_up", true)
+            put("focus_timer_started_at_millis", startMillis)
+        }
+        val beforeCap = DuoyiWidgetFrameClock(
+            wallMillis = capMillis - 100L,
+            elapsedMillis = 10_000L,
+            zone = ZoneId.of("UTC"),
+        )
+        val frame = core(values = values, clock = beforeCap)
+        val atCap = DuoyiWidgetFrameClock(
+            wallMillis = capMillis,
+            elapsedMillis = 10_100L,
+            zone = ZoneId.of("UTC"),
+        )
+
+        assertEquals("timer_capped", reason(frame, currentClock = atCap))
+    }
+
+    @Test
+    fun runningCountUpEntirelyBeforeOrAfterCapIsAccepted() {
+        val startMillis = Instant.parse("2024-06-15T12:00:00Z").toEpochMilli()
+        val capMillis = startMillis + DuoyiWidgetCountUpCapCore.COUNT_UP_CAP_MILLIS
+        val values = baseValues().apply {
+            put("focus_timer_running", true)
+            put("focus_timer_count_up", true)
+            put("focus_timer_started_at_millis", startMillis)
+        }
+
+        // Before cap
+        val beforeFrame = core(
+            values = values,
+            clock = DuoyiWidgetFrameClock(
+                wallMillis = capMillis - 5_000L,
+                elapsedMillis = 10_000L,
+                zone = ZoneId.of("UTC"),
+            ),
+        )
+        val stillBefore = DuoyiWidgetFrameClock(
+            wallMillis = capMillis - 4_900L,
+            elapsedMillis = 10_100L,
+            zone = ZoneId.of("UTC"),
+        )
+        assertNull(reason(beforeFrame, currentClock = stillBefore))
+
+        // Captured after cap: built as capped UI, not rejected again
+        val afterFrame = core(
+            values = values,
+            clock = DuoyiWidgetFrameClock(
+                wallMillis = capMillis + 1_000L,
+                elapsedMillis = 20_000L,
+                zone = ZoneId.of("UTC"),
+            ),
+        )
+        val stillAfter = DuoyiWidgetFrameClock(
+            wallMillis = capMillis + 1_100L,
+            elapsedMillis = 20_100L,
+            zone = ZoneId.of("UTC"),
+        )
+        assertNull(reason(afterFrame, currentClock = stillAfter))
+    }
+
+    @Test
+    fun countUpCapRejectionRespectsSessionTrustAndRunningState() {
+        val startMillis = Instant.parse("2024-06-15T12:00:00Z").toEpochMilli()
+        val capMillis = startMillis + DuoyiWidgetCountUpCapCore.COUNT_UP_CAP_MILLIS
+
+        // Paused count-up does not trigger timer_capped
+        val pausedValues = baseValues().apply {
+            put("focus_timer_running", false)
+            put("focus_timer_count_up", true)
+            put("focus_timer_started_at_millis", startMillis)
+        }
+        val pausedFrame = core(
+            values = pausedValues,
+            clock = DuoyiWidgetFrameClock(
+                wallMillis = capMillis - 100L,
+                elapsedMillis = 10_000L,
+                zone = ZoneId.of("UTC"),
+            ),
+        )
+        val atCap = DuoyiWidgetFrameClock(
+            wallMillis = capMillis,
+            elapsedMillis = 10_100L,
+            zone = ZoneId.of("UTC"),
+        )
+        assertNull(reason(pausedFrame, currentClock = atCap))
+
+        // Untrusted session does not trigger timer_capped
+        val untrustedValues = pausedValues.apply {
+            put("focus_timer_running", true)
+            put("widget_publication_state", "cleared")
+        }
+        val untrustedFrame = core(
+            values = untrustedValues,
+            clock = DuoyiWidgetFrameClock(
+                wallMillis = capMillis - 100L,
+                elapsedMillis = 10_000L,
+                zone = ZoneId.of("UTC"),
+            ),
+        )
+        assertNull(reason(untrustedFrame, currentClock = atCap))
+
+        // Bad anchor (0L) does not trigger timer_capped
+        val badAnchorValues = baseValues().apply {
+            put("focus_timer_running", true)
+            put("focus_timer_count_up", true)
+            put("focus_timer_started_at_millis", 0L)
+        }
+        val badAnchorFrame = core(
+            values = badAnchorValues,
+            clock = DuoyiWidgetFrameClock(
+                wallMillis = capMillis - 100L,
+                elapsedMillis = 10_000L,
+                zone = ZoneId.of("UTC"),
+            ),
+        )
+        assertNull(reason(badAnchorFrame, currentClock = atCap))
+
+        // Future anchor does not trigger timer_capped
+        val futureAnchorValues = baseValues().apply {
+            put("focus_timer_running", true)
+            put("focus_timer_count_up", true)
+            put("focus_timer_started_at_millis", capMillis + 5_000L)
+        }
+        val futureAnchorFrame = core(
+            values = futureAnchorValues,
+            clock = DuoyiWidgetFrameClock(
+                wallMillis = capMillis - 100L,
+                elapsedMillis = 10_000L,
+                zone = ZoneId.of("UTC"),
+            ),
+        )
+        assertNull(reason(futureAnchorFrame, currentClock = atCap))
+
+        // Overflow anchor does not trigger timer_capped
+        val overflowAnchorValues = baseValues().apply {
+            put("focus_timer_running", true)
+            put("focus_timer_count_up", true)
+            put("focus_timer_started_at_millis", Long.MAX_VALUE)
+        }
+        val overflowAnchorFrame = core(
+            values = overflowAnchorValues,
+            clock = DuoyiWidgetFrameClock(
+                wallMillis = capMillis - 100L,
+                elapsedMillis = 10_000L,
+                zone = ZoneId.of("UTC"),
+            ),
+        )
+        assertNull(reason(overflowAnchorFrame, currentClock = atCap))
+    }
+
+    @Test
+    fun staleDailyTrustedSessionStillRejectsWhenCrossingCap() {
+        val startMillis = Instant.parse("2024-06-15T12:00:00Z").toEpochMilli()
+        val capMillis = startMillis + DuoyiWidgetCountUpCapCore.COUNT_UP_CAP_MILLIS
+        val staleValues = baseValues(day = "2024-06-14").apply {
+            put("focus_timer_running", true)
+            put("focus_timer_count_up", true)
+            put("focus_timer_started_at_millis", startMillis)
+        }
+        val beforeCap = DuoyiWidgetFrameClock(
+            wallMillis = capMillis - 100L,
+            elapsedMillis = 10_000L,
+            zone = ZoneId.of("UTC"),
+        )
+        val frame = core(values = staleValues, clock = beforeCap)
+        assertTrue(frame.sessionTrusted)
+        assertFalse(frame.fresh)
+
+        val atCap = DuoyiWidgetFrameClock(
+            wallMillis = capMillis,
+            elapsedMillis = 10_100L,
+            zone = ZoneId.of("UTC"),
+        )
+        assertEquals("timer_capped", reason(frame, currentClock = atCap))
+    }
+
+    @Test
+    fun frameAttemptsRetryCappedCountUpAndCommitSecondBuild() {
+        val startMillis = Instant.parse("2024-06-15T12:00:00Z").toEpochMilli()
+        val capMillis = startMillis + DuoyiWidgetCountUpCapCore.COUNT_UP_CAP_MILLIS
+        val values = baseValues().apply {
+            put("focus_timer_running", true)
+            put("focus_timer_count_up", true)
+            put("focus_timer_started_at_millis", startMillis)
+        }
+
+        var attempt = 0
+        val committed = mutableListOf<String>()
+        val rejections = mutableListOf<String>()
+
+        val accepted = DuoyiWidgetFrameAttempts.run(
+            capture = {
+                attempt++
+                if (attempt == 1) {
+                    core(
+                        values = values,
+                        clock = DuoyiWidgetFrameClock(
+                            wallMillis = capMillis - 50L,
+                            elapsedMillis = 10_000L,
+                            zone = ZoneId.of("UTC"),
+                        ),
+                    )
+                } else {
+                    core(
+                        values = values,
+                        clock = DuoyiWidgetFrameClock(
+                            wallMillis = capMillis + 50L,
+                            elapsedMillis = 10_100L,
+                            zone = ZoneId.of("UTC"),
+                        ),
+                    )
+                }
+            },
+            build = { frame -> "views(wall=${frame.clock.wallMillis})" },
+            rejectionReason = { frame ->
+                if (frame.clock.wallMillis < capMillis) {
+                    val currentClock = DuoyiWidgetFrameClock(
+                        wallMillis = capMillis + 10L,
+                        elapsedMillis = 10_060L,
+                        zone = ZoneId.of("UTC"),
+                    )
+                    reason(frame, currentClock = currentClock)
+                } else {
+                    val currentClock = DuoyiWidgetFrameClock(
+                        wallMillis = capMillis + 60L,
+                        elapsedMillis = 10_110L,
+                        zone = ZoneId.of("UTC"),
+                    )
+                    reason(frame, currentClock = currentClock)
+                }
+            },
+            commit = { views -> committed += views },
+            acceptedEffect = { _, _ -> },
+            rejected = { rejections += it },
+        )
+
+        assertTrue(accepted)
+        assertEquals(listOf("timer_capped"), rejections)
+        assertEquals(listOf("views(wall=${capMillis + 50L})"), committed)
+    }
+
+    @Test
     fun effectiveModeRespectsMinimumSizeThresholdsAndModeBounds() {
         fun mode(width: Int, height: Int, preferred: String = "detailed"): String {
             val values = baseValues().apply { put("widget_display_mode_9", preferred) }

@@ -1,0 +1,337 @@
+{
+  "started_at_utc": "2026-10-11T12:05:34.225889+00:00",
+  "finished_at_utc": "2026-10-11T12:10:21.040172+00:00",
+  "duration_seconds": 286.814,
+  "head": "48cf29bcaff02cd9ccb0ca4158ac46da90d09fee",
+  "command": [
+    "./gradlew",
+    ":app:compileDebugKotlin",
+    "--offline",
+    "-x",
+    ":app:compileFlutterBuildDebug",
+    "--max-workers=1",
+    "--no-daemon",
+    "-Dorg.gradle.jvmargs=-Xmx2G",
+    "--console=plain"
+  ],
+  "gradle_exit_code": 0,
+  "source_files": 350,
+  "changed_source_files": [],
+  "classes": {
+    "DuoyiAnniversaryCompactWidgetProvider": {
+      "exists": true,
+      "sha256": "5ffe76bea569aa6c8b9ce65d88a3ed9f18bb42090511b89bbeaa317740f0e089"
+    },
+    "DuoyiAnniversaryDetailedWidgetProvider": {
+      "exists": true,
+      "sha256": "2e9b16927a11ac815e024763c4796a79e3e62720686455067e74a94636be33ac"
+    },
+    "DuoyiAnniversaryWidgetProvider": {
+      "exists": true,
+      "sha256": "55a4089904c9813e2f47c69f974ac84fd4cfdb0dbba0827254e1bd454d347431"
+    },
+    "DuoyiCalendarCompactWidgetProvider": {
+      "exists": true,
+      "sha256": "6cb63420353199d80bcf20ad18e4dd885070b589cf94aa8920487c4f30b80c59"
+    },
+    "DuoyiCalendarDetailedWidgetProvider": {
+      "exists": true,
+      "sha256": "902135631b8b5931e7c9d7f0077ec6e97fd52656615ef5486949d74aeeb61efd"
+    },
+    "DuoyiCalendarWidgetProvider": {
+      "exists": true,
+      "sha256": "b5774fb9265990b0c7496ed8639e5ea01a1ebb1690cd3eb4848b53fa48505af3"
+    },
+    "DuoyiCourseCompactWidgetProvider": {
+      "exists": true,
+      "sha256": "17f9969f363aee9736d30beb0f959d74bd1951ec601f0c372d419b72804fcfab"
+    },
+    "DuoyiCourseDetailedWidgetProvider": {
+      "exists": true,
+      "sha256": "be571bd0767de35a92c8f9c43068e20023b3afa0aaa131f714316f931306f560"
+    },
+    "DuoyiCourseWidgetProvider": {
+      "exists": true,
+      "sha256": "fe6fd8182fb378800dd638d0dbdbf06418a26047d0a9f261aabea77837b8550f"
+    },
+    "DuoyiDiaryCompactWidgetProvider": {
+      "exists": true,
+      "sha256": "59683d7278de0f3072d95a5a153e63321c5fd3d94a9969e81cbf1bb5ffdb607c"
+    },
+    "DuoyiDiaryDetailedWidgetProvider": {
+      "exists": true,
+      "sha256": "5fc36c4535a8c627cc4baa19c539aeef75bacb394e4db10c4d96c3fa24aca1d8"
+    },
+    "DuoyiDiaryWidgetProvider": {
+      "exists": true,
+      "sha256": "7da9da225fcaf3272f29d35f4fed9e075b7308c68645158b7b24429fcd47d23a"
+    },
+    "DuoyiFocusHabitCompactWidgetProvider": {
+      "exists": true,
+      "sha256": "b3cccb23f10a00735c7b7530d1d22741337a72b3ec9c5abe06633c981c814aac"
+    },
+    "DuoyiFocusHabitDetailedWidgetProvider": {
+      "exists": true,
+      "sha256": "334d172925c88da7ca7fb87ccf961bfb42c921572bf15d03d07a1bad8c7f6977"
+    },
+    "DuoyiFocusHabitWidgetProvider": {
+      "exists": true,
+      "sha256": "6132339b9d4090cbe5a5851d514914f5332b5cfb2d904a5fc6c8c69e5b4fcdab"
+    },
+    "DuoyiFocusHabitWidgetProvider$Companion": {
+      "exists": true,
+      "sha256": "49e740336039a446dc8ef0e3f93c31368e980ed500239dfd4771d22c93414d2e"
+    },
+    "DuoyiGoalCompactWidgetProvider": {
+      "exists": true,
+      "sha256": "6f039805ce67f406afc84ea7d7830e18f5516d776a8e332cdba260163fb3c1b6"
+    },
+    "DuoyiGoalDetailedWidgetProvider": {
+      "exists": true,
+      "sha256": "c72916e643580f7b2c9b4fc73b9c0904b1a84953f367a8e65f1805424335cda4"
+    },
+    "DuoyiGoalWidgetProvider": {
+      "exists": true,
+      "sha256": "877a4acde307425657325fdb129d887370cd0e6e091e4aae1503ed1215fce4cd"
+    },
+    "DuoyiHabitCompactWidgetProvider": {
+      "exists": true,
+      "sha256": "1b662f838de10a70a5923b94b55141b4b443bb82a5f02716faec4b8d120aa80a"
+    },
+    "DuoyiHabitDetailedWidgetProvider": {
+      "exists": true,
+      "sha256": "cea63f718f3edf08e31f7801dd1383e52a619117bb82a8d5b10b959bbaea143f"
+    },
+    "DuoyiHabitWidgetProvider": {
+      "exists": true,
+      "sha256": "8c0c053ae4fc684074189ed156098fe7dace62582cade1f745f876667f9e68b3"
+    },
+    "DuoyiNoteCompactWidgetProvider": {
+      "exists": true,
+      "sha256": "093a38840b99977e447904bed7dcc2f9828d59c277f34ee0da5e1a0ff9f042db"
+    },
+    "DuoyiNoteDetailedWidgetProvider": {
+      "exists": true,
+      "sha256": "d369598c7ece089e8ea02177938222f8c01691f3c83b7d157852687aac04c5d4"
+    },
+    "DuoyiNoteWidgetProvider": {
+      "exists": true,
+      "sha256": "4cc0d07193581ab99ff693629856cfa5d5a1fb705d337f362baa4fa45aea5ef0"
+    },
+    "DuoyiScheduleCompactWidgetProvider": {
+      "exists": true,
+      "sha256": "998887c181bf9072dc31baa4131611f304d0a4ee1b9a5e0a38abaf6ab0589c7e"
+    },
+    "DuoyiScheduleDetailedWidgetProvider": {
+      "exists": true,
+      "sha256": "d82b84963bec98fe535b6bff75cd716bcd99791e56e06d995e3eb6a455b6c87e"
+    },
+    "DuoyiScheduleWidgetProvider": {
+      "exists": true,
+      "sha256": "198474e41df27672f28c04a6540cb9ca4a4192a4e3103a8848684dec800f19de"
+    },
+    "DuoyiTodoCompactWidgetProvider": {
+      "exists": true,
+      "sha256": "81a4cad985d378d729ab2f59c79eac49c51d4572a26ba1a51aa98a1e5d68b503"
+    },
+    "DuoyiTodoDetailedWidgetProvider": {
+      "exists": true,
+      "sha256": "e1491d9f04f9c2f7fd29d5f8e2c6a23f86877b11a85087b871a6db1d1074fbf5"
+    },
+    "DuoyiTodoWidgetProvider": {
+      "exists": true,
+      "sha256": "f5f292e29041c6b76edc0f8375f89f9e911aff006fda6e9beb25448624f67de8"
+    },
+    "DuoyiWidgetBuiltViews": {
+      "exists": true,
+      "sha256": "8d684809b3c2654c238f7921454bc41d7bc83fc78ae70b13dd8843c89cd0e6dd"
+    },
+    "DuoyiWidgetConfigActivity": {
+      "exists": true,
+      "sha256": "6b92f3ce1d140dbb17a75c336a72936840c123c73561fccf8906ce8d7238bc05"
+    },
+    "DuoyiWidgetContent": {
+      "exists": true,
+      "sha256": "f168b0cf25c39a562a6f1e99fad47fa3519b78990183206836ad791b60191e84"
+    },
+    "DuoyiWidgetCopy": {
+      "exists": true,
+      "sha256": "0580f80f985cf21e660d18b0052f882e61e10c5ccf0d66b2b7760c592c8df921"
+    },
+    "DuoyiWidgetCountUpCapCore": {
+      "exists": true,
+      "sha256": "e75b17411cddf2b364d661ba26af4a20a1e2ba46431746a42dd41144bba359c6"
+    },
+    "DuoyiWidgetCountUpCapCore$CapEffectDecision": {
+      "exists": true,
+      "sha256": "76279a3570b4f32d3f596e25b7646140a5d68299e5db191f2f36c4129c1b8895"
+    },
+    "DuoyiWidgetDayBoundaryReceiver": {
+      "exists": true,
+      "sha256": "aa652ca5bded1f7ea4a0cf73253df796971b77b20ceff2092c40aa2cabb1da05"
+    },
+    "DuoyiWidgetDayBoundaryScheduler": {
+      "exists": true,
+      "sha256": "c993d3769eaa143012de3b36d7473fbf786aae11a175607e9d3fc85f7d5875d7"
+    },
+    "DuoyiWidgetFrameAttempts": {
+      "exists": true,
+      "sha256": "e5b379ca685f76f3413309086337af325c3f93cf04bfb37d8cc9128d7c4e1997"
+    },
+    "DuoyiWidgetFrameClock": {
+      "exists": true,
+      "sha256": "62f4ff02f0f5277a10b34430ac990e9b1b84059f70c87d321a09c4fe872edaa1"
+    },
+    "DuoyiWidgetFrameCore": {
+      "exists": true,
+      "sha256": "ac48ca675915b3e59ead1f586fa8c50f700a11a6fff98bafd9f7d02cd27159d2"
+    },
+    "DuoyiWidgetFrameOptions": {
+      "exists": true,
+      "sha256": "f4cd3eb6ecf32aac48496a6fafa6a8c6f201c43efefcfa9c2876d7e6437b31e7"
+    },
+    "DuoyiWidgetLaunchBridge": {
+      "exists": true,
+      "sha256": "e8885240ccbad18912f9d27ebbbb0828c99eee448a7b2cdabf448dc356793596"
+    },
+    "DuoyiWidgetPinResultCore": {
+      "exists": true,
+      "sha256": "cf97b219d7f919b221f2c58397eca3d9eebafa2c528d81b7726c9cdcbc7cae43"
+    },
+    "DuoyiWidgetPinResultCore$Record": {
+      "exists": true,
+      "sha256": "8c649028ed169a823cfa7440bf1fb36221f492812383172c50544d4b915ccfde"
+    },
+    "DuoyiWidgetPinResultPlugin": {
+      "exists": true,
+      "sha256": "961ecde5f6423a44790154c0bf722088f9146ddb6f17d21989fe505f5c1150a6"
+    },
+    "DuoyiWidgetPinResultPlugin$lifecycle$1": {
+      "exists": true,
+      "sha256": "0997894b56916a23eac34fd1d0ce75028782c1ba3d155b882e36f2503b685b79"
+    },
+    "DuoyiWidgetPinResultReceiver": {
+      "exists": true,
+      "sha256": "ac33216112eaf88c2deb7d6b410371ae768d94d93ca68366f55c3450768b04ed"
+    },
+    "DuoyiWidgetPinResultRetention": {
+      "exists": true,
+      "sha256": "e94237af91b54efb0f18308f75aa1a900173c18535135a2d57083528df252285"
+    },
+    "DuoyiWidgetPinResultRetention$Wait": {
+      "exists": true,
+      "sha256": "f9dcff8cb6676604b8d5a6908fc5ba99f545d0636f12ebccde8d39117b61912a"
+    },
+    "DuoyiWidgetPinResultStore": {
+      "exists": true,
+      "sha256": "d90d6cf46af30d2d561f7a70c4fecb8858f3821e900fbcbf5996c36e7ba3580f"
+    },
+    "DuoyiWidgetPinResults": {
+      "exists": true,
+      "sha256": "1c51a99890493bd28d5987e348c4e630f5a718f999e121ed25aab5ae42bddb81"
+    },
+    "DuoyiWidgetProvider": {
+      "exists": true,
+      "sha256": "e018746047ba33f5c780502a45af9ff7a0871e265f5e34e5a09432010e745956"
+    },
+    "DuoyiWidgetPublicationBridge": {
+      "exists": true,
+      "sha256": "b9f52306d94fae263551b680aa273fb5a3160b4bde982743b054b8bc89083fc4"
+    },
+    "DuoyiWidgetPublicationDocument": {
+      "exists": true,
+      "sha256": "512906dac8d73a46eeba7d1d92718974f7d9498ec812376a9e43dd94bfe530ef"
+    },
+    "DuoyiWidgetPublicationDocument$State": {
+      "exists": true,
+      "sha256": "f9b428ac01231e577fdba13da3f8105ce78df1d9642c921a72edfcf5ebf09e44"
+    },
+    "DuoyiWidgetPublicationStore": {
+      "exists": true,
+      "sha256": "04c8d41f86c86931a1d3fd03a34c6e2df84a5778a2735676a8eb45cad3683ebb"
+    },
+    "DuoyiWidgetRenderFrame": {
+      "exists": true,
+      "sha256": "a83e9d1c210bd4c3cf51379ddad84335212b52ba659d3c6df64b2f4229915e4b"
+    },
+    "DuoyiWidgetRenderFrame$Companion": {
+      "exists": true,
+      "sha256": "26d9e153db4440c93a2f96e2a1e1461d8f73ce3b2d9d4aee24341d2b298bf0e4"
+    },
+    "DuoyiWidgetRestoreReceiver": {
+      "exists": true,
+      "sha256": "f99755c07fa1744a0354397bd556e4d52d87693aa85a6ee4c8374e98a09b6135"
+    },
+    "DuoyiWidgetSnapshot": {
+      "exists": true,
+      "sha256": "09a937a35404cc978e5113494ab692a0352ce98f82510648fa43139bbf86dc96"
+    },
+    "MainActivity": {
+      "exists": true,
+      "sha256": "7c0b699a5c3c1e673a40686e87edfd9de6fb56f4cdc47502a6311dc170368df6"
+    }
+  },
+  "manifest_widget_components": [
+    "DuoyiAnniversaryCompactWidgetProvider",
+    "DuoyiAnniversaryDetailedWidgetProvider",
+    "DuoyiAnniversaryWidgetProvider",
+    "DuoyiCalendarCompactWidgetProvider",
+    "DuoyiCalendarDetailedWidgetProvider",
+    "DuoyiCalendarWidgetProvider",
+    "DuoyiCourseCompactWidgetProvider",
+    "DuoyiCourseDetailedWidgetProvider",
+    "DuoyiCourseWidgetProvider",
+    "DuoyiDiaryCompactWidgetProvider",
+    "DuoyiDiaryDetailedWidgetProvider",
+    "DuoyiDiaryWidgetProvider",
+    "DuoyiFocusHabitCompactWidgetProvider",
+    "DuoyiFocusHabitDetailedWidgetProvider",
+    "DuoyiFocusHabitWidgetProvider",
+    "DuoyiGoalCompactWidgetProvider",
+    "DuoyiGoalDetailedWidgetProvider",
+    "DuoyiGoalWidgetProvider",
+    "DuoyiHabitCompactWidgetProvider",
+    "DuoyiHabitDetailedWidgetProvider",
+    "DuoyiHabitWidgetProvider",
+    "DuoyiNoteCompactWidgetProvider",
+    "DuoyiNoteDetailedWidgetProvider",
+    "DuoyiNoteWidgetProvider",
+    "DuoyiScheduleCompactWidgetProvider",
+    "DuoyiScheduleDetailedWidgetProvider",
+    "DuoyiScheduleWidgetProvider",
+    "DuoyiTodoCompactWidgetProvider",
+    "DuoyiTodoDetailedWidgetProvider",
+    "DuoyiTodoWidgetProvider",
+    "DuoyiWidgetConfigActivity",
+    "DuoyiWidgetDayBoundaryReceiver",
+    "DuoyiWidgetPinResultReceiver",
+    "DuoyiWidgetProvider",
+    "DuoyiWidgetRestoreReceiver",
+    "MainActivity"
+  ],
+  "manifest_component_count": 36,
+  "javap_exit_failures": [],
+  "bytecode_symbol_assertions": {
+    "provider_references_live_eligibility": true,
+    "provider_references_canonical_match": true,
+    "provider_references_elapsed_time": true,
+    "provider_references_cap_effect_decision": true,
+    "provider_formats_displayed_timer": true,
+    "provider_contains_cap_scheduling_reference": true,
+    "frame_core_contains_cap_crossing_check": true,
+    "frame_core_contains_timer_capped_rejection": true,
+    "copy_signatures_include_publication_state": true,
+    "provider_calls_state_aware_focus_timer_summary": true,
+    "anniversary_calls_state_aware_content": true,
+    "calendar_calls_state_aware_content": true,
+    "content_signatures_include_publication_state": true,
+    "content_resolves_anniversary_items": true,
+    "content_resolves_calendar_summary_and_target": true,
+    "snapshot_exposes_render_widget": true,
+    "anniversary_provider_uses_state_aware_content": true,
+    "calendar_provider_uses_state_aware_content": true
+  },
+  "free_bytes_before": 29974175744,
+  "free_bytes_after": 29950263296,
+  "scope": "Offline Android debug Kotlin compilation with Flutter compilation excluded. javap -c -p records compiled symbol wiring only; this does not establish device behavior, runtime timing, rendering, or deployment."
+}
