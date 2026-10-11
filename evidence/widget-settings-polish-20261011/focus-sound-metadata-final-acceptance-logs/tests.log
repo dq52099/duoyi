@@ -1,0 +1,52 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart
+00:00 +0: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog single tracks map to one asset
+00:00 +1: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog mix ids are rejected
+00:00 +2: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog unknown ids are ignored as invalid sound configs
+00:00 +3: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog generated noise ids are unpublished
+00:00 +4: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog legacy generated-noise configs fall back to a smooth real recording
+00:00 +5: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog published options are single track only
+00:00 +6: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog visible track labels avoid generated-noise wording
+00:00 +7: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog retained built-in metadata follows zh-en-zh without replacing IDs
+00:00 +8: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog an explicit display locale leaves the live locale unchanged
+00:00 +9: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog fallback track options retain bilingual metadata across switches
+00:00 +10: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog invalid playback choices have localized absence labels
+00:00 +11: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog literal metadata without a translation stays authored in any locale
+00:00 +12: /home/ubuntu/duoyi/test/core/focus_sound_catalog_test.dart: FocusSoundCatalog locale changes preserve playback normalization and asset selection
+00:00 +13: loading /home/ubuntu/duoyi/test/services/focus_sound_service_test.dart
+00:01 +13: /home/ubuntu/duoyi/test/services/focus_sound_service_test.dart: (setUpAll)
+00:01 +13: /home/ubuntu/duoyi/test/services/focus_sound_service_test.dart: volume is clamped to an audible preview floor
+00:01 +14: /home/ubuntu/duoyi/test/services/focus_sound_service_test.dart: preview reports startup failure to callers
+00:01 +15: /home/ubuntu/duoyi/test/services/focus_sound_service_test.dart: reminder previews use the same media asset playback primitives
+00:01 +16: /home/ubuntu/duoyi/test/services/focus_sound_service_test.dart: missing custom focus sounds report preview failure instead of silence
+00:01 +17: /home/ubuntu/duoyi/test/services/focus_sound_service_test.dart: focus sound selection starts an automatic preview
+00:01 +18: /home/ubuntu/duoyi/test/services/focus_sound_service_test.dart: focus sound volume changes are persisted and previewed
+00:01 +19: /home/ubuntu/duoyi/test/services/focus_sound_service_test.dart: foreground notification stop is routed back to Dart audio state
+00:01 +20: /home/ubuntu/duoyi/test/services/focus_sound_service_test.dart: (tearDownAll)
+00:01 +20: loading /home/ubuntu/duoyi/test/screens/pomodoro_focus_room_static_test.dart
+00:02 +20: /home/ubuntu/duoyi/test/screens/pomodoro_focus_room_static_test.dart: Pomodoro screen exposes self-study room picker and rankings
+00:02 +21: /home/ubuntu/duoyi/test/screens/pomodoro_focus_room_static_test.dart: Focus room tab shows sanitized fallback without raw errors
+00:02 +22: /home/ubuntu/duoyi/test/screens/pomodoro_focus_room_static_test.dart: Focus room tab isolates stopwatch ticks from scrollable ranking work
+00:02 +23: loading /home/ubuntu/duoyi/test/screens/goal_edit_screen_static_test.dart
+00:04 +23: /home/ubuntu/duoyi/test/screens/goal_edit_screen_static_test.dart: 目标编辑页通过 RecurrenceEngine 计算下一派发日并跳过节假日
+00:04 +24: /home/ubuntu/duoyi/test/screens/goal_edit_screen_static_test.dart: 目标编辑页日期字段在窄屏保持一行紧凑布局
+00:04 +25: /home/ubuntu/duoyi/test/screens/goal_edit_screen_static_test.dart: 目标编辑页空间归属窄屏展示保留保存到并约束长文案
+00:04 +26: /home/ubuntu/duoyi/test/screens/goal_edit_screen_static_test.dart: 目标编辑页基础信息保持原输入框标签并用顶部间距避免裁切
+00:04 +27: /home/ubuntu/duoyi/test/screens/goal_edit_screen_static_test.dart: 目标编辑页分组内容按表单左对齐铺满宽度
+00:04 +28: /home/ubuntu/duoyi/test/screens/goal_edit_screen_static_test.dart: 新建目标窄屏日期同一行并展示空日期语义
+00:07 +29: /home/ubuntu/duoyi/test/screens/goal_edit_screen_static_test.dart: 目标编辑页选中日期后使用短日期避免移动端截断
+00:08 +30: /home/ubuntu/duoyi/test/screens/goal_edit_screen_static_test.dart: 空间归属长名称在窄屏保留保存到标签且不溢出
+00:08 +31: /home/ubuntu/duoyi/test/screens/goal_edit_screen_static_test.dart: 目标列表对无目标日期展示无期限并适配常用宽度
+00:09 +32: /home/ubuntu/duoyi/test/screens/goal_edit_screen_static_test.dart: 目标空日期保存和读取仍为空
+00:09 +33: loading /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart
+00:11 +33: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroConfig persists auto DND preference and defaults old data off
+00:11 +34: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroConfig clamps corrupted focus sound volume on restore
+00:11 +35: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroConfig clamps corrupted stored durations on restore
+00:11 +36: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroConfig migrates generated noise without dropping custom audio
+00:11 +37: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroSession persists focus room attribution
+00:11 +38: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroSession copyWith supports field updates and clearing
+00:11 +39: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroFocusPenalty persists reason and affected context
+00:11 +40: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: Distracting app penalty reason has stable key and label
+00:11 +41: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: penalty labels localize while legacy JSON stays Chinese and stable
+00:11 +42: loading /home/ubuntu/duoyi/test/services/custom_focus_sound_static_test.dart
+00:12 +42: /home/ubuntu/duoyi/test/services/custom_focus_sound_static_test.dart: 专注白噪音支持用户导入自定义音频并进入选择列表
+00:12 +43: All tests passed!

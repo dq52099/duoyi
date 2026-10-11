@@ -1,0 +1,54 @@
+{
+  "before": {
+    "lib/core/focus_sound_catalog.dart": "2c2f7a8f3b7ad83243a112820c5883d75dd2075531ca3bf83db9609b8ed1028e",
+    "test/core/focus_sound_catalog_test.dart": "6f8304a4853a81dc5618508905dffa45c56c753103c98d582f56925ab9bc0a34",
+    "lib/models/pomodoro.dart": "299ab78fdd079346cdfb4f8a06aa4acae8c6a6368b2ad47c8c1e3be929504968",
+    "lib/providers/custom_focus_sound_provider.dart": "acbb6fcaf2feefb12f3c510836ef5e8c5826065f210edb0c1edd4427d9829f02",
+    "lib/screens/pomodoro_screen.dart": "86c5ec8502c2d3ff7c89a0250c5c7a804ce0b71d5b7f676e356ee8e61907a718",
+    "lib/screens/goal_edit_screen.dart": "2fa7fa5a9b97f9309c936853db9e0b113bf7620f957ca442dbee501845032170"
+  },
+  "after": {
+    "lib/core/focus_sound_catalog.dart": "2c2f7a8f3b7ad83243a112820c5883d75dd2075531ca3bf83db9609b8ed1028e",
+    "test/core/focus_sound_catalog_test.dart": "6f8304a4853a81dc5618508905dffa45c56c753103c98d582f56925ab9bc0a34",
+    "lib/models/pomodoro.dart": "299ab78fdd079346cdfb4f8a06aa4acae8c6a6368b2ad47c8c1e3be929504968",
+    "lib/providers/custom_focus_sound_provider.dart": "acbb6fcaf2feefb12f3c510836ef5e8c5826065f210edb0c1edd4427d9829f02",
+    "lib/screens/pomodoro_screen.dart": "86c5ec8502c2d3ff7c89a0250c5c7a804ce0b71d5b7f676e356ee8e61907a718",
+    "lib/screens/goal_edit_screen.dart": "2fa7fa5a9b97f9309c936853db9e0b113bf7620f957ca442dbee501845032170"
+  },
+  "hashes_unchanged": true,
+  "runs": [
+    {
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter",
+        "expanded",
+        "test/core/focus_sound_catalog_test.dart",
+        "test/services/focus_sound_service_test.dart",
+        "test/screens/pomodoro_focus_room_static_test.dart",
+        "test/screens/goal_edit_screen_static_test.dart",
+        "test/models/pomodoro_config_test.dart",
+        "test/services/custom_focus_sound_static_test.dart"
+      ],
+      "exit": 0,
+      "log": "evidence/widget-settings-polish-20261011/focus-sound-metadata-final-acceptance-logs/tests.log"
+    },
+    {
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "analyze",
+        "--no-pub",
+        "lib/core/focus_sound_catalog.dart",
+        "test/core/focus_sound_catalog_test.dart",
+        "lib/models/pomodoro.dart",
+        "lib/providers/custom_focus_sound_provider.dart",
+        "lib/screens/pomodoro_screen.dart",
+        "lib/screens/goal_edit_screen.dart"
+      ],
+      "exit": 0,
+      "log": "evidence/widget-settings-polish-20261011/focus-sound-metadata-final-acceptance-logs/analyze.log"
+    }
+  ]
+}
