@@ -3,6 +3,41 @@ import 'package:test/test.dart';
 import 'package:duoyi/core/lunar_calendar.dart';
 
 void main() {
+  test('闰月不重复普通农历节日', () {
+    final regular = LunarCalendar.fromSolar(DateTime(2009, 5, 28));
+    final leap = LunarCalendar.fromSolar(DateTime(2009, 6, 27));
+    expect(regular.month, 5);
+    expect(regular.day, 5);
+    expect(regular.isLeapMonth, isFalse);
+    expect(LunarCalendar.lunarFestival(regular), '端午');
+    expect(leap.month, 5);
+    expect(leap.day, 5);
+    expect(leap.isLeapMonth, isTrue);
+    expect(LunarCalendar.lunarFestival(leap), isNull);
+  });
+
+  test('除夕只标记腊月最后一天，兼容二十九日和三十日', () {
+    expect(
+      LunarCalendar.lunarFestival(
+        LunarCalendar.fromSolar(DateTime(2023, 1, 20)),
+      ),
+      isNull,
+    );
+    expect(
+      LunarCalendar.lunarFestival(
+        LunarCalendar.fromSolar(DateTime(2023, 1, 21)),
+      ),
+      '除夕',
+    );
+    expect(
+      LunarCalendar.lunarFestival(
+        LunarCalendar.fromSolar(DateTime(2025, 1, 28)),
+      ),
+      '除夕',
+    );
+    expect(LunarCalendar.lunarFestival(const LunarDate(2022, 12, 31)), isNull);
+  });
+
   test('农历转换在公历支持边界外不会数组越界', () {
     for (final date in [
       DateTime(1899, 12, 31),

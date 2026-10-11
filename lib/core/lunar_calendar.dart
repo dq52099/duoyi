@@ -487,6 +487,8 @@ class LunarCalendar {
 
   /// 农历节日(按农历月日)
   static String? lunarFestival(LunarDate d) {
+    // Traditional festivals follow the regular month, not its leap repeat.
+    if (d.isLeapMonth) return null;
     const t = <String, String>{
       '1-1': '春节',
       '1-15': '元宵',
@@ -500,7 +502,16 @@ class LunarCalendar {
       '12-23': '小年',
     };
     final k = '${d.month}-${d.day}';
-    if (d.month == 12 && d.day >= 29) return '除夕'; // 简化
+    if (d.month == 12 && d.day >= 29) {
+      var finalDay = daysInMonth(d.year, 12);
+      try {
+        finalDay =
+            lunar_pkg.LunarMonth.fromYm(d.year, 12)?.getDayCount() ?? finalDay;
+      } catch (_) {
+        // Match date conversion's bundled-table fallback.
+      }
+      if (d.day == finalDay) return '除夕';
+    }
     return t[k];
   }
 
