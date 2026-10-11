@@ -7,6 +7,7 @@ import 'package:duoyi/core/web_target.dart';
 import 'package:duoyi/l10n/generated/app_localizations.dart';
 import 'package:duoyi/main.dart';
 import 'package:duoyi/models/habit.dart';
+import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/achievement_provider.dart';
 import 'package:duoyi/providers/anniversary_provider.dart';
 import 'package:duoyi/providers/app_lock_provider.dart';
@@ -34,6 +35,7 @@ import 'package:duoyi/screens/today_screen.dart';
 import 'package:duoyi/services/ai_service.dart';
 import 'package:duoyi/services/app_update_service.dart';
 import 'package:duoyi/services/calendar_sync_service.dart';
+import 'package:duoyi/widgets/eisenhower_matrix.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -48,10 +50,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 Finder get _maxWidthBox =>
     find.byKey(const ValueKey('desktop_web_body_max_width'));
 
-Widget _wrapShell(ThemeData theme, {HabitProvider? habitProvider}) {
+Widget _wrapShell(
+  ThemeData theme, {
+  HabitProvider? habitProvider,
+  TodoProvider? todoProvider,
+  double textScaleFactor = 1,
+}) {
   return MultiProvider(
     providers: [
-      ChangeNotifierProvider(create: (_) => TodoProvider()),
+      ChangeNotifierProvider(create: (_) => todoProvider ?? TodoProvider()),
       ChangeNotifierProvider(create: (_) => habitProvider ?? HabitProvider()),
       ChangeNotifierProvider(create: (_) => PomodoroProvider()),
       ChangeNotifierProvider(create: (_) => ThemeProvider()),
@@ -87,6 +94,12 @@ Widget _wrapShell(ThemeData theme, {HabitProvider? habitProvider}) {
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       theme: theme,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScaleFactor)),
+        child: child!,
+      ),
       home: MainShell(),
     ),
   );
@@ -97,11 +110,20 @@ Future<void> _pumpShellAt(
   ThemeData theme,
   Size size, {
   HabitProvider? habitProvider,
+  TodoProvider? todoProvider,
+  double textScaleFactor = 1,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(_wrapShell(theme, habitProvider: habitProvider));
+  await tester.pumpWidget(
+    _wrapShell(
+      theme,
+      habitProvider: habitProvider,
+      todoProvider: todoProvider,
+      textScaleFactor: textScaleFactor,
+    ),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -131,10 +153,15 @@ void main() {
   });
 
   testWidgets('1280x800 液态玻璃主题：切到待办主 tab，无溢出且卡片限宽', (tester) async {
+    final todoProvider = TodoProvider();
+    await todoProvider.addTodo(
+      TodoItem(title: '桌面矩阵导航', quadrant: EisenhowerQuadrant.urgentImportant),
+    );
     await _pumpShellAt(
       tester,
       AppBrands.liquidGlass.theme,
       const Size(1280, 800),
+      todoProvider: todoProvider,
     );
 
     expect(find.byType(NavigationRail), findsOneWidget);
@@ -142,6 +169,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(TodoScreen), findsOneWidget);
+    expect(find.byType(EisenhowerMatrix), findsOneWidget);
+    await tester.tap(find.text('列表'));
+    await tester.pumpAndSettle();
+    expect(find.byType(EisenhowerMatrix), findsNothing);
+    expect(find.text('桌面矩阵导航'), findsOneWidget);
+    await tester.tap(find.text('四象限'));
+    await tester.pumpAndSettle();
+    expect(find.byType(EisenhowerMatrix), findsOneWidget);
     expect(tester.takeException(), isNull);
     final width = tester.getSize(_maxWidthBox).width;
     expect(width, greaterThan(0));
@@ -204,6 +239,81 @@ void main() {
     expect(find.byKey(const ValueKey('habit_checkin_card_c')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final (width, textScaleFactor) in [
+    (1120.0, 1.6),
+    (1120.0, 2.0),
+    (1400.0, 1.6),
+    (1400.0, 2.0),
+  ]) {
+    testWidgets('${width.toInt()}px 宽屏习惯打卡网格随 ${textScaleFactor}x 字体缩放扩高', (
+      tester,
+    ) async {
+      final habitProvider = HabitProvider();
+      for (final id in ['a', 'b', 'c']) {
+        await habitProvider.addHabit(
+          Habit(id: id, name: '习惯$id', icon: Icons.book.codePoint.toString()),
+        );
+      }
+      await _pumpShellAt(
+        tester,
+        AppBrands.defaultBrand.theme,
+        Size(width, 800),
+        habitProvider: habitProvider,
+        textScaleFactor: textScaleFactor,
+      );
+
+      tester.state<MainShellState>(find.byType(MainShell)).navigateTo(2);
+      await tester.pumpAndSettle();
+
+      final gridFinder = find.byKey(
+        const ValueKey('habit_today_checkin_sliver'),
+      );
+      expect(gridFinder, findsOneWidget);
+      final grid = tester.widget<SliverGrid>(gridFinder);
+      final delegate =
+          grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+      final textScaler = TextScaler.linear(textScaleFactor);
+      final scaledTextFactor = (textScaler.scale(13) / 13)
+          .clamp(1.0, double.infinity)
+          .toDouble();
+      final scaledCardBodyHeight = 38 * scaledTextFactor;
+      expect(
+        delegate.mainAxisExtent,
+        closeTo(scaledCardBodyHeight + 6, 0.001),
+        reason:
+            'the grid row must fit its scaled 38px card body and 6px spacing',
+      );
+
+      final card = find.byKey(const ValueKey('habit_checkin_card_a'));
+      await tester.scrollUntilVisible(
+        card,
+        160,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('habit_today_scroll_view')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is SizedBox && widget.height == scaledCardBodyHeight,
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.takeException(),
+        isNull,
+        reason:
+            'habit cards must not overflow at ${width.toInt()}px and ${textScaleFactor}x text',
+      );
+    });
+  }
 
   testWidgets('800x600 宽度不足阈值：注入 desktop 档也回落移动底导航壳', (tester) async {
     await _pumpShellAt(

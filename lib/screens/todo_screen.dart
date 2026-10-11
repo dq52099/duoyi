@@ -27,6 +27,7 @@ import '../providers/todo_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/theme_provider.dart';
 import '../services/ai_service.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../services/api_client.dart';
 import '../core/todo_templates.dart';
 import '../widgets/brand_background.dart';
@@ -2762,10 +2763,14 @@ class _KanbanTodoCardState extends State<_KanbanTodoCard> {
 
   Future<void> _openDetails(BuildContext context) async {
     _closeSwipe();
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => TodoDetailScreen(todoId: widget.todo.id),
+        builder: (_) => TodoDetailScreen(
+          todoId: widget.todo.id,
+          accountGeneration: accountGeneration,
+        ),
       ),
     );
   }
@@ -3834,10 +3839,14 @@ class _TodoTileState extends State<_TodoTile> {
 
   Future<void> _openDetails(BuildContext context) async {
     _closeSwipe();
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => TodoDetailScreen(todoId: widget.todo.id),
+        builder: (_) => TodoDetailScreen(
+          todoId: widget.todo.id,
+          accountGeneration: accountGeneration,
+        ),
       ),
     );
   }

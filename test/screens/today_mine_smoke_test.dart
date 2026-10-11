@@ -33,6 +33,7 @@ import 'package:duoyi/screens/calendar_screen.dart';
 import 'package:duoyi/services/ai_service.dart';
 import 'package:duoyi/services/app_update_service.dart';
 import 'package:duoyi/services/calendar_sync_service.dart';
+import 'package:duoyi/services/account_local_data_cleaner.dart';
 import 'package:duoyi/core/app_version.dart';
 import 'package:duoyi/screens/anniversary_screen.dart';
 import 'package:duoyi/screens/countdown_screen.dart';
@@ -54,6 +55,7 @@ Widget _wrap(
   AuthProvider? authProvider,
   TodoProvider? todoProvider,
   ThemeData? theme,
+  double? textScale,
 }) {
   return MultiProvider(
     providers: [
@@ -94,7 +96,18 @@ Widget _wrap(
         ),
       ),
     ],
-    child: MaterialApp(theme: theme, home: child),
+    child: MaterialApp(
+      theme: theme,
+      builder: textScale == null
+          ? null
+          : (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(textScale)),
+              child: child!,
+            ),
+      home: child,
+    ),
   );
 }
 
@@ -106,6 +119,237 @@ double? _topOrScrolledAway(WidgetTester tester, Finder finder) {
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    I18n.setLocale(AppLocale.zh);
+  });
+
+  tearDown(() => I18n.setLocale(AppLocale.zh));
+
+  testWidgets('Today greeting changes on a locale notifier alone', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrap(const TodayScreen()));
+    await tester.pumpAndSettle();
+    final zhGreeting = AppBrands.defaultBrand.strings.greetingFor(
+      DateTime.now(),
+    );
+    expect(find.textContaining(zhGreeting), findsWidgets);
+    I18n.setLocale(AppLocale.en);
+    await tester.pumpAndSettle();
+    final enGreeting = AppBrands.defaultBrand.strings.greetingFor(
+      DateTime.now(),
+    );
+    expect(enGreeting, isNot(zhGreeting));
+    expect(find.textContaining(enGreeting), findsWidgets);
+    expect(find.textContaining(zhGreeting), findsNothing);
+    expect(find.text(I18n.tr('today.todos')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'Today open delete confirmation stays bound to its original account',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final todos = TodoProvider();
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      await todos.addTodo(
+        TodoItem(id: 'old-account-task', title: '原账号任务', date: today),
+      );
+      await tester.pumpWidget(_wrap(const TodayScreen(), todoProvider: todos));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('原账号任务'));
+      await tester.pumpAndSettle();
+      await tester.drag(find.text('原账号任务'), const Offset(-180, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find
+            .byKey(const ValueKey('today_todo_swipe_delete_button'))
+            .hitTestable(),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('删除任务？'), findsOneWidget);
+
+      AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+      todos.resetLocalState();
+      // Account cleanup replaces persisted data before the next hydration.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('todos');
+      await todos.addTodo(
+        TodoItem(id: 'old-account-task', title: '新账号任务', date: today),
+      );
+      I18n.setLocale(AppLocale.en);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.textContaining('原账号任务'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.widgetWithText(FilledButton, I18n.tr('action.delete')),
+      );
+      await tester.pumpAndSettle();
+      expect(todos.todos.map((todo) => todo.id), ['old-account-task']);
+      expect(todos.todos.single.title, '新账号任务');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'retained Today suggestion callback rejects a same-ID new account',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final todos = TodoProvider();
+      final old = TodoItem(
+        id: 'suggestion-account-collision',
+        title: '原账号建议',
+        date: DateTime.now().add(const Duration(days: 2)),
+        priority: TodoPriority.urgent,
+      );
+      await todos.addTodo(old);
+      await tester.pumpWidget(_wrap(const TodayScreen(), todoProvider: todos));
+      await tester.pumpAndSettle();
+      final section = find.byWidgetPredicate(
+        (widget) => widget.runtimeType.toString() == '_TodayReminderSection',
+      );
+      expect(section, findsOneWidget);
+      final dynamic openedSection = tester.widget(section);
+      final callback =
+          openedSection.onAddToday as Future<void> Function(TodoItem);
+
+      AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+      todos.resetLocalState();
+      final next = TodoItem(
+        id: old.id,
+        title: '新账号建议',
+        date: DateTime.now().add(const Duration(days: 2)),
+        priority: TodoPriority.urgent,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('todos', jsonEncode([next.toJson()]));
+      await todos.loadFromStorage();
+      await tester.pumpAndSettle();
+      final persisted = prefs.getString('todos');
+      await callback(old);
+      await tester.pumpAndSettle();
+
+      expect(todos.todos.single.toJson(), next.toJson());
+      expect(prefs.getString('todos'), persisted);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'retained Today row button rejects rebinding to a same-ID new account',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final todos = TodoProvider();
+      final old = TodoItem(
+        id: 'retained-row-collision',
+        title: '原账号建议按钮',
+        date: DateTime.now().add(const Duration(days: 2)),
+        priority: TodoPriority.urgent,
+      );
+      await todos.addTodo(old);
+      await tester.pumpWidget(_wrap(const TodayScreen(), todoProvider: todos));
+      await tester.pumpAndSettle();
+      final reminderToggle = find.byKey(
+        const ValueKey('today_reminder_header_toggle'),
+      );
+      await tester.scrollUntilVisible(
+        reminderToggle,
+        360,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(reminderToggle);
+      await tester.pumpAndSettle();
+      final header = find.text(I18n.tr('today.suggestions'));
+      await tester.scrollUntilVisible(
+        header,
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(header);
+      await tester.pumpAndSettle();
+      final button = find.byKey(ValueKey('today_suggestion_add_${old.id}'));
+      final retainedCallback = tester.widget<TextButton>(button).onPressed!;
+
+      AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+      todos.resetLocalState();
+      final next = TodoItem(
+        id: old.id,
+        title: '新账号建议按钮',
+        date: DateTime.now().add(const Duration(days: 3)),
+        priority: TodoPriority.urgent,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('todos', jsonEncode([next.toJson()]));
+      await todos.loadFromStorage();
+      await tester.pumpAndSettle();
+      final persisted = prefs.getString('todos');
+      retainedCallback();
+      await tester.pumpAndSettle();
+      expect(todos.todos.single.toJson(), next.toJson());
+      expect(prefs.getString('todos'), persisted);
+      expect(find.byType(SnackBar), findsNothing);
+
+      // The freshly built B row remains usable after rejecting A's callback.
+      final currentCallback = tester.widget<TextButton>(button).onPressed;
+      expect(currentCallback, isNotNull);
+      currentCallback!();
+      await tester.pumpAndSettle();
+      final today = DateTime.now();
+      expect(todos.todos.single.title, next.title);
+      expect(
+        todos.todos.single.date,
+        DateTime(today.year, today.month, today.day),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Today expanded reminders and scroll survive locale switching', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final todos = TodoProvider();
+    final now = DateTime.now();
+    await todos.addTodo(
+      TodoItem(
+        title: '用户填写的逾期事项',
+        date: now.subtract(const Duration(days: 1)),
+        dueDate: now.subtract(const Duration(hours: 1)),
+      ),
+    );
+    await tester.pumpWidget(_wrap(const TodayScreen(), todoProvider: todos));
+    await tester.pumpAndSettle();
+    final toggle = find.byKey(const ValueKey('today_reminder_header_toggle'));
+    await tester.ensureVisible(toggle);
+    await tester.pumpAndSettle();
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(find.text('用户填写的逾期事项'), findsWidgets);
+    final scroll = tester.state<ScrollableState>(find.byType(Scrollable).first);
+    final offset = scroll.position.pixels;
+    I18n.setLocale(AppLocale.en);
+    await tester.pumpAndSettle();
+    expect(find.text('用户填写的逾期事项'), findsWidgets);
+    expect(scroll.position.pixels, closeTo(offset, 0.1));
+    expect(find.text('已逾期事项'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Today keeps todo section visible when there is no task', (
@@ -120,6 +364,75 @@ void main() {
 
     expect(find.text('今日待办'), findsOneWidget);
     expect(find.text('今天暂无待办，点击查看或添加任务'), findsOneWidget);
+  });
+
+  testWidgets('English Today fits narrow and wide views with large text', (
+    tester,
+  ) async {
+    addTearDown(tester.view.reset);
+    await tester.runAsync(loadWidgetPolishScreenshotFonts);
+    I18n.setLocale(AppLocale.en);
+    final theme = AppBrands.defaultBrand.theme;
+    final screenshotTheme = theme.copyWith(
+      textTheme: theme.textTheme.apply(
+        fontFamily: 'DuoyiScreenshotLatin',
+        fontFamilyFallback: const ['DuoyiScreenshot'],
+      ),
+      appBarTheme: theme.appBarTheme.copyWith(
+        titleTextStyle: theme.appBarTheme.titleTextStyle?.copyWith(
+          fontFamily: 'DuoyiScreenshotLatin',
+          fontFamilyFallback: const ['DuoyiScreenshot'],
+        ),
+      ),
+    );
+    for (final width in <double>[320, 390, 1120, 1440]) {
+      tester.view.physicalSize = Size(width, 1000);
+      tester.view.devicePixelRatio = 1;
+      final todos = TodoProvider();
+      await todos.addTodo(
+        TodoItem(
+          title: 'User title 用户内容 should remain unchanged',
+          date: DateTime.now(),
+        ),
+      );
+      final key = GlobalKey();
+      await tester.pumpWidget(
+        _wrap(
+          RepaintBoundary(key: key, child: const TodayScreen()),
+          todoProvider: todos,
+          theme: screenshotTheme,
+          textScale: 1.6,
+        ),
+      );
+      await _pumpTodayLayoutFrame(tester);
+      expect(find.text(I18n.tr('today.todos')), findsOneWidget);
+      expect(
+        find.text('User title 用户内容 should remain unchanged'),
+        findsWidgets,
+      );
+      expect(find.text('今日待办'), findsNothing);
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'English width=$width scale=1.6',
+      );
+      if (Platform.environment['DUOYI_CAPTURE_TODAY_SCREENSHOTS'] == '1') {
+        await tester.runAsync(() async {
+          final boundary =
+              key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+          final image = await boundary.toImage();
+          final data = await image.toByteData(format: ui.ImageByteFormat.png);
+          image.dispose();
+          final file = File(
+            'evidence/screenshots/home-locale-20261011/home-en-${width.toInt()}-scale-1.6.png',
+          );
+          file.parent.createSync(recursive: true);
+          file.writeAsBytesSync(data!.buffer.asUint8List());
+        });
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
   });
 
   testWidgets('Today todo shows no-due and not-overdue tasks', (tester) async {
@@ -186,6 +499,12 @@ void main() {
         textTheme: theme.textTheme.apply(
           fontFamily: 'DuoyiScreenshotLatin',
           fontFamilyFallback: const ['DuoyiScreenshot'],
+        ),
+        appBarTheme: theme.appBarTheme.copyWith(
+          titleTextStyle: theme.appBarTheme.titleTextStyle?.copyWith(
+            fontFamily: 'DuoyiScreenshotLatin',
+            fontFamilyFallback: const ['DuoyiScreenshot'],
+          ),
         ),
       );
 
@@ -341,18 +660,15 @@ void main() {
     expect(mine, isNot(contains("label: '问题反馈'")));
     expect(mine, isNot(contains("label: '许愿池'")));
 
-    // 记录回顾 经 _MineRecordReviewGroup 子组件封装，其 title 出现在文件末的
-    // 子组件类定义处，无法再以 indexOf("title: '记录回顾'") 反映它在主 build 中
-    // 的真实视觉位置。改以子组件注入锚点 const _MineRecordReviewGroup() 比较，
-    // 仍保留"行动计划 → 记录回顾 → 日程日期"的主 build 视觉先后这一约束意图。
-    expect(
-      mine.indexOf("title: I18n.tr('mine.group.action_plan')"),
-      lessThan(mine.indexOf("return _MineRecordReviewGroup();")),
-    );
-    expect(
-      mine.indexOf("return _MineRecordReviewGroup();"),
-      lessThan(mine.indexOf("title: I18n.tr('mine.group.schedule')")),
-    );
+    // Compare the group insertion, since its title is declared in a helper.
+    final actionPlan = mine.indexOf("title: I18n.tr('mine.group.action_plan')");
+    final recordReview = mine.indexOf('return capped(_MineRecordReviewGroup(');
+    final schedule = mine.indexOf("title: I18n.tr('mine.group.schedule')");
+    expect(actionPlan, greaterThanOrEqualTo(0));
+    expect(recordReview, greaterThanOrEqualTo(0));
+    expect(schedule, greaterThanOrEqualTo(0));
+    expect(actionPlan, lessThan(recordReview));
+    expect(recordReview, lessThan(schedule));
     expect(
       mine.indexOf("title: I18n.tr('mine.group.personal')"),
       lessThan(mine.indexOf("title: I18n.tr('mine.group.data')")),

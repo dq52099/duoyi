@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/almanac_locale_format.dart';
 import '../core/completion_visibility_policy.dart';
 import '../core/design_tokens.dart';
 import '../core/desktop_tokens.dart';
@@ -12,6 +13,7 @@ import '../core/lunar_calendar.dart';
 import '../core/quotes.dart';
 import '../core/report_engine.dart';
 import '../core/smart_schedule_advisor.dart';
+import '../core/today_ui_copy.dart';
 import '../core/todo_templates.dart';
 import '../models/course_schedule.dart' show CourseItem, ScheduleSettings;
 import '../models/todo.dart';
@@ -26,6 +28,7 @@ import '../providers/theme_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/user_provider.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/surface_components.dart';
 import '../widgets/todo_completion_flow.dart';
@@ -61,7 +64,6 @@ class TodayScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
-    final s = themeProvider.brand.strings;
 
     final todoP = context.watch<TodoProvider>();
     final habitP = context.watch<HabitProvider>();
@@ -74,485 +76,526 @@ class TodayScreen extends StatelessWidget {
     final goalP = context.watch<GoalProvider>();
     final user = context.watch<UserProvider>();
 
-    final now = DateTime.now();
-    final todayKey = DateTime(now.year, now.month, now.day);
-    final lunar = LunarCalendar.fromSolar(now);
-    final term = LunarCalendar.solarTerm(now);
-    final festival =
-        LunarCalendar.solarFestival(now) ?? LunarCalendar.lunarFestival(lunar);
-    final suitable = LunarCalendar.suitable(now);
-    final avoid = LunarCalendar.avoid(now);
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final s = themeProvider.brand.strings;
+        final now = DateTime.now();
+        final todayKey = DateTime(now.year, now.month, now.day);
+        final lunar = LunarCalendar.fromSolar(now);
+        final term = LunarCalendar.solarTerm(now);
+        final festival =
+            LunarCalendar.solarFestival(now) ??
+            LunarCalendar.lunarFestival(lunar);
+        final suitable = LunarCalendar.suitable(now);
+        final avoid = LunarCalendar.avoid(now);
 
-    final todayTodos = _visibleTodayOverviewTodos(todoP.todos, now);
-    final todayTodosCount = todayTodos.length;
-    final completedTodayCount = todoP.todos.where((todo) {
-      final completedAt = todo.completedAt;
-      if (!todo.isCompleted || completedAt == null) return false;
-      return completedAt.year == todayKey.year &&
-          completedAt.month == todayKey.month &&
-          completedAt.day == todayKey.day;
-    }).length;
-    final noDueTodayTodos = todayTodos.where((todo) => todo.dueDate == null);
-    todayTodos.sort((a, b) {
-      final dueA = a.dueDate;
-      final dueB = b.dueDate;
-      if (dueA != null && dueB != null) return dueA.compareTo(dueB);
-      if (dueA != null) return -1;
-      if (dueB != null) return 1;
-      return a.quadrant.index.compareTo(b.quadrant.index);
-    });
+        final todayTodos = _visibleTodayOverviewTodos(todoP.todos, now);
+        final todayTodosCount = todayTodos.length;
+        final completedTodayCount = todoP.todos.where((todo) {
+          final completedAt = todo.completedAt;
+          if (!todo.isCompleted || completedAt == null) return false;
+          return completedAt.year == todayKey.year &&
+              completedAt.month == todayKey.month &&
+              completedAt.day == todayKey.day;
+        }).length;
+        final noDueTodayTodos = todayTodos.where(
+          (todo) => todo.dueDate == null,
+        );
+        todayTodos.sort((a, b) {
+          final dueA = a.dueDate;
+          final dueB = b.dueDate;
+          if (dueA != null && dueB != null) return dueA.compareTo(dueB);
+          if (dueA != null) return -1;
+          if (dueB != null) return 1;
+          return a.quadrant.index.compareTo(b.quadrant.index);
+        });
 
-    final todayCourses = courseP.todayCourses
-      ..sort((a, b) => a.startSection.compareTo(b.startSection));
-    final reminderGroups = _TodayReminderGroups.build(
-      todos: todoP.todos,
-      courses: todayCourses,
-      courseSettings: courseP.settings,
-      now: now,
-      todayKey: todayKey,
-    );
-    final todayHabitProgress = habitP.todayCompletionRate;
+        final todayCourses = courseP.todayCourses
+          ..sort((a, b) => a.startSection.compareTo(b.startSection));
+        final reminderGroups = _TodayReminderGroups.build(
+          todos: todoP.todos,
+          courses: todayCourses,
+          courseSettings: courseP.settings,
+          now: now,
+          todayKey: todayKey,
+        );
+        final todayHabitProgress = habitP.todayCompletionRate;
 
-    // 最近的 3 个纪念日
-    final upcomingAnni = [...anniP.items]
-      ..sort((a, b) => a.daysRemaining.compareTo(b.daysRemaining));
-    final soon = upcomingAnni
-        .where((a) => a.daysRemaining >= 0)
-        .take(3)
-        .toList();
+        // 最近的 3 个纪念日
+        final upcomingAnni = [...anniP.items]
+          ..sort((a, b) => a.daysRemaining.compareTo(b.daysRemaining));
+        final soon = upcomingAnni
+            .where((a) => a.daysRemaining >= 0)
+            .take(3)
+            .toList();
 
-    final activeGoals = goalP.activeGoals.take(2).toList();
-    final suggestions = SmartScheduleAdvisor.suggestToday(
-      todoP.todos.where(
-        (todo) => !CompletionVisibilityPolicy.shouldShowInToday(todo, now),
-      ),
-      now: now,
-      limit: 5,
-    );
-    final showReminderSection =
-        !reminderGroups.isEmpty || suggestions.isNotEmpty;
+        final activeGoals = goalP.activeGoals.take(2).toList();
+        final suggestions = SmartScheduleAdvisor.suggestToday(
+          todoP.todos.where(
+            (todo) => !CompletionVisibilityPolicy.shouldShowInToday(todo, now),
+          ),
+          now: now,
+          limit: 5,
+        );
+        final showReminderSection =
+            !reminderGroups.isEmpty || suggestions.isNotEmpty;
 
-    // 问候语随主题品牌文案变化（BrandStrings.greetingFor 按时段取词）。
-    // 分隔符与用户名兜底跟随 locale：en 下为 "Good afternoon, User"。
-    final rawUsername = user.profile.username.trim();
-    final displayUsername = rawUsername.isEmpty || rawUsername == '用户'
-        ? I18n.tr('profile.default_user')
-        : rawUsername;
-    final greeting =
-        '${s.greetingFor(now)}${I18n.tr('greeting.separator')}$displayUsername';
-    final almanacCard = _TodayAlmanacCard(
-      now: now,
-      lunarText: lunar.chineseText,
-      suitable: suitable,
-      avoid: avoid,
-      term: term,
-      festival: festival,
-      onTap: () => _go(context, AlmanacScreen(initialDate: now)),
-    );
-    final productivityCard = _TodayProductivitySection(
-      onTap: () => _go(context, const StatisticsScreen()),
-    );
+        // 问候语随主题品牌文案变化（BrandStrings.greetingFor 按时段取词）。
+        // 分隔符与用户名兜底跟随 locale：en 下为 "Good afternoon, User"。
+        final rawUsername = user.profile.username.trim();
+        final displayUsername = rawUsername.isEmpty || rawUsername == '用户'
+            ? I18n.tr('profile.default_user')
+            : rawUsername;
+        final greeting =
+            '${s.greetingFor(now)}${I18n.tr('greeting.separator')}$displayUsername';
+        final almanacCard = _TodayAlmanacCard(
+          now: now,
+          lunar: lunar,
+          suitable: suitable,
+          avoid: avoid,
+          term: term,
+          festival: festival,
+          onTap: () => _go(context, AlmanacScreen(initialDate: now)),
+        );
+        final productivityCard = _TodayProductivitySection(
+          onTap: () => _go(context, const StatisticsScreen()),
+        );
 
-    Widget metricsGrid({required bool desktop}) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final theme = Theme.of(context);
-          final cs = theme.colorScheme;
-          final useTwoColumns = constraints.maxWidth < (desktop ? 640 : 520);
-          final crossAxisCount = useTwoColumns ? 2 : 4;
-          final aspectRatio = desktop
-              ? (useTwoColumns ? 2.75 : 2.85)
-              : (useTwoColumns ? 2.55 : 3.65);
-          // 数值行默认字号已提升到 DesignTokens.fontSizeMd，移动端 4 列在
-          // 中段宽度下按 3.65 宽高比算出的瓦片高度不足以容纳“标题+数值”
-          // 两行（还要扣掉卡片 0.5 描边内缩）。这里按当前系统字号缩放换算
-          // 内容所需高度给瓦片兜底：AppMetricCard 默认竖向内容为标题
-          // 11×1.1 + 间距 2 + 数值 fontSizeMd×1.1，外加卡内边距 20、描边
-          // 1、余量 2；宽裕时仍按宽高比走，任意字号下都不溢出。
-          final textScaler = MediaQuery.textScalerOf(context);
-          final minTileExtent =
-              textScaler.scale(11 * 1.1) +
-              2 +
-              textScaler.scale(DesignTokens.fontSizeMd * 1.1) +
-              23;
-          final tileExtent = desktop || useTwoColumns
-              ? null
-              : math.max(
-                  ((constraints.maxWidth - 3 * 8) / crossAxisCount) /
-                      aspectRatio,
-                  minTileExtent,
-                );
+        Widget metricsGrid({required bool desktop}) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final theme = Theme.of(context);
+              final cs = theme.colorScheme;
+              final useTwoColumns =
+                  constraints.maxWidth < (desktop ? 640 : 520);
+              final crossAxisCount = useTwoColumns ? 2 : 4;
+              final aspectRatio = desktop
+                  ? (useTwoColumns ? 2.75 : 2.85)
+                  : (useTwoColumns ? 2.55 : 3.65);
+              // 数值行默认字号已提升到 DesignTokens.fontSizeMd，移动端与桌面端在
+              // 缩放字号或中段宽度下按固定宽高比算出的瓦片高度可能不足以容纳“标题+数值”
+              // 两行（还要扣掉卡片边距与描边）。这里按当前系统字号缩放换算内容所需高度
+              // 给瓦片兜底：在任何宽度和文本缩放档位下均自适应扩高，宽裕时仍按宽高比走，
+              // 彻底消除卡片内容竖向溢出。
+              final textScaler = MediaQuery.textScalerOf(context);
+              final titleFont = desktop ? DesktopTokens.fontSizeCaption : 11.0;
+              final valueFont = desktop
+                  ? DesktopTokens.fontSizeBody
+                  : DesignTokens.fontSizeMd;
+              final verticalPadding = desktop ? 24.0 : 20.0;
+              final iconBox = desktop ? 32.0 : 28.0;
+              final spacing = desktop ? DesktopTokens.cardSpacingMedium : 8.0;
+              final totalSpacing = (crossAxisCount - 1) * spacing;
+              final textContentHeight = textScaler.scale(titleFont * 1.1) +
+                  2 +
+                  textScaler.scale(valueFont * (desktop ? 1.08 : 1.1));
+              final minTileExtent = verticalPadding +
+                  math.max(iconBox, textContentHeight) +
+                  3;
+              final naturalTileHeight =
+                  ((constraints.maxWidth - totalSpacing) / crossAxisCount) /
+                      aspectRatio;
+              final tileExtent = math.max(naturalTileHeight, minTileExtent);
 
-          // 桌面端使用更大的字体和图标
-          final titleStyle = desktop
-              ? theme.textTheme.bodySmall?.copyWith(
-                  fontSize: DesktopTokens.fontSizeCaption,
-                  color: cs.onSurface.withValues(
-                    alpha: DesktopTokens.opacityTextTertiary,
+              // 桌面端使用更大的字体和图标
+              final titleStyle = desktop
+                  ? theme.textTheme.bodySmall?.copyWith(
+                      fontSize: DesktopTokens.fontSizeCaption,
+                      color: cs.onSurface.withValues(
+                        alpha: DesktopTokens.opacityTextTertiary,
+                      ),
+                      fontWeight: FontWeight.normal,
+                      height: 1.1,
+                    )
+                  : null;
+
+              final valueStyle = desktop
+                  ? theme.textTheme.titleMedium?.copyWith(
+                      fontSize: DesktopTokens.fontSizeBody,
+                      color: cs.onSurface.withValues(
+                        alpha: DesktopTokens.opacityTextPrimary,
+                      ),
+                      height: 1.08,
+                    )
+                  : null;
+
+              final unitStyle = desktop
+                  ? theme.textTheme.bodySmall?.copyWith(
+                      fontSize: DesktopTokens.fontSizeCaption,
+                      fontWeight: FontWeight.normal,
+                      color: cs.onSurface.withValues(
+                        alpha: DesktopTokens.opacityTextTertiary,
+                      ),
+                      height: 1.08,
+                    )
+                  : null;
+
+              final padding = desktop
+                  ? const EdgeInsets.fromLTRB(14, 12, 14, 12)
+                  : const EdgeInsets.fromLTRB(12, 10, 12, 10);
+
+              final iconBoxSize = desktop ? 32.0 : 28.0;
+              final iconSize = desktop ? 17.0 : 15.0;
+
+              return GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: aspectRatio,
+                mainAxisExtent: tileExtent,
+                mainAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
+                crossAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
+                children: [
+                  AppMetricCard(
+                    title: s.navTodo,
+                    value: '${todayTodos.length}',
+                    unit: I18n.tr('today.unit.item'),
+                    icon: Icons.check_circle_outline,
+                    color: cs.primary,
+                    onTap: () => _go(context, const TodoScreen()),
+                    titleStyle: titleStyle,
+                    valueStyle: valueStyle,
+                    unitStyle: unitStyle,
+                    padding: padding,
+                    iconBoxSize: iconBoxSize,
+                    iconSize: iconSize,
                   ),
-                  fontWeight: FontWeight.normal,
-                  height: 1.1,
-                )
-              : null;
-
-          final valueStyle = desktop
-              ? theme.textTheme.titleMedium?.copyWith(
-                  fontSize: DesktopTokens.fontSizeBody,
-                  color: cs.onSurface.withValues(
-                    alpha: DesktopTokens.opacityTextPrimary,
+                  AppMetricCard(
+                    title: s.navHabit,
+                    value: '${(todayHabitProgress * 100).round()}',
+                    unit: '%',
+                    icon: Icons.repeat,
+                    color: cs.tertiary,
+                    onTap: () => _go(context, const HabitScreen()),
+                    titleStyle: titleStyle,
+                    valueStyle: valueStyle,
+                    unitStyle: unitStyle,
+                    padding: padding,
+                    iconBoxSize: iconBoxSize,
+                    iconSize: iconSize,
                   ),
-                  height: 1.08,
-                )
-              : null;
-
-          final unitStyle = desktop
-              ? theme.textTheme.bodySmall?.copyWith(
-                  fontSize: DesktopTokens.fontSizeCaption,
-                  fontWeight: FontWeight.normal,
-                  color: cs.onSurface.withValues(
-                    alpha: DesktopTokens.opacityTextTertiary,
-                  ),
-                  height: 1.08,
-                )
-              : null;
-
-          final padding = desktop
-              ? const EdgeInsets.fromLTRB(14, 12, 14, 12)
-              : const EdgeInsets.fromLTRB(12, 10, 12, 10);
-
-          final iconBoxSize = desktop ? 32.0 : 28.0;
-          final iconSize = desktop ? 17.0 : 15.0;
-
-          return GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: crossAxisCount,
-            childAspectRatio: aspectRatio,
-            mainAxisExtent: tileExtent,
-            mainAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
-            crossAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
-            children: [
-              AppMetricCard(
-                title: s.navTodo,
-                value: '${todayTodos.length}',
-                unit: I18n.tr('today.unit.item'),
-                icon: Icons.check_circle_outline,
-                color: cs.primary,
-                onTap: () => _go(context, const TodoScreen()),
-                titleStyle: titleStyle,
-                valueStyle: valueStyle,
-                unitStyle: unitStyle,
-                padding: padding,
-                iconBoxSize: iconBoxSize,
-                iconSize: iconSize,
-              ),
-              AppMetricCard(
-                title: s.navHabit,
-                value: '${(todayHabitProgress * 100).round()}',
-                unit: '%',
-                icon: Icons.repeat,
-                color: cs.tertiary,
-                onTap: () => _go(context, const HabitScreen()),
-                titleStyle: titleStyle,
-                valueStyle: valueStyle,
-                unitStyle: unitStyle,
-                padding: padding,
-                iconBoxSize: iconBoxSize,
-                iconSize: iconSize,
-              ),
-              AppMetricCard(
-                title: s.navFocus,
-                value: '$todayFocusCount',
-                unit: I18n.tr('today.unit.times'),
-                icon: Icons.timer,
-                color: Colors.redAccent,
-                onTap: () => _go(
-                  context,
-                  const PomodoroScreen(useShellBackground: true),
-                ),
-                titleStyle: titleStyle,
-                valueStyle: valueStyle,
-                unitStyle: unitStyle,
-                padding: padding,
-                iconBoxSize: iconBoxSize,
-                iconSize: iconSize,
-              ),
-              AppMetricCard(
-                title: I18n.tr('today.diary'),
-                value: diaryP.entryForDate(now) == null
-                    ? I18n.tr('today.diary.unwritten')
-                    : I18n.tr('today.diary.written'),
-                icon: Icons.book_outlined,
-                color: const Color(0xFF26A69A),
-                onTap: () => _go(context, const DiaryScreen()),
-                titleStyle: titleStyle,
-                valueStyle: valueStyle,
-                unitStyle: unitStyle,
-                padding: padding,
-                iconBoxSize: iconBoxSize,
-                iconSize: iconSize,
-              ),
-            ],
-          );
-        },
-      );
-    }
-
-    Widget todosSection({int maxItems = 6}) {
-      return _section(
-        I18n.tr('today.todos'),
-        subtitle:
-            "$todayTodosCount ${I18n.tr('today.unit.item')} · ${I18n.tr('today.completed')} $completedTodayCount · ${I18n.tr('today.no_due')} ${noDueTodayTodos.length}",
-        onMore: () => TodayDetailRouter.open(context, TodaySectionKind.todos),
-        child: todayTodos.isEmpty
-            ? _TodayTodoEmptyState(
-                onTap: () =>
-                    TodayDetailRouter.open(context, TodaySectionKind.todos),
-              )
-            : Column(
-                children: todayTodos.take(maxItems).map((t) {
-                  return _TodayTodoSwipeTile(
-                    todo: t,
-                    onToggle: () =>
-                        completeTodoWithOptionalTimeRecord(context, t),
-                    onOpen: () => TodayDetailRouter.open(
+                  AppMetricCard(
+                    title: s.navFocus,
+                    value: '$todayFocusCount',
+                    unit: I18n.tr('today.unit.times'),
+                    icon: Icons.timer,
+                    color: Colors.redAccent,
+                    onTap: () => _go(
                       context,
-                      TodaySectionKind.todos,
-                      id: t.id,
+                      const PomodoroScreen(useShellBackground: true),
                     ),
-                  );
-                }).toList(),
-              ),
-      );
-    }
+                    titleStyle: titleStyle,
+                    valueStyle: valueStyle,
+                    unitStyle: unitStyle,
+                    padding: padding,
+                    iconBoxSize: iconBoxSize,
+                    iconSize: iconSize,
+                  ),
+                  AppMetricCard(
+                    title: I18n.tr('today.diary'),
+                    value: diaryP.entryForDate(now) == null
+                        ? I18n.tr('today.diary.unwritten')
+                        : I18n.tr('today.diary.written'),
+                    icon: Icons.book_outlined,
+                    color: const Color(0xFF26A69A),
+                    onTap: () => _go(context, const DiaryScreen()),
+                    titleStyle: titleStyle,
+                    valueStyle: valueStyle,
+                    unitStyle: unitStyle,
+                    padding: padding,
+                    iconBoxSize: iconBoxSize,
+                    iconSize: iconSize,
+                  ),
+                ],
+              );
+            },
+          );
+        }
 
-    Widget? reminderSection() {
-      if (!showReminderSection) return null;
-      return _TodayReminderSection(
-        groups: reminderGroups,
-        suggestions: suggestions,
-        todayKey: todayKey,
-        now: now,
-        onOpenTodo: (id) =>
-            TodayDetailRouter.open(context, TodaySectionKind.todos, id: id),
-        onToggleTodo: (todo) =>
-            completeTodoWithOptionalTimeRecord(context, todo),
-        onOpenCourses: () =>
-            TodayDetailRouter.open(context, TodaySectionKind.courses),
-        onAddToday: (todo) async {
-          final actionNow = DateTime.now();
-          final changed = await context
-              .read<TodoProvider>()
-              .scheduleTodoForToday(todo.id, now: actionNow);
-          if (!context.mounted || !changed) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${I18n.tr('today.added_prefix')}${todo.title}'),
-              behavior: SnackBarBehavior.floating,
+        Widget todosSection({int maxItems = 6}) {
+          return _section(
+            I18n.tr('today.todos'),
+            subtitle:
+                "$todayTodosCount ${I18n.tr('today.unit.item')} · ${I18n.tr('today.completed')} $completedTodayCount · ${I18n.tr('today.no_due')} ${noDueTodayTodos.length}",
+            onMore: () =>
+                TodayDetailRouter.open(context, TodaySectionKind.todos),
+            child: todayTodos.isEmpty
+                ? _TodayTodoEmptyState(
+                    onTap: () =>
+                        TodayDetailRouter.open(context, TodaySectionKind.todos),
+                  )
+                : Column(
+                    children: todayTodos.take(maxItems).map((t) {
+                      return _TodayTodoSwipeTile(
+                        key: ValueKey('today_todo_${t.id}'),
+                        todo: t,
+                        onToggle: () =>
+                            completeTodoWithOptionalTimeRecord(context, t),
+                        onOpen: () => TodayDetailRouter.open(
+                          context,
+                          TodaySectionKind.todos,
+                          id: t.id,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+          );
+        }
+
+        Widget? reminderSection() {
+          if (!showReminderSection) return null;
+          final boundAccountGeneration =
+              AccountLocalDataCleaner.accountDataGeneration;
+          return _TodayReminderSection(
+            groups: reminderGroups,
+            suggestions: suggestions,
+            todayKey: todayKey,
+            now: now,
+            onOpenTodo: (id) => TodayDetailRouter.open(
+              context,
+              TodaySectionKind.todos,
+              id: id,
+              accountGeneration: boundAccountGeneration,
+            ),
+            onToggleTodo: (todo) =>
+                completeTodoWithOptionalTimeRecord(context, todo),
+            onOpenCourses: () =>
+                TodayDetailRouter.open(context, TodaySectionKind.courses),
+            onAddToday: (todo) async {
+              if (AccountLocalDataCleaner.accountDataGeneration !=
+                  boundAccountGeneration) {
+                return;
+              }
+              final actionNow = DateTime.now();
+              final changed = await context
+                  .read<TodoProvider>()
+                  .scheduleTodoForToday(
+                    todo.id,
+                    now: actionNow,
+                    expectedAccountDataGeneration: boundAccountGeneration,
+                  );
+              if (!context.mounted ||
+                  AccountLocalDataCleaner.accountDataGeneration !=
+                      boundAccountGeneration ||
+                  !changed) {
+                return;
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '${I18n.tr('today.added_prefix')}${todo.title}',
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+          );
+        }
+
+        Widget? coursesSection() {
+          if (todayCourses.isEmpty) return null;
+          return _section(
+            I18n.tr('today.courses'),
+            subtitle:
+                '${todayCourses.length} ${I18n.tr('today.unit.course_section')}',
+            onMore: () =>
+                TodayDetailRouter.open(context, TodaySectionKind.courses),
+            child: Column(
+              children: todayCourses.map((c) {
+                return ListTile(
+                  dense: true,
+                  leading: CircleAvatar(
+                    radius: 14,
+                    backgroundColor: Color(c.colorValue).withValues(alpha: 0.2),
+                    child: Text(
+                      '${c.startSection}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Color(c.colorValue),
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                  title: Text(c.name),
+                  subtitle: Text(
+                    '${I18n.tr('today.course.period_prefix')}${c.startSection}-${c.endSection}${I18n.tr('today.course.period_suffix')}${c.location.isEmpty ? '' : ' · ${c.location}'}${c.teacher.isEmpty ? '' : ' · ${c.teacher}'}',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  onTap: () =>
+                      TodayDetailRouter.open(context, TodaySectionKind.courses),
+                );
+              }).toList(),
             ),
           );
-        },
-      );
-    }
+        }
 
-    Widget? coursesSection() {
-      if (todayCourses.isEmpty) return null;
-      return _section(
-        I18n.tr('today.courses'),
-        subtitle:
-            '${todayCourses.length} ${I18n.tr('today.unit.course_section')}',
-        onMore: () => TodayDetailRouter.open(context, TodaySectionKind.courses),
-        child: Column(
-          children: todayCourses.map((c) {
-            return ListTile(
-              dense: true,
-              leading: CircleAvatar(
-                radius: 14,
-                backgroundColor: Color(c.colorValue).withValues(alpha: 0.2),
-                child: Text(
-                  '${c.startSection}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Color(c.colorValue),
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-              ),
-              title: Text(c.name),
-              subtitle: Text(
-                '${I18n.tr('today.course.period_prefix')}${c.startSection}-${c.endSection}${I18n.tr('today.course.period_suffix')}${c.location.isEmpty ? '' : ' · ${c.location}'}${c.teacher.isEmpty ? '' : ' · ${c.teacher}'}',
-                style: const TextStyle(fontSize: 11),
-              ),
-              onTap: () =>
-                  TodayDetailRouter.open(context, TodaySectionKind.courses),
-            );
-          }).toList(),
-        ),
-      );
-    }
-
-    Widget? anniversariesSection() {
-      if (soon.isEmpty) return null;
-      return _section(
-        I18n.tr('today.upcoming_anniversaries'),
-        onMore: () =>
-            TodayDetailRouter.open(context, TodaySectionKind.anniversaries),
-        child: Column(
-          children: soon.map((a) {
-            final d = a.daysRemaining;
-            return ListTile(
-              dense: true,
-              leading: CircleAvatar(
-                radius: 14,
-                backgroundColor: Color(a.colorValue).withValues(alpha: 0.15),
-                child: Text(
-                  '$d',
-                  style: TextStyle(
-                    color: Color(a.colorValue),
-                    fontWeight: FontWeight.normal,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-              title: Text(a.title),
-              subtitle: Text(
-                d == 0
-                    ? I18n.tr('today.anniversary.today')
-                    : '${I18n.tr('today.anniversary.days_prefix')}$d ${I18n.tr('unit.day')}',
-                style: const TextStyle(fontSize: 11),
-              ),
-              onTap: () => TodayDetailRouter.open(
-                context,
-                TodaySectionKind.anniversaries,
-                id: a.id,
-              ),
-            );
-          }).toList(),
-        ),
-      );
-    }
-
-    Widget goalsSection() {
-      return _section(
-        activeGoals.isEmpty
-            ? I18n.tr('goal.title')
-            : I18n.tr('today.active_goals'),
-        actionLabel: activeGoals.isEmpty
-            ? I18n.tr('goal.new')
-            : I18n.tr('today.view'),
-        onMore: () => activeGoals.isEmpty
-            ? Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const GoalEditScreen()),
-              )
-            : TodayDetailRouter.open(context, TodaySectionKind.goals),
-        child: activeGoals.isEmpty
-            ? ListTile(
-                leading: const Icon(Icons.flag_circle_outlined),
-                title: Text(I18n.tr('goal.new')),
-                subtitle: Text(I18n.tr('today.goal.create.subtitle')),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const GoalEditScreen()),
-                ),
-              )
-            : Column(
-                children: activeGoals.map((g) {
-                  final p = g.computedProgress;
-                  return ListTile(
-                    dense: true,
-                    leading: Icon(
-                      goalIconFromName(g.icon),
-                      color: Color(g.colorValue),
-                      size: 18,
+        Widget? anniversariesSection() {
+          if (soon.isEmpty) return null;
+          return _section(
+            I18n.tr('today.upcoming_anniversaries'),
+            onMore: () =>
+                TodayDetailRouter.open(context, TodaySectionKind.anniversaries),
+            child: Column(
+              children: soon.map((a) {
+                final d = a.daysRemaining;
+                return ListTile(
+                  dense: true,
+                  leading: CircleAvatar(
+                    radius: 14,
+                    backgroundColor: Color(
+                      a.colorValue,
+                    ).withValues(alpha: 0.15),
+                    child: Text(
+                      '$d',
+                      style: TextStyle(
+                        color: Color(a.colorValue),
+                        fontWeight: FontWeight.normal,
+                        fontSize: 11,
+                      ),
                     ),
-                    title: Text(g.title),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
-                          child: LinearProgressIndicator(
-                            value: p,
-                            minHeight: 5,
-                            color: Color(g.colorValue),
-                            backgroundColor: Color(
-                              g.colorValue,
-                            ).withValues(alpha: 0.15),
-                          ),
-                        ),
-                        Text(
-                          '${(p * 100).toStringAsFixed(0)}%',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ],
-                    ),
-                    onTap: () => TodayDetailRouter.open(
+                  ),
+                  title: Text(a.title),
+                  subtitle: Text(
+                    d == 0
+                        ? I18n.tr('today.anniversary.today')
+                        : '${I18n.tr('today.anniversary.days_prefix')}$d ${I18n.tr('unit.day')}',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  onTap: () => TodayDetailRouter.open(
+                    context,
+                    TodaySectionKind.anniversaries,
+                    id: a.id,
+                  ),
+                );
+              }).toList(),
+            ),
+          );
+        }
+
+        Widget goalsSection() {
+          return _section(
+            activeGoals.isEmpty
+                ? I18n.tr('goal.title')
+                : I18n.tr('today.active_goals'),
+            actionLabel: activeGoals.isEmpty
+                ? I18n.tr('goal.new')
+                : I18n.tr('today.view'),
+            onMore: () => activeGoals.isEmpty
+                ? Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const GoalEditScreen()),
+                  )
+                : TodayDetailRouter.open(context, TodaySectionKind.goals),
+            child: activeGoals.isEmpty
+                ? ListTile(
+                    leading: const Icon(Icons.flag_circle_outlined),
+                    title: Text(I18n.tr('goal.new')),
+                    subtitle: Text(I18n.tr('today.goal.create.subtitle')),
+                    onTap: () => Navigator.push(
                       context,
-                      TodaySectionKind.goals,
-                      id: g.id,
+                      MaterialPageRoute(builder: (_) => const GoalEditScreen()),
                     ),
-                  );
-                }).toList(),
-              ),
-      );
-    }
+                  )
+                : Column(
+                    children: activeGoals.map((g) {
+                      final p = g.computedProgress;
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(
+                          goalIconFromName(g.icon),
+                          color: Color(g.colorValue),
+                          size: 18,
+                        ),
+                        title: Text(g.title),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 4),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(3),
+                              child: LinearProgressIndicator(
+                                value: p,
+                                minHeight: 5,
+                                color: Color(g.colorValue),
+                                backgroundColor: Color(
+                                  g.colorValue,
+                                ).withValues(alpha: 0.15),
+                              ),
+                            ),
+                            Text(
+                              '${(p * 100).toStringAsFixed(0)}%',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ],
+                        ),
+                        onTap: () => TodayDetailRouter.open(
+                          context,
+                          TodaySectionKind.goals,
+                          id: g.id,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+          );
+        }
 
-    final isDesktopLayout = MediaQuery.sizeOf(context).width >= 1100;
-    final reminder = reminderSection();
-    final courses = coursesSection();
-    final anniversaries = anniversariesSection();
-    final goals = goalsSection();
-    if (isDesktopLayout) {
-      return _TodayDesktopDashboard(
-        greeting: greeting,
-        dateText:
-            '${I18nDateFormat.monthDayWithWeekday(now)} · ${lunar.chineseText}',
-        almanacCard: almanacCard,
-        productivityCard: productivityCard,
-        metricsGrid: metricsGrid(desktop: true),
-        todosSection: todosSection(maxItems: 8),
-        reminderSection: reminder,
-        quoteCard: _QuoteCard(),
-        goalsSection: goals,
-        coursesSection: courses,
-        anniversariesSection: anniversaries,
-      );
-    }
+        final isDesktopLayout = MediaQuery.sizeOf(context).width >= 1100;
+        final reminder = reminderSection();
+        final courses = coursesSection();
+        final anniversaries = anniversariesSection();
+        final goals = goalsSection();
+        if (isDesktopLayout) {
+          return _TodayDesktopDashboard(
+            greeting: greeting,
+            dateText:
+                '${I18nDateFormat.monthDayWithWeekday(now)} · ${AlmanacLocaleFormat.formatLunarDate(lunar)}',
+            almanacCard: almanacCard,
+            productivityCard: productivityCard,
+            metricsGrid: metricsGrid(desktop: true),
+            todosSection: todosSection(maxItems: 8),
+            reminderSection: reminder,
+            quoteCard: _QuoteCard(),
+            goalsSection: goals,
+            coursesSection: courses,
+            anniversariesSection: anniversaries,
+          );
+        }
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: Text(greeting),
-        backgroundColor: Colors.transparent,
-      ),
-      body: ListView(
-        key: const ValueKey('today_screen_list'),
-        restorationId: 'today_screen_list',
-        // Keep the final card clear of the bottom navigation bar and FAB when
-        // the mobile Today list is scrolled to its end.
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 96),
-        children: [
-          almanacCard,
-          const SizedBox(height: 12),
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            title: Text(greeting),
+            backgroundColor: Colors.transparent,
+          ),
+          body: ListView(
+            key: const ValueKey('today_screen_list'),
+            restorationId: 'today_screen_list',
+            // Keep the final card clear of the bottom navigation bar and FAB when
+            // the mobile Today list is scrolled to its end.
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 96),
+            children: [
+              almanacCard,
+              const SizedBox(height: 12),
 
-          productivityCard,
+              productivityCard,
 
-          const SizedBox(height: 12),
-          metricsGrid(desktop: false),
+              const SizedBox(height: 12),
+              metricsGrid(desktop: false),
 
-          const SizedBox(height: 14),
+              const SizedBox(height: 14),
 
-          todosSection(),
-          const SizedBox(height: 10),
-          _QuoteCard(),
-          ?reminder,
-          ?courses,
-          ?anniversaries,
-          goals,
-        ],
-      ),
+              todosSection(),
+              const SizedBox(height: 10),
+              _QuoteCard(),
+              ?reminder,
+              ?courses,
+              ?anniversaries,
+              goals,
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -657,7 +700,10 @@ class _CompactMonthCalendar extends StatelessWidget {
     final days = <Widget>[];
 
     // 星期标题
-    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+    final weekdays = switch (I18n.current) {
+      AppLocale.en => const ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      AppLocale.zh => const ['日', '一', '二', '三', '四', '五', '六'],
+    };
     for (final weekday in weekdays) {
       days.add(
         Center(
@@ -725,7 +771,7 @@ class _CompactMonthCalendar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Text(
-              '${now.year}年${now.month}月',
+              I18nDateFormat.yearMonth(now),
               style: theme.textTheme.titleMedium?.copyWith(
                 fontSize: DesktopTokens.fontSizeCardSubtitle,
                 color: cs.onSurface.withValues(
@@ -761,25 +807,25 @@ class _QuickAccessPanel extends StatelessWidget {
     final quickActions = [
       _QuickAction(
         icon: Icons.repeat,
-        label: '习惯打卡',
+        label: TodayUiCopy.quickAccessHabit,
         color: cs.tertiary,
         onTap: () => Navigator.pushNamed(context, '/habit'),
       ),
       _QuickAction(
         icon: Icons.timer_outlined,
-        label: '番茄专注',
+        label: TodayUiCopy.quickAccessPomodoro,
         color: Colors.redAccent,
         onTap: () => Navigator.pushNamed(context, '/pomodoro'),
       ),
       _QuickAction(
         icon: Icons.edit_note_outlined,
-        label: '快速笔记',
+        label: TodayUiCopy.quickAccessNotes,
         color: cs.secondary,
         onTap: () => Navigator.pushNamed(context, '/notes'),
       ),
       _QuickAction(
         icon: Icons.calendar_today_outlined,
-        label: '日程安排',
+        label: TodayUiCopy.quickAccessCalendar,
         color: cs.primary,
         onTap: () => Navigator.pushNamed(context, '/calendar'),
       ),
@@ -803,7 +849,7 @@ class _QuickAccessPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '快捷入口',
+            TodayUiCopy.quickAccessTitle,
             style: theme.textTheme.titleSmall?.copyWith(
               fontSize: DesktopTokens.fontSizeCardSubtitle,
               color: cs.onSurface.withValues(
@@ -1158,7 +1204,7 @@ class _TodayDesktopHeader extends StatelessWidget {
 
 class _TodayAlmanacCard extends StatelessWidget {
   final DateTime now;
-  final String lunarText;
+  final LunarDate lunar;
   final String suitable;
   final String avoid;
   final String? term;
@@ -1167,7 +1213,7 @@ class _TodayAlmanacCard extends StatelessWidget {
 
   const _TodayAlmanacCard({
     required this.now,
-    required this.lunarText,
+    required this.lunar,
     required this.suitable,
     required this.avoid,
     required this.term,
@@ -1190,6 +1236,9 @@ class _TodayAlmanacCard extends StatelessWidget {
     final lunarLabel = I18n.current == AppLocale.en
         ? 'Lunar'
         : I18n.tr('calendar.chinese_lunar_calendar');
+    final lunarText = AlmanacLocaleFormat.formatLunarDate(lunar);
+    final termText = AlmanacLocaleFormat.formatSolarTerm(term);
+    final festivalText = AlmanacLocaleFormat.formatFestival(festival);
     final backgroundAsset = brand.backgroundAsset;
     final panelFill = foreground.withValues(alpha: isDark ? 0.045 : 0.018);
     final panelBorder = foreground.withValues(alpha: isDark ? 0.13 : 0.09);
@@ -1373,20 +1422,21 @@ class _TodayAlmanacCard extends StatelessWidget {
                                     fontWeight: FontWeight.normal,
                                   ),
                                 ),
-                                if (term != null || festival != null) ...[
+                                if (termText != null ||
+                                    festivalText != null) ...[
                                   const SizedBox(height: 9),
                                   Wrap(
                                     spacing: 6,
                                     runSpacing: 6,
                                     children: [
-                                      if (term != null)
+                                      if (termText != null)
                                         _TodayCalendarChip(
-                                          text: term!,
+                                          text: termText,
                                           color: accent,
                                         ),
-                                      if (festival != null)
+                                      if (festivalText != null)
                                         _TodayCalendarChip(
-                                          text: festival!,
+                                          text: festivalText,
                                           color: cs.tertiary,
                                         ),
                                     ],
@@ -1402,7 +1452,7 @@ class _TodayAlmanacCard extends StatelessWidget {
                         children: [
                           Expanded(
                             child: _TodayYijiPreview(
-                              label: '宜',
+                              label: TodayUiCopy.auspiciousLabel,
                               text: suitable,
                               color: const Color(0xFF2E7D32),
                               foreground: foreground,
@@ -1412,7 +1462,7 @@ class _TodayAlmanacCard extends StatelessWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: _TodayYijiPreview(
-                              label: '忌',
+                              label: TodayUiCopy.inauspiciousLabel,
                               text: avoid,
                               color: const Color(0xFFC62828),
                               foreground: foreground,
@@ -1453,7 +1503,7 @@ class _TodayDateBadge extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       width: 68,
-      height: 76,
+      constraints: const BoxConstraints(minHeight: 76),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: foreground.withValues(alpha: isDark ? 0.08 : 0.05),
@@ -1464,6 +1514,7 @@ class _TodayDateBadge extends StatelessWidget {
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: double.infinity,
@@ -1471,7 +1522,7 @@ class _TodayDateBadge extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 5),
             color: accent.withValues(alpha: isDark ? 0.20 : 0.13),
             child: Text(
-              '${date.month}月',
+              TodayUiCopy.monthBadge(date),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
@@ -1482,8 +1533,10 @@ class _TodayDateBadge extends StatelessWidget {
               ),
             ),
           ),
-          Expanded(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 SizedBox(
@@ -1591,13 +1644,16 @@ class _TodayYijiPreview extends StatelessWidget {
               color: color.withValues(alpha: isDark ? 0.18 : 0.12),
               borderRadius: BorderRadius.circular(7),
             ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                height: 1,
-                fontWeight: FontWeight.normal,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  height: 1,
+                  fontWeight: FontWeight.normal,
+                ),
               ),
             ),
           ),
@@ -1621,13 +1677,7 @@ class _TodayYijiPreview extends StatelessWidget {
 }
 
 String _wholeTermPreview(String value) {
-  final terms = value
-      .split(RegExp(r'\s+'))
-      .map((term) => term.trim())
-      .where((term) => term.isNotEmpty)
-      .toList(growable: false);
-  if (terms.length <= 4) return terms.join(' ');
-  return '${terms.take(4).join(' ')} …';
+  return AlmanacLocaleFormat.formatActivitiesPreview(value);
 }
 
 class _TodayProductivitySection extends StatelessWidget {
@@ -1690,6 +1740,8 @@ class _TodayProductivityCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final scoreDelta = comparison.productivityScore.difference.round();
     final trendColor = _trendColor(cs, comparison.productivityScore.direction);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final scoreSize = math.max(60.0, textScaler.scale(40.0) + 20.0);
     return AppSurfaceCard(
       onTap: onTap,
       margin: const EdgeInsets.only(bottom: 2),
@@ -1717,9 +1769,10 @@ class _TodayProductivityCard extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 60,
-            height: 60,
+            width: scoreSize,
+            height: scoreSize,
             alignment: Alignment.center,
+            padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Color.alphaBlend(
@@ -1735,27 +1788,31 @@ class _TodayProductivityCard extends StatelessWidget {
                 ),
               ],
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  comparison.current.productivityScore.toString(),
-                  style: TextStyle(
-                    fontSize: 22,
-                    height: 1,
-                    color: cs.primary,
-                    fontWeight: FontWeight.normal,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    comparison.current.productivityScore.toString(),
+                    style: TextStyle(
+                      fontSize: 22,
+                      height: 1,
+                      color: cs.primary,
+                      fontWeight: FontWeight.normal,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  I18n.tr('today.productivity.score'),
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: cs.onSurface.withValues(alpha: 0.58),
+                  const SizedBox(height: 2),
+                  Text(
+                    I18n.tr('today.productivity.score'),
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: cs.onSurface.withValues(alpha: 0.58),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -2351,7 +2408,9 @@ class _TodayTodoStatusToggle extends StatelessWidget {
     return Semantics(
       button: true,
       checked: isCompleted,
-      label: isCompleted ? '标记为未完成' : '标记为完成',
+      label: isCompleted
+          ? TodayUiCopy.markAsIncomplete
+          : TodayUiCopy.markAsComplete,
       child: Material(
         color: Colors.transparent,
         shape: const CircleBorder(),
@@ -2405,6 +2464,7 @@ class _TodayTodoSwipeTile extends StatefulWidget {
   final bool showOverdueBadge;
 
   const _TodayTodoSwipeTile({
+    super.key,
     required this.todo,
     required this.onToggle,
     required this.onOpen,
@@ -2451,9 +2511,15 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
 
   void _showReadOnlyMessage(String action) {
     _closeSwipe();
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(
-        content: Text('共享空间只读，不能$action'),
+        content: ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (context, locale, _) =>
+              Text(TodayUiCopy.readOnlyActionMessage(action, locale)),
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -2461,26 +2527,38 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
 
   Future<void> _confirmDelete(BuildContext context) async {
     _closeSwipe();
+    final targetTodoId = widget.todo.id;
+    final targetTodoTitle = widget.todo.title;
+    final targetGeneration = AccountLocalDataCleaner.accountDataGeneration;
+
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogCtx) => AppDialog(
-        icon: const Icon(Icons.delete_outline),
-        title: const Text('删除任务？'),
-        content: Text('将删除“${widget.todo.title}”，相关时间足迹也会同步移除。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(true),
-            child: const Text('删除'),
-          ),
-        ],
+      builder: (dialogCtx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (context, locale, _) => AppDialog(
+          icon: const Icon(Icons.delete_outline),
+          title: Text(TodayUiCopy.deleteTaskTitle(locale)),
+          content: Text(TodayUiCopy.deleteTaskContent(targetTodoTitle, locale)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: Text(I18n.tr('action.cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: Text(I18n.tr('action.delete')),
+            ),
+          ],
+        ),
       ),
     );
-    if (confirmed == true && context.mounted) {
-      await context.read<TodoProvider>().deleteTodo(widget.todo.id);
+    if (!context.mounted) return;
+    if (confirmed == true &&
+        context.mounted &&
+        mounted &&
+        AccountLocalDataCleaner.accountDataGeneration == targetGeneration &&
+        widget.todo.id == targetTodoId) {
+      await context.read<TodoProvider>().deleteTodo(targetTodoId);
     } else {
       _closeSwipe();
     }
@@ -2626,7 +2704,7 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
                         _TodayTodoSwipeButton(
                           key: const ValueKey('today_todo_swipe_delete_button'),
                           icon: Icons.delete_outline,
-                          label: '删除',
+                          label: I18n.tr('action.delete'),
                           background: canEdit
                               ? cs.errorContainer.withValues(alpha: 0.64)
                               : cs.surfaceContainerHighest.withValues(
@@ -2828,10 +2906,10 @@ class _TodayReminderGroups {
     DateTime now,
   ) {
     final prefix = trigger.isBefore(now)
-        ? '提醒时间'
+        ? TodayUiCopy.reminderPrefixPast
         : _sameDay(trigger, DateTime(now.year, now.month, now.day))
-        ? '今日提醒'
-        : '即将开始';
+        ? TodayUiCopy.reminderPrefixToday
+        : TodayUiCopy.reminderPrefixUpcoming;
     final meta = <String>[
       I18nDateFormat.smartDate(trigger, includeTime: true),
       if (todo.listGroupName != null && todo.listGroupName!.isNotEmpty)
@@ -2875,9 +2953,10 @@ class _TodayReminderSectionState extends State<_TodayReminderSection> {
         widget.groups.dueToday.length +
         widget.groups.upcoming.length +
         widget.groups.overdue.length;
-    final subtitle = widget.suggestions.isEmpty
-        ? '$total 项 · 今日待提醒 > 即将开始 > 逾期优先处理'
-        : '$total 项提醒 · 今日待提醒 > 即将开始 > 逾期优先处理 > 今日建议';
+    final subtitle = TodayUiCopy.reminderSectionSubtitle(
+      total: total,
+      hasSuggestions: widget.suggestions.isNotEmpty,
+    );
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Padding(
@@ -2913,7 +2992,7 @@ class _TodayReminderSectionState extends State<_TodayReminderSection> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '今日提醒',
+                            TodayUiCopy.reminderHeaderTitle,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               fontSize: 14,
                               height: 1.25,
@@ -2922,7 +3001,9 @@ class _TodayReminderSectionState extends State<_TodayReminderSection> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _expanded ? subtitle : '$subtitle · 默认收起',
+                            _expanded
+                                ? subtitle
+                                : '$subtitle · ${TodayUiCopy.collapsedByDefault}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
@@ -2956,7 +3037,7 @@ class _TodayReminderSectionState extends State<_TodayReminderSection> {
             ),
             if (_expanded && widget.groups.dueToday.isNotEmpty)
               _ReminderGroupBlock(
-                title: '今日待提醒事项',
+                title: TodayUiCopy.reminderGroupDueToday,
                 items: widget.groups.dueToday.take(4).toList(),
                 now: widget.now,
                 onOpenTodo: widget.onOpenTodo,
@@ -2965,7 +3046,7 @@ class _TodayReminderSectionState extends State<_TodayReminderSection> {
               ),
             if (_expanded && widget.groups.upcoming.isNotEmpty)
               _ReminderGroupBlock(
-                title: '即将开始事项',
+                title: TodayUiCopy.reminderGroupUpcoming,
                 items: widget.groups.upcoming.take(4).toList(),
                 now: widget.now,
                 onOpenTodo: widget.onOpenTodo,
@@ -2974,7 +3055,7 @@ class _TodayReminderSectionState extends State<_TodayReminderSection> {
               ),
             if (_expanded && widget.groups.overdue.isNotEmpty)
               _ReminderGroupBlock(
-                title: '已逾期事项',
+                title: TodayUiCopy.reminderGroupOverdue,
                 items: widget.groups.overdue.take(4).toList(),
                 now: widget.now,
                 overdue: true,
@@ -2984,6 +3065,7 @@ class _TodayReminderSectionState extends State<_TodayReminderSection> {
               ),
             if (_expanded && widget.suggestions.isNotEmpty)
               _SuggestionSection(
+                key: const ValueKey('today_suggestion_section'),
                 suggestions: widget.suggestions,
                 todayKey: widget.todayKey,
                 onOpenTodo: widget.onOpenTodo,
@@ -3065,7 +3147,7 @@ class _ReminderGroupBlock extends StatelessWidget {
                   ],
                   const Spacer(),
                   Text(
-                    '${items.length} 项',
+                    TodayUiCopy.itemCount(items.length),
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: cs.onSurfaceVariant,
                     ),
@@ -3196,6 +3278,7 @@ class _TodayReminderTile extends StatelessWidget {
           );
     if (isTodo && todo != null) {
       return _TodayTodoSwipeTile(
+        key: ValueKey('today_reminder_todo_${todo.id}'),
         todo: todo,
         onToggle: () => onToggleTodo(todo),
         onOpen: () => onOpenTodo(item.id),
@@ -3325,11 +3408,12 @@ class _TodayReminderTile extends StatelessWidget {
     final days = today.difference(triggerDay).inDays;
     if (days <= 0) {
       final minutes = now.difference(trigger).inMinutes.clamp(1, 999);
-      return item.kind == _TodayReminderKind.course
-          ? '已过期 $minutes 分钟'
-          : '已过提醒 $minutes 分钟';
+      return TodayUiCopy.pastStatusMinutes(
+        minutes: minutes,
+        isCourse: item.kind == _TodayReminderKind.course,
+      );
     }
-    return '已逾期 $days 天';
+    return TodayUiCopy.pastStatusDays(days);
   }
 }
 
@@ -3340,6 +3424,7 @@ class _SuggestionSection extends StatefulWidget {
   final Future<void> Function(TodoItem todo) onAddToday;
 
   const _SuggestionSection({
+    super.key,
     required this.suggestions,
     required this.todayKey,
     required this.onOpenTodo,
@@ -3352,14 +3437,55 @@ class _SuggestionSection extends StatefulWidget {
 
 class _SuggestionSectionState extends State<_SuggestionSection> {
   final Set<String> _addingTodoIds = <String>{};
+  final Map<String, int> _addingTodoOpSeqs = <String, int>{};
+  int _addingActionSeq = 0;
+  final ExpansibleController _expansionController = ExpansibleController();
+  bool _expanded = false;
 
-  Future<void> _addToday(TodoItem todo) async {
+  @override
+  void initState() {
+    super.initState();
+    AccountLocalDataCleaner.accountDataGenerationListenable.addListener(
+      _onAccountDataGenerationChanged,
+    );
+  }
+
+  void _onAccountDataGenerationChanged() {
+    if (!mounted) return;
+    _addingActionSeq++;
+    _addingTodoOpSeqs.clear();
+    _addingTodoIds.clear();
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
+      _onAccountDataGenerationChanged,
+    );
+    _expansionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addToday(
+    TodoItem todo, {
+    required int rowGeneration,
+    required Future<void> Function(TodoItem todo) action,
+  }) async {
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(rowGeneration)) {
+      return;
+    }
     if (_addingTodoIds.contains(todo.id)) return;
+    final seq = ++_addingActionSeq;
+    _addingTodoOpSeqs[todo.id] = seq;
     setState(() => _addingTodoIds.add(todo.id));
     try {
-      await widget.onAddToday(todo);
+      await action(todo);
     } finally {
-      if (mounted) setState(() => _addingTodoIds.remove(todo.id));
+      if (mounted && _addingTodoOpSeqs[todo.id] == seq) {
+        _addingTodoOpSeqs.remove(todo.id);
+        setState(() => _addingTodoIds.remove(todo.id));
+      }
     }
   }
 
@@ -3369,8 +3495,13 @@ class _SuggestionSectionState extends State<_SuggestionSection> {
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
-        initiallyExpanded: false,
+        key: const PageStorageKey<String>('today_suggestions_expansion_tile'),
+        controller: _expansionController,
+        initiallyExpanded: _expanded,
         maintainState: true,
+        onExpansionChanged: (expanded) {
+          setState(() => _expanded = expanded);
+        },
         tilePadding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
         childrenPadding: const EdgeInsets.only(bottom: 4),
         leading: Icon(
@@ -3386,7 +3517,9 @@ class _SuggestionSectionState extends State<_SuggestionSection> {
           ),
         ),
         subtitle: Text(
-          '${I18n.tr('today.suggestions.subtitle')} · 默认收起',
+          _expanded
+              ? I18n.tr('today.suggestions.subtitle')
+              : '${I18n.tr('today.suggestions.subtitle')} · ${TodayUiCopy.collapsedByDefault}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -3396,7 +3529,10 @@ class _SuggestionSectionState extends State<_SuggestionSection> {
         children: widget.suggestions.map((suggestion) {
           final t = suggestion.todo;
           final adding = _addingTodoIds.contains(t.id);
+          final rowGeneration = AccountLocalDataCleaner.accountDataGeneration;
+          final rowAction = widget.onAddToday;
           return _TodayTodoSwipeTile(
+            key: ValueKey('today_suggestion_todo_${t.id}'),
             todo: t,
             onToggle: () {},
             onOpen: () => widget.onOpenTodo(t.id),
@@ -3404,7 +3540,7 @@ class _SuggestionSectionState extends State<_SuggestionSection> {
             titleColor: cs.onSurface.withValues(alpha: 0.76),
             iconKeyPrefix: 'today_suggestion_template_icon',
             subtitle: Text(
-              suggestion.reason,
+              TodayUiCopy.formatSuggestionReason(suggestion.reason),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 11),
@@ -3417,7 +3553,13 @@ class _SuggestionSectionState extends State<_SuggestionSection> {
                     height: 40,
                     child: TextButton(
                       key: ValueKey('today_suggestion_add_${t.id}'),
-                      onPressed: adding ? null : () => _addToday(t),
+                      onPressed: adding
+                          ? null
+                          : () => _addToday(
+                              t,
+                              rowGeneration: rowGeneration,
+                              action: rowAction,
+                            ),
                       style: TextButton.styleFrom(
                         minimumSize: const Size(56, 40),
                         padding: const EdgeInsets.symmetric(horizontal: 8),

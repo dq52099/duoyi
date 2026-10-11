@@ -10,6 +10,7 @@ import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/note_provider.dart';
 import '../providers/todo_provider.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/surface_components.dart';
 import 'anniversary_screen.dart';
@@ -48,9 +49,17 @@ class TodayDetailRouter {
     BuildContext context,
     TodaySectionKind kind, {
     String? id,
+    int? accountGeneration,
   }) async {
+    final openingGeneration =
+        accountGeneration ?? AccountLocalDataCleaner.accountDataGeneration;
     try {
-      final route = _routeFor(context, kind, id);
+      final route = _routeFor(
+        context,
+        kind,
+        id,
+        accountGeneration: openingGeneration,
+      );
       await Navigator.push(context, route);
     } catch (e, st) {
       // 路由构建阶段失败（例如 Provider 不在上下文），跳到 ErrorState 兜底。
@@ -74,8 +83,11 @@ class TodayDetailRouter {
   static Route<void> _routeFor(
     BuildContext context,
     TodaySectionKind kind,
-    String? id,
-  ) {
+    String? id, {
+    int? accountGeneration,
+  }) {
+    final openingGeneration =
+        accountGeneration ?? AccountLocalDataCleaner.accountDataGeneration;
     switch (kind) {
       case TodaySectionKind.todos:
         if (id == null) {
@@ -85,7 +97,12 @@ class TodayDetailRouter {
           (t) => t.id == id,
         );
         if (!exists) return _emptyRoute(kind, '这个待办不存在或已被删除');
-        return _brandRoute(TodoDetailScreen(todoId: id));
+        return _brandRoute(
+          TodoDetailScreen(
+            todoId: id,
+            accountGeneration: openingGeneration,
+          ),
+        );
 
       case TodaySectionKind.courses:
         if (id != null) {
