@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/account_preference_writes.dart';
 import '../core/feature_flags.dart';
 import '../services/account_local_data_cleaner.dart';
 import '../services/api_client.dart';
@@ -253,6 +254,9 @@ class CloudSyncProvider extends ChangeNotifier {
   bool _syncSuspendedForAccountChange = false;
   bool _resumePollingAfterAccountChange = false;
   Future<void>? _activeLocalWriteback;
+  Future<void> _metadataWriteTail = Future<void>.value();
+  final Set<Future<void>> _pendingMetadataWrites = {};
+  int _accountChangePreflightDepth = 0;
   bool get hasPendingChanges => _hasPendingChanges;
 
   bool _isCurrentAccountGeneration(int generation) =>
@@ -283,6 +287,7 @@ class CloudSyncProvider extends ChangeNotifier {
     final activeFuture = completer.future;
     _activeLocalWriteback = activeFuture;
     try {
+      await _metadataWriteTail;
       _throwIfAccountGenerationChanged(generation);
       final result = await body();
       _throwIfAccountGenerationChanged(generation);
@@ -408,18 +413,81 @@ class CloudSyncProvider extends ChangeNotifier {
     _syncRetryMessage = null;
   }
 
-  Future<void> _persistPendingChanges(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await _writePendingChanges(prefs, value);
+  Future<void> _persistPendingChanges(bool value) => _persistAccountMetadata(
+    (prefs) => prefs.setBool(_pendingLocalChangesStorageKey, value),
+  );
+
+  /// Registers queued metadata before awaiting storage so account cleanup can
+  /// drain issued writes and discard old-account work still in the queue.
+  Future<void> _persistAccountMetadata(
+    Future<bool> Function(SharedPreferences prefs) write, {
+    bool allowDuringBoundary = false,
+  }) {
+    final accountGeneration = _accountGeneration;
+    final previous = _metadataWriteTail;
+    Future<void> persist(bool Function() isCurrent) async {
+      await previous;
+      if (!isCurrent() || accountGeneration != _accountGeneration) {
+        return;
+      }
+      final prefs = await SharedPreferences.getInstance();
+      if (!isCurrent() || accountGeneration != _accountGeneration) {
+        return;
+      }
+      if (!await write(prefs)) {
+        throw StateError('Sync metadata persistence failed');
+      }
+    }
+
+    // Auth's outer boundary runs its upload preflight before cleanup. Its sync
+    // acknowledgements must complete there; suspend drains provider writeback
+    // and this queue before any account data is removed.
+    final pending =
+        allowDuringBoundary &&
+            _accountChangePreflightDepth > 0 &&
+            AccountPreferenceWrites.isBoundaryActive
+        ? persist(() => !_syncSuspendedForAccountChange)
+        : AccountPreferenceWrites.run(
+            (token) => persist(() => token.isCurrent),
+          );
+    _pendingMetadataWrites.add(pending);
+    _metadataWriteTail = pending.then<void>(
+      (_) => _pendingMetadataWrites.remove(pending),
+      onError: (Object _, StackTrace _) {
+        _pendingMetadataWrites.remove(pending);
+      },
+    );
+    return pending;
   }
 
-  Future<void> _writePendingChanges(SharedPreferences prefs, bool value) async {
-    await prefs.setBool(_pendingLocalChangesStorageKey, value);
+  void _persistMetadataInBackground(Future<void> pending) {
+    unawaited(
+      pending.catchError((Object error, StackTrace stack) {
+        debugPrint('[CloudSyncProvider] metadata persistence failed: $error');
+      }),
+    );
   }
 
-  Future<void> _setPendingChanges(SharedPreferences prefs, bool value) async {
-    _hasPendingChanges = value;
-    await _writePendingChanges(prefs, value);
+  Future<void> _writePendingChanges(SharedPreferences prefs, bool value) =>
+      _persistAccountMetadata(
+        (storage) => storage.setBool(_pendingLocalChangesStorageKey, value),
+        allowDuringBoundary: true,
+      );
+
+  Future<void> _setPendingChanges(SharedPreferences prefs, bool value) {
+    final localGeneration = _localChangeGeneration;
+    return _persistAccountMetadata((storage) async {
+      final pending = value || _localChangeGeneration != localGeneration;
+      final saved = await storage.setBool(
+        _pendingLocalChangesStorageKey,
+        pending,
+      );
+      if (saved) {
+        _hasPendingChanges =
+            pending || _localChangeGeneration != localGeneration;
+      }
+      return saved;
+    }, allowDuringBoundary: true);
   }
 
   Future<bool> hasPendingLocalChangesIncludingDisk() async {
@@ -431,6 +499,17 @@ class CloudSyncProvider extends ChangeNotifier {
   Future<bool> flushPendingLocalChangesBeforeAccountChange({
     Duration timeout = const Duration(seconds: 8),
   }) async {
+    _accountChangePreflightDepth++;
+    try {
+      return await _flushPendingLocalChangesBeforeAccountChange(timeout);
+    } finally {
+      _accountChangePreflightDepth--;
+    }
+  }
+
+  Future<bool> _flushPendingLocalChangesBeforeAccountChange(
+    Duration timeout,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     final persistedPending =
         prefs.getBool(_pendingLocalChangesStorageKey) ?? false;
@@ -526,14 +605,16 @@ class CloudSyncProvider extends ChangeNotifier {
     if (keys != null && normalizedKeys.isEmpty) return;
     final stamp = DateTime.now().toUtc().toIso8601String();
     _pendingPreferencesUpdatedAt = stamp;
-    unawaited(_persistSyncStamp(_preferencesUpdatedAtStorageKey, stamp));
+    _persistMetadataInBackground(
+      _persistSyncStamp(_preferencesUpdatedAtStorageKey, stamp),
+    );
     if (keys == null) {
       _pendingPreferencesFullSync = true;
       _pendingPreferenceKeys.clear();
     } else if (!_pendingPreferencesFullSync) {
       _pendingPreferenceKeys.addAll(normalizedKeys);
     }
-    unawaited(_persistPreferenceChangedKeys());
+    _persistMetadataInBackground(_persistPreferenceChangedKeys());
     if (markUserMutation) {
       markUserMutationPending();
     } else {
@@ -553,7 +634,7 @@ class CloudSyncProvider extends ChangeNotifier {
   void _markQuickCaptureTemplatesChanged({required bool markUserMutation}) {
     final stamp = DateTime.now().toUtc().toIso8601String();
     _pendingQuickCaptureTemplatesUpdatedAt = stamp;
-    unawaited(
+    _persistMetadataInBackground(
       _persistSyncStamp(_quickCaptureTemplatesUpdatedAtStorageKey, stamp),
     );
     if (markUserMutation) {
@@ -563,21 +644,16 @@ class CloudSyncProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _persistSyncStamp(String key, String value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(key, value);
-  }
+  Future<void> _persistSyncStamp(String key, String value) =>
+      _persistAccountMetadata((prefs) => prefs.setString(key, value));
 
-  Future<void> _persistPreferenceChangedKeys() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_pendingPreferencesFullSync) {
-      await prefs.setStringList(_preferencesChangedKeysStorageKey, const [
-        _preferencesFullSyncSentinel,
-      ]);
-      return;
-    }
-    final keys = _pendingPreferenceKeys.toList()..sort();
-    await prefs.setStringList(_preferencesChangedKeysStorageKey, keys);
+  Future<void> _persistPreferenceChangedKeys() {
+    final keys = _pendingPreferencesFullSync
+        ? <String>[_preferencesFullSyncSentinel]
+        : (_pendingPreferenceKeys.toList()..sort());
+    return _persistAccountMetadata(
+      (prefs) => prefs.setStringList(_preferencesChangedKeysStorageKey, keys),
+    );
   }
 
   void _scheduleAutoSync([Duration delay = _autoSyncDelay]) {
@@ -817,6 +893,14 @@ class CloudSyncProvider extends ChangeNotifier {
     final activeWriteback = _activeLocalWriteback;
     if (activeWriteback != null) {
       await activeWriteback;
+    }
+    while (_pendingMetadataWrites.isNotEmpty) {
+      await Future.wait(
+        _pendingMetadataWrites.toList().map(
+          (pending) =>
+              pending.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+        ),
+      );
     }
     _isSyncing = false;
     _syncQueued = false;
@@ -1456,7 +1540,11 @@ class CloudSyncProvider extends ChangeNotifier {
           );
           await _guardAccountGeneration(
             accountGenerationAtStart,
-            () => _persistPreferencesSnapshot(prefs!, payload['preferences']),
+            () => _persistPreferencesSnapshot(
+              prefs!,
+              payload['preferences'],
+              localChangeGenerationAtStart: syncGeneration,
+            ),
           );
           await _guardAccountGeneration(
             accountGenerationAtStart,
@@ -2404,7 +2492,11 @@ class CloudSyncProvider extends ChangeNotifier {
       throwIfAccountChanged();
       await _persistServerRevision(prefs, response);
       throwIfAccountChanged();
-      await _persistPreferencesSnapshot(prefs, nextPayload['preferences']);
+      await _persistPreferencesSnapshot(
+        prefs,
+        nextPayload['preferences'],
+        localChangeGenerationAtStart: localChangeGenerationAtStart,
+      );
       throwIfAccountChanged();
       _lastItemHashes = nextPrepared.items;
       await prefs.setString(
@@ -3079,8 +3171,20 @@ class CloudSyncProvider extends ChangeNotifier {
     }
     final updatedAt = normalized['updatedAt']?.toString() ?? '';
     if (updatedAt.isNotEmpty) {
-      _pendingPreferencesUpdatedAt = null;
-      await prefs.setString(_preferencesUpdatedAtStorageKey, updatedAt);
+      await _persistAccountMetadata((storage) async {
+        if (_remotePreferencesAreOlderThanLocal(storage, normalized)) {
+          return true;
+        }
+        final pendingStamp = _pendingPreferencesUpdatedAt;
+        final saved = await storage.setString(
+          _preferencesUpdatedAtStorageKey,
+          updatedAt,
+        );
+        if (saved && _pendingPreferencesUpdatedAt == pendingStamp) {
+          _pendingPreferencesUpdatedAt = null;
+        }
+        return saved;
+      }, allowDuringBoundary: true);
     }
   }
 
@@ -3123,26 +3227,44 @@ class CloudSyncProvider extends ChangeNotifier {
 
   Future<void> _persistPreferencesSnapshot(
     SharedPreferences prefs,
-    Object? preferencesPayload,
-  ) async {
+    Object? preferencesPayload, {
+    required int localChangeGenerationAtStart,
+  }) async {
     final values = preferencesPayload is Map
         ? preferencesPayload['values']
         : null;
     if (values is! Map) return;
-    await prefs.setString(
-      _preferencesValuesSnapshotStorageKey,
-      json.encode(Map<String, dynamic>.from(values)),
-    );
+    final encodedValues = json.encode(Map<String, dynamic>.from(values));
     final updatedAt = preferencesPayload is Map
         ? preferencesPayload['updatedAt']?.toString() ?? ''
         : '';
-    if (updatedAt.isNotEmpty) {
-      _pendingPreferencesUpdatedAt = null;
-      await prefs.setString(_preferencesUpdatedAtStorageKey, updatedAt);
-    }
-    _pendingPreferenceKeys.clear();
-    _pendingPreferencesFullSync = false;
-    await prefs.remove(_preferencesChangedKeysStorageKey);
+    await _persistAccountMetadata((storage) async {
+      if (!await storage.setString(
+        _preferencesValuesSnapshotStorageKey,
+        encodedValues,
+      )) {
+        return false;
+      }
+      if (_localChangeGeneration != localChangeGenerationAtStart) return true;
+      if (updatedAt.isNotEmpty &&
+          !await storage.setString(
+            _preferencesUpdatedAtStorageKey,
+            updatedAt,
+          )) {
+        return false;
+      }
+      if (!await storage.remove(_preferencesChangedKeysStorageKey)) {
+        return false;
+      }
+      // A local mark issued during the acknowledgement remains queued after
+      // it. Preserve that mark's in-memory state until its own write finishes.
+      if (_localChangeGeneration == localChangeGenerationAtStart) {
+        _pendingPreferencesUpdatedAt = null;
+        _pendingPreferenceKeys.clear();
+        _pendingPreferencesFullSync = false;
+      }
+      return true;
+    }, allowDuringBoundary: true);
   }
 
   Future<void> _writeQuickCaptureTemplatesPayload(
@@ -3161,11 +3283,23 @@ class CloudSyncProvider extends ChangeNotifier {
     );
     final updatedAt = normalized['updatedAt']?.toString() ?? '';
     if (updatedAt.isNotEmpty) {
-      _pendingQuickCaptureTemplatesUpdatedAt = null;
-      await prefs.setString(
-        _quickCaptureTemplatesUpdatedAtStorageKey,
-        updatedAt,
-      );
+      await _persistAccountMetadata((storage) async {
+        if (_remoteQuickCaptureTemplatesAreOlderThanLocal(
+          storage,
+          normalized,
+        )) {
+          return true;
+        }
+        final pendingStamp = _pendingQuickCaptureTemplatesUpdatedAt;
+        final saved = await storage.setString(
+          _quickCaptureTemplatesUpdatedAtStorageKey,
+          updatedAt,
+        );
+        if (saved && _pendingQuickCaptureTemplatesUpdatedAt == pendingStamp) {
+          _pendingQuickCaptureTemplatesUpdatedAt = null;
+        }
+        return saved;
+      }, allowDuringBoundary: true);
     }
   }
 

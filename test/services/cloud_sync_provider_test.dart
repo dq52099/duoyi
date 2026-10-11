@@ -2218,7 +2218,7 @@ void main() {
       'if (keys != null && normalizedKeys.isEmpty) return;',
       'final changedKeys = _readPendingPreferenceChangedKeys(prefs);',
       "if (changedKeys.isNotEmpty) 'changedKeys': changedKeys",
-      'await prefs.remove(_preferencesChangedKeysStorageKey);',
+      'await storage.remove(_preferencesChangedKeysStorageKey)',
       'normalized.remove(\'changedKeys\');',
       'normalized.remove(\'changed_keys\');',
     ]) {
@@ -2243,8 +2243,9 @@ void main() {
     }
     for (final field in const [
       'static void Function(Iterable<String> keys)? onChanged;',
-      'onChanged?.call(const [volumePreferenceKey]);',
-      'onChanged?.call(const [soundPreferenceKey]);',
+      'onChanged?.call(changedKeys);',
+      'changedKeys: const [volumePreferenceKey],',
+      'changedKeys: const [soundPreferenceKey],',
     ]) {
       expect(ringtoneSettings, contains(field), reason: field);
     }

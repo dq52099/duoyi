@@ -12,6 +12,7 @@ class AccountPreferenceWrites {
   static final Set<Future<void>> _pending = {};
 
   static int get generation => _generation;
+  static bool get isBoundaryActive => _boundaryDepth > 0;
 
   static void invalidate() => _generation++;
 
