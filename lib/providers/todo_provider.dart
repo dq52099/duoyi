@@ -505,9 +505,11 @@ class TodoProvider extends ChangeNotifier {
     return !_disposed;
   }
 
-  Future<void> _saveToStorage() async {
+  Future<void> _saveToStorage({bool Function()? canWrite}) async {
+    if (canWrite?.call() == false) return;
     if (!await _ensureStorageLoaded() || _disposed) return;
-    await _writeToStorage();
+    if (canWrite?.call() == false) return;
+    await _writeToStorage(canWrite: canWrite);
   }
 
   /// 将当前内存列表编码并写入存储，不做队列串联。
@@ -536,9 +538,12 @@ class TodoProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _writeToStorage() async {
-    if (_disposed) return;
-    final write = _storageWriteQueue.then((_) => _writeTodosSnapshot());
+  Future<void> _writeToStorage({bool Function()? canWrite}) async {
+    if (_disposed || canWrite?.call() == false) return;
+    final write = _storageWriteQueue.then((_) async {
+      if (_disposed || canWrite?.call() == false) return;
+      await _writeTodosSnapshot();
+    });
     _storageWriteQueue = write.catchError((Object e, StackTrace st) {
       debugPrint('[TodoProvider] queued local todo write failed: $e\n$st');
     });
@@ -1469,7 +1474,15 @@ class TodoProvider extends ChangeNotifier {
     String id, {
     DateTime? now,
     bool waitForReminderSync = true,
+    int? expectedAccountDataGeneration,
   }) async {
+    final storageGeneration = _storageGeneration;
+    final accountGeneration =
+        expectedAccountDataGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    if (!_isCurrentStorageGeneration(storageGeneration, accountGeneration)) {
+      return false;
+    }
     final claimed = _claimInFlightKeys(
       _inFlightScheduleTodayTodoIds,
       [id],
@@ -1490,6 +1503,8 @@ class TodoProvider extends ChangeNotifier {
         id,
         now: now,
         waitForReminderSync: waitForReminderSync,
+        storageGeneration: storageGeneration,
+        accountGeneration: accountGeneration,
       );
     } finally {
       _inFlightScheduleTodayTodoIds.removeAll(claimed);
@@ -1501,8 +1516,13 @@ class TodoProvider extends ChangeNotifier {
     String id, {
     DateTime? now,
     required bool waitForReminderSync,
+    required int storageGeneration,
+    required int accountGeneration,
   }) async {
     if (!await _ensureStorageLoaded() || _disposed) return false;
+    if (!_isCurrentStorageGeneration(storageGeneration, accountGeneration)) {
+      return false;
+    }
     final idx = _todos.indexWhere((t) => t.id == id);
     if (idx == -1) return false;
     final todo = _todos[idx];
@@ -1554,14 +1574,24 @@ class TodoProvider extends ChangeNotifier {
             )
           : null,
     );
-    await _saveToStorage();
+    await _saveToStorage(
+      canWrite: () =>
+          _isCurrentStorageGeneration(storageGeneration, accountGeneration),
+    );
+    if (!_isCurrentStorageGeneration(storageGeneration, accountGeneration)) {
+      return false;
+    }
     _notify();
+    // A synchronous listener may switch accounts or reset local state.
+    if (!_isCurrentStorageGeneration(storageGeneration, accountGeneration)) {
+      return false;
+    }
     if (waitForReminderSync) {
       await _syncTodoRemindersNow();
     } else {
       unawaited(_syncTodoRemindersNow());
     }
-    return true;
+    return _isCurrentStorageGeneration(storageGeneration, accountGeneration);
   }
 
   bool _isSameDay(DateTime value, DateTime day) =>
