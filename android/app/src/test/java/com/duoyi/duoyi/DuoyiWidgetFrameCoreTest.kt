@@ -108,6 +108,30 @@ class DuoyiWidgetFrameCoreTest {
     }
 
     @Test
+    fun onlyAnExactPublishedStateCanTrustAnOtherwiseValidSession() {
+        val published = core()
+        assertEquals(DuoyiWidgetPublicationDocument.State.PUBLISHED, published.publicationState)
+        assertTrue(published.sessionTrusted)
+        assertTrue(published.fresh)
+        listOf<Any?>("cleared", "blocked", "PUBLISHED", " published ", "unknown", 1, null)
+            .forEach { state ->
+                val values = baseValues().apply { put("widget_publication_state", state) }
+                val frame = core(values)
+                assertFalse("unpublished state must not trust the session: $state", frame.sessionTrusted)
+                assertFalse(frame.fresh)
+                if (state != "cleared" && state != "blocked") assertNull(frame.publicationState)
+            }
+        assertFalse(core(baseValues().apply { remove("widget_publication_state") }).sessionTrusted)
+    }
+
+    @Test
+    fun publicationStateOnlyChangeRejectsTheCapturedFrame() {
+        val frame = core()
+        val changed = baseValues().apply { put("widget_publication_state", "cleared") }
+        assertEquals("data_changed", reason(frame, currentValues = changed))
+    }
+
+    @Test
     fun capturedLocalDayChangeAcrossMidnightRejectsTheFrame() {
         val start = clockAt("2024-06-15T23:59:59Z", elapsedMillis = 10_000L)
         val frame = core(
@@ -379,6 +403,7 @@ class DuoyiWidgetFrameCoreTest {
         offset: Int = 0,
         nonce: String = "session-nonce",
     ): LinkedHashMap<String, Any?> = linkedMapOf(
+        "widget_publication_state" to "published",
         "widget_snapshot_day" to day,
         "widget_snapshot_utc_offset_minutes" to offset,
         "widget_account_nonce" to nonce,

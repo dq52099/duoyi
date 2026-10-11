@@ -34,10 +34,15 @@ class DuoyiWidgetFrameCore(
     val systemLocaleTag: String,
 ) {
     val rawValues: Map<String, *> = immutableValues(values)
+    val publicationState: DuoyiWidgetPublicationDocument.State? =
+        DuoyiWidgetPublicationDocument.State.entries.firstOrNull {
+            it.wire == rawValues["widget_publication_state"]
+        }
     val day: String? = rawValues["widget_snapshot_day"] as? String
     val offset: Int? = rawValues["widget_snapshot_utc_offset_minutes"] as? Int
     val nonce: String? = rawValues["widget_account_nonce"] as? String
-    val sessionTrusted: Boolean = validDay(day) && offset != null &&
+    val sessionTrusted: Boolean = publicationState == DuoyiWidgetPublicationDocument.State.PUBLISHED &&
+        validDay(day) && offset != null &&
         offset in -1080..1080 && !nonce.isNullOrBlank()
     val fresh: Boolean = sessionTrusted && day == clock.day && offset == clock.offsetMinutes
     val language: String = language(rawValues["widget_locale"] as? String)

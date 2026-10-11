@@ -73,6 +73,8 @@ class DuoyiWidgetPublicationDocumentTest {
 
         val flat = document.toFlatValues()
         assertEquals(EXPECTED_FLAT_KEYS, flat.keys)
+        assertEquals("published", flat["widget_publication_state"])
+        assertFalse(document.values.containsKey("widget_publication_state"))
         assertEquals("  epoch/雪 + %2F  ", flat["widget_account_nonce"])
         assertEquals("zh", flat["widget_locale"])
         assertEquals("2024-02-29", flat["widget_snapshot_day"])
@@ -484,6 +486,7 @@ class DuoyiWidgetPublicationDocumentTest {
             val parsed = requireDocument(canonical, "canonical $state document should parse")
             assertEquals(expectedTombstone, parsed.values)
             assertEquals(state, parsed.state.wire)
+            assertEquals(state, parsed.toFlatValues()["widget_publication_state"])
             PRESENTATION_KEYS.forEach { key ->
                 assertEquals(expectedParsedValues(complete)[key], parsed.values[key])
             }
@@ -869,6 +872,7 @@ class DuoyiWidgetPublicationDocumentTest {
             addAll(EXPECTED_VALUE_KEYS)
             addAll(
                 listOf(
+                    "widget_publication_state",
                     "widget_account_nonce",
                     "widget_locale",
                     "widget_snapshot_day",

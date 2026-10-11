@@ -298,6 +298,7 @@ class DuoyiFrozenWidgetPreferencesTest {
         nonce: String = "session-nonce",
         language: String = "en",
     ): LinkedHashMap<String, Any?> = linkedMapOf(
+        "widget_publication_state" to "published",
         "widget_snapshot_day" to day,
         "widget_snapshot_utc_offset_minutes" to offset,
         "widget_account_nonce" to nonce,

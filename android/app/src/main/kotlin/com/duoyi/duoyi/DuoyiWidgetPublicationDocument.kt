@@ -35,6 +35,8 @@ class DuoyiWidgetPublicationDocument private constructor(
 
     /** Counters/offset stay Int; timer millis stay Long even when their value is zero. */
     fun toFlatValues(): Map<String, Any> = LinkedHashMap(values).apply {
+        // Render-only provenance from the validated document, never preferences.
+        put("widget_publication_state", state.wire)
         put("widget_account_nonce", ownerEpoch)
         put("widget_locale", locale)
         put("widget_snapshot_day", snapshotDay)
