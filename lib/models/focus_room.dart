@@ -1,6 +1,47 @@
 import 'pomodoro.dart';
+import '../core/i18n.dart';
 
 enum FocusLeaderboardScope { friends, global }
+
+/// Runtime provenance for app-generated ranking explanations.
+/// Server explanations remain literal when no reason bit is set.
+enum FocusFlagReasonCode {
+  weeklyCap,
+  longSessionCap,
+  dailyCap,
+  futureSessionIgnored,
+  remoteCorrectionFallback;
+
+  int get mask => 1 << index;
+
+  String labelFor(AppLocale locale) {
+    final isEn = locale == AppLocale.en;
+    return switch (this) {
+      weeklyCap =>
+        isEn ? 'Weekly credited time exceeded the limit' : '超过每周有效时长上限',
+      longSessionCap =>
+        isEn ? 'Sessions over 4 hours were capped' : '单次专注超过 4 小时已封顶',
+      dailyCap =>
+        isEn
+            ? 'Daily credited focus over 12 hours was capped'
+            : '单日有效专注超过 12 小时已封顶',
+      futureSessionIgnored =>
+        isEn ? 'Future focus records were ignored' : '忽略未来专注记录',
+      remoteCorrectionFallback =>
+        isEn ? 'The server adjusted unusual focus time' : '服务端已校正异常时长',
+    };
+  }
+}
+
+String? _generatedFlagReason(int reasons, AppLocale locale) {
+  final labels = [
+    for (final reason in FocusFlagReasonCode.values)
+      if ((reasons & reason.mask) != 0) reason.labelFor(locale),
+  ];
+  return labels.isEmpty
+      ? null
+      : labels.join(locale == AppLocale.en ? '; ' : '；');
+}
 
 class FocusRoomMemberSeed {
   final String id;
@@ -88,7 +129,8 @@ class FocusRoomRankingEntry {
   final bool online;
   final bool active;
   final bool flagged;
-  final String? flagReason;
+  final String? _flagReason;
+  final int generatedFlagReasons;
   final int rank;
   final DateTime? lastSeenAt;
 
@@ -102,10 +144,16 @@ class FocusRoomRankingEntry {
     this.online = false,
     this.active = true,
     this.flagged = false,
-    this.flagReason,
+    String? flagReason,
+    this.generatedFlagReasons = 0,
     required this.rank,
     this.lastSeenAt,
-  });
+  }) : _flagReason = flagReason;
+
+  String? get flagReason => flagReasonFor(I18n.current);
+
+  String? flagReasonFor(AppLocale locale) =>
+      _generatedFlagReason(generatedFlagReasons, locale) ?? _flagReason;
 
   int get weeklyMinutes => weeklySeconds ~/ 60;
   int get rawWeeklyMinutes =>
@@ -166,14 +214,26 @@ class FocusSocialRanking {
     this.updatedAt,
   });
 
-  String get title => switch (scope) {
-    FocusLeaderboardScope.friends => '好友专注榜',
-    FocusLeaderboardScope.global => '全局专注榜',
+  String get title => titleFor(I18n.current);
+
+  String titleFor(AppLocale locale) => switch (scope) {
+    FocusLeaderboardScope.friends =>
+      locale == AppLocale.en ? 'Friends focus ranking' : '好友专注榜',
+    FocusLeaderboardScope.global =>
+      locale == AppLocale.en ? 'Global focus ranking' : '全局专注榜',
   };
 
-  String get subtitle => switch (scope) {
-    FocusLeaderboardScope.friends => '按好友本周有效专注时长排名',
-    FocusLeaderboardScope.global => '按全站本周有效专注时长排名',
+  String get subtitle => subtitleFor(I18n.current);
+
+  String subtitleFor(AppLocale locale) => switch (scope) {
+    FocusLeaderboardScope.friends =>
+      locale == AppLocale.en
+          ? 'Ranked by friends’ credited focus time this week'
+          : '按好友本周有效专注时长排名',
+    FocusLeaderboardScope.global =>
+      locale == AppLocale.en
+          ? 'Ranked by credited focus time across all users this week'
+          : '按全站本周有效专注时长排名',
   };
 }
 
@@ -218,6 +278,7 @@ FocusRoomRanking buildFocusRoomRanking({
           online: true,
           flagged: userScore.flagged,
           flagReason: userScore.flagReason,
+          generatedFlagReasons: userScore.generatedFlagReasons,
           rank: 0,
         ),
         ...room.members.map(
@@ -255,6 +316,7 @@ FocusRoomRanking buildFocusRoomRanking({
         active: entry.active,
         flagged: entry.flagged,
         flagReason: entry.flagReason,
+        generatedFlagReasons: entry.generatedFlagReasons,
         rank: i + 1,
         lastSeenAt: entry.lastSeenAt,
       ),
@@ -304,6 +366,7 @@ FocusSocialRanking buildFocusSocialRanking({
           online: true,
           flagged: userScore.flagged,
           flagReason: userScore.flagReason,
+          generatedFlagReasons: userScore.generatedFlagReasons,
           rank: 0,
         ),
         ...seedMembers.map((m) {
@@ -318,6 +381,7 @@ FocusSocialRanking buildFocusSocialRanking({
             online: false,
             flagged: seeded.flagged,
             flagReason: seeded.flagReason,
+            generatedFlagReasons: seeded.generatedFlagReasons,
             rank: 0,
           );
         }),
@@ -344,6 +408,7 @@ FocusSocialRanking buildFocusSocialRanking({
         active: entry.active,
         flagged: entry.flagged,
         flagReason: entry.flagReason,
+        generatedFlagReasons: entry.generatedFlagReasons,
         rank: i + 1,
         lastSeenAt: entry.lastSeenAt,
       ),
@@ -364,15 +429,18 @@ class _FocusAntiCheatScore {
   final int creditedSeconds;
   final int sessionCount;
   final bool flagged;
-  final String? flagReason;
+  final int generatedFlagReasons;
 
   const _FocusAntiCheatScore({
     required this.rawSeconds,
     required this.creditedSeconds,
     required this.sessionCount,
     required this.flagged,
-    this.flagReason,
+    this.generatedFlagReasons = 0,
   });
+
+  String? get flagReason =>
+      _generatedFlagReason(generatedFlagReasons, AppLocale.zh);
 }
 
 _FocusAntiCheatScore _scoreSeedMember(FocusRoomMemberSeed member) {
@@ -385,7 +453,7 @@ _FocusAntiCheatScore _scoreSeedMember(FocusRoomMemberSeed member) {
     creditedSeconds: creditedSeconds,
     sessionCount: member.sessionCount,
     flagged: flagged,
-    flagReason: flagged ? '超过每周有效时长上限' : null,
+    generatedFlagReasons: flagged ? FocusFlagReasonCode.weeklyCap.mask : 0,
   );
 }
 
@@ -434,16 +502,15 @@ _FocusAntiCheatScore _scoreSessionsWithAntiCheat(
     creditedSeconds += credited;
   }
 
-  final reasons = <String>[
-    if (clippedLongSession) '单次专注超过 4 小时已封顶',
-    if (clippedDailyCap) '单日有效专注超过 12 小时已封顶',
-    if (futureSession) '忽略未来专注记录',
-  ];
+  final reasons =
+      (clippedLongSession ? FocusFlagReasonCode.longSessionCap.mask : 0) |
+      (clippedDailyCap ? FocusFlagReasonCode.dailyCap.mask : 0) |
+      (futureSession ? FocusFlagReasonCode.futureSessionIgnored.mask : 0);
   return _FocusAntiCheatScore(
     rawSeconds: rawSeconds,
     creditedSeconds: creditedSeconds,
     sessionCount: sessionCount,
-    flagged: reasons.isNotEmpty,
-    flagReason: reasons.isEmpty ? null : reasons.join('；'),
+    flagged: reasons != 0,
+    generatedFlagReasons: reasons,
   );
 }

@@ -1197,6 +1197,9 @@ class FocusRoomProvider extends ChangeNotifier {
             : flagged
             ? '服务端已校正异常时长'
             : null,
+        generatedFlagReasons: entry.riskSummary.trim().isEmpty && flagged
+            ? FocusFlagReasonCode.remoteCorrectionFallback.mask
+            : 0,
         rank: entry.rank,
         lastSeenAt: entry.lastSeenAt,
       );
@@ -1245,6 +1248,9 @@ class FocusRoomProvider extends ChangeNotifier {
             : flagged
             ? '服务端已校正异常时长'
             : null,
+        generatedFlagReasons: entry.riskSummary.trim().isEmpty && flagged
+            ? FocusFlagReasonCode.remoteCorrectionFallback.mask
+            : 0,
         rank: entry.rank,
         lastSeenAt: entry.lastSeenAt,
       );

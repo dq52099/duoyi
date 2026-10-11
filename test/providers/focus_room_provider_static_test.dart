@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:duoyi/core/i18n.dart';
+import 'package:duoyi/models/focus_room.dart';
 import 'package:duoyi/models/pomodoro.dart';
 import 'package:duoyi/providers/focus_room_provider.dart';
 import 'package:duoyi/services/api_client.dart';
@@ -183,10 +185,7 @@ void main() {
         requests,
         contains('POST /api/focus-rooms/deep_work_room/heartbeat'),
       );
-      expect(
-        provider.lastRemoteError,
-        '自习室服务暂不可用，请稍后重试或联系管理员。',
-      );
+      expect(provider.lastRemoteError, '自习室服务暂不可用，请稍后重试或联系管理员。');
 
       final ranking = provider.effectiveRankingFor(
         FocusRoomProvider.defaultRoomId,
@@ -334,6 +333,110 @@ void main() {
         contains('必备路由摘要 stale-focus-routes 与客户端要求'),
       );
       expect(provider.lastRemoteError, isNot(equals('自习室服务暂不可用，请稍后重试或联系管理员。')));
+    },
+  );
+
+  test(
+    'remote correction fallback localizes but server risk text stays literal',
+    () async {
+      final savedLocale = I18n.current;
+      final provider = FocusRoomProvider();
+      const remotePayload = <String, dynamic>{
+        'room_id': 'global',
+        'online_count': 3,
+        'entries': [
+          {
+            'user_id': 'fallback-user',
+            'display_name': '远端成员甲',
+            'weekly_seconds': 3600,
+            'raw_weekly_seconds': 7200,
+            'session_count': 2,
+            'is_current_user': true,
+            'rank': 1,
+            'risk_flags': ['duration_adjusted'],
+            'risk_summary': '',
+          },
+          {
+            'user_id': 'literal-user',
+            'display_name': '远端成员乙',
+            'weekly_seconds': 5400,
+            'raw_weekly_seconds': 5400,
+            'session_count': 3,
+            'rank': 2,
+            'risk_flags': ['server_flag'],
+            'risk_summary': '  服务端已校正异常时长  ',
+          },
+          {
+            'user_id': 'clean-user',
+            'display_name': '远端成员丙',
+            'weekly_seconds': 1800,
+            'raw_weekly_seconds': 1800,
+            'session_count': 1,
+            'rank': 3,
+            'risk_flags': [],
+            'risk_summary': '',
+          },
+        ],
+      };
+      final payloadBefore = jsonEncode(remotePayload);
+      final requests = <String>[];
+      provider.apiClientGetter = () => ApiClient(
+        baseUrl: 'https://duoyi.test',
+        token: 'test-token',
+        httpClient: MockClient((request) async {
+          requests.add('${request.method} ${request.url.path}');
+          return http.Response(
+            jsonEncode(remotePayload),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      try {
+        I18n.setLocale(AppLocale.zh);
+        await provider.loadGlobalRanking(force: true);
+        expect(requests, ['GET /api/focus-leaderboard/global']);
+        expect(provider.remoteGlobalRankingActive, isTrue);
+
+        final ranking = provider.socialRankingFor(
+          FocusLeaderboardScope.global,
+          const <PomodoroSession>[],
+        );
+        final fallback = ranking.entries.firstWhere(
+          (entry) => entry.id == 'fallback-user',
+        );
+        final serverLiteral = ranking.entries.firstWhere(
+          (entry) => entry.id == 'literal-user',
+        );
+        final clean = ranking.entries.firstWhere(
+          (entry) => entry.id == 'clean-user',
+        );
+        expect(fallback.flagged, isTrue);
+        expect(
+          fallback.generatedFlagReasons,
+          FocusFlagReasonCode.remoteCorrectionFallback.mask,
+        );
+        expect(fallback.flagReason, '服务端已校正异常时长');
+        expect(serverLiteral.generatedFlagReasons, 0);
+        expect(serverLiteral.flagReason, '服务端已校正异常时长');
+        expect(serverLiteral.name, '远端成员乙');
+        expect(clean.flagged, isFalse);
+        expect(clean.flagReason, isNull);
+
+        I18n.setLocale(AppLocale.en);
+        expect(fallback.flagReason, 'The server adjusted unusual focus time');
+        expect(fallback.flagReasonFor(AppLocale.zh), '服务端已校正异常时长');
+        expect(I18n.current, AppLocale.en);
+        expect(serverLiteral.flagReasonFor(AppLocale.en), '服务端已校正异常时长');
+        expect(serverLiteral.flagReason, '服务端已校正异常时长');
+        expect(serverLiteral.name, '远端成员乙');
+        expect(clean.flagReason, isNull);
+        expect(jsonEncode(remotePayload), payloadBefore);
+      } finally {
+        provider.dispose();
+        I18n.setLocale(savedLocale);
+      }
     },
   );
 }

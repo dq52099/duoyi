@@ -1,8 +1,19 @@
+import 'dart:convert';
+
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/models/focus_room.dart';
 import 'package:duoyi/models/pomodoro.dart';
 import 'package:test/test.dart';
 
 void main() {
+  late AppLocale savedLocale;
+
+  setUp(() {
+    savedLocale = I18n.current;
+    I18n.setLocale(AppLocale.zh);
+  });
+  tearDown(() => I18n.setLocale(savedLocale));
+
   test(
     'buildFocusRoomRanking ranks current user by this week focus sessions',
     () {
@@ -142,6 +153,211 @@ void main() {
     expect(abnormal.weeklySeconds, 84 * 60 * 60);
     expect(abnormal.flagged, isTrue);
     expect(ranking.suspiciousEntryCount, 2);
+  });
+
+  test(
+    'cached local ranking reasons localize without changing score or inputs',
+    () {
+      final now = DateTime(2026, 5, 20, 12);
+      final sessions = [
+        PomodoroSession(
+          id: 'long-session',
+          startTime: DateTime(2026, 5, 18, 8),
+          endTime: DateTime(2026, 5, 18, 16),
+          durationSeconds: 8 * 60 * 60,
+          type: PomodoroType.focus,
+        ),
+        for (var index = 0; index < 4; index++)
+          PomodoroSession(
+            id: 'daily-$index',
+            startTime: DateTime(2026, 5, 19, 8 + index * 4),
+            endTime: DateTime(2026, 5, 19, 12 + index * 4),
+            durationSeconds: 4 * 60 * 60,
+            type: PomodoroType.focus,
+          ),
+        PomodoroSession(
+          id: 'future-session',
+          startTime: DateTime(2026, 5, 21, 8),
+          endTime: DateTime(2026, 5, 21, 9),
+          durationSeconds: 60 * 60,
+          type: PomodoroType.focus,
+        ),
+      ];
+      const seeds = [
+        FocusRoomMemberSeed(
+          id: 'weekly-cap',
+          name: '周上限成员',
+          weeklySeconds: 91 * 60 * 60,
+          sessionCount: 30,
+        ),
+        FocusRoomMemberSeed(
+          id: 'normal',
+          name: '普通成员',
+          weeklySeconds: 15 * 60 * 60,
+          sessionCount: 20,
+        ),
+      ];
+      final sessionsJsonBefore = jsonEncode(
+        sessions.map((session) => session.toJson()).toList(),
+      );
+      final seedsJsonBefore = jsonEncode(
+        seeds.map((seed) => seed.toJson()).toList(),
+      );
+      FocusSocialRanking rank() => buildFocusSocialRanking(
+        scope: FocusLeaderboardScope.global,
+        now: now,
+        sessions: sessions,
+        seedMembers: seeds,
+      );
+
+      I18n.setLocale(AppLocale.zh);
+      final ranking = rank();
+      final currentUser = ranking.entries.firstWhere(
+        (entry) => entry.isCurrentUser,
+      );
+      final cappedSeed = ranking.entries.firstWhere(
+        (entry) => entry.id == 'weekly-cap',
+      );
+      final normal = ranking.entries.firstWhere(
+        (entry) => entry.id == 'normal',
+      );
+      final scoresAndRanks = [
+        for (final entry in ranking.entries)
+          [
+            entry.id,
+            entry.rawWeeklySeconds,
+            entry.weeklySeconds,
+            entry.sessionCount,
+            entry.rank,
+            entry.flagged,
+            entry.generatedFlagReasons,
+          ],
+      ];
+      final enumMask =
+          FocusFlagReasonCode.longSessionCap.mask |
+          FocusFlagReasonCode.dailyCap.mask |
+          FocusFlagReasonCode.futureSessionIgnored.mask;
+
+      expect(ranking.title, '全局专注榜');
+      expect(ranking.subtitle, '按全站本周有效专注时长排名');
+      expect(currentUser.id, 'current_user');
+      expect(currentUser.rank, 2);
+      expect(currentUser.rawWeeklySeconds, 24 * 60 * 60);
+      expect(currentUser.weeklySeconds, 16 * 60 * 60);
+      expect(currentUser.sessionCount, 5);
+      expect(currentUser.flagged, isTrue);
+      expect(currentUser.generatedFlagReasons, enumMask);
+      expect(
+        currentUser.flagReasonFor(AppLocale.zh),
+        '单次专注超过 4 小时已封顶；单日有效专注超过 12 小时已封顶；忽略未来专注记录',
+      );
+      expect(cappedSeed.rank, 1);
+      expect(cappedSeed.rawWeeklySeconds, 91 * 60 * 60);
+      expect(cappedSeed.weeklySeconds, 84 * 60 * 60);
+      expect(
+        cappedSeed.generatedFlagReasons,
+        FocusFlagReasonCode.weeklyCap.mask,
+      );
+      expect(cappedSeed.flagReasonFor(AppLocale.zh), '超过每周有效时长上限');
+      expect(normal.rank, 3);
+      expect(normal.generatedFlagReasons, 0);
+
+      I18n.setLocale(AppLocale.en);
+      expect(ranking.title, 'Global focus ranking');
+      expect(
+        ranking.subtitle,
+        'Ranked by credited focus time across all users this week',
+      );
+      expect(
+        currentUser.flagReason,
+        'Sessions over 4 hours were capped; Daily credited focus over 12 hours was capped; Future focus records were ignored',
+      );
+      expect(currentUser.flagReasonFor(AppLocale.en), currentUser.flagReason);
+      expect(cappedSeed.flagReason, 'Weekly credited time exceeded the limit');
+      expect(ranking.entries.map((entry) => entry.rank).toList(), [1, 2, 3]);
+      expect([
+        for (final entry in ranking.entries)
+          [
+            entry.id,
+            entry.rawWeeklySeconds,
+            entry.weeklySeconds,
+            entry.sessionCount,
+            entry.rank,
+            entry.flagged,
+            entry.generatedFlagReasons,
+          ],
+      ], scoresAndRanks);
+      expect(
+        jsonEncode(sessions.map((session) => session.toJson()).toList()),
+        sessionsJsonBefore,
+      );
+      expect(
+        jsonEncode(seeds.map((seed) => seed.toJson()).toList()),
+        seedsJsonBefore,
+      );
+      expect(I18n.current, AppLocale.en);
+    },
+  );
+
+  test(
+    'literal reason matching app copy remains literal without provenance',
+    () {
+      const entry = FocusRoomRankingEntry(
+        id: 'remote-literal',
+        name: '服务端成员',
+        weeklySeconds: 600,
+        sessionCount: 1,
+        isCurrentUser: false,
+        flagged: true,
+        flagReason: '单次专注超过 4 小时已封顶',
+        rank: 1,
+      );
+
+      I18n.setLocale(AppLocale.zh);
+      expect(entry.flagReason, '单次专注超过 4 小时已封顶');
+      I18n.setLocale(AppLocale.en);
+      expect(entry.flagReasonFor(AppLocale.zh), '单次专注超过 4 小时已封顶');
+      expect(entry.flagReasonFor(AppLocale.en), '单次专注超过 4 小时已封顶');
+      expect(entry.flagReason, '单次专注超过 4 小时已封顶');
+      expect(entry.generatedFlagReasons, 0);
+    },
+  );
+
+  test('social ranking headings follow locale for both scopes', () {
+    final friends = FocusSocialRanking(
+      scope: FocusLeaderboardScope.friends,
+      entries: const [],
+      weekStart: DateTime(2026, 5, 18),
+      weekEnd: DateTime(2026, 5, 25),
+      suspiciousEntryCount: 0,
+    );
+    final global = FocusSocialRanking(
+      scope: FocusLeaderboardScope.global,
+      entries: const [],
+      weekStart: DateTime(2026, 5, 18),
+      weekEnd: DateTime(2026, 5, 25),
+      suspiciousEntryCount: 0,
+    );
+
+    I18n.setLocale(AppLocale.zh);
+    expect(friends.title, '好友专注榜');
+    expect(friends.subtitle, '按好友本周有效专注时长排名');
+    expect(global.title, '全局专注榜');
+    expect(global.subtitle, '按全站本周有效专注时长排名');
+
+    I18n.setLocale(AppLocale.en);
+    expect(friends.title, 'Friends focus ranking');
+    expect(
+      friends.subtitle,
+      'Ranked by friends’ credited focus time this week',
+    );
+    expect(global.title, 'Global focus ranking');
+    expect(
+      global.subtitle,
+      'Ranked by credited focus time across all users this week',
+    );
+    expect(friends.titleFor(AppLocale.zh), '好友专注榜');
+    expect(I18n.current, AppLocale.en);
   });
 
   test('FocusRoom JSON remains compatible with sparse stored payloads', () {
