@@ -93,4 +93,67 @@ void main() {
     expect(provider.labelFor('custom:missing', locale: AppLocale.zh), '自定义音频');
     expect(I18n.current, AppLocale.en);
   });
+
+  test('retained nameless metadata resolves live without persisting copy', () {
+    for (final includeNullLabel in [false, true]) {
+      final sound = CustomFocusSound.fromJson({
+        'id': 'custom:nameless',
+        if (includeNullLabel) 'label': null,
+        'path': '/fixture/no-audio.mp3',
+        'importedAt': '2024-06-15T12:00:00.000Z',
+      });
+      final stored = sound.toJson();
+      expect(stored['label'], isNull);
+
+      for (final locale in [AppLocale.en, AppLocale.zh, AppLocale.en]) {
+        I18n.setLocale(locale);
+        expect(sound.label, locale == AppLocale.en ? 'Custom audio' : '自定义音频');
+        expect(sound.toJson(), stored);
+        expect(CustomFocusSound.fromJson(stored).label, sound.label);
+      }
+    }
+  });
+
+  test('loaded nameless entries and explicit locale retain storage', () async {
+    final records = [
+      jsonEncode({
+        'id': 'custom:nameless',
+        'path': '/fixture/no-audio.mp3',
+        'importedAt': '2024-06-15T12:00:00.000Z',
+      }),
+    ];
+    SharedPreferences.setMockInitialValues({
+      CustomFocusSoundProvider.storageKey: records,
+    });
+    final provider = providerForTest();
+    await provider.loadFromStorage();
+    final prefs = await SharedPreferences.getInstance();
+
+    expect(provider.sounds.single.label, '自定义音频');
+    expect(
+      provider.labelFor('custom:nameless', locale: AppLocale.en),
+      'Custom audio',
+    );
+    expect(I18n.current, AppLocale.zh);
+    I18n.setLocale(AppLocale.en);
+    expect(provider.labelFor('custom:nameless'), 'Custom audio');
+    expect(provider.sounds.single.label, 'Custom audio');
+    expect(prefs.getStringList(CustomFocusSoundProvider.storageKey), records);
+    expect(provider.sounds.single.toJson()['label'], isNull);
+  });
+
+  test('explicit empty and former default labels stay literal', () {
+    for (final label in ['', '  ', '自定义音频', 'Custom audio']) {
+      final sound = CustomFocusSound.fromJson({
+        'id': 'custom:literal',
+        'label': label,
+        'path': '/fixture/no-audio.mp3',
+        'importedAt': '2024-06-15T12:00:00.000Z',
+      });
+      I18n.setLocale(AppLocale.en);
+      expect(sound.label, label);
+      expect(sound.labelForLocale(AppLocale.zh), label);
+      expect(sound.toJson()['label'], label);
+    }
+  });
 }

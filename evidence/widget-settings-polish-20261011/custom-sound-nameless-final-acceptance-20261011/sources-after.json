@@ -1,0 +1,12 @@
+{
+  "lib/providers/custom_focus_sound_provider.dart": "9efe8f940f501b37dcda142b069d0238203e4c61520302105b6b832fe55bf42e",
+  "lib/models/pomodoro.dart": "299ab78fdd079346cdfb4f8a06aa4acae8c6a6368b2ad47c8c1e3be929504968",
+  "test/providers/custom_focus_sound_locale_test.dart": "858eb110d574c386b11a1ee3b1d8963eeac40384dea8c490d770e15e1254e042",
+  "test/services/custom_focus_sound_static_test.dart": "c6d684eb57cda949927cbdf36f5a5d8b612ae7da91f9cf6c10d1d949b5f5c8e1",
+  "test/models/pomodoro_config_test.dart": "9281c2f855e7419a483c2e202bda771e725cdf2d7ec2ebe87ef4c05fd95477e0",
+  "lib/services/focus_sound_service.dart": "b14670ac4f9f7cf16915b2a14fc3dca89c97f98834d35f07603038df7523b998",
+  "lib/screens/pomodoro_screen.dart": "86c5ec8502c2d3ff7c89a0250c5c7a804ce0b71d5b7f676e356ee8e61907a718",
+  "lib/screens/goal_edit_screen.dart": "2fa7fa5a9b97f9309c936853db9e0b113bf7620f957ca442dbee501845032170",
+  "lib/main.dart": "3a32dbeee5135fad5265cc5f87fc5462a61aa8d68b0ebecec505b14cca37406e",
+  "lib/services/backup_service.dart": "6ad6370d62fc7812f9e691e35ce9c5603c2139a73b9ca914c064a3cac8614379"
+}

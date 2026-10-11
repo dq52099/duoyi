@@ -1,0 +1,8 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/providers/custom_focus_sound_locale_test.dart
+00:00 +0: missing custom selection uses live localized display copy
+00:00 +1: authored sound metadata and storage stay literal across locales
+00:00 +2: explicit fallback locale never changes the live locale
+00:00 +3: retained nameless metadata resolves live without persisting copy
+00:00 +4: loaded nameless entries and explicit locale retain storage
+00:00 +5: explicit empty and former default labels stay literal
+00:00 +6: All tests passed!

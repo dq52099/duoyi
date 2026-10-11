@@ -11,20 +11,27 @@ import '../services/focus_sound_service.dart';
 
 class CustomFocusSound {
   final String id;
-  final String label;
+  // A missing name is generated display copy; saved names remain literal.
+  final String? _storedLabel;
   final String path;
   final DateTime importedAt;
 
   const CustomFocusSound({
     required this.id,
-    required this.label,
+    required String? label,
     required this.path,
     required this.importedAt,
-  });
+  }) : _storedLabel = label;
+
+  String get label => labelForLocale();
+
+  String labelForLocale([AppLocale? locale]) =>
+      _storedLabel ??
+      ((locale ?? I18n.current) == AppLocale.en ? 'Custom audio' : '自定义音频');
 
   Map<String, dynamic> toJson() => {
     'id': id,
-    'label': label,
+    'label': _storedLabel,
     'path': path,
     'importedAt': importedAt.toIso8601String(),
   };
@@ -32,7 +39,7 @@ class CustomFocusSound {
   factory CustomFocusSound.fromJson(Map<String, dynamic> json) {
     return CustomFocusSound(
       id: json['id']?.toString() ?? '',
-      label: json['label']?.toString() ?? '自定义音频',
+      label: json['label']?.toString(),
       path: json['path']?.toString() ?? '',
       importedAt:
           DateTime.tryParse(json['importedAt']?.toString() ?? '') ??
@@ -55,7 +62,7 @@ class CustomFocusSoundProvider extends ChangeNotifier {
 
   String labelFor(String id, {AppLocale? locale}) {
     for (final sound in _sounds) {
-      if (sound.id == id) return sound.label;
+      if (sound.id == id) return sound.labelForLocale(locale);
     }
     return (locale ?? I18n.current) == AppLocale.en ? 'Custom audio' : '自定义音频';
   }
@@ -176,10 +183,10 @@ class CustomFocusSoundProvider extends ChangeNotifier {
     return ext.isEmpty ? 'mp3' : ext;
   }
 
-  String _labelFor(String name) {
+  String? _labelFor(String name) {
     final dot = name.lastIndexOf('.');
     final base = dot > 0 ? name.substring(0, dot) : name;
     final clean = base.trim();
-    return clean.isEmpty ? '自定义音频' : clean;
+    return clean.isEmpty ? null : clean;
   }
 }

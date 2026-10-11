@@ -1,0 +1,11 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart
+00:00 +0: PomodoroConfig persists auto DND preference and defaults old data off
+00:00 +1: PomodoroConfig clamps corrupted focus sound volume on restore
+00:00 +2: PomodoroConfig clamps corrupted stored durations on restore
+00:00 +3: PomodoroConfig migrates generated noise without dropping custom audio
+00:00 +4: PomodoroSession persists focus room attribution
+00:00 +5: PomodoroSession copyWith supports field updates and clearing
+00:00 +6: PomodoroFocusPenalty persists reason and affected context
+00:00 +7: Distracting app penalty reason has stable key and label
+00:00 +8: penalty labels localize while legacy JSON stays Chinese and stable
+00:00 +9: All tests passed!

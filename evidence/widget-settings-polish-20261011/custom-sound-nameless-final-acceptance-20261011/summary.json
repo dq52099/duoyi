@@ -1,0 +1,70 @@
+{
+  "started_at_utc": "2026-10-11T11:24:09.943886+00:00",
+  "suites": [
+    {
+      "suite": "test/providers/custom_focus_sound_locale_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/providers/custom_focus_sound_locale_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 47.704,
+      "passed": 6,
+      "log": "evidence/widget-settings-polish-20261011/custom-sound-nameless-final-acceptance-20261011/01-custom_focus_sound_locale_test.log"
+    },
+    {
+      "suite": "test/services/custom_focus_sound_static_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/custom_focus_sound_static_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 15.078,
+      "passed": 1,
+      "log": "evidence/widget-settings-polish-20261011/custom-sound-nameless-final-acceptance-20261011/02-custom_focus_sound_static_test.log"
+    },
+    {
+      "suite": "test/models/pomodoro_config_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/models/pomodoro_config_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 7.629,
+      "passed": 9,
+      "log": "evidence/widget-settings-polish-20261011/custom-sound-nameless-final-acceptance-20261011/03-pomodoro_config_test.log"
+    }
+  ],
+  "analysis": {
+    "command": [
+      "/home/ubuntu/flutter/bin/flutter",
+      "analyze",
+      "--no-pub",
+      "lib/providers/custom_focus_sound_provider.dart",
+      "lib/models/pomodoro.dart",
+      "test/providers/custom_focus_sound_locale_test.dart",
+      "test/services/custom_focus_sound_static_test.dart",
+      "test/models/pomodoro_config_test.dart"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 53.291,
+    "log": "evidence/widget-settings-polish-20261011/custom-sound-nameless-final-acceptance-20261011/analyze.log"
+  },
+  "source_hashes_unchanged": true,
+  "changed_source_files": [],
+  "finished_at_utc": "2026-10-11T11:26:13.650039+00:00",
+  "passed_total": 16,
+  "accepted": true
+}
