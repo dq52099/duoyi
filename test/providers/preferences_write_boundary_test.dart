@@ -24,6 +24,27 @@ void main() {
     LocalTimezoneResolver.debugNativeSystemTimeZoneReader = null;
   });
 
+  test('untracked reads wait until nested account cleanup settles', () async {
+    final started = Completer<void>();
+    final release = Completer<void>();
+    final boundary = AccountPreferenceWrites.boundary<void>(() async {
+      await AccountPreferenceWrites.boundary<void>(() async {});
+      started.complete();
+      await release.future;
+    });
+    await started.future;
+    var settled = false;
+    final read = AccountPreferenceWrites.waitForBoundary().then((_) {
+      settled = true;
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(settled, isFalse);
+    release.complete();
+    await Future.wait([read, boundary]);
+    expect(settled, isTrue);
+    await AccountPreferenceWrites.waitForBoundary();
+  });
+
   test('rejected boolean save restores provider and legacy cache', () async {
     final store = _ControlledStore()..rejectKeyOnce = 'flutter.pref_show_lunar';
     SharedPreferencesStorePlatform.instance = store;

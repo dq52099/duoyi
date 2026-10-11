@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Tracks writes before their first await so account cleanup can drain them.
@@ -6,6 +8,7 @@ class AccountPreferenceWrites {
 
   static int _generation = 0;
   static int _boundaryDepth = 0;
+  static Completer<void>? _boundaryFinished;
   static final Set<Future<void>> _pending = {};
 
   static int get generation => _generation;
@@ -53,14 +56,28 @@ class AccountPreferenceWrites {
     }
   }
 
+  /// Lets untracked UI reads wait until account cleanup has settled.
+  /// Do not call this from a tracked write: cleanup is draining that write.
+  static Future<void> waitForBoundary() async {
+    while (_boundaryDepth > 0) {
+      await _boundaryFinished!.future;
+    }
+  }
+
   static Future<T> boundary<T>(Future<T> Function() operation) async {
     _boundaryDepth++;
+    _boundaryFinished ??= Completer<void>();
     invalidate();
     try {
       await drain();
       return await operation();
     } finally {
       _boundaryDepth--;
+      if (_boundaryDepth == 0) {
+        final finished = _boundaryFinished;
+        _boundaryFinished = null;
+        finished?.complete();
+      }
     }
   }
 }
