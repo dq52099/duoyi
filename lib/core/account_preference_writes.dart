@@ -26,6 +26,22 @@ class AccountPreferenceWrites {
     return pending;
   }
 
+  static Future<T> runResult<T>(
+    Future<T> Function(AccountPreferenceWriteToken token) operation, {
+    required T Function() canceledResult,
+  }) {
+    if (_boundaryDepth > 0) return Future<T>.value(canceledResult());
+    final token = AccountPreferenceWriteToken._(_generation);
+    final result = Future<T>.sync(() => operation(token));
+    final pending = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _pending.add(pending);
+    pending.then((_) => _pending.remove(pending));
+    return result;
+  }
+
   static Future<void> drain() async {
     while (_pending.isNotEmpty) {
       await Future.wait(

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/domain_event_bus.dart';
 import '../core/app_brand.dart';
+import '../core/account_preference_writes.dart';
 import '../services/account_local_data_cleaner.dart';
 
 class FocusBackdropReward {
@@ -195,6 +196,104 @@ class ThemeProvider extends ChangeNotifier {
   String _shopStateUpdatedAt = '';
   bool _serverConfirmedChangePending = false;
   int _storageGeneration = 0;
+  Future<void> _shopWriteTail = Future<void>.value();
+
+  Future<T> _enqueueShopChange<T>(
+    Future<T> Function(
+      SharedPreferences preferences,
+      AccountPreferenceTransaction transaction,
+    )
+    change, {
+    required T Function() canceledResult,
+    void Function()? afterCommit,
+  }) {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    return AccountPreferenceWrites.runResult<T>((token) {
+      bool isCurrent() =>
+          _isCurrentShopOperation(generation, accountGeneration) &&
+          token.isCurrent;
+      final write = _shopWriteTail.then<T>((_) async {
+        if (!isCurrent()) return canceledResult();
+        final preferences = await SharedPreferences.getInstance();
+        if (!isCurrent()) return canceledResult();
+        final restoreState = _captureShopState();
+        final transaction = AccountPreferenceTransaction(
+          preferences,
+          isCurrent,
+        );
+        try {
+          final result = await change(preferences, transaction);
+          final didChange = transaction.changedKeys.isNotEmpty;
+          transaction.commit();
+          if (didChange) {
+            afterCommit?.call();
+            if (isCurrent()) notifyListeners();
+          }
+          return result;
+        } on AccountPreferenceWriteCanceled {
+          await transaction.rollback(canceledBeforeCleanup: true);
+          if (generation == _storageGeneration) restoreState();
+          return canceledResult();
+        } catch (_) {
+          if (transaction.isCommitted) rethrow;
+          await transaction.rollback(canceledBeforeCleanup: true);
+          if (generation == _storageGeneration) {
+            restoreState();
+            // Preserve actual disk state if the device cannot restore a key.
+            await loadFromStorage();
+          }
+          rethrow;
+        }
+      });
+      _shopWriteTail = write.then<void>(
+        (_) {},
+        onError: (Object _, StackTrace _) {},
+      );
+      return write;
+    }, canceledResult: canceledResult);
+  }
+
+  void Function() _captureShopState() {
+    final savedBrand = _brand;
+    final savedSwitchCount = _switchCount;
+    final savedUnlockedBrandIds = Set<String>.of(_unlockedBrandIds);
+    final savedUnlockedFocusBackdropIds = Set<String>.of(
+      _unlockedFocusBackdropIds,
+    );
+    final savedUnlockedAvatarFrameIds = Set<String>.of(_unlockedAvatarFrameIds);
+    final savedUnlockedCardSkinIds = Set<String>.of(_unlockedCardSkinIds);
+    final savedActiveFocusBackdropId = _activeFocusBackdropId;
+    final savedActiveAvatarFrameId = _activeAvatarFrameId;
+    final savedActiveCardSkinId = _activeCardSkinId;
+    final savedActiveWidgetBackgroundId = _activeWidgetBackgroundId;
+    final savedActiveWidgetCardSkinId = _activeWidgetCardSkinId;
+    final savedShopStateUpdatedAt = _shopStateUpdatedAt;
+    final savedServerConfirmedChangePending = _serverConfirmedChangePending;
+    return () {
+      _brand = savedBrand;
+      _switchCount = savedSwitchCount;
+      _unlockedBrandIds
+        ..clear()
+        ..addAll(savedUnlockedBrandIds);
+      _unlockedFocusBackdropIds
+        ..clear()
+        ..addAll(savedUnlockedFocusBackdropIds);
+      _unlockedAvatarFrameIds
+        ..clear()
+        ..addAll(savedUnlockedAvatarFrameIds);
+      _unlockedCardSkinIds
+        ..clear()
+        ..addAll(savedUnlockedCardSkinIds);
+      _activeFocusBackdropId = savedActiveFocusBackdropId;
+      _activeAvatarFrameId = savedActiveAvatarFrameId;
+      _activeCardSkinId = savedActiveCardSkinId;
+      _activeWidgetBackgroundId = savedActiveWidgetBackgroundId;
+      _activeWidgetCardSkinId = savedActiveWidgetCardSkinId;
+      _shopStateUpdatedAt = savedShopStateUpdatedAt;
+      _serverConfirmedChangePending = savedServerConfirmedChangePending;
+    };
+  }
 
   AppBrand get brand => _brand;
   List<AppBrand> get brands => AppBrands.all;
@@ -333,41 +432,41 @@ class ThemeProvider extends ChangeNotifier {
   Future<void> applyShopStateFromServer(
     Map<dynamic, dynamic> state, {
     bool trusted = false,
-  }) async {
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return;
-    }
-    final incoming = Map<String, dynamic>.from(state);
-    if (!trusted && _isIncomingShopStateOlder(incoming)) {
-      debugPrint(
-        '[theme-sync] skipped older shop state incoming='
-        '${_shopStateUpdatedAtOf(incoming)} current=$_shopStateUpdatedAt',
+  }) {
+    return _enqueueShopChange<void>((preferences, transaction) async {
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return;
+      }
+      final incoming = Map<String, dynamic>.from(state);
+      if (!trusted && _isIncomingShopStateOlder(incoming)) {
+        debugPrint(
+          '[theme-sync] skipped older shop state incoming='
+          '${_shopStateUpdatedAtOf(incoming)} current=$_shopStateUpdatedAt',
+        );
+        return;
+      }
+      final changed = _applyShopStateMap(
+        incoming,
+        prefs: preferences,
+        includeLegacyFallback: false,
       );
-      return;
-    }
-    final changed = _applyShopStateMap(
-      incoming,
-      prefs: prefs,
-      includeLegacyFallback: false,
-    );
-    if (!changed) return;
-    await prefs.setString(_storageKey, _brand.id);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
-    await prefs.setStringList(
-      _unlockedBrandsKey,
-      _unlockedBrandIds.toList(growable: false),
-    );
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
-    await _saveShopState(prefs, touch: false);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
-    _serverConfirmedChangePending = true;
-    notifyListeners();
+      if (!changed) return;
+      await transaction.setString(_storageKey, _brand.id);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+      await transaction.setStringList(
+        _unlockedBrandsKey,
+        _unlockedBrandIds.toList(growable: false),
+      );
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+      await _saveShopState(transaction, touch: false);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+      _serverConfirmedChangePending = true;
+    }, canceledResult: () {});
   }
 
   bool _applyShopStateMap(
@@ -484,214 +583,224 @@ class ThemeProvider extends ChangeNotifier {
     return before != jsonEncode(_shopStateJson());
   }
 
-  Future<void> unlockBrand(String id) async {
-    if (isBrandUnlocked(id)) return;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    _unlockedBrandIds.add(id);
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return;
-    }
-    await prefs.setStringList(
-      _unlockedBrandsKey,
-      _unlockedBrandIds.toList(growable: false),
+  Future<void> unlockBrand(String id) {
+    return _enqueueShopChange<void>((preferences, transaction) async {
+      if (isBrandUnlocked(id)) return;
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      _unlockedBrandIds.add(id);
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return;
+      }
+      await transaction.setStringList(
+        _unlockedBrandsKey,
+        _unlockedBrandIds.toList(growable: false),
+      );
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+      await _saveShopState(transaction);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+    }, canceledResult: () {});
+  }
+
+  Future<void> unlockFocusBackdrop(String id) {
+    return _enqueueShopChange<void>((preferences, transaction) async {
+      if (isFocusBackdropUnlocked(id)) return;
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      _unlockedFocusBackdropIds.add(id);
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return;
+      }
+      await _saveShopState(transaction);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+    }, canceledResult: () {});
+  }
+
+  Future<bool> setFocusBackdrop(String id) {
+    return _enqueueShopChange<bool>((preferences, transaction) async {
+      if (!isFocusBackdropUnlocked(id)) return false;
+      final nextId = focusBackdropById(id).id;
+      if (_activeFocusBackdropId == nextId) return true;
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      _activeFocusBackdropId = nextId;
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return false;
+      }
+      await _saveShopState(transaction);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
+      return true;
+    }, canceledResult: () => false);
+  }
+
+  Future<void> unlockAvatarFrame(String id) {
+    return _enqueueShopChange<void>((preferences, transaction) async {
+      if (isAvatarFrameUnlocked(id)) return;
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      _unlockedAvatarFrameIds.add(id);
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return;
+      }
+      await _saveShopState(transaction);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+    }, canceledResult: () {});
+  }
+
+  Future<bool> setAvatarFrame(String id) {
+    return _enqueueShopChange<bool>((preferences, transaction) async {
+      if (!isAvatarFrameUnlocked(id)) return false;
+      final nextId = avatarFrameById(id).id;
+      if (_activeAvatarFrameId == nextId) return true;
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      _activeAvatarFrameId = nextId;
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return false;
+      }
+      await _saveShopState(transaction);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
+      return true;
+    }, canceledResult: () => false);
+  }
+
+  Future<void> unlockCardSkin(String id) {
+    return _enqueueShopChange<void>((preferences, transaction) async {
+      if (isCardSkinUnlocked(id)) return;
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      _unlockedCardSkinIds.add(id);
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return;
+      }
+      await _saveShopState(transaction);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+    }, canceledResult: () {});
+  }
+
+  Future<bool> setCardSkin(String id) {
+    return _enqueueShopChange<bool>((preferences, transaction) async {
+      if (!isCardSkinUnlocked(id)) return false;
+      final nextId = cardSkinById(id).id;
+      if (_activeCardSkinId == nextId) return true;
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      _activeCardSkinId = nextId;
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return false;
+      }
+      await _saveShopState(transaction);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
+      return true;
+    }, canceledResult: () => false);
+  }
+
+  Future<bool> setWidgetBackgroundBrand(String id) {
+    return _enqueueShopChange<bool>((preferences, transaction) async {
+      if (id != widgetFollowThemeId && !isBrandUnlocked(id)) {
+        return false;
+      }
+      final nextId = _normalizeWidgetBackgroundId(id);
+      if (_activeWidgetBackgroundId == nextId) return true;
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      _activeWidgetBackgroundId = nextId;
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return false;
+      }
+      await _saveShopState(transaction);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
+      return true;
+    }, canceledResult: () => false);
+  }
+
+  Future<bool> setWidgetCardSkin(String id) {
+    return _enqueueShopChange<bool>((preferences, transaction) async {
+      if (id != widgetFollowCardSkinId && !isCardSkinUnlocked(id)) {
+        return false;
+      }
+      final nextId = _normalizeWidgetCardSkinId(id);
+      if (_activeWidgetCardSkinId == nextId) return true;
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      _activeWidgetCardSkinId = nextId;
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return false;
+      }
+      await _saveShopState(transaction);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
+      return true;
+    }, canceledResult: () => false);
+  }
+
+  Future<bool> setBrand(String id) {
+    return _enqueueShopChange<bool>(
+      (preferences, transaction) async {
+        if (!isBrandUnlocked(id)) return false;
+        final prev = _brand.id;
+        _brand = AppBrands.byId(id);
+        if (prev == _brand.id) return true;
+        final generation = _storageGeneration;
+        final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+        if (generation != _storageGeneration ||
+            !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              accountGeneration,
+            )) {
+          return false;
+        }
+        await transaction.setString(_storageKey, _brand.id);
+        if (!_isCurrentShopOperation(generation, accountGeneration)) {
+          return false;
+        }
+        _switchCount++;
+        await transaction.setInt(_switchCountKey, _switchCount);
+        if (!_isCurrentShopOperation(generation, accountGeneration)) {
+          return false;
+        }
+        await _saveShopState(transaction);
+        if (!_isCurrentShopOperation(generation, accountGeneration)) {
+          return false;
+        }
+        return true;
+      },
+      canceledResult: () => false,
+      afterCommit: () {
+        DomainEventBus.instance.publish(
+          DomainEvent(
+            type: DomainEventType.themeSwitched,
+            objectId: _brand.id,
+            metadata: {'count': _switchCount},
+          ),
+        );
+      },
     );
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
-    await _saveShopState(prefs);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
-    notifyListeners();
-  }
-
-  Future<void> unlockFocusBackdrop(String id) async {
-    if (isFocusBackdropUnlocked(id)) return;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    _unlockedFocusBackdropIds.add(id);
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return;
-    }
-    await _saveShopState(prefs);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
-    notifyListeners();
-  }
-
-  Future<bool> setFocusBackdrop(String id) async {
-    if (!isFocusBackdropUnlocked(id)) return false;
-    final nextId = focusBackdropById(id).id;
-    if (_activeFocusBackdropId == nextId) return true;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    _activeFocusBackdropId = nextId;
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return false;
-    }
-    await _saveShopState(prefs);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
-    notifyListeners();
-    return true;
-  }
-
-  Future<void> unlockAvatarFrame(String id) async {
-    if (isAvatarFrameUnlocked(id)) return;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    _unlockedAvatarFrameIds.add(id);
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return;
-    }
-    await _saveShopState(prefs);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
-    notifyListeners();
-  }
-
-  Future<bool> setAvatarFrame(String id) async {
-    if (!isAvatarFrameUnlocked(id)) return false;
-    final nextId = avatarFrameById(id).id;
-    if (_activeAvatarFrameId == nextId) return true;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    _activeAvatarFrameId = nextId;
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return false;
-    }
-    await _saveShopState(prefs);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
-    notifyListeners();
-    return true;
-  }
-
-  Future<void> unlockCardSkin(String id) async {
-    if (isCardSkinUnlocked(id)) return;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    _unlockedCardSkinIds.add(id);
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return;
-    }
-    await _saveShopState(prefs);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return;
-    notifyListeners();
-  }
-
-  Future<bool> setCardSkin(String id) async {
-    if (!isCardSkinUnlocked(id)) return false;
-    final nextId = cardSkinById(id).id;
-    if (_activeCardSkinId == nextId) return true;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    _activeCardSkinId = nextId;
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return false;
-    }
-    await _saveShopState(prefs);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
-    notifyListeners();
-    return true;
-  }
-
-  Future<bool> setWidgetBackgroundBrand(String id) async {
-    if (id != widgetFollowThemeId && !isBrandUnlocked(id)) {
-      return false;
-    }
-    final nextId = _normalizeWidgetBackgroundId(id);
-    if (_activeWidgetBackgroundId == nextId) return true;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    _activeWidgetBackgroundId = nextId;
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return false;
-    }
-    await _saveShopState(prefs);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
-    notifyListeners();
-    return true;
-  }
-
-  Future<bool> setWidgetCardSkin(String id) async {
-    if (id != widgetFollowCardSkinId && !isCardSkinUnlocked(id)) {
-      return false;
-    }
-    final nextId = _normalizeWidgetCardSkinId(id);
-    if (_activeWidgetCardSkinId == nextId) return true;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    _activeWidgetCardSkinId = nextId;
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return false;
-    }
-    await _saveShopState(prefs);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
-    notifyListeners();
-    return true;
-  }
-
-  Future<bool> setBrand(String id) async {
-    if (!isBrandUnlocked(id)) return false;
-    final prev = _brand.id;
-    _brand = AppBrands.byId(id);
-    if (prev == _brand.id) return true;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return false;
-    }
-    await prefs.setString(_storageKey, _brand.id);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
-    _switchCount++;
-    await prefs.setInt(_switchCountKey, _switchCount);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
-    DomainEventBus.instance.publish(
-      DomainEvent(
-        type: DomainEventType.themeSwitched,
-        objectId: _brand.id,
-        metadata: {'count': _switchCount},
-      ),
-    );
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
-    await _saveShopState(prefs);
-    if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
-    notifyListeners();
-    return true;
   }
 
   bool _isIncomingShopStateOlder(Map<String, dynamic> incoming) {
@@ -777,13 +886,13 @@ class ThemeProvider extends ChangeNotifier {
   }
 
   Future<void> _saveShopState(
-    SharedPreferences prefs, {
+    AccountPreferenceTransaction preferences, {
     bool touch = true,
   }) async {
     if (touch || _shopStateUpdatedAt.isEmpty) {
       _shopStateUpdatedAt = DateTime.now().toUtc().toIso8601String();
     }
-    await prefs.setString(_shopStateKey, jsonEncode(_shopStateJson()));
+    await preferences.setString(_shopStateKey, jsonEncode(_shopStateJson()));
   }
 
   Map<String, dynamic> _shopStateJson() => {

@@ -1,28 +1,40 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:duoyi/core/account_preference_writes.dart';
+import 'package:duoyi/core/domain_event_bus.dart';
 import 'package:duoyi/providers/achievement_provider.dart';
 import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/services/account_local_data_cleaner.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  tearDown(() async {
+    await AccountPreferenceWrites.drain();
+  });
+
   test(
     'old brand write cannot increment the next account switch count',
     () async {
+      final store = _ThemeStore();
+      SharedPreferencesStorePlatform.instance = store;
       final provider = ThemeProvider();
       await provider.unlockBrand('re0');
+      store.holdKey = 'flutter.active_brand';
       final prefs = await SharedPreferences.getInstance();
       final operation = provider.setBrand('re0');
-      await Future<void>.value();
-      // The first cache write has occurred; its awaited continuation is pending.
+      await store.started.future.timeout(const Duration(seconds: 5));
+      // The first platform write is in flight; hold its completion explicitly.
       expect(prefs.getString('active_brand'), 're0');
       AccountLocalDataCleaner.invalidateInFlightAccountWrites();
       provider.resetLocalState();
+      store.release.complete();
 
       expect(await operation, isFalse);
       expect(provider.themeSwitchCount, 0);
@@ -34,6 +46,8 @@ void main() {
   test(
     'old server theme write cannot confirm the next account state',
     () async {
+      final store = _ThemeStore()..holdKey = 'flutter.active_brand';
+      SharedPreferencesStorePlatform.instance = store;
       final provider = ThemeProvider();
       final prefs = await SharedPreferences.getInstance();
       final operation = provider.applyShopStateFromServer({
@@ -41,10 +55,11 @@ void main() {
         'unlockedBrandIds': ['defaultBrand', 're0'],
         'updatedAt': '2026-06-01T00:00:00Z',
       });
-      await Future<void>.value();
+      await store.started.future.timeout(const Duration(seconds: 5));
       expect(prefs.getString('active_brand'), 're0');
       AccountLocalDataCleaner.invalidateInFlightAccountWrites();
       provider.resetLocalState();
+      store.release.complete();
 
       await operation;
       expect(provider.consumeServerConfirmedChange(), isFalse);
@@ -53,6 +68,193 @@ void main() {
       provider.dispose();
     },
   );
+
+  test('failed brand save restores all keys without a switch event', () async {
+    final store = _ThemeStore();
+    SharedPreferencesStorePlatform.instance = store;
+    final provider = ThemeProvider();
+    await provider.unlockBrand('re0');
+    final before = provider.shopStateSnapshot;
+    store.rejectKeyOnce = 'flutter.theme_shop_state';
+    final events = <DomainEvent>[];
+    final subscription = DomainEventBus.instance.events.listen(events.add);
+
+    await expectLater(provider.setBrand('re0'), throwsStateError);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(provider.shopStateSnapshot, before);
+    expect(provider.brand.id, 'defaultBrand');
+    expect(provider.themeSwitchCount, 0);
+    expect(prefs.getString('active_brand'), isNull);
+    expect(prefs.getInt('theme_switch_count'), isNull);
+    expect(jsonDecode(prefs.getString('theme_shop_state')!), before);
+    expect(events, isEmpty);
+    // An earlier rejection must not poison the serial queue.
+    expect(await provider.setBrand('re0'), isTrue);
+    expect(events.single.type, DomainEventType.themeSwitched);
+    await subscription.cancel();
+    provider.dispose();
+  });
+
+  test('widget appearance rejection restores selection and cache', () async {
+    final store = _ThemeStore();
+    SharedPreferencesStorePlatform.instance = store;
+    final provider = ThemeProvider();
+    await provider.unlockCardSkin('paper_card');
+    final before = provider.shopStateSnapshot;
+    store.rejectKeyOnce = 'flutter.theme_shop_state';
+
+    await expectLater(
+      provider.setWidgetCardSkin('paper_card'),
+      throwsStateError,
+    );
+
+    expect(provider.shopStateSnapshot, before);
+    final prefs = await SharedPreferences.getInstance();
+    expect(jsonDecode(prefs.getString('theme_shop_state')!), before);
+    provider.dispose();
+  });
+
+  test('rapid widget selections persist in submission order', () async {
+    final store = _ThemeStore();
+    SharedPreferencesStorePlatform.instance = store;
+    final provider = ThemeProvider();
+    await provider.unlockCardSkin('paper_card');
+    await provider.unlockCardSkin('mint_card');
+    store.holdKey = 'flutter.theme_shop_state';
+    final first = provider.setWidgetCardSkin('paper_card');
+    await store.started.future.timeout(const Duration(seconds: 5));
+    final second = provider.setWidgetCardSkin('mint_card');
+    expect(store.heldValues, hasLength(1));
+    store.release.complete();
+    expect(await Future.wait([first, second]), [true, true]);
+
+    expect(
+      store.heldValues.map(
+        (value) => jsonDecode(value as String)['activeWidgetCardSkinId'],
+      ),
+      ['paper_card', 'mint_card'],
+    );
+    expect(provider.activeWidgetCardSkin.id, 'mint_card');
+    provider.dispose();
+  });
+
+  test(
+    'cleanup drains issued theme writes and skips old queued edits',
+    () async {
+      final store = _ThemeStore();
+      SharedPreferencesStorePlatform.instance = store;
+      final provider = ThemeProvider();
+      await provider.unlockBrand('re0');
+      store.holdKey = 'flutter.active_brand';
+      final events = <DomainEvent>[];
+      final subscription = DomainEventBus.instance.events.listen(events.add);
+      final first = provider.setBrand('re0');
+      await store.started.future.timeout(const Duration(seconds: 5));
+      final queued = provider.setWidgetBackgroundBrand('re0');
+      provider.resetLocalState();
+      var cleaned = false;
+      final cleanup = AccountLocalDataCleaner.clearSharedPreferences().then((
+        _,
+      ) {
+        cleaned = true;
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(cleaned, isFalse);
+      store.release.complete();
+      expect(await first, isFalse);
+      expect(await queued, isFalse);
+      await cleanup;
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('active_brand'), isFalse);
+      expect(prefs.containsKey('theme_shop_state'), isFalse);
+      expect(provider.brand.id, 'defaultBrand');
+      expect(
+        provider.activeWidgetBackgroundId,
+        ThemeProvider.widgetFollowThemeId,
+      );
+      expect(events, isEmpty);
+      expect(
+        store.events.indexOf('set:flutter.active_brand'),
+        lessThan(store.events.indexOf('remove:flutter.active_brand')),
+      );
+      await subscription.cancel();
+      provider.dispose();
+    },
+  );
+
+  test(
+    'aborted account transition rolls back theme before returning',
+    () async {
+      final store = _ThemeStore();
+      SharedPreferencesStorePlatform.instance = store;
+      final provider = ThemeProvider();
+      await provider.unlockBrand('re0');
+      final before = provider.shopStateSnapshot;
+      store.holdKey = 'flutter.theme_shop_state';
+      final events = <DomainEvent>[];
+      final subscription = DomainEventBus.instance.events.listen(events.add);
+      final write = provider.setBrand('re0');
+      await store.started.future.timeout(const Duration(seconds: 5));
+      final boundary = AccountLocalDataCleaner.runPreferenceBoundary<void>(
+        () async {
+          throw StateError('Preflight failed');
+        },
+      );
+      final expectedFailure = expectLater(boundary, throwsStateError);
+      store.release.complete();
+      expect(await write, isFalse);
+      await expectedFailure;
+
+      expect(provider.shopStateSnapshot, before);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('active_brand'), isNull);
+      expect(prefs.getInt('theme_switch_count'), isNull);
+      expect(jsonDecode(prefs.getString('theme_shop_state')!), before);
+      expect(events, isEmpty);
+      await subscription.cancel();
+      provider.dispose();
+    },
+  );
+
+  test(
+    'theme writes submitted inside cleanup return canceled results',
+    () async {
+      final provider = ThemeProvider();
+      await provider.unlockBrand('re0');
+      await AccountLocalDataCleaner.runPreferenceBoundary<void>(() async {
+        expect(await provider.setBrand('re0'), isFalse);
+        await provider.unlockCardSkin('paper_card');
+      });
+      expect(provider.brand.id, 'defaultBrand');
+      expect(provider.isCardSkinUnlocked('paper_card'), isFalse);
+      provider.dispose();
+    },
+  );
+
+  test('partial server save restores unlocks and confirmation flag', () async {
+    final store = _ThemeStore()
+      ..rejectKeyOnce = 'flutter.theme_unlocked_brands';
+    SharedPreferencesStorePlatform.instance = store;
+    final provider = ThemeProvider();
+    await expectLater(
+      provider.applyShopStateFromServer({
+        'activeBrand': 're0',
+        'unlockedBrandIds': ['defaultBrand', 're0'],
+        'updatedAt': '2026-06-01T00:00:00Z',
+      }),
+      throwsStateError,
+    );
+    expect(provider.brand.id, 'defaultBrand');
+    expect(provider.isBrandUnlocked('re0'), isFalse);
+    expect(provider.consumeServerConfirmedChange(), isFalse);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('active_brand'), isNull);
+    expect(prefs.getStringList('theme_unlocked_brands'), isNull);
+    expect(prefs.getString('theme_shop_state'), isNull);
+    provider.dispose();
+  });
 
   test('server theme shop state updates provider and local cache', () async {
     final provider = ThemeProvider();
@@ -288,4 +490,40 @@ void main() {
       );
     },
   );
+}
+
+class _ThemeStore extends InMemorySharedPreferencesStore {
+  _ThemeStore() : super.withData({});
+
+  String? rejectKeyOnce;
+  String? holdKey;
+  final started = Completer<void>();
+  final release = Completer<void>();
+  final heldValues = <Object>[];
+  final events = <String>[];
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (key == holdKey) {
+      heldValues.add(value);
+      if (!started.isCompleted) {
+        started.complete();
+        await release.future;
+      }
+    }
+    if (key == rejectKeyOnce) {
+      rejectKeyOnce = null;
+      return false;
+    }
+    final saved = await super.setValue(valueType, key, value);
+    events.add('set:$key');
+    return saved;
+  }
+
+  @override
+  Future<bool> remove(String key) async {
+    final removed = await super.remove(key);
+    events.add('remove:$key');
+    return removed;
+  }
 }
