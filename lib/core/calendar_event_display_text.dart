@@ -1,5 +1,6 @@
 import '../models/calendar_event.dart';
 import '../models/time_entry.dart';
+import 'diary_note_ui_copy.dart';
 import 'i18n.dart';
 
 /// Helper to resolve live localized title and subtitle for system-generated calendar events,
@@ -15,6 +16,9 @@ class CalendarEventDisplayText {
     final meta = event.displayMetadata;
     if (meta is PomodoroDisplayMetadata && meta.isFallbackTitle) {
       return _isEn ? 'Focus ${meta.minutes} min' : '专注 ${meta.minutes} 分钟';
+    }
+    if (meta is DiaryDisplayMetadata && meta.fallbackTitleDate != null) {
+      return DiaryNoteUiCopy(I18n.current).diaryTitle(meta.fallbackTitleDate!);
     }
     return event.title;
   }
@@ -77,8 +81,8 @@ class CalendarEventDisplayText {
       if (meta.teacher.isNotEmpty) parts.add(meta.teacher);
       return parts.join(' · ');
     }
-    if (meta is DiaryDisplayMetadata) {
-      return I18n.tr(meta.moodKey);
+    if (meta is DiaryDisplayMetadata && meta.moodKey != null) {
+      return I18n.tr(meta.moodKey!);
     }
 
     return event.subtitle;

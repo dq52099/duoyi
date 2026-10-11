@@ -359,15 +359,17 @@ class CalendarAggregator {
           type: CalendarEventType.diary,
           color: const Color(0xFF26A69A),
           sourceId: d.id,
-          displayMetadata: d.mood == null
+          displayMetadata: d.mood == null && d.content.trim().isNotEmpty
               ? null
               : DiaryDisplayMetadata(
-                  moodKey: switch (d.mood!) {
+                  fallbackTitleDate: d.content.trim().isEmpty ? d.date : null,
+                  moodKey: switch (d.mood) {
                     Mood.awesome => 'diary.mood.awesome',
                     Mood.good => 'diary.mood.good',
                     Mood.okay => 'diary.mood.okay',
                     Mood.bad => 'diary.mood.bad',
                     Mood.terrible => 'diary.mood.terrible',
+                    null => null,
                   },
                 ),
         ),

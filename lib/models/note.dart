@@ -1,3 +1,6 @@
+import '../core/diary_note_ui_copy.dart';
+import '../core/i18n.dart';
+
 class NoteAttachment {
   final String name;
   final String uri;
@@ -182,9 +185,13 @@ class NoteItem {
          blocks ?? NoteBlock.fromMarkdown(content),
        );
 
-  String get title {
+  String get title => titleFor(I18n.current);
+
+  String titleFor(AppLocale locale) {
     final lines = content.trim().split('\n');
-    return lines.isNotEmpty && lines.first.isNotEmpty ? lines.first : '无标题笔记';
+    return lines.isNotEmpty && lines.first.isNotEmpty
+        ? lines.first
+        : DiaryNoteUiCopy(locale).untitledNote;
   }
 
   String get preview {

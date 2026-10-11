@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'goal_icons.dart';
+import 'diary_note_ui_copy.dart';
 import 'i18n.dart';
 import '../models/todo.dart';
 import '../models/habit.dart';
@@ -25,9 +26,33 @@ enum SearchKind {
   timeEntry,
 }
 
+/// Runtime provenance for generated search headings; never inferred from text.
+sealed class SearchGeneratedTitle {
+  const SearchGeneratedTitle();
+
+  String titleFor(AppLocale locale);
+}
+
+class EmptyNoteSearchTitle extends SearchGeneratedTitle {
+  const EmptyNoteSearchTitle();
+
+  @override
+  String titleFor(AppLocale locale) => DiaryNoteUiCopy(locale).untitledNote;
+}
+
+class EmptyDiarySearchTitle extends SearchGeneratedTitle {
+  const EmptyDiarySearchTitle(this.date);
+
+  final DateTime date;
+
+  @override
+  String titleFor(AppLocale locale) => DiaryNoteUiCopy(locale).diaryTitle(date);
+}
+
 class SearchHit {
   final SearchKind kind;
-  final String title;
+  final String _title;
+  final SearchGeneratedTitle? generatedTitle;
   final String? subtitle;
   final String sourceId;
   final DateTime? when;
@@ -35,12 +60,18 @@ class SearchHit {
 
   const SearchHit({
     required this.kind,
-    required this.title,
+    required String title,
+    this.generatedTitle,
     this.subtitle,
     required this.sourceId,
     this.when,
     this.iconOverride,
-  });
+  }) : _title = title;
+
+  String get title => titleFor(I18n.current);
+
+  String titleFor(AppLocale locale) =>
+      generatedTitle?.titleFor(locale) ?? _title;
 
   IconData get icon => switch (kind) {
     SearchKind.todo => Icons.check_circle_outline,
@@ -129,6 +160,9 @@ class GlobalSearch {
             (n) => SearchHit(
               kind: SearchKind.note,
               title: n.title,
+              generatedTitle: n.content.trim().isEmpty
+                  ? const EmptyNoteSearchTitle()
+                  : null,
               subtitle: n.preview,
               sourceId: n.id,
               when: n.updatedAt,
@@ -144,6 +178,9 @@ class GlobalSearch {
             (d) => SearchHit(
               kind: SearchKind.diary,
               title: d.title,
+              generatedTitle: d.content.trim().isEmpty
+                  ? EmptyDiarySearchTitle(d.date)
+                  : null,
               subtitle: d.preview,
               sourceId: d.id,
               when: d.date,

@@ -1,4 +1,5 @@
 import '../core/export_ui_copy.dart';
+import '../core/i18n.dart';
 import '../models/anniversary.dart';
 import '../models/calendar_event.dart';
 import '../models/diary_entry.dart';
@@ -175,7 +176,7 @@ class ModuleExporter {
     for (final n in notes) {
       sb.writeln(
         [
-          _csv(n.title),
+          _csv(n.titleFor(AppLocale.zh)),
           _csv(n.content),
           n.format,
           n.pinned,
@@ -197,8 +198,8 @@ class ModuleExporter {
       sb.writeln(
         [
           _csvDate(d.date),
-          d.mood?.label ?? '',
-          d.weather?.label ?? '',
+          d.mood?.labelFor(AppLocale.zh) ?? '',
+          d.weather?.labelFor(AppLocale.zh) ?? '',
           _csv(d.location ?? ''),
           _csv(d.tags.join('|')),
           _csv(d.content),
@@ -276,7 +277,7 @@ class ModuleExporter {
     final copy = ExportUiCopy.current();
     final sb = StringBuffer('# ${copy.notesHeading}\n\n');
     for (final n in notes) {
-      sb.writeln('## ${n.title}');
+      sb.writeln('## ${n.titleFor(copy.locale)}');
       sb.writeln(
         '*${n.updatedAt.toIso8601String().substring(0, 16).replaceAll("T", " ")}*\n',
       );

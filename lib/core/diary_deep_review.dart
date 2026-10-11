@@ -1,4 +1,5 @@
 import '../models/diary_entry.dart';
+import 'i18n.dart';
 
 class DiaryDeepReviewPrompt {
   final String systemPrompt;
@@ -32,7 +33,7 @@ class DiaryDeepReviewBuilder {
     final moodCounts = <String, int>{};
     final tagCounts = <String, int>{};
     for (final entry in recent) {
-      final mood = entry.mood?.label;
+      final mood = entry.mood?.labelFor(AppLocale.zh);
       if (mood != null) moodCounts[mood] = (moodCounts[mood] ?? 0) + 1;
       for (final tag in entry.tags) {
         final clean = tag.trim();
@@ -49,8 +50,9 @@ class DiaryDeepReviewBuilder {
         .map((entry) {
           final meta = [
             _dateLabel(entry.date),
-            if (entry.mood != null) '心情=${entry.mood!.label}',
-            if (entry.weather != null) '天气=${entry.weather!.label}',
+            if (entry.mood != null) '心情=${entry.mood!.labelFor(AppLocale.zh)}',
+            if (entry.weather != null)
+              '天气=${entry.weather!.labelFor(AppLocale.zh)}',
             if (entry.tags.isNotEmpty) '标签=${entry.tags.join(',')}',
             if ((entry.location ?? '').trim().isNotEmpty)
               '地点=${entry.location!.trim()}',

@@ -256,6 +256,12 @@ void main() {
     ];
     final notes = [
       NoteItem(id: 'note-1', content: '笔记', createdAt: now, updatedAt: now),
+      NoteItem(
+        id: 'note-empty',
+        content: ' \n\t ',
+        createdAt: DateTime(2026, 5, 19, 8),
+        updatedAt: DateTime(2026, 5, 19, 8, 5),
+      ),
     ];
     final diary = [
       DiaryEntry(
@@ -264,6 +270,13 @@ void main() {
         content: '日记',
         mood: Mood.good,
         weather: Weather.sunny,
+      ),
+      DiaryEntry(
+        id: 'diary-empty',
+        date: DateTime(2026, 5, 19),
+        content: '',
+        createdAt: DateTime(2026, 5, 19, 8),
+        updatedAt: DateTime(2026, 5, 19, 8, 5),
       ),
     ];
     final anniversaries = [
@@ -311,7 +324,10 @@ void main() {
     );
     expect(zhExports[1], contains(',negative,'));
     expect(zhExports[2], contains('学习,手动'));
+    expect(zhExports[3], contains('无标题笔记'));
+    expect(zhExports[3], isNot(contains('Untitled note')));
     expect(zhExports[4], contains('开心,晴'));
+    expect(zhExports[4], contains('2026-05-19,,,,,,2026-05-19T08:00:00.000'));
     expect(zhExports[5], contains(',倒数,lunar,'));
     expect(zhExports[6], contains(',paused,study,'));
   });

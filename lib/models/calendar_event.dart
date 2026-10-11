@@ -261,6 +261,8 @@ class CourseDisplayMetadata extends CalendarEventDisplayMetadata {
 }
 
 class DiaryDisplayMetadata extends CalendarEventDisplayMetadata {
-  final String moodKey;
-  const DiaryDisplayMetadata({required this.moodKey});
+  final String? moodKey;
+  final DateTime? fallbackTitleDate;
+
+  const DiaryDisplayMetadata({this.moodKey, this.fallbackTitleDate});
 }

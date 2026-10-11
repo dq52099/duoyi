@@ -1,7 +1,15 @@
+import 'dart:convert';
+
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/models/note.dart';
 import 'package:test/test.dart';
 
 void main() {
+  late AppLocale savedLocale;
+
+  setUp(() => savedLocale = I18n.current);
+  tearDown(() => I18n.setLocale(savedLocale));
+
   test('NoteItem keeps legacy plain text notes readable', () {
     final note = NoteItem.fromJson({
       'id': 'n1',
@@ -128,4 +136,43 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'empty note title localizes lazily without rewriting JSON or authored text',
+    () {
+      NoteItem noteWithContent(String content, String id) => NoteItem.fromJson({
+        'id': id,
+        'content': content,
+        'createdAt': '2026-05-18T10:00:00.000',
+        'updatedAt': '2026-05-18T10:10:00.000',
+      });
+
+      final emptyNote = noteWithContent(' \n\t ', 'empty-note');
+      final authoredFallbackTitle = noteWithContent(
+        '无标题笔记\n作者正文保持原样',
+        'authored-fallback-text',
+      );
+      final emptyJsonBefore = jsonEncode(emptyNote.toJson());
+      final authoredJsonBefore = jsonEncode(authoredFallbackTitle.toJson());
+
+      I18n.setLocale(AppLocale.zh);
+      expect(emptyNote.titleFor(AppLocale.zh), '无标题笔记');
+      expect(emptyNote.title, '无标题笔记');
+
+      I18n.setLocale(AppLocale.en);
+      expect(emptyNote.titleFor(AppLocale.en), 'Untitled note');
+      expect(emptyNote.title, 'Untitled note');
+      expect(emptyNote.titleFor(AppLocale.zh), '无标题笔记');
+      expect(I18n.current, AppLocale.en);
+
+      expect(authoredFallbackTitle.titleFor(AppLocale.zh), '无标题笔记');
+      expect(authoredFallbackTitle.titleFor(AppLocale.en), '无标题笔记');
+      expect(authoredFallbackTitle.title, '无标题笔记');
+      expect(I18n.current, AppLocale.en);
+      expect(jsonEncode(emptyNote.toJson()), emptyJsonBefore);
+      expect(jsonEncode(authoredFallbackTitle.toJson()), authoredJsonBefore);
+      expect(emptyNote.toJson(), isNot(contains('title')));
+      expect(authoredFallbackTitle.toJson(), isNot(contains('title')));
+    },
+  );
 }

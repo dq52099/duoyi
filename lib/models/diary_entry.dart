@@ -1,5 +1,8 @@
 import 'package:uuid/uuid.dart';
 
+import '../core/diary_note_ui_copy.dart';
+import '../core/i18n.dart';
+
 const _uuid = Uuid();
 
 /// 心情
@@ -12,12 +15,14 @@ enum Mood {
 }
 
 extension MoodX on Mood {
-  String get label => switch (this) {
-    Mood.awesome => '超棒',
-    Mood.good => '开心',
-    Mood.okay => '平静',
-    Mood.bad => '郁闷',
-    Mood.terrible => '糟糕',
+  String get label => labelFor(I18n.current);
+
+  String labelFor(AppLocale locale) => switch (this) {
+    Mood.awesome => locale == AppLocale.en ? 'Great' : '超棒',
+    Mood.good => locale == AppLocale.en ? 'Good' : '开心',
+    Mood.okay => locale == AppLocale.en ? 'Calm' : '平静',
+    Mood.bad => locale == AppLocale.en ? 'Low' : '郁闷',
+    Mood.terrible => locale == AppLocale.en ? 'Terrible' : '糟糕',
   };
 
   String get emoji => switch (this) {
@@ -33,15 +38,17 @@ extension MoodX on Mood {
 enum Weather { sunny, cloudy, overcast, rain, snow, wind, fog, thunder }
 
 extension WeatherX on Weather {
-  String get label => switch (this) {
-    Weather.sunny => '晴',
-    Weather.cloudy => '多云',
-    Weather.overcast => '阴',
-    Weather.rain => '雨',
-    Weather.snow => '雪',
-    Weather.wind => '风',
-    Weather.fog => '雾',
-    Weather.thunder => '雷',
+  String get label => labelFor(I18n.current);
+
+  String labelFor(AppLocale locale) => switch (this) {
+    Weather.sunny => locale == AppLocale.en ? 'Sunny' : '晴',
+    Weather.cloudy => locale == AppLocale.en ? 'Cloudy' : '多云',
+    Weather.overcast => locale == AppLocale.en ? 'Overcast' : '阴',
+    Weather.rain => locale == AppLocale.en ? 'Rain' : '雨',
+    Weather.snow => locale == AppLocale.en ? 'Snow' : '雪',
+    Weather.wind => locale == AppLocale.en ? 'Wind' : '风',
+    Weather.fog => locale == AppLocale.en ? 'Fog' : '雾',
+    Weather.thunder => locale == AppLocale.en ? 'Thunder' : '雷',
   };
 
   String get emoji => switch (this) {
@@ -89,11 +96,13 @@ class DiaryEntry {
   String get dateKey =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-  String get title {
+  String get title => titleFor(I18n.current);
+
+  String titleFor(AppLocale locale) {
     final lines = content.trim().split('\n');
     return lines.isNotEmpty && lines.first.isNotEmpty
         ? lines.first
-        : '${date.month}月${date.day}日的日记';
+        : DiaryNoteUiCopy(locale).diaryTitle(date);
   }
 
   String get preview {

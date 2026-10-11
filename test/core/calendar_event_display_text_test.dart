@@ -18,6 +18,87 @@ void main() {
   setUp(() => I18n.setLocale(AppLocale.zh));
   tearDown(() => I18n.setLocale(AppLocale.zh));
 
+  for (final mood in <Mood?>[null, Mood.good]) {
+    test('empty diary title follows locale without rebuilding, mood=$mood', () {
+      final date = DateTime(2026, 10, 11);
+      final entry = DiaryEntry(
+        id: 'empty-diary',
+        date: date,
+        content: ' \n ',
+        mood: mood,
+      );
+      final event = _buildEvents(diaries: [entry]).single;
+      final snapshot = event.toJson();
+      final metadata = event.displayMetadata! as DiaryDisplayMetadata;
+      expect(metadata.fallbackTitleDate, date);
+      expect(event.title, '10月11日的日记');
+      expect(CalendarEventDisplayText.resolveTitle(event), event.title);
+      expect(
+        CalendarEventDisplayText.resolveSubtitle(event),
+        mood == null ? null : '开心',
+      );
+
+      I18n.setLocale(AppLocale.en);
+      expect(CalendarEventDisplayText.resolveTitle(event), 'Diary for 10/11');
+      expect(
+        CalendarEventDisplayText.resolveSubtitle(event),
+        mood == null ? null : 'Good',
+      );
+      expect(event.title, '10月11日的日记');
+      expect(event.toJson(), snapshot);
+      expect(event.sourceId, entry.id);
+      expect(event.date, date);
+      expect(snapshot, isNot(contains('displayMetadata')));
+      final restored = CalendarEvent.fromJson(snapshot);
+      expect(restored.displayMetadata, isNull);
+      expect(CalendarEventDisplayText.resolveTitle(restored), event.title);
+      expect(
+        CalendarEventDisplayText.resolveTitle(
+          event.copyWith(hasConflict: true),
+        ),
+        'Diary for 10/11',
+      );
+
+      I18n.setLocale(AppLocale.zh);
+      expect(CalendarEventDisplayText.resolveTitle(event), '10月11日的日记');
+    });
+  }
+
+  test('diary title matching a fallback stays authored across locales', () {
+    final event = _buildEvents(
+      diaries: [
+        DiaryEntry(
+          id: 'authored-diary',
+          date: DateTime(2026, 10, 11),
+          content: '10月11日的日记\n用户正文',
+          mood: Mood.good,
+        ),
+      ],
+    ).single;
+    final metadata = event.displayMetadata! as DiaryDisplayMetadata;
+    expect(metadata.fallbackTitleDate, isNull);
+    I18n.setLocale(AppLocale.en);
+    expect(CalendarEventDisplayText.resolveTitle(event), '10月11日的日记');
+    expect(CalendarEventDisplayText.resolveSubtitle(event), 'Good');
+  });
+
+  test('title-only diary metadata retains a literal subtitle', () {
+    final event = CalendarEvent(
+      id: 'title-only',
+      title: '10月11日的日记',
+      subtitle: '开心',
+      date: DateTime(2026, 10, 11),
+      type: CalendarEventType.diary,
+      color: Colors.teal,
+      displayMetadata: DiaryDisplayMetadata(
+        fallbackTitleDate: DateTime(2026, 10, 11),
+      ),
+    );
+    I18n.setLocale(AppLocale.en);
+    expect(CalendarEventDisplayText.resolveTitle(event), 'Diary for 10/11');
+    expect(CalendarEventDisplayText.resolveSubtitle(event), '开心');
+  });
+
   test(
     'generated Pomodoro fallback title and duration follow the current locale',
     () {

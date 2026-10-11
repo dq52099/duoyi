@@ -1,5 +1,28 @@
 # Parallel integration checkpoint
 
+## Six-stream continuation — 2026-10-11
+
+This continuation used root implementation/integration, Sol's cached-title
+contract review, Luna's model regressions, Luna's accepted-artifact validation,
+an independent Swift display-core verifier, and a committed-source widget
+layout/interaction process. Native capacity remains four including root;
+independent processes supplement it. Completed streams are not counted as
+still active, and this is not six native subagents.
+
+Diary/note model presentation and runtime calendar/search provenance passed
+77 checks across ten test files. Fifteen-file analysis is clean, exit 0.
+See `domain-model-locale-acceptance-20261011.md` for contracts and evidence.
+Calendar row rendering and search repaint remain frontend follow-ups.
+
+The isolated committed-head Web build at `729f2ea` passed, exit 0. Separately,
+its widget layout/interaction regression passed 27 tests and skipped one
+Sunday-dependent future-day check, exit 0. The skipped test is not a pass.
+Log: `.dart_tool/task-temp-20261011/accepted-widget-locale-layout-20261011.log`.
+This checks committed source, excluding pending frontend drafts.
+
+Swift display-core execution and local browser artifact verification are still
+being collected. No new signed APK, push, or deployment is claimed here.
+
 Accepted standalone metadata commit: `2b12c26`
 (`fix(calendar): localize generated metadata and preserve authored text`).
 Only the aggregator, metadata model, display-text helper, and their tests were
