@@ -175,7 +175,7 @@ sudo mkdir -p "$WEB_ROOT"
 if [ -d "$WEB_ROOT/downloads" ]; then
     DOWNLOADS_BACKUP_DIR="$(mktemp -d)"
     echo "📦 Preserving existing downloads directory..."
-    sudo cp -a "$WEB_ROOT/downloads" "$DOWNLOADS_BACKUP_DIR/downloads"
+    cp -a --no-preserve=ownership -- "$WEB_ROOT/downloads" "$DOWNLOADS_BACKUP_DIR/downloads"
 fi
 sudo find "$WEB_ROOT" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 sudo cp -r "$BUILD_WEB_DIR"/. "$WEB_ROOT/"
