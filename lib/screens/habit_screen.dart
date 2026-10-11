@@ -782,11 +782,11 @@ class _HabitScreenState extends State<HabitScreen>
             // 窄屏保持单列 SliverList 不变。
             SliverGrid.builder(
               key: const ValueKey('habit_today_checkin_sliver'),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 mainAxisSpacing: DesignTokens.spaceSm,
                 crossAxisSpacing: DesignTokens.spaceSm,
-                mainAxisExtent: _habitCheckinGridTileExtent,
+                mainAxisExtent: _habitCheckinGridTileExtent(context),
               ),
               itemCount: activeHabits.length,
               itemBuilder: (context, index) =>
@@ -1356,10 +1356,17 @@ class _HabitSummaryTile extends StatelessWidget {
 
 const double _habitCheckinCardBodyHeight = 38;
 
-/// 宽屏双列网格（SliverGrid）单格主轴高度：打卡卡总高 = 卡体 38 +
+double _habitCheckinTextScale(BuildContext context) =>
+    (MediaQuery.textScalerOf(context).scale(13) / 13).clamp(
+      1.0,
+      double.infinity,
+    );
+
+/// 宽屏双列网格（SliverGrid）单格主轴高度：打卡卡总高 = 卡体 38 * textScale +
 /// 上下内边距 2×2 + 底部 margin 1（描边绘制在装饰盒内不加高），
 /// 再留 1px 容差吸收亚像素取整，避免任何一档出现卡体溢出。
-const double _habitCheckinGridTileExtent = _habitCheckinCardBodyHeight + 6;
+double _habitCheckinGridTileExtent(BuildContext context) =>
+    _habitCheckinCardBodyHeight * _habitCheckinTextScale(context) + 6;
 const double _habitTitleStatusHeight = 15;
 const double _habitCheckinButtonWidth = 52;
 const double _habitUndoButtonWidth = 28;
@@ -1395,10 +1402,7 @@ class _HabitCheckinCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final textScale = (MediaQuery.textScalerOf(context).scale(13) / 13).clamp(
-      1.0,
-      double.infinity,
-    );
+    final textScale = _habitCheckinTextScale(context);
     final titleStatusHeight = _habitTitleStatusHeight * textScale;
     final isNegative = habit.kind == HabitKind.negative;
     final todayCount = habit.todayCount();

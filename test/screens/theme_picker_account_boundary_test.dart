@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:duoyi/core/i18n.dart';
+import 'package:duoyi/core/data_settings_ui_copy.dart';
 import 'package:duoyi/providers/achievement_provider.dart';
 import 'package:duoyi/providers/auth_provider.dart';
 import 'package:duoyi/providers/theme_provider.dart';
@@ -16,6 +17,74 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     I18n.setLocale(AppLocale.zh);
   });
+  tearDown(() => I18n.setLocale(AppLocale.zh));
+
+  for (final background in [true, false]) {
+    testWidgets(
+      'widget ${background ? 'background' : 'skin'} save failure shows localized feedback',
+      (tester) async {
+        final auth = _ShopAuth(loggedIn: false);
+        final theme = _ShopTheme()..failWidgetSave = true;
+        final rewards = _ShopRewards();
+        await _mount(tester, auth, theme, rewards);
+        I18n.setLocale(AppLocale.en);
+        await tester.pumpAndSettle();
+        final option = find.text(
+          background
+              ? DataSettingsUiCopy.widgetFollowCurrentTheme
+              : DataSettingsUiCopy.widgetFollowCardSkin,
+        );
+        await tester.scrollUntilVisible(
+          option,
+          500,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(option);
+        await tester.pumpAndSettle();
+        expect(find.text(DataSettingsUiCopy.themeSaveFailed), findsOneWidget);
+        expect(find.text(DataSettingsUiCopy.unlockThemeFirst), findsNothing);
+        expect(find.text(DataSettingsUiCopy.unlockCardSkinFirst), findsNothing);
+        expect(theme.widgetSaveCalls, 1);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+        auth.dispose();
+        theme.dispose();
+        rewards.dispose();
+      },
+    );
+  }
+
+  testWidgets(
+    'old widget save failure does not show feedback for the next account',
+    (tester) async {
+      final auth = _ShopAuth(loggedIn: false);
+      final theme = _ShopTheme()
+        ..failWidgetSave = true
+        ..widgetSaveGate = Completer<void>();
+      final rewards = _ShopRewards();
+      await _mount(tester, auth, theme, rewards);
+      final option = find.text(DataSettingsUiCopy.widgetFollowCurrentTheme);
+      await tester.scrollUntilVisible(
+        option,
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(option);
+      await tester.pumpAndSettle();
+      expect(theme.widgetSaveCalls, 1);
+      auth.switchAccount();
+      theme.widgetSaveGate!.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      auth.dispose();
+      theme.dispose();
+      rewards.dispose();
+    },
+  );
 
   testWidgets(
     'account switch during theme snapshot skips old rewards and feedback',
@@ -117,6 +186,21 @@ class _ShopTheme extends ThemeProvider {
   int setBrandCalls = 0;
   Completer<void>? snapshotGate;
   Completer<void>? unlockGate;
+  Completer<void>? widgetSaveGate;
+  bool failWidgetSave = false;
+  int widgetSaveCalls = 0;
+
+  Future<bool> _saveWidgetChoice() async {
+    widgetSaveCalls++;
+    if (widgetSaveGate != null) await widgetSaveGate!.future;
+    if (failWidgetSave) throw StateError('Controlled persistence failure');
+    return true;
+  }
+
+  @override
+  Future<bool> setWidgetBackgroundBrand(String id) => _saveWidgetChoice();
+  @override
+  Future<bool> setWidgetCardSkin(String id) => _saveWidgetChoice();
   @override
   Future<void> applyShopStateFromServer(
     Map<dynamic, dynamic> state, {

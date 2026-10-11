@@ -399,7 +399,18 @@ class ThemePickerScreen extends StatelessWidget {
   ) async {
     final isCurrent = _accountOperationGuard(context);
     if (!isCurrent()) return;
-    final ok = await themeProvider.setWidgetBackgroundBrand(id);
+    final bool ok;
+    try {
+      ok = await themeProvider.setWidgetBackgroundBrand(id);
+    } catch (_) {
+      if (!context.mounted || !isCurrent()) return;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.themeSaveFailed)),
+      );
+      return;
+    }
     if (!context.mounted || !isCurrent()) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
@@ -422,7 +433,18 @@ class ThemePickerScreen extends StatelessWidget {
   ) async {
     final isCurrent = _accountOperationGuard(context);
     if (!isCurrent()) return;
-    final ok = await themeProvider.setWidgetCardSkin(id);
+    final bool ok;
+    try {
+      ok = await themeProvider.setWidgetCardSkin(id);
+    } catch (_) {
+      if (!context.mounted || !isCurrent()) return;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.themeSaveFailed)),
+      );
+      return;
+    }
     if (!context.mounted || !isCurrent()) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
