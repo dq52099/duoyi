@@ -16,7 +16,7 @@ enum AdminResponseFailure {
 
 /// Carries app-owned response diagnostics without interpreting server text.
 class AdminResponseException extends ApiException
-    implements UserVisibleApiException {
+    implements LocalizedUserVisibleApiException {
   const AdminResponseException(this.failure, {this.endpoint = ''}) : super('');
 
   final AdminResponseFailure failure;
@@ -70,8 +70,11 @@ class AdminResponseException extends ApiException
   }
 
   @override
-  String get userVisibleMessage {
-    final isEn = I18n.current == AppLocale.en;
+  String get userVisibleMessage => userVisibleMessageForLocale(I18n.current);
+
+  @override
+  String userVisibleMessageForLocale(AppLocale locale) {
+    final isEn = locale == AppLocale.en;
     return switch (failure) {
       AdminResponseFailure.missingCoinBalance =>
         isEn

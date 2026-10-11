@@ -512,6 +512,12 @@ abstract interface class UserVisibleApiException {
   String get userVisibleMessage;
 }
 
+/// Optional explicit-locale rendering for frozen feedback and exported copy.
+abstract interface class LocalizedUserVisibleApiException
+    implements UserVisibleApiException {
+  String userVisibleMessageForLocale(AppLocale locale);
+}
+
 const defaultUserVisibleBackendErrorMessage = '服务暂不可用，请稍后重试或联系管理员';
 
 bool isBackendCompatibilityDiagnosticMessage(String message) =>
@@ -524,8 +530,13 @@ bool isBackendCompatibilityDiagnosticMessage(String message) =>
     message.contains('可能是旧后端') ||
     message.contains('反向代理未转发 /api/*');
 
-String userVisibleApiError(Object error, {String? fallbackMessage}) {
-  final isEn = I18n.current == AppLocale.en;
+String userVisibleApiError(
+  Object error, {
+  String? fallbackMessage,
+  AppLocale? locale,
+}) {
+  final effectiveLocale = locale ?? I18n.current;
+  final isEn = effectiveLocale == AppLocale.en;
   final fallback =
       fallbackMessage ??
       (isEn
@@ -534,6 +545,10 @@ String userVisibleApiError(Object error, {String? fallbackMessage}) {
   // Unexpected exceptions can contain URLs, tokens or implementation details.
   // Only API messages explicitly intended for presentation may reach the UI.
   if (error is! ApiException) return fallback;
+  if (error is LocalizedUserVisibleApiException) {
+    return (error as LocalizedUserVisibleApiException)
+        .userVisibleMessageForLocale(effectiveLocale);
+  }
   if (error is UserVisibleApiException) {
     return (error as UserVisibleApiException).userVisibleMessage;
   }

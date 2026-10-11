@@ -63,6 +63,7 @@ import 'services/widget_publication_controller.dart';
 import 'services/widget_quick_todo_action.dart';
 import 'services/widget_action_scope.dart';
 import 'services/widget_link_dispatch.dart';
+import 'services/cloud_sync_notice.dart';
 import 'services/widget_action_message.dart';
 import 'services/reminder_issue_copy.dart';
 import 'services/ai_service.dart';
@@ -1478,8 +1479,10 @@ void main() async {
     }
     if (cloudSyncProvider.hasPendingChanges &&
         !cloudSyncProvider.config.autoSync) {
-      return const TodoCloudSyncNotice(
-        message: '自动同步已关闭，尚未上传服务器。重新开启后会继续同步。',
+      return TodoCloudSyncNotice(
+        message: const CloudSyncNotice(
+          CloudSyncNoticeKind.automaticSyncOff,
+        ).render(),
         level: TodoCloudSyncNoticeLevel.warning,
       );
     }
@@ -4747,6 +4750,7 @@ WidgetActionMessage _quickTodoCreatedNotice(TodoItem todo) {
   }
   var syncState = WidgetActionSyncState.unknown;
   var syncReason = '';
+  CloudSyncNotice? syncNotice;
   final context = mainShellKey.currentContext;
   if (context != null && context.mounted) {
     try {
@@ -4761,9 +4765,12 @@ WidgetActionMessage _quickTodoCreatedNotice(TodoItem todo) {
         pendingChanges: sync.hasPendingChanges,
         retryReason: sync.syncRetryStatus,
         lastError: sync.lastError,
+        retryNotice: sync.syncRetryNotice,
+        errorNotice: sync.lastErrorNotice,
       );
       syncState = status.state;
-      syncReason = status.reason;
+      syncNotice = status.notice;
+      syncReason = status.notice == null ? status.reason : '';
     } catch (e, st) {
       debugPrint('[CloudSyncStatus] local save message unavailable: $e\n$st');
     }
@@ -4772,6 +4779,7 @@ WidgetActionMessage _quickTodoCreatedNotice(TodoItem todo) {
     WidgetActionNotice.todoSaved,
     syncState: syncState,
     syncReason: syncReason,
+    syncNotice: syncNotice,
     reminderHint: reminderHint,
   );
 }

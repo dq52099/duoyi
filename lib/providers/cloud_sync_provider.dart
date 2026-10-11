@@ -8,8 +8,10 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/account_preference_writes.dart';
 import '../core/feature_flags.dart';
+import '../core/i18n.dart';
 import '../services/account_local_data_cleaner.dart';
 import '../services/api_client.dart';
+import '../services/cloud_sync_notice.dart';
 
 class SyncConfig {
   final DateTime lastSync;
@@ -114,10 +116,13 @@ typedef SyncChangedCollectionsCallback =
 /// 云同步：服务器地址与 token 直接复用 AuthProvider(普通用户无需感知)。
 /// 登录后和本地数据变更后自动同步。
 class CloudSyncProvider extends ChangeNotifier {
+  CloudSyncProvider() {
+    I18n.localeListenable.addListener(_notifySyncStateChanged);
+  }
+
   static const _autoSyncDelay = Duration(seconds: 20);
   static const _autoRetryDelay = Duration(minutes: 3);
   static const _remotePollDelay = Duration(minutes: 2);
-  static const _serviceUnavailableMessage = '云同步暂不可用，请稍后重试或联系管理员';
   static const deletedItemsStorageKey = 'sync_deleted_items';
   static const _serverUpdatedAtStorageKey = 'sync_server_updated_at';
   static const _serverVersionStorageKey = 'sync_server_version';
@@ -144,10 +149,10 @@ class CloudSyncProvider extends ChangeNotifier {
   bool _syncQueued = false;
   bool _syncQueuedExplicitly = false;
   bool _notifyQueued = false;
-  String? _lastError;
-  String? _lastRealtimeWarning;
+  CloudSyncNotice? _lastError;
+  CloudSyncNotice? _lastRealtimeWarning;
   bool _syncRetryPending = false;
-  String? _syncRetryMessage;
+  CloudSyncNotice? _syncRetryMessage;
   Completer<void>? _queuedSyncCompleter;
   Timer? _autoSyncTimer;
   Timer? _remotePollTimer;
@@ -184,8 +189,9 @@ class CloudSyncProvider extends ChangeNotifier {
 
   SyncConfig get config => _config;
   bool get isSyncing => _isSyncing;
-  String? get lastError => _lastError;
-  String? get lastRealtimeWarning => _lastRealtimeWarning;
+  String? get lastError => _lastError?.render();
+  CloudSyncNotice? get lastErrorNotice => _lastError;
+  String? get lastRealtimeWarning => _lastRealtimeWarning?.render();
   bool get hasAuthenticatedClient {
     final client = apiClientGetter?.call();
     return client != null && client.token != null && client.token!.isNotEmpty;
@@ -198,47 +204,76 @@ class CloudSyncProvider extends ChangeNotifier {
 
   bool get isSyncSuspended => _syncSuspendedForAccountChange;
   bool get hasSyncRetryPending => _syncRetryPending;
-  String? get syncRetryStatus {
+  CloudSyncNotice? get syncRetryNotice {
     if (!_syncRetryPending) return null;
-    return _syncRetryMessage ?? '云同步上次未完成，稍后会自动重试。';
+    return _syncRetryMessage ??
+        const CloudSyncNotice(CloudSyncNoticeKind.retryIncomplete);
   }
 
+  String? get syncRetryStatus => syncRetryNotice?.render();
+
   String? get syncUnavailableStatus {
-    if (!FeatureFlags.cloudSyncV2) return '当前版本未启用云同步。';
-    if (_syncSuspendedForAccountChange) return '账号切换处理中，云同步已暂停。';
-    if (!hasAuthenticatedClient) return '未登录云同步账号。';
-    if (isBackupDisabledByServer) return '管理员已关闭云端备份。';
+    if (!FeatureFlags.cloudSyncV2) {
+      return const CloudSyncNotice(
+        CloudSyncNoticeKind.featureDisabled,
+      ).render();
+    }
+    if (_syncSuspendedForAccountChange) {
+      return const CloudSyncNotice(
+        CloudSyncNoticeKind.accountTransition,
+      ).render();
+    }
+    if (!hasAuthenticatedClient) {
+      return const CloudSyncNotice(CloudSyncNoticeKind.signedOut).render();
+    }
+    if (isBackupDisabledByServer) {
+      return const CloudSyncNotice(CloudSyncNoticeKind.serverDisabled).render();
+    }
     return null;
   }
 
-  String localSaveSyncMessage({String localSavedText = '本机已保存'}) {
+  String localSaveSyncMessage({String? localSavedText}) {
+    final isEn = I18n.current == AppLocale.en;
+    final saved = localSavedText ?? (isEn ? 'Saved on this device' : '本机已保存');
     final unavailable = syncUnavailableStatus?.trim();
     if (unavailable != null && unavailable.isNotEmpty) {
-      return '$localSavedText，尚未上传服务器：$unavailable';
+      return isEn
+          ? '$saved. Not uploaded to the server: $unavailable'
+          : '$saved，尚未上传服务器：$unavailable';
     }
     if (!_config.autoSync) {
-      return '$localSavedText，尚未上传服务器：自动同步已关闭，重新开启后会继续同步。';
+      return isEn
+          ? '$saved. Automatic sync is off; changes will upload when it is enabled again.'
+          : '$saved，尚未上传服务器：自动同步已关闭，重新开启后会继续同步。';
     }
     final retryStatus = syncRetryStatus?.trim();
     if (retryStatus != null && retryStatus.isNotEmpty) {
-      return '$localSavedText，$retryStatus';
+      return '$saved${isEn ? '. ' : '，'}$retryStatus';
     }
-    final lastError = _lastError?.trim();
-    if (_hasPendingChanges && lastError != null && lastError.isNotEmpty) {
-      return '$localSavedText，云同步上次失败，稍后会自动重试：$lastError';
+    final error = lastError?.trim();
+    if (_hasPendingChanges && error != null && error.isNotEmpty) {
+      return isEn
+          ? '$saved. Cloud sync failed and will retry automatically: $error'
+          : '$saved，云同步上次失败，稍后会自动重试：$error';
     }
-    return '$localSavedText，云同步会后台上传';
+    return isEn
+        ? '$saved. Cloud sync will upload in the background'
+        : '$saved，云同步会后台上传';
   }
 
   String? get queuedRemotePullStatus {
     if (!_remotePullQueued) return null;
     if (_hasPendingChanges) {
-      return '远端有更新，正在等待本机待上传改动同步成功后再拉取，避免覆盖本机编辑。';
+      return const CloudSyncNotice(
+        CloudSyncNoticeKind.queuedWaitingLocalChanges,
+      ).render();
     }
     if (_isSyncing) {
-      return '远端有更新，当前同步完成后会继续拉取。';
+      return const CloudSyncNotice(
+        CloudSyncNoticeKind.queuedWaitingSync,
+      ).render();
     }
-    return '远端有更新，正在排队拉取。';
+    return const CloudSyncNotice(CloudSyncNoticeKind.queuedRemotePull).render();
   }
 
   bool get hasEverSynced => _config.lastSync.millisecondsSinceEpoch > 0;
@@ -394,15 +429,12 @@ class CloudSyncProvider extends ChangeNotifier {
     }
   }
 
-  String _userVisibleSyncError(Object error) {
+  CloudSyncNotice _userVisibleSyncError(Object error) {
     debugPrint('[CloudSync] $error');
-    return userVisibleApiError(
-      error,
-      fallbackMessage: _serviceUnavailableMessage,
-    );
+    return CloudSyncNotice(CloudSyncNoticeKind.failure, error: error);
   }
 
-  void _setSyncRetryPending(String message) {
+  void _setSyncRetryPending(CloudSyncNotice message) {
     _syncRetryPending = true;
     _syncRetryMessage = message;
     _lastError = null;
@@ -521,7 +553,9 @@ class CloudSyncProvider extends ChangeNotifier {
     try {
       await syncNow().timeout(timeout);
     } on TimeoutException {
-      _lastError = '本机改动上传超时，已暂停切换账号以避免未上传内容被清空。';
+      _lastError = const CloudSyncNotice(
+        CloudSyncNoticeKind.switchUploadTimedOut,
+      );
       _hasPendingChanges = true;
       await _writePendingChanges(prefs, true);
       _notifySyncStateChanged();
@@ -534,7 +568,9 @@ class CloudSyncProvider extends ChangeNotifier {
     final stillPersisted =
         prefs.getBool(_pendingLocalChangesStorageKey) ?? false;
     if (_hasPendingChanges || stillPersisted) {
-      _lastError ??= '本机还有未上传服务器的改动，已暂停切换账号以避免本地内容被清空。';
+      _lastError ??= const CloudSyncNotice(
+        CloudSyncNoticeKind.switchUnsyncedLocal,
+      );
       _notifySyncStateChanged();
       return false;
     }
@@ -725,8 +761,9 @@ class CloudSyncProvider extends ChangeNotifier {
           },
           onError: (Object error) {
             if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
-            _lastRealtimeWarning =
-                '实时同步连接中断，已切换到轮询兜底：${_userVisibleSyncError(error)}';
+            _lastRealtimeWarning = _userVisibleSyncError(
+              error,
+            ).withKind(CloudSyncNoticeKind.realtimePollingFallback);
             _remoteEventSubscription = null;
             _remoteEventName = '';
             _remoteEventDataLines.clear();
@@ -816,7 +853,9 @@ class CloudSyncProvider extends ChangeNotifier {
       _pullRemoteChanges(expectedAccountGeneration: accountGenerationAtStart);
     } catch (e) {
       final message = _userVisibleSyncError(e);
-      _setSyncRetryPending('远端更新事件处理失败，稍后会自动重试：$message');
+      _setSyncRetryPending(
+        message.withKind(CloudSyncNoticeKind.remoteEventRetry),
+      );
       _scheduleRemotePoll(_autoRetryDelay);
       _notifySyncStateChanged();
     }
@@ -1000,7 +1039,9 @@ class CloudSyncProvider extends ChangeNotifier {
     } catch (e) {
       if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
       final message = _userVisibleSyncError(e);
-      _setSyncRetryPending('远端更新检查失败，稍后会自动重试：$message');
+      _setSyncRetryPending(
+        message.withKind(CloudSyncNoticeKind.remoteCheckRetry),
+      );
       _scheduleRemotePoll(_autoRetryDelay);
       _notifySyncStateChanged();
     }
@@ -1656,7 +1697,9 @@ class CloudSyncProvider extends ChangeNotifier {
           await _writePendingChanges(localPrefs, true);
         }
       } else {
-        _setSyncRetryPending('同步基线建立失败，稍后会自动重试：$message');
+        _setSyncRetryPending(
+          message.withKind(CloudSyncNoticeKind.baselineRetry),
+        );
       }
     }
 
@@ -1784,7 +1827,9 @@ class CloudSyncProvider extends ChangeNotifier {
         _lastError = message;
         _clearSyncRetryPending();
       } else {
-        _setSyncRetryPending('远端更新拉取失败，稍后会自动重试：$message');
+        _setSyncRetryPending(
+          message.withKind(CloudSyncNoticeKind.remotePullRetry),
+        );
       }
     }
 
@@ -2647,6 +2692,7 @@ class CloudSyncProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_notifySyncStateChanged);
     _clearQueuedSync(completeWaiters: true);
     _autoSyncTimer?.cancel();
     _remotePollTimer?.cancel();

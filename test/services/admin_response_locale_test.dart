@@ -9,6 +9,43 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test(
+    'explicit API error locale overrides global locale without mutation',
+    () {
+      const diagnostics = <Object>[
+        AdminResponseException(AdminResponseFailure.invalidPage),
+        ApiException('无法连接服务器：private diagnostic'),
+        ApiException('连接服务器超时：private diagnostic'),
+        ApiException('500: private diagnostic'),
+      ];
+      for (final error in [...diagnostics, StateError('private diagnostic')]) {
+        final zh = userVisibleApiError(error, locale: AppLocale.zh);
+        final en = userVisibleApiError(error, locale: AppLocale.en);
+        expect(en, isNot(zh));
+        expect(en, isNot(matches(RegExp(r'[\u3400-\u9fff]'))));
+        expect(en, isNot(contains('private diagnostic')));
+        expect(I18n.current, AppLocale.zh);
+      }
+      expect(
+        userVisibleApiError(
+          StateError('private'),
+          locale: AppLocale.en,
+          fallbackMessage: 'Supplied 用户',
+        ),
+        'Supplied 用户',
+      );
+      for (final locale in AppLocale.values) {
+        expect(
+          userVisibleApiError(
+            const ApiException('409: 用户编写内容'),
+            locale: locale,
+          ),
+          '用户编写内容',
+        );
+      }
+    },
+  );
+
   setUp(() => I18n.setLocale(AppLocale.zh));
   tearDown(() => I18n.setLocale(AppLocale.zh));
 

@@ -1,8 +1,74 @@
 import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/services/widget_action_message.dart';
+import 'package:duoyi/services/api_client.dart';
+import 'package:duoyi/services/cloud_sync_notice.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final retry in [false, true]) {
+    test(
+      'frozen typed sync feedback renders explicit locale (retry=$retry)',
+      () {
+        final notice = CloudSyncNotice(
+          retry
+              ? CloudSyncNoticeKind.baselineRetry
+              : CloudSyncNoticeKind.failure,
+          error: StateError('private diagnostic'),
+        );
+        final status = WidgetActionSyncStatus.fromFacts(
+          enabled: true,
+          accountTransition: false,
+          authenticated: true,
+          serverDisabled: false,
+          autoSync: true,
+          retryPending: retry,
+          pendingChanges: !retry,
+          retryNotice: retry ? notice : null,
+          errorNotice: retry ? null : notice,
+        );
+        final message = WidgetActionMessage(
+          WidgetActionNotice.todoSaved,
+          syncState: status.state,
+          syncNotice: status.notice,
+        );
+        final zh = message.render();
+        final en = message.render(locale: AppLocale.en);
+        expect(en, isNot(matches(RegExp(r'[\u3400-\u9fff]'))));
+        expect(en, isNot(contains('private diagnostic')));
+        expect(RegExp('retry automatically').allMatches(en), hasLength(1));
+        expect(I18n.current, AppLocale.zh);
+        I18n.setLocale(AppLocale.en);
+        expect(message.render(), en);
+        expect(status.reason, notice.render(locale: AppLocale.en));
+        expect(status.notice, same(notice));
+        expect(
+          status.state,
+          retry
+              ? WidgetActionSyncState.retryPending
+              : WidgetActionSyncState.failed,
+        );
+        I18n.setLocale(AppLocale.zh);
+        expect(message.render(), zh);
+      },
+    );
+  }
+
+  test('typed saved feedback keeps supplied 4xx detail literal', () {
+    const notice = CloudSyncNotice(
+      CloudSyncNoticeKind.failure,
+      error: ApiException('409: 项目 Aurora 已被修改'),
+    );
+    const message = WidgetActionMessage(
+      WidgetActionNotice.todoSaved,
+      syncState: WidgetActionSyncState.failed,
+      syncNotice: notice,
+    );
+    for (final locale in AppLocale.values) {
+      expect(message.render(locale: locale), contains('项目 Aurora 已被修改'));
+      expect(message.render(locale: locale), isNot(contains('409:')));
+    }
+  });
+
   setUp(() => I18n.setLocale(AppLocale.zh));
   tearDown(() => I18n.setLocale(AppLocale.zh));
 

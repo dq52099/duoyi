@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/providers/cloud_sync_provider.dart';
+import 'package:duoyi/services/cloud_sync_notice.dart';
 import 'package:duoyi/services/api_client.dart';
 import 'package:duoyi/services/account_local_data_cleaner.dart';
 import 'package:http/http.dart' as http;
@@ -11,6 +13,147 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:test/test.dart';
 
 void main() {
+  setUp(() => I18n.setLocale(AppLocale.zh));
+  tearDown(() => I18n.setLocale(AppLocale.zh));
+
+  test(
+    'generated sync notices render both locales without exposing diagnostics',
+    () {
+      for (final kind in CloudSyncNoticeKind.values) {
+        final notice = CloudSyncNotice(
+          kind,
+          error: StateError('secret diagnostic'),
+        );
+        final zh = notice.render(locale: AppLocale.zh);
+        final en = notice.render(locale: AppLocale.en);
+        expect(zh, isNotEmpty, reason: kind.name);
+        expect(en, isNotEmpty, reason: kind.name);
+        expect(
+          en,
+          isNot(matches(RegExp(r'[\u3400-\u9fff]'))),
+          reason: kind.name,
+        );
+        expect(en, isNot(contains('secret diagnostic')));
+        expect(zh, isNot(contains('secret diagnostic')));
+        expect(zh, isNot(en));
+        expect(I18n.current, AppLocale.zh);
+      }
+      const error = ApiException('409: 项目 Aurora 已在其他设备修改');
+      const notice = CloudSyncNotice(
+        CloudSyncNoticeKind.remotePullRetry,
+        error: error,
+      );
+      for (final locale in AppLocale.values) {
+        expect(notice.render(locale: locale), contains('项目 Aurora 已在其他设备修改'));
+      }
+      expect(notice.withKind(CloudSyncNoticeKind.failure).error, same(error));
+    },
+  );
+
+  test(
+    'locale notifications are detached when sync provider is disposed',
+    () async {
+      final provider = CloudSyncProvider();
+      var notifications = 0;
+      provider.addListener(() => notifications++);
+      I18n.setLocale(AppLocale.en);
+      await Future<void>.delayed(Duration.zero);
+      expect(notifications, 1);
+      expect(provider.localSaveSyncMessage(), contains('Saved on this device'));
+      expect(
+        provider.localSaveSyncMessage(localSavedText: '自定义已保存'),
+        startsWith('自定义已保存'),
+      );
+      expect(provider.hasPendingChanges, isFalse);
+      expect(provider.hasSyncRetryPending, isFalse);
+      provider.dispose();
+      I18n.setLocale(AppLocale.zh);
+      await Future<void>.delayed(Duration.zero);
+      expect(notifications, 1);
+    },
+  );
+
+  for (final pendingChanges in [false, true]) {
+    test(
+      'cached sync failure follows locale without new requests (pending=$pendingChanges)',
+      () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          if (pendingChanges) 'sync_pending_local_changes': true,
+        });
+        var requests = 0;
+        final httpClient = MockClient((request) async {
+          requests++;
+          return http.Response(
+            json.encode({'detail': 'internal diagnostic'}),
+            500,
+          );
+        });
+        addTearDown(httpClient.close);
+        final client = ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'synthetic-token',
+          httpClient: httpClient,
+        );
+        final provider = CloudSyncProvider();
+        addTearDown(provider.dispose);
+        provider.apiClientGetter = () => client;
+        provider.serverConfigGetter = () => {'backup_enabled': true};
+        await provider.loadFromStorage();
+        await provider.syncNow();
+        await Future<void>.delayed(Duration.zero);
+        final zhStatus = pendingChanges
+            ? provider.lastError
+            : provider.syncRetryStatus;
+        final zhLocalSave = provider.localSaveSyncMessage();
+        final notice = pendingChanges
+            ? provider.lastErrorNotice
+            : provider.syncRetryNotice;
+        final config = provider.config;
+        final requestCount = requests;
+        expect(requestCount, greaterThan(0));
+        var notifications = 0;
+        provider.addListener(() => notifications++);
+        I18n.setLocale(AppLocale.en);
+        await Future<void>.delayed(Duration.zero);
+        final enStatus = pendingChanges
+            ? provider.lastError
+            : provider.syncRetryStatus;
+        expect(enStatus, isNot(zhStatus));
+        expect(enStatus, isNot(matches(RegExp(r'[\u3400-\u9fff]'))));
+        expect(enStatus, isNot(contains('internal diagnostic')));
+        expect(provider.localSaveSyncMessage(), isNot(zhLocalSave));
+        expect(
+          provider.localSaveSyncMessage(),
+          contains(pendingChanges ? 'Cloud sync failed' : 'Initial sync'),
+        );
+        expect(notifications, 1);
+        expect(
+          pendingChanges ? provider.lastErrorNotice : provider.syncRetryNotice,
+          same(notice),
+        );
+        expect(provider.config, same(config));
+        expect(provider.hasPendingChanges, pendingChanges);
+        expect(provider.hasSyncRetryPending, !pendingChanges);
+        expect(provider.isSyncSuspended, isFalse);
+        expect(provider.isSyncing, isFalse);
+        expect(provider.lastServerVersion, isNull);
+        I18n.setLocale(AppLocale.zh);
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          pendingChanges ? provider.lastError : provider.syncRetryStatus,
+          zhStatus,
+        );
+        expect(provider.localSaveSyncMessage(), zhLocalSave);
+        expect(requests, requestCount);
+        final prefs = await SharedPreferences.getInstance();
+        expect(
+          prefs.getBool('sync_pending_local_changes') == true,
+          pendingChanges,
+        );
+      },
+    );
+  }
+
   test('账号切换会冻结云同步并阻断旧账号异步回写', () {
     final providerSource = File(
       'lib/providers/cloud_sync_provider.dart',
@@ -815,13 +958,17 @@ void main() {
     final quickTodoNotice = mainSource.substring(noticeStart, noticeEnd);
     expect(quickTodoNotice, contains('WidgetActionSyncStatus.fromFacts('));
     expect(quickTodoNotice, contains('syncState = status.state;'));
-    expect(quickTodoNotice, contains('syncReason = status.reason;'));
+    expect(quickTodoNotice, contains('syncNotice = status.notice;'));
+    expect(
+      quickTodoNotice,
+      contains("syncReason = status.notice == null ? status.reason : '';"),
+    );
     expect(quickTodoNotice, contains('syncState: syncState'));
     expect(quickTodoNotice, contains('syncReason: syncReason'));
     expect(mainSource, contains('cloudSyncProvider.queuedRemotePullStatus'));
     expect(mainSource, contains('cloudSyncProvider.hasPendingChanges'));
     expect(mainSource, contains('!cloudSyncProvider.config.autoSync'));
-    expect(mainSource, contains('自动同步已关闭，尚未上传服务器'));
+    expect(mainSource, contains('CloudSyncNoticeKind.automaticSyncOff'));
     expect(mainSource, contains('mirroringCloudSyncError = true;'));
     expect(
       mainSource,
@@ -886,7 +1033,11 @@ void main() {
     );
     expect(source, contains('await _writePendingChanges(localPrefs, true);'));
     expect(source, contains('_setSyncRetryPending('));
-    expect(source, contains('同步基线建立失败'));
+    expect(source, contains('CloudSyncNoticeKind.baselineRetry'));
+    expect(
+      File('lib/services/cloud_sync_notice.dart').readAsStringSync(),
+      contains('同步基线建立失败'),
+    );
     expect(source, contains('_scheduleAutoSync(_autoRetryDelay);'));
     expect(source, contains('Completer<void>? _queuedSyncCompleter'));
     expect(source, contains('Future<void> _queueSyncWhileBusy('));
@@ -990,10 +1141,10 @@ void main() {
     for (final field in [
       'StreamSubscription<String>? _remoteEventSubscription',
       "Timer? _remoteEventRetryTimer",
-      'String? _lastRealtimeWarning',
+      'CloudSyncNotice? _lastRealtimeWarning',
       'String? get lastRealtimeWarning',
       'String? get queuedRemotePullStatus',
-      '远端有更新，正在等待本机待上传改动同步成功后再拉取',
+      'CloudSyncNoticeKind.queuedWaitingLocalChanges',
       ".streamLines('/api/sync/events')",
       'void _handleRemoteEventLine(String line)',
       'void _dispatchRemoteEvent()',

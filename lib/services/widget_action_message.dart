@@ -1,4 +1,5 @@
 import '../core/i18n.dart';
+import 'cloud_sync_notice.dart';
 import 'todo_reminder_preflight_copy.dart';
 import 'reminder_issue_copy.dart';
 import 'reminder_sync_issue.dart';
@@ -50,7 +51,8 @@ enum WidgetActionReminderHint { none, settings, details }
 
 /// A frozen read of sync facts; locale selection does not reread a provider.
 final class WidgetActionSyncStatus {
-  const WidgetActionSyncStatus(this.state, {this.reason = ''});
+  const WidgetActionSyncStatus(this.state, {String reason = '', this.notice})
+    : _reason = reason;
 
   factory WidgetActionSyncStatus.fromFacts({
     required bool enabled,
@@ -62,6 +64,8 @@ final class WidgetActionSyncStatus {
     required bool pendingChanges,
     String? retryReason,
     String? lastError,
+    CloudSyncNotice? retryNotice,
+    CloudSyncNotice? errorNotice,
   }) {
     final state = !enabled
         ? WidgetActionSyncState.disabled
@@ -73,9 +77,11 @@ final class WidgetActionSyncStatus {
         ? WidgetActionSyncState.serverDisabled
         : !autoSync
         ? WidgetActionSyncState.autoSyncOff
-        : retryPending && (retryReason?.trim().isNotEmpty ?? false)
+        : retryPending &&
+              (retryNotice != null || (retryReason?.trim().isNotEmpty ?? false))
         ? WidgetActionSyncState.retryPending
-        : pendingChanges && (lastError?.trim().isNotEmpty ?? false)
+        : pendingChanges &&
+              (errorNotice != null || (lastError?.trim().isNotEmpty ?? false))
         ? WidgetActionSyncState.failed
         : WidgetActionSyncState.backgroundUpload;
     final reason = switch (state) {
@@ -83,11 +89,18 @@ final class WidgetActionSyncStatus {
       WidgetActionSyncState.failed => lastError ?? '',
       _ => '',
     };
-    return WidgetActionSyncStatus(state, reason: reason);
+    final notice = switch (state) {
+      WidgetActionSyncState.retryPending => retryNotice,
+      WidgetActionSyncState.failed => errorNotice,
+      _ => null,
+    };
+    return WidgetActionSyncStatus(state, reason: reason, notice: notice);
   }
 
   final WidgetActionSyncState state;
-  final String reason;
+  final String _reason;
+  final CloudSyncNotice? notice;
+  String get reason => notice?.render() ?? _reason;
 }
 
 /// Keeps copy separate from identity guards and the locale at dispatch time.
@@ -103,6 +116,7 @@ final class WidgetActionMessage {
     this.syncIssueCopy,
     this.syncState = WidgetActionSyncState.unknown,
     this.syncReason = '',
+    this.syncNotice,
     this.reminderHint = WidgetActionReminderHint.none,
   });
 
@@ -115,6 +129,7 @@ final class WidgetActionMessage {
   final ReminderSyncIssue? syncIssueCopy;
   final WidgetActionSyncState syncState;
   final String syncReason;
+  final CloudSyncNotice? syncNotice;
   final WidgetActionReminderHint reminderHint;
 
   /// Call after the origin/lifetime checks, immediately before displaying text.
@@ -238,54 +253,65 @@ final class WidgetActionMessage {
         '快捷待办已保存到本机，提醒状态需检查：${syncIssueCopy?.render(locale: effectiveLocale) ?? detail}',
         'Task saved on this device. Check reminder status: ${syncIssueCopy?.render(locale: effectiveLocale) ?? detail}',
       ),
-      WidgetActionNotice.todoSaved => _savedMessage(isZh),
+      WidgetActionNotice.todoSaved => _savedMessage(effectiveLocale),
     };
   }
 
-  String _savedMessage(bool isZh) {
+  String _savedMessage(AppLocale locale) {
+    final isZh = locale == AppLocale.zh;
     String pick(String zh, String en) => isZh ? zh : en;
     final saved = pick('待办已保存到本机', 'Task saved on this device');
-    final status = switch (syncState) {
-      WidgetActionSyncState.unknown => pick(
-        '云同步状态待确认',
-        'Cloud sync status is unconfirmed',
-      ),
-      WidgetActionSyncState.disabled => pick(
-        '尚未上传服务器：当前版本未启用云同步。',
-        'Not uploaded: cloud sync is disabled in this version.',
-      ),
-      WidgetActionSyncState.accountTransition => pick(
-        '尚未上传服务器：账号切换处理中，云同步已暂停。',
-        'Not uploaded: cloud sync is paused while switching accounts.',
-      ),
-      WidgetActionSyncState.signedOut => pick(
-        '尚未上传服务器：未登录云同步账号。',
-        'Not uploaded: no cloud sync account is signed in.',
-      ),
-      WidgetActionSyncState.serverDisabled => pick(
-        '尚未上传服务器：管理员已关闭云端备份。',
-        'Not uploaded: cloud backup is disabled by the administrator.',
-      ),
-      WidgetActionSyncState.autoSyncOff => pick(
-        '尚未上传服务器：自动同步已关闭，重新开启后会继续同步。',
-        'Not uploaded: automatic sync is off. Enable it to resume syncing.',
-      ),
-      WidgetActionSyncState.retryPending => pick(
-        '云同步上次未完成，稍后会自动重试。',
-        'Cloud sync is incomplete and will retry automatically.',
-      ),
-      WidgetActionSyncState.failed => pick(
-        '云同步上次失败，稍后会自动重试',
-        'Cloud sync failed and will retry automatically',
-      ),
-      WidgetActionSyncState.backgroundUpload => pick(
-        '云同步会后台上传',
-        'Cloud sync will upload in the background',
-      ),
-    };
-    final reason = syncReason.isEmpty
+    final typedReason =
+        syncState == WidgetActionSyncState.retryPending ||
+            syncState == WidgetActionSyncState.failed
+        ? syncNotice?.render(locale: locale)
+        : null;
+    final reasonIsStatus =
+        syncState == WidgetActionSyncState.retryPending && typedReason != null;
+    final status = reasonIsStatus
+        ? typedReason
+        : switch (syncState) {
+            WidgetActionSyncState.unknown => pick(
+              '云同步状态待确认',
+              'Cloud sync status is unconfirmed',
+            ),
+            WidgetActionSyncState.disabled => pick(
+              '尚未上传服务器：当前版本未启用云同步。',
+              'Not uploaded: cloud sync is disabled in this version.',
+            ),
+            WidgetActionSyncState.accountTransition => pick(
+              '尚未上传服务器：账号切换处理中，云同步已暂停。',
+              'Not uploaded: cloud sync is paused while switching accounts.',
+            ),
+            WidgetActionSyncState.signedOut => pick(
+              '尚未上传服务器：未登录云同步账号。',
+              'Not uploaded: no cloud sync account is signed in.',
+            ),
+            WidgetActionSyncState.serverDisabled => pick(
+              '尚未上传服务器：管理员已关闭云端备份。',
+              'Not uploaded: cloud backup is disabled by the administrator.',
+            ),
+            WidgetActionSyncState.autoSyncOff => pick(
+              '尚未上传服务器：自动同步已关闭，重新开启后会继续同步。',
+              'Not uploaded: automatic sync is off. Enable it to resume syncing.',
+            ),
+            WidgetActionSyncState.retryPending => pick(
+              '云同步上次未完成，稍后会自动重试。',
+              'Cloud sync is incomplete and will retry automatically.',
+            ),
+            WidgetActionSyncState.failed => pick(
+              '云同步上次失败，稍后会自动重试',
+              'Cloud sync failed and will retry automatically',
+            ),
+            WidgetActionSyncState.backgroundUpload => pick(
+              '云同步会后台上传',
+              'Cloud sync will upload in the background',
+            ),
+          };
+    final detail = typedReason ?? syncReason;
+    final reason = reasonIsStatus || detail.isEmpty
         ? ''
-        : pick('：$syncReason', ': $syncReason');
+        : pick('：$detail', ': $detail');
     final hint = switch (reminderHint) {
       WidgetActionReminderHint.none => '',
       WidgetActionReminderHint.settings => pick(
