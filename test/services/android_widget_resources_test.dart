@@ -664,11 +664,44 @@ void main() {
       expect(theme, contains('centerCropRect('));
       expect(theme, contains('R.id.widget_theme_background'));
       expect(theme, contains('R.id.widget_theme_overlay'));
+      expect(theme, contains('R.id.widget_theme_border'));
+      expect(theme, contains('rootResourceId ?: widgetBackgroundResource'));
+      expect(theme, contains('borderResourceId = surfaces?.imageBorder'));
+      expect(
+        theme,
+        contains(
+          'views.setImageViewResource(R.id.widget_theme_border, borderResourceId)',
+        ),
+      );
+      expect(theme, contains('if (source != null)'));
+      expect(theme, contains('paint.color = fill'));
+      expect(theme, contains('Paint.Style.STROKE'));
+      expect(
+        theme,
+        contains('val strokeRadius = (radius - inset).coerceAtLeast(0f)'),
+      );
+      final cacheKey = theme
+          .split('private data class BackgroundBitmapCacheKey(')[1]
+          .split(')')[0];
+      for (final field in [
+        'val fill: Int',
+        'val stroke: Int',
+        'val strokeWidthDp: Int',
+      ]) {
+        expect(cacheKey, contains(field));
+      }
+      for (final radius in [13, 14, 15]) {
+        final plain = File(
+          'android/app/src/main/res/drawable/widget_bg_round_${radius}_plain.xml',
+        ).readAsStringSync();
+        expect(plain, contains('android:radius="${radius}dp"'));
+        expect(theme, contains('R.drawable.widget_bg_round_${radius}_plain'));
+      }
       expect(theme, contains('imageOverlayColor(theme)'));
       expect(
         theme,
         contains(
-          'views.setViewVisibility(R.id.widget_theme_overlay, View.VISIBLE)',
+          'views.setViewVisibility(R.id.widget_theme_border, View.VISIBLE)',
         ),
       );
       expect(theme, contains('"starrail",'));
@@ -736,6 +769,12 @@ void main() {
         expect(xml, contains('@+id/widget_theme_background'));
         expect(xml, contains('android:scaleType="centerCrop"'));
         expect(xml, contains('@+id/widget_theme_overlay'));
+        expect(xml, contains('@+id/widget_theme_border'));
+        expect(xml, contains('android:scaleType="fitXY"'));
+        expect(
+          xml.indexOf('@+id/widget_theme_border'),
+          greaterThan(xml.indexOf('@+id/widget_theme_background')),
+        );
         expect(
           xml,
           isNot(contains('<View')),

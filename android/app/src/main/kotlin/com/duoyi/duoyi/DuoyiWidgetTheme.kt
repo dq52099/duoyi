@@ -107,11 +107,17 @@ object DuoyiWidgetTheme {
                 imageResource = imageResource,
                 overlayColor = imageOverlayColor(theme),
                 radiusDp = theme.cornerRadiusDp,
+                fill = theme.background,
+                stroke = theme.border,
+                strokeWidthDp = theme.borderWidthDp,
+                rootResourceId = surfaces?.root,
+                borderResourceId = surfaces?.imageBorder,
                 appWidgetId = appWidgetId,
             )
         } else {
             views.setViewVisibility(R.id.widget_theme_background, View.GONE)
             views.setViewVisibility(R.id.widget_theme_overlay, View.GONE)
+            views.setViewVisibility(R.id.widget_theme_border, View.GONE)
             applyRoundedSurface(
                 views,
                 rootId,
@@ -143,12 +149,17 @@ object DuoyiWidgetTheme {
         imageResource: Int,
         overlayColor: Int,
         radiusDp: Int,
+        fill: Int,
+        stroke: Int,
+        strokeWidthDp: Int,
+        rootResourceId: Int?,
+        borderResourceId: Int?,
         appWidgetId: Int?,
     ) {
         views.setInt(
             rootId,
             "setBackgroundResource",
-            widgetBackgroundResource(radiusDp, 0),
+            rootResourceId ?: widgetBackgroundResource(radiusDp, 0),
         )
         clearBackgroundTint(views, rootId)
         val bitmap = roundedBackgroundBitmap(
@@ -156,15 +167,20 @@ object DuoyiWidgetTheme {
             imageResource = imageResource,
             radiusDp = radiusDp,
             overlayColor = overlayColor,
+            fill = fill,
+            stroke = stroke,
+            // Bundled borders scale with the launcher bounds rather than being
+            // cropped with the photo. Unknown palettes retain a bitmap stroke.
+            strokeWidthDp = if (borderResourceId == null) strokeWidthDp else 0,
             renderSpec = backgroundRenderSpec(prefs, appWidgetId),
         )
-        if (bitmap == null) {
-            views.setImageViewResource(R.id.widget_theme_background, imageResource)
-            views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", overlayColor)
-            views.setViewVisibility(R.id.widget_theme_overlay, View.VISIBLE)
+        views.setImageViewBitmap(R.id.widget_theme_background, bitmap)
+        views.setViewVisibility(R.id.widget_theme_overlay, View.GONE)
+        if (borderResourceId != null && strokeWidthDp > 0) {
+            views.setImageViewResource(R.id.widget_theme_border, borderResourceId)
+            views.setViewVisibility(R.id.widget_theme_border, View.VISIBLE)
         } else {
-            views.setImageViewBitmap(R.id.widget_theme_background, bitmap)
-            views.setViewVisibility(R.id.widget_theme_overlay, View.GONE)
+            views.setViewVisibility(R.id.widget_theme_border, View.GONE)
         }
         views.setViewVisibility(R.id.widget_theme_background, View.VISIBLE)
     }
@@ -279,6 +295,9 @@ object DuoyiWidgetTheme {
     private fun widgetBackgroundResource(radiusDp: Int, strokeWidthDp: Int): Int {
         if (strokeWidthDp <= 0) {
             if (radiusDp >= 16) return R.drawable.widget_bg_round_16_plain
+            if (radiusDp >= 15) return R.drawable.widget_bg_round_15_plain
+            if (radiusDp >= 14) return R.drawable.widget_bg_round_14_plain
+            if (radiusDp >= 13) return R.drawable.widget_bg_round_13_plain
             if (radiusDp >= 12) return R.drawable.widget_bg_round_12_plain
             return R.drawable.widget_bg_plain
         }
@@ -293,12 +312,18 @@ object DuoyiWidgetTheme {
         imageResource: Int,
         radiusDp: Int,
         overlayColor: Int,
+        fill: Int,
+        stroke: Int,
+        strokeWidthDp: Int,
         renderSpec: BackgroundRenderSpec,
-    ): Bitmap? {
+    ): Bitmap {
         val key = BackgroundBitmapCacheKey(
             imageResource = imageResource,
             radiusDp = radiusDp,
             overlayColor = overlayColor,
+            fill = fill,
+            stroke = stroke,
+            strokeWidthDp = strokeWidthDp,
             renderSpec = renderSpec,
         )
         synchronized(backgroundBitmapCache) {
@@ -310,8 +335,11 @@ object DuoyiWidgetTheme {
             imageResource = imageResource,
             radiusDp = radiusDp,
             overlayColor = overlayColor,
+            fill = fill,
+            stroke = stroke,
+            strokeWidthDp = strokeWidthDp,
             renderSpec = renderSpec,
-        ) ?: return null
+        )
         synchronized(backgroundBitmapCache) {
             backgroundBitmapCache[key] = output
         }
@@ -323,9 +351,12 @@ object DuoyiWidgetTheme {
         imageResource: Int,
         radiusDp: Int,
         overlayColor: Int,
+        fill: Int,
+        stroke: Int,
+        strokeWidthDp: Int,
         renderSpec: BackgroundRenderSpec,
-    ): Bitmap? {
-        val source = BitmapFactory.decodeResource(context.resources, imageResource) ?: return null
+    ): Bitmap {
+        val source = BitmapFactory.decodeResource(context.resources, imageResource)
         return try {
             val width = renderSpec.bitmapWidth
             val height = renderSpec.bitmapHeight
@@ -338,13 +369,30 @@ object DuoyiWidgetTheme {
             }
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
             canvas.clipPath(path)
-            canvas.drawBitmap(source, centerCropRect(source, width, height), bounds, paint)
+            if (source != null) {
+                canvas.drawBitmap(source, centerCropRect(source, width, height), bounds, paint)
+            } else {
+                // Preserve the same radius, overlay and border if decoding fails.
+                paint.color = fill
+                canvas.drawRect(bounds, paint)
+            }
             paint.color = overlayColor
             paint.style = Paint.Style.FILL
             canvas.drawRect(bounds, paint)
+            if (strokeWidthDp > 0) {
+                val strokeWidth = (strokeWidthDp * renderSpec.radiusScale)
+                    .coerceAtMost(minOf(width, height).toFloat())
+                val inset = strokeWidth / 2f
+                val strokeBounds = RectF(bounds).apply { inset(inset, inset) }
+                val strokeRadius = (radius - inset).coerceAtLeast(0f)
+                paint.color = stroke
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = strokeWidth
+                canvas.drawRoundRect(strokeBounds, strokeRadius, strokeRadius, paint)
+            }
             output
         } finally {
-            source.recycle()
+            if (source != null) source.recycle()
         }
     }
 
@@ -405,6 +453,9 @@ object DuoyiWidgetTheme {
         val imageResource: Int,
         val radiusDp: Int,
         val overlayColor: Int,
+        val fill: Int,
+        val stroke: Int,
+        val strokeWidthDp: Int,
         val renderSpec: BackgroundRenderSpec,
     )
 

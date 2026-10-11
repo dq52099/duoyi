@@ -48,6 +48,13 @@
         "radius": 12,
         "strokeWidth": 0,
         "resource": "widget_surface_506cb96681f58066"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#00000000",
+        "radius": 16,
+        "strokeWidth": 0,
+        "resource": "widget_surface_fa8941eb223336dd"
       }
     }
   },
@@ -100,6 +107,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_a6a0fc6df2641f09"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_7e197d0fc086ce62"
       }
     }
   },
@@ -152,6 +166,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_e057601944564978"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_60ae2b225f69bec2"
       }
     }
   },
@@ -204,6 +225,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_c8f305a8325df878"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_13dcd40f6578bf96"
       }
     }
   },
@@ -256,6 +284,13 @@
         "radius": 8,
         "strokeWidth": 0,
         "resource": "widget_surface_f9ea07348027802c"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#00000000",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_c1b23766f55138bb"
       }
     }
   },
@@ -308,6 +343,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_7ae7be2251e9c1ba"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_7e197d0fc086ce62"
       }
     }
   },
@@ -360,6 +402,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_194ccfe5cffc9a6f"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_60ae2b225f69bec2"
       }
     }
   },
@@ -412,6 +461,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_02defe2c304333e1"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_13dcd40f6578bf96"
       }
     }
   },
@@ -464,6 +520,13 @@
         "radius": 8,
         "strokeWidth": 0,
         "resource": "widget_surface_243e3cea2ff6896b"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#00000000",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_c1b23766f55138bb"
       }
     }
   },
@@ -516,6 +579,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_abb1cafc12707cba"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_7e197d0fc086ce62"
       }
     }
   },
@@ -568,6 +638,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_2e408fa1081c19ee"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_60ae2b225f69bec2"
       }
     }
   },
@@ -620,6 +697,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_92f8fd56e80b830d"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_13dcd40f6578bf96"
       }
     }
   },
@@ -672,6 +756,13 @@
         "radius": 8,
         "strokeWidth": 0,
         "resource": "widget_surface_eb2fc6cca1276bc5"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#00000000",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_c1b23766f55138bb"
       }
     }
   },
@@ -724,6 +815,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_502fad8a5c4a1f71"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FFFFFCF0",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_a3223af82eeed438"
       }
     }
   },
@@ -776,6 +874,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_3829c31209bc3d77"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FFF0F9F8",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_60cd3ccc2bbe6a3c"
       }
     }
   },
@@ -828,6 +933,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_8d94e77786fddf20"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF939AC9",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_6af22fee187c1353"
       }
     }
   },
@@ -880,6 +992,13 @@
         "radius": 8,
         "strokeWidth": 0,
         "resource": "widget_surface_475f0203d77740b2"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#00000000",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_c1b23766f55138bb"
       }
     }
   },
@@ -932,6 +1051,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_a959e1d3d29b2aad"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_7e197d0fc086ce62"
       }
     }
   },
@@ -984,6 +1110,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_18ac143de2fd9b0b"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_60ae2b225f69bec2"
       }
     }
   },
@@ -1036,6 +1169,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_954fcc5fef906d0f"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_13dcd40f6578bf96"
       }
     }
   },
@@ -1088,6 +1228,13 @@
         "radius": 8,
         "strokeWidth": 0,
         "resource": "widget_surface_0737e6db878f9fbc"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#00000000",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_c1b23766f55138bb"
       }
     }
   },
@@ -1140,6 +1287,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_c121253768f93555"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FFFFFCF0",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_a3223af82eeed438"
       }
     }
   },
@@ -1192,6 +1346,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_74ab114f02be434e"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FFF0F9F8",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_60cd3ccc2bbe6a3c"
       }
     }
   },
@@ -1244,6 +1405,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_68434114c56217fc"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF939AC9",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_6af22fee187c1353"
       }
     }
   },
@@ -1296,6 +1464,13 @@
         "radius": 8,
         "strokeWidth": 0,
         "resource": "widget_surface_ab251cf22c2c1548"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#00000000",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_c1b23766f55138bb"
       }
     }
   },
@@ -1348,6 +1523,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_7fec34248af08393"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_7e197d0fc086ce62"
       }
     }
   },
@@ -1400,6 +1582,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_e264c970c1dbf466"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_60ae2b225f69bec2"
       }
     }
   },
@@ -1452,6 +1641,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_0270931b59e0e86b"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_13dcd40f6578bf96"
       }
     }
   },
@@ -1504,6 +1700,13 @@
         "radius": 8,
         "strokeWidth": 0,
         "resource": "widget_surface_11d7473114c42b6c"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#00000000",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_c1b23766f55138bb"
       }
     }
   },
@@ -1556,6 +1759,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_9e7501d41fd1f26e"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FFFFFCF0",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_a3223af82eeed438"
       }
     }
   },
@@ -1608,6 +1818,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_dedc3054407cade6"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FFF0F9F8",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_60cd3ccc2bbe6a3c"
       }
     }
   },
@@ -1660,6 +1877,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_5c5123a38c0c8a5e"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF939AC9",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_6af22fee187c1353"
       }
     }
   },
@@ -1712,6 +1936,13 @@
         "radius": 8,
         "strokeWidth": 0,
         "resource": "widget_surface_506d7e11d5ed1192"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#00000000",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_c1b23766f55138bb"
       }
     }
   },
@@ -1764,6 +1995,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_85ec0578b640df83"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_7e197d0fc086ce62"
       }
     }
   },
@@ -1816,6 +2054,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_d948d4a7e3842646"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_60ae2b225f69bec2"
       }
     }
   },
@@ -1868,6 +2113,13 @@
         "radius": 8,
         "strokeWidth": 1,
         "resource": "widget_surface_51e7454afe49fea9"
+      },
+      "imageBorder": {
+        "fill": "#00000000",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_13dcd40f6578bf96"
       }
     }
   }

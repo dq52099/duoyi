@@ -42,7 +42,13 @@ void main() {
       final entry = manifest.singleWhere((item) => item['key'] == key) as Map;
       expect(entry['palette'], palette, reason: key);
       expect(kotlin, contains('"$key" to'));
-      for (final role in ['root', 'nav', 'primary', 'secondary']) {
+      for (final role in [
+        'root',
+        'nav',
+        'primary',
+        'secondary',
+        'imageBorder',
+      ]) {
         final shape = entry['surfaces'][role] as Map;
         final resource = shape['resource'] as String;
         final xml = File(
@@ -65,7 +71,7 @@ void main() {
         }
         expect(
           shape['radius'],
-          role == 'root'
+          role == 'root' || role == 'imageBorder'
               ? palette['widget_theme_corner_radius_dp']
               : palette['widget_theme_control_radius_dp'],
         );
@@ -74,6 +80,12 @@ void main() {
           expect(shape['strokeWidth'], 0);
         } else if (role == 'root') {
           expect(shape['fill'], palette['widget_theme_background']);
+        } else if (role == 'imageBorder') {
+          expect(shape['fill'], '#00000000');
+          expect(shape['strokeWidth'], palette['widget_theme_border_width_dp']);
+          if (shape['strokeWidth'] > 0) {
+            expect(shape['stroke'], palette['widget_theme_border']);
+          }
         } else {
           expect(shape['fill'], palette['widget_theme_nav_background']);
         }

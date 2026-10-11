@@ -23,6 +23,16 @@
         android:ellipsize="end"
         android:visibility="gone" />
 
+    <!-- Keep the skin border above the cropped photo at every launcher size. -->
+    <ImageView
+        android:id="@+id/widget_theme_border"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:visibility="gone" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
