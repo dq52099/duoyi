@@ -1,0 +1,39 @@
+{
+  "before": {
+    "lib/providers/custom_focus_sound_provider.dart": "df93db3753f7ab50b4e003cf50b9059c9b4eb6be8cec069366c91cb2413a5941",
+    "test/providers/custom_focus_sound_locale_test.dart": "ed6289f1c65f2792119b6dc856df46478e6b111b616aa8383e3312ad94399b9d"
+  },
+  "after": {
+    "lib/providers/custom_focus_sound_provider.dart": "df93db3753f7ab50b4e003cf50b9059c9b4eb6be8cec069366c91cb2413a5941",
+    "test/providers/custom_focus_sound_locale_test.dart": "ed6289f1c65f2792119b6dc856df46478e6b111b616aa8383e3312ad94399b9d"
+  },
+  "hashes_unchanged": true,
+  "runs": [
+    {
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter",
+        "expanded",
+        "test/providers/custom_focus_sound_locale_test.dart",
+        "test/services/custom_focus_sound_static_test.dart",
+        "test/models/pomodoro_config_test.dart"
+      ],
+      "exit": 0,
+      "log": "tests.log"
+    },
+    {
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "analyze",
+        "--no-pub",
+        "lib/providers/custom_focus_sound_provider.dart",
+        "test/providers/custom_focus_sound_locale_test.dart"
+      ],
+      "exit": 0,
+      "log": "analyze.log"
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/i18n.dart';
 import '../services/focus_sound_service.dart';
 
 class CustomFocusSound {
@@ -52,11 +53,11 @@ class CustomFocusSoundProvider extends ChangeNotifier {
 
   bool isCustomSound(String id) => id.startsWith(idPrefix);
 
-  String labelFor(String id) {
+  String labelFor(String id, {AppLocale? locale}) {
     for (final sound in _sounds) {
       if (sound.id == id) return sound.label;
     }
-    return '自定义音频';
+    return (locale ?? I18n.current) == AppLocale.en ? 'Custom audio' : '自定义音频';
   }
 
   Future<void> loadFromStorage() async {

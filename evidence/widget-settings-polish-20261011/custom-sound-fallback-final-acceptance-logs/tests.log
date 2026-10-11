@@ -1,0 +1,17 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/providers/custom_focus_sound_locale_test.dart
+00:00 +0: /home/ubuntu/duoyi/test/providers/custom_focus_sound_locale_test.dart: missing custom selection uses live localized display copy
+00:00 +1: /home/ubuntu/duoyi/test/providers/custom_focus_sound_locale_test.dart: authored sound metadata and storage stay literal across locales
+00:00 +2: /home/ubuntu/duoyi/test/providers/custom_focus_sound_locale_test.dart: explicit fallback locale never changes the live locale
+00:00 +3: loading /home/ubuntu/duoyi/test/services/custom_focus_sound_static_test.dart
+00:01 +3: /home/ubuntu/duoyi/test/services/custom_focus_sound_static_test.dart: 专注白噪音支持用户导入自定义音频并进入选择列表
+00:01 +4: loading /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart
+00:03 +4: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroConfig persists auto DND preference and defaults old data off
+00:03 +5: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroConfig clamps corrupted focus sound volume on restore
+00:03 +6: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroConfig clamps corrupted stored durations on restore
+00:03 +7: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroConfig migrates generated noise without dropping custom audio
+00:03 +8: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroSession persists focus room attribution
+00:03 +9: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroSession copyWith supports field updates and clearing
+00:03 +10: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: PomodoroFocusPenalty persists reason and affected context
+00:03 +11: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: Distracting app penalty reason has stable key and label
+00:03 +12: /home/ubuntu/duoyi/test/models/pomodoro_config_test.dart: penalty labels localize while legacy JSON stays Chinese and stable
+00:03 +13: All tests passed!
