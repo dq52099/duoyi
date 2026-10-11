@@ -1,0 +1,1874 @@
+[
+  {
+    "key": "defaultBrand|plain_card",
+    "palette": {
+      "widget_theme_brand_id": "defaultBrand",
+      "widget_theme_card_skin_id": "plain_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FFC85656",
+      "widget_theme_background": "#FFF6F7F9",
+      "widget_theme_surface": "#FFFFFFFF",
+      "widget_theme_nav_background": "#FFF1F3F6",
+      "widget_theme_border": "#00C85656",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFC85656",
+      "widget_theme_accent_end": "#FF2F8F83",
+      "widget_theme_background_asset_key": "",
+      "widget_theme_corner_radius_dp": 16,
+      "widget_theme_control_radius_dp": 12,
+      "widget_theme_border_width_dp": 0
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFF6F7F9",
+        "stroke": "#FFF6F7F9",
+        "radius": 16,
+        "strokeWidth": 0,
+        "resource": "widget_surface_40c5e832313fb5e7"
+      },
+      "nav": {
+        "fill": "#FFF1F3F6",
+        "stroke": "#FFF1F3F6",
+        "radius": 12,
+        "strokeWidth": 0,
+        "resource": "widget_surface_506cb96681f58066"
+      },
+      "primary": {
+        "fill": "#FFC85656",
+        "stroke": "#FFC85656",
+        "radius": 12,
+        "strokeWidth": 0,
+        "resource": "widget_surface_4589149db13721e9"
+      },
+      "secondary": {
+        "fill": "#FFF1F3F6",
+        "stroke": "#FFF1F3F6",
+        "radius": 12,
+        "strokeWidth": 0,
+        "resource": "widget_surface_506cb96681f58066"
+      }
+    }
+  },
+  {
+    "key": "defaultBrand|paper_card",
+    "palette": {
+      "widget_theme_brand_id": "defaultBrand",
+      "widget_theme_card_skin_id": "paper_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FFC85656",
+      "widget_theme_background": "#FFF8F6F1",
+      "widget_theme_surface": "#FFFFFCF3",
+      "widget_theme_nav_background": "#FFFAEBE3",
+      "widget_theme_border": "#FF57544D",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFFFF8E1",
+      "widget_theme_accent_end": "#FFFFECB3",
+      "widget_theme_background_asset_key": "",
+      "widget_theme_corner_radius_dp": 14,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFF8F6F1",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_f2ab6e9e48245639"
+      },
+      "nav": {
+        "fill": "#FFFAEBE3",
+        "stroke": "#FFB0A79F",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_256fbf30365eff41"
+      },
+      "primary": {
+        "fill": "#FFC85656",
+        "stroke": "#FFC85656",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_bbe24b7742af5a5c"
+      },
+      "secondary": {
+        "fill": "#FFFAEBE3",
+        "stroke": "#FFC0B6AE",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_a6a0fc6df2641f09"
+      }
+    }
+  },
+  {
+    "key": "defaultBrand|mint_card",
+    "palette": {
+      "widget_theme_brand_id": "defaultBrand",
+      "widget_theme_card_skin_id": "mint_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FFC85656",
+      "widget_theme_background": "#FFEEF5F6",
+      "widget_theme_surface": "#FFF3FAF9",
+      "widget_theme_nav_background": "#FFEEE9E9",
+      "widget_theme_border": "#FF4C5252",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFE0F2F1",
+      "widget_theme_accent_end": "#FFB2DFDB",
+      "widget_theme_background_asset_key": "",
+      "widget_theme_corner_radius_dp": 15,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFEEF5F6",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_3163fb20903def6e"
+      },
+      "nav": {
+        "fill": "#FFEEE9E9",
+        "stroke": "#FFA5A5A5",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_3800bc88c3ac7843"
+      },
+      "primary": {
+        "fill": "#FFC85656",
+        "stroke": "#FFC85656",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_bbe24b7742af5a5c"
+      },
+      "secondary": {
+        "fill": "#FFEEE9E9",
+        "stroke": "#FFB5B4B4",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_e057601944564978"
+      }
+    }
+  },
+  {
+    "key": "defaultBrand|starlight_card",
+    "palette": {
+      "widget_theme_brand_id": "defaultBrand",
+      "widget_theme_card_skin_id": "starlight_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FFC85656",
+      "widget_theme_background": "#FFD6D5E9",
+      "widget_theme_surface": "#FFEAE4F5",
+      "widget_theme_nav_background": "#FFE7D6E5",
+      "widget_theme_border": "#FF0E1232",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FF283593",
+      "widget_theme_accent_end": "#FF7E57C2",
+      "widget_theme_background_asset_key": "",
+      "widget_theme_corner_radius_dp": 16,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFD6D5E9",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_8ad37439e3d3d711"
+      },
+      "nav": {
+        "fill": "#FFE7D6E5",
+        "stroke": "#FF857D94",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_b1062465faa49a88"
+      },
+      "primary": {
+        "fill": "#FFC85656",
+        "stroke": "#FFC85656",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_bbe24b7742af5a5c"
+      },
+      "secondary": {
+        "fill": "#FFE7D6E5",
+        "stroke": "#FF9B91A6",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_c8f305a8325df878"
+      }
+    }
+  },
+  {
+    "key": "re0|plain_card",
+    "palette": {
+      "widget_theme_brand_id": "re0",
+      "widget_theme_card_skin_id": "plain_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF4682B4",
+      "widget_theme_background": "#FFE5ECF7",
+      "widget_theme_surface": "#FFFAFBFD",
+      "widget_theme_nav_background": "#FFE4ECF4",
+      "widget_theme_border": "#FF0D1720",
+      "widget_theme_text": "#FF000000",
+      "widget_theme_muted_text": "#FF000000",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FF4682B4",
+      "widget_theme_accent_end": "#FFE6E6FA",
+      "widget_theme_background_asset_key": "re0",
+      "widget_theme_corner_radius_dp": 13,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 0
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFE5ECF7",
+        "stroke": "#FFE5ECF7",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_caf98384921ff0d2"
+      },
+      "nav": {
+        "fill": "#FFE4ECF4",
+        "stroke": "#FFE4ECF4",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_f9ea07348027802c"
+      },
+      "primary": {
+        "fill": "#FF4682B4",
+        "stroke": "#FF4682B4",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_6fe6ada76fdd5327"
+      },
+      "secondary": {
+        "fill": "#FFE4ECF4",
+        "stroke": "#FFE4ECF4",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_f9ea07348027802c"
+      }
+    }
+  },
+  {
+    "key": "re0|paper_card",
+    "palette": {
+      "widget_theme_brand_id": "re0",
+      "widget_theme_card_skin_id": "paper_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF4682B4",
+      "widget_theme_background": "#FFFBF9F1",
+      "widget_theme_surface": "#FFFDFAF1",
+      "widget_theme_nav_background": "#FFE7ECEA",
+      "widget_theme_border": "#FF57544D",
+      "widget_theme_text": "#FF000000",
+      "widget_theme_muted_text": "#FF000000",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFFFF8E1",
+      "widget_theme_accent_end": "#FFFFECB3",
+      "widget_theme_background_asset_key": "re0",
+      "widget_theme_corner_radius_dp": 14,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFFBF9F1",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_c28a243a496a5fba"
+      },
+      "nav": {
+        "fill": "#FFE7ECEA",
+        "stroke": "#FFA6A7A3",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_3e29ede083d5d5ab"
+      },
+      "primary": {
+        "fill": "#FF4682B4",
+        "stroke": "#FF4682B4",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_6fe6ada76fdd5327"
+      },
+      "secondary": {
+        "fill": "#FFE7ECEA",
+        "stroke": "#FFB4B6B3",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_7ae7be2251e9c1ba"
+      }
+    }
+  },
+  {
+    "key": "re0|mint_card",
+    "palette": {
+      "widget_theme_brand_id": "re0",
+      "widget_theme_card_skin_id": "mint_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF4682B4",
+      "widget_theme_background": "#FFEDF7F9",
+      "widget_theme_surface": "#FFF0F8F8",
+      "widget_theme_nav_background": "#FFDCEAF0",
+      "widget_theme_border": "#FF4C5252",
+      "widget_theme_text": "#FF000000",
+      "widget_theme_muted_text": "#FF000000",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFE0F2F1",
+      "widget_theme_accent_end": "#FFB2DFDB",
+      "widget_theme_background_asset_key": "re0",
+      "widget_theme_corner_radius_dp": 15,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFEDF7F9",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_7227f60de4a5a10e"
+      },
+      "nav": {
+        "fill": "#FFDCEAF0",
+        "stroke": "#FF9BA5A8",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_bc7700d708989c41"
+      },
+      "primary": {
+        "fill": "#FF4682B4",
+        "stroke": "#FF4682B4",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_6fe6ada76fdd5327"
+      },
+      "secondary": {
+        "fill": "#FFDCEAF0",
+        "stroke": "#FFA9B4B8",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_194ccfe5cffc9a6f"
+      }
+    }
+  },
+  {
+    "key": "re0|starlight_card",
+    "palette": {
+      "widget_theme_brand_id": "re0",
+      "widget_theme_card_skin_id": "starlight_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF4682B4",
+      "widget_theme_background": "#FFD3D0EB",
+      "widget_theme_surface": "#FFE8E2F4",
+      "widget_theme_nav_background": "#FFD4D7EC",
+      "widget_theme_border": "#FF0E1232",
+      "widget_theme_text": "#FF000000",
+      "widget_theme_muted_text": "#FF000000",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FF283593",
+      "widget_theme_accent_end": "#FF7E57C2",
+      "widget_theme_background_asset_key": "re0",
+      "widget_theme_corner_radius_dp": 16,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFD3D0EB",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_dc34b62cf1e16417"
+      },
+      "nav": {
+        "fill": "#FFD4D7EC",
+        "stroke": "#FF7A7E98",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_809c190b7af43716"
+      },
+      "primary": {
+        "fill": "#FF4682B4",
+        "stroke": "#FF4682B4",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_6fe6ada76fdd5327"
+      },
+      "secondary": {
+        "fill": "#FFD4D7EC",
+        "stroke": "#FF8E92AA",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_02defe2c304333e1"
+      }
+    }
+  },
+  {
+    "key": "genshin|plain_card",
+    "palette": {
+      "widget_theme_brand_id": "genshin",
+      "widget_theme_card_skin_id": "plain_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF2E8B57",
+      "widget_theme_background": "#FFE1E2CC",
+      "widget_theme_surface": "#FFFAF4EB",
+      "widget_theme_nav_background": "#FFE1E8D9",
+      "widget_theme_border": "#FF081910",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FF2E8B57",
+      "widget_theme_accent_end": "#FFC5892F",
+      "widget_theme_background_asset_key": "genshin",
+      "widget_theme_corner_radius_dp": 13,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 0
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFE1E2CC",
+        "stroke": "#FFE1E2CC",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_cad4419aee32e26d"
+      },
+      "nav": {
+        "fill": "#FFE1E8D9",
+        "stroke": "#FFE1E8D9",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_243e3cea2ff6896b"
+      },
+      "primary": {
+        "fill": "#FF2E8B57",
+        "stroke": "#FF2E8B57",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_9b3edb9c79bf1a90"
+      },
+      "secondary": {
+        "fill": "#FFE1E8D9",
+        "stroke": "#FFE1E8D9",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_243e3cea2ff6896b"
+      }
+    }
+  },
+  {
+    "key": "genshin|paper_card",
+    "palette": {
+      "widget_theme_brand_id": "genshin",
+      "widget_theme_card_skin_id": "paper_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF2E8B57",
+      "widget_theme_background": "#FFFFFBEC",
+      "widget_theme_surface": "#FFFFFCF1",
+      "widget_theme_nav_background": "#FFE6EEDF",
+      "widget_theme_border": "#FF57544D",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFFFF8E1",
+      "widget_theme_accent_end": "#FFFFECB3",
+      "widget_theme_background_asset_key": "genshin",
+      "widget_theme_corner_radius_dp": 14,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFFFFBEC",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_01909052ab660548"
+      },
+      "nav": {
+        "fill": "#FFE6EEDF",
+        "stroke": "#FFA5A89D",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_fdb5b21e815fc6eb"
+      },
+      "primary": {
+        "fill": "#FF2E8B57",
+        "stroke": "#FF2E8B57",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_9b3edb9c79bf1a90"
+      },
+      "secondary": {
+        "fill": "#FFE6EEDF",
+        "stroke": "#FFB3B8AB",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_abb1cafc12707cba"
+      }
+    }
+  },
+  {
+    "key": "genshin|mint_card",
+    "palette": {
+      "widget_theme_brand_id": "genshin",
+      "widget_theme_card_skin_id": "mint_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF2E8B57",
+      "widget_theme_background": "#FFF1F9F4",
+      "widget_theme_surface": "#FFF3FAF8",
+      "widget_theme_nav_background": "#FFDBECE5",
+      "widget_theme_border": "#FF4C5252",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFE0F2F1",
+      "widget_theme_accent_end": "#FFB2DFDB",
+      "widget_theme_background_asset_key": "genshin",
+      "widget_theme_corner_radius_dp": 15,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFF1F9F4",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_18b7247e363d0fdb"
+      },
+      "nav": {
+        "fill": "#FFDBECE5",
+        "stroke": "#FF9AA6A2",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_f00af0245359467c"
+      },
+      "primary": {
+        "fill": "#FF2E8B57",
+        "stroke": "#FF2E8B57",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_9b3edb9c79bf1a90"
+      },
+      "secondary": {
+        "fill": "#FFDBECE5",
+        "stroke": "#FFA8B6B1",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_2e408fa1081c19ee"
+      }
+    }
+  },
+  {
+    "key": "genshin|starlight_card",
+    "palette": {
+      "widget_theme_brand_id": "genshin",
+      "widget_theme_card_skin_id": "starlight_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF2E8B57",
+      "widget_theme_background": "#FFD7D2E7",
+      "widget_theme_surface": "#FFEAE4F4",
+      "widget_theme_nav_background": "#FFD4D9E1",
+      "widget_theme_border": "#FF0E1232",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FF283593",
+      "widget_theme_accent_end": "#FF7E57C2",
+      "widget_theme_background_asset_key": "genshin",
+      "widget_theme_corner_radius_dp": 16,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFD7D2E7",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_50ac7e75b9b6bb96"
+      },
+      "nav": {
+        "fill": "#FFD4D9E1",
+        "stroke": "#FF7A7F92",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_314122c61fcfbaad"
+      },
+      "primary": {
+        "fill": "#FF2E8B57",
+        "stroke": "#FF2E8B57",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_9b3edb9c79bf1a90"
+      },
+      "secondary": {
+        "fill": "#FFD4D9E1",
+        "stroke": "#FF8E93A3",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_92f8fd56e80b830d"
+      }
+    }
+  },
+  {
+    "key": "starRail|plain_card",
+    "palette": {
+      "widget_theme_brand_id": "starRail",
+      "widget_theme_card_skin_id": "plain_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FF7EA2FF",
+      "widget_theme_background": "#FF484747",
+      "widget_theme_surface": "#FF312F2E",
+      "widget_theme_nav_background": "#FF444B60",
+      "widget_theme_border": "#FFE8EEFF",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FF7EA2FF",
+      "widget_theme_accent_end": "#FFD0A43A",
+      "widget_theme_background_asset_key": "star_rail",
+      "widget_theme_corner_radius_dp": 13,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 0
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF484747",
+        "stroke": "#FF484747",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_0f0154379edbc90a"
+      },
+      "nav": {
+        "fill": "#FF444B60",
+        "stroke": "#FF444B60",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_eb2fc6cca1276bc5"
+      },
+      "primary": {
+        "fill": "#FF7EA2FF",
+        "stroke": "#FF7EA2FF",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_ae77c450cccee682"
+      },
+      "secondary": {
+        "fill": "#FF444B60",
+        "stroke": "#FF444B60",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_eb2fc6cca1276bc5"
+      }
+    }
+  },
+  {
+    "key": "starRail|paper_card",
+    "palette": {
+      "widget_theme_brand_id": "starRail",
+      "widget_theme_card_skin_id": "paper_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FF7EA2FF",
+      "widget_theme_background": "#FF68655C",
+      "widget_theme_surface": "#FF4C4B4C",
+      "widget_theme_nav_background": "#FF586077",
+      "widget_theme_border": "#FFFFFCF0",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FFFFF8E1",
+      "widget_theme_accent_end": "#FFFFECB3",
+      "widget_theme_background_asset_key": "star_rail",
+      "widget_theme_corner_radius_dp": 14,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF68655C",
+        "stroke": "#FFFFFCF0",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_67179a3f4487bbcc"
+      },
+      "nav": {
+        "fill": "#FF586077",
+        "stroke": "#FFA3A6AD",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_ff3622a6c664b786"
+      },
+      "primary": {
+        "fill": "#FF7EA2FF",
+        "stroke": "#FF7EA2FF",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_ae77c450cccee682"
+      },
+      "secondary": {
+        "fill": "#FF586077",
+        "stroke": "#FF9296A1",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_502fad8a5c4a1f71"
+      }
+    }
+  },
+  {
+    "key": "starRail|mint_card",
+    "palette": {
+      "widget_theme_brand_id": "starRail",
+      "widget_theme_card_skin_id": "mint_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FF7EA2FF",
+      "widget_theme_background": "#FF526268",
+      "widget_theme_surface": "#FF394856",
+      "widget_theme_nav_background": "#FF4A5E7E",
+      "widget_theme_border": "#FFF0F9F8",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FFE0F2F1",
+      "widget_theme_accent_end": "#FFB2DFDB",
+      "widget_theme_background_asset_key": "star_rail",
+      "widget_theme_corner_radius_dp": 15,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF526268",
+        "stroke": "#FFF0F9F8",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_a0eddde863cb292a"
+      },
+      "nav": {
+        "fill": "#FF4A5E7E",
+        "stroke": "#FF94A3B4",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_0f122bbf59ff313e"
+      },
+      "primary": {
+        "fill": "#FF7EA2FF",
+        "stroke": "#FF7EA2FF",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_ae77c450cccee682"
+      },
+      "secondary": {
+        "fill": "#FF4A5E7E",
+        "stroke": "#FF8494A8",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_3829c31209bc3d77"
+      }
+    }
+  },
+  {
+    "key": "starRail|starlight_card",
+    "palette": {
+      "widget_theme_brand_id": "starRail",
+      "widget_theme_card_skin_id": "starlight_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FF7EA2FF",
+      "widget_theme_background": "#FF272352",
+      "widget_theme_surface": "#FF2D2850",
+      "widget_theme_nav_background": "#FF40457A",
+      "widget_theme_border": "#FF939AC9",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FF283593",
+      "widget_theme_accent_end": "#FF7E57C2",
+      "widget_theme_background_asset_key": "star_rail",
+      "widget_theme_corner_radius_dp": 16,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF272352",
+        "stroke": "#FF939AC9",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_2e42326b4abf8ce5"
+      },
+      "nav": {
+        "fill": "#FF40457A",
+        "stroke": "#FF656B9D",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_71be585fb61ce81d"
+      },
+      "primary": {
+        "fill": "#FF7EA2FF",
+        "stroke": "#FF7EA2FF",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_ae77c450cccee682"
+      },
+      "secondary": {
+        "fill": "#FF40457A",
+        "stroke": "#FF5D6295",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_8d94e77786fddf20"
+      }
+    }
+  },
+  {
+    "key": "wuthering|plain_card",
+    "palette": {
+      "widget_theme_brand_id": "wuthering",
+      "widget_theme_card_skin_id": "plain_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF1B8C8F",
+      "widget_theme_background": "#FFE0E5D6",
+      "widget_theme_surface": "#FFFBF7ED",
+      "widget_theme_nav_background": "#FFE1EAE1",
+      "widget_theme_border": "#FF05191A",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FF1B8C8F",
+      "widget_theme_accent_end": "#FFE6A73A",
+      "widget_theme_background_asset_key": "wuthering",
+      "widget_theme_corner_radius_dp": 13,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 0
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFE0E5D6",
+        "stroke": "#FFE0E5D6",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_000e4bd8a34bcba1"
+      },
+      "nav": {
+        "fill": "#FFE1EAE1",
+        "stroke": "#FFE1EAE1",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_475f0203d77740b2"
+      },
+      "primary": {
+        "fill": "#FF1B8C8F",
+        "stroke": "#FF1B8C8F",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_bed985e389281b4c"
+      },
+      "secondary": {
+        "fill": "#FFE1EAE1",
+        "stroke": "#FFE1EAE1",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_475f0203d77740b2"
+      }
+    }
+  },
+  {
+    "key": "wuthering|paper_card",
+    "palette": {
+      "widget_theme_brand_id": "wuthering",
+      "widget_theme_card_skin_id": "paper_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF1B8C8F",
+      "widget_theme_background": "#FFFBFAEF",
+      "widget_theme_surface": "#FFFEFCF2",
+      "widget_theme_nav_background": "#FFE3EEE6",
+      "widget_theme_border": "#FF57544D",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFFFF8E1",
+      "widget_theme_accent_end": "#FFFFECB3",
+      "widget_theme_background_asset_key": "wuthering",
+      "widget_theme_corner_radius_dp": 14,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFFBFAEF",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_2b53b27314342956"
+      },
+      "nav": {
+        "fill": "#FFE3EEE6",
+        "stroke": "#FFA4A8A1",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_02275576b5bc4a21"
+      },
+      "primary": {
+        "fill": "#FF1B8C8F",
+        "stroke": "#FF1B8C8F",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_bed985e389281b4c"
+      },
+      "secondary": {
+        "fill": "#FFE3EEE6",
+        "stroke": "#FFB2B8B0",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_a959e1d3d29b2aad"
+      }
+    }
+  },
+  {
+    "key": "wuthering|mint_card",
+    "palette": {
+      "widget_theme_brand_id": "wuthering",
+      "widget_theme_card_skin_id": "mint_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF1B8C8F",
+      "widget_theme_background": "#FFEDF8F6",
+      "widget_theme_surface": "#FFF1F9F9",
+      "widget_theme_nav_background": "#FFD8ECEC",
+      "widget_theme_border": "#FF4C5252",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFE0F2F1",
+      "widget_theme_accent_end": "#FFB2DFDB",
+      "widget_theme_background_asset_key": "wuthering",
+      "widget_theme_corner_radius_dp": 15,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFEDF8F6",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_c7eea743c009ed21"
+      },
+      "nav": {
+        "fill": "#FFD8ECEC",
+        "stroke": "#FF99A6A6",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_4c31802bced4eeba"
+      },
+      "primary": {
+        "fill": "#FF1B8C8F",
+        "stroke": "#FF1B8C8F",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_bed985e389281b4c"
+      },
+      "secondary": {
+        "fill": "#FFD8ECEC",
+        "stroke": "#FFA7B6B6",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_18ac143de2fd9b0b"
+      }
+    }
+  },
+  {
+    "key": "wuthering|starlight_card",
+    "palette": {
+      "widget_theme_brand_id": "wuthering",
+      "widget_theme_card_skin_id": "starlight_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF1B8C8F",
+      "widget_theme_background": "#FFD3D1E9",
+      "widget_theme_surface": "#FFE9E4F5",
+      "widget_theme_nav_background": "#FFD0D9E8",
+      "widget_theme_border": "#FF0E1232",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FF283593",
+      "widget_theme_accent_end": "#FF7E57C2",
+      "widget_theme_background_asset_key": "wuthering",
+      "widget_theme_corner_radius_dp": 16,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFD3D1E9",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_6a289e16353eb078"
+      },
+      "nav": {
+        "fill": "#FFD0D9E8",
+        "stroke": "#FF787F96",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_c7ba24cadca8438d"
+      },
+      "primary": {
+        "fill": "#FF1B8C8F",
+        "stroke": "#FF1B8C8F",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_bed985e389281b4c"
+      },
+      "secondary": {
+        "fill": "#FFD0D9E8",
+        "stroke": "#FF8C93A8",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_954fcc5fef906d0f"
+      }
+    }
+  },
+  {
+    "key": "zzz|plain_card",
+    "palette": {
+      "widget_theme_brand_id": "zzz",
+      "widget_theme_card_skin_id": "plain_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FFE6C229",
+      "widget_theme_background": "#FF653F1B",
+      "widget_theme_surface": "#FF3B231A",
+      "widget_theme_nav_background": "#FF64491E",
+      "widget_theme_border": "#FFFBF4D8",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FFE6C229",
+      "widget_theme_accent_end": "#FFFF6B35",
+      "widget_theme_background_asset_key": "zzz",
+      "widget_theme_corner_radius_dp": 13,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 0
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF653F1B",
+        "stroke": "#FF653F1B",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_f0e21a25e95a2cae"
+      },
+      "nav": {
+        "fill": "#FF64491E",
+        "stroke": "#FF64491E",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_0737e6db878f9fbc"
+      },
+      "primary": {
+        "fill": "#FFE6C229",
+        "stroke": "#FFE6C229",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_81ae85fe4ac1638b"
+      },
+      "secondary": {
+        "fill": "#FF64491E",
+        "stroke": "#FF64491E",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_0737e6db878f9fbc"
+      }
+    }
+  },
+  {
+    "key": "zzz|paper_card",
+    "palette": {
+      "widget_theme_brand_id": "zzz",
+      "widget_theme_card_skin_id": "paper_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FFE6C229",
+      "widget_theme_background": "#FF6A6556",
+      "widget_theme_surface": "#FF4D493B",
+      "widget_theme_nav_background": "#FF726637",
+      "widget_theme_border": "#FFFFFCF0",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FFFFF8E1",
+      "widget_theme_accent_end": "#FFFFECB3",
+      "widget_theme_background_asset_key": "zzz",
+      "widget_theme_corner_radius_dp": 14,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF6A6556",
+        "stroke": "#FFFFFCF0",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_abf01cfb5fa52320"
+      },
+      "nav": {
+        "fill": "#FF726637",
+        "stroke": "#FFB1A98A",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_49b793895e4f0da4"
+      },
+      "primary": {
+        "fill": "#FFE6C229",
+        "stroke": "#FFE6C229",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_81ae85fe4ac1638b"
+      },
+      "secondary": {
+        "fill": "#FF726637",
+        "stroke": "#FFA39A77",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_c121253768f93555"
+      }
+    }
+  },
+  {
+    "key": "zzz|mint_card",
+    "palette": {
+      "widget_theme_brand_id": "zzz",
+      "widget_theme_card_skin_id": "mint_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FFE6C229",
+      "widget_theme_background": "#FF536162",
+      "widget_theme_surface": "#FF3B4645",
+      "widget_theme_nav_background": "#FF64643E",
+      "widget_theme_border": "#FFF0F9F8",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FFE0F2F1",
+      "widget_theme_accent_end": "#FFB2DFDB",
+      "widget_theme_background_asset_key": "zzz",
+      "widget_theme_corner_radius_dp": 15,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF536162",
+        "stroke": "#FFF0F9F8",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_b15e09e733f5d244"
+      },
+      "nav": {
+        "fill": "#FF64643E",
+        "stroke": "#FFA3A791",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_9493b2805e072a1d"
+      },
+      "primary": {
+        "fill": "#FFE6C229",
+        "stroke": "#FFE6C229",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_81ae85fe4ac1638b"
+      },
+      "secondary": {
+        "fill": "#FF64643E",
+        "stroke": "#FF95987F",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_74ab114f02be434e"
+      }
+    }
+  },
+  {
+    "key": "zzz|starlight_card",
+    "palette": {
+      "widget_theme_brand_id": "zzz",
+      "widget_theme_card_skin_id": "starlight_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FFE6C229",
+      "widget_theme_background": "#FF28234C",
+      "widget_theme_surface": "#FF2E253F",
+      "widget_theme_nav_background": "#FF5A4B3A",
+      "widget_theme_border": "#FF939AC9",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FF283593",
+      "widget_theme_accent_end": "#FF7E57C2",
+      "widget_theme_background_asset_key": "zzz",
+      "widget_theme_corner_radius_dp": 16,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF28234C",
+        "stroke": "#FF939AC9",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_5c382781bb5dbab7"
+      },
+      "nav": {
+        "fill": "#FF5A4B3A",
+        "stroke": "#FF736E7A",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_4fbe59e0f38a414f"
+      },
+      "primary": {
+        "fill": "#FFE6C229",
+        "stroke": "#FFE6C229",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_81ae85fe4ac1638b"
+      },
+      "secondary": {
+        "fill": "#FF5A4B3A",
+        "stroke": "#FF6D666C",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_68434114c56217fc"
+      }
+    }
+  },
+  {
+    "key": "yanyun|plain_card",
+    "palette": {
+      "widget_theme_brand_id": "yanyun",
+      "widget_theme_card_skin_id": "plain_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF7D4E2D",
+      "widget_theme_background": "#FFE8D6C7",
+      "widget_theme_surface": "#FFF9EFE4",
+      "widget_theme_nav_background": "#FFEADCCE",
+      "widget_theme_border": "#FF160E08",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FF7D4E2D",
+      "widget_theme_accent_end": "#FFB86F32",
+      "widget_theme_background_asset_key": "yanyun",
+      "widget_theme_corner_radius_dp": 13,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 0
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFE8D6C7",
+        "stroke": "#FFE8D6C7",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_b83354def049eb6b"
+      },
+      "nav": {
+        "fill": "#FFEADCCE",
+        "stroke": "#FFEADCCE",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_ab251cf22c2c1548"
+      },
+      "primary": {
+        "fill": "#FF7D4E2D",
+        "stroke": "#FF7D4E2D",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_87f32d0c4c9fb5ea"
+      },
+      "secondary": {
+        "fill": "#FFEADCCE",
+        "stroke": "#FFEADCCE",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_ab251cf22c2c1548"
+      }
+    }
+  },
+  {
+    "key": "yanyun|paper_card",
+    "palette": {
+      "widget_theme_brand_id": "yanyun",
+      "widget_theme_card_skin_id": "paper_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF7D4E2D",
+      "widget_theme_background": "#FFFFF9EB",
+      "widget_theme_surface": "#FFFFF9EB",
+      "widget_theme_nav_background": "#FFEFE5D4",
+      "widget_theme_border": "#FF57544D",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFFFF8E1",
+      "widget_theme_accent_end": "#FFFFECB3",
+      "widget_theme_background_asset_key": "yanyun",
+      "widget_theme_corner_radius_dp": 14,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFFFF9EB",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_0915a89057217d69"
+      },
+      "nav": {
+        "fill": "#FFEFE5D4",
+        "stroke": "#FFAAA397",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_150e812fb3642cc1"
+      },
+      "primary": {
+        "fill": "#FF7D4E2D",
+        "stroke": "#FF7D4E2D",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_87f32d0c4c9fb5ea"
+      },
+      "secondary": {
+        "fill": "#FFEFE5D4",
+        "stroke": "#FFB9B2A4",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_7fec34248af08393"
+      }
+    }
+  },
+  {
+    "key": "yanyun|mint_card",
+    "palette": {
+      "widget_theme_brand_id": "yanyun",
+      "widget_theme_card_skin_id": "mint_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF7D4E2D",
+      "widget_theme_background": "#FFF1F7F3",
+      "widget_theme_surface": "#FFF3F7F1",
+      "widget_theme_nav_background": "#FFE5E3DA",
+      "widget_theme_border": "#FF4C5252",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFE0F2F1",
+      "widget_theme_accent_end": "#FFB2DFDB",
+      "widget_theme_background_asset_key": "yanyun",
+      "widget_theme_corner_radius_dp": 15,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFF1F7F3",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_561b32f1cf2cf953"
+      },
+      "nav": {
+        "fill": "#FFE5E3DA",
+        "stroke": "#FFA0A19C",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_b77ad26b02a9c16b"
+      },
+      "primary": {
+        "fill": "#FF7D4E2D",
+        "stroke": "#FF7D4E2D",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_87f32d0c4c9fb5ea"
+      },
+      "secondary": {
+        "fill": "#FFE5E3DA",
+        "stroke": "#FFAFB0AA",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_e264c970c1dbf466"
+      }
+    }
+  },
+  {
+    "key": "yanyun|starlight_card",
+    "palette": {
+      "widget_theme_brand_id": "yanyun",
+      "widget_theme_card_skin_id": "starlight_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF7D4E2D",
+      "widget_theme_background": "#FFD7D0E5",
+      "widget_theme_surface": "#FFEAE1ED",
+      "widget_theme_nav_background": "#FFDDD0D6",
+      "widget_theme_border": "#FF0E1232",
+      "widget_theme_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FF283593",
+      "widget_theme_accent_end": "#FF7E57C2",
+      "widget_theme_background_asset_key": "yanyun",
+      "widget_theme_corner_radius_dp": 16,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFD7D0E5",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_da31dd218010d683"
+      },
+      "nav": {
+        "fill": "#FFDDD0D6",
+        "stroke": "#FF7F7A8C",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_94b556c983d31df4"
+      },
+      "primary": {
+        "fill": "#FF7D4E2D",
+        "stroke": "#FF7D4E2D",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_87f32d0c4c9fb5ea"
+      },
+      "secondary": {
+        "fill": "#FFDDD0D6",
+        "stroke": "#FF948D9C",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_0270931b59e0e86b"
+      }
+    }
+  },
+  {
+    "key": "botw|plain_card",
+    "palette": {
+      "widget_theme_brand_id": "botw",
+      "widget_theme_card_skin_id": "plain_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FF00D2FF",
+      "widget_theme_background": "#FF3D503A",
+      "widget_theme_surface": "#FF473820",
+      "widget_theme_nav_background": "#FF365D56",
+      "widget_theme_border": "#FFD1F7FF",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FF00D2FF",
+      "widget_theme_accent_end": "#FFFF9600",
+      "widget_theme_background_asset_key": "botw",
+      "widget_theme_corner_radius_dp": 13,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 0
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF3D503A",
+        "stroke": "#FF3D503A",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_9632054832a1be6b"
+      },
+      "nav": {
+        "fill": "#FF365D56",
+        "stroke": "#FF365D56",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_11d7473114c42b6c"
+      },
+      "primary": {
+        "fill": "#FF00D2FF",
+        "stroke": "#FF00D2FF",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_1d7ac0aa9dbf3149"
+      },
+      "secondary": {
+        "fill": "#FF365D56",
+        "stroke": "#FF365D56",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_11d7473114c42b6c"
+      }
+    }
+  },
+  {
+    "key": "botw|paper_card",
+    "palette": {
+      "widget_theme_brand_id": "botw",
+      "widget_theme_card_skin_id": "paper_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FF00D2FF",
+      "widget_theme_background": "#FF686A5C",
+      "widget_theme_surface": "#FF585648",
+      "widget_theme_nav_background": "#FF437374",
+      "widget_theme_border": "#FFFFFCF0",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FFFFF8E1",
+      "widget_theme_accent_end": "#FFFFECB3",
+      "widget_theme_background_asset_key": "botw",
+      "widget_theme_corner_radius_dp": 14,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF686A5C",
+        "stroke": "#FFFFFCF0",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_164105183c2e3bbb"
+      },
+      "nav": {
+        "fill": "#FF437374",
+        "stroke": "#FF97B0AB",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_4e28caf347afa9de"
+      },
+      "primary": {
+        "fill": "#FF00D2FF",
+        "stroke": "#FF00D2FF",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_1d7ac0aa9dbf3149"
+      },
+      "secondary": {
+        "fill": "#FF437374",
+        "stroke": "#FF84A29F",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_9e7501d41fd1f26e"
+      }
+    }
+  },
+  {
+    "key": "botw|mint_card",
+    "palette": {
+      "widget_theme_brand_id": "botw",
+      "widget_theme_card_skin_id": "mint_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FF00D2FF",
+      "widget_theme_background": "#FF526668",
+      "widget_theme_surface": "#FF465252",
+      "widget_theme_nav_background": "#FF35717B",
+      "widget_theme_border": "#FFF0F9F8",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FFE0F2F1",
+      "widget_theme_accent_end": "#FFB2DFDB",
+      "widget_theme_background_asset_key": "botw",
+      "widget_theme_corner_radius_dp": 15,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF526668",
+        "stroke": "#FFF0F9F8",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_dbc82c4c0c8876c4"
+      },
+      "nav": {
+        "fill": "#FF35717B",
+        "stroke": "#FF89AEB3",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_1617ab0bbfe5fa3b"
+      },
+      "primary": {
+        "fill": "#FF00D2FF",
+        "stroke": "#FF00D2FF",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_1d7ac0aa9dbf3149"
+      },
+      "secondary": {
+        "fill": "#FF35717B",
+        "stroke": "#FF76A0A6",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_dedc3054407cade6"
+      }
+    }
+  },
+  {
+    "key": "botw|starlight_card",
+    "palette": {
+      "widget_theme_brand_id": "botw",
+      "widget_theme_card_skin_id": "starlight_card",
+      "widget_theme_dark": true,
+      "widget_theme_primary": "#FF00D2FF",
+      "widget_theme_background": "#FF272752",
+      "widget_theme_surface": "#FF39324C",
+      "widget_theme_nav_background": "#FF2B5877",
+      "widget_theme_border": "#FF939AC9",
+      "widget_theme_text": "#FFFFFFFF",
+      "widget_theme_muted_text": "#FFFFFFFF",
+      "widget_theme_on_primary": "#FF000000",
+      "widget_theme_accent_start": "#FF283593",
+      "widget_theme_accent_end": "#FF7E57C2",
+      "widget_theme_background_asset_key": "botw",
+      "widget_theme_corner_radius_dp": 16,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FF272752",
+        "stroke": "#FF939AC9",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_362e3e9aee19d29c"
+      },
+      "nav": {
+        "fill": "#FF2B5877",
+        "stroke": "#FF59759B",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_471a576cfcba17ed"
+      },
+      "primary": {
+        "fill": "#FF00D2FF",
+        "stroke": "#FF00D2FF",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_1d7ac0aa9dbf3149"
+      },
+      "secondary": {
+        "fill": "#FF2B5877",
+        "stroke": "#FF4F6F93",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_5c5123a38c0c8a5e"
+      }
+    }
+  },
+  {
+    "key": "liquidGlass|plain_card",
+    "palette": {
+      "widget_theme_brand_id": "liquidGlass",
+      "widget_theme_card_skin_id": "plain_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF0A6CDB",
+      "widget_theme_background": "#FFC5DDF3",
+      "widget_theme_surface": "#FFEEF6FC",
+      "widget_theme_nav_background": "#FFD7E8F9",
+      "widget_theme_border": "#FF021327",
+      "widget_theme_text": "#FF17233B",
+      "widget_theme_muted_text": "#FF17233B",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FF0A6CDB",
+      "widget_theme_accent_end": "#FF5AC8FA",
+      "widget_theme_background_asset_key": "",
+      "widget_theme_corner_radius_dp": 13,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 0
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFC5DDF3",
+        "stroke": "#FFC5DDF3",
+        "radius": 13,
+        "strokeWidth": 0,
+        "resource": "widget_surface_8f0de70619750f40"
+      },
+      "nav": {
+        "fill": "#FFD7E8F9",
+        "stroke": "#FFD7E8F9",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_506d7e11d5ed1192"
+      },
+      "primary": {
+        "fill": "#FF0A6CDB",
+        "stroke": "#FF0A6CDB",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_65e9d3e2ad98745a"
+      },
+      "secondary": {
+        "fill": "#FFD7E8F9",
+        "stroke": "#FFD7E8F9",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_506d7e11d5ed1192"
+      }
+    }
+  },
+  {
+    "key": "liquidGlass|paper_card",
+    "palette": {
+      "widget_theme_brand_id": "liquidGlass",
+      "widget_theme_card_skin_id": "paper_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF0A6CDB",
+      "widget_theme_background": "#FFEDEFEE",
+      "widget_theme_surface": "#FFF8F7F0",
+      "widget_theme_nav_background": "#FFE0E9EE",
+      "widget_theme_border": "#FF57544D",
+      "widget_theme_text": "#FF17233B",
+      "widget_theme_muted_text": "#FF17233B",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFFFF8E1",
+      "widget_theme_accent_end": "#FFFFECB3",
+      "widget_theme_background_asset_key": "",
+      "widget_theme_corner_radius_dp": 14,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFEDEFEE",
+        "stroke": "#FF57544D",
+        "radius": 14,
+        "strokeWidth": 1,
+        "resource": "widget_surface_b1a4d7bfd89792d8"
+      },
+      "nav": {
+        "fill": "#FFE0E9EE",
+        "stroke": "#FFA2A5A5",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_7da0bd73b1664d6b"
+      },
+      "primary": {
+        "fill": "#FF0A6CDB",
+        "stroke": "#FF0A6CDB",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_65e9d3e2ad98745a"
+      },
+      "secondary": {
+        "fill": "#FFE0E9EE",
+        "stroke": "#FFB0B4B5",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_85ec0578b640df83"
+      }
+    }
+  },
+  {
+    "key": "liquidGlass|mint_card",
+    "palette": {
+      "widget_theme_brand_id": "liquidGlass",
+      "widget_theme_card_skin_id": "mint_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF0A6CDB",
+      "widget_theme_background": "#FFE4EDF3",
+      "widget_theme_surface": "#FFECF5F7",
+      "widget_theme_nav_background": "#FFD5E7F4",
+      "widget_theme_border": "#FF4C5252",
+      "widget_theme_text": "#FF17233B",
+      "widget_theme_muted_text": "#FF17233B",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FFE0F2F1",
+      "widget_theme_accent_end": "#FFB2DFDB",
+      "widget_theme_background_asset_key": "",
+      "widget_theme_corner_radius_dp": 15,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFE4EDF3",
+        "stroke": "#FF4C5252",
+        "radius": 15,
+        "strokeWidth": 1,
+        "resource": "widget_surface_c6c633ea2c463e3c"
+      },
+      "nav": {
+        "fill": "#FFD5E7F4",
+        "stroke": "#FF97A3AB",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_fb8dfb6cf4d66c5f"
+      },
+      "primary": {
+        "fill": "#FF0A6CDB",
+        "stroke": "#FF0A6CDB",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_65e9d3e2ad98745a"
+      },
+      "secondary": {
+        "fill": "#FFD5E7F4",
+        "stroke": "#FFA5B2BB",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_d948d4a7e3842646"
+      }
+    }
+  },
+  {
+    "key": "liquidGlass|starlight_card",
+    "palette": {
+      "widget_theme_brand_id": "liquidGlass",
+      "widget_theme_card_skin_id": "starlight_card",
+      "widget_theme_dark": false,
+      "widget_theme_primary": "#FF0A6CDB",
+      "widget_theme_background": "#FFCBCDE7",
+      "widget_theme_surface": "#FFE4DFF3",
+      "widget_theme_nav_background": "#FFCED4F0",
+      "widget_theme_border": "#FF0E1232",
+      "widget_theme_text": "#FF17233B",
+      "widget_theme_muted_text": "#FF17233B",
+      "widget_theme_on_primary": "#FFFFFFFF",
+      "widget_theme_accent_start": "#FF283593",
+      "widget_theme_accent_end": "#FF7E57C2",
+      "widget_theme_background_asset_key": "",
+      "widget_theme_corner_radius_dp": 16,
+      "widget_theme_control_radius_dp": 8,
+      "widget_theme_border_width_dp": 1
+    },
+    "surfaces": {
+      "root": {
+        "fill": "#FFCBCDE7",
+        "stroke": "#FF0E1232",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_cf5496892f2a0628"
+      },
+      "nav": {
+        "fill": "#FFCED4F0",
+        "stroke": "#FF777C9A",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_79b1430961fbcdbc"
+      },
+      "primary": {
+        "fill": "#FF0A6CDB",
+        "stroke": "#FF0A6CDB",
+        "radius": 8,
+        "strokeWidth": 0,
+        "resource": "widget_surface_65e9d3e2ad98745a"
+      },
+      "secondary": {
+        "fill": "#FFCED4F0",
+        "stroke": "#FF8A90AD",
+        "radius": 8,
+        "strokeWidth": 1,
+        "resource": "widget_surface_51e7454afe49fea9"
+      }
+    }
+  }
+]

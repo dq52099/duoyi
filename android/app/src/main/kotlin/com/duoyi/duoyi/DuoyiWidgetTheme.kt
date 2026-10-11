@@ -93,6 +93,7 @@ object DuoyiWidgetTheme {
         appWidgetId: Int? = null,
     ) {
         val theme = read(prefs)
+        val surfaces = DuoyiWidgetSurfaceResources.forTheme(theme)
         views.setTextColor(R.id.widget_refresh, theme.mutedText)
         views.setOnClickPendingIntent(R.id.widget_refresh, HomeWidgetLaunchIntent.getActivity(
             context, MainActivity::class.java, Uri.parse("duoyi://action/refresh_widgets")))
@@ -118,6 +119,7 @@ object DuoyiWidgetTheme {
                 stroke = theme.border,
                 radiusDp = theme.cornerRadiusDp,
                 strokeWidthDp = theme.borderWidthDp,
+                resourceId = surfaces?.root,
             )
         }
         if (navId != 0) {
@@ -128,6 +130,7 @@ object DuoyiWidgetTheme {
                 stroke = blend(theme.border, theme.navBackground, 0.45f),
                 radiusDp = theme.controlRadiusDp,
                 strokeWidthDp = if (theme.borderWidthDp > 0) 1 else 0,
+                resourceId = surfaces?.nav,
             )
         }
     }
@@ -147,6 +150,7 @@ object DuoyiWidgetTheme {
             "setBackgroundResource",
             widgetBackgroundResource(radiusDp, 0),
         )
+        clearBackgroundTint(views, rootId)
         val bitmap = roundedBackgroundBitmap(
             context = context,
             imageResource = imageResource,
@@ -172,6 +176,7 @@ object DuoyiWidgetTheme {
         secondaryIds: IntArray = intArrayOf(),
     ) {
         val theme = read(prefs)
+        val surfaces = DuoyiWidgetSurfaceResources.forTheme(theme)
         primaryIds.forEach {
             applyRoundedSurface(
                 views,
@@ -180,6 +185,7 @@ object DuoyiWidgetTheme {
                 stroke = theme.primary,
                 radiusDp = theme.controlRadiusDp,
                 strokeWidthDp = 0,
+                resourceId = surfaces?.primary,
             )
         }
         secondaryIds.forEach {
@@ -190,6 +196,7 @@ object DuoyiWidgetTheme {
                 stroke = blend(theme.border, theme.navBackground, 0.35f),
                 radiusDp = theme.controlRadiusDp,
                 strokeWidthDp = if (theme.borderWidthDp > 0) 1 else 0,
+                resourceId = surfaces?.secondary,
             )
         }
     }
@@ -237,12 +244,19 @@ object DuoyiWidgetTheme {
         stroke: Int,
         radiusDp: Int,
         strokeWidthDp: Int,
+        resourceId: Int? = null,
     ) {
         views.setInt(
             viewId,
             "setBackgroundResource",
-            widgetBackgroundResource(radiusDp, strokeWidthDp),
+            resourceId ?: widgetBackgroundResource(radiusDp, strokeWidthDp),
         )
+        // Known brand/skin pairs use exact scalable shape resources on every
+        // Android version. Runtime tint would also recolor their border.
+        if (resourceId != null) {
+            clearBackgroundTint(views, viewId)
+            return
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             views.setColorStateList(viewId, "setBackgroundTintList", ColorStateList.valueOf(fill))
         } else {
@@ -252,6 +266,13 @@ object DuoyiWidgetTheme {
                 "DuoyiWidgetTheme",
                 "pre-S rounded widget surface uses bundled rounded drawable without runtime tint",
             )
+        }
+    }
+
+    private fun clearBackgroundTint(views: RemoteViews, viewId: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Launcher reapply can retain tint set by an older widget version.
+            views.setColorStateList(viewId, "setBackgroundTintList", null)
         }
     }
 

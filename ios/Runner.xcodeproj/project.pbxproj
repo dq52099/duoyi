@@ -17,6 +17,7 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		E00000000000000000000005 /* DuoyiWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00000000000000000000001 /* DuoyiWidgets.swift */; };
 		E00000000000000000000006 /* DuoyiWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = E00000000000000000000004 /* DuoyiWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E00000000000000000000015 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E00000000000000000000014 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,6 +83,7 @@
 		E00000000000000000000003 /* DuoyiWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DuoyiWidgets.entitlements; sourceTree = "<group>"; };
 		E00000000000000000000004 /* DuoyiWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DuoyiWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E00000000000000000000013 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
+		E00000000000000000000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -165,6 +167,7 @@
 				E00000000000000000000001 /* DuoyiWidgets.swift */,
 				E00000000000000000000002 /* Info.plist */,
 				E00000000000000000000003 /* DuoyiWidgets.entitlements */,
+				E00000000000000000000014 /* Assets.xcassets */,
 			);
 			path = DuoyiWidgets;
 			sourceTree = "<group>";
@@ -294,6 +297,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E00000000000000000000015 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

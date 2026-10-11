@@ -626,6 +626,23 @@ void main() {
       ).readAsStringSync();
 
       expect(theme, contains('setBackgroundTintList'));
+      expect(
+        theme,
+        matches(
+          RegExp(
+            r'if \(resourceId != null\)\s*\{\s*clearBackgroundTint\(views, viewId\);?\s*return',
+          ),
+        ),
+        reason:
+            'Generated shapes must clear tint retained by launcher reapply.',
+      );
+      expect(theme, contains('clearBackgroundTint(views, rootId)'));
+      expect(
+        theme,
+        contains(
+          'views.setColorStateList(viewId, "setBackgroundTintList", null)',
+        ),
+      );
       expect(theme, contains('fun applyButtonSurfaces('));
       expect(
         theme,
@@ -1435,7 +1452,7 @@ void main() {
       expect(widgetScreen, contains('class _WidgetPreviewCalendarCell'));
       expect(
         widgetScreen,
-        contains('displayMode != WidgetDisplayMode.compact'),
+        matches(RegExp(r'displayMode\s*!=\s*WidgetDisplayMode\.compact')),
       );
       expect(widgetScreen, contains('if (maxLines >= 2)'));
       expect(widgetScreen, contains('if (maxLines >= 3)'));

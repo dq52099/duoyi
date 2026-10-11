@@ -2,6 +2,9 @@ import SwiftUI
 import WidgetKit
 import Foundation
 import CoreFoundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // BEGIN DUOYI_WIDGET_TIMER_CORE
 // Foundation-only logic is exercised directly by the portable Swift verifier.
@@ -967,60 +970,181 @@ private struct DuoyiWidgetConfig {
 }
 
 private struct DuoyiWidgetTheme {
+    let brandId: String
+    let cardSkinId: String
+    let isDark: Bool
     let primary: Color
     let background: Color
     let surface: Color
     let navBackground: Color
+    let border: Color
     let text: Color
     let mutedText: Color
     let onPrimary: Color
     let accentStart: Color
     let accentEnd: Color
+    let backgroundAssetKey: String
+    let cornerRadius: CGFloat
+    let controlRadius: CGFloat
+    let borderWidth: CGFloat
+
+    var isDefaultBrand: Bool {
+        brandId == "defaultBrand"
+    }
+
+    var isPlainCard: Bool {
+        cardSkinId == "plain_card"
+    }
+
+    var isDefaultIosStyle: Bool {
+        isDefaultBrand && isPlainCard
+    }
 
     static let fallback = DuoyiWidgetTheme(
+        brandId: "defaultBrand",
+        cardSkinId: "plain_card",
+        isDark: false,
         primary: color("#FFC85656"),
         background: color("#FFF6F7F9"),
         surface: color("#FFFFFFFF"),
         navBackground: color("#FFF1F3F6"),
+        border: color("#00C85656"),
         text: color("#FF1F2933"),
         mutedText: color("#FF667085"),
         onPrimary: color("#FFFFFFFF"),
         accentStart: color("#FFC85656"),
-        accentEnd: color("#FF2F8F83")
+        accentEnd: color("#FF2F8F83"),
+        backgroundAssetKey: "",
+        cornerRadius: 16,
+        controlRadius: 12,
+        borderWidth: 0
     )
 
     init(values: [String: Any]) {
+        self.brandId = Self.readString(values, key: "widget_theme_brand_id", fallback: "defaultBrand")
+        self.cardSkinId = Self.readString(values, key: "widget_theme_card_skin_id", fallback: "plain_card")
+        self.isDark = Self.readBool(values, key: "widget_theme_dark", fallback: false)
         self.primary = Self.read(values, key: "widget_theme_primary", fallback: "#FFC85656")
         self.background = Self.read(values, key: "widget_theme_background", fallback: "#FFF6F7F9")
         self.surface = Self.read(values, key: "widget_theme_surface", fallback: "#FFFFFFFF")
         self.navBackground = Self.read(values, key: "widget_theme_nav_background", fallback: "#FFF1F3F6")
+        self.border = Self.read(values, key: "widget_theme_border", fallback: "#00C85656")
         self.text = Self.read(values, key: "widget_theme_text", fallback: "#FF1F2933")
         self.mutedText = Self.read(values, key: "widget_theme_muted_text", fallback: "#FF667085")
         self.onPrimary = Self.read(values, key: "widget_theme_on_primary", fallback: "#FFFFFFFF")
         self.accentStart = Self.read(values, key: "widget_theme_accent_start", fallback: "#FFC85656")
         self.accentEnd = Self.read(values, key: "widget_theme_accent_end", fallback: "#FF2F8F83")
+        self.backgroundAssetKey = Self.readString(values, key: "widget_theme_background_asset_key", fallback: "")
+        self.cornerRadius = Self.readClampedCGFloat(
+            values, key: "widget_theme_corner_radius_dp", fallback: 16, min: 0, max: 32
+        )
+        self.controlRadius = Self.readClampedCGFloat(
+            values, key: "widget_theme_control_radius_dp", fallback: 12, min: 0, max: 24
+        )
+        self.borderWidth = Self.readClampedCGFloat(
+            values, key: "widget_theme_border_width_dp", fallback: 0, min: 0, max: 8
+        )
     }
 
     private init(
+        brandId: String,
+        cardSkinId: String,
+        isDark: Bool,
         primary: Color,
         background: Color,
         surface: Color,
         navBackground: Color,
+        border: Color,
         text: Color,
         mutedText: Color,
         onPrimary: Color,
         accentStart: Color,
-        accentEnd: Color
+        accentEnd: Color,
+        backgroundAssetKey: String,
+        cornerRadius: CGFloat,
+        controlRadius: CGFloat,
+        borderWidth: CGFloat
     ) {
+        self.brandId = brandId
+        self.cardSkinId = cardSkinId
+        self.isDark = isDark
         self.primary = primary
         self.background = background
         self.surface = surface
         self.navBackground = navBackground
+        self.border = border
         self.text = text
         self.mutedText = mutedText
         self.onPrimary = onPrimary
         self.accentStart = accentStart
         self.accentEnd = accentEnd
+        self.backgroundAssetKey = backgroundAssetKey
+        self.cornerRadius = cornerRadius
+        self.controlRadius = controlRadius
+        self.borderWidth = borderWidth
+    }
+
+    static func normalizeAssetKey(_ key: String) -> String {
+        let clean = key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch clean {
+        case "re0", "assets/backgrounds/re0.png": return "re0"
+        case "genshin", "assets/backgrounds/genshin.png": return "genshin"
+        case "star_rail", "starrail", "assets/backgrounds/star_rail.png": return "star_rail"
+        case "wuthering", "wutheringwaves", "assets/backgrounds/wuthering.png": return "wuthering"
+        case "zzz", "assets/backgrounds/zzz.png": return "zzz"
+        case "yanyun", "assets/backgrounds/yanyun.png": return "yanyun"
+        case "botw", "assets/backgrounds/botw.png": return "botw"
+        default: return clean
+        }
+    }
+
+    #if canImport(UIKit)
+    var backgroundImage: UIImage? {
+        guard !backgroundAssetKey.isEmpty else { return nil }
+        let key = Self.normalizeAssetKey(backgroundAssetKey)
+        guard !key.isEmpty else { return nil }
+        return UIImage(named: key, in: Bundle.main, compatibleWith: nil) ?? UIImage(named: key)
+    }
+    #endif
+
+    private static func readString(_ values: [String: Any], key: String, fallback: String) -> String {
+        guard let value = values[key] as? String else { return fallback }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+
+    private static func readBool(_ values: [String: Any], key: String, fallback: Bool) -> Bool {
+        guard let value = values[key] else { return fallback }
+        if let number = value as? NSNumber {
+            return number.boolValue
+        }
+        if let text = value as? String {
+            let lower = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if lower == "true" || lower == "1" { return true }
+            if lower == "false" || lower == "0" { return false }
+        }
+        return fallback
+    }
+
+    private static func readClampedCGFloat(
+        _ values: [String: Any],
+        key: String,
+        fallback: CGFloat,
+        min: CGFloat,
+        max: CGFloat
+    ) -> CGFloat {
+        guard let value = values[key] else { return fallback }
+        let raw: Double?
+        if let number = value as? NSNumber {
+            raw = number.doubleValue
+        } else if let text = value as? String,
+                  let parsed = Double(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            raw = parsed
+        } else {
+            raw = nil
+        }
+        guard let resolved = raw, resolved.isFinite else { return fallback }
+        return Swift.min(Swift.max(CGFloat(resolved), min), max)
     }
 
     private static func read(_ values: [String: Any], key: String, fallback: String) -> Color {
@@ -1512,6 +1636,16 @@ private struct DuoyiWidgetView: View {
                     Text(entry.config.quickActionTitle)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(entry.theme.primary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2.5)
+                        .background(
+                            RoundedRectangle(cornerRadius: entry.theme.controlRadius)
+                                .fill(entry.theme.navBackground)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: entry.theme.controlRadius)
+                                .strokeBorder(entry.theme.border, lineWidth: entry.theme.borderWidth > 0 ? entry.theme.borderWidth : 0)
+                        )
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -1816,6 +1950,16 @@ private struct DuoyiWidgetView: View {
             navLink(entry.navCalendar, "duoyi://calendar")
             navLink(entry.navFocus, "duoyi://focus")
         }
+        .padding(.vertical, 3)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: entry.theme.controlRadius)
+                .fill(entry.theme.navBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: entry.theme.controlRadius)
+                .strokeBorder(entry.theme.border, lineWidth: entry.theme.borderWidth > 0 ? entry.theme.borderWidth : 0)
+        )
     }
 
     private func navLink(_ text: String, _ urlString: String) -> some View {
@@ -1828,6 +1972,7 @@ private struct DuoyiWidgetView: View {
                 navText(text)
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func navText(_ text: String) -> some View {
@@ -2250,12 +2395,51 @@ private extension View {
         }
     }
 
+    @ViewBuilder
     private func duoyiWidgetBackgroundView(_ theme: DuoyiWidgetTheme) -> some View {
-        LinearGradient(
-            colors: [theme.background, theme.surface, theme.accentEnd.opacity(0.18)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        ZStack {
+            duoyiWidgetBaseBackground(theme)
+
+            #if canImport(UIKit)
+            if let image = theme.backgroundImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .overlay(theme.background.opacity(theme.isDark ? 0.72 : 0.65))
+            }
+            #endif
+
+            if theme.borderWidth > 0 {
+                // The system ContainerRelativeShape is authoritative for the outer widget boundary
+                // and stroke on iOS Home Screen, ensuring concentric alignment with device masks.
+                // theme.cornerRadius stores the Flutter/theme card skin radius token for internal metrics.
+                ContainerRelativeShape()
+                    .strokeBorder(theme.border, lineWidth: theme.borderWidth)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func duoyiWidgetBaseBackground(_ theme: DuoyiWidgetTheme) -> some View {
+        if theme.isDefaultIosStyle {
+            LinearGradient(
+                colors: [theme.background, theme.surface],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else if !theme.isPlainCard {
+            LinearGradient(
+                colors: [theme.background, theme.surface, theme.accentEnd.opacity(theme.isDark ? 0.28 : 0.18)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else {
+            LinearGradient(
+                colors: [theme.background, theme.surface, theme.accentEnd.opacity(theme.isDark ? 0.20 : 0.12)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
     }
 }
 

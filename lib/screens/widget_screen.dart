@@ -1062,80 +1062,44 @@ class WidgetPreviewCard extends StatelessWidget {
   }
 
   Widget _buildCard(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final surfaceStyle = appSurfaceStyleOf(context);
     ThemeProvider? themeProvider;
     try {
       themeProvider = context.watch<ThemeProvider>();
-    } catch (_) {
+    } on ProviderNotFoundException {
       themeProvider = null;
     }
-    final cardSkin = themeProvider?.activeCardSkin;
-    final usesCardSkin =
-        cardSkin != null && cardSkin.id != ThemeProvider.defaultCardSkinId;
-    final accent = switch (kind) {
-      WidgetPreviewKind.todo => Colors.blue,
-      WidgetPreviewKind.focus => Colors.redAccent,
-      WidgetPreviewKind.habit => Colors.green,
-      WidgetPreviewKind.calendar => Colors.indigo,
-      WidgetPreviewKind.schedule => Colors.cyan,
-      WidgetPreviewKind.goal => Colors.orange,
-      WidgetPreviewKind.course => Colors.orange,
-      WidgetPreviewKind.note => Colors.purple,
-      WidgetPreviewKind.anniversary => Colors.pink,
-      WidgetPreviewKind.diary => Colors.teal,
-    };
+    final provider = themeProvider ?? ThemeProvider();
+    final widgetBrand = provider.activeWidgetBackgroundBrand;
+    final widgetTheme = HomeWidgetThemePayload.fromThemeProvider(provider);
+    final baseTheme = widgetBrand.theme;
+    final cs = baseTheme.colorScheme.copyWith(
+      primary: widgetTheme.primary,
+      onPrimary: widgetTheme.onPrimary,
+      secondary: widgetTheme.accentEnd,
+      surface: widgetTheme.surface,
+      onSurface: widgetTheme.text,
+      onSurfaceVariant: widgetTheme.mutedText,
+      outlineVariant: widgetTheme.border,
+    );
+    final accent = widgetTheme.primary;
     final title = WidgetUiCopy.previewTitle(kind);
-    final skin = cardSkin;
-    final widgetBrand = themeProvider?.activeWidgetBackgroundBrand;
-    final previewBackgroundAsset = widgetBrand?.backgroundAsset;
+    final previewBackgroundAsset = widgetBrand.backgroundAsset;
     final imageBacked = previewBackgroundAsset != null;
-    final brightness = Theme.of(context).brightness;
-    final backgroundStart = usesCardSkin && skin != null
-        ? skin.colors.first
-        : cs.primary;
-    final backgroundEnd = usesCardSkin && skin != null
-        ? skin.colors.last
-        : cs.surface;
-    final previewBackground = Color.alphaBlend(
-      backgroundStart.withValues(
-        alpha: Theme.of(context).brightness == Brightness.dark ? 0.22 : 0.12,
+    final previewBackground = widgetTheme.background;
+    final imageOverlay = widgetTheme.dark
+        ? const Color.fromARGB(92, 0, 0, 0)
+        : const Color.fromARGB(78, 255, 255, 255);
+    final previewCardRadius = widgetTheme.cornerRadiusDp.toDouble();
+    final appBodyStyle = Theme.of(context).textTheme.bodyMedium;
+    final previewTheme = baseTheme.copyWith(
+      colorScheme: cs,
+      textTheme: baseTheme.textTheme.apply(
+        fontFamily: appBodyStyle?.fontFamily,
+        fontFamilyFallback: appBodyStyle?.fontFamilyFallback,
+        bodyColor: widgetTheme.text,
+        displayColor: widgetTheme.text,
       ),
-      cs.surface,
     );
-    final previewGradient = LinearGradient(
-      colors: [
-        previewBackground,
-        Color.alphaBlend(
-          backgroundEnd.withValues(
-            alpha: usesCardSkin
-                ? (Theme.of(context).brightness == Brightness.dark
-                      ? 0.20
-                      : 0.14)
-                : 0.05,
-          ),
-          cs.surface,
-        ),
-      ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    );
-    final imageOverlay = LinearGradient(
-      colors: brightness == Brightness.dark
-          ? [
-              Colors.black.withValues(alpha: 0.34),
-              cs.surface.withValues(alpha: 0.46),
-            ]
-          : [
-              (widgetBrand?.backgroundOverlay ?? cs.surface).withValues(
-                alpha: 0.42,
-              ),
-              cs.surface.withValues(alpha: 0.58),
-            ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    );
-    final previewCardRadius = surfaceStyle?.cardRadius ?? 16.0;
     return Semantics(
       label: '$title ${displayMode.previewCellLabel}',
       child: LayoutBuilder(
@@ -1161,174 +1125,191 @@ class WidgetPreviewCard extends StatelessWidget {
                   clipBehavior: Clip.hardEdge,
                   decoration: BoxDecoration(
                     color: imageBacked ? cs.surface : previewBackground,
-                    gradient: imageBacked ? null : previewGradient,
                     borderRadius: BorderRadius.circular(previewCardRadius),
-                    border: Border.all(
-                      color: cs.primary.withValues(alpha: 0.16),
-                      width: 0.45,
-                    ),
+                    border: widgetTheme.borderWidthDp == 0
+                        ? null
+                        : Border.all(
+                            color: widgetTheme.border,
+                            width: widgetTheme.borderWidthDp.toDouble(),
+                          ),
                   ),
-                  child: Stack(
-                    children: [
-                      if (imageBacked)
-                        Positioned.fill(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final dpr = MediaQuery.devicePixelRatioOf(
-                                context,
-                              ).clamp(1.0, 3.0);
-                              final cacheWidth = (constraints.maxWidth * dpr)
-                                  .ceil()
-                                  .clamp(1, 1600);
-                              final cacheHeight = (constraints.maxHeight * dpr)
-                                  .ceil()
-                                  .clamp(1, 1600);
-                              return Image.asset(
-                                previewBackgroundAsset,
-                                fit: BoxFit.cover,
-                                alignment: Alignment.center,
-                                cacheWidth: cacheWidth,
-                                cacheHeight: cacheHeight,
-                                filterQuality: FilterQuality.low,
-                                gaplessPlayback: true,
-                                errorBuilder: (context, error, stack) =>
-                                    DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        gradient: previewGradient,
-                                      ),
-                                    ),
-                              );
-                            },
-                          ),
-                        ),
-                      if (imageBacked)
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(gradient: imageOverlay),
-                          ),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Theme(
+                    data: previewTheme,
+                    child: DefaultTextStyle.merge(
+                      style: previewTheme.textTheme.bodyMedium,
+                      child: _WidgetPreviewTheme(
+                        payload: widgetTheme,
+                        child: Stack(
                           children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  switch (kind) {
-                                    WidgetPreviewKind.todo =>
-                                      Icons.checklist_rtl_outlined,
-                                    WidgetPreviewKind.focus =>
-                                      Icons.timer_outlined,
-                                    WidgetPreviewKind.habit =>
-                                      Icons.self_improvement_outlined,
-                                    WidgetPreviewKind.calendar =>
-                                      Icons.calendar_month_outlined,
-                                    WidgetPreviewKind.schedule =>
-                                      Icons.event_note_outlined,
-                                    WidgetPreviewKind.goal =>
-                                      Icons.flag_outlined,
-                                    WidgetPreviewKind.course =>
-                                      Icons.school_outlined,
-                                    WidgetPreviewKind.note =>
-                                      Icons.edit_note_outlined,
-                                    WidgetPreviewKind.anniversary =>
-                                      Icons.event_available_outlined,
-                                    WidgetPreviewKind.diary =>
-                                      Icons.book_outlined,
+                            if (imageBacked)
+                              Positioned.fill(
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final dpr = MediaQuery.devicePixelRatioOf(
+                                      context,
+                                    ).clamp(1.0, 3.0);
+                                    final cacheWidth =
+                                        (constraints.maxWidth * dpr)
+                                            .ceil()
+                                            .clamp(1, 1600);
+                                    final cacheHeight =
+                                        (constraints.maxHeight * dpr)
+                                            .ceil()
+                                            .clamp(1, 1600);
+                                    return Image.asset(
+                                      previewBackgroundAsset,
+                                      fit: BoxFit.cover,
+                                      alignment: Alignment.center,
+                                      cacheWidth: cacheWidth,
+                                      cacheHeight: cacheHeight,
+                                      filterQuality: FilterQuality.low,
+                                      gaplessPlayback: true,
+                                      errorBuilder: (context, error, stack) =>
+                                          DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              color: previewBackground,
+                                            ),
+                                          ),
+                                    );
                                   },
-                                  size: 16,
-                                  color: accent,
                                 ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    WidgetUiCopy.previewSampleBadge(title),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.normal,
-                                    ),
+                              ),
+                            if (imageBacked)
+                              Positioned.fill(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: imageOverlay,
                                   ),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 3),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    WidgetUiCopy.sampleHeaderDate(
-                                      displayMode.previewCellLabel,
-                                    ),
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: cs.onSurfaceVariant,
-                                      fontWeight: FontWeight.normal,
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        switch (kind) {
+                                          WidgetPreviewKind.todo =>
+                                            Icons.checklist_rtl_outlined,
+                                          WidgetPreviewKind.focus =>
+                                            Icons.timer_outlined,
+                                          WidgetPreviewKind.habit =>
+                                            Icons.self_improvement_outlined,
+                                          WidgetPreviewKind.calendar =>
+                                            Icons.calendar_month_outlined,
+                                          WidgetPreviewKind.schedule =>
+                                            Icons.event_note_outlined,
+                                          WidgetPreviewKind.goal =>
+                                            Icons.flag_outlined,
+                                          WidgetPreviewKind.course =>
+                                            Icons.school_outlined,
+                                          WidgetPreviewKind.note =>
+                                            Icons.edit_note_outlined,
+                                          WidgetPreviewKind.anniversary =>
+                                            Icons.event_available_outlined,
+                                          WidgetPreviewKind.diary =>
+                                            Icons.book_outlined,
+                                        },
+                                        size: 16,
+                                        color: accent,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          WidgetUiCopy.previewSampleBadge(
+                                            title,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.normal,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          WidgetUiCopy.sampleHeaderDate(
+                                            displayMode.previewCellLabel,
+                                          ),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: cs.onSurfaceVariant,
+                                            fontWeight: FontWeight.normal,
+                                          ),
+                                        ),
+                                      ),
+                                      Text(
+                                        '↻',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: cs.onSurfaceVariant,
+                                          fontWeight: FontWeight.normal,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Expanded(
+                                    child: _WidgetPreviewContentFrame(
+                                      mode: displayMode,
+                                      child: switch (kind) {
+                                        WidgetPreviewKind.todo =>
+                                          _WidgetPreviewTodoBody(),
+                                        WidgetPreviewKind.focus =>
+                                          _WidgetPreviewFocusBody(),
+                                        WidgetPreviewKind.habit =>
+                                          _WidgetPreviewHabitBody(),
+                                        WidgetPreviewKind.calendar =>
+                                          _WidgetPreviewCalendarBody(),
+                                        WidgetPreviewKind.schedule =>
+                                          _WidgetPreviewScheduleBody(),
+                                        WidgetPreviewKind.goal =>
+                                          _WidgetPreviewGoalBody(),
+                                        WidgetPreviewKind.course =>
+                                          _WidgetPreviewCourseBody(),
+                                        WidgetPreviewKind.note =>
+                                          _WidgetPreviewNoteBody(),
+                                        WidgetPreviewKind.anniversary =>
+                                          _WidgetPreviewAnniversaryBody(),
+                                        WidgetPreviewKind.diary =>
+                                          _WidgetPreviewDiaryBody(),
+                                      },
                                     ),
                                   ),
-                                ),
-                                Text(
-                                  '↻',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: cs.onSurfaceVariant,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Expanded(
-                              child: _WidgetPreviewContentFrame(
-                                mode: displayMode,
-                                child: switch (kind) {
-                                  WidgetPreviewKind.todo =>
-                                    _WidgetPreviewTodoBody(),
-                                  WidgetPreviewKind.focus =>
-                                    _WidgetPreviewFocusBody(),
-                                  WidgetPreviewKind.habit =>
-                                    _WidgetPreviewHabitBody(),
-                                  WidgetPreviewKind.calendar =>
-                                    _WidgetPreviewCalendarBody(),
-                                  WidgetPreviewKind.schedule =>
-                                    _WidgetPreviewScheduleBody(),
-                                  WidgetPreviewKind.goal =>
-                                    _WidgetPreviewGoalBody(),
-                                  WidgetPreviewKind.course =>
-                                    _WidgetPreviewCourseBody(),
-                                  WidgetPreviewKind.note =>
-                                    _WidgetPreviewNoteBody(),
-                                  WidgetPreviewKind.anniversary =>
-                                    _WidgetPreviewAnniversaryBody(),
-                                  WidgetPreviewKind.diary =>
-                                    _WidgetPreviewDiaryBody(),
-                                },
+                                  if (displayMode !=
+                                      WidgetDisplayMode.compact) ...[
+                                    const SizedBox(height: 10),
+                                    _WidgetPreviewNav(
+                                      selectedIndex: switch (kind) {
+                                        WidgetPreviewKind.todo => 0,
+                                        WidgetPreviewKind.focus => 3,
+                                        WidgetPreviewKind.habit => 1,
+                                        WidgetPreviewKind.calendar => 2,
+                                        WidgetPreviewKind.schedule => 2,
+                                        WidgetPreviewKind.goal => 2,
+                                        WidgetPreviewKind.course => 2,
+                                        WidgetPreviewKind.note => 2,
+                                        WidgetPreviewKind.anniversary => 2,
+                                        WidgetPreviewKind.diary => 2,
+                                      },
+                                      accent: accent,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
-                            if (displayMode != WidgetDisplayMode.compact) ...[
-                              const SizedBox(height: 10),
-                              _WidgetPreviewNav(
-                                selectedIndex: switch (kind) {
-                                  WidgetPreviewKind.todo => 0,
-                                  WidgetPreviewKind.focus => 3,
-                                  WidgetPreviewKind.habit => 1,
-                                  WidgetPreviewKind.calendar => 2,
-                                  WidgetPreviewKind.schedule => 2,
-                                  WidgetPreviewKind.goal => 2,
-                                  WidgetPreviewKind.course => 2,
-                                  WidgetPreviewKind.note => 2,
-                                  WidgetPreviewKind.anniversary => 2,
-                                  WidgetPreviewKind.diary => 2,
-                                },
-                                accent: accent,
-                              ),
-                            ],
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1338,6 +1319,20 @@ class WidgetPreviewCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _WidgetPreviewTheme extends InheritedWidget {
+  final HomeWidgetThemePayload payload;
+
+  const _WidgetPreviewTheme({required this.payload, required super.child});
+
+  static HomeWidgetThemePayload of(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<_WidgetPreviewTheme>()!
+      .payload;
+
+  @override
+  bool updateShouldNotify(_WidgetPreviewTheme oldWidget) =>
+      payload.signature != oldWidget.payload.signature;
 }
 
 class _WidgetPreviewDensity extends StatelessWidget {
@@ -1450,8 +1445,9 @@ class _WidgetPreviewFocusBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxLines = _WidgetPreviewDensityScope.maxLinesOf(context);
-    final surfaceStyle = appSurfaceStyleOf(context);
-    final buttonRadius = surfaceStyle?.smallTileRadius ?? 8.0;
+    final buttonRadius = _WidgetPreviewTheme.of(
+      context,
+    ).controlRadiusDp.toDouble();
     return Column(
       children: [
         Row(
@@ -1460,21 +1456,21 @@ class _WidgetPreviewFocusBody extends StatelessWidget {
               child: _WidgetPreviewMetric(
                 value: '2',
                 label: WidgetUiCopy.focusMetricSessions,
-                color: Colors.redAccent,
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
             Expanded(
               child: _WidgetPreviewMetric(
                 value: '50',
                 label: WidgetUiCopy.focusMetricDuration,
-                color: Colors.redAccent,
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
             Expanded(
               child: _WidgetPreviewMetric(
                 value: '25',
                 label: WidgetUiCopy.focusMetricNext,
-                color: Colors.redAccent,
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
           ],
@@ -1487,15 +1483,15 @@ class _WidgetPreviewFocusBody extends StatelessWidget {
                 height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.redAccent,
+                  color: Theme.of(context).colorScheme.primary,
                   borderRadius: BorderRadius.circular(buttonRadius),
                 ),
                 child: Text(
                   WidgetUiCopy.focusStartButton,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onPrimary,
                     fontSize: 12,
                     fontWeight: FontWeight.normal,
                   ),
@@ -1533,8 +1529,9 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final maxLines = _WidgetPreviewDensityScope.maxLinesOf(context);
-    final surfaceStyle = appSurfaceStyleOf(context);
-    final chipRadius = surfaceStyle?.smallTileRadius ?? 8.0;
+    final chipRadius = _WidgetPreviewTheme.of(
+      context,
+    ).controlRadiusDp.toDouble();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1552,11 +1549,11 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
                 ),
               ),
             ),
-            const Text(
+            Text(
               '80%',
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.green,
+                color: Theme.of(context).colorScheme.primary,
                 fontWeight: FontWeight.normal,
               ),
             ),
@@ -1582,10 +1579,14 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
                 height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(chipRadius),
                   border: Border.all(
-                    color: Colors.green.withValues(alpha: 0.28),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.28),
                     width: 0.45,
                   ),
                 ),
@@ -1593,8 +1594,8 @@ class _WidgetPreviewHabitBody extends StatelessWidget {
                   WidgetUiCopy.habitCheckInButton,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.green,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
                     fontSize: 11,
                     fontWeight: FontWeight.normal,
                   ),
@@ -1635,8 +1636,9 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
       [25, 26, 27, 28, 29, 30, 31],
       [null, null, null, null, null, null, null],
     ];
-    final surfaceStyle = appSurfaceStyleOf(context);
-    final chipRadius = surfaceStyle?.smallTileRadius ?? 8.0;
+    final chipRadius = _WidgetPreviewTheme.of(
+      context,
+    ).controlRadiusDp.toDouble();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1659,10 +1661,14 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 9),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.1),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(chipRadius),
                 border: Border.all(
-                  color: Colors.blue.withValues(alpha: 0.28),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.28),
                   width: 0.45,
                 ),
               ),
@@ -1670,8 +1676,8 @@ class _WidgetPreviewCalendarBody extends StatelessWidget {
                 WidgetUiCopy.calendarToday,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.blue,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
                   fontSize: 11,
                   fontWeight: FontWeight.normal,
                 ),
@@ -1744,8 +1750,9 @@ class _WidgetPreviewCalendarCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final surfaceStyle = appSurfaceStyleOf(context);
-    final cellRadius = surfaceStyle?.smallTileRadius ?? 8.0;
+    final cellRadius = _WidgetPreviewTheme.of(
+      context,
+    ).controlRadiusDp.toDouble();
     final isToday = day == 17;
     return Center(
       child: Container(
@@ -1753,7 +1760,9 @@ class _WidgetPreviewCalendarCell extends StatelessWidget {
         height: 20,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isToday ? Colors.blue : Colors.transparent,
+          color: isToday
+              ? Theme.of(context).colorScheme.primary
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(cellRadius),
         ),
         child: Text(
@@ -1762,7 +1771,9 @@ class _WidgetPreviewCalendarCell extends StatelessWidget {
           overflow: TextOverflow.clip,
           style: TextStyle(
             fontSize: 10,
-            color: isToday ? Colors.white : cs.onSurface,
+            color: isToday
+                ? Theme.of(context).colorScheme.onPrimary
+                : cs.onSurface,
             fontWeight: FontWeight.normal,
           ),
         ),
@@ -1937,8 +1948,9 @@ class _WidgetPreviewQuickAdd extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final surfaceStyle = appSurfaceStyleOf(context);
-    final chipRadius = surfaceStyle?.smallTileRadius ?? 8.0;
+    final chipRadius = _WidgetPreviewTheme.of(
+      context,
+    ).controlRadiusDp.toDouble();
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -1946,10 +1958,12 @@ class _WidgetPreviewQuickAdd extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.blue.withValues(alpha: 0.1),
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(chipRadius),
           border: Border.all(
-            color: Colors.blue.withValues(alpha: 0.28),
+            color: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.28),
             width: 0.45,
           ),
         ),
@@ -1957,8 +1971,8 @@ class _WidgetPreviewQuickAdd extends StatelessWidget {
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.blue,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
             fontSize: 11,
             fontWeight: FontWeight.normal,
           ),
@@ -2009,8 +2023,9 @@ class _WidgetPreviewTodoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final surfaceStyle = appSurfaceStyleOf(context);
-    final boxRadius = surfaceStyle?.smallTileRadius ?? 8.0;
+    final boxRadius = _WidgetPreviewTheme.of(
+      context,
+    ).controlRadiusDp.toDouble();
     return Row(
       children: [
         Container(
@@ -2018,19 +2033,21 @@ class _WidgetPreviewTodoRow extends StatelessWidget {
           height: 22,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: Colors.blue.withValues(alpha: 0.1),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(boxRadius),
             border: Border.all(
-              color: Colors.blue.withValues(alpha: 0.28),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.28),
               width: 0.45,
             ),
           ),
-          child: const Text(
+          child: Text(
             '○',
             maxLines: 1,
             overflow: TextOverflow.clip,
             style: TextStyle(
-              color: Colors.blue,
+              color: Theme.of(context).colorScheme.primary,
               fontSize: 13,
               fontWeight: FontWeight.normal,
             ),
@@ -2105,15 +2122,16 @@ class _WidgetPreviewNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final labels = WidgetUiCopy.previewNavLabels;
     final cs = Theme.of(context).colorScheme;
-    final surfaceStyle = appSurfaceStyleOf(context);
-    final navRadius = surfaceStyle?.smallTileRadius ?? 8.0;
+    final navRadius = _WidgetPreviewTheme.of(
+      context,
+    ).controlRadiusDp.toDouble();
     return Container(
       key: const ValueKey('widget_preview_navigation'),
       width: double.infinity,
       constraints: const BoxConstraints(minHeight: 30),
       padding: const EdgeInsets.symmetric(vertical: 5),
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: _WidgetPreviewTheme.of(context).navBackground,
         borderRadius: BorderRadius.circular(navRadius),
         border: Border.all(
           color: cs.outlineVariant.withValues(alpha: 0.18),

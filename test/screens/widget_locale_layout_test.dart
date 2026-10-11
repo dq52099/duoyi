@@ -5,6 +5,7 @@ import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/core/widget_ui_copy.dart';
 import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/screens/widget_screen.dart';
+import 'package:duoyi/services/home_widget_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,6 +33,91 @@ void main() {
     I18n.setLocale(AppLocale.zh);
   });
   tearDown(() => I18n.setLocale(AppLocale.zh));
+
+  testWidgets('preview follows independent widget background and skin', (
+    tester,
+  ) async {
+    final theme = await _prepare(tester, dark: true);
+    await theme.unlockCardSkin('mint_card');
+    await theme.setWidgetBackgroundBrand('defaultBrand');
+    await theme.setWidgetCardSkin('mint_card');
+    final screenshotKey = GlobalKey();
+    await tester.pumpWidget(
+      _app(
+        theme,
+        RepaintBoundary(
+          key: screenshotKey,
+          child: const WidgetPreviewCard.focus(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final preview = find.byType(WidgetPreviewCard);
+    final previewTheme = find.descendant(
+      of: preview,
+      matching: find.byType(Theme),
+    );
+    final payload = HomeWidgetThemePayload.fromThemeProvider(theme);
+    expect(payload.cardSkinId, 'mint_card');
+    expect(theme.activeCardSkin.id, 'plain_card');
+    expect(
+      tester.widget<Theme>(previewTheme).data.colorScheme.primary,
+      payload.primary,
+    );
+    expect(
+      tester.widget<Theme>(previewTheme).data.colorScheme.onSurface,
+      payload.text,
+    );
+    expect(
+      tester.widget<Theme>(previewTheme).data.brightness,
+      Brightness.light,
+    );
+    final appTheme = Theme.of(tester.element(find.byKey(screenshotKey)));
+    expect(appTheme.brightness, Brightness.dark);
+    expect(appTheme.colorScheme.onSurface, isNot(payload.text));
+    final sampleTitle = find.text(
+      WidgetUiCopy.previewSampleBadge(
+        WidgetUiCopy.previewTitle(WidgetPreviewKind.focus),
+      ),
+    );
+    expect(sampleTitle, findsOneWidget);
+    final titleRichText = tester.widget<RichText>(
+      find.descendant(of: sampleTitle, matching: find.byType(RichText)),
+    );
+    expect(titleRichText.text.style?.color, payload.text);
+    final root = tester.widget<Container>(
+      find.ancestor(of: previewTheme, matching: find.byType(Container)).first,
+    );
+    final decoration = root.decoration! as BoxDecoration;
+    expect(decoration.color, payload.background);
+    expect(
+      decoration.borderRadius,
+      BorderRadius.circular(payload.cornerRadiusDp.toDouble()),
+    );
+    await theme.setWidgetCardSkin('plain_card');
+    await tester.pumpAndSettle();
+    final updated =
+        tester
+                .widget<Container>(
+                  find
+                      .ancestor(
+                        of: previewTheme,
+                        matching: find.byType(Container),
+                      )
+                      .first,
+                )
+                .decoration!
+            as BoxDecoration;
+    expect(updated.border, isNull);
+    expect(updated.borderRadius, BorderRadius.circular(16));
+    expect(tester.takeException(), isNull);
+    await _capture(
+      tester,
+      screenshotKey,
+      'independent-light-widget-on-dark-app',
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   for (final locale in AppLocale.values) {
     for (final dark in [false, true]) {
@@ -248,7 +334,9 @@ Future<void> _capture(WidgetTester tester, GlobalKey key, String name) async {
     final image = await boundary.toImage();
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
-    final file = File('evidence/screenshots/widget-locale-20261006/$name.png');
+    final file = File(
+      '${Platform.environment['DUOYI_WIDGET_SCREENSHOT_DIR'] ?? 'evidence/screenshots/widget-locale-20261006'}/$name.png',
+    );
     file.parent.createSync(recursive: true);
     file.writeAsBytesSync(data!.buffer.asUint8List());
   });

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import '../core/app_brand.dart';
 import '../core/brand_strings.dart';
+import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../core/platform_info.dart';
 import '../providers/theme_provider.dart';
@@ -947,47 +948,65 @@ class HomeWidgetThemePayload {
     final dark = theme.brightness == Brightness.dark;
     final cardSkin = provider.activeWidgetCardSkin;
     final usesCardSkin = cardSkin.id != ThemeProvider.defaultCardSkinId;
+    final defaultIosStyle =
+        brand.id == AppBrands.defaultBrand.id && !usesCardSkin;
     final imageBacked = brand.backgroundAsset != null;
     final accentStart = usesCardSkin ? cardSkin.colors.first : cs.primary;
     final accentEnd = usesCardSkin ? cardSkin.colors.last : cs.secondary;
-    final baseBackground = Color.alphaBlend(
-      brand.backgroundOverlay.withValues(
-        alpha: imageBacked
-            ? brand.backgroundOverlayOpacity.clamp(0.56, 0.82).toDouble()
-            : brand.backgroundOverlayOpacity,
-      ),
-      dark ? const Color(0xFF0B0F17) : const Color(0xFFFFFFFF),
-    );
-    final background = Color.alphaBlend(
-      accentEnd.withValues(alpha: imageBacked ? (dark ? 0.22 : 0.14) : 0.08),
-      Color.alphaBlend(
-        accentStart.withValues(alpha: dark ? 0.22 : 0.12),
-        baseBackground,
-      ),
-    );
-    final surface = Color.alphaBlend(
-      accentEnd.withValues(
-        alpha: usesCardSkin
-            ? (dark ? 0.24 : 0.16)
-            : imageBacked
-            ? (dark ? 0.16 : 0.09)
-            : 0.06,
-      ),
-      Color.alphaBlend(
-        brand.backgroundOverlay.withValues(alpha: imageBacked ? 0.18 : 0.0),
-        cs.surface,
-      ),
-    );
-    final navBackground = Color.alphaBlend(
-      cs.primary.withValues(alpha: imageBacked ? (dark ? 0.24 : 0.12) : 0.10),
-      surface,
-    );
-    final border = Color.alphaBlend(
-      accentStart.withValues(alpha: usesCardSkin ? (dark ? 0.50 : 0.34) : 0.18),
-      cs.outlineVariant,
-    );
-    final defaultIosStyle =
-        brand.id == AppBrands.defaultBrand.id && !usesCardSkin;
+    final baseBackground = defaultIosStyle
+        ? DesignTokens.defaultPageBackground
+        : Color.alphaBlend(
+            brand.backgroundOverlay.withValues(
+              alpha: imageBacked
+                  ? brand.backgroundOverlayOpacity.clamp(0.56, 0.82).toDouble()
+                  : brand.backgroundOverlayOpacity,
+            ),
+            dark ? const Color(0xFF0B0F17) : const Color(0xFFFFFFFF),
+          );
+    final background = defaultIosStyle
+        ? DesignTokens.defaultPageBackground
+        : Color.alphaBlend(
+            accentEnd.withValues(
+              alpha: imageBacked ? (dark ? 0.22 : 0.14) : 0.08,
+            ),
+            Color.alphaBlend(
+              accentStart.withValues(alpha: dark ? 0.22 : 0.12),
+              baseBackground,
+            ),
+          );
+    final surface = defaultIosStyle
+        ? DesignTokens.defaultSurface
+        : Color.alphaBlend(
+            accentEnd.withValues(
+              alpha: usesCardSkin
+                  ? (dark ? 0.24 : 0.16)
+                  : imageBacked
+                  ? (dark ? 0.16 : 0.09)
+                  : 0.06,
+            ),
+            Color.alphaBlend(
+              brand.backgroundOverlay.withValues(
+                alpha: imageBacked ? 0.18 : 0.0,
+              ),
+              cs.surface,
+            ),
+          );
+    final navBackground = defaultIosStyle
+        ? DesignTokens.defaultSurfaceMuted
+        : Color.alphaBlend(
+            cs.primary.withValues(
+              alpha: imageBacked ? (dark ? 0.24 : 0.12) : 0.10,
+            ),
+            surface,
+          );
+    final border = defaultIosStyle
+        ? const Color(0x00C85656)
+        : Color.alphaBlend(
+            accentStart.withValues(
+              alpha: usesCardSkin ? (dark ? 0.50 : 0.34) : 0.18,
+            ),
+            cs.outlineVariant,
+          );
     final cornerRadiusDp = switch (cardSkin.id) {
       'paper_card' => 14,
       'mint_card' => 15,
