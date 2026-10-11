@@ -1,0 +1,24 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/screens/todo_kanban_view_test.dart
+00:00 +0: 快速创建待办成功后显示本机保存和云同步状态
+00:00 +1: TodoScreen can switch to kanban view
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:02 +2: TodoScreen surfaces cloud sync submit failures
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:02 +3: TodoScreen surfaces pending cloud sync status
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:03 +4: TodoScreen restores kanban grouping preference
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:03 +5: TodoScreen left swipe reveals completion and delete actions
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:04 +6: TodoScreen scrolling closes open swipe actions
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:05 +7: TodoScreen kanban card left swipe can delete task
+[TodoProvider] waiting for local todo hydration before write
+[TodoProvider] reminder sync skipped: scheduler missing
+00:06 +8: All tests passed!

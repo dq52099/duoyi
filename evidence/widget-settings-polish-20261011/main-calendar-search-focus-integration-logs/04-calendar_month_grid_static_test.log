@@ -1,0 +1,5 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/widgets/calendar_month_grid_static_test.dart
+00:00 +0: 月历格子在更多应用等紧凑高度下不会因日期字体溢出
+00:00 +1: 月视图日期格直接展示当天事项数量
+00:00 +2: 月历格子保留倒数日事件点，不让倒数日在月视图消失
+00:00 +3: All tests passed!

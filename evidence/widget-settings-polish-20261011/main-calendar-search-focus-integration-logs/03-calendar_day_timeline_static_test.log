@@ -1,0 +1,6 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/widgets/calendar_day_timeline_static_test.dart
+00:00 +0: 日视图按时间线和全天无时间事件分区展示
+00:00 +1: 日视图时间线提供 24 小时刻度和按分钟定位的事件块
+00:00 +2: 时间线事件支持跨日边界裁剪和短块紧凑卡片
+00:00 +3: 日历日程中的待办按完成和逾期状态区分显示
+00:00 +4: All tests passed!

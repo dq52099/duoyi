@@ -1,0 +1,18 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/core/calendar_event_display_text_test.dart
+00:00 +0: empty diary title follows locale without rebuilding, mood=null
+00:00 +1: empty diary title follows locale without rebuilding, mood=Mood.good
+00:00 +2: diary title matching a fallback stays authored across locales
+00:00 +3: title-only diary metadata retains a literal subtitle
+00:00 +4: generated Pomodoro fallback title and duration follow the current locale
+00:00 +5: aggregated todo due-date metadata localizes while preserving its authored title
+00:00 +6: aggregated time-entry category and duration localize while preserving its authored title
+00:00 +7: authored Pomodoro title is preserved while its generated duration localizes
+00:00 +8: aggregated anniversary, countdown, goal, and diary metadata localizes
+00:00 +9: course translation preserves authored room and teacher text
+00:00 +10: custom anniversary subtitle without metadata stays unchanged
+00:00 +11: custom countdown subtitle without metadata stays unchanged
+00:00 +12: custom goal subtitle without metadata stays unchanged
+00:00 +13: custom diary subtitle without metadata stays unchanged
+00:00 +14: raw todo, time-entry, and Pomodoro text stays exact without metadata
+00:00 +15: legacy user and ICS event JSON remains compatible without metadata
+00:00 +16: All tests passed!

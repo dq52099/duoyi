@@ -1,0 +1,8 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/services/android_widget_frame_static_test.dart
+00:00 +0: all eleven actual renderers submit through captured frames
+00:00 +1: snapshot initializes styles before reading the native publication
+00:00 +2: raw values and dimensions are checked before any accepted effect
+00:00 +3: frozen preferences cover all reads and deny generic editing
+00:00 +4: focus uses frozen clock values and defers its existing alarm effect
+00:00 +5: all mutation entry points require the captured fresh session
+00:00 +6: All tests passed!

@@ -1,0 +1,8 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/core/calendar_agenda_ui_copy_test.dart
+00:00 +0: weekday headings preserve the Monday-first order in both locales
+00:00 +1: month badges and overflow messages use English count agreement
+00:00 +2: day semantics translate statuses while preserving supplied subtitle
+00:00 +3: course periods keep section numbers in both locales
+00:00 +4: agenda headings and empty diary prompt follow retained locale
+00:00 +5: drag feedback translates glue and preserves supplied diagnostics
+00:00 +6: All tests passed!

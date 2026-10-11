@@ -13,6 +13,7 @@ import '../core/smart_date_parser.dart';
 import '../core/smart_todo_draft.dart';
 import '../core/todo_filters.dart';
 import '../core/todo_kanban.dart';
+import '../core/todo_board_ui_copy.dart';
 import '../models/goal.dart'
     show ReminderKind, ReminderPlan, ReminderRule, ReminderRuleType;
 import '../models/habit.dart';
@@ -179,6 +180,7 @@ class _TodoScreenState extends State<TodoScreen> {
   }
 
   void _onLocaleChanged() {
+    _derived = null;
     if (mounted) setState(() {});
   }
 
@@ -288,28 +290,28 @@ class _TodoScreenState extends State<TodoScreen> {
   Future<void> _completeSelected() async {
     await _runBatchAction(
       (ids) => context.read<TodoProvider>().completeTodos(ids),
-      (count) => '已完成 $count 个任务',
+      (count) => TodoBoardUiCopy.batchCompleted(count),
     );
   }
 
   Future<void> _reopenSelected() async {
     await _runBatchAction(
       (ids) => context.read<TodoProvider>().reopenTodos(ids),
-      (count) => '已恢复 $count 个任务为未完成',
+      (count) => TodoBoardUiCopy.batchReopened(count),
     );
   }
 
   Future<void> _moveSelected(EisenhowerQuadrant quadrant) async {
     await _runBatchAction(
       (ids) => context.read<TodoProvider>().updateTodosQuadrant(ids, quadrant),
-      (count) => '已移动 $count 个任务到${_quadrantLabel(quadrant)}',
+      (count) => TodoBoardUiCopy.batchMoved(count, _quadrantLabel(quadrant)),
     );
   }
 
   Future<void> _setSelectedPriority(TodoPriority priority) async {
     await _runBatchAction(
       (ids) => context.read<TodoProvider>().updateTodosPriority(ids, priority),
-      (count) => '已更新 $count 个任务优先级',
+      (count) => TodoBoardUiCopy.batchPriorityUpdated(count),
     );
   }
 
@@ -327,27 +329,32 @@ class _TodoScreenState extends State<TodoScreen> {
     final selectedCount = _selectedTodoIds.length;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogCtx) => AppDialog(
-        icon: const Icon(Icons.delete_outline),
-        title: const Text('删除所选任务'),
-        content: Text('确认删除 $selectedCount 个任务吗？相关时间足迹也会同步移除。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(false),
-            child: const Text('取消'),
+      builder: (dialogCtx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (context, _, _) => AppDialog(
+          icon: const Icon(Icons.delete_outline),
+          title: Text(TodoBoardUiCopy.deleteSelectedTasksTitle),
+          content: Text(
+            TodoBoardUiCopy.deleteSelectedTasksContent(selectedCount),
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(true),
-            child: const Text('删除'),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: Text(TodoBoardUiCopy.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: Text(TodoBoardUiCopy.delete),
+            ),
+          ],
+        ),
       ),
     );
     if (confirmed != true || !mounted) return;
 
     await _runBatchAction(
       (ids) => context.read<TodoProvider>().deleteTodos(ids),
-      (count) => '已删除 $count 个任务',
+      (count) => TodoBoardUiCopy.batchDeleted(count),
     );
   }
 

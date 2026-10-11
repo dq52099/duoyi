@@ -1,0 +1,5 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/providers/calendar_multiday_static_test.dart
+00:00 +0: CalendarProvider indexes CalendarEvent endDate spans
+00:00 +1: CalendarProvider handles all-day midnight DTEND as exclusive
+00:00 +2: CalendarProvider supports shared workspace calendar filters
+00:00 +3: All tests passed!

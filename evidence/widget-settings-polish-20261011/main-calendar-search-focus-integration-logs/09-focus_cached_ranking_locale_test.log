@@ -1,0 +1,3 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/screens/focus_cached_ranking_locale_test.dart
+00:00 +0: both cached ranking selectors repaint while retaining scores and literal reasons
+00:03 +1: All tests passed!

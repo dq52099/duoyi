@@ -1,0 +1,4 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/widgets/calendar_cached_display_locale_test.dart
+00:00 +0: cached day rows repaint without replacing events
+00:02 +1: cached week rows repaint without replacing events
+00:03 +2: All tests passed!

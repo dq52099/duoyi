@@ -1,0 +1,3 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/screens/search_retained_locale_test.dart
+00:00 +0: mounted SearchScreen relocalizes retained diary hits without rerunning query
+00:07 +1: All tests passed!
