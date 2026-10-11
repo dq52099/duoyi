@@ -127,15 +127,15 @@ open class DuoyiCourseWidgetProvider : DuoyiStyledWidgetProvider() {
                 views.setOnClickPendingIntent(R.id.widget_course_subtitle, openCourse)
                 views.setOnClickPendingIntent(
                     R.id.widget_course_1,
-                    itemIntent(context, prefs, "course_highlight_1_id", "duoyi://course")
+                    itemIntent(context, frame, "course_highlight_1_id", "duoyi://course")
                 )
                 views.setOnClickPendingIntent(
                     R.id.widget_course_2,
-                    itemIntent(context, prefs, "course_highlight_2_id", "duoyi://course")
+                    itemIntent(context, frame, "course_highlight_2_id", "duoyi://course")
                 )
                 views.setOnClickPendingIntent(
                     R.id.widget_course_3,
-                    itemIntent(context, prefs, "course_highlight_3_id", "duoyi://course")
+                    itemIntent(context, frame, "course_highlight_3_id", "duoyi://course")
                 )
                 views.setOnClickPendingIntent(R.id.widget_course_nav_todo, openTodo)
                 views.setOnClickPendingIntent(R.id.widget_course_nav_habit, openHabit)
@@ -148,11 +148,11 @@ open class DuoyiCourseWidgetProvider : DuoyiStyledWidgetProvider() {
     }
 
     companion object {
-        private fun itemIntent(context: Context, prefs: SharedPreferences, key: String, fallback: String) =
+        private fun itemIntent(context: Context, frame: DuoyiWidgetRenderFrame, key: String, fallback: String) =
             HomeWidgetLaunchIntent.getActivity(
                 context,
                 MainActivity::class.java,
-                detailUri(prefs, key, fallback)
+                DuoyiWidgetSnapshot.entityUri(frame, detailUri(frame.prefs, key, fallback), Uri.parse(fallback))
             )
 
         private fun detailUri(prefs: SharedPreferences, key: String, fallback: String): Uri {

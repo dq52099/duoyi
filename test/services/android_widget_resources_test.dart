@@ -3485,7 +3485,9 @@ void main() {
         }
         expect(
           source,
-          contains('detailUri(prefs, key, fallback)'),
+          contains(
+            'DuoyiWidgetSnapshot.entityUri(frame, detailUri(frame.prefs, key, fallback), Uri.parse(fallback))',
+          ),
           reason:
               '${entry.key} should route raw saved ids through a deep-link builder.',
         );
@@ -3525,7 +3527,7 @@ void main() {
           expect(
             source,
             contains(
-              'itemIntent(context, prefs, "${entry.value.keyPrefix}${index}_id", "${entry.value.fallback}")',
+              'itemIntent(context, frame, "${entry.value.keyPrefix}${index}_id", "${entry.value.fallback}")',
             ),
             reason:
                 '${entry.key} row $index should open detail or fallback page',

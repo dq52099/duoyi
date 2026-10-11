@@ -336,8 +336,13 @@ private struct DuoyiWidgetSnapshot {
 
     func actionURL(_ components: URLComponents?, at date: Date, calendar: Calendar) -> URL? {
         guard var components = components else { return nil }
-        guard components.scheme?.lowercased() == "duoyi",
-              components.host?.lowercased() == "action" else { return components.url }
+        guard components.scheme?.lowercased() == "duoyi" else { return components.url }
+        let entityHosts = Set(["todo", "habit", "course", "note", "diary", "goal",
+                               "anniversary", "countdown", "time-entry"])
+        let host = components.host?.lowercased() ?? ""
+        let isEntity = entityHosts.contains(host) &&
+            components.percentEncodedPath.split(separator: "/").first != nil
+        guard host == "action" || isEntity else { return components.url }
         // Flutter dispatches the first decoded path segment, including when
         // extra trailing segments are present. Decode after splitting so an
         // encoded slash does not create a different action.
@@ -349,11 +354,11 @@ private struct DuoyiWidgetSnapshot {
             $0.name == "text" && !($0.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         } ?? false
         // Opening quick entry and requesting refresh are recoverable navigation.
-        let mutates = ["complete_todo", "checkin_habit", "start_pomodoro"].contains(action) ||
+        let mutates = isEntity || ["complete_todo", "checkin_habit", "start_pomodoro"].contains(action) ||
             (action == "quick_todo" && hasQuickText)
         guard mutates else { return components.url }
         guard isFresh(at: date, calendar: calendar), let offset = utcOffsetMinutes else { return nil }
-        let bindingKeys = Set(["source", "widget_day", "widget_offset", "widget_account"])
+        let bindingKeys = Set(["source", "widget_day", "widget_offset", "widget_account", "widget_delivery"])
         var items = (components.queryItems ?? []).filter { !bindingKeys.contains($0.name) }
         items.append(contentsOf: [
             URLQueryItem(name: "source", value: "widget"),
@@ -1185,7 +1190,7 @@ private struct DuoyiTodoRow: Identifiable {
             return nil
         }
         let encodedId = todoId.addingPercentEncoding(withAllowedCharacters: duoyiPathSegmentAllowed) ?? todoId
-        return URL(string: "duoyi://todo/\(encodedId)")
+        return snapshot.actionURL(URLComponents(string: "duoyi://todo/\(encodedId)"))
     }
 
     var completeURL: URL? {

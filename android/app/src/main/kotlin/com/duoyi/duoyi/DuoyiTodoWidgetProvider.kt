@@ -237,7 +237,9 @@ open class DuoyiTodoWidgetProvider : DuoyiStyledWidgetProvider() {
             HomeWidgetLaunchIntent.getActivity(
                 context,
                 MainActivity::class.java,
-                Uri.parse("duoyi://todo/$encodedTodoId")
+                DuoyiWidgetSnapshot.entityUri(
+                    frame, Uri.parse("duoyi://todo/$encodedTodoId"), Uri.parse("duoyi://todo")
+                )
             )
         )
         views.setOnClickPendingIntent(

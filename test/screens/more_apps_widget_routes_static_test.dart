@@ -183,7 +183,12 @@ void main() {
         );
         continue;
       }
-      expect(source, contains('detailUri(prefs, key, fallback)'));
+      expect(
+        source,
+        contains(
+          'DuoyiWidgetSnapshot.entityUri(frame, detailUri(frame.prefs, key, fallback), Uri.parse(fallback))',
+        ),
+      );
       expect(
         source,
         contains('if (rawId.isBlank()) return Uri.parse(fallback)'),
@@ -207,7 +212,7 @@ void main() {
         expect(
           source,
           contains(
-            'itemIntent(context, prefs, "${entry.value.keyPrefix}${index}_id", "${entry.value.fallback}")',
+            'itemIntent(context, frame, "${entry.value.keyPrefix}${index}_id", "${entry.value.fallback}")',
           ),
           reason: '${entry.key} row $index should open detail or fallback page',
         );
@@ -269,7 +274,14 @@ void main() {
       main,
       contains("_drainPendingWidgetUris(context.read<PomodoroProvider>())"),
     );
-    expect(main, contains("debugPrint('[DeepLink] unknown duoyi host:"));
+    expect(main, contains("debugPrint('[DeepLink] unsupported entry')"));
+    final deepLinkDiagnostics = main
+        .split('\n')
+        .where((line) => line.contains("debugPrint('[DeepLink]"));
+    for (final diagnostic in deepLinkDiagnostics) {
+      expect(diagnostic, isNot(contains(r'$uri')));
+      expect(diagnostic, isNot(contains(r'${uri.')));
+    }
     expect(main, contains("state.navigateTo(6, allowHidden: true);"));
   });
 

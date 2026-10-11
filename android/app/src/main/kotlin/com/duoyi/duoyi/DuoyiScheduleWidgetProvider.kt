@@ -137,15 +137,15 @@ open class DuoyiScheduleWidgetProvider : DuoyiStyledWidgetProvider() {
                 views.setOnClickPendingIntent(R.id.widget_schedule_subtitle, openCalendar)
                 views.setOnClickPendingIntent(
                     R.id.widget_schedule_1,
-                    itemIntent(context, prefs, "schedule_highlight_1_id", "duoyi://calendar")
+                    itemIntent(context, frame, "schedule_highlight_1_id", "duoyi://calendar")
                 )
                 views.setOnClickPendingIntent(
                     R.id.widget_schedule_2,
-                    itemIntent(context, prefs, "schedule_highlight_2_id", "duoyi://calendar")
+                    itemIntent(context, frame, "schedule_highlight_2_id", "duoyi://calendar")
                 )
                 views.setOnClickPendingIntent(
                     R.id.widget_schedule_3,
-                    itemIntent(context, prefs, "schedule_highlight_3_id", "duoyi://calendar")
+                    itemIntent(context, frame, "schedule_highlight_3_id", "duoyi://calendar")
                 )
                 views.setOnClickPendingIntent(R.id.widget_schedule_nav_todo, openTodo)
                 views.setOnClickPendingIntent(R.id.widget_schedule_nav_habit, openHabit)
@@ -158,11 +158,11 @@ open class DuoyiScheduleWidgetProvider : DuoyiStyledWidgetProvider() {
     }
 
     companion object {
-        private fun itemIntent(context: Context, prefs: SharedPreferences, key: String, fallback: String) =
+        private fun itemIntent(context: Context, frame: DuoyiWidgetRenderFrame, key: String, fallback: String) =
             HomeWidgetLaunchIntent.getActivity(
                 context,
                 MainActivity::class.java,
-                detailUri(prefs, key, fallback)
+                DuoyiWidgetSnapshot.entityUri(frame, detailUri(frame.prefs, key, fallback), Uri.parse(fallback))
             )
 
         private fun detailUri(prefs: SharedPreferences, key: String, fallback: String): Uri {

@@ -122,15 +122,15 @@ open class DuoyiNoteWidgetProvider : DuoyiStyledWidgetProvider() {
                 views.setOnClickPendingIntent(R.id.widget_note_subtitle, openNote)
                 views.setOnClickPendingIntent(
                     R.id.widget_note_1,
-                    itemIntent(context, prefs, "note_highlight_1_id", "duoyi://note")
+                    itemIntent(context, frame, "note_highlight_1_id", "duoyi://note")
                 )
                 views.setOnClickPendingIntent(
                     R.id.widget_note_2,
-                    itemIntent(context, prefs, "note_highlight_2_id", "duoyi://note")
+                    itemIntent(context, frame, "note_highlight_2_id", "duoyi://note")
                 )
                 views.setOnClickPendingIntent(
                     R.id.widget_note_3,
-                    itemIntent(context, prefs, "note_highlight_3_id", "duoyi://note")
+                    itemIntent(context, frame, "note_highlight_3_id", "duoyi://note")
                 )
                 views.setOnClickPendingIntent(R.id.widget_note_nav_todo, openTodo)
                 views.setOnClickPendingIntent(R.id.widget_note_nav_habit, openHabit)
@@ -143,11 +143,11 @@ open class DuoyiNoteWidgetProvider : DuoyiStyledWidgetProvider() {
     }
 
     companion object {
-        private fun itemIntent(context: Context, prefs: SharedPreferences, key: String, fallback: String) =
+        private fun itemIntent(context: Context, frame: DuoyiWidgetRenderFrame, key: String, fallback: String) =
             HomeWidgetLaunchIntent.getActivity(
                 context,
                 MainActivity::class.java,
-                detailUri(prefs, key, fallback)
+                DuoyiWidgetSnapshot.entityUri(frame, detailUri(frame.prefs, key, fallback), Uri.parse(fallback))
             )
 
         private fun detailUri(prefs: SharedPreferences, key: String, fallback: String): Uri {

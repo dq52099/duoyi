@@ -141,7 +141,8 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
                     HomeWidgetLaunchIntent.getActivity(
                         context,
                         MainActivity::class.java,
-                        Uri.parse(item1?.target ?: "duoyi://anniversary")
+                        DuoyiWidgetSnapshot.entityUri(frame,
+                            Uri.parse(item1?.target ?: "duoyi://anniversary"), Uri.parse("duoyi://anniversary"))
                     )
                 )
                 views.setOnClickPendingIntent(
@@ -149,7 +150,8 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
                     HomeWidgetLaunchIntent.getActivity(
                         context,
                         MainActivity::class.java,
-                        Uri.parse(item2?.target ?: "duoyi://anniversary")
+                        DuoyiWidgetSnapshot.entityUri(frame,
+                            Uri.parse(item2?.target ?: "duoyi://anniversary"), Uri.parse("duoyi://anniversary"))
                     )
                 )
                 views.setOnClickPendingIntent(
@@ -157,7 +159,8 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
                     HomeWidgetLaunchIntent.getActivity(
                         context,
                         MainActivity::class.java,
-                        Uri.parse(item3?.target ?: "duoyi://anniversary")
+                        DuoyiWidgetSnapshot.entityUri(frame,
+                            Uri.parse(item3?.target ?: "duoyi://anniversary"), Uri.parse("duoyi://anniversary"))
                     )
                 )
                 views.setOnClickPendingIntent(R.id.widget_anniversary_nav_todo, openTodo)

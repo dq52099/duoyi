@@ -525,7 +525,7 @@ void main() {
       expect(
         actionURL,
         contains(
-          'let mutates = ["complete_todo", "checkin_habit", '
+          'let mutates = isEntity || ["complete_todo", "checkin_habit", '
           '"start_pomodoro"].contains(action)',
         ),
       );
@@ -560,7 +560,7 @@ void main() {
         actionURL,
         contains(
           'let bindingKeys = Set(["source", "widget_day", "widget_offset", '
-          '"widget_account"])',
+          '"widget_account", "widget_delivery"])',
         ),
       );
       expect(
@@ -941,7 +941,7 @@ void main() {
       expect(sceneDelegate, contains('willConnectTo session'));
       expect(
         sceneDelegate,
-        contains('connectionOptions.urlContexts.first?.url'),
+        contains('for context in connectionOptions.urlContexts'),
       );
       expect(sceneDelegate, contains('openURLContexts URLContexts'));
       expect(sceneDelegate, contains('DuoyiDeepLinkBridge.shared.handle'));

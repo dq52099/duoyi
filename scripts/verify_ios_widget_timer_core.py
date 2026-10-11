@@ -35,7 +35,7 @@ def _parser() -> argparse.ArgumentParser:
 def _resolve_executable(value: str) -> str | None:
     candidate = shutil.which(value)
     if candidate:
-        return candidate
+        return str(Path(candidate).resolve())
     path = Path(value).expanduser()
     if path.is_file() and os.access(path, os.X_OK):
         return str(path.resolve())
@@ -46,7 +46,13 @@ def _extract_core(source: str) -> str:
     return _extract_marked_core(source, BEGIN_MARKER, END_MARKER)
 
 
-def _extract_marked_core(source: str, begin_marker: str, end_marker: str) -> str:
+def _extract_marked_core(
+    source: str,
+    begin_marker: str,
+    end_marker: str,
+    *,
+    required_imports: tuple[str, ...] = ("import Foundation", "import CoreFoundation"),
+) -> str:
     start = source.find(begin_marker)
     end = source.find(end_marker)
     if start < 0 or end < 0 or end <= start:
@@ -60,7 +66,7 @@ def _extract_marked_core(source: str, begin_marker: str, end_marker: str) -> str
         raise ValueError(f"multiple {end_marker!r} markers")
     core = source[start + len(begin_marker) : end].strip()
     production_imports = source[:start]
-    for required_import in ("import Foundation", "import CoreFoundation"):
+    for required_import in required_imports:
         if required_import not in production_imports:
             raise ValueError(
                 f"production file is missing {required_import!r} before the core marker"

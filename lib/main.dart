@@ -62,6 +62,7 @@ import 'services/widget_publication_client.dart';
 import 'services/widget_publication_controller.dart';
 import 'services/widget_quick_todo_action.dart';
 import 'services/widget_action_scope.dart';
+import 'services/widget_link_dispatch.dart';
 import 'services/widget_action_message.dart';
 import 'services/reminder_issue_copy.dart';
 import 'services/ai_service.dart';
@@ -106,6 +107,7 @@ import 'widgets/surface_components.dart';
 final GlobalKey<MainShellState> mainShellKey = GlobalKey<MainShellState>();
 final List<Uri> _pendingWidgetUris = <Uri>[];
 final Map<String, DateTime> _recentWidgetActionUris = <String, DateTime>{};
+final Set<String> _handledWidgetDeliveries = <String>{};
 typedef _ReminderResyncQueue =
     Future<void> Function({Duration delay, String reason});
 
@@ -1055,6 +1057,7 @@ void main() async {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleWidgetUri(uri, pomodoroProvider);
     });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   void handleSharedText(String text) {
@@ -3938,11 +3941,16 @@ void _queuePendingWidgetUri(Uri uri, String reason) {
   )) {
     return;
   }
-  if (_pendingWidgetUris.length >= 20) {
-    _pendingWidgetUris.removeAt(0);
+  if (_pendingWidgetUris.length >= 20 &&
+      !HomeWidgetService.isReceivedLaunch(uri)) {
+    final disposable = _pendingWidgetUris.indexWhere(
+      (pending) => !HomeWidgetService.isReceivedLaunch(pending),
+    );
+    if (disposable < 0) return;
+    _pendingWidgetUris.removeAt(disposable);
   }
   _pendingWidgetUris.add(uri);
-  debugPrint('[DeepLink] queued $uri: $reason');
+  debugPrint('[DeepLink] queued launch: $reason');
 }
 
 void _drainPendingWidgetUris(PomodoroProvider pomodoro) {
@@ -3955,6 +3963,9 @@ void _drainPendingWidgetUris(PomodoroProvider pomodoro) {
 }
 
 bool _reserveWidgetActionUri(Uri uri) {
+  // The native bridge deduplicates deliveries. Separate user taps can share
+  // the same action URL and must each increment a count-based habit.
+  if (HomeWidgetService.isReceivedLaunch(uri)) return true;
   final now = DateTime.now();
   _recentWidgetActionUris.removeWhere(
     (_, at) => now.difference(at) > const Duration(seconds: 5),
@@ -3962,7 +3973,7 @@ bool _reserveWidgetActionUri(Uri uri) {
   final key = uri.toString();
   final last = _recentWidgetActionUris[key];
   if (last != null && now.difference(last) <= const Duration(seconds: 5)) {
-    debugPrint('[DeepLink] duplicate widget action skipped: $uri');
+    debugPrint('[DeepLink] duplicate widget action skipped');
     return false;
   }
   _recentWidgetActionUris[key] = now;
@@ -3978,25 +3989,11 @@ void _handleWidgetUri(
 }) {
   if (uri == null) return;
   if (uri.scheme != 'duoyi') return;
-  if (!dataReady &&
-      const {
-        'todo',
-        'habit',
-        'course',
-        'note',
-        'diary',
-        'goal',
-        'anniversary',
-        'calendar',
-        'action',
-      }.contains(uri.host)) {
-    unawaited(_dispatchWidgetUriAfterHydration(uri, pomodoro));
-    return;
-  }
 
   final state = mainShellKey.currentState;
   final ctx = mainShellKey.currentContext;
   if (ctx != null && _widgetAccountUnavailable(ctx.read<AuthProvider>())) {
+    unawaited(HomeWidgetService.acknowledgeLaunch(uri));
     return;
   }
   if (state == null && retry < 8) {
@@ -4009,11 +4006,43 @@ void _handleWidgetUri(
     if (allowQueue) {
       _queuePendingWidgetUri(uri, 'main shell not ready after $retry frames');
     } else {
-      debugPrint('[DeepLink] dropped $uri: main shell not ready');
+      debugPrint('[DeepLink] dropped launch: main shell not ready');
     }
     return;
   }
 
+  if (!dataReady && WidgetLinkDispatch.requiresHydration(uri)) {
+    unawaited(_dispatchWidgetUriAfterHydration(uri, pomodoro));
+    return;
+  }
+
+  final receivedLaunch = HomeWidgetService.isReceivedLaunch(uri);
+  final delivery = receivedLaunch
+      ? uri.queryParameters['widget_delivery']
+      : null;
+  if (receivedLaunch &&
+      delivery != null &&
+      !_handledWidgetDeliveries.add(delivery)) {
+    unawaited(HomeWidgetService.acknowledgeLaunch(uri));
+    return;
+  }
+  if (_handledWidgetDeliveries.length > 4096) {
+    _handledWidgetDeliveries.remove(_handledWidgetDeliveries.first);
+  }
+
+  try {
+    _routeHydratedWidgetUri(uri, pomodoro, state, ctx);
+  } finally {
+    unawaited(HomeWidgetService.acknowledgeLaunch(uri));
+  }
+}
+
+void _routeHydratedWidgetUri(
+  Uri uri,
+  PomodoroProvider pomodoro,
+  MainShellState state,
+  BuildContext? ctx,
+) {
   if (uri.host == 'tab') {
     final tab = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
     final idx = switch (tab) {
@@ -4161,10 +4190,6 @@ void _handleWidgetUri(
     ns.handleSnoozeDeepLink(uri);
   } else if (uri.host == 'action') {
     final action = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
-    if (uri.queryParameters['source'] == 'widget') {
-      unawaited(_handleBoundWidgetAction(uri));
-      return;
-    }
     if (!_reserveWidgetActionUri(uri)) return;
     if (action == 'start_pomodoro') {
       state.navigateTo(4, allowHidden: true);
@@ -4264,7 +4289,7 @@ void _handleWidgetUri(
       unawaited(_checkInHabitFromWidgetAction(habits, target));
     }
   } else {
-    debugPrint('[DeepLink] unknown duoyi host: ${uri.host} uri=$uri');
+    debugPrint('[DeepLink] unsupported entry');
     state.navigateTo(6, allowHidden: true);
     if (ctx != null) {
       _showWidgetActionFeedback(
@@ -4385,57 +4410,42 @@ Future<void> _dispatchWidgetUriAfterHydration(
   final generation = AccountLocalDataCleaner.accountDataGeneration;
   final scope = WidgetActionScope();
   try {
-    await _ensureHomeWidgetDataReady?.call();
-    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
-      return;
+    final result = await WidgetLinkDispatch.resolve(
+      uri,
+      hydrate: () async => await _ensureHomeWidgetDataReady?.call(),
+      validate: HomeWidgetService.isCurrentWidgetAction,
+      isCurrent: () {
+        if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          generation,
+        )) {
+          return false;
+        }
+        final context = mainShellKey.currentContext;
+        return context != null &&
+            context.mounted &&
+            !_widgetAccountUnavailable(context.read<AuthProvider>());
+      },
+    );
+    if (result.stale) {
+      _showWidgetActionFeedbackFromShell(
+        const WidgetActionMessage(WidgetActionNotice.staleContent),
+        isCurrentAction: () => scope.isCurrent,
+      );
     }
-    final context = mainShellKey.currentContext;
-    if (context != null &&
-        context.mounted &&
-        _widgetAccountUnavailable(context.read<AuthProvider>())) {
-      return;
+    if (result.uri != null) {
+      _handleWidgetUri(result.uri, pomodoro, dataReady: true);
     }
-    _handleWidgetUri(uri, pomodoro, dataReady: true);
+    // A rejected or section-only fallback consumes the original delivery too.
+    if (result.uri == null || result.stale) {
+      await HomeWidgetService.acknowledgeLaunch(uri);
+    }
   } catch (e, st) {
     debugPrint('[WidgetAction] data preparation failed: $e\n$st');
     _showWidgetActionFeedbackFromShell(
       const WidgetActionMessage(WidgetActionNotice.hydrationFailed),
       isCurrentAction: () => scope.isCurrent,
     );
-  }
-}
-
-Future<void> _handleBoundWidgetAction(Uri uri) async {
-  final generation = AccountLocalDataCleaner.accountDataGeneration;
-  final scope = WidgetActionScope();
-  try {
-    await _ensureHomeWidgetDataReady?.call();
-    final current = await HomeWidgetService.isCurrentWidgetAction(uri);
-    final context = mainShellKey.currentContext;
-    if (!current ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation) ||
-        context == null ||
-        !context.mounted ||
-        _widgetAccountUnavailable(context.read<AuthProvider>())) {
-      _showWidgetActionFeedbackFromShell(
-        const WidgetActionMessage(WidgetActionNotice.staleContent),
-        isCurrentAction: () => scope.isCurrent,
-      );
-      return;
-    }
-    final parameters = Map<String, String>.from(uri.queryParameters)
-      ..remove('source');
-    _handleWidgetUri(
-      uri.replace(queryParameters: parameters),
-      context.read<PomodoroProvider>(),
-      dataReady: true,
-    );
-  } catch (e, st) {
-    debugPrint('[WidgetAction] validation failed: $e\n$st');
-    _showWidgetActionFeedbackFromShell(
-      const WidgetActionMessage(WidgetActionNotice.validationFailed),
-      isCurrentAction: () => scope.isCurrent,
-    );
+    await HomeWidgetService.acknowledgeLaunch(uri);
   }
 }
 

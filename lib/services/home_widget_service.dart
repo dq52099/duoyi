@@ -11,6 +11,7 @@ import '../core/i18n.dart';
 import '../core/platform_info.dart';
 import '../providers/theme_provider.dart';
 import 'android_widget_manager.dart';
+import 'widget_launch_service.dart';
 
 /// Pushes today's stats and brand strings out to Android/iOS home widgets.
 /// 在 web / 其他平台下为空实现。
@@ -828,13 +829,29 @@ class HomeWidgetService {
 
   static Stream<Uri?> get widgetClickedStream {
     if (!_supported) return const Stream.empty();
+    if (PlatformInfo.isAndroid || PlatformInfo.isIOS) {
+      return WidgetLaunchService.instance.links;
+    }
     return HomeWidget.widgetClicked;
   }
 
   static Future<Uri?> initialLaunchUri() async {
     if (!_supported) return null;
+    // Native cold and hot launches drain from one queue. Reading a plugin's
+    // initial launch later can replay the latest tap or collapse early taps.
+    if (PlatformInfo.isAndroid || PlatformInfo.isIOS) return null;
     return HomeWidget.initiallyLaunchedFromHomeWidget();
   }
+
+  static Future<void> acknowledgeLaunch(Uri uri) async {
+    if (PlatformInfo.isAndroid || PlatformInfo.isIOS) {
+      await WidgetLaunchService.instance.acknowledge(uri);
+    }
+  }
+
+  static bool isReceivedLaunch(Uri uri) =>
+      (PlatformInfo.isAndroid || PlatformInfo.isIOS) &&
+      WidgetLaunchService.instance.ownsDelivery(uri);
 
   static String _pushSignature({
     required int todoCount,

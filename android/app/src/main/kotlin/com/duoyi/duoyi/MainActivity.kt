@@ -57,6 +57,9 @@ class MainActivity : FlutterActivity() {
     private var lastWidgetRestoreAtMillis = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // A recreation reuses the launch Intent. Its queued tap already lives
+        // in the process bridge; only a new Activity launch receives a new ID.
+        if (savedInstanceState == null) DuoyiWidgetLaunchBridge.capture(intent)
         super.onCreate(savedInstanceState)
         stopReminderRingtoneIfRequested(intent)
         pendingInitialDeepLink = duoyiDeepLinkFrom(intent)
@@ -76,8 +79,9 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
         setIntent(intent)
+        DuoyiWidgetLaunchBridge.capture(intent)
+        super.onNewIntent(intent)
         stopReminderRingtoneIfRequested(intent)
         val deepLink = duoyiDeepLinkFrom(intent)
         val link = oauthDeepLinkFrom(intent)
@@ -118,6 +122,9 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        if (!flutterEngine.plugins.has(DuoyiWidgetLaunchPlugin::class.java)) {
+            flutterEngine.plugins.add(DuoyiWidgetLaunchPlugin())
+        }
         if (!flutterEngine.plugins.has(DuoyiWidgetPublicationBridge::class.java)) {
             flutterEngine.plugins.add(DuoyiWidgetPublicationBridge())
         }
@@ -584,7 +591,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun duoyiDeepLinkFrom(intent: Intent?): String? {
-        // HomeWidget owns this launch in both cold-start and onNewIntent paths.
+        // The app-owned widget bridge handles cold and warm widget launches.
         if (intent?.action == HomeWidgetLaunchIntent.HOME_WIDGET_LAUNCH_ACTION) return null
         val uri = intent?.data ?: return null
         if (uri.scheme != "duoyi") return null

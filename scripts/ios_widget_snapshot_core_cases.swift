@@ -536,4 +536,87 @@ snapshotRunCase("nil components and legacy wrappers keep safe behavior") {
     )
 }
 
-print("PASS: all production-extracted snapshot core cases")
+snapshotRunCase("entity detail links bind the frozen snapshot and preserve entity ids") {
+    let calendar = snapshotGregorianCalendar(snapshotTimeZone("UTC"))
+    let date = snapshotLocalDate(2026, 4, 5, hour: 12, calendar: calendar)
+    let snapshot = DuoyiWidgetSnapshot(values: snapshotValues())
+    for host in ["todo", "habit", "course", "note", "diary", "goal", "anniversary", "countdown", "time-entry"] {
+        let components = snapshotComponents(host: host, path: "/same-account-id")
+        let url = snapshot.actionURL(components, at: date, calendar: calendar)
+        snapshotExpect(url != nil, "\(host) detail is available in a fresh snapshot")
+        snapshotExpect(url!.path == components.path, "\(host) preserves its entity path")
+        snapshotAssertBindings(url!, day: "2026-04-05", offset: 0, nonce: "snapshot-nonce", context: host)
+    }
+}
+
+snapshotRunCase("expired entity links cannot keep an interactive detail target") {
+    let calendar = snapshotGregorianCalendar(snapshotTimeZone("UTC"))
+    let date = snapshotLocalDate(2026, 4, 6, hour: 12, calendar: calendar)
+    let snapshot = DuoyiWidgetSnapshot(values: snapshotValues())
+    let components = snapshotComponents(host: "todo", path: "/colliding-id")
+    snapshotExpect(snapshot.actionURL(components, at: date, calendar: calendar) == nil,
+                   "expired entity snapshot returns no detail URL")
+    let section = snapshotComponents(host: "todo", path: "/")
+    snapshotExpect(snapshot.actionURL(section, at: date, calendar: calendar) == section.url,
+                   "expired widget can still navigate to its section")
+}
+
+snapshotRunCase("entity binding replaces duplicate snapshot keys and removes old delivery ids") {
+    let calendar = snapshotGregorianCalendar(snapshotTimeZone("UTC"))
+    let date = snapshotLocalDate(2026, 4, 5, hour: 12, calendar: calendar)
+    let snapshot = DuoyiWidgetSnapshot(values: snapshotValues())
+    let components = snapshotComponents(host: "note", path: "/note-id", queryItems: [
+        URLQueryItem(name: "source", value: "external"),
+        URLQueryItem(name: "source", value: "old-widget"),
+        URLQueryItem(name: "widget_account", value: "old-account"),
+        URLQueryItem(name: "widget_delivery", value: "old-tap"),
+        URLQueryItem(name: "title", value: "Authored text 用户")
+    ])
+    let url = snapshot.actionURL(components, at: date, calendar: calendar)!
+    snapshotAssertBindings(url, day: "2026-04-05", offset: 0, nonce: "snapshot-nonce", context: "note detail")
+    snapshotExpect(!snapshotQueryItems(url).contains { $0.name == "widget_delivery" }, "render cannot replay a delivery ID")
+    snapshotExpect(snapshotQueryItems(url).contains { $0.name == "title" && $0.value == "Authored text 用户" },
+                   "entity binding preserves authored query values")
+}
+
+snapshotRunCase("iOS launch buffer preserves rapid same-URL taps until terminal ACK") {
+    var sequence = 0
+    let buffer = DuoyiWidgetLaunchBuffer(nextID: { sequence += 1; return "tap-\(sequence)" })
+    let url = URL(string: "duoyi://action/checkin_habit?id=habit&source=widget&widget_account=account&widget_day=2026-04-05&widget_offset=0")!
+    let first = buffer.receive(url: url).delivery!
+    let second = buffer.receive(url: url).delivery!
+    snapshotExpect(first.id != second.id, "same-URL iOS taps have distinct IDs")
+    snapshotExpect(buffer.snapshot().map { $0.id } == [first.id, second.id], "rapid taps preserve order")
+    snapshotExpect(snapshotQueryItems(URL(string: first.uri)!).contains { $0.name == "widget_account" && $0.value == "account" },
+                   "receive-time stamping preserves snapshot account")
+    buffer.acknowledge(first.id)
+    buffer.acknowledge(first.id)
+    snapshotExpect(buffer.snapshot().map { $0.id } == [second.id], "ACK is idempotent and preserves other taps")
+}
+
+snapshotRunCase("iOS launch buffer keeps every received identical cold URL") {
+    let buffer = DuoyiWidgetLaunchBuffer()
+    let url = URL(string: "duoyi://todo/task?source=widget")!
+    snapshotExpect(buffer.receive(url: url).delivery != nil, "first cold delivery is buffered")
+    snapshotExpect(buffer.receive(url: url).delivery != nil, "a second received cold tap stays distinct")
+    snapshotExpect(buffer.snapshot().count == 2, "both cold taps survive before Dart subscribes")
+    snapshotExpect(Set(buffer.snapshot().map { $0.id }).count == 2, "each received cold URL has a unique ID")
+}
+
+snapshotRunCase("iOS buffer leaves plain links unchanged and refuses oversized or overflowing widget launches") {
+    let buffer = DuoyiWidgetLaunchBuffer(maxPending: 2)
+    let plain = URL(string: "duoyi://todo/task")!
+    snapshotExpect(!buffer.receive(url: plain).handled, "ordinary external link remains external")
+    let widget = URL(string: "duoyi://todo/task?source=widget&widget_delivery=forged")!
+    let first = buffer.receive(url: widget).delivery!
+    snapshotExpect(first.id != "forged", "incoming delivery ID is replaced")
+    _ = buffer.receive(url: widget)
+    snapshotExpect(buffer.receive(url: widget).delivery == nil, "newest overflow is refused")
+    snapshotExpect(buffer.snapshot().first?.id == first.id, "overflow preserves older pending tap")
+    buffer.acknowledge(first.id)
+    snapshotExpect(buffer.receive(url: widget).delivery != nil, "ACK makes room for the next tap")
+    let oversized = URL(string: "duoyi://todo/task?source=widget&text=" + String(repeating: "x", count: 8192))!
+    snapshotExpect(buffer.receive(url: oversized).delivery == nil, "oversized launch is rejected")
+}
+
+print("PASS: all production-extracted snapshot and launch core cases")

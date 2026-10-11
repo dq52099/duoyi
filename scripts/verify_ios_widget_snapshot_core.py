@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run source-extracted iOS widget snapshot core cases with Swift."""
+"""Run source-extracted iOS widget snapshot and launch buffer cases with Swift."""
 
 from __future__ import annotations
 
@@ -47,6 +47,7 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     production_path = root / "ios" / "DuoyiWidgets" / "DuoyiWidgets.swift"
     cases_path = Path(__file__).with_name("ios_widget_snapshot_core_cases.swift")
+    launch_path = root / "ios" / "Runner" / "AppDelegate.swift"
     if not production_path.is_file():
         print(f"FAIL: production Swift file not found: {production_path}", file=sys.stderr)
         return 2
@@ -60,6 +61,12 @@ def main() -> int:
             production,
             BEGIN_MARKER,
             END_MARKER,
+        )
+        launch_core = timer_runner._extract_marked_core(
+            launch_path.read_text(encoding="utf-8"),
+            "// BEGIN DUOYI_WIDGET_LAUNCH_CORE",
+            "// END DUOYI_WIDGET_LAUNCH_CORE",
+            required_imports=("import Foundation",),
         )
         cases = cases_path.read_text(encoding="utf-8")
     except (OSError, UnicodeError, ValueError) as error:
@@ -81,6 +88,8 @@ def main() -> int:
             "import Foundation\nimport CoreFoundation\n\n"
             + core
             + "\n\n"
+            + launch_core
+            + "\n\n"
             + cases,
             encoding="utf-8",
         )
@@ -91,16 +100,19 @@ def main() -> int:
 
     case_count = len(re.findall(r"^snapshotRunCase\(", cases, flags=re.MULTILINE))
     core_sha = hashlib.sha256(core.encode("utf-8")).hexdigest()
+    launch_sha = hashlib.sha256(launch_core.encode("utf-8")).hexdigest()
     fixture_sha = hashlib.sha256(cases.encode("utf-8")).hexdigest()
     merged_sha = hashlib.sha256(merged_path.read_bytes()).hexdigest()
 
     print(f"Swift: {swift}")
     print(f"Private output: {run_dir}")
     print(f"Production source: {production_path}")
+    print(f"Launch buffer source: {launch_path}")
     print(f"Fixture source: {cases_path}")
     print(f"Merged script: {merged_path}")
     print(f"Case count: {case_count}")
     print(f"Production core SHA-256: {core_sha}")
+    print(f"Production launch buffer SHA-256: {launch_sha}")
     print(f"Fixture SHA-256: {fixture_sha}")
     print(f"Merged script SHA-256: {merged_sha}")
 

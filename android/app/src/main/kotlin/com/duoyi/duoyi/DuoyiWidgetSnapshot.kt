@@ -98,12 +98,27 @@ object DuoyiWidgetSnapshot {
 
     fun actionUri(frame: DuoyiWidgetRenderFrame, action: Uri): Uri {
         require(frame.fresh) { "Widget action requires a fresh published session" }
-        return action.buildUpon()
+        val bindingKeys = setOf("source", "widget_day", "widget_offset", "widget_account", "widget_delivery")
+        val builder = action.buildUpon().clearQuery()
+        for (name in action.queryParameterNames) {
+            if (name in bindingKeys) continue
+            for (value in action.getQueryParameters(name)) builder.appendQueryParameter(name, value)
+        }
+        return builder
             .appendQueryParameter("source", "widget")
             .appendQueryParameter("widget_day", frame.core.day)
             .appendQueryParameter("widget_offset", frame.core.offset.toString())
             .appendQueryParameter("widget_account", frame.core.nonce)
             .build()
+    }
+
+    fun entityUri(frame: DuoyiWidgetRenderFrame, target: Uri, fallback: Uri): Uri {
+        val hosts = setOf("todo", "habit", "course", "note", "diary", "goal",
+            "anniversary", "countdown", "time-entry", "calendar", "focus", "tab")
+        if (!frame.fresh || target.scheme != "duoyi" || !target.isHierarchical || target.host !in hosts) {
+            return fallback
+        }
+        return runCatching { actionUri(frame, target) }.getOrDefault(fallback)
     }
 
     private fun finishRender(views: RemoteViews, frame: DuoyiWidgetRenderFrame) {

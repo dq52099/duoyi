@@ -11,8 +11,8 @@ class SceneDelegate: FlutterSceneDelegate {
     if let controller = window?.rootViewController as? FlutterViewController {
       DuoyiDeepLinkBridge.shared.attach(to: controller.binaryMessenger)
     }
-    if let url = connectionOptions.urlContexts.first?.url {
-      DuoyiDeepLinkBridge.shared.handle(url: url, initial: true)
+    for context in connectionOptions.urlContexts {
+      DuoyiDeepLinkBridge.shared.handle(url: context.url, initial: true)
     }
   }
 

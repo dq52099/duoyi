@@ -609,10 +609,6 @@ void main() {
 
       final hydrationSource = functionSource(
         'Future<void> _dispatchWidgetUriAfterHydration(',
-        '\nFuture<void> _handleBoundWidgetAction',
-      );
-      final boundSource = functionSource(
-        'Future<void> _handleBoundWidgetAction(',
         '\nFuture<void> _refreshWidgetsFromAction',
       );
       final refreshSource = functionSource(
@@ -622,11 +618,14 @@ void main() {
 
       for (final (name, function) in <(String, String)>[
         ('hydration', hydrationSource),
-        ('bound action', boundSource),
         ('refresh', refreshSource),
       ]) {
         final scope = function.indexOf('final scope = WidgetActionScope');
-        final firstAwait = function.indexOf('await _ensureHomeWidgetDataReady');
+        final firstAwait = function.indexOf(
+          name == 'hydration'
+              ? 'await WidgetLinkDispatch.resolve'
+              : 'await _ensureHomeWidgetDataReady',
+        );
         final guardedFeedback = function.indexOf(
           'isCurrentAction: () => scope.isCurrent',
         );
@@ -634,6 +633,10 @@ void main() {
         expect(firstAwait, greaterThan(scope), reason: name);
         expect(guardedFeedback, greaterThan(scope), reason: name);
       }
+      expect(
+        hydrationSource,
+        contains('validate: HomeWidgetService.isCurrentWidgetAction'),
+      );
       expect(
         refreshSource,
         contains(

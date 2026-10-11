@@ -126,7 +126,8 @@ open class DuoyiCalendarWidgetProvider : DuoyiStyledWidgetProvider() {
                     views.setTextViewText(R.id.widget_calendar_event_summary, summaryResult.summary)
                     views.setViewVisibility(R.id.widget_calendar_event_summary, View.VISIBLE)
                     val openEvent = HomeWidgetLaunchIntent.getActivity(
-                        context, MainActivity::class.java, Uri.parse(summaryResult.target)
+                        context, MainActivity::class.java,
+                        DuoyiWidgetSnapshot.entityUri(frame, Uri.parse(summaryResult.target), Uri.parse("duoyi://calendar"))
                     )
                     views.setOnClickPendingIntent(R.id.widget_calendar_event_summary, openEvent)
                 } else {
