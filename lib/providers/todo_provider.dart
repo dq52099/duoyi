@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/account_preference_writes.dart';
 import '../core/completion_visibility_policy.dart';
 import '../core/domain_event_bus.dart';
 import '../core/todo_kanban.dart';
@@ -95,6 +96,9 @@ class TodoProvider extends ChangeNotifier {
   Future<void>? _storageLoadFuture;
   Future<void> _storageWriteQueue = Future<void>.value();
   int _storageGeneration = 0;
+  int? _externalStorageUpdateGeneration;
+  int get _mutationStorageGeneration =>
+      _externalStorageUpdateGeneration ?? _storageGeneration;
   final Set<String> _inFlightCreateKeys = {};
   final Set<String> _inFlightTodoMutationIds = {};
   final Set<String> _inFlightUpdateTodoIds = {};
@@ -365,9 +369,92 @@ class TodoProvider extends ChangeNotifier {
     }
   }
 
+  /// Runs a backup restore or wipe between todo writes, then reads its result.
+  /// [operation] must only update storage; it must not call this provider.
+  Future<T> runExternalStorageUpdate<T>(
+    Future<T> Function() operation, {
+    int? expectedAccountDataGeneration,
+  }) {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    if (_disposed ||
+        _externalStorageUpdateGeneration != null ||
+        (expectedAccountDataGeneration != null &&
+            expectedAccountDataGeneration != accountGeneration)) {
+      return Future<T>.error(const AccountPreferenceWriteCanceled());
+    }
+    final previousLoad = _storageLoadFuture;
+    final previousWrite = _storageWriteQueue;
+    // Calls arriving while old writes drain belong to the restored snapshot.
+    // Old queued writes keep their original epoch until the gate body starts.
+    _externalStorageUpdateGeneration = generation + 1;
+    final result = previousWrite.then<T>((_) async {
+      await previousLoad;
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+        throw const AccountPreferenceWriteCanceled();
+      }
+      // Older async mutations must not save their pre-restore drafts later.
+      final replacementGeneration = ++_storageGeneration;
+      Object? operationError;
+      late T value;
+      try {
+        value = await operation();
+        if (!_isCurrentStorageGeneration(
+          replacementGeneration,
+          accountGeneration,
+        )) {
+          throw const AccountPreferenceWriteCanceled();
+        }
+      } catch (error) {
+        operationError = error;
+        rethrow;
+      } finally {
+        if (_isCurrentStorageGeneration(
+          replacementGeneration,
+          accountGeneration,
+        )) {
+          try {
+            // Calling public loadFromStorage here would wait for this gate.
+            await _loadFromStorage(replacementGeneration);
+          } catch (error, stack) {
+            _storageLoaded = false;
+            if (operationError == null) rethrow;
+            debugPrint(
+              '[TodoProvider] reload after external update failed: '
+              '$error\n$stack',
+            );
+          }
+        }
+      }
+      if (!_isCurrentStorageGeneration(
+        replacementGeneration,
+        accountGeneration,
+      )) {
+        throw const AccountPreferenceWriteCanceled();
+      }
+      return value;
+    });
+    // Reserve both tails before yielding, so later mutations wait for restore
+    // and hydration together. A failed restore must still release the tails.
+    final settled = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _storageLoadFuture = settled;
+    _storageWriteQueue = settled;
+    settled.then((_) {
+      if (identical(_storageLoadFuture, settled)) {
+        _storageLoadFuture = null;
+        _externalStorageUpdateGeneration = null;
+      }
+    });
+    return result;
+  }
+
   void resetLocalState() {
     if (_disposed) return;
     _storageGeneration++;
+    _externalStorageUpdateGeneration = null;
     _nextReminderSyncGeneration++;
     _todos = [];
     _storageLoaded = false;
@@ -506,10 +593,15 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _saveToStorage({bool Function()? canWrite}) async {
-    if (canWrite?.call() == false) return;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    bool isCurrent() =>
+        _isCurrentStorageGeneration(generation, accountGeneration) &&
+        canWrite?.call() != false;
+    if (!isCurrent()) return;
     if (!await _ensureStorageLoaded() || _disposed) return;
-    if (canWrite?.call() == false) return;
-    await _writeToStorage(canWrite: canWrite);
+    if (!isCurrent()) return;
+    await _writeToStorage(canWrite: isCurrent);
   }
 
   /// 将当前内存列表编码并写入存储，不做队列串联。
@@ -728,7 +820,7 @@ class TodoProvider extends ChangeNotifier {
     bool waitForReminderSync = true,
     bool reportReminderScheduleFailure = false,
   }) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!await _ensureStorageLoaded() || _disposed) return null;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
@@ -863,7 +955,7 @@ class TodoProvider extends ChangeNotifier {
     TodoItem updated, {
     required bool waitForReminderSync,
   }) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!await _ensureStorageLoaded() || _disposed) {
       return const TodoMutationResult.notSaved();
@@ -978,7 +1070,7 @@ class TodoProvider extends ChangeNotifier {
     Set<String> selected, {
     required bool recordCompletionTime,
   }) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!await _ensureStorageLoaded() || _disposed) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
@@ -1062,7 +1154,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<int> _reopenTodosLocked(Set<String> selected) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!await _ensureStorageLoaded() || _disposed) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
@@ -1130,7 +1222,7 @@ class TodoProvider extends ChangeNotifier {
     String id, {
     required bool recordCompletionTime,
   }) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!await _ensureStorageLoaded() || _disposed) return;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
@@ -1216,7 +1308,7 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<int> _deleteTodosLocked(Set<String> selected) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!await _ensureStorageLoaded() || _disposed) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
@@ -1406,7 +1498,7 @@ class TodoProvider extends ChangeNotifier {
     Set<String> selected,
     String target,
   ) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!await _ensureStorageLoaded() || _disposed) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
@@ -1482,11 +1574,11 @@ class TodoProvider extends ChangeNotifier {
     bool waitForReminderSync = true,
     int? expectedAccountDataGeneration,
   }) async {
-    final storageGeneration = _storageGeneration;
+    final storageGeneration = _mutationStorageGeneration;
     final accountGeneration =
         expectedAccountDataGeneration ??
         AccountLocalDataCleaner.accountDataGeneration;
-    if (!_isCurrentStorageGeneration(storageGeneration, accountGeneration)) {
+    if (!_canStartStorageMutation(storageGeneration, accountGeneration)) {
       return false;
     }
     final claimed = _claimInFlightKeys(
@@ -1840,11 +1932,11 @@ class TodoProvider extends ChangeNotifier {
     String title, {
     int? expectedAccountDataGeneration,
   }) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration =
         expectedAccountDataGeneration ??
         AccountLocalDataCleaner.accountDataGeneration;
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    if (!_canStartStorageMutation(generation, accountGeneration)) return;
     final cleanTitle = title.trim();
     if (cleanTitle.isEmpty) return;
     final key = '$todoId:${cleanTitle.toLowerCase()}';
@@ -1899,11 +1991,11 @@ class TodoProvider extends ChangeNotifier {
     String subtaskId, {
     int? expectedAccountDataGeneration,
   }) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration =
         expectedAccountDataGeneration ??
         AccountLocalDataCleaner.accountDataGeneration;
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    if (!_canStartStorageMutation(generation, accountGeneration)) return;
     final key = '$todoId:$subtaskId';
     if (!_inFlightSubtaskToggleKeys.add(key)) return;
     final mutationClaimed = _claimTodoMutationIds([
@@ -1968,11 +2060,11 @@ class TodoProvider extends ChangeNotifier {
     String todoId, {
     int? expectedAccountDataGeneration,
   }) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration =
         expectedAccountDataGeneration ??
         AccountLocalDataCleaner.accountDataGeneration;
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    if (!_canStartStorageMutation(generation, accountGeneration)) return;
     if (!await _ensureStorageLoaded() || _disposed) return;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final idx = _todos.indexWhere((t) => t.id == todoId);
@@ -2026,11 +2118,11 @@ class TodoProvider extends ChangeNotifier {
     String subtaskId, {
     int? expectedAccountDataGeneration,
   }) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration =
         expectedAccountDataGeneration ??
         AccountLocalDataCleaner.accountDataGeneration;
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    if (!_canStartStorageMutation(generation, accountGeneration)) return;
     final key = '$todoId:$subtaskId';
     if (!_inFlightSubtaskDeleteKeys.add(key)) return;
     final mutationClaimed = _claimTodoMutationIds([
@@ -2092,11 +2184,11 @@ class TodoProvider extends ChangeNotifier {
     List<String> orderedIds, {
     int? expectedAccountDataGeneration,
   }) async {
-    final generation = _storageGeneration;
+    final generation = _mutationStorageGeneration;
     final accountGeneration =
         expectedAccountDataGeneration ??
         AccountLocalDataCleaner.accountDataGeneration;
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+    if (!_canStartStorageMutation(generation, accountGeneration)) return;
     final key = '$todoId:${orderedIds.join('|')}';
     final claimed = _claimInFlightKeys(
       _inFlightSubtaskReorderKeys,
@@ -2376,6 +2468,12 @@ class TodoProvider extends ChangeNotifier {
           accountGeneration,
         );
   }
+
+  bool _canStartStorageMutation(int generation, int accountGeneration) =>
+      !_disposed &&
+      (generation == _storageGeneration ||
+          generation == _externalStorageUpdateGeneration) &&
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(accountGeneration);
 
   String _dateKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
