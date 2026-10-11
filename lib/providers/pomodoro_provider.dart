@@ -1491,11 +1491,16 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
         .toList();
   }
 
-  List<PomodoroSession> get todayFocusSessions {
-    final now = clock.now();
-    final start = DateTime(now.year, now.month, now.day);
-    return getSessionsForDateRange(start, now.add(const Duration(days: 1)));
-  }
+  List<PomodoroSession> get todayFocusSessions =>
+      focusSessionsForDate(clock.now());
+
+  List<PomodoroSession> focusSessionsForDate(DateTime date) => _sessions
+      .where(
+        (session) =>
+            session.type == PomodoroType.focus &&
+            _isSameDay(session.startTime, date),
+      )
+      .toList();
 
   int get totalFocusMinutes {
     return _sessions

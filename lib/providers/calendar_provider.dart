@@ -268,6 +268,7 @@ class CalendarProvider extends ChangeNotifier {
     List<CountdownItem>? countdowns,
     List<GoalItem>? goals,
     List<TimeEntry>? timeEntries,
+    DateTime? now,
   }) {
     final civilQuery = _tryCivilQuery(date);
     if (civilQuery == null) return List<CalendarEvent>.empty(growable: false);
@@ -283,6 +284,7 @@ class CalendarProvider extends ChangeNotifier {
       countdowns: countdowns,
       goals: goals,
       timeEntries: timeEntries,
+      now: now,
     );
     return [...events, ..._localEvents, ..._externalEvents]
         .where((event) => _eventOccursOnDate(event, civilQuery))

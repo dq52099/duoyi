@@ -16,12 +16,16 @@ class AnniversaryProvider extends ChangeNotifier {
   String? _lastReminderSyncIssue;
   VoidCallback? onLocalMutationPersisted;
 
-  List<Anniversary> get items {
+  List<Anniversary> get items => itemsAt(DateTime.now());
+
+  List<Anniversary> itemsAt(DateTime date) {
     final sorted = [..._items];
     sorted.sort((a, b) {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
-      return a.daysRemaining.compareTo(b.daysRemaining);
+      return a
+          .daysRemainingForDate(date)
+          .compareTo(b.daysRemainingForDate(date));
     });
     return List.unmodifiable(sorted);
   }

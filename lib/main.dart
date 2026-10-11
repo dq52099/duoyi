@@ -2879,16 +2879,20 @@ Future<bool> _pushHomeWidget(
   final top3 = activeToday.take(3).map((e) => e.title).toList();
   final top3Ids = activeToday.take(3).map((e) => e.id).toList();
   final activeHabits = h.habits
-      .where((habit) => habit.isActiveToday())
+      .where((habit) => habit.activeForDate(today))
       .toList();
-  final habitPercent = (h.todayCompletionRate * 100).round();
+  final habitPercent = activeHabits.isEmpty
+      ? 0
+      : (activeHabits.where((habit) => habit.isCompletedForDate(today)).length /
+                activeHabits.length *
+                100)
+            .round();
   final quickCheckHabits =
-      h.habits
+      activeHabits
           .where(
             (habit) =>
                 habit.kind == HabitKind.positive &&
-                habit.isActiveToday() &&
-                !habit.isCompletedToday(),
+                !habit.isCompletedForDate(today),
           )
           .toList()
         ..sort((a, b) {
@@ -2897,6 +2901,14 @@ Future<bool> _pushHomeWidget(
           return a.createdAt.compareTo(b.createdAt);
         });
   final quickCheckHabit = quickCheckHabits.firstOrNull;
+  final todayFocusSessions = p.focusSessionsForDate(today);
+  final pomodoroToday = todayFocusSessions.length;
+  final focusMinutesToday =
+      todayFocusSessions.fold<int>(
+        0,
+        (sum, session) => sum + session.durationSeconds,
+      ) ~/
+      60;
   final activeGoalItems = g.activeGoals.take(3).toList();
   final goalHighlights = activeGoalItems
       .map(
@@ -2906,35 +2918,42 @@ Future<bool> _pushHomeWidget(
   final goalHighlightIds = activeGoalItems
       .map((goal) => 'duoyi://goal/${Uri.encodeComponent(goal.id)}')
       .toList();
-  final anniversaryItems = a.items
-      .where((item) => item.daysRemaining >= 0)
+  final anniversaryItems = a
+      .itemsAt(today)
+      .map((item) => (item: item, days: item.daysRemainingForDate(today)))
+      .where((entry) => entry.days >= 0)
       .take(2)
       .toList();
   final anniversaryHighlights = anniversaryItems
       .map(
-        (item) =>
-            '${item.title} · ${I18n.tr('widget.days_remaining_prefix')}'
-            '${item.daysRemaining}${I18n.tr('widget.days_remaining_suffix')}',
+        (entry) =>
+            '${entry.item.title} · ${I18n.tr('widget.days_remaining_prefix')}'
+            '${entry.days}${I18n.tr('widget.days_remaining_suffix')}',
       )
       .toList();
   final anniversaryHighlightIds = anniversaryItems
-      .map((item) => 'duoyi://anniversary/${Uri.encodeComponent(item.id)}')
+      .map(
+        (entry) => 'duoyi://anniversary/${Uri.encodeComponent(entry.item.id)}',
+      )
       .toList();
   final memorialItems = a.memorials
-      .where((item) => item.daysRemaining >= 0)
+      .map((item) => (item: item, days: item.daysRemainingForDate(today)))
+      .where((entry) => entry.days >= 0)
       .take(3)
       .toList();
   final memorialHighlights = memorialItems
       .map(
-        (item) =>
-            '${item.title} · ${I18n.tr('widget.days_remaining_prefix')}'
-            '${item.daysRemaining}${I18n.tr('widget.days_remaining_suffix')}',
+        (entry) =>
+            '${entry.item.title} · ${I18n.tr('widget.days_remaining_prefix')}'
+            '${entry.days}${I18n.tr('widget.days_remaining_suffix')}',
       )
       .toList();
   final memorialHighlightIds = memorialItems
-      .map((item) => 'duoyi://anniversary/${Uri.encodeComponent(item.id)}')
+      .map(
+        (entry) => 'duoyi://anniversary/${Uri.encodeComponent(entry.item.id)}',
+      )
       .toList();
-  final courseItems = c.todayCourses.take(3).toList();
+  final courseItems = c.coursesOfDate(today).take(3).toList();
   final courseHighlights = courseItems.map((course) {
     final location = course.location.isEmpty ? '' : ' · ${course.location}';
     return '${I18n.tr('widget.course_section_prefix')}'
@@ -2997,13 +3016,8 @@ Future<bool> _pushHomeWidget(
     todoCount: activeTodayTodos,
     habitPercent: habitPercent,
     habitActiveCount: activeHabits.length,
-    pomodoroToday: p.sessionCountToday,
-    focusMinutesToday:
-        p.todayFocusSessions.fold<int>(
-          0,
-          (sum, session) => sum + session.durationSeconds,
-        ) ~/
-        60,
+    pomodoroToday: pomodoroToday,
+    focusMinutesToday: focusMinutesToday,
     strings: tp.brand.strings,
     todoTop3: top3,
     todoTop3Ids: top3Ids,
@@ -3022,9 +3036,9 @@ Future<bool> _pushHomeWidget(
     scheduleHighlights: scheduleHighlights,
     scheduleHighlightIds: scheduleHighlightIds,
     todayEventSummary: todayEventSummary,
-    focusSummary: p.sessionCountToday == 0
+    focusSummary: pomodoroToday == 0
         ? I18n.tr('widget.focus_not_started')
-        : "${I18n.tr('widget.focus_today_prefix')}${p.sessionCountToday}"
+        : "${I18n.tr('widget.focus_today_prefix')}$pomodoroToday"
               "${I18n.tr('widget.focus_today_suffix')}",
     habitSummary: activeHabits.isEmpty
         ? I18n.tr('widget.habit_none_today')
@@ -3073,13 +3087,14 @@ List<CalendarEvent> _homeWidgetEventsForToday(
       habits.habits,
       pomodoros.sessions,
       themeProvider.brand.theme.colorScheme,
-      anniversaries: anniversaries.items,
+      anniversaries: anniversaries.itemsAt(today),
       courses: courses.courses,
       courseSettings: courses.settings,
       diaries: diaries.entries,
       countdowns: countdowns.items,
       goals: goals.goals,
       timeEntries: timeAudit.entries,
+      now: today,
     ),
   );
 }

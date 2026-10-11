@@ -115,9 +115,10 @@ class Anniversary {
   }
 
   /// 下一次(含今天)的公历日期
-  DateTime get nextOccurrence {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+  DateTime get nextOccurrence => nextOccurrenceForDate(DateTime.now());
+
+  DateTime nextOccurrenceForDate(DateTime date) {
+    final today = DateTime(date.year, date.month, date.day);
 
     // 单次倒数：原始日期即下一次(过去就停留)
     if (type == AnniversaryType.normal) return originDate;
@@ -162,22 +163,24 @@ class Anniversary {
   }
 
   /// 距离下一次还剩多少天(过去返回负数)
-  int get daysRemaining {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final next = nextOccurrence;
-    final n = DateTime(next.year, next.month, next.day);
+  int get daysRemaining => daysRemainingForDate(DateTime.now());
+
+  int daysRemainingForDate(DateTime date) {
+    final today = DateTime.utc(date.year, date.month, date.day);
+    final next = nextOccurrenceForDate(date);
+    final n = DateTime.utc(next.year, next.month, next.day);
     return n.difference(today).inDays;
   }
 
   /// 已经过去多少年(生日/纪念日用)
-  int? get yearsPassed {
+  int? get yearsPassed => yearsPassedForDate(DateTime.now());
+
+  int? yearsPassedForDate(DateTime date) {
     if (type == AnniversaryType.normal) return null;
     if (ignoreYear) return null;
-    final now = DateTime.now();
-    int years = now.year - originDate.year;
-    final thisYearOccur = DateTime(now.year, originDate.month, originDate.day);
-    if (thisYearOccur.isAfter(DateTime(now.year, now.month, now.day))) {
+    int years = date.year - originDate.year;
+    final thisYearOccur = DateTime(date.year, originDate.month, originDate.day);
+    if (thisYearOccur.isAfter(DateTime(date.year, date.month, date.day))) {
       years -= 1;
     }
     return years < 0 ? 0 : years;

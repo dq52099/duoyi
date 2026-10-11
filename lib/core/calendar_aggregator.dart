@@ -36,8 +36,8 @@ class CalendarAggregator {
       ..._habitEvents(habits),
       ..._pomodoroEvents(pomodoroSessions),
       ..._timeEntryEvents(timeEntries ?? const <TimeEntry>[]),
-      ..._anniversaryEvents(anniversaries ?? const <Anniversary>[]),
-      ..._countdownEvents(countdowns ?? const <CountdownItem>[]),
+      ..._anniversaryEvents(anniversaries ?? const <Anniversary>[], reference),
+      ..._countdownEvents(countdowns ?? const <CountdownItem>[], reference),
       ..._courseEvents(courses ?? const <CourseItem>[], courseSettings),
       ..._diaryEvents(diaries ?? const <DiaryEntry>[]),
       ..._goalEvents(goals ?? const <GoalItem>[]),
@@ -270,46 +270,49 @@ class CalendarAggregator {
 
   static List<CalendarEvent> _anniversaryEvents(
     List<Anniversary> anniversaries,
-  ) {
-    return [
-      for (final a in anniversaries)
-        CalendarEvent(
-          id: 'anniversary_${a.id}',
-          title: a.title,
-          subtitle: a.yearsPassed == null
-              ? '还有 ${a.daysRemaining} 天'
-              : '第 ${a.yearsPassed! + 1} 次',
-          date: a.nextOccurrence,
-          type: CalendarEventType.anniversary,
-          color: Color(a.colorValue),
-          sourceId: a.id,
-          displayMetadata: AnniversaryDisplayMetadata(
-            yearsPassed: a.yearsPassed,
-            daysRemaining: a.daysRemaining,
-          ),
-        ),
-    ];
+    DateTime reference,
+  ) => [for (final a in anniversaries) _anniversaryEvent(a, reference)];
+
+  static CalendarEvent _anniversaryEvent(Anniversary a, DateTime reference) {
+    final yearsPassed = a.yearsPassedForDate(reference);
+    final daysRemaining = a.daysRemainingForDate(reference);
+    return CalendarEvent(
+      id: 'anniversary_${a.id}',
+      title: a.title,
+      subtitle: yearsPassed == null
+          ? '还有 $daysRemaining 天'
+          : '第 ${yearsPassed + 1} 次',
+      date: a.nextOccurrenceForDate(reference),
+      type: CalendarEventType.anniversary,
+      color: Color(a.colorValue),
+      sourceId: a.id,
+      displayMetadata: AnniversaryDisplayMetadata(
+        yearsPassed: yearsPassed,
+        daysRemaining: daysRemaining,
+      ),
+    );
   }
 
-  static List<CalendarEvent> _countdownEvents(List<CountdownItem> countdowns) {
-    return [
-      for (final c in countdowns)
-        CalendarEvent(
-          id: 'countdown_${c.id}',
-          title: c.title,
-          subtitle: c.daysRemaining >= 0
-              ? '还有 ${c.daysRemaining} 天'
-              : '已过 ${-c.daysRemaining} 天',
-          date: c.targetDate,
-          type: CalendarEventType.countdown,
-          color: const Color(0xFFE91E63),
-          isCompleted: c.daysRemaining < 0,
-          sourceId: c.id,
-          displayMetadata: CountdownDisplayMetadata(
-            daysRemaining: c.daysRemaining,
-          ),
-        ),
-    ];
+  static List<CalendarEvent> _countdownEvents(
+    List<CountdownItem> countdowns,
+    DateTime reference,
+  ) => [for (final c in countdowns) _countdownEvent(c, reference)];
+
+  static CalendarEvent _countdownEvent(CountdownItem c, DateTime reference) {
+    final daysRemaining = c.daysRemainingForDate(reference);
+    return CalendarEvent(
+      id: 'countdown_${c.id}',
+      title: c.title,
+      subtitle: daysRemaining >= 0
+          ? '还有 $daysRemaining 天'
+          : '已过 ${-daysRemaining} 天',
+      date: c.targetDate,
+      type: CalendarEventType.countdown,
+      color: const Color(0xFFE91E63),
+      isCompleted: daysRemaining < 0,
+      sourceId: c.id,
+      displayMetadata: CountdownDisplayMetadata(daysRemaining: daysRemaining),
+    );
   }
 
   static List<CalendarEvent> _courseEvents(

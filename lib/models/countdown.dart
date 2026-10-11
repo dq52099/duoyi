@@ -45,10 +45,15 @@ class CountdownItem {
     DateTime? updatedAt,
   }) : updatedAt = updatedAt ?? DateTime.now();
 
-  int get daysRemaining {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final target = DateTime(targetDate.year, targetDate.month, targetDate.day);
+  int get daysRemaining => daysRemainingForDate(DateTime.now());
+
+  int daysRemainingForDate(DateTime date) {
+    final today = DateTime.utc(date.year, date.month, date.day);
+    final target = DateTime.utc(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+    );
     return target.difference(today).inDays;
   }
 
