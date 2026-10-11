@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/i18n.dart';
+import 'time_entry.dart';
 
 enum CalendarEventType {
   event,
@@ -48,6 +49,7 @@ class CalendarEvent {
   final int conflictCount;
   final String? note;
   final DateTime? updatedAt;
+  final CalendarEventDisplayMetadata? displayMetadata;
 
   const CalendarEvent({
     required this.id,
@@ -67,6 +69,7 @@ class CalendarEvent {
     this.conflictCount = 0,
     this.note,
     this.updatedAt,
+    this.displayMetadata,
   });
 
   String get dateKey =>
@@ -98,6 +101,7 @@ class CalendarEvent {
     int? conflictCount,
     String? note,
     DateTime? updatedAt,
+    CalendarEventDisplayMetadata? displayMetadata,
   }) {
     return CalendarEvent(
       id: id ?? this.id,
@@ -117,6 +121,7 @@ class CalendarEvent {
       conflictCount: conflictCount ?? this.conflictCount,
       note: note ?? this.note,
       updatedAt: updatedAt ?? this.updatedAt,
+      displayMetadata: displayMetadata ?? this.displayMetadata,
     );
   }
 
@@ -178,4 +183,84 @@ class CalendarEvent {
       updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
     );
   }
+}
+
+sealed class CalendarEventDisplayMetadata {
+  const CalendarEventDisplayMetadata();
+}
+
+class PomodoroDisplayMetadata extends CalendarEventDisplayMetadata {
+  final int? fallbackMinutes;
+  final int durationSeconds;
+
+  const PomodoroDisplayMetadata({
+    int? fallbackMinutes,
+    int? minutes,
+    int? durationSeconds,
+  }) : fallbackMinutes = fallbackMinutes ?? minutes,
+       durationSeconds =
+           durationSeconds ?? (minutes != null ? minutes * 60 : 0);
+
+  bool get isFallbackTitle => fallbackMinutes != null;
+  int get minutes => fallbackMinutes ?? (durationSeconds ~/ 60);
+}
+
+class TodoDisplayMetadata extends CalendarEventDisplayMetadata {
+  final DateTime? dueDate;
+  const TodoDisplayMetadata({this.dueDate});
+}
+
+class TimeEntryDisplayMetadata extends CalendarEventDisplayMetadata {
+  final TimeEntryCategory category;
+  final int durationSeconds;
+
+  const TimeEntryDisplayMetadata({
+    required this.category,
+    required this.durationSeconds,
+  });
+}
+
+class AnniversaryDisplayMetadata extends CalendarEventDisplayMetadata {
+  final int? yearsPassed;
+  final int daysRemaining;
+  const AnniversaryDisplayMetadata({
+    required this.yearsPassed,
+    required this.daysRemaining,
+  });
+}
+
+class CountdownDisplayMetadata extends CalendarEventDisplayMetadata {
+  final int daysRemaining;
+  const CountdownDisplayMetadata({required this.daysRemaining});
+}
+
+class GoalDisplayMetadata extends CalendarEventDisplayMetadata {
+  final bool isAchieved;
+  final int progressPercent;
+  const GoalDisplayMetadata({
+    required this.isAchieved,
+    required this.progressPercent,
+  });
+}
+
+class CourseDisplayMetadata extends CalendarEventDisplayMetadata {
+  final int week;
+  final int startSection;
+  final int endSection;
+  final String timeRangeLabel;
+  final String location;
+  final String teacher;
+  const CourseDisplayMetadata({
+    required this.week,
+    required this.startSection,
+    required this.endSection,
+    required this.timeRangeLabel,
+    this.location = '',
+    this.teacher = '',
+  });
+}
+
+class DiaryDisplayMetadata extends CalendarEventDisplayMetadata {
+  final String moodKey;
+  const DiaryDisplayMetadata({required this.moodKey});
 }

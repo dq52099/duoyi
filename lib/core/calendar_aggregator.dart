@@ -71,6 +71,9 @@ class CalendarAggregator {
       projectName: t.listGroupName,
       workspaceId: t.workspaceId,
       time: anchor.time,
+      displayMetadata: t.dueDate == null
+          ? null
+          : TodoDisplayMetadata(dueDate: t.dueDate),
     );
   }
 
@@ -223,6 +226,13 @@ class CalendarAggregator {
             isCompleted: true,
             sourceId: s.id,
             time: TimeOfDay.fromDateTime(s.startTime),
+            displayMetadata: PomodoroDisplayMetadata(
+              fallbackMinutes:
+                  (s.taskName == null || s.taskName!.trim().isEmpty)
+                  ? s.durationSeconds ~/ 60
+                  : null,
+              durationSeconds: s.durationSeconds,
+            ),
           ),
     ];
   }
@@ -241,6 +251,10 @@ class CalendarAggregator {
           color: _timeEntryColor(entry.category),
           sourceId: entry.id,
           time: TimeOfDay.fromDateTime(entry.startAt),
+          displayMetadata: TimeEntryDisplayMetadata(
+            category: entry.category,
+            durationSeconds: entry.durationSeconds,
+          ),
         ),
     ];
   }
@@ -260,6 +274,10 @@ class CalendarAggregator {
           type: CalendarEventType.anniversary,
           color: Color(a.colorValue),
           sourceId: a.id,
+          displayMetadata: AnniversaryDisplayMetadata(
+            yearsPassed: a.yearsPassed,
+            daysRemaining: a.daysRemaining,
+          ),
         ),
     ];
   }
@@ -278,6 +296,9 @@ class CalendarAggregator {
           color: const Color(0xFFE91E63),
           isCompleted: c.daysRemaining < 0,
           sourceId: c.id,
+          displayMetadata: CountdownDisplayMetadata(
+            daysRemaining: c.daysRemaining,
+          ),
         ),
     ];
   }
@@ -309,6 +330,17 @@ class CalendarAggregator {
             color: Color(course.colorValue),
             sourceId: course.id,
             time: TimeOfDay.fromDateTime(start),
+            displayMetadata: CourseDisplayMetadata(
+              week: week,
+              startSection: course.startSection,
+              endSection: course.endSection,
+              timeRangeLabel: settings.sectionTimeRangeLabel(
+                course.startSection,
+                course.sectionCount,
+              ),
+              location: course.location,
+              teacher: course.teacher,
+            ),
           ),
         );
       }
@@ -327,6 +359,17 @@ class CalendarAggregator {
           type: CalendarEventType.diary,
           color: const Color(0xFF26A69A),
           sourceId: d.id,
+          displayMetadata: d.mood == null
+              ? null
+              : DiaryDisplayMetadata(
+                  moodKey: switch (d.mood!) {
+                    Mood.awesome => 'diary.mood.awesome',
+                    Mood.good => 'diary.mood.good',
+                    Mood.okay => 'diary.mood.okay',
+                    Mood.bad => 'diary.mood.bad',
+                    Mood.terrible => 'diary.mood.terrible',
+                  },
+                ),
         ),
     ];
   }
@@ -347,6 +390,10 @@ class CalendarAggregator {
             isCompleted: g.status == GoalStatus.achieved,
             sourceId: g.id,
             workspaceId: g.workspaceId,
+            displayMetadata: GoalDisplayMetadata(
+              isAchieved: g.status == GoalStatus.achieved,
+              progressPercent: (g.computedProgress * 100).round(),
+            ),
           ),
     ];
   }
