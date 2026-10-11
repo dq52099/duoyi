@@ -38,6 +38,16 @@ No new APK, version bump, push, release, or deployment was performed for these a
 
 There is still no real Android/iOS device or Xcode acceptance. Static resources, Kotlin/JVM runs, Flutter mounted tests, historical screenshots, readiness output, and a successful scoped analyzer cover different boundaries; none substitutes for the missing native platform evidence.
 
+## Shared Focus metadata continuation
+
+Accepted `0b446b2` supplies both languages for 28 built-in recordings and 29 selection options. Retained objects resolve display names on read; explicit locale rendering does not change global locale. Playback IDs/assets and persisted config/session/focus-link fields remain unchanged. The final six-suite run passed **43 tests**, with clean six-item analysis and matched hashes (`focus-sound-metadata-final-acceptance-20261011.md`).
+
+Accepted `a2b43cc` localizes only the provider's missing-custom-selection placeholder. Existing names remain literal even when they exactly match the Chinese placeholder. The provider/custom-contract/config run passed **13 tests** and two-item analysis; ten checks overlap the preceding batch. These totals must not be added as distinct tests. Stored/import missing-name defaults and custom file portability remain separate unresolved cases (`custom-sound-fallback-final-acceptance-20261011.md`).
+
+Goal editing and open Pomodoro picker/session-editor routes still need explicit locale invalidation and retained-draft acceptance under the frontend owner. Shared metadata now supplies correct names when read, without proving those routes repaint live. The already-localized TodoPriority, CalendarEventType, TimeEntrySource and TimeEntryCategory getters require no new repair (`focus-sound-metadata-contract-review-20261011.md`).
+
+The current AGY catalog was read again without a quota probe: latest Flash high is `gemini-3.8-flash-high`; Sonnet remains `claude-sonnet-4-6` without a separate high ID. The known unsupported high invocation does not establish Sonnet quota exhaustion or authorize frontend takeover. No build, version, push, APK or deployment was added by these metadata commits. The goal remains active and incomplete.
+
 ## Next actions and goal status
 
 1. Resolve root's pending permission to take over the remaining frontend work and the Statistics 120-minute continuation question. Neither elapsed time nor silence grants that authority.
