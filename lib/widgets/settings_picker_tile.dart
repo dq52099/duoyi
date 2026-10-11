@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
+import '../services/account_local_data_cleaner.dart';
 import 'surface_components.dart';
 
 /// Single option entry for [SettingsPickerTile].
@@ -37,7 +40,7 @@ class SettingsPickerTile<T> extends StatelessWidget {
   final T currentValue;
   final ValueGetter<String> displayLabelBuilder;
   final ValueGetter<List<SettingsPickerOption<T>>> optionsBuilder;
-  final ValueChanged<T> onSelected;
+  final FutureOr<void> Function(T) onSelected;
   final EdgeInsetsGeometry padding;
 
   const SettingsPickerTile({
@@ -55,6 +58,7 @@ class SettingsPickerTile<T> extends StatelessWidget {
   });
 
   Future<void> _showPicker(BuildContext context) async {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final picked = await showAppModalSheet<T>(
       context: context,
       builder: (sheetContext) => ValueListenableBuilder<AppLocale>(
@@ -164,8 +168,16 @@ class SettingsPickerTile<T> extends StatelessWidget {
     );
 
     if (!context.mounted) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      accountGeneration,
+    )) {
+      return;
+    }
     if (picked != null) {
-      onSelected(picked);
+      final result = onSelected(picked);
+      if (result is Future) {
+        await result;
+      }
     }
   }
 

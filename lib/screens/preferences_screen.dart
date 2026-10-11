@@ -210,6 +210,32 @@ class _PreferencesEntryTile extends StatelessWidget {
   }
 }
 
+Future<void> _handlePreferenceWrite(
+  BuildContext context,
+  Future<void> Function() write,
+) async {
+  final generation = AccountLocalDataCleaner.accountDataGeneration;
+  if (!context.mounted ||
+      !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+    return;
+  }
+  try {
+    await write();
+  } catch (_) {
+    if (context.mounted &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, _, _) => Text(SettingsUiCopy.saveFailed),
+          ),
+        ),
+      );
+    }
+  }
+}
+
 /// 纯本地的用户习惯，与服务器/管理员配置无关。
 class PersonalizationSettingsScreen extends StatefulWidget {
   const PersonalizationSettingsScreen({super.key});
@@ -381,9 +407,12 @@ class _PersonalizationSettingsScreenState
                         ),
                       ),
                     ],
-                    onSelected: (v) {
-                      context.read<PreferencesProvider>().setFirstDayOfWeek(v);
-                    },
+                    onSelected: (v) => _handlePreferenceWrite(
+                      context,
+                      () => context
+                          .read<PreferencesProvider>()
+                          .setFirstDayOfWeek(v),
+                    ),
                   ),
                   SettingsPickerTile<String>(
                     icon: Icons.date_range_outlined,
@@ -405,9 +434,12 @@ class _PersonalizationSettingsScreenState
                           subtitle: SettingsUiCopy.dateFormatSample(pattern),
                         ),
                     ],
-                    onSelected: (v) {
-                      context.read<PreferencesProvider>().setDateFormat(v);
-                    },
+                    onSelected: (v) => _handlePreferenceWrite(
+                      context,
+                      () => context
+                          .read<PreferencesProvider>()
+                          .setDateFormat(v),
+                    ),
                   ),
                   SettingsPickerTile<String>(
                     icon: Icons.public_outlined,
@@ -432,9 +464,12 @@ class _PersonalizationSettingsScreenState
                               : id,
                         ),
                     ],
-                    onSelected: (v) {
-                      context.read<PreferencesProvider>().setAppTimeZone(v);
-                    },
+                    onSelected: (v) => _handlePreferenceWrite(
+                      context,
+                      () => context
+                          .read<PreferencesProvider>()
+                          .setAppTimeZone(v),
+                    ),
                   ),
                   AppSwitchTile(
                     icon: Icons.brightness_2_outlined,
@@ -442,8 +477,12 @@ class _PersonalizationSettingsScreenState
                     value: p.showLunar,
                     title: I18n.tr('preferences.lunar.title'),
                     subtitle: I18n.tr('preferences.lunar.subtitle'),
-                    onChanged: (v) =>
-                        context.read<PreferencesProvider>().setShowLunar(v),
+                    onChanged: (v) => _handlePreferenceWrite(
+                      context,
+                      () => context
+                          .read<PreferencesProvider>()
+                          .setShowLunar(v),
+                    ),
                   ),
                 ],
               ),
@@ -472,9 +511,12 @@ class _PersonalizationSettingsScreenState
                             title: _tabLabel(tab),
                           ),
                     ],
-                    onSelected: (v) {
-                      context.read<PreferencesProvider>().setDefaultTab(v);
-                    },
+                    onSelected: (v) => _handlePreferenceWrite(
+                      context,
+                      () => context
+                          .read<PreferencesProvider>()
+                          .setDefaultTab(v),
+                    ),
                   ),
                   AppSwitchTile(
                     icon: Icons.add_circle_outline,
@@ -482,9 +524,12 @@ class _PersonalizationSettingsScreenState
                     value: p.quickCaptureFab,
                     title: I18n.tr('preferences.quick_capture.title'),
                     subtitle: I18n.tr('preferences.quick_capture.subtitle'),
-                    onChanged: (v) => context
-                        .read<PreferencesProvider>()
-                        .setQuickCaptureFab(v),
+                    onChanged: (v) => _handlePreferenceWrite(
+                      context,
+                      () => context
+                          .read<PreferencesProvider>()
+                          .setQuickCaptureFab(v),
+                    ),
                   ),
                   AppSwitchTile(
                     icon: Icons.done_all,
@@ -492,9 +537,12 @@ class _PersonalizationSettingsScreenState
                     value: p.showCompletedTodos,
                     title: I18n.tr('preferences.show_completed.title'),
                     subtitle: I18n.tr('preferences.show_completed.subtitle'),
-                    onChanged: (v) => context
-                        .read<PreferencesProvider>()
-                        .setShowCompletedTodos(v),
+                    onChanged: (v) => _handlePreferenceWrite(
+                      context,
+                      () => context
+                          .read<PreferencesProvider>()
+                          .setShowCompletedTodos(v),
+                    ),
                   ),
                   _SliderSetting(
                     icon: Icons.timer_outlined,
@@ -530,8 +578,12 @@ class _PersonalizationSettingsScreenState
                         value: p.haptic,
                         title: I18n.tr('preferences.haptic.title'),
                         subtitle: I18n.tr('preferences.haptic.subtitle'),
-                        onChanged: (v) =>
-                            context.read<PreferencesProvider>().setHaptic(v),
+                        onChanged: (v) => _handlePreferenceWrite(
+                          context,
+                          () => context
+                              .read<PreferencesProvider>()
+                              .setHaptic(v),
+                        ),
                       ),
                     ],
                   ),
@@ -918,9 +970,11 @@ class _NavConfigActions extends StatelessWidget {
         compactIconButton(
           tooltip: I18n.tr('action.move_up'),
           onPressed: canMoveUp
-              ? () => context.read<PreferencesProvider>().moveBottomNavTab(
-                  tab,
-                  -1,
+              ? () => _handlePreferenceWrite(
+                  context,
+                  () => context
+                      .read<PreferencesProvider>()
+                      .moveBottomNavTab(tab, -1),
                 )
               : null,
           icon: Icons.keyboard_arrow_up_rounded,
@@ -928,8 +982,12 @@ class _NavConfigActions extends StatelessWidget {
         compactIconButton(
           tooltip: I18n.tr('action.move_down'),
           onPressed: canMoveDown
-              ? () =>
-                    context.read<PreferencesProvider>().moveBottomNavTab(tab, 1)
+              ? () => _handlePreferenceWrite(
+                  context,
+                  () => context
+                      .read<PreferencesProvider>()
+                      .moveBottomNavTab(tab, 1),
+                )
               : null,
           icon: Icons.keyboard_arrow_down_rounded,
         ),
@@ -942,9 +1000,12 @@ class _NavConfigActions extends StatelessWidget {
               value: visible,
               onChanged: lockedVisible || reachedLimit
                   ? null
-                  : (v) => context
-                        .read<PreferencesProvider>()
-                        .setBottomNavVisible(tab, v),
+                  : (v) => _handlePreferenceWrite(
+                      context,
+                      () => context
+                          .read<PreferencesProvider>()
+                          .setBottomNavVisible(tab, v),
+                    ),
             ),
           ),
         ),
