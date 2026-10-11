@@ -2961,68 +2961,75 @@ class _FocusSocialLeaderboardSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sessions = context.read<PomodoroProvider>().sessions;
-    return Selector<FocusRoomProvider, _FocusSocialLeaderboardViewModel>(
-      selector: (_, rooms) => _FocusSocialLeaderboardViewModel(
-        rankings: [
-          rooms.socialRankingFor(
-            FocusLeaderboardScope.friends,
-            sessions,
-            currentUserName: displayName,
-          ),
-          rooms.socialRankingFor(
-            FocusLeaderboardScope.global,
-            sessions,
-            currentUserName: displayName,
-          ),
-        ],
-        friendLoading: rooms.friendLoading,
-        globalLoading: rooms.globalLoading,
-      ),
-      builder: (context, state, _) => AppSurfaceCard(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const AppSectionHeader(
-              title: '好友与全局排行榜',
-              subtitle: '按本周有效专注时长排名，异常时长会自动封顶',
-              padding: EdgeInsets.zero,
-            ),
-            const SizedBox(height: 12),
-            ...state.rankings.map(
-              (ranking) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _FocusSocialRankingCard(
-                  ranking: ranking,
-                  loading: ranking.scope == FocusLeaderboardScope.friends
-                      ? state.friendLoading
-                      : state.globalLoading,
-                  onRefresh: ranking.scope == FocusLeaderboardScope.friends
-                      ? () => context
-                            .read<FocusRoomProvider>()
-                            .loadFocusFriendsAndRanking(force: true)
-                      : () => context
-                            .read<FocusRoomProvider>()
-                            .loadGlobalRanking(force: true),
-                  onManage: ranking.scope == FocusLeaderboardScope.friends
-                      ? onManageFriends
-                      : null,
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) =>
+          Selector<FocusRoomProvider, _FocusSocialLeaderboardViewModel>(
+            selector: (_, rooms) => _FocusSocialLeaderboardViewModel(
+              locale: locale,
+              rankings: [
+                rooms.socialRankingFor(
+                  FocusLeaderboardScope.friends,
+                  sessions,
+                  currentUserName: displayName,
                 ),
+                rooms.socialRankingFor(
+                  FocusLeaderboardScope.global,
+                  sessions,
+                  currentUserName: displayName,
+                ),
+              ],
+              friendLoading: rooms.friendLoading,
+              globalLoading: rooms.globalLoading,
+            ),
+            builder: (context, state, _) => AppSurfaceCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const AppSectionHeader(
+                    title: '好友与全局排行榜',
+                    subtitle: '按本周有效专注时长排名，异常时长会自动封顶',
+                    padding: EdgeInsets.zero,
+                  ),
+                  const SizedBox(height: 12),
+                  ...state.rankings.map(
+                    (ranking) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _FocusSocialRankingCard(
+                        ranking: ranking,
+                        loading: ranking.scope == FocusLeaderboardScope.friends
+                            ? state.friendLoading
+                            : state.globalLoading,
+                        onRefresh: ranking.scope == FocusLeaderboardScope.friends
+                            ? () => context
+                                  .read<FocusRoomProvider>()
+                                  .loadFocusFriendsAndRanking(force: true)
+                            : () => context
+                                  .read<FocusRoomProvider>()
+                                  .loadGlobalRanking(force: true),
+                        onManage: ranking.scope == FocusLeaderboardScope.friends
+                            ? onManageFriends
+                            : null,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 }
 
 class _FocusSocialLeaderboardViewModel {
+  final AppLocale locale;
   final List<FocusSocialRanking> rankings;
   final bool friendLoading;
   final bool globalLoading;
 
   const _FocusSocialLeaderboardViewModel({
+    required this.locale,
     required this.rankings,
     required this.friendLoading,
     required this.globalLoading,
@@ -3031,17 +3038,19 @@ class _FocusSocialLeaderboardViewModel {
   @override
   bool operator ==(Object other) {
     return other is _FocusSocialLeaderboardViewModel &&
+        other.locale == locale &&
         other.friendLoading == friendLoading &&
         other.globalLoading == globalLoading &&
-        _focusSocialRankingsSignature(other.rankings) ==
-            _focusSocialRankingsSignature(rankings);
+        _focusSocialRankingsSignature(other.rankings, other.locale) ==
+            _focusSocialRankingsSignature(rankings, locale);
   }
 
   @override
   int get hashCode => Object.hash(
+    locale,
     friendLoading,
     globalLoading,
-    _focusSocialRankingsSignature(rankings),
+    _focusSocialRankingsSignature(rankings, locale),
   );
 }
 
@@ -3059,83 +3068,91 @@ class _JoinedFocusRoomRankingSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sessions = context.read<PomodoroProvider>().sessions;
-    return Selector<FocusRoomProvider, _JoinedFocusRoomRankingViewModel>(
-      selector: (_, rooms) => _JoinedFocusRoomRankingViewModel(
-        rankings: rooms.joinedRooms
-            .map(
-              (room) => rooms.effectiveRankingFor(
-                room.id,
-                sessions,
-                currentUserName: displayName,
-              ),
-            )
-            .toList(),
-        loading: rooms.remoteLoading,
-        realtimeActive: rooms.realtimeRankingsActive,
-        fallbackToLocal: rooms.fallbackToLocal || rooms.lastRemoteError != null,
-      ),
-      builder: (context, state, _) => AppSurfaceCard(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AppSectionHeader(
-              title: '专注自习室',
-              subtitle: activeRoomName == null
-                  ? '选择一个房间后，本轮专注会计入本周排行榜'
-                  : '当前本轮计入：$activeRoomName',
-              padding: EdgeInsets.zero,
-              actionLabel: '输入邀请码',
-              actionIcon: Icons.key_outlined,
-              onAction: onAcceptInvite,
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) =>
+          Selector<FocusRoomProvider, _JoinedFocusRoomRankingViewModel>(
+            selector: (_, rooms) => _JoinedFocusRoomRankingViewModel(
+              locale: locale,
+              rankings: rooms.joinedRooms
+                  .map(
+                    (room) => rooms.effectiveRankingFor(
+                      room.id,
+                      sessions,
+                      currentUserName: displayName,
+                    ),
+                  )
+                  .toList(),
+              loading: rooms.remoteLoading,
+              realtimeActive: rooms.realtimeRankingsActive,
+              fallbackToLocal:
+                  rooms.fallbackToLocal || rooms.lastRemoteError != null,
             ),
-            const SizedBox(height: 12),
-            if (state.loading)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: LinearProgressIndicator(minHeight: 2),
+            builder: (context, state, _) => AppSurfaceCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppSectionHeader(
+                    title: '专注自习室',
+                    subtitle: activeRoomName == null
+                        ? '选择一个房间后，本轮专注会计入本周排行榜'
+                        : '当前本轮计入：$activeRoomName',
+                    padding: EdgeInsets.zero,
+                    actionLabel: '输入邀请码',
+                    actionIcon: Icons.key_outlined,
+                    onAction: onAcceptInvite,
+                  ),
+                  const SizedBox(height: 12),
+                  if (state.loading)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: LinearProgressIndicator(minHeight: 2),
+                    ),
+                  if (state.realtimeActive && !state.fallbackToLocal)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: AppStatusBadge(
+                        label: '实时房间',
+                        color: Colors.green,
+                        icon: Icons.bolt_outlined,
+                      ),
+                    ),
+                  if (state.fallbackToLocal)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: AppStatusBadge(
+                        label: focusRoomRankingUnavailableMessage,
+                        color: Theme.of(context).colorScheme.outline,
+                        icon: Icons.cloud_off_outlined,
+                      ),
+                    ),
+                  if (state.rankings.isEmpty)
+                    const Text('还没有加入自习室')
+                  else
+                    ...state.rankings.map(
+                      (ranking) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _FocusRoomRankingCard(ranking: ranking),
+                      ),
+                    ),
+                ],
               ),
-            if (state.realtimeActive && !state.fallbackToLocal)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: AppStatusBadge(
-                  label: '实时房间',
-                  color: Colors.green,
-                  icon: Icons.bolt_outlined,
-                ),
-              ),
-            if (state.fallbackToLocal)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: AppStatusBadge(
-                  label: focusRoomRankingUnavailableMessage,
-                  color: Theme.of(context).colorScheme.outline,
-                  icon: Icons.cloud_off_outlined,
-                ),
-              ),
-            if (state.rankings.isEmpty)
-              const Text('还没有加入自习室')
-            else
-              ...state.rankings.map(
-                (ranking) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _FocusRoomRankingCard(ranking: ranking),
-                ),
-              ),
-          ],
-        ),
-      ),
+            ),
+          ),
     );
   }
 }
 
 class _JoinedFocusRoomRankingViewModel {
+  final AppLocale locale;
   final List<FocusRoomRanking> rankings;
   final bool loading;
   final bool realtimeActive;
   final bool fallbackToLocal;
 
   const _JoinedFocusRoomRankingViewModel({
+    required this.locale,
     required this.rankings,
     required this.loading,
     required this.realtimeActive,
@@ -3145,19 +3162,21 @@ class _JoinedFocusRoomRankingViewModel {
   @override
   bool operator ==(Object other) {
     return other is _JoinedFocusRoomRankingViewModel &&
+        other.locale == locale &&
         other.loading == loading &&
         other.realtimeActive == realtimeActive &&
         other.fallbackToLocal == fallbackToLocal &&
-        _focusRoomRankingsSignature(other.rankings) ==
-            _focusRoomRankingsSignature(rankings);
+        _focusRoomRankingsSignature(other.rankings, other.locale) ==
+            _focusRoomRankingsSignature(rankings, locale);
   }
 
   @override
   int get hashCode => Object.hash(
+    locale,
     loading,
     realtimeActive,
     fallbackToLocal,
-    _focusRoomRankingsSignature(rankings),
+    _focusRoomRankingsSignature(rankings, locale),
   );
 }
 
@@ -3298,26 +3317,34 @@ class _FocusRoomCatalogViewModel {
   );
 }
 
-String _focusSocialRankingsSignature(List<FocusSocialRanking> rankings) {
+String _focusSocialRankingsSignature(
+  List<FocusSocialRanking> rankings, [
+  AppLocale? locale,
+]) {
   return rankings
       .map((ranking) {
         return [
           ranking.scope.name,
+          locale?.name ?? '',
           ranking.remote,
           ranking.onlineCount,
           ranking.suspiciousEntryCount,
           ranking.updatedAt?.microsecondsSinceEpoch ?? 0,
-          _focusRankingEntriesSignature(ranking.entries),
+          _focusRankingEntriesSignature(ranking.entries, locale),
         ].join(',');
       })
       .join('|');
 }
 
-String _focusRoomRankingsSignature(List<FocusRoomRanking> rankings) {
+String _focusRoomRankingsSignature(
+  List<FocusRoomRanking> rankings, [
+  AppLocale? locale,
+]) {
   return rankings
       .map((ranking) {
         return [
           ranking.room.id,
+          locale?.name ?? '',
           ranking.room.name,
           ranking.room.accentColor,
           ranking.userWeeklySeconds,
@@ -3325,15 +3352,21 @@ String _focusRoomRankingsSignature(List<FocusRoomRanking> rankings) {
           ranking.remote,
           ranking.onlineCount,
           ranking.updatedAt?.microsecondsSinceEpoch ?? 0,
-          _focusRankingEntriesSignature(ranking.entries),
+          _focusRankingEntriesSignature(ranking.entries, locale),
         ].join(',');
       })
       .join('|');
 }
 
-String _focusRankingEntriesSignature(List<FocusRoomRankingEntry> entries) {
+String _focusRankingEntriesSignature(
+  List<FocusRoomRankingEntry> entries, [
+  AppLocale? locale,
+]) {
   return entries
       .map((entry) {
+        final reason = locale != null
+            ? entry.flagReasonFor(locale)
+            : entry.flagReason;
         return [
           entry.id,
           entry.name,
@@ -3344,7 +3377,7 @@ String _focusRankingEntriesSignature(List<FocusRoomRankingEntry> entries) {
           entry.online,
           entry.active,
           entry.flagged,
-          entry.flagReason ?? '',
+          reason ?? '',
           entry.lastSeenAt?.microsecondsSinceEpoch ?? 0,
         ].join(':');
       })
