@@ -117,3 +117,16 @@ pending under `task-model-routing`; no ownership is inferred from elapsed time
 or from the user's concurrency request.
 
 No new version, signed APK, push or deployment is claimed by this follow-up.
+
+## Service internationalization checkpoint
+
+This follow-up organized six useful streams: root service integration, Sol typed-contract review, Luna exporter implementation/acceptance, Luna updater-copy inventory/extraction, and two independent root regression processes for cloud-sync and widget/API feedback. Native capacity remains four including root; this is not a claim that six native subagents ran simultaneously. Finished streams were reused for compatibility regression, focused analysis, and evidence recording.
+
+Accepted commits are `ec27048` (sync/widget feedback), `100f9bc` (exports), and `729f2ea` (update notices and target-version asset selection). The distinct focused regression groups contain **190 passing checks**, with clean focused analyses and a source review of the changed contracts. Full commands and limits are recorded in the three service acceptance reports.
+
+Pending frontend source and its original regression fixtures remain outside these commits. Today compile errors, calendar opening-account capture, Todo draft account binding, and Backup async/cancellation/import sequencing still prevent whole-task acceptance. Under `task-model-routing`, AGY owns those frontend changes; Gemini quota was reported unavailable until roughly 06:00 UTC and Sonnet high invocation was rejected. The earlier takeover request remains unanswered. Neither the concurrency request nor elapsed time changes that ownership.
+
+No push, new signed APK, version bump, or deployment occurred in this follow-up. Physical Android/iOS acceptance and Xcode/WidgetKit compilation remain outstanding.
+
+
+The subsequent existing data-settings error suite passed **11** checks with clean two-file analysis. Only its test file changed; it confirms bilingual safe error framing and WebDAV classification, not the pending Backup page/account flows. See `data-settings-error-locale-acceptance-20261011.md`. The four independent focused groups now contain **201 distinct passing checks**.
