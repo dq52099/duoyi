@@ -1,3 +1,5 @@
+// ignore_for_file: depend_on_referenced_packages
+
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -9,6 +11,7 @@ import 'package:duoyi/providers/preferences_provider.dart';
 import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/screens/lock_settings_screen.dart';
 import 'package:duoyi/screens/preferences_screen.dart';
+import 'package:duoyi/services/account_local_data_cleaner.dart';
 import 'package:duoyi/widgets/settings_picker_tile.dart';
 import 'package:duoyi/widgets/surface_components.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +19,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import '../support/widget_polish_screenshot_font.dart';
 
@@ -29,6 +33,108 @@ void main() {
   tearDown(() {
     I18n.setLocale(AppLocale.zh);
     LocalTimezoneResolver.debugSystemTimeZoneReader = null;
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('sliders show drafts and persist only when released', (
+    tester,
+  ) async {
+    final store = _SliderPreferencesStore();
+    final fixture = await _pump(tester, _Page.display, preferencesStore: store);
+    final slider = find.byWidgetPredicate(
+      (widget) => widget is Slider && widget.min == 5,
+    );
+    await tester.scrollUntilVisible(
+      slider,
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final control = tester.widget<Slider>(slider);
+    control.onChangeStart!(25);
+    control.onChanged!(45);
+    await tester.pump();
+    expect(fixture.preferences.defaultPomodoroMinutes, 25);
+    expect(store.writes, isEmpty);
+    expect(tester.widget<Slider>(slider).value, 45);
+    expect(find.text('45 分'), findsOneWidget);
+    I18n.setLocale(AppLocale.en);
+    await tester.pump();
+    expect(find.text('45 min'), findsOneWidget);
+    tester.widget<Slider>(slider).onChangeEnd!(45);
+    await tester.pumpAndSettle();
+    expect(fixture.preferences.defaultPomodoroMinutes, 45);
+    expect(store.writes, [45]);
+    final increase = find.byTooltip(SettingsUiCopy.increaseValue).first;
+    await tester.ensureVisible(increase);
+    await tester.tap(increase);
+    await tester.pumpAndSettle();
+    expect(fixture.preferences.defaultPomodoroMinutes, 50);
+    expect(store.writes, [45, 50]);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('rejected slider save restores value and allows retry', (
+    tester,
+  ) async {
+    final store = _SliderPreferencesStore()..rejectNext = true;
+    final fixture = await _pump(tester, _Page.display, preferencesStore: store);
+    final slider = find.byWidgetPredicate(
+      (widget) => widget is Slider && widget.min == 5,
+    );
+    await tester.scrollUntilVisible(
+      slider,
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    tester.widget<Slider>(slider).onChanged!(60);
+    await tester.pump();
+    tester.widget<Slider>(slider).onChangeEnd!(60);
+    await tester.pumpAndSettle();
+    expect(fixture.preferences.defaultPomodoroMinutes, 25);
+    expect(tester.widget<Slider>(slider).value, 25);
+    expect(find.text(SettingsUiCopy.saveFailed), findsOneWidget);
+    I18n.setLocale(AppLocale.en);
+    await tester.pump();
+    expect(find.text(SettingsUiCopy.saveFailed), findsOneWidget);
+    tester.widget<Slider>(slider).onChanged!(60);
+    tester.widget<Slider>(slider).onChangeEnd!(60);
+    await tester.pumpAndSettle();
+    expect(fixture.preferences.defaultPomodoroMinutes, 60);
+    expect(store.writes, [60, 60]);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('account invalidation discards a pending slider gesture', (
+    tester,
+  ) async {
+    final store = _SliderPreferencesStore();
+    final fixture = await _pump(tester, _Page.display, preferencesStore: store);
+    final slider = find.byWidgetPredicate(
+      (widget) => widget is Slider && widget.min == 5,
+    );
+    await tester.scrollUntilVisible(
+      slider,
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final control = tester.widget<Slider>(slider);
+    control.onChangeStart!(25);
+    control.onChanged!(75);
+    await tester.pump();
+    AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+    fixture.preferences.resetLocalState();
+    I18n.setLocale(AppLocale.en);
+    await tester.pump();
+    tester.widget<Slider>(slider).onChangeEnd!(75);
+    await tester.pumpAndSettle();
+    expect(store.writes, isEmpty);
+    expect(fixture.preferences.defaultPomodoroMinutes, 25);
+    expect(tester.widget<Slider>(slider).value, 25);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   for (final locale in AppLocale.values) {
@@ -299,10 +405,14 @@ Future<_Fixture> _pump(
   AppLocale locale = AppLocale.zh,
   bool dark = false,
   bool pinEnabled = true,
+  SharedPreferencesStorePlatform? preferencesStore,
 }) async {
   SharedPreferences.setMockInitialValues({
     'active_brand': dark ? 'starRail' : 'defaultBrand',
   });
+  if (preferencesStore != null) {
+    SharedPreferencesStorePlatform.instance = preferencesStore;
+  }
   I18n.setLocale(locale);
   tester.view.physicalSize = const Size(320, 844);
   tester.view.devicePixelRatio = 1;
@@ -390,9 +500,28 @@ Future<void> _capture(WidgetTester tester, GlobalKey key, String name) async {
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
     final file = File(
-      'evidence/screenshots/settings-locale-20261006/$name.png',
+      '${Platform.environment['DUOYI_SETTINGS_SCREENSHOT_DIR'] ?? 'evidence/screenshots/settings-locale-20261006'}/$name.png',
     );
     file.parent.createSync(recursive: true);
     file.writeAsBytesSync(data!.buffer.asUint8List());
   });
+}
+
+class _SliderPreferencesStore extends InMemorySharedPreferencesStore {
+  _SliderPreferencesStore() : super.withData({});
+
+  bool rejectNext = false;
+  final writes = <int>[];
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (key == 'flutter.pref_default_pomodoro_minutes') {
+      writes.add(value as int);
+      if (rejectNext) {
+        rejectNext = false;
+        return false;
+      }
+    }
+    return super.setValue(valueType, key, value);
+  }
 }

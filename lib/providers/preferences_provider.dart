@@ -991,9 +991,18 @@ class PreferencesProvider extends ChangeNotifier {
   }
 
   Future<void> setDefaultPomodoroMinutes(int value) async {
-    _defaultPomodoroMinutes = value.clamp(5, 180);
+    final nextValue = value.clamp(5, 180);
+    if (nextValue == _defaultPomodoroMinutes) return;
+    final generation = _storageGeneration;
     final p = await SharedPreferences.getInstance();
-    await p.setInt(_kDefaultPomodoroMinutes, _defaultPomodoroMinutes);
+    if (generation != _storageGeneration) return;
+    final saved = await p.setInt(_kDefaultPomodoroMinutes, nextValue);
+    if (generation != _storageGeneration) return;
+    if (!saved) {
+      await p.reload();
+      throw StateError('Preference persistence failed');
+    }
+    _defaultPomodoroMinutes = nextValue;
     _notifyPreferenceKeys(const [_kDefaultPomodoroMinutes]);
   }
 
@@ -1026,9 +1035,18 @@ class PreferencesProvider extends ChangeNotifier {
   }
 
   Future<void> setAutoArchiveCompletedDays(int days) async {
-    _autoArchiveCompletedDays = days.clamp(0, 365);
+    final nextValue = days.clamp(0, 365);
+    if (nextValue == _autoArchiveCompletedDays) return;
+    final generation = _storageGeneration;
     final p = await SharedPreferences.getInstance();
-    await p.setInt(_kAutoArchiveCompletedDays, _autoArchiveCompletedDays);
+    if (generation != _storageGeneration) return;
+    final saved = await p.setInt(_kAutoArchiveCompletedDays, nextValue);
+    if (generation != _storageGeneration) return;
+    if (!saved) {
+      await p.reload();
+      throw StateError('Preference persistence failed');
+    }
+    _autoArchiveCompletedDays = nextValue;
     _notifyPreferenceKeys(const [_kAutoArchiveCompletedDays]);
   }
 

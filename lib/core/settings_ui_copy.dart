@@ -8,6 +8,12 @@ class SettingsUiCopy {
 
   static bool get isZh => I18n.current == AppLocale.zh;
 
+  static String get saveFailed =>
+      isZh ? '设置未保存，请重试。' : 'Could not save this setting. Please try again.';
+
+  static String get decreaseValue => isZh ? '减少' : 'Decrease';
+  static String get increaseValue => isZh ? '增加' : 'Increase';
+
   // Preferences Screen
   static String get preferencesTitle => I18n.tr('preferences.title');
 

@@ -6,6 +6,7 @@ import '../core/i18n.dart';
 import '../core/settings_ui_copy.dart';
 import '../core/web_target.dart';
 import '../providers/preferences_provider.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../widgets/settings_picker_tile.dart';
 import '../widgets/surface_components.dart';
 
@@ -499,16 +500,15 @@ class _PersonalizationSettingsScreenState
                     icon: Icons.timer_outlined,
                     color: Colors.red,
                     title: I18n.tr('preferences.pomodoro_length.title'),
-                    subtitle:
-                        '${p.defaultPomodoroMinutes} ${I18n.tr('unit.minute')}',
+                    subtitleBuilder: (value) =>
+                        '${value.round()} ${I18n.tr('unit.minute')}',
                     value: p.defaultPomodoroMinutes.toDouble(),
                     min: 5,
-                    max: 90,
-                    divisions: 17,
-                    label: '${p.defaultPomodoroMinutes} ${I18n.tr('unit.min')}',
-                    onChanged: (v) => context
-                        .read<PreferencesProvider>()
-                        .setDefaultPomodoroMinutes(v.toInt()),
+                    max: 180,
+                    divisions: 35,
+                    labelBuilder: (value) =>
+                        '${value.round()} ${I18n.tr('unit.min')}',
+                    onChanged: (v) => p.setDefaultPomodoroMinutes(v.round()),
                   ),
                 ],
               ),
@@ -548,19 +548,18 @@ class _PersonalizationSettingsScreenState
                           icon: Icons.inventory_2_outlined,
                           color: Colors.brown,
                           title: I18n.tr('preferences.auto_archive.title'),
-                          subtitle: p.autoArchiveCompletedDays == 0
+                          subtitleBuilder: (value) => value.round() == 0
                               ? I18n.tr('preferences.auto_archive.never')
-                              : '${p.autoArchiveCompletedDays} ${I18n.tr('preferences.auto_archive.after_days')}',
+                              : '${value.round()} ${I18n.tr('preferences.auto_archive.after_days')}',
                           value: p.autoArchiveCompletedDays.toDouble(),
                           min: 0,
-                          max: 30,
-                          divisions: 30,
-                          label: p.autoArchiveCompletedDays == 0
+                          max: 365,
+                          divisions: 365,
+                          labelBuilder: (value) => value.round() == 0
                               ? I18n.tr('action.off')
-                              : '${p.autoArchiveCompletedDays} ${I18n.tr('unit.day')}',
-                          onChanged: (v) => context
-                              .read<PreferencesProvider>()
-                              .setAutoArchiveCompletedDays(v.toInt()),
+                              : '${value.round()} ${I18n.tr('unit.day')}',
+                          onChanged: (v) =>
+                              p.setAutoArchiveCompletedDays(v.round()),
                         ),
                       ],
                     ),
@@ -954,30 +953,103 @@ class _NavConfigActions extends StatelessWidget {
   }
 }
 
-class _SliderSetting extends StatelessWidget {
+class _SliderSetting extends StatefulWidget {
   final IconData icon;
   final Color color;
   final String title;
-  final String subtitle;
+  final String Function(double) subtitleBuilder;
   final double value;
   final double min;
   final double max;
   final int divisions;
-  final String label;
-  final ValueChanged<double> onChanged;
+  final String Function(double) labelBuilder;
+  final Future<void> Function(double) onChanged;
 
   const _SliderSetting({
     required this.icon,
     required this.color,
     required this.title,
-    required this.subtitle,
+    required this.subtitleBuilder,
     required this.value,
     required this.min,
     required this.max,
     required this.divisions,
-    required this.label,
+    required this.labelBuilder,
     required this.onChanged,
   });
+
+  @override
+  State<_SliderSetting> createState() => _SliderSettingState();
+}
+
+class _SliderSettingState extends State<_SliderSetting> {
+  double? _draftValue;
+  bool _dragging = false;
+  bool _saving = false;
+  int _interactionGeneration = AccountLocalDataCleaner.accountDataGeneration;
+  int? _dragGeneration;
+
+  double get _value =>
+      (_draftValue ?? widget.value).clamp(widget.min, widget.max);
+
+  @override
+  void didUpdateWidget(covariant _SliderSetting oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_interactionGeneration !=
+        AccountLocalDataCleaner.accountDataGeneration) {
+      _interactionGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      _draftValue = null;
+      _dragging = false;
+      _saving = false;
+    } else if (!_dragging &&
+        !_saving &&
+        (oldWidget.value != widget.value ||
+            oldWidget.min != widget.min ||
+            oldWidget.max != widget.max)) {
+      _draftValue = null;
+    }
+  }
+
+  Future<void> _finishDrag(double value) async {
+    final generation = _dragGeneration ?? _interactionGeneration;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      setState(() {
+        _draftValue = null;
+        _dragging = false;
+        _dragGeneration = null;
+      });
+      return;
+    }
+    setState(() {
+      _dragging = false;
+      _dragGeneration = null;
+      _draftValue = value;
+      _saving = true;
+    });
+    try {
+      await widget.onChanged(value);
+    } catch (_) {
+      if (mounted &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: ValueListenableBuilder<AppLocale>(
+              valueListenable: I18n.localeListenable,
+              builder: (context, _, _) => Text(SettingsUiCopy.saveFailed),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        setState(() {
+          _saving = false;
+          _draftValue = null;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -993,10 +1065,10 @@ class _SliderSetting extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
+                  color: widget.color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: Icon(widget.icon, color: widget.color, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1004,7 +1076,7 @@ class _SliderSetting extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      widget.title,
                       softWrap: true,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: cs.onSurface,
@@ -1013,7 +1085,7 @@ class _SliderSetting extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
+                      widget.subtitleBuilder(_value),
                       softWrap: true,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.62),
@@ -1025,13 +1097,13 @@ class _SliderSetting extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
+                  color: widget.color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  label,
+                  widget.labelBuilder(_value),
                   style: TextStyle(
-                    color: color,
+                    color: widget.color,
                     fontSize: 11,
                     fontWeight: FontWeight.normal,
                   ),
@@ -1041,12 +1113,56 @@ class _SliderSetting extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            label: label,
-            onChanged: onChanged,
+            value: _value,
+            min: widget.min,
+            max: widget.max,
+            divisions: widget.divisions,
+            label: widget.labelBuilder(_value),
+            onChangeStart: (_) {
+              _dragGeneration = AccountLocalDataCleaner.accountDataGeneration;
+            },
+            onChanged: _saving
+                ? null
+                : (value) {
+                    if (_dragGeneration != null &&
+                        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                          _dragGeneration!,
+                        )) {
+                      return;
+                    }
+                    setState(() {
+                      _dragging = true;
+                      _draftValue = value;
+                    });
+                  },
+            onChangeEnd: _finishDrag,
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                tooltip: SettingsUiCopy.decreaseValue,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                onPressed: _saving || _dragging || _value <= widget.min
+                    ? null
+                    : () => _finishDrag(
+                        (_value - (widget.max - widget.min) / widget.divisions)
+                            .clamp(widget.min, widget.max),
+                      ),
+                icon: const Icon(Icons.remove_rounded, size: 20),
+              ),
+              IconButton(
+                tooltip: SettingsUiCopy.increaseValue,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                onPressed: _saving || _dragging || _value >= widget.max
+                    ? null
+                    : () => _finishDrag(
+                        (_value + (widget.max - widget.min) / widget.divisions)
+                            .clamp(widget.min, widget.max),
+                      ),
+                icon: const Icon(Icons.add_rounded, size: 20),
+              ),
+            ],
           ),
         ],
       ),

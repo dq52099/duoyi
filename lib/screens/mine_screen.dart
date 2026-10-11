@@ -97,8 +97,10 @@ class MineScreen extends StatelessWidget {
       valueListenable: I18n.localeListenable,
       builder: (context, locale, _) {
         final theme = context.select<ThemeProvider, _MineThemeSlice>(
-          (provider) =>
-              (strings: provider.brand.strings, brandName: provider.brand.name),
+          (provider) => (
+            strings: provider.brand.strings,
+            brandName: provider.brand.localizedName,
+          ),
         );
         final s = theme.strings;
         final cs = Theme.of(context).colorScheme;

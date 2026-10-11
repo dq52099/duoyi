@@ -42,19 +42,7 @@ class ThemePickerScreen extends StatelessWidget {
     }
   }
 
-  String _styleName(AppBrand brand) {
-    return switch (brand.style) {
-      BrandStyle.defaultBrand => I18n.tr('theme.style.default.name'),
-      BrandStyle.re0 => I18n.tr('theme.style.re0.name'),
-      BrandStyle.genshin => I18n.tr('theme.style.genshin.name'),
-      BrandStyle.starRail => I18n.tr('theme.style.star_rail.name'),
-      BrandStyle.wuthering => I18n.tr('theme.style.wuthering.name'),
-      BrandStyle.zzz => I18n.tr('theme.style.zzz.name'),
-      BrandStyle.yanyun => I18n.tr('theme.style.yanyun.name'),
-      BrandStyle.botw => I18n.tr('theme.style.botw.name'),
-      BrandStyle.liquidGlass => I18n.tr('theme.style.liquid_glass.name'),
-    };
-  }
+  String _styleName(AppBrand brand) => brand.localizedName;
 
   Widget _swatch(Color color) {
     return Container(

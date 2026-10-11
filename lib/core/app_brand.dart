@@ -48,6 +48,21 @@ class AppBrand {
   /// 主题文案按当前 locale 分发：zh 走中文常量，en 走英文变体骨架
   /// （brand_strings_en/）。getter 签名不变，消费端（brand.strings）零改动。
   BrandStrings get strings => BrandStrings.forLocale(style, I18n.current);
+
+  /// Localized display name for settings, profile and other user-facing UI.
+  /// Keep the stable [name] field for storage and diagnostics; never render it
+  /// directly when the interface language may be English.
+  String get localizedName => switch (style) {
+    BrandStyle.defaultBrand => I18n.tr('theme.style.default.name'),
+    BrandStyle.re0 => I18n.tr('theme.style.re0.name'),
+    BrandStyle.genshin => I18n.tr('theme.style.genshin.name'),
+    BrandStyle.starRail => I18n.tr('theme.style.star_rail.name'),
+    BrandStyle.wuthering => I18n.tr('theme.style.wuthering.name'),
+    BrandStyle.zzz => I18n.tr('theme.style.zzz.name'),
+    BrandStyle.yanyun => I18n.tr('theme.style.yanyun.name'),
+    BrandStyle.botw => I18n.tr('theme.style.botw.name'),
+    BrandStyle.liquidGlass => I18n.tr('theme.style.liquid_glass.name'),
+  };
 }
 
 TextTheme _textTheme({
