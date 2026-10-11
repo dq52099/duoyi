@@ -1,5 +1,11 @@
 # Focus ranking locale contract — 2026-10-11
 
+Root acceptance follow-up: the implemented model/provider behavior later
+passed 12 focused checks and 5 API compatibility checks; four-file analysis
+was clean. See `focus-ranking-locale-acceptance-20261011.md`. The review's
+pending regression statement below records its earlier checkpoint. The
+AGY-owned Pomodoro ranking repaint remains pending.
+
 Read-only bounded decision audit of `lib/models/focus_room.dart` and `lib/providers/focus_room_provider.dart`. No implementation or tests were changed or run.
 
 ## Source boundary

@@ -20,8 +20,45 @@ Sunday-dependent future-day check, exit 0. The skipped test is not a pass.
 Log: `.dart_tool/task-temp-20261011/accepted-widget-locale-layout-20261011.log`.
 This checks committed source, excluding pending frontend drafts.
 
-Swift display-core execution and local browser artifact verification are still
-being collected. No new signed APK, push, or deployment is claimed here.
+The production-extracted Swift display core passed 19 fixture cases, exit 0.
+The pure core and fixture hashes match the retained log. This does not compile
+SwiftUI/WidgetKit or prove device rendering. Log:
+`.dart_tool/task-temp-20261011/ios-widget-display-core-accepted-20261011.log`.
+
+Three bounded implementation batches are now committed:
+
+| Commit | Scope | Passing Dart checks |
+| --- | --- | --- |
+| `31e38dc` | Diary/note presentation, cached title provenance, stable CSV/AI contracts | 77 |
+| `49b2d2a` | Collaboration and focus penalty labels, stable wire/storage fields | 58 |
+| `b94117d` | Typed cached focus ranking explanations and literal server text | 17 |
+
+Together with the isolated committed-source widget regression, this round
+records **179 passing Dart checks** and **one skipped Dart check**, plus
+**19 passing Swift fixture cases**. These are bounded checks, not a full
+repository acceptance. Focused analysis is clean for all three implementation
+batches. Earlier compatibility commands containing two nonexistent paths were
+corrected and superseded by the accepted logs; they are not counted as passes.
+
+The accepted Web artifact remains pinned to `729f2ea`, predating those three
+commits and excluding pending frontend drafts. Static loopback requests and
+hashes were verified. Browser collection is complete: the strict offline run
+returned HTTP 200 but stayed blank after the harness blocked external CanvasKit
+JS/WASM; a controlled run supplied the byte-identical bundled CanvasKit files
+and produced one Flutter canvas at both mobile and desktop viewports. Roboto
+and Noto Sans SC requests remained blocked, leaving some numerals and Latin
+glyphs as tofu. The `en-US` screenshots show the title `Duoyi`, tofu for most
+English text, and some readable Chinese lunar/almanac and quote text. This is
+limited render evidence, not a complete visual pass or a locale-switch verdict.
+See `accepted-head-web-build-20261011.md` and
+`web-offline-font-audit-20261011.md` for screenshots, route details and limits.
+No new signed APK, push, or deployment is claimed.
+
+The concrete AGY page handoff is in `agy-frontend-resume-contract-20261011.md`.
+The previous Gemini quota resets no earlier than **06:00:25 UTC**; actual
+execution must confirm recovery after that time. Sonnet high was rejected by
+the CLI, which does not establish quota exhaustion. The pending frontend
+takeover request has no reply, so file ownership remains with AGY.
 
 Accepted standalone metadata commit: `2b12c26`
 (`fix(calendar): localize generated metadata and preserve authored text`).
