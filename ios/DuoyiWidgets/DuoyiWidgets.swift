@@ -1817,37 +1817,12 @@ private struct DuoyiWidgetView: View {
                     HStack(spacing: 0) {
                         ForEach(0..<7, id: \.self) { col in
                             let cell = grid.cells[week * 7 + col]
-                            Group {
-                                if cell.dayNumber > 0 {
-                                    let label = DuoyiWidgetDisplayCore.cellAccessibilityLabel(
-                                        year: grid.year,
-                                        month: grid.month,
-                                        day: cell.dayNumber,
-                                        isToday: cell.isToday,
-                                        isZh: entry.locale == .zh
-                                    )
-                                    if cell.isToday {
-                                        Text("\(cell.dayNumber)")
-                                            .font(.system(size: cellFontSize, weight: .medium))
-                                            .foregroundColor(entry.theme.onPrimary)
-                                            .frame(width: CGFloat(cellHeight), height: CGFloat(cellHeight))
-                                            .background(Circle().fill(entry.theme.primary))
-                                            .accessibilityLabel(label)
-                                            .accessibilityAddTraits(.isSelected)
-                                    } else {
-                                        Text("\(cell.dayNumber)")
-                                            .font(.system(size: cellFontSize, weight: .regular))
-                                            .foregroundColor(entry.theme.text)
-                                            .frame(width: CGFloat(cellHeight), height: CGFloat(cellHeight))
-                                            .accessibilityLabel(label)
-                                    }
-                                } else {
-                                    Text("")
-                                        .font(.system(size: cellFontSize))
-                                        .frame(width: CGFloat(cellHeight), height: CGFloat(cellHeight))
-                                        .accessibilityHidden(true)
-                                }
-                            }
+                            calendarDayCell(
+                                cell: cell,
+                                grid: grid,
+                                cellFontSize: cellFontSize,
+                                cellHeight: cellHeight
+                            )
                             .frame(maxWidth: .infinity)
                         }
                     }
@@ -1864,6 +1839,60 @@ private struct DuoyiWidgetView: View {
                         primary: false
                     )
                 }
+            }
+        }
+    }
+
+    private func calendarDayCell(
+        cell: DuoyiMonthCell,
+        grid: DuoyiMonthGridModel,
+        cellFontSize: CGFloat,
+        cellHeight: Double
+    ) -> some View {
+        Group {
+            if cell.dayNumber > 0 {
+                let label = DuoyiWidgetDisplayCore.cellAccessibilityLabel(
+                    year: grid.year,
+                    month: grid.month,
+                    day: cell.dayNumber,
+                    isToday: cell.isToday,
+                    isZh: entry.locale == .zh
+                )
+                let dayLabel = Group {
+                    if cell.isToday {
+                        Text("\(cell.dayNumber)")
+                            .font(.system(size: cellFontSize, weight: .medium))
+                            .foregroundColor(entry.theme.onPrimary)
+                            .frame(width: CGFloat(cellHeight), height: CGFloat(cellHeight))
+                            .background(Circle().fill(entry.theme.primary))
+                            .accessibilityLabel(label)
+                            .accessibilityAddTraits(.isSelected)
+                    } else {
+                        Text("\(cell.dayNumber)")
+                            .font(.system(size: cellFontSize, weight: .regular))
+                            .foregroundColor(entry.theme.text)
+                            .frame(width: CGFloat(cellHeight), height: CGFloat(cellHeight))
+                            .accessibilityLabel(label)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: CGFloat(cellHeight))
+                .contentShape(Rectangle())
+
+                if let target = cell.target,
+                   let url = entry.snapshot.actionURL(URLComponents(string: target)) {
+                    Link(destination: url) {
+                        dayLabel
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    dayLabel
+                }
+            } else {
+                Text("")
+                    .font(.system(size: cellFontSize))
+                    .frame(width: CGFloat(cellHeight), height: CGFloat(cellHeight))
+                    .accessibilityHidden(true)
             }
         }
     }

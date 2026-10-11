@@ -694,6 +694,150 @@ void main() {
       expect(swift, contains('formatMinutes'));
     });
 
+    test(
+      'calendarContent builds day cells from budgeted visible grid rows',
+      () {
+        final calendarContent = _swiftFunctionBlock(swift, 'calendarContent');
+
+        _expectSourceInOrder(calendarContent, [
+          'DuoyiWidgetDisplayCore.budgetedVisibleWeekRange(',
+          r'ForEach(visibleWeekRange, id: \.self) { week in',
+          'let cell = grid.cells[week * 7 + col]',
+          'calendarDayCell(',
+        ]);
+        expect(calendarContent, contains('grid: grid,'));
+        expect(calendarContent, contains('cell: cell,'));
+        expect(calendarContent, contains('cellHeight: cellHeight'));
+      },
+    );
+
+    test(
+      'calendarDayCell binds only real dates and preserves label, hit area, and fallback',
+      () {
+        final calendarDayCell = _swiftFunctionBlock(swift, 'calendarDayCell');
+        final blankStart = calendarDayCell.lastIndexOf('} else {');
+        expect(blankStart, greaterThanOrEqualTo(0));
+        final blankCellBranch = calendarDayCell.substring(blankStart);
+        final realDayBranch = calendarDayCell.substring(0, blankStart);
+        final targetStart = realDayBranch.indexOf(
+          'if let target = cell.target,',
+        );
+        expect(targetStart, greaterThanOrEqualTo(0));
+        final targetBranch = realDayBranch.substring(targetStart);
+
+        _expectSourceInOrder(calendarDayCell, [
+          'if cell.dayNumber > 0 {',
+          'DuoyiWidgetDisplayCore.cellAccessibilityLabel(',
+          'if let target = cell.target,',
+          'entry.snapshot.actionURL(URLComponents(string: target))',
+          'Link(destination: url) {',
+          '.buttonStyle(.plain)',
+          '} else {',
+          'dayLabel',
+          '} else {',
+          'Text("")',
+        ]);
+        expect(calendarDayCell, contains('year: grid.year'));
+        expect(calendarDayCell, contains('month: grid.month'));
+        expect(calendarDayCell, contains('day: cell.dayNumber'));
+        expect(calendarDayCell, contains('isToday: cell.isToday'));
+        expect(calendarDayCell, contains('isZh: entry.locale == .zh'));
+        expect(
+          calendarDayCell,
+          contains('.foregroundColor(entry.theme.onPrimary)'),
+        );
+        expect(calendarDayCell, contains('.foregroundColor(entry.theme.text)'));
+        expect(
+          calendarDayCell,
+          contains('.accessibilityAddTraits(.isSelected)'),
+        );
+        expect(
+          RegExp(r'\.accessibilityLabel\(label\)').allMatches(calendarDayCell),
+          hasLength(2),
+        );
+
+        _expectSourceInOrder(calendarDayCell, [
+          '.frame(maxWidth: .infinity)',
+          '.frame(height: CGFloat(cellHeight))',
+          '.contentShape(Rectangle())',
+          'if let target = cell.target,',
+        ]);
+        expect(
+          RegExp(
+            r'\.frame\s*\(\s*maxWidth\s*:[^)]*\bheight\s*:',
+          ).hasMatch(calendarDayCell),
+          isFalse,
+        );
+        expect(
+          calendarDayCell,
+          contains('.background(Circle().fill(entry.theme.primary))'),
+        );
+        expect(
+          RegExp(r'\.background\(').allMatches(calendarDayCell),
+          hasLength(1),
+        );
+
+        expect(
+          RegExp(r'\} else \{\s*dayLabel\s*\}').hasMatch(targetBranch),
+          isTrue,
+          reason:
+              'A missing target or stale snapshot URL must leave the real day as a plain label.',
+        );
+        _expectSourceInOrder(targetBranch, [
+          'Link(destination: url) {',
+          'dayLabel',
+          '.buttonStyle(.plain)',
+          '} else {',
+          'dayLabel',
+        ]);
+        expect(targetBranch, isNot(contains('.background(')));
+        expect(blankCellBranch, contains('Text("")'));
+        expect(blankCellBranch, contains('.accessibilityHidden(true)'));
+        expect(blankCellBranch, isNot(contains('cell.target')));
+        expect(blankCellBranch, isNot(contains('Link(')));
+      },
+    );
+
+    test(
+      'calendarBody keeps its section fallback and custom widget background',
+      () {
+        final calendarBody = _swiftPropertyBlock(swift, 'calendarBody');
+        final calendarConfig = _swiftConfigBlock(swift, 'calendarConfig');
+        final backgroundHelper = _swiftMemberBlock(
+          swift,
+          'func duoyiWidgetBackground(',
+          '\n    @ViewBuilder\n    private func duoyiWidgetBackgroundView(',
+        );
+        final backgroundView = _swiftFunctionBlock(
+          swift,
+          'duoyiWidgetBackgroundView',
+        );
+
+        _expectSourceInOrder(calendarBody, [
+          'header',
+          'calendarContent(availableHeight: Double(proxy.size.height))',
+          'footer',
+          '.duoyiWidgetBackground(entry.theme)',
+          '.widgetURL(URL(string: entry.config.deepLink))',
+        ]);
+        expect(calendarConfig, contains('deepLink: "duoyi://calendar"'));
+        expect(
+          backgroundHelper,
+          contains('self.containerBackground(for: .widget)'),
+        );
+        expect(backgroundHelper, contains('duoyiWidgetBackgroundView(theme)'));
+        expect(
+          backgroundHelper,
+          contains('self.background(duoyiWidgetBackgroundView(theme))'),
+        );
+        expect(backgroundView, contains('ContainerRelativeShape()'));
+        expect(
+          backgroundView,
+          contains('.strokeBorder(theme.border, lineWidth: theme.borderWidth)'),
+        );
+      },
+    );
+
     test('keeps WidgetKit text compatible with iOS 14 and clipped in bounds', () {
       final widgetTargetBlocks = RegExp(
         r'IPHONEOS_DEPLOYMENT_TARGET = 14\.0;',
@@ -1013,6 +1157,31 @@ String _swiftPropertyBlock(String swift, String propertyName) {
     throw StateError('Missing Swift property end for $propertyName');
   }
   return swift.substring(start, end);
+}
+
+String _swiftMemberBlock(String swift, String startMarker, String endMarker) {
+  final start = swift.indexOf(startMarker);
+  if (start < 0) {
+    throw StateError('Missing Swift member $startMarker');
+  }
+  final end = swift.indexOf(endMarker, start + startMarker.length);
+  if (end <= start) {
+    throw StateError('Missing Swift member boundary $endMarker');
+  }
+  return swift.substring(start, end);
+}
+
+void _expectSourceInOrder(String source, List<String> fragments) {
+  var previousIndex = -1;
+  for (final fragment in fragments) {
+    final index = source.indexOf(fragment, previousIndex + 1);
+    expect(
+      index,
+      greaterThan(previousIndex),
+      reason: 'Expected source fragment in order: $fragment',
+    );
+    previousIndex = index;
+  }
 }
 
 String _configName(String kind) {
