@@ -890,11 +890,17 @@ class TodoProvider extends ChangeNotifier {
           DomainEvent(type: DomainEventType.todoCompleted, objectId: next.id),
         );
       }
-      await _saveToStorage();
+      await _saveToStorage(
+        canWrite: () =>
+            _isCurrentStorageGeneration(generation, accountGeneration),
+      );
       if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
         return const TodoMutationResult.notSaved();
       }
       _notify();
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+        return const TodoMutationResult.notSaved();
+      }
       TodoReminderSyncResult? reminderSync;
       if (waitForReminderSync) {
         reminderSync = await _syncTodoRemindersNow();
@@ -1829,8 +1835,16 @@ class TodoProvider extends ChangeNotifier {
 
   // --- Subtask operations ---
 
-  Future<void> addSubtask(String todoId, String title) async {
-    if (_disposed) return;
+  Future<void> addSubtask(
+    String todoId,
+    String title, {
+    int? expectedAccountDataGeneration,
+  }) async {
+    final generation = _storageGeneration;
+    final accountGeneration =
+        expectedAccountDataGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final cleanTitle = title.trim();
     if (cleanTitle.isEmpty) return;
     final key = '$todoId:${cleanTitle.toLowerCase()}';
@@ -1846,27 +1860,50 @@ class TodoProvider extends ChangeNotifier {
       return;
     }
     try {
-      await _addSubtaskLocked(todoId, cleanTitle);
+      await _addSubtaskLocked(
+        todoId,
+        cleanTitle,
+        generation,
+        accountGeneration,
+      );
     } finally {
       _inFlightSubtaskCreateKeys.remove(key);
       _inFlightTodoMutationIds.removeAll(mutationClaimed);
     }
   }
 
-  Future<void> _addSubtaskLocked(String todoId, String title) async {
+  Future<void> _addSubtaskLocked(
+    String todoId,
+    String title,
+    int generation,
+    int accountGeneration,
+  ) async {
     if (!await _ensureStorageLoaded() || _disposed) return;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx != -1) {
       final newSubtasks = List<Subtask>.from(_todos[idx].subtasks)
         ..add(Subtask(title: title, sortOrder: _todos[idx].subtasks.length));
       _todos[idx] = _todos[idx].copyWith(subtasks: newSubtasks);
-      await _saveToStorage();
+      await _saveToStorage(
+        canWrite: () =>
+            _isCurrentStorageGeneration(generation, accountGeneration),
+      );
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
       _notify();
     }
   }
 
-  Future<void> toggleSubtask(String todoId, String subtaskId) async {
-    if (_disposed) return;
+  Future<void> toggleSubtask(
+    String todoId,
+    String subtaskId, {
+    int? expectedAccountDataGeneration,
+  }) async {
+    final generation = _storageGeneration;
+    final accountGeneration =
+        expectedAccountDataGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final key = '$todoId:$subtaskId';
     if (!_inFlightSubtaskToggleKeys.add(key)) return;
     final mutationClaimed = _claimTodoMutationIds([
@@ -1877,15 +1914,26 @@ class TodoProvider extends ChangeNotifier {
       return;
     }
     try {
-      await _toggleSubtaskLocked(todoId, subtaskId);
+      await _toggleSubtaskLocked(
+        todoId,
+        subtaskId,
+        generation,
+        accountGeneration,
+      );
     } finally {
       _inFlightSubtaskToggleKeys.remove(key);
       _inFlightTodoMutationIds.removeAll(mutationClaimed);
     }
   }
 
-  Future<void> _toggleSubtaskLocked(String todoId, String subtaskId) async {
+  Future<void> _toggleSubtaskLocked(
+    String todoId,
+    String subtaskId,
+    int generation,
+    int accountGeneration,
+  ) async {
     if (!await _ensureStorageLoaded() || _disposed) return;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx == -1) return;
     final todo = _todos[idx];
@@ -1903,7 +1951,10 @@ class TodoProvider extends ChangeNotifier {
             : subtask,
     ];
     _todos[idx] = todo.copyWith(subtasks: nextSubtasks);
-    await recomputeParent(todoId);
+    await recomputeParent(
+      todoId,
+      expectedAccountDataGeneration: accountGeneration,
+    );
   }
 
   /// 依据子任务聚合状态重算父任务完成态（P6/P7 不变式）。
@@ -1913,9 +1964,15 @@ class TodoProvider extends ChangeNotifier {
   ///   - 全部子任务完成且父任务未完成 → `isCompleted = true` 且 `completedAt = now`
   ///   - 存在未完成子任务且父任务已完成 → `isCompleted = false` 且 `completedAt = null`
   /// - 若 `autoToggleByChildren = false`：不触碰父任务完成态，仅持久化当前子任务变动。
-  Future<void> recomputeParent(String todoId) async {
+  Future<void> recomputeParent(
+    String todoId, {
+    int? expectedAccountDataGeneration,
+  }) async {
     final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final accountGeneration =
+        expectedAccountDataGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     if (!await _ensureStorageLoaded() || _disposed) return;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final idx = _todos.indexWhere((t) => t.id == todoId);
@@ -1938,9 +1995,13 @@ class TodoProvider extends ChangeNotifier {
       }
     }
 
-    await _saveToStorage();
+    await _saveToStorage(
+      canWrite: () =>
+          _isCurrentStorageGeneration(generation, accountGeneration),
+    );
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     _notify();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     if (completedTodo != null) {
       if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
       await _timeAudit?.recordTodoCompletion(
@@ -1960,8 +2021,16 @@ class TodoProvider extends ChangeNotifier {
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
   }
 
-  Future<void> deleteSubtask(String todoId, String subtaskId) async {
-    if (_disposed) return;
+  Future<void> deleteSubtask(
+    String todoId,
+    String subtaskId, {
+    int? expectedAccountDataGeneration,
+  }) async {
+    final generation = _storageGeneration;
+    final accountGeneration =
+        expectedAccountDataGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final key = '$todoId:$subtaskId';
     if (!_inFlightSubtaskDeleteKeys.add(key)) return;
     final mutationClaimed = _claimTodoMutationIds([
@@ -1972,15 +2041,26 @@ class TodoProvider extends ChangeNotifier {
       return;
     }
     try {
-      await _deleteSubtaskLocked(todoId, subtaskId);
+      await _deleteSubtaskLocked(
+        todoId,
+        subtaskId,
+        generation,
+        accountGeneration,
+      );
     } finally {
       _inFlightSubtaskDeleteKeys.remove(key);
       _inFlightTodoMutationIds.removeAll(mutationClaimed);
     }
   }
 
-  Future<void> _deleteSubtaskLocked(String todoId, String subtaskId) async {
+  Future<void> _deleteSubtaskLocked(
+    String todoId,
+    String subtaskId,
+    int generation,
+    int accountGeneration,
+  ) async {
     if (!await _ensureStorageLoaded() || _disposed) return;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx != -1) {
       final todo = _todos[idx];
@@ -1990,16 +2070,33 @@ class TodoProvider extends ChangeNotifier {
       if (nextSubtasks.length == todo.subtasks.length) return;
       _todos[idx] = todo.copyWith(subtasks: nextSubtasks);
       if (nextSubtasks.isEmpty) {
-        await _saveToStorage();
+        await _saveToStorage(
+          canWrite: () =>
+              _isCurrentStorageGeneration(generation, accountGeneration),
+        );
+        if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
         _notify();
+        if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
         await _syncTodoRemindersNow();
       } else {
-        await recomputeParent(todoId);
+        await recomputeParent(
+          todoId,
+          expectedAccountDataGeneration: accountGeneration,
+        );
       }
     }
   }
 
-  Future<void> reorderSubtasks(String todoId, List<String> orderedIds) async {
+  Future<void> reorderSubtasks(
+    String todoId,
+    List<String> orderedIds, {
+    int? expectedAccountDataGeneration,
+  }) async {
+    final generation = _storageGeneration;
+    final accountGeneration =
+        expectedAccountDataGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final key = '$todoId:${orderedIds.join('|')}';
     final claimed = _claimInFlightKeys(
       _inFlightSubtaskReorderKeys,
@@ -2017,7 +2114,12 @@ class TodoProvider extends ChangeNotifier {
       return;
     }
     try {
-      await _reorderSubtasksLocked(todoId, orderedIds);
+      await _reorderSubtasksLocked(
+        todoId,
+        orderedIds,
+        generation,
+        accountGeneration,
+      );
     } finally {
       _inFlightSubtaskReorderKeys.removeAll(claimed);
       _inFlightTodoMutationIds.removeAll(mutationClaimed);
@@ -2027,8 +2129,11 @@ class TodoProvider extends ChangeNotifier {
   Future<void> _reorderSubtasksLocked(
     String todoId,
     List<String> orderedIds,
+    int generation,
+    int accountGeneration,
   ) async {
     if (!await _ensureStorageLoaded() || _disposed) return;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     final idx = _todos.indexWhere((t) => t.id == todoId);
     if (idx == -1) return;
     final map = {for (final s in _todos[idx].subtasks) s.id: s};
@@ -2043,7 +2148,11 @@ class TodoProvider extends ChangeNotifier {
     }
     newList.addAll(map.values);
     _todos[idx] = _todos[idx].copyWith(subtasks: newList);
-    await _saveToStorage();
+    await _saveToStorage(
+      canWrite: () =>
+          _isCurrentStorageGeneration(generation, accountGeneration),
+    );
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     _notify();
   }
 
