@@ -20,6 +20,46 @@ Give each row one writer at a time. Read dependencies may overlap; writable file
 
 Tasks B and F touch separate calendar files; B may read the two row call sites but F owns any row changes. Task C may read callers in Today/Search but edits only Todo detail. Task H's root provenance dependency is now accepted in `b94117d`; its page repaint remains pending. Task I exclusively owns the shared `app_brand.dart` font configuration and font manifest/assets; it must not edit Today, calendar, or Pomodoro page files already assigned to other writers. AGY should report actual changed files and unresolved cases for each task; root reviews each diff before considering the page accepted. Do not discard or overwrite partial drafts from the canceled Today worker or quota-stopped Backup worker.
 
+## Habit domain follow-up
+
+Root's bounded Habit follow-up adds locale-aware progress/count labels and
+runtime `HabitDisplayMetadata`; raw calendar subtitles deliberately retain
+the legacy Chinese snapshot. Task F must route Habit subtitles through the
+same resolver as other generated metadata. The provider signature and
+notification comparison now cover flex-rule and authored-unit changes.
+These domain changes were accepted in `666c26c` with 89 model/core/provider
+checks and 5 export compatibility checks; focused analysis was clean. Consult
+`habit-model-locale-contract-20261011.md` and
+`habit-model-locale-acceptance-20261011.md` for bounded results and UI gaps.
+
+The page owner still needs a separate Habit scope in
+`lib/screens/habit_screen.dart`: localize the generated badge/check-in framing
+around `labelPrefix`, the insight section heading, form/reminder labels and
+feedback. A translated model prefix must not be joined to the remaining
+Chinese suffixes. Keep user names, units, notes and seed values literal.
+`HabitInsight` now has typed generated text and live locale getters; its
+scores, selection thresholds, ordering and authored-name snapshots stay
+stable. The Habit screen already listens for locale changes, but its page
+copy remains unaccepted.
+
+## Resume invocations after the recorded reset
+
+At 06:00:40 UTC root rediscovered the actual catalog. Latest comparable
+high Flash was `gemini-3.8-flash-high`; Sonnet remained the base
+`claude-sonnet-4-6` ID. Catalog visibility is not quota or task acceptance.
+Root dispatched bounded implement jobs using the explicit high Flash ID:
+
+| Scope | Job | Exclusive write files |
+| --- | --- | --- |
+| A Today | `implement-mv3f06fr-ad839c4b` | Today and proven shared-card overflow only |
+| I local font | `implement-mv3fca3s-af47feb4` | Font asset/license, pubspec and app_brand only |
+| B opening account | `implement-mv3fcav6-1fb4f0af` | Calendar event sheet only |
+
+At dispatch these were pending results, not accepted fixes or confirmed
+quota recovery. Root uses one background final-result wait per job, then
+reviews each scoped diff and runs existing regression checks. They do not
+own Git delivery. Other blocked page scopes remain with AGY.
+
 ## Existing evidence and exact regression commands for later acceptance
 
 The focused analyzer log `.dart_tool/task-temp-20261011/frontend-current-analysis.log` has **3 blocking `undefined_named_parameter` errors** at Today lines 326, 3244 and 3464; its other **32 infos** include 26 Backup async-context infos, three ringtone infos, and three Today infos. The committed-source `desktop-web-shell-head-verify.log` has **7 passes, 4 failures** at the four 1120/1400 × 1.6/2.0 habit cases; it predates acceptance of the pending Today draft. `calendar-ui-final-tests.log` has **24 passes, 1 failure** in `sheet opening keeps the generation from before its route builds` (`test/widgets/calendar_event_sheet_locale_test.dart:248`, expected disabled Delete, got enabled). `todo-detail-account-origin-baseline.log` has **0 passes, 1 failure**: the new-account title became the old-account draft. Existing Todo detail checks had 29 passes, and Backup dialog baseline had 5 passes; those passing groups do not cover the failed account boundaries. Ringtone's final copy/service batch had 33 passes, but `calendar-ringtone-final-analysis.log` still records the three async-context infos. These counts are historical baselines, not results against a resumed AGY patch.
