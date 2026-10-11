@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:duoyi/core/account_preference_writes.dart';
 import 'package:duoyi/core/brand_strings.dart';
 import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/providers/theme_provider.dart';
@@ -18,6 +19,8 @@ void main() {
   late int refreshes;
   var failRefresh = false;
   String? failSave;
+  String? nullSave;
+  var saveHoldKey = 'todo_top3_1';
   Completer<void>? saveEntered;
   Completer<void>? saveRelease;
   Completer<void>? refreshEntered;
@@ -48,6 +51,8 @@ void main() {
     refreshes = 0;
     failRefresh = false;
     failSave = null;
+    nullSave = null;
+    saveHoldKey = 'todo_top3_1';
     saveEntered = null;
     saveRelease = null;
     refreshEntered = null;
@@ -63,12 +68,13 @@ void main() {
           return stored[args!['id']];
         case 'saveWidgetData':
           final key = args!['id'] as String;
-          if (key == 'todo_top3_1' && saveRelease != null) {
+          if (key == saveHoldKey && saveRelease != null) {
             saveEntered!.complete();
             await saveRelease!.future;
             saveRelease = null;
           }
           if (key == failSave) return false;
+          if (key == nullSave) return null;
           stored[key] = args['data'];
           writes.add(key);
           return true;
@@ -96,6 +102,110 @@ void main() {
     messenger.setMockMethodCallHandler(channel, null);
     HomeWidgetService.supportedForTesting = null;
   });
+
+  test(
+    'display mode rejects failed native storage without refreshing',
+    () async {
+      failSave = 'widget_display_mode';
+      expect(await HomeWidgetService.setDisplayMode('detailed'), isFalse);
+      expect(stored.containsKey('widget_display_mode'), isFalse);
+      expect(refreshes, 0);
+    },
+  );
+
+  test('display mode publications serialize later choices', () async {
+    saveHoldKey = 'widget_display_mode';
+    saveEntered = Completer<void>();
+    saveRelease = Completer<void>();
+    final first = HomeWidgetService.setDisplayMode('compact');
+    await saveEntered!.future;
+    final later = HomeWidgetService.setDisplayMode('detailed');
+    saveRelease!.complete();
+    expect(await first, isTrue);
+    expect(await later, isTrue);
+    expect(stored['widget_display_mode'], 'detailed');
+    expect(writes.where((key) => key == 'widget_display_mode'), hasLength(2));
+  });
+
+  test('display mode requires an acknowledged native write', () async {
+    nullSave = 'widget_display_mode';
+    expect(await HomeWidgetService.setDisplayMode('detailed'), isFalse);
+    expect(stored.containsKey('widget_display_mode'), isFalse);
+    expect(refreshes, 0);
+  });
+
+  test(
+    'account clear drains in-flight modes and rejects old queued modes',
+    () async {
+      saveHoldKey = 'widget_display_mode';
+      saveEntered = Completer<void>();
+      saveRelease = Completer<void>();
+      final old = HomeWidgetService.setDisplayMode('compact');
+      await saveEntered!.future;
+      final queuedOld = HomeWidgetService.setDisplayMode('standard');
+      HomeWidgetService.resetAccountCache();
+      var clearFinished = false;
+      final clear = HomeWidgetService.waitForAccountClear().then((result) {
+        clearFinished = true;
+        return result;
+      });
+      final current = HomeWidgetService.setDisplayMode('detailed');
+      await Future<void>.delayed(Duration.zero);
+      expect(clearFinished, isFalse);
+      saveRelease!.complete();
+      expect(await old, isFalse);
+      expect(await queuedOld, isFalse);
+      expect(await clear, isTrue);
+      expect(await current, isTrue);
+      expect(stored['widget_display_mode'], 'detailed');
+      expect(writes.where((key) => key == 'widget_display_mode'), hasLength(2));
+    },
+  );
+
+  test('captured old epochs cannot publish after account clearing', () async {
+    final epoch = HomeWidgetService.accountGeneration;
+    final preferenceEpoch = AccountPreferenceWrites.generation;
+    HomeWidgetService.resetAccountCache();
+    expect(await HomeWidgetService.waitForAccountClear(), isTrue);
+    writes.clear();
+    refreshes = 0;
+    expect(
+      await HomeWidgetService.setDisplayMode(
+        'compact',
+        expectedAccountGeneration: epoch,
+        expectedPreferenceGeneration: preferenceEpoch,
+      ),
+      isFalse,
+    );
+    expect(writes, isEmpty);
+    expect(refreshes, 0);
+  });
+
+  test(
+    'preference cleanup invalidates an in-flight mode before refresh',
+    () async {
+      saveHoldKey = 'widget_display_mode';
+      saveEntered = Completer<void>();
+      saveRelease = Completer<void>();
+      final old = HomeWidgetService.setDisplayMode('compact');
+      await saveEntered!.future;
+      final cleanupEntered = Completer<void>();
+      final cleanupRelease = Completer<void>();
+      final cleanup = AccountPreferenceWrites.boundary(() async {
+        cleanupEntered.complete();
+        await cleanupRelease.future;
+      });
+      await cleanupEntered.future;
+      final current = HomeWidgetService.setDisplayMode('detailed');
+      saveRelease!.complete();
+      expect(await old, isFalse);
+      expect(refreshes, 0);
+      cleanupRelease.complete();
+      await cleanup;
+      expect(await current, isTrue);
+      expect(stored['widget_display_mode'], 'detailed');
+    },
+  );
 
   test(
     'empty highlights contain no invented rows and follow language changes',

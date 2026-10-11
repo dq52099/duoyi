@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
+import '../core/account_preference_writes.dart';
 import '../core/app_brand.dart';
 import '../core/brand_strings.dart';
 import '../core/design_tokens.dart';
@@ -169,6 +170,7 @@ class HomeWidgetService {
   static Future<bool>? _accountPayloadClearInFlight;
   static Future<void> _payloadQueue = Future<void>.value();
   static int _accountGeneration = 0;
+  static int get accountGeneration => _accountGeneration;
   static bool _refreshPending = false;
   static bool _accountPayloadStorageCleared = true;
   static String? _accountActionNonce;
@@ -263,15 +265,46 @@ class HomeWidgetService {
     }
   }
 
-  static Future<bool> setDisplayMode(String mode) async {
+  static Future<bool> setDisplayMode(
+    String mode, {
+    int? expectedAccountGeneration,
+    int? expectedPreferenceGeneration,
+  }) async {
     if (!_supported) return true;
-    try {
-      await HomeWidget.saveWidgetData<String>('widget_display_mode', mode);
-      return await _updateAllWidgets();
-    } catch (e, st) {
-      debugPrint('[HomeWidget] setDisplayMode($mode) failed: $e\n$st');
-      return false;
-    }
+    final generation = expectedAccountGeneration ?? _accountGeneration;
+    final preferenceGeneration =
+        expectedPreferenceGeneration ?? AccountPreferenceWrites.generation;
+    bool isCurrent() =>
+        generation == _accountGeneration &&
+        preferenceGeneration == AccountPreferenceWrites.generation;
+    // This native operation is untracked. Never wait for cleanup while holding
+    // the payload queue: account cleanup itself needs that queue to drain.
+    await AccountPreferenceWrites.waitForBoundary();
+    if (!isCurrent()) return false;
+    await _drainPendingAccountClear();
+    return _serializePayload(() async {
+      if (!isCurrent()) return false;
+      try {
+        final saved = await HomeWidget.saveWidgetData<String>(
+          'widget_display_mode',
+          mode,
+        );
+        if (saved != true || !isCurrent()) return false;
+        if (PlatformInfo.isAndroid) {
+          final applied =
+              await AndroidWidgetManager.applyDisplayModeToExistingWidgets(
+                AndroidWidgetStyle.fromId(mode),
+              );
+          if (applied == null || !isCurrent()) return false;
+        }
+        if (!isCurrent()) return false;
+        final refreshed = await _updateAllWidgets();
+        return refreshed && isCurrent();
+      } catch (e, st) {
+        debugPrint('[HomeWidget] setDisplayMode($mode) failed: $e\n$st');
+        return false;
+      }
+    });
   }
 
   static Future<bool> updateTheme(HomeWidgetThemePayload theme) async {

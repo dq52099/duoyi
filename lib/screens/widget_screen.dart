@@ -1,12 +1,13 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/account_preference_writes.dart';
 import '../core/i18n.dart';
 import '../core/platform_info.dart';
 import '../core/web_target.dart';
 import '../core/widget_ui_copy.dart';
 import '../providers/theme_provider.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../services/android_widget_manager.dart';
 import '../services/home_widget_service.dart';
 import '../widgets/surface_components.dart';
@@ -136,6 +137,8 @@ class _WidgetScreenState extends State<WidgetScreen>
   bool _userChangedDisplayMode = false;
   int _pinSupportSeq = 0;
   int _displayModeSeq = 0;
+  int _loadDisplayModeSeq = 0;
+  int _refreshSeq = 0;
   bool _isUpdatingDisplayMode = false;
 
   @override
@@ -143,6 +146,9 @@ class _WidgetScreenState extends State<WidgetScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     I18n.localeListenable.addListener(_onLocaleChanged);
+    AccountLocalDataCleaner.accountDataGenerationListenable.addListener(
+      _onAccountDataChanged,
+    );
     _loadDisplayMode();
     _loadPinSupport();
   }
@@ -150,6 +156,9 @@ class _WidgetScreenState extends State<WidgetScreen>
   @override
   void dispose() {
     I18n.localeListenable.removeListener(_onLocaleChanged);
+    AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
+      _onAccountDataChanged,
+    );
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -160,6 +169,21 @@ class _WidgetScreenState extends State<WidgetScreen>
     }
   }
 
+  void _onAccountDataChanged() {
+    if (!mounted) return;
+    _displayModeSeq++;
+    _loadDisplayModeSeq++;
+    _refreshSeq++;
+    _userChangedDisplayMode = false;
+    _isUpdatingDisplayMode = false;
+    _refreshingData = false;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    setState(() {
+      _displayMode = WidgetDisplayMode.standard;
+    });
+    _loadDisplayMode();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -168,9 +192,32 @@ class _WidgetScreenState extends State<WidgetScreen>
   }
 
   Future<void> _loadDisplayMode() async {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final readSeq = ++_loadDisplayModeSeq;
+
+    await AccountPreferenceWrites.waitForBoundary();
+
+    if (!mounted ||
+        readSeq != _loadDisplayModeSeq ||
+        _userChangedDisplayMode ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
+
     final prefs = await SharedPreferences.getInstance();
+
+    if (!mounted ||
+        readSeq != _loadDisplayModeSeq ||
+        _userChangedDisplayMode ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
+
     final value = prefs.getString(_displayModeKey);
-    if (!mounted || _userChangedDisplayMode) return;
     setState(() {
       _displayMode = WidgetDisplayMode.fromId(value);
     });
@@ -189,35 +236,160 @@ class _WidgetScreenState extends State<WidgetScreen>
   }
 
   Future<void> _setDisplayMode(WidgetDisplayMode mode) async {
-    if (_isUpdatingDisplayMode) return;
-    _userChangedDisplayMode = true;
+    if (!mounted || _isUpdatingDisplayMode) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    final homeWidgetAccountGeneration = HomeWidgetService.accountGeneration;
+    final preferenceGeneration = AccountPreferenceWrites.generation;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final seq = ++_displayModeSeq;
+    _userChangedDisplayMode = true;
     setState(() {
       _displayMode = mode;
       _isUpdatingDisplayMode = true;
     });
+
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_displayModeKey, mode.id);
-      final isWeb = kIsWeb || WebTarget.isDesktopWebBuild;
-      bool homeWidgetSynced = true;
-      int? appliedCount = 0;
-      if (!isWeb) {
-        homeWidgetSynced = await HomeWidgetService.setDisplayMode(mode.id);
-        appliedCount =
-            await AndroidWidgetManager.applyDisplayModeToExistingWidgets(
-              mode.androidStyle,
-            );
+      var didPersist = false;
+      try {
+        await AccountPreferenceWrites.run((token) async {
+          bool isCurrent() =>
+              mounted &&
+              seq == _displayModeSeq &&
+              token.isCurrent &&
+              AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                accountGeneration,
+              ) &&
+              preferenceGeneration == AccountPreferenceWrites.generation;
+
+          if (!isCurrent()) return;
+          final prefs = await SharedPreferences.getInstance();
+          if (!isCurrent()) return;
+          final transaction = AccountPreferenceTransaction(prefs, isCurrent);
+          try {
+            await transaction.setString(_displayModeKey, mode.id);
+            transaction.commit();
+            didPersist = true;
+          } on AccountPreferenceWriteCanceled {
+            await transaction.rollback(canceledBeforeCleanup: true);
+            return;
+          } catch (_) {
+            await transaction.rollback();
+            if (AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              accountGeneration,
+            )) {
+              try {
+                await transaction.reload();
+              } catch (_) {}
+            }
+            rethrow;
+          }
+        });
+      } catch (_) {
+        // Persistence failed. didPersist remains false.
       }
-      if (!mounted || seq != _displayModeSeq) return;
-      final nativeSynced = isWeb || appliedCount != null;
-      if (!homeWidgetSynced || !nativeSynced) {
+
+      if (!didPersist) {
+        await AccountPreferenceWrites.waitForBoundary();
+        if (mounted &&
+            seq == _displayModeSeq &&
+            AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              accountGeneration,
+            ) &&
+            preferenceGeneration == AccountPreferenceWrites.generation) {
+          WidgetDisplayMode restoredMode = WidgetDisplayMode.standard;
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            if (!mounted ||
+                seq != _displayModeSeq ||
+                !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                  accountGeneration,
+                ) ||
+                preferenceGeneration != AccountPreferenceWrites.generation) {
+              return;
+            }
+            final savedValue = prefs.getString(_displayModeKey);
+            if (savedValue != null) {
+              restoredMode = WidgetDisplayMode.fromId(savedValue);
+            }
+          } catch (_) {}
+          if (!mounted ||
+              seq != _displayModeSeq ||
+              !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                accountGeneration,
+              ) ||
+              preferenceGeneration != AccountPreferenceWrites.generation) {
+            return;
+          }
+          setState(() {
+            _displayMode = restoredMode;
+            _userChangedDisplayMode = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: _widgetFeedback(() => WidgetUiCopy.styleSyncFailed),
+              action: SnackBarAction(
+                label: WidgetUiCopy.actionRetry,
+                onPressed: () {
+                  if (!mounted ||
+                      seq != _displayModeSeq ||
+                      !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                        accountGeneration,
+                      ) ||
+                      preferenceGeneration !=
+                          AccountPreferenceWrites.generation) {
+                    return;
+                  }
+                  _setDisplayMode(mode);
+                },
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      if (!mounted ||
+          seq != _displayModeSeq ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          ) ||
+          preferenceGeneration != AccountPreferenceWrites.generation) {
+        return;
+      }
+
+      final homeWidgetSynced = await HomeWidgetService.setDisplayMode(
+        mode.id,
+        expectedAccountGeneration: homeWidgetAccountGeneration,
+        expectedPreferenceGeneration: preferenceGeneration,
+      );
+
+      if (!mounted ||
+          seq != _displayModeSeq ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          ) ||
+          preferenceGeneration != AccountPreferenceWrites.generation) {
+        return;
+      }
+
+      if (!homeWidgetSynced) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: _widgetFeedback(() => WidgetUiCopy.styleSyncFailed),
             action: SnackBarAction(
               label: WidgetUiCopy.actionRetry,
-              onPressed: () => _setDisplayMode(mode),
+              onPressed: () {
+                if (!mounted ||
+                    seq != _displayModeSeq ||
+                    !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                      accountGeneration,
+                    ) ||
+                    preferenceGeneration !=
+                        AccountPreferenceWrites.generation) {
+                  return;
+                }
+                _setDisplayMode(mode);
+              },
             ),
           ),
         );
@@ -231,16 +403,33 @@ class _WidgetScreenState extends State<WidgetScreen>
         );
       }
     } catch (_) {
-      if (!mounted || seq != _displayModeSeq) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: _widgetFeedback(() => WidgetUiCopy.styleSyncFailed),
-          action: SnackBarAction(
-            label: WidgetUiCopy.actionRetry,
-            onPressed: () => _setDisplayMode(mode),
+      if (mounted &&
+          seq == _displayModeSeq &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          ) &&
+          preferenceGeneration == AccountPreferenceWrites.generation) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: _widgetFeedback(() => WidgetUiCopy.styleSyncFailed),
+            action: SnackBarAction(
+              label: WidgetUiCopy.actionRetry,
+              onPressed: () {
+                if (!mounted ||
+                    seq != _displayModeSeq ||
+                    !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                      accountGeneration,
+                    ) ||
+                    preferenceGeneration !=
+                        AccountPreferenceWrites.generation) {
+                  return;
+                }
+                _setDisplayMode(mode);
+              },
+            ),
           ),
-        ),
-      );
+        );
+      }
     } finally {
       if (mounted && seq == _displayModeSeq) {
         setState(() => _isUpdatingDisplayMode = false);
@@ -249,8 +438,14 @@ class _WidgetScreenState extends State<WidgetScreen>
   }
 
   Future<void> _openWidgetSettings() async {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final opened = await AndroidWidgetManager.openWidgetSettings();
-    if (!mounted) return;
+    if (!mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     if (!opened) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -271,10 +466,18 @@ class _WidgetScreenState extends State<WidgetScreen>
 
   Future<void> _refreshWidgetData() async {
     if (_refreshingData) return;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final seq = ++_refreshSeq;
     setState(() => _refreshingData = true);
     try {
       final success = await HomeWidgetService.refreshDashboardData();
-      if (!mounted) return;
+      if (!mounted ||
+          seq != _refreshSeq ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: _widgetFeedback(
@@ -285,12 +488,22 @@ class _WidgetScreenState extends State<WidgetScreen>
         ),
       );
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted ||
+          seq != _refreshSeq ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: _widgetFeedback(() => WidgetUiCopy.refreshFailed)),
       );
     } finally {
-      if (mounted) {
+      if (mounted &&
+          seq == _refreshSeq &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
         setState(() => _refreshingData = false);
       }
     }

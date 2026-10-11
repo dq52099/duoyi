@@ -1,16 +1,20 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:duoyi/core/account_preference_writes.dart';
 import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/core/widget_ui_copy.dart';
 import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/screens/widget_screen.dart';
+import 'package:duoyi/services/account_local_data_cleaner.dart';
 import 'package:duoyi/services/home_widget_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import '../support/widget_polish_screenshot_font.dart';
 
@@ -276,6 +280,193 @@ void main() {
     await _capture(tester, catalogKey, 'catalog-life-detailed-en');
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets(
+    'account cleanup keeps a pending saved style read from restoring old data',
+    (tester) async {
+      final store = _GatedReadPreferencesStore({
+        'flutter.duoyi_widget_display_mode': 'detailed',
+      });
+      SharedPreferencesStorePlatform.instance = store;
+      final theme = ThemeProvider();
+      addTearDown(theme.dispose);
+
+      await tester.pumpWidget(_app(theme, const WidgetScreen()));
+      await store.readStarted.future;
+
+      expect(_selectedDisplayMode(tester), {WidgetDisplayMode.standard});
+
+      final cleanup = AccountLocalDataCleaner.clearSharedPreferences();
+      await tester.pump();
+      expect(_selectedDisplayMode(tester), {WidgetDisplayMode.standard});
+
+      store.releaseRead.complete();
+      await tester.pump();
+      expect(_selectedDisplayMode(tester), {WidgetDisplayMode.standard});
+
+      await cleanup;
+      await tester.pumpAndSettle();
+
+      expect(_selectedDisplayMode(tester), {WidgetDisplayMode.standard});
+      expect(
+        (await SharedPreferences.getInstance()).getString(
+          'duoyi_widget_display_mode',
+        ),
+        isNull,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await AccountPreferenceWrites.waitForBoundary();
+    },
+  );
+
+  testWidgets('stale style retry cannot overwrite a newer selected style', (
+    tester,
+  ) async {
+    final store = _RejectingWidgetModePreferencesStore()
+      ..rejectNextModeWrite = true;
+    SharedPreferencesStorePlatform.instance = store;
+    final theme = ThemeProvider();
+    addTearDown(theme.dispose);
+
+    await tester.pumpWidget(_app(theme, const WidgetScreen()));
+    await tester.pumpAndSettle();
+
+    final modeSelector = find.byWidgetPredicate(
+      (widget) => widget is SegmentedButton<WidgetDisplayMode>,
+    );
+    await tester.tap(
+      find.descendant(
+        of: modeSelector,
+        matching: find.textContaining(WidgetDisplayMode.detailed.label),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(SnackBarAction), findsOneWidget);
+    final staleRetry = tester
+        .widget<SnackBarAction>(find.byType(SnackBarAction))
+        .onPressed;
+
+    await tester.tap(
+      find.descendant(
+        of: modeSelector,
+        matching: find.textContaining(WidgetDisplayMode.compact.label),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(_selectedDisplayMode(tester), {WidgetDisplayMode.compact});
+    expect(
+      (await SharedPreferences.getInstance()).getString(
+        'duoyi_widget_display_mode',
+      ),
+      WidgetDisplayMode.compact.id,
+    );
+
+    staleRetry();
+    await tester.pumpAndSettle();
+
+    expect(_selectedDisplayMode(tester), {WidgetDisplayMode.compact});
+    expect(
+      (await SharedPreferences.getInstance()).getString(
+        'duoyi_widget_display_mode',
+      ),
+      WidgetDisplayMode.compact.id,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'failed style save restores the saved mode after a delayed initial load',
+    (tester) async {
+      final store = _GatedReadPreferencesStore({
+        'flutter.duoyi_widget_display_mode': 'detailed',
+      })..rejectNextModeWrite = true;
+      SharedPreferencesStorePlatform.instance = store;
+      final theme = ThemeProvider();
+      addTearDown(theme.dispose);
+
+      await tester.pumpWidget(_app(theme, const WidgetScreen()));
+      await store.readStarted.future;
+
+      expect(_selectedDisplayMode(tester), {WidgetDisplayMode.standard});
+      final modeSelector = find.byWidgetPredicate(
+        (widget) => widget is SegmentedButton<WidgetDisplayMode>,
+      );
+      await tester.tap(
+        find.descendant(
+          of: modeSelector,
+          matching: find.textContaining(WidgetDisplayMode.compact.label),
+        ),
+      );
+      await tester.pump();
+      expect(_selectedDisplayMode(tester), {WidgetDisplayMode.compact});
+
+      store.releaseRead.complete();
+      await tester.pumpAndSettle();
+
+      expect(_selectedDisplayMode(tester), {WidgetDisplayMode.detailed});
+      expect(
+        (await SharedPreferences.getInstance()).getString(
+          'duoyi_widget_display_mode',
+        ),
+        WidgetDisplayMode.detailed.id,
+      );
+      expect(find.byType(SnackBarAction), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+}
+
+Set<WidgetDisplayMode> _selectedDisplayMode(WidgetTester tester) => tester
+    .widget<SegmentedButton<WidgetDisplayMode>>(
+      find.byWidgetPredicate(
+        (widget) => widget is SegmentedButton<WidgetDisplayMode>,
+      ),
+    )
+    .selected;
+
+class _GatedReadPreferencesStore extends InMemorySharedPreferencesStore {
+  _GatedReadPreferencesStore(super.data) : super.withData();
+
+  final readStarted = Completer<void>();
+  final releaseRead = Completer<void>();
+  bool rejectNextModeWrite = false;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (key == 'flutter.duoyi_widget_display_mode' && rejectNextModeWrite) {
+      rejectNextModeWrite = false;
+      return false;
+    }
+    return super.setValue(valueType, key, value);
+  }
+
+  @override
+  Future<Map<String, Object>> getAll() async {
+    if (!readStarted.isCompleted) {
+      readStarted.complete();
+      await releaseRead.future;
+    }
+    return super.getAll();
+  }
+}
+
+class _RejectingWidgetModePreferencesStore
+    extends InMemorySharedPreferencesStore {
+  _RejectingWidgetModePreferencesStore() : super.withData({});
+
+  bool rejectNextModeWrite = false;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (key == 'flutter.duoyi_widget_display_mode' && rejectNextModeWrite) {
+      rejectNextModeWrite = false;
+      return false;
+    }
+    return super.setValue(valueType, key, value);
+  }
 }
 
 Future<ThemeProvider> _prepare(WidgetTester tester, {bool dark = false}) async {

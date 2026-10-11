@@ -1408,12 +1408,12 @@ void main() {
         widgetScreen,
         contains('WidgetUiCopy.styleSyncSuccess(mode.label)'),
       );
+      expect(widgetScreen, contains('if (!homeWidgetSynced)'));
+      expect(widgetScreen, contains('WidgetUiCopy.styleSyncFailed'));
       expect(
         widgetScreen,
-        contains('final nativeSynced = isWeb || appliedCount != null'),
+        contains('if (!mounted || _isUpdatingDisplayMode) return'),
       );
-      expect(widgetScreen, contains('WidgetUiCopy.styleSyncFailed'));
-      expect(widgetScreen, contains('if (_isUpdatingDisplayMode) return'));
       expect(widgetScreen, contains('enabled: !_isUpdatingDisplayMode'));
       expect(widgetScreen, contains('_userChangedDisplayMode = true'));
       expect(
@@ -1424,17 +1424,37 @@ void main() {
       expect(widgetScreen, contains('SegmentedButton<WidgetDisplayMode>'));
       expect(
         widgetScreen,
-        contains('HomeWidgetService.setDisplayMode(mode.id)'),
+        contains('HomeWidgetService.setDisplayMode('),
         reason:
             'The style selector must update the native default used before new widget instances receive a per-widget style.',
       );
       expect(
         widgetScreen,
-        contains("prefs.setString(_displayModeKey, mode.id)"),
+        contains('transaction.setString(_displayModeKey, mode.id)'),
+      );
+      expect(
+        service,
+        contains('AndroidWidgetManager.applyDisplayModeToExistingWidgets'),
       );
       expect(
         widgetScreen,
-        contains('AndroidWidgetManager.applyDisplayModeToExistingWidgets'),
+        contains('expectedAccountGeneration: homeWidgetAccountGeneration'),
+      );
+      expect(
+        widgetScreen,
+        contains('expectedPreferenceGeneration: preferenceGeneration'),
+      );
+      expect(
+        widgetScreen,
+        isNot(
+          contains(
+            'await AndroidWidgetManager.applyDisplayModeToExistingWidgets',
+          ),
+        ),
+      );
+      expect(
+        service,
+        contains('if (saved != true || !isCurrent()) return false'),
       );
       expect(widgetScreen, contains('style: requestedMode.androidStyle'));
       final manager = File(
@@ -1619,7 +1639,12 @@ void main() {
       ).readAsStringSync();
 
       expect(service, contains('Future<bool> init()'));
-      expect(service, contains('Future<bool> setDisplayMode(String mode)'));
+      expect(
+        service,
+        matches(RegExp(r'Future<bool> setDisplayMode\(\s*String mode,\s*\{')),
+      );
+      expect(service, contains('int? expectedAccountGeneration'));
+      expect(service, contains('int? expectedPreferenceGeneration'));
       expect(
         service,
         contains('Future<bool> updateTheme(HomeWidgetThemePayload theme)'),
