@@ -1,22 +1,149 @@
 import '../models/habit.dart';
 import 'habit_trend.dart';
+import 'i18n.dart';
 
 enum HabitInsightKind { overview, rising, slipping, streak, attention }
 
 class HabitInsight {
   final HabitInsightKind kind;
-  final String title;
-  final String message;
+  final String _title;
+  final String _message;
+  final HabitInsightText? generatedText;
   final String? habitId;
   final double score;
 
   const HabitInsight({
     required this.kind,
-    required this.title,
-    required this.message,
+    required String title,
+    required String message,
+    this.generatedText,
     this.habitId,
     this.score = 0,
+  }) : _title = title,
+       _message = message;
+
+  String titleFor(AppLocale locale) =>
+      generatedText?.titleFor(locale) ?? _title;
+  String messageFor(AppLocale locale) =>
+      generatedText?.messageFor(locale) ?? _message;
+
+  String get title => titleFor(I18n.current);
+  String get message => messageFor(I18n.current);
+}
+
+/// Immutable presentation facts for cached, app-generated insight text.
+sealed class HabitInsightText {
+  const HabitInsightText();
+
+  String titleFor(AppLocale locale);
+  String messageFor(AppLocale locale);
+}
+
+final class HabitOverviewInsightText extends HabitInsightText {
+  final HabitTrendWindow window;
+  final int percent;
+  final int completedDays;
+  final int activeDays;
+
+  const HabitOverviewInsightText({
+    required this.window,
+    required this.percent,
+    required this.completedDays,
+    required this.activeDays,
   });
+
+  @override
+  String titleFor(AppLocale locale) {
+    if (locale == AppLocale.en) {
+      return percent >= 80
+          ? 'Habits are steady'
+          : percent >= 50
+          ? 'Room to improve'
+          : 'Habits need attention';
+    }
+    return percent >= 80
+        ? '习惯状态稳定'
+        : percent >= 50
+        ? '习惯状态可提升'
+        : '习惯需要收紧';
+  }
+
+  @override
+  String messageFor(AppLocale locale) {
+    if (locale == AppLocale.en) {
+      final period = window == HabitTrendWindow.days365
+          ? '1 year'
+          : '${window.days} days';
+      return '$period average completion: $percent%; '
+          '$completedDays/$activeDays active days completed.';
+    }
+    return '${window.label}平均达标率 $percent%，已完成 $completedDays/$activeDays 个活跃日。';
+  }
+}
+
+final class HabitChangeInsightText extends HabitInsightText {
+  final String habitName;
+  final int delta;
+  final bool rising;
+
+  const HabitChangeInsightText({
+    required this.habitName,
+    required this.delta,
+    required this.rising,
+  });
+
+  @override
+  String titleFor(AppLocale locale) => locale == AppLocale.en
+      ? '$habitName ${rising ? 'is improving' : 'is slipping'}'
+      : '$habitName ${rising ? '正在变好' : '有下滑'}';
+
+  @override
+  String messageFor(AppLocale locale) {
+    if (locale == AppLocale.en) {
+      return rising
+          ? 'Up $delta percentage points from the previous period. Keep your current pace.'
+          : 'Down $delta percentage points from the previous period. Try a smaller goal or a different reminder time.';
+    }
+    return rising
+        ? '较上一周期提升 $delta 个百分点，继续保持当前节奏。'
+        : '较上一周期下降 $delta 个百分点，建议降低目标或调整提醒时间。';
+  }
+}
+
+final class HabitStreakInsightText extends HabitInsightText {
+  final String habitName;
+  final int days;
+
+  const HabitStreakInsightText({required this.habitName, required this.days});
+
+  @override
+  String titleFor(AppLocale locale) => locale == AppLocale.en
+      ? '$habitName has the strongest streak'
+      : '$habitName 连续性最好';
+
+  @override
+  String messageFor(AppLocale locale) => locale == AppLocale.en
+      ? 'Your longest streak in this period is $days ${days == 1 ? 'day' : 'days'}. Keep this steady habit.'
+      : '窗口内最长连续达标 $days 天，可作为稳定习惯保留。';
+}
+
+final class HabitAttentionInsightText extends HabitInsightText {
+  final String habitName;
+  final int percent;
+
+  const HabitAttentionInsightText({
+    required this.habitName,
+    required this.percent,
+  });
+
+  @override
+  String titleFor(AppLocale locale) =>
+      locale == AppLocale.en ? '$habitName needs attention' : '$habitName 需要关注';
+
+  @override
+  String messageFor(AppLocale locale) => locale == AppLocale.en
+      ? 'Current completion is $percent%. Start with a smaller goal to make progress easier.'
+      : '当前达标率 $percent%，可以先改成更小目标，避免连续挫败。';
 }
 
 class HabitInsightEngine {
@@ -72,6 +199,12 @@ class HabitInsightEngine {
       message:
           '${window.label}平均达标率 $percent%，已完成 $completedDays/$activeDays 个活跃日。',
       score: rate,
+      generatedText: HabitOverviewInsightText(
+        window: window,
+        percent: percent,
+        completedDays: completedDays,
+        activeDays: activeDays,
+      ),
     );
   }
 
@@ -94,6 +227,11 @@ class HabitInsightEngine {
       message: '较上一周期提升 $delta 个百分点，继续保持当前节奏。',
       habitId: item.habit.id,
       score: item.summary.completionRateDelta,
+      generatedText: HabitChangeInsightText(
+        habitName: item.habit.name,
+        delta: delta,
+        rising: true,
+      ),
     );
   }
 
@@ -116,6 +254,11 @@ class HabitInsightEngine {
       message: '较上一周期下降 $delta 个百分点，建议降低目标或调整提醒时间。',
       habitId: item.habit.id,
       score: item.summary.completionRateDelta.abs(),
+      generatedText: HabitChangeInsightText(
+        habitName: item.habit.name,
+        delta: delta,
+        rising: false,
+      ),
     );
   }
 
@@ -137,6 +280,10 @@ class HabitInsightEngine {
       message: '窗口内最长连续达标 ${item.summary.longestCompletedStreak} 天，可作为稳定习惯保留。',
       habitId: item.habit.id,
       score: item.summary.longestCompletedStreak.toDouble(),
+      generatedText: HabitStreakInsightText(
+        habitName: item.habit.name,
+        days: item.summary.longestCompletedStreak,
+      ),
     );
   }
 
@@ -162,6 +309,10 @@ class HabitInsightEngine {
       message: '当前达标率 $percent%，可以先改成更小目标，避免连续挫败。',
       habitId: item.habit.id,
       score: 1 - item.summary.completionRate,
+      generatedText: HabitAttentionInsightText(
+        habitName: item.habit.name,
+        percent: percent,
+      ),
     );
   }
 }
