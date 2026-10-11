@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/account_preference_writes.dart';
 import '../core/platform_info.dart';
+import 'account_local_data_cleaner.dart';
 import 'native_reminder_ringtone.dart';
 import 'reminder_ringtone_preview_service.dart';
 
@@ -87,6 +89,50 @@ class ReminderRingtoneSettings {
     'duoyi/reminder_ringtone',
   );
   static void Function(Iterable<String> keys)? onChanged;
+  static Future<void> _writeTail = Future<void>.value();
+
+  static Future<T> _persist<T>(
+    Future<T> Function(SharedPreferences, AccountPreferenceTransaction)
+    change, {
+    required T Function() canceledResult,
+    Iterable<String> changedKeys = const [],
+  }) {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    return AccountPreferenceWrites.runResult<T>((token) {
+      bool isCurrent() =>
+          token.isCurrent &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation);
+      final write = _writeTail.then<T>((_) async {
+        if (!isCurrent()) return canceledResult();
+        final preferences = await SharedPreferences.getInstance();
+        if (!isCurrent()) return canceledResult();
+        final transaction = AccountPreferenceTransaction(
+          preferences,
+          isCurrent,
+        );
+        try {
+          final result = await change(preferences, transaction);
+          final didChange = transaction.changedKeys.isNotEmpty;
+          transaction.commit();
+          if (didChange && changedKeys.isNotEmpty) onChanged?.call(changedKeys);
+          return result;
+        } on AccountPreferenceWriteCanceled {
+          await transaction.rollback(canceledBeforeCleanup: true);
+          return canceledResult();
+        } catch (_) {
+          if (!transaction.isCommitted) {
+            await transaction.rollback(canceledBeforeCleanup: true);
+          }
+          rethrow;
+        }
+      });
+      _writeTail = write.then<void>(
+        (_) {},
+        onError: (Object _, StackTrace _) {},
+      );
+      return write;
+    }, canceledResult: canceledResult);
+  }
 
   static ReminderRingtonePlatformPolicy get platformPolicy => platformPolicyFor(
     isAndroid: PlatformInfo.isAndroid,
@@ -155,9 +201,12 @@ class ReminderRingtoneSettings {
     );
   }
 
-  static Future<String> loadSound() async {
-    final p = await SharedPreferences.getInstance();
-    return _loadAndMigrateSoundPreference(p);
+  static Future<String> loadSound() {
+    return _persist<String>(
+      _loadAndMigrateSoundPreference,
+      canceledResult: () => defaultSound,
+      changedKeys: const [soundPreferenceKey],
+    );
   }
 
   static String androidRawResourceNameFor(String value) {
@@ -184,23 +233,34 @@ class ReminderRingtoneSettings {
   static Future<void> markAndroidFallbackChannelSoundApplied(
     String channelId,
     String rawResourceName,
-  ) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setString(
-      _fallbackChannelSoundPreferenceKey(channelId),
-      rawResourceName,
-    );
-    await p.setInt(
-      _fallbackChannelSoundSchemaPreferenceKey(channelId),
-      androidFallbackChannelSoundSchemaVersion,
-    );
+  ) {
+    return _persist<void>((_, transaction) async {
+      await transaction.setString(
+        _fallbackChannelSoundPreferenceKey(channelId),
+        rawResourceName,
+      );
+      await transaction.setInt(
+        _fallbackChannelSoundSchemaPreferenceKey(channelId),
+        androidFallbackChannelSoundSchemaVersion,
+      );
+    }, canceledResult: () {});
   }
 
   static Future<void> setVolumePercent(int value, {bool preview = true}) async {
     final next = _normalizeVolume(value);
-    final p = await SharedPreferences.getInstance();
-    await p.setInt(volumePreferenceKey, next);
-    onChanged?.call(const [volumePreferenceKey]);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    final saved = await _persist<bool>(
+      (_, transaction) async {
+        await transaction.setInt(volumePreferenceKey, next);
+        return true;
+      },
+      canceledResult: () => false,
+      changedKeys: const [volumePreferenceKey],
+    );
+    if (!saved ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
     if (!preview) {
       await applyPersistedSettingsToNative();
       return;
@@ -210,10 +270,20 @@ class ReminderRingtoneSettings {
 
   static Future<void> setSound(String value, {bool preview = true}) async {
     final next = _normalizeSound(value);
-    final p = await SharedPreferences.getInstance();
-    await p.setBool(legacyAlarmMigrationPreferenceKey, true);
-    await p.setString(soundPreferenceKey, next);
-    onChanged?.call(const [soundPreferenceKey]);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    final saved = await _persist<bool>(
+      (_, transaction) async {
+        await transaction.setBool(legacyAlarmMigrationPreferenceKey, true);
+        await transaction.setString(soundPreferenceKey, next);
+        return true;
+      },
+      canceledResult: () => false,
+      changedKeys: const [soundPreferenceKey],
+    );
+    if (!saved ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
     if (!preview) {
       await applyPersistedSettingsToNative();
       return;
@@ -228,19 +298,25 @@ class ReminderRingtoneSettings {
 
   static Future<bool> applyPersistedSettingsToNative() async {
     if (!_isAndroid) return true;
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    bool isCurrent() =>
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation);
     final p = await SharedPreferences.getInstance();
+    if (!isCurrent()) return false;
     final volumePercent = _normalizeVolume(
       p.getInt(volumePreferenceKey) ?? defaultVolumePercent,
     );
-    final soundName = _normalizeSound(await _loadAndMigrateSoundPreference(p));
+    final soundName = _normalizeSound(await loadSound());
+    if (!isCurrent()) return false;
     try {
       await _channel.invokeMethod<void>('setVolumePercent', <String, Object?>{
         'volumePercent': volumePercent,
       });
+      if (!isCurrent()) return false;
       await _channel.invokeMethod<void>('setSoundName', <String, Object?>{
         'soundName': soundName,
       });
-      return true;
+      return isCurrent();
     } catch (e, st) {
       debugPrint(
         '[ReminderRingtoneSettings] apply persisted settings failed: $e\n$st',
@@ -251,18 +327,25 @@ class ReminderRingtoneSettings {
 
   static Future<void> _applyAndPreviewCurrentSound() async {
     if (!_isAndroid) return;
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    bool isCurrent() =>
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation);
     final p = await SharedPreferences.getInstance();
+    if (!isCurrent()) return;
     final volumePercent = _normalizeVolume(
       p.getInt(volumePreferenceKey) ?? defaultVolumePercent,
     );
-    final soundName = _normalizeSound(await _loadAndMigrateSoundPreference(p));
+    final soundName = _normalizeSound(await loadSound());
+    if (!isCurrent()) return;
     final nativeSettingsApplied = await applyPersistedSettingsToNative();
+    if (!isCurrent()) return;
     String? nativeFailureMessage;
     String? nativeFailureReason;
     if (nativeSettingsApplied) {
       final nativePreview = await NativeReminderRingtone.previewCurrentSound(
         duration: NativeReminderRingtone.previewDuration,
       );
+      if (!isCurrent()) return;
       if (nativePreview.started) {
         debugPrint(
           '[ReminderRingtoneSettings] native MediaPlayer preview started '
@@ -295,6 +378,7 @@ class ReminderRingtoneSettings {
           volumePercent: volumePercent,
           duration: NativeReminderRingtone.previewDuration,
         );
+    if (!isCurrent()) return;
     if (flutterPreviewStarted) {
       debugPrint(
         '[ReminderRingtoneSettings] Flutter media preview started '
@@ -324,13 +408,13 @@ class ReminderRingtoneSettings {
 
   static Future<String> _loadAndMigrateSoundPreference(
     SharedPreferences preferences,
+    AccountPreferenceTransaction transaction,
   ) async {
     final stored = preferences.getString(soundPreferenceKey);
     if (stored == 'alarm' &&
         preferences.getBool(legacyAlarmMigrationPreferenceKey) != true) {
-      await preferences.setBool(legacyAlarmMigrationPreferenceKey, true);
-      await preferences.setString(soundPreferenceKey, defaultSound);
-      onChanged?.call(const [soundPreferenceKey]);
+      await transaction.setBool(legacyAlarmMigrationPreferenceKey, true);
+      await transaction.setString(soundPreferenceKey, defaultSound);
       return defaultSound;
     }
     return _normalizeSound(stored ?? defaultSound);
