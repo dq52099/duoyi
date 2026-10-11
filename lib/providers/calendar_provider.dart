@@ -695,11 +695,22 @@ class CalendarProvider extends ChangeNotifier {
   }
 
   List<DateTime> _eventDates(CalendarEvent event) {
-    final start = _dateOnly(event.date);
+    final start = _utcCivilDay(event.date);
     final end = _eventVisibleEndDate(event, start);
-    if (end.isBefore(start)) return <DateTime>[start];
-    final dayCount = end.difference(start).inDays + 1;
-    return List.generate(dayCount, (index) => start.add(Duration(days: index)));
+    final dayCount = end.isBefore(start) ? 1 : end.difference(start).inDays + 1;
+    final dates = <DateTime>[];
+    for (var index = 0; index < dayCount; index++) {
+      // UTC contains civil fields here, not the event's converted instant.
+      // Its consecutive days remain stable across local DST transitions.
+      final civil = start.add(Duration(days: index));
+      final local = DateTime(civil.year, civil.month, civil.day);
+      if (local.year == civil.year &&
+          local.month == civil.month &&
+          local.day == civil.day) {
+        dates.add(local);
+      }
+    }
+    return dates;
   }
 
   List<String> _eventDateKeys(CalendarEvent event) {
@@ -710,7 +721,7 @@ class CalendarProvider extends ChangeNotifier {
     final endDate = event.endDate;
     if (endDate == null || !endDate.isAfter(event.date)) return start;
 
-    var end = _dateOnly(endDate);
+    var end = _utcCivilDay(endDate);
     final endsAtMidnight =
         endDate.hour == 0 &&
         endDate.minute == 0 &&
@@ -718,13 +729,15 @@ class CalendarProvider extends ChangeNotifier {
         endDate.millisecond == 0 &&
         endDate.microsecond == 0;
     if (endsAtMidnight && end.isAfter(start)) {
+      // Exclude the civil end day before constructing any local dates. A
+      // skipped local day must not shift this endpoint to its neighbor.
       end = end.subtract(const Duration(days: 1));
     }
     return end;
   }
 
-  DateTime _dateOnly(DateTime date) =>
-      DateTime(date.year, date.month, date.day);
+  DateTime _utcCivilDay(DateTime date) =>
+      DateTime.utc(date.year, date.month, date.day);
 
   String _dateKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
