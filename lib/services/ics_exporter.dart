@@ -1,3 +1,4 @@
+import '../core/export_ui_copy.dart';
 import '../models/anniversary.dart';
 import '../models/calendar_event.dart';
 import '../models/diary_entry.dart';
@@ -12,13 +13,15 @@ class IcsExporter {
   /// 生成 .ics 文本。
   static String fromEvents(
     Iterable<CalendarEvent> events, {
-    String calendarName = '多仪 · 日程',
+    String? calendarName,
   }) {
+    final copy = ExportUiCopy.current();
+    final resolvedCalendarName = calendarName ?? copy.eventsCalendarName;
     final sb = StringBuffer()
       ..writeln('BEGIN:VCALENDAR')
       ..writeln('VERSION:2.0')
       ..writeln('PRODID:-//Duoyi//ZH//CN')
-      ..writeln('X-WR-CALNAME:$calendarName');
+      ..writeln('X-WR-CALNAME:${_escape(resolvedCalendarName)}');
     for (final e in events) {
       sb
         ..writeln('BEGIN:VEVENT')
@@ -39,13 +42,15 @@ class IcsExporter {
   /// 纪念日(带每年循环 RRULE)。
   static String fromAnniversaries(
     Iterable<Anniversary> items, {
-    String calendarName = '多仪 · 纪念日',
+    String? calendarName,
   }) {
+    final copy = ExportUiCopy.current();
+    final resolvedCalendarName = calendarName ?? copy.anniversariesCalendarName;
     final sb = StringBuffer()
       ..writeln('BEGIN:VCALENDAR')
       ..writeln('VERSION:2.0')
       ..writeln('PRODID:-//Duoyi//ZH//CN')
-      ..writeln('X-WR-CALNAME:$calendarName');
+      ..writeln('X-WR-CALNAME:${_escape(resolvedCalendarName)}');
     for (final a in items) {
       final date = a.nextOccurrence;
       final recurring = a.type != AnniversaryType.normal;
@@ -81,6 +86,8 @@ class IcsExporter {
         .replaceAll('\\', '\\\\')
         .replaceAll(',', '\\,')
         .replaceAll(';', '\\;')
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
         .replaceAll('\n', '\\n');
   }
 }
@@ -95,7 +102,7 @@ class ModuleExporter {
       final row = [
         _csv(t.title),
         t.isCompleted ? '1' : '0',
-        t.priority.label,
+        _todoPriorityCsvLabel(t.priority),
         _quadLabel(t.quadrant),
         _csv(t.listGroupName ?? ''),
         t.dueDate?.toIso8601String() ?? '',
@@ -108,13 +115,19 @@ class ModuleExporter {
   }
 
   static String todosMarkdown(Iterable<TodoItem> todos) {
-    final sb = StringBuffer('# 待办清单\n\n');
-    final groups = <String, List<TodoItem>>{};
+    final copy = ExportUiCopy.current();
+    final sb = StringBuffer('# ${copy.todosHeading}\n\n');
+    final ungroupedGroupKey = Object();
+    final groups = <Object, List<TodoItem>>{};
     for (final t in todos) {
-      groups.putIfAbsent(t.listGroupName ?? '未分组', () => []).add(t);
+      final groupKey = t.listGroupName ?? ungroupedGroupKey;
+      groups.putIfAbsent(groupKey, () => []).add(t);
     }
     for (final g in groups.entries) {
-      sb.writeln('## ${g.key}\n');
+      final groupName = identical(g.key, ungroupedGroupKey)
+          ? copy.ungroupedTodo
+          : g.key as String;
+      sb.writeln('## $groupName\n');
       for (final t in g.value) {
         final mark = t.isCompleted ? '[x]' : '[ ]';
         final due = t.dueDate == null
@@ -125,7 +138,9 @@ class ModuleExporter {
           sb.writeln('  - ${s.isCompleted ? '[x]' : '[ ]'} ${s.title}');
         }
         for (final attachment in t.attachments) {
-          sb.writeln('  - 附件: [${attachment.name}](${attachment.uri})');
+          sb.writeln(
+            '  - ${copy.attachment}: [${attachment.name}](${attachment.uri})',
+          );
         }
       }
       sb.writeln();
@@ -206,8 +221,8 @@ class ModuleExporter {
           _csvDateTime(e.startAt),
           _csvDateTime(e.endAt),
           (e.durationSeconds / 60).toStringAsFixed(1),
-          e.category.label,
-          e.source.label,
+          _timeEntryCategoryCsvLabel(e.category),
+          _timeEntrySourceCsvLabel(e.source),
           _csv(e.note),
         ].join(','),
       );
@@ -258,19 +273,25 @@ class ModuleExporter {
   }
 
   static String notesMarkdown(Iterable<NoteItem> notes) {
-    final sb = StringBuffer('# 笔记\n\n');
+    final copy = ExportUiCopy.current();
+    final sb = StringBuffer('# ${copy.notesHeading}\n\n');
     for (final n in notes) {
       sb.writeln('## ${n.title}');
       sb.writeln(
         '*${n.updatedAt.toIso8601String().substring(0, 16).replaceAll("T", " ")}*\n',
       );
       if (n.pinned || n.archived) {
-        sb.writeln([if (n.pinned) '置顶', if (n.archived) '归档'].join(' · '));
+        sb.writeln(
+          [
+            if (n.pinned) copy.pinned,
+            if (n.archived) copy.archived,
+          ].join(' · '),
+        );
         sb.writeln();
       }
       sb.writeln(n.content);
       if (n.attachments.isNotEmpty) {
-        sb.writeln('\n附件:');
+        sb.writeln('\n${copy.attachments}:');
         for (final attachment in n.attachments) {
           sb.writeln('- [${attachment.name}](${attachment.uri})');
         }
@@ -281,13 +302,14 @@ class ModuleExporter {
   }
 
   static String diaryMarkdown(Iterable<DiaryEntry> entries) {
-    final sb = StringBuffer('# 日记\n\n');
+    final copy = ExportUiCopy.current();
+    final sb = StringBuffer('# ${copy.diaryHeading}\n\n');
     for (final d in entries) {
       final date =
           '${d.date.year}-${d.date.month.toString().padLeft(2, '0')}-${d.date.day.toString().padLeft(2, '0')}';
       sb.writeln('## $date ${d.mood?.emoji ?? ''} ${d.weather?.emoji ?? ''}');
       if (d.tags.isNotEmpty) {
-        sb.writeln('Tags: ${d.tags.map((t) => '#$t').join(' ')}\n');
+        sb.writeln('${copy.tagsLabel} ${d.tags.map((t) => '#$t').join(' ')}\n');
       }
       sb.writeln(d.content);
       sb.writeln('\n---\n');
@@ -296,13 +318,14 @@ class ModuleExporter {
   }
 
   static String anniversariesMarkdown(Iterable<Anniversary> items) {
-    final sb = StringBuffer('# 纪念日\n\n');
+    final copy = ExportUiCopy.current();
+    final sb = StringBuffer('# ${copy.anniversariesHeading}\n\n');
     for (final a in items) {
       sb.writeln(
-        '- **${a.title}** — ${_annType(a.type)} · ${a.calendarType == AnniversaryCalendarType.lunar ? "农历" : "公历"}',
+        '- **${a.title}** — ${copy.anniversaryType(a.type)} · ${copy.anniversaryCalendar(a.calendarType)}',
       );
       sb.writeln(
-        '  下一次: ${a.nextOccurrence.toIso8601String().substring(0, 10)}',
+        '  ${copy.nextOccurrenceLabel} ${a.nextOccurrence.toIso8601String().substring(0, 10)}',
       );
       if ((a.description ?? '').isNotEmpty) sb.writeln('  ${a.description!}');
       sb.writeln();
@@ -311,7 +334,8 @@ class ModuleExporter {
   }
 
   static String goalsMarkdown(Iterable<GoalItem> goals) {
-    final sb = StringBuffer('# 目标\n\n');
+    final copy = ExportUiCopy.current();
+    final sb = StringBuffer('# ${copy.goalsHeading}\n\n');
     for (final g in goals) {
       sb.writeln(
         '## ${g.title} — ${(g.computedProgress * 100).toStringAsFixed(0)}%',
@@ -354,4 +378,36 @@ class ModuleExporter {
     AnniversaryType.normal => '倒数',
     AnniversaryType.custom => '自定义',
   };
+
+  // CSV enum labels intentionally retain their historical zh output even when
+  // the active UI locale is English, so changing locale cannot alter exports.
+  static String _todoPriorityCsvLabel(TodoPriority priority) =>
+      switch (priority) {
+        TodoPriority.none => '无',
+        TodoPriority.low => '低',
+        TodoPriority.medium => '中',
+        TodoPriority.high => '高',
+        TodoPriority.urgent => '紧急',
+      };
+
+  static String _timeEntryCategoryCsvLabel(TimeEntryCategory category) =>
+      switch (category) {
+        TimeEntryCategory.focus => '专注',
+        TimeEntryCategory.todo => '待办',
+        TimeEntryCategory.habit => '习惯',
+        TimeEntryCategory.goal => '目标',
+        TimeEntryCategory.study => '学习',
+        TimeEntryCategory.work => '工作',
+        TimeEntryCategory.life => '生活',
+        TimeEntryCategory.other => '其他',
+      };
+
+  static String _timeEntrySourceCsvLabel(TimeEntrySource source) =>
+      switch (source) {
+        TimeEntrySource.manual => '手动',
+        TimeEntrySource.pomodoro => '番茄钟',
+        TimeEntrySource.todo => '待办',
+        TimeEntrySource.habit => '习惯',
+        TimeEntrySource.goal => '目标',
+      };
 }
