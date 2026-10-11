@@ -1,0 +1,14 @@
+{
+  "lib/models/focus_room.dart": "73a04f97d627bd94745e431acaf2fcf383148fbb47bb34204d5341d2d75ee235",
+  "lib/providers/focus_room_provider.dart": "43e017dd406f09decbc7dc040fc5429aeca3da7593c08b4d0fb934fcfa451525",
+  "test/providers/focus_room_builtin_copy_test.dart": "6543926ae2254dcf16bef8c733d2a9378273f908d4a964871527fd2134cd387e",
+  "test/models/focus_room_test.dart": "25f6d0f0d6feaaf13520f2feee9b2fa796e54e7b2b3aaf03c556bc3fca8f9dfa",
+  "test/providers/focus_room_provider_static_test.dart": "d94f5c50d7752c9bf32b89ba16768731f4ea0df9458559ac0d650f63d75be164",
+  "test/services/focus_room_api_static_test.dart": "3f5cd071f4f29f74e1bae2d8117113cff00d7aa9c1d73e236c271b779d5b4af3",
+  "lib/services/focus_room_api.dart": "3436eadb634e3c94f20b587e3de44461b5d0d6d6f54dfcc91223a7782fb88cb4",
+  "lib/services/api_client.dart": "201cf8e1400c5fdc4045d999b07324d8014e051791c9341349388a5dbc60d3ae",
+  "lib/core/i18n.dart": "46e21e9087b77f74990b96cc7526dfefc676fd4847a39b35b026dd86ce92c6dc",
+  "lib/models/pomodoro.dart": "299ab78fdd079346cdfb4f8a06aa4acae8c6a6368b2ad47c8c1e3be929504968",
+  "pubspec.yaml": "97c5396a7c1c36f3adf815ed1f099f997aa8afbdbe7cb1023f404f746af002ba",
+  "pubspec.lock": "73b80135ea9e434f83d7ae0e4eb77664a69c8f810e3f0cb346298d4b070e2786"
+}

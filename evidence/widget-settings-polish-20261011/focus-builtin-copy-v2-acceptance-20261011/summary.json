@@ -1,0 +1,83 @@
+{
+  "started_at_utc": "2026-10-11T12:31:17.163018+00:00",
+  "suites": [
+    {
+      "suite": "test/providers/focus_room_builtin_copy_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/providers/focus_room_builtin_copy_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 10.054,
+      "passed": 22,
+      "log": "evidence/widget-settings-polish-20261011/focus-builtin-copy-v2-acceptance-20261011/01-focus_room_builtin_copy_test.log"
+    },
+    {
+      "suite": "test/models/focus_room_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/models/focus_room_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 7.227,
+      "passed": 6,
+      "log": "evidence/widget-settings-polish-20261011/focus-builtin-copy-v2-acceptance-20261011/02-focus_room_test.log"
+    },
+    {
+      "suite": "test/providers/focus_room_provider_static_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/providers/focus_room_provider_static_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 10.393,
+      "passed": 6,
+      "log": "evidence/widget-settings-polish-20261011/focus-builtin-copy-v2-acceptance-20261011/03-focus_room_provider_static_test.log"
+    },
+    {
+      "suite": "test/services/focus_room_api_static_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/focus_room_api_static_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 7.81,
+      "passed": 5,
+      "log": "evidence/widget-settings-polish-20261011/focus-builtin-copy-v2-acceptance-20261011/04-focus_room_api_static_test.log"
+    }
+  ],
+  "analysis": {
+    "command": [
+      "/home/ubuntu/flutter/bin/flutter",
+      "analyze",
+      "--no-pub",
+      "lib/models/focus_room.dart",
+      "lib/providers/focus_room_provider.dart",
+      "test/providers/focus_room_builtin_copy_test.dart"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 49.93,
+    "log": "evidence/widget-settings-polish-20261011/focus-builtin-copy-v2-acceptance-20261011/analyze.log"
+  },
+  "source_hashes_unchanged": true,
+  "changed_source_files": [],
+  "finished_at_utc": "2026-10-11T12:32:42.592230+00:00",
+  "passed_total": 39,
+  "accepted": true
+}

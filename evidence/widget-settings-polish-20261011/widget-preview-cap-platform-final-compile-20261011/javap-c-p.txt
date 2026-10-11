@@ -26942,4 +26942,3 @@ public final class com.duoyi.duoyi.MainActivity extends io.flutter.embedding.and
      185: invokeinterface #1453,  1         // InterfaceMethod io/flutter/plugin/common/MethodChannel$Result.notImplemented:()V
      190: return
 }
-

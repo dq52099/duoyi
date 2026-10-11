@@ -12,6 +12,8 @@ import '../services/focus_room_api.dart';
 class FocusRoomProvider extends ChangeNotifier {
   static const storageKey = 'duoyi_focus_rooms';
   static const defaultRoomId = 'deep_work_room';
+  static const _builtinRoomCopyKey = 'builtinRoomCopy';
+  static const _builtinRoomCopyVersion = 1;
   static const _remoteRefreshInterval = Duration(minutes: 2);
   static const _friendRefreshInterval = Duration(minutes: 2);
   static const _globalRefreshInterval = Duration(minutes: 2);
@@ -225,6 +227,7 @@ class FocusRoomProvider extends ChangeNotifier {
   static final List<FocusRoom> _defaultRooms = [
     FocusRoom(
       id: defaultRoomId,
+      builtinKind: FocusRoomBuiltinKind.deepWork,
       name: '深度工作自习室',
       description: '适合写作、开发和高强度脑力任务。',
       weeklyTargetSeconds: 8 * 60 * 60,
@@ -253,6 +256,7 @@ class FocusRoomProvider extends ChangeNotifier {
     ),
     FocusRoom(
       id: 'exam_sprint_room',
+      builtinKind: FocusRoomBuiltinKind.examSprint,
       name: '考试冲刺自习室',
       description: '按周目标推进刷题、背诵和复习。',
       weeklyTargetSeconds: 12 * 60 * 60,
@@ -281,6 +285,7 @@ class FocusRoomProvider extends ChangeNotifier {
     ),
     FocusRoom(
       id: 'reading_room',
+      builtinKind: FocusRoomBuiltinKind.reading,
       name: '阅读自习室',
       description: '给阅读、论文和知识整理留一张安静桌子。',
       weeklyTargetSeconds: 5 * 60 * 60,
@@ -315,10 +320,26 @@ class FocusRoomProvider extends ChangeNotifier {
     try {
       final decoded = json.decode(raw);
       if (decoded is! Map) return;
+      final builtinCopy = decoded[_builtinRoomCopyKey];
+      final builtinRooms =
+          builtinCopy is Map &&
+              builtinCopy['version'] is int &&
+              builtinCopy['version'] == _builtinRoomCopyVersion &&
+              builtinCopy['rooms'] is Map
+          ? builtinCopy['rooms'] as Map
+          : const <Object?, Object?>{};
       final rooms = (decoded['rooms'] as List?)
           ?.whereType<Map>()
           .map((room) => FocusRoom.fromJson(Map<String, dynamic>.from(room)))
           .where((room) => room.id.isNotEmpty)
+          .map((room) {
+            final kind = FocusRoomBuiltinKind.fromStorageCode(
+              builtinRooms[room.id],
+            );
+            return kind != null && kind.matchesContent(room)
+                ? room.withBuiltinKind(kind)
+                : room;
+          })
           .toList();
       if (rooms != null && rooms.isNotEmpty) {
         _rooms = _mergeDefaultRooms(rooms);
@@ -1093,6 +1114,15 @@ class FocusRoomProvider extends ChangeNotifier {
         'rooms': _rooms.map((room) => room.toJson()).toList(),
         'joinedRoomIds': _joinedRoomIds.toList(),
         'activeRoomId': _activeRoomId,
+        if (_rooms.any((room) => room.builtinKind != null))
+          _builtinRoomCopyKey: {
+            'version': _builtinRoomCopyVersion,
+            'rooms': {
+              for (final room in _rooms)
+                if (room.builtinKind != null)
+                  room.id: room.builtinKind!.storageCode,
+            },
+          },
       }),
     );
   }
