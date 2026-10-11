@@ -27,6 +27,10 @@ class WidgetLaunchService {
   int _generation = 0;
   Timer? _retryTimer;
   int _retryAttempt = 0;
+  final Queue<Object?> _bufferedHotDeliveries = Queue<Object?>();
+  bool _draining = false;
+  bool _backlogReady = false;
+  bool _redrainRequested = false;
 
   Stream<Uri> get links => _controller.stream;
 
@@ -40,11 +44,22 @@ class WidgetLaunchService {
 
   void _subscribe() {
     final generation = ++_generation;
-    // Install the handler before asking native code to drain the backlog.
-    // An overlapping hot delivery is harmless because both carry the same ID.
+    _bufferedHotDeliveries.clear();
+    _backlogReady = false;
+    _draining = false;
+    _redrainRequested = false;
+    // Install the handler before requesting the ordered native backlog.
+    // Buffer newer hot taps until that snapshot is emitted, deduplicating IDs.
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onLaunch') {
-        await _receive(call.arguments, generation);
+        if (generation != _generation) return null;
+        if (!_backlogReady || _draining) {
+          // The native snapshot has receipt order. Emit it before newer hot
+          // taps even if its method-channel result arrives after onLaunch.
+          _bufferedHotDeliveries.add(call.arguments);
+        } else {
+          await _receive(call.arguments, generation);
+        }
       }
       return null;
     });
@@ -52,7 +67,11 @@ class WidgetLaunchService {
   }
 
   Future<void> _drain(int generation) async {
-    if (generation != _generation || !_controller.hasListener) return;
+    if (generation != _generation || !_controller.hasListener || _draining) {
+      return;
+    }
+    _draining = true;
+    _backlogReady = false;
     try {
       final pending = await _channel.invokeListMethod<Object?>('subscribe');
       if (generation != _generation) return;
@@ -60,9 +79,23 @@ class WidgetLaunchService {
       for (final delivery in pending ?? const <Object?>[]) {
         await _receive(delivery, generation);
       }
+      while (generation == _generation && _bufferedHotDeliveries.isNotEmpty) {
+        await _receive(_bufferedHotDeliveries.removeFirst(), generation);
+      }
+      if (generation == _generation) _backlogReady = true;
     } catch (error, stack) {
       debugPrint('[WidgetLaunch] subscription failed: $error\n$stack');
       _scheduleRetry(generation);
+    } finally {
+      if (generation == _generation) {
+        _draining = false;
+        if (_redrainRequested && _controller.hasListener) {
+          _redrainRequested = false;
+          _retryTimer?.cancel();
+          _retryTimer = null;
+          unawaited(_drain(generation));
+        }
+      }
     }
   }
 
@@ -76,7 +109,13 @@ class WidgetLaunchService {
     final seconds = delays[_retryAttempt < 4 ? _retryAttempt++ : 4];
     _retryTimer = Timer(Duration(seconds: seconds), () {
       _retryTimer = null;
-      unawaited(_drain(generation));
+      if (generation != _generation || !_controller.hasListener) return;
+      if (_draining) {
+        // A slow ACK must not consume the only scheduled retry wakeup.
+        _redrainRequested = true;
+      } else {
+        unawaited(_drain(generation));
+      }
     });
   }
 
@@ -105,20 +144,26 @@ class WidgetLaunchService {
     if (link is! String) return null;
     try {
       final uri = Uri.tryParse(link);
-      if (uri != null &&
-          uri.scheme == 'duoyi' &&
-          uri.hasAuthority &&
-          uri.queryParameters['source'] == 'widget' &&
-          uri.queryParameters['widget_delivery'] == id) {
-        return uri;
+      if (uri == null || uri.scheme != 'duoyi' || !uri.hasAuthority) {
+        return null;
       }
+      final parameters = uri.queryParametersAll;
+      final sources = parameters['source'];
+      final deliveries = parameters['widget_delivery'];
+      if (sources?.length != 1 ||
+          sources!.single != 'widget' ||
+          deliveries?.length != 1 ||
+          deliveries!.single != id) {
+        return null;
+      }
+      return uri;
     } on FormatException {
       return null;
     }
-    return null;
   }
 
   Future<void> acknowledge(Uri uri) async {
+    if (!ownsDelivery(uri)) return;
     final id = uri.queryParameters['widget_delivery'];
     if (id == null || !_receivedIds.contains(id)) return;
     await _acknowledgeId(id);
@@ -152,6 +197,10 @@ class WidgetLaunchService {
     _retryTimer?.cancel();
     _retryTimer = null;
     _retryAttempt = 0;
+    _bufferedHotDeliveries.clear();
+    _backlogReady = false;
+    _draining = false;
+    _redrainRequested = false;
     _receivedIds.removeWhere((id) => !_terminalIds.contains(id));
     unawaited(() async {
       try {

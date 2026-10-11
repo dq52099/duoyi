@@ -600,10 +600,15 @@ void main() {
         contains('WidgetActionSyncStatus.fromFacts('),
       );
       expect(createdNoticeSource, contains('syncState = status.state;'));
-      expect(createdNoticeSource, contains('syncReason = status.reason;'));
+      expect(createdNoticeSource, contains('syncNotice = status.notice;'));
+      expect(
+        createdNoticeSource,
+        contains("syncReason = status.notice == null ? status.reason : '';"),
+      );
       expect(createdNoticeSource, contains('WidgetActionNotice.todoSaved'));
       expect(createdNoticeSource, contains('syncState: syncState'));
       expect(createdNoticeSource, contains('syncReason: syncReason'));
+      expect(createdNoticeSource, contains('syncNotice: syncNotice'));
       expect(createdNoticeSource, contains('reminderHint: reminderHint'));
       expect(createdNoticeSource, isNot(contains('localSaveSyncMessage(')));
 

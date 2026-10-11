@@ -1,7 +1,160 @@
 import 'package:duoyi/services/widget_link_dispatch.dart';
+import 'package:duoyi/services/widget_calendar_link.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('WidgetLinkDispatch calendar dates', () {
+    test('a valid widget date is hydrated and snapshot validated', () async {
+      final uri = Uri.parse(
+        'duoyi://calendar?date=2024-02-29&source=widget&widget_delivery=date-1'
+        '&widget_day=2026-10-11&widget_offset=480&widget_account=owner',
+      );
+      final calls = <String>[];
+      final result = await WidgetLinkDispatch.resolve(
+        uri,
+        hydrate: () async => calls.add('hydrate'),
+        validate: (value) async {
+          calls.add('validate');
+          expect(value, uri);
+          return true;
+        },
+        isCurrent: () => true,
+      );
+
+      expect(calls, ['hydrate', 'validate']);
+      expect(result.stale, isFalse);
+      expect(
+        WidgetCalendarLink.dateFromUri(result.uri!),
+        DateTime(2024, 2, 29),
+      );
+      expect(result.uri!.queryParameters['source'], isNull);
+      expect(result.uri!.queryParameters['widget_delivery'], 'date-1');
+      expect(result.uri!.queryParameters['widget_account'], 'owner');
+      expect(result.uri!.queryParameters['widget_day'], '2026-10-11');
+      expect(result.uri!.queryParameters['widget_offset'], '480');
+    });
+
+    test('an outdated widget date falls back without a selected date', () async {
+      final uri = Uri.parse(
+        'duoyi://calendar?date=2024-02-29&source=widget&widget_delivery=old-date',
+      );
+      var validations = 0;
+      final result = await WidgetLinkDispatch.resolve(
+        uri,
+        hydrate: () async {},
+        validate: (_) async {
+          validations++;
+          return false;
+        },
+        isCurrent: () => true,
+      );
+      expect(validations, 1);
+      expect(result.uri, Uri.parse('duoyi://calendar'));
+      expect(result.stale, isTrue);
+      expect(WidgetCalendarLink.dateFromUri(result.uri!), isNull);
+    });
+
+    test(
+      'a direct dated app link retains its legacy unbound behavior',
+      () async {
+        final uri = Uri.parse('duoyi://calendar?date=2024-02-29');
+        var validations = 0;
+        final result = await WidgetLinkDispatch.resolve(
+          uri,
+          hydrate: () async {},
+          validate: (_) async {
+            validations++;
+            return false;
+          },
+          isCurrent: () => true,
+        );
+        expect(result.uri, uri);
+        expect(result.stale, isFalse);
+        expect(validations, 0);
+      },
+    );
+
+    test(
+      'an undated widget root hydrates without snapshot validation',
+      () async {
+        final uri = Uri.parse(
+          'duoyi://calendar?source=widget&widget_delivery=root-date',
+        );
+        var hydrations = 0;
+        var validations = 0;
+        final result = await WidgetLinkDispatch.resolve(
+          uri,
+          hydrate: () async {
+            hydrations++;
+          },
+          validate: (_) async {
+            validations++;
+            return false;
+          },
+          isCurrent: () => true,
+        );
+        expect(result.uri, uri);
+        expect(result.stale, isFalse);
+        expect(hydrations, 1);
+        expect(validations, 0);
+      },
+    );
+
+    for (final query in [
+      'date=2025-02-29&source=widget',
+      'date=2024-02-29&date=2024-03-01&source=widget',
+      'date=2024-02-29&source=widget&source=other',
+      'date=2024-02-29&source=other&source=widget',
+      'date=2024-02-29&source=widget&widget_day=today&widget_day=old',
+      'date=2024-02-29&source=widget&widget_offset=0&widget_offset=480',
+      'date=2024-02-29&source=widget&widget_account=A&widget_account=B',
+      'date=2024-02-29&source=widget&widget_delivery=A&widget_delivery=B',
+      'date=2024-02-29&source=widget&extra=unsupported',
+      'date=%FF&source=widget',
+    ]) {
+      test('normalizes invalid or ambiguous date input $query', () async {
+        var validations = 0;
+        final result = await WidgetLinkDispatch.resolve(
+          Uri.parse('duoyi://calendar?$query'),
+          hydrate: () async {},
+          validate: (_) async {
+            validations++;
+            return true;
+          },
+          isCurrent: () => true,
+        );
+        expect(result.uri, Uri.parse('duoyi://calendar'));
+        expect(result.stale, isFalse);
+        expect(validations, 0);
+      });
+    }
+
+    for (final phase in ['hydrate', 'validate']) {
+      test(
+        'drops a calendar date when account changes during $phase',
+        () async {
+          var current = true;
+          var validations = 0;
+          final result = await WidgetLinkDispatch.resolve(
+            Uri.parse('duoyi://calendar?date=2024-02-29&source=widget'),
+            hydrate: () async {
+              if (phase == 'hydrate') current = false;
+            },
+            validate: (_) async {
+              validations++;
+              if (phase == 'validate') current = false;
+              return true;
+            },
+            isCurrent: () => current,
+          );
+          expect(result.uri, isNull);
+          expect(result.stale, isFalse);
+          expect(validations, phase == 'hydrate' ? 0 : 1);
+        },
+      );
+    }
+  });
+
   group('WidgetLinkDispatch binding policy', () {
     test(
       'legacy unbound entity link keeps its ID and bypasses validation',

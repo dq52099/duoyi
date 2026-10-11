@@ -1,3 +1,5 @@
+import 'widget_calendar_link.dart';
+
 /// Resolves widget links after data hydration and account binding validation.
 /// Plain reminder/external deep links retain their existing behavior.
 class WidgetLinkDispatch {
@@ -36,7 +38,8 @@ class WidgetLinkDispatch {
       }
       return true;
     }
-    return entityHosts.contains(uri.host) && uri.pathSegments.isNotEmpty;
+    return (entityHosts.contains(uri.host) && uri.pathSegments.isNotEmpty) ||
+        WidgetCalendarLink.hasDateRequest(uri);
   }
 
   static Future<WidgetLinkDispatch> resolve(
@@ -47,12 +50,16 @@ class WidgetLinkDispatch {
   }) async {
     await hydrate();
     if (!isCurrent()) return const WidgetLinkDispatch(null);
+    if (WidgetCalendarLink.hasDateRequest(uri) &&
+        WidgetCalendarLink.dateFromUri(uri) == null) {
+      return WidgetLinkDispatch(Uri(scheme: 'duoyi', host: 'calendar'));
+    }
     if (!requiresBinding(uri)) return WidgetLinkDispatch(uri);
     final valid = await validate(uri);
     if (!isCurrent()) return const WidgetLinkDispatch(null);
     if (!valid) {
       return WidgetLinkDispatch(
-        entityHosts.contains(uri.host)
+        entityHosts.contains(uri.host) || WidgetCalendarLink.isCalendarUri(uri)
             ? Uri(scheme: 'duoyi', host: uri.host)
             : null,
         stale: true,

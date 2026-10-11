@@ -63,6 +63,9 @@ import 'services/widget_publication_controller.dart';
 import 'services/widget_quick_todo_action.dart';
 import 'services/widget_action_scope.dart';
 import 'services/widget_link_dispatch.dart';
+import 'services/widget_calendar_link.dart';
+import 'services/widget_calendar_route_controller.dart';
+import 'services/widget_navigation_request.dart';
 import 'services/cloud_sync_notice.dart';
 import 'services/widget_action_message.dart';
 import 'services/reminder_issue_copy.dart';
@@ -106,7 +109,10 @@ import 'widgets/todo_completion_flow.dart';
 import 'widgets/surface_components.dart';
 
 final GlobalKey<MainShellState> mainShellKey = GlobalKey<MainShellState>();
-final List<Uri> _pendingWidgetUris = <Uri>[];
+typedef _PendingWidgetLaunch = ({Uri uri, WidgetNavigationRequest request});
+final List<_PendingWidgetLaunch> _pendingWidgetUris = [];
+final _widgetNavigationRequests = WidgetNavigationRequests();
+final _widgetCalendarRoutes = WidgetCalendarRouteController();
 final Map<String, DateTime> _recentWidgetActionUris = <String, DateTime>{};
 final Set<String> _handledWidgetDeliveries = <String>{};
 typedef _ReminderResyncQueue =
@@ -3921,30 +3927,41 @@ String _reportDigestNotificationBody({
   return (previousStart, previousEnd);
 }
 
-void _queuePendingWidgetUri(Uri uri, String reason) {
-  if (_pendingWidgetUris.any(
-    (pending) => pending.toString() == uri.toString(),
-  )) {
+void _queuePendingWidgetUri(
+  Uri uri,
+  String reason,
+  WidgetNavigationRequest request,
+) {
+  final existingIndex = _pendingWidgetUris.indexWhere(
+    (pending) => pending.uri.toString() == uri.toString(),
+  );
+  if (existingIndex >= 0) {
+    _pendingWidgetUris[existingIndex] = (uri: uri, request: request);
     return;
   }
   if (_pendingWidgetUris.length >= 20 &&
       !HomeWidgetService.isReceivedLaunch(uri)) {
     final disposable = _pendingWidgetUris.indexWhere(
-      (pending) => !HomeWidgetService.isReceivedLaunch(pending),
+      (pending) => !HomeWidgetService.isReceivedLaunch(pending.uri),
     );
     if (disposable < 0) return;
     _pendingWidgetUris.removeAt(disposable);
   }
-  _pendingWidgetUris.add(uri);
+  _pendingWidgetUris.add((uri: uri, request: request));
   debugPrint('[DeepLink] queued launch: $reason');
 }
 
 void _drainPendingWidgetUris(PomodoroProvider pomodoro) {
   if (_pendingWidgetUris.isEmpty) return;
-  final pending = List<Uri>.of(_pendingWidgetUris);
+  final pending = List<_PendingWidgetLaunch>.of(_pendingWidgetUris);
   _pendingWidgetUris.clear();
-  for (final uri in pending) {
-    _handleWidgetUri(uri, pomodoro, allowQueue: false);
+  for (final launch in pending) {
+    _handleWidgetUri(
+      launch.uri,
+      pomodoro,
+      allowQueue: false,
+      navigationRequest: launch.request,
+    );
   }
 }
 
@@ -3966,15 +3983,25 @@ bool _reserveWidgetActionUri(Uri uri) {
   return true;
 }
 
+bool _isCalendarNavigationUri(Uri uri) =>
+    uri.host == 'calendar' ||
+    (uri.host == 'tab' && uri.pathSegments.firstOrNull == 'calendar');
+
 void _handleWidgetUri(
   Uri? uri,
   PomodoroProvider pomodoro, {
   int retry = 0,
   bool allowQueue = true,
   bool dataReady = false,
+  WidgetNavigationRequest? navigationRequest,
 }) {
   if (uri == null) return;
   if (uri.scheme != 'duoyi') return;
+  final request = navigationRequest ?? _widgetNavigationRequests.capture();
+  if (_isCalendarNavigationUri(uri) && !request.isLatest) {
+    unawaited(HomeWidgetService.acknowledgeLaunch(uri));
+    return;
+  }
 
   final state = mainShellKey.currentState;
   final ctx = mainShellKey.currentContext;
@@ -3984,13 +4011,24 @@ void _handleWidgetUri(
   }
   if (state == null && retry < 8) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _handleWidgetUri(uri, pomodoro, retry: retry + 1);
+      _handleWidgetUri(
+        uri,
+        pomodoro,
+        retry: retry + 1,
+        allowQueue: allowQueue,
+        dataReady: dataReady,
+        navigationRequest: request,
+      );
     });
     return;
   }
   if (state == null) {
     if (allowQueue) {
-      _queuePendingWidgetUri(uri, 'main shell not ready after $retry frames');
+      _queuePendingWidgetUri(
+        uri,
+        'main shell not ready after $retry frames',
+        request,
+      );
     } else {
       debugPrint('[DeepLink] dropped launch: main shell not ready');
     }
@@ -3998,7 +4036,7 @@ void _handleWidgetUri(
   }
 
   if (!dataReady && WidgetLinkDispatch.requiresHydration(uri)) {
-    unawaited(_dispatchWidgetUriAfterHydration(uri, pomodoro));
+    unawaited(_dispatchWidgetUriAfterHydration(uri, pomodoro, request));
     return;
   }
 
@@ -4017,9 +4055,20 @@ void _handleWidgetUri(
   }
 
   try {
-    _routeHydratedWidgetUri(uri, pomodoro, state, ctx);
+    _routeHydratedWidgetUri(uri, pomodoro, state, ctx, request);
   } finally {
     unawaited(HomeWidgetService.acknowledgeLaunch(uri));
+  }
+}
+
+void _navigateWidgetSection(
+  MainShellState state,
+  BuildContext? context,
+  int index,
+) {
+  state.navigateTo(index, allowHidden: true);
+  if (context != null && context.mounted) {
+    _widgetCalendarRoutes.showSection(Navigator.of(context));
   }
 }
 
@@ -4028,6 +4077,7 @@ void _routeHydratedWidgetUri(
   PomodoroProvider pomodoro,
   MainShellState state,
   BuildContext? ctx,
+  WidgetNavigationRequest navigationRequest,
 ) {
   if (uri.host == 'tab') {
     final tab = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
@@ -4041,9 +4091,9 @@ void _routeHydratedWidgetUri(
       'mine' => 6,
       _ => 3,
     };
-    state.navigateTo(idx, allowHidden: true);
+    _navigateWidgetSection(state, ctx, idx);
   } else if (uri.host == 'oauth' && ctx != null) {
-    state.navigateTo(6, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 6);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final latestContext = mainShellKey.currentContext ?? ctx;
       Navigator.of(latestContext).push(
@@ -4057,10 +4107,10 @@ void _routeHydratedWidgetUri(
   } else if (uri.host == 'todo' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     if (id == null || id.isEmpty) {
-      state.navigateTo(1, allowHidden: true);
+      _navigateWidgetSection(state, ctx, 1);
       return;
     }
-    state.navigateTo(1, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 1);
     final confirm = uri.queryParameters['confirm'] == '1';
     if (confirm) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -4076,12 +4126,12 @@ void _routeHydratedWidgetUri(
       _pushHiddenWidgetFallbackRoute(ctx, const GoalScreen());
       return;
     }
-    state.navigateTo(0, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 0);
     // ignore: discarded_futures
     TodayDetailRouter.open(ctx, TodaySectionKind.goals, id: id);
   } else if (uri.host == 'habit' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
-    state.navigateTo(2, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 2);
     if (id == null || id.isEmpty) return;
     final confirm = uri.queryParameters['confirm'] == '1';
     if (confirm) {
@@ -4094,17 +4144,23 @@ void _routeHydratedWidgetUri(
     }
   } else if (uri.host == 'calendar') {
     state.navigateTo(3, allowHidden: true);
+    final date = WidgetCalendarLink.dateFromUri(uri);
+    if (date != null && ctx != null) {
+      _openWidgetCalendarDate(ctx, date, navigationRequest);
+    } else if (ctx != null) {
+      _widgetCalendarRoutes.showSection(Navigator.of(ctx));
+    }
   } else if (uri.host == 'focus') {
-    state.navigateTo(4, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 4);
   } else if (uri.host == 'widget') {
-    state.navigateTo(5, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 5);
   } else if (uri.host == 'course' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     if (id == null || id.isEmpty) {
       _pushHiddenWidgetFallbackRoute(ctx, const CourseScheduleScreen());
       return;
     }
-    state.navigateTo(0, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 0);
     // ignore: discarded_futures
     TodayDetailRouter.open(ctx, TodaySectionKind.courses, id: id);
   } else if (uri.host == 'anniversary' && ctx != null) {
@@ -4113,7 +4169,7 @@ void _routeHydratedWidgetUri(
       _pushHiddenWidgetFallbackRoute(ctx, const AnniversaryScreen());
       return;
     }
-    state.navigateTo(0, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 0);
     // ignore: discarded_futures
     TodayDetailRouter.open(ctx, TodaySectionKind.anniversaries, id: id);
   } else if (uri.host == 'countdown' && ctx != null) {
@@ -4127,7 +4183,7 @@ void _routeHydratedWidgetUri(
     if (id == null || id.isEmpty) {
       _pushHiddenWidgetFallbackRoute(ctx, const NoteScreen());
     } else {
-      state.navigateTo(0, allowHidden: true);
+      _navigateWidgetSection(state, ctx, 0);
       // ignore: discarded_futures
       TodayDetailRouter.open(ctx, TodaySectionKind.notes, id: id);
     }
@@ -4137,12 +4193,12 @@ void _routeHydratedWidgetUri(
       _pushHiddenWidgetFallbackRoute(ctx, const DiaryScreen());
       return;
     }
-    state.navigateTo(0, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 0);
     // ignore: discarded_futures
     TodayDetailRouter.open(ctx, TodaySectionKind.diary, id: id);
   } else if (uri.host == 'time-entry' && ctx != null) {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
-    state.navigateTo(6, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 6);
     Navigator.of(ctx).push(
       MaterialPageRoute(
         builder: (_) =>
@@ -4150,7 +4206,7 @@ void _routeHydratedWidgetUri(
       ),
     );
   } else if (uri.host == 'report' && ctx != null) {
-    state.navigateTo(6, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 6);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final latestContext = mainShellKey.currentContext ?? ctx;
       Navigator.of(latestContext).push(
@@ -4160,7 +4216,7 @@ void _routeHydratedWidgetUri(
       );
     });
   } else if (uri.host == 'location' && ctx != null) {
-    state.navigateTo(6, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 6);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final latestContext = mainShellKey.currentContext ?? ctx;
       Navigator.of(latestContext).push(
@@ -4178,7 +4234,7 @@ void _routeHydratedWidgetUri(
     final action = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
     if (!_reserveWidgetActionUri(uri)) return;
     if (action == 'start_pomodoro') {
-      state.navigateTo(4, allowHidden: true);
+      _navigateWidgetSection(state, ctx, 4);
       if (pomodoro.state.isRunning) {
         if (ctx != null) {
           _showWidgetActionFeedback(
@@ -4199,7 +4255,7 @@ void _routeHydratedWidgetUri(
       unawaited(_refreshWidgetsFromAction(ctx));
     } else if (action == 'quick_todo' && ctx != null) {
       final text = uri.queryParameters['text']?.trim();
-      state.navigateTo(1, allowHidden: true);
+      _navigateWidgetSection(state, ctx, 1);
       if (text != null && text.isNotEmpty) {
         final draft = SmartTodoDraftBuilder.fromText(text);
         unawaited(_createQuickTodoFromAction(ctx, draft.toTodo()));
@@ -4211,7 +4267,7 @@ void _routeHydratedWidgetUri(
     } else if (action == 'complete_todo' && ctx != null) {
       final id = uri.queryParameters['id'];
       if (id == null || id.isEmpty) return;
-      state.navigateTo(1, allowHidden: true);
+      _navigateWidgetSection(state, ctx, 1);
       final todos = Provider.of<TodoProvider>(ctx, listen: false);
       final target = todos.todos.where((todo) => todo.id == id).firstOrNull;
       if (target == null) {
@@ -4234,7 +4290,7 @@ void _routeHydratedWidgetUri(
       unawaited(_completeTodoFromWidgetAction(ctx, todos, target));
     } else if (action == 'checkin_habit' && ctx != null) {
       final id = uri.queryParameters['id'];
-      state.navigateTo(2, allowHidden: true);
+      _navigateWidgetSection(state, ctx, 2);
       if (id == null || id.isEmpty) return;
       final habits = Provider.of<HabitProvider>(ctx, listen: false);
       final target = habits.habits.where((habit) => habit.id == id).firstOrNull;
@@ -4276,7 +4332,7 @@ void _routeHydratedWidgetUri(
     }
   } else {
     debugPrint('[DeepLink] unsupported entry');
-    state.navigateTo(6, allowHidden: true);
+    _navigateWidgetSection(state, ctx, 6);
     if (ctx != null) {
       _showWidgetActionFeedback(
         ctx,
@@ -4286,8 +4342,34 @@ void _routeHydratedWidgetUri(
   }
 }
 
+void _openWidgetCalendarDate(
+  BuildContext context,
+  DateTime date,
+  WidgetNavigationRequest request,
+) {
+  final auth = context.read<AuthProvider>();
+  final scope = WidgetActionScope(
+    isCallerAvailable: () =>
+        context.mounted && !_widgetAccountUnavailable(auth) && request.isLatest,
+  );
+  scope.afterFrame(() {
+    final latestContext = mainShellKey.currentContext;
+    if (latestContext == null || !latestContext.mounted) return;
+    final navigator = Navigator.of(latestContext);
+    final route = MaterialPageRoute<void>(
+      settings: const RouteSettings(name: 'widget/calendar/date'),
+      builder: (_) =>
+          BrandRouteSurface(child: CalendarScreen(initialDate: date)),
+    );
+    _widgetCalendarRoutes.open(navigator, route);
+  });
+}
+
 void _pushHiddenWidgetFallbackRoute(BuildContext context, Widget child) {
   mainShellKey.currentState?.navigateTo(6, allowHidden: true);
+  if (context.mounted) {
+    _widgetCalendarRoutes.showSection(Navigator.of(context));
+  }
   WidgetsBinding.instance.addPostFrameCallback((_) {
     final latestContext = mainShellKey.currentContext ?? context;
     if (!latestContext.mounted) return;
@@ -4392,15 +4474,20 @@ bool _widgetAccountUnavailable(AuthProvider auth) =>
 Future<void> _dispatchWidgetUriAfterHydration(
   Uri uri,
   PomodoroProvider pomodoro,
+  WidgetNavigationRequest navigationRequest,
 ) async {
   final generation = AccountLocalDataCleaner.accountDataGeneration;
-  final scope = WidgetActionScope();
+  final scope = WidgetActionScope(
+    isCallerAvailable: () =>
+        !_isCalendarNavigationUri(uri) || navigationRequest.isLatest,
+  );
   try {
     final result = await WidgetLinkDispatch.resolve(
       uri,
       hydrate: () async => await _ensureHomeWidgetDataReady?.call(),
       validate: HomeWidgetService.isCurrentWidgetAction,
       isCurrent: () {
+        if (!scope.isCurrent) return false;
         if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
           generation,
         )) {
@@ -4412,6 +4499,10 @@ Future<void> _dispatchWidgetUriAfterHydration(
             !_widgetAccountUnavailable(context.read<AuthProvider>());
       },
     );
+    if (!scope.isCurrent) {
+      await HomeWidgetService.acknowledgeLaunch(uri);
+      return;
+    }
     if (result.stale) {
       _showWidgetActionFeedbackFromShell(
         const WidgetActionMessage(WidgetActionNotice.staleContent),
@@ -4419,10 +4510,18 @@ Future<void> _dispatchWidgetUriAfterHydration(
       );
     }
     if (result.uri != null) {
-      _handleWidgetUri(result.uri, pomodoro, dataReady: true);
+      _handleWidgetUri(
+        result.uri,
+        pomodoro,
+        dataReady: true,
+        navigationRequest: navigationRequest,
+      );
     }
     // A rejected or section-only fallback consumes the original delivery too.
-    if (result.uri == null || result.stale) {
+    if (result.uri == null ||
+        result.stale ||
+        (HomeWidgetService.isReceivedLaunch(uri) &&
+            !HomeWidgetService.isReceivedLaunch(result.uri!))) {
       await HomeWidgetService.acknowledgeLaunch(uri);
     }
   } catch (e, st) {

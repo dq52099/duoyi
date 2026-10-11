@@ -26,6 +26,7 @@ import 'package:duoyi/screens/pomodoro_screen.dart';
 import 'package:duoyi/screens/todo_screen.dart';
 import 'package:duoyi/services/calendar_sync_service.dart';
 import 'package:duoyi/services/ai_service.dart';
+import 'package:duoyi/services/widget_calendar_link.dart';
 import 'package:duoyi/services/focus_dnd_service.dart';
 import 'package:duoyi/widgets/brand_background.dart';
 import 'package:flutter/material.dart';
@@ -529,6 +530,44 @@ void main() {
         expect(find.text('Locale fixture session'), findsOneWidget);
       }
 
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Calendar renders the exact widget civil date and retains it across locales',
+    (tester) async {
+      final target = WidgetCalendarLink.dateFromUri(
+        Uri.parse('duoyi://calendar?date=2024-02-29'),
+      );
+      expect(target, DateTime(2024, 2, 29));
+      await tester.pumpWidget(_calendarRouteApp(target!));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(Tab, '日'));
+      await tester.pumpAndSettle();
+      expect(_calendarDateLabel('2024年2月29日'), findsOneWidget);
+      final originalState = tester.state(find.byType(CalendarScreen));
+      final originalTabs = _calendarTabController(tester);
+      expect(tester.takeException(), isNull);
+
+      for (final locale in [AppLocale.en, AppLocale.zh]) {
+        I18n.setLocale(locale);
+        await tester.pumpAndSettle();
+        expect(
+          _calendarDateLabel(
+            locale == AppLocale.en ? 'Feb 29, 2024' : '2024年2月29日',
+          ),
+          findsOneWidget,
+        );
+        expect(tester.state(find.byType(CalendarScreen)), same(originalState));
+        expect(_calendarTabController(tester), same(originalTabs));
+        expect(originalTabs.index, 2);
+        expect(tester.takeException(), isNull);
+      }
+      await tester.tap(find.byTooltip('下一天'));
+      await tester.pumpAndSettle();
+      expect(_calendarDateLabel('2024年3月1日'), findsOneWidget);
+      expect(tester.state(find.byType(CalendarScreen)), same(originalState));
       expect(tester.takeException(), isNull);
     },
   );
