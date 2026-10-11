@@ -159,6 +159,7 @@ class BackupService {
   static Future<String> exportAll() async {
     final generation = AccountLocalDataCleaner.accountDataGeneration;
     await AccountPreferenceWrites.waitForBoundary();
+    await _writeTail;
     if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
       throw const AccountPreferenceWriteCanceled();
     }
