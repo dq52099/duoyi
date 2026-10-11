@@ -1,7 +1,9 @@
 import 'dart:io';
 
-import 'package:test/test.dart';
+import 'package:duoyi/core/app_update_ui_copy.dart';
 import 'package:duoyi/core/app_version.dart';
+import 'package:duoyi/core/i18n.dart';
+import 'package:test/test.dart';
 
 void main() {
   test('force update defaults track the repository version', () {
@@ -189,11 +191,17 @@ void main() {
     expect(forceUpdateGate, contains('PopScope('));
     expect(forceUpdateGate, contains('canPop: false'));
     expect(forceUpdateGate, contains('AppUpdateInstaller.supportsInstall'));
-    expect(forceUpdateGate, contains('需要更新后才能继续使用'));
+    expect(forceUpdateGate, contains('AppUpdateUiCopy.requiredTitle()'));
     expect(forceUpdateGate, contains('BrandBackground('));
-    expect(forceUpdateGate, contains('管理员已开启强制更新策略'));
-    expect(forceUpdateGate, contains('管理员未配置下载地址'));
-    expect(forceUpdateGate, contains('当前平台不支持应用内安装'));
+    expect(forceUpdateGate, contains('AppUpdateUiCopy.requiredDescription()'));
+    expect(
+      forceUpdateGate,
+      contains('AppUpdateUiCopy.installerUnavailableMessage()'),
+    );
+    expect(
+      forceUpdateGate,
+      contains('AppUpdateUiCopy.unsupportedPlatformTitle()'),
+    );
     expect(forceUpdateGate, contains('downloadAndInstallLatest()'));
     expect(forceUpdateGate, contains('updater.hasDownloadedInstaller'));
     expect(mainApp, contains('class _MainShellNotificationBadgeIcon'));
@@ -211,7 +219,38 @@ void main() {
     // 底导航文案已迁移到 BrandStrings（主题换文案对导航生效），
     // 见 test/core/brand_navigation_strings_test.dart 的静态锚点。
     expect(mainApp, contains('label: brand.navMine'));
-    expect(forceUpdateGate, contains("'更新内容'"));
+    expect(forceUpdateGate, contains('AppUpdateUiCopy.notesHeading()'));
+    expect(AppUpdateUiCopy.requiredTitle(locale: AppLocale.zh), '需要更新后才能继续使用');
+    expect(
+      AppUpdateUiCopy.requiredTitle(locale: AppLocale.en),
+      'Update required to continue',
+    );
+    expect(
+      AppUpdateUiCopy.requiredDescription(locale: AppLocale.zh),
+      '管理员已开启强制更新策略。更新完成前，应用功能会暂时锁定。',
+    );
+    expect(
+      AppUpdateUiCopy.requiredDescription(locale: AppLocale.en),
+      'An administrator requires this update. App features stay locked until it is installed.',
+    );
+    expect(
+      AppUpdateUiCopy.installerUnavailableMessage(locale: AppLocale.zh),
+      '管理员未配置下载地址，或发布通道还没有提供可安装的新版本。请等待发布包同步完成。',
+    );
+    expect(
+      AppUpdateUiCopy.installerUnavailableMessage(locale: AppLocale.en),
+      'No download URL is configured, or the release channel does not have an installable package yet. Wait for the package to sync.',
+    );
+    expect(
+      AppUpdateUiCopy.unsupportedPlatformTitle(locale: AppLocale.zh),
+      '当前平台不支持应用内安装',
+    );
+    expect(
+      AppUpdateUiCopy.unsupportedPlatformTitle(locale: AppLocale.en),
+      'In-app installation is not supported on this platform',
+    );
+    expect(AppUpdateUiCopy.notesHeading(locale: AppLocale.zh), '更新内容');
+    expect(AppUpdateUiCopy.notesHeading(locale: AppLocale.en), 'What’s new');
     expect(backend, contains('APP_CURRENT_VERSION'));
     expect(backend, contains('APP_UPDATE_DEFAULT_NOTES'));
     expect(backend, contains('def _update_release_defaults'));

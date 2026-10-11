@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
-
+import 'package:duoyi/core/app_update_ui_copy.dart';
 import 'package:duoyi/core/i18n.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('通知设置铃声和音量控制在窄屏下仍保持同行紧凑布局', () {
@@ -51,12 +51,22 @@ void main() {
     final source = File(
       'lib/widgets/force_update_gate.dart',
     ).readAsStringSync();
+    final copy = File('lib/core/app_update_ui_copy.dart').readAsStringSync();
 
     expect(source, contains('class _ForceUpdateInfoRow'));
     expect(source, contains('_breakableUpdateValue'));
     expect(source, contains('constraints.maxWidth < 300'));
     expect(source, contains('softWrap: true'));
-    expect(source, contains("'安装包'"));
+    expect(source, contains('label: AppUpdateUiCopy.installerLabel()'));
+    expect(source, isNot(contains("label: '安装包'")));
+    expect(
+      copy,
+      contains(
+        "AppUpdateNoticeKind.installerLabel => pick('安装包', 'Installer')",
+      ),
+    );
+    expect(AppUpdateUiCopy.installerLabel(locale: AppLocale.zh), '安装包');
+    expect(AppUpdateUiCopy.installerLabel(locale: AppLocale.en), 'Installer');
   });
 
   test('通知记录批量已读和筛选控件在窄屏下不挤压标题区', () {

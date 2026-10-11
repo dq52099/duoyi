@@ -1,0 +1,55 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/services/app_update_service_test.dart
+00:00 +0: generated updater notices render both locales and sanitize errors
+00:00 +1: authored mobile release notes remain literal through locale changes
+00:00 +2: authored config release notes remain literal through locale changes
+00:00 +3: authored github release notes remain literal through locale changes
+00:00 +4: missing notes localize lazily and never imply unsupplied changes
+00:00 +5: cached GitHub failure re-renders without another check (404)
+00:00 +6: cached GitHub failure re-renders without another check (503)
+00:00 +7: cached backend exceptions sanitize diagnostics in both locales
+00:00 +8: GitHub v1.9.0 fills only the backend target 2.0.0
+00:00 +9: GitHub v2.1.0 fills only the backend target 2.0.0
+00:00 +10: GitHub v2.0.0-rc.1 fills only the backend target 2.0.0
+00:00 +11: GitHub v2.0.0 fills only the backend target 2.0.0
+00:00 +12: release notes display hides GitHub generated full changelog link
+00:00 +13: minimum supported version only locks app when force update is enabled
+00:00 +14: server force update policy blocks current app when version is raised
+00:00 +15: client uses backend mobile update before GitHub fallback
+00:00 +16: backend update errors do not silently fall back to GitHub
+00:00 +17: mobile update 404 with stale backend contract still falls back to GitHub
+[AppUpdate] backend compatibility fallback: 检查更新失败：当前后端未部署本版本更新接口：/api/mobile/apps/duoyi/update。后端版本 3.1.0。缺少接口契约 api_contract_version。缺少必备路由摘要 required_routes_hash。请部署当前 backend/main.py 后再重试。
+00:00 +18: server config with outdated contract still falls back to GitHub
+[AppUpdate] backend compatibility fallback: 检查更新失败：当前后端未部署本版本更新接口：/api/mobile/apps/duoyi/update。后端版本 3.1.0。接口契约 2024-01-01.1 低于客户端要求 2026-06-01.2。缺少必备路由摘要 required_routes_hash。请部署当前 backend/main.py 后再重试。
+00:00 +19: server config with route hash mismatch still falls back to GitHub
+[AppUpdate] backend compatibility fallback: 检查更新失败：当前后端未部署本版本更新接口：/api/mobile/apps/duoyi/update。后端版本 3.1.0。必备路由摘要 stale-routes 与客户端要求 aaa003f86a1ff544 不一致。请部署当前 backend/main.py 后再重试。
+00:00 +20: backend mobile update fills missing release notes from GitHub
+00:00 +21: backend update request sends real build code when provided
+00:00 +22: same version with newer build code still surfaces update
+00:00 +23: server policy startup check avoids GitHub and uses fallback notes
+00:00 +24: startup policy check hides stale backend compatibility prompt
+[AppUpdate] startup backend compatibility fallback: 检查更新失败：当前后端未部署本版本更新接口：/api/mobile/apps/duoyi/update。后端版本 3.1.0。缺少接口契约 api_contract_version。缺少必备路由摘要 required_routes_hash。请部署当前 backend/main.py 后再重试。
+00:00 +25: backend mobile minimum supported version can force update
+00:00 +26: stale backend update versions are displayed as current version
+00:00 +27: backend stale apk url is replaced by release channel apk
+00:00 +28: mobile force_update response is honored directly
+00:00 +29: check update restores downloaded installer without network
+00:00 +30: stale downloaded installer url is not reused offline
+00:00 +31: mobile update 200 with route hash mismatch still falls back to GitHub
+[AppUpdate] backend compatibility fallback: 检查更新失败：当前后端未部署本版本更新接口：/api/mobile/apps/duoyi/update。必备路由摘要 stale-routes 与客户端要求 aaa003f86a1ff544 不一致。请部署当前 backend/main.py 后再重试。
+00:00 +32: backend force update switch also locks when backend reports blocked url
+00:00 +33: server config force update fallback blocks even without manual url
+00:00 +34: backend update checks normalize trailing slash base urls
+00:00 +35: backend update download urls are resolved and blocked reasons surface
+00:00 +36: GitHub assets match target before ranking (fallback=false, asset=1.9.0)
+00:00 +37: GitHub assets match target before ranking (fallback=false, asset=2.1.0)
+00:00 +38: GitHub assets match target before ranking (fallback=false, asset=path-mismatch)
+00:00 +39: GitHub assets match target before ranking (fallback=false, asset=adjacent-path-mismatch)
+00:00 +40: GitHub assets match target before ranking (fallback=false, asset=matching)
+00:00 +41: valid APK outranks mismatched universal APK (fallback=false)
+00:00 +42: GitHub assets match target before ranking (fallback=true, asset=1.9.0)
+00:00 +43: GitHub assets match target before ranking (fallback=true, asset=2.1.0)
+00:00 +44: GitHub assets match target before ranking (fallback=true, asset=path-mismatch)
+00:00 +45: GitHub assets match target before ranking (fallback=true, asset=adjacent-path-mismatch)
+00:01 +46: GitHub assets match target before ranking (fallback=true, asset=matching)
+00:01 +47: valid APK outranks mismatched universal APK (fallback=true)
+00:01 +48: All tests passed!

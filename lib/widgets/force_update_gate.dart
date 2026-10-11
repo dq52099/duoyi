@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/app_update_ui_copy.dart';
+import '../core/i18n.dart';
 import '../services/app_update_installer.dart';
 import '../services/app_update_service.dart';
 import 'brand_background.dart';
@@ -17,7 +19,18 @@ class _ForceUpdateGateState extends State<ForceUpdateGate> {
   final ScrollController _notesScrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     _notesScrollController.dispose();
     super.dispose();
   }
@@ -85,7 +98,7 @@ class _ForceUpdateGateState extends State<ForceUpdateGate> {
                           ),
                           const SizedBox(height: 18),
                           Text(
-                            '需要更新后才能继续使用',
+                            AppUpdateUiCopy.requiredTitle(),
                             textAlign: TextAlign.center,
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.normal,
@@ -93,7 +106,7 @@ class _ForceUpdateGateState extends State<ForceUpdateGate> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '管理员已开启强制更新策略。更新完成前，应用功能会暂时锁定。',
+                            AppUpdateUiCopy.requiredDescription(),
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurfaceVariant,
@@ -107,21 +120,23 @@ class _ForceUpdateGateState extends State<ForceUpdateGate> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 _ForceUpdateInfoRow(
-                                  label: '当前版本',
+                                  label: AppUpdateUiCopy.currentVersionLabel(),
                                   value: updater.currentVersion,
                                 ),
                                 _ForceUpdateInfoRow(
-                                  label: '最新版本',
-                                  value: updater.latestVersion ?? '未配置',
+                                  label: AppUpdateUiCopy.latestVersionLabel(),
+                                  value: updater.latestVersion ??
+                                      AppUpdateUiCopy.unconfiguredVersion(),
                                 ),
                                 if (updater.minimumSupportedVersion != null)
                                   _ForceUpdateInfoRow(
-                                    label: '最低支持版本',
+                                    label:
+                                        AppUpdateUiCopy.minimumVersionLabel(),
                                     value: updater.minimumSupportedVersion!,
                                   ),
                                 if (updater.latestAssetName != null)
                                   _ForceUpdateInfoRow(
-                                    label: '安装包',
+                                    label: AppUpdateUiCopy.installerLabel(),
                                     value: updater.latestAssetName!,
                                   ),
                               ],
@@ -130,7 +145,7 @@ class _ForceUpdateGateState extends State<ForceUpdateGate> {
                           if (notes.isNotEmpty) ...[
                             const SizedBox(height: 16),
                             Text(
-                              '更新内容',
+                              AppUpdateUiCopy.notesHeading(),
                               style: theme.textTheme.titleSmall?.copyWith(
                                 fontWeight: FontWeight.normal,
                               ),
@@ -170,9 +185,9 @@ class _ForceUpdateGateState extends State<ForceUpdateGate> {
                             const SizedBox(height: 12),
                             AppInfoBanner(
                               icon: Icons.link_off_outlined,
-                              title: '安装包暂不可用',
+                              title: AppUpdateUiCopy.installerUnavailableTitle(),
                               message:
-                                  '管理员未配置下载地址，或发布通道还没有提供可安装的新版本。请等待发布包同步完成。',
+                                  AppUpdateUiCopy.installerUnavailableMessage(),
                               color: colorScheme.error,
                               margin: EdgeInsets.zero,
                             ),
@@ -180,8 +195,9 @@ class _ForceUpdateGateState extends State<ForceUpdateGate> {
                             const SizedBox(height: 12),
                             AppInfoBanner(
                               icon: Icons.install_mobile_outlined,
-                              title: '当前平台不支持应用内安装',
-                              message: '请在 Android 手机上安装更新包；桌面或 Web 端仅展示更新说明。',
+                              title: AppUpdateUiCopy.unsupportedPlatformTitle(),
+                              message:
+                                  AppUpdateUiCopy.unsupportedPlatformMessage(),
                               color: colorScheme.primary,
                               margin: EdgeInsets.zero,
                             ),
@@ -194,8 +210,10 @@ class _ForceUpdateGateState extends State<ForceUpdateGate> {
                             const SizedBox(height: 6),
                             Text(
                               updater.downloadProgress == null
-                                  ? '正在下载更新包'
-                                  : '正在下载 ${(updater.downloadProgress! * 100).clamp(0, 100).toStringAsFixed(0)}%',
+                                  ? AppUpdateUiCopy.downloading()
+                                  : AppUpdateUiCopy.downloadProgress(
+                                      updater.downloadProgress! * 100,
+                                    ),
                               textAlign: TextAlign.center,
                               style: theme.textTheme.bodySmall,
                             ),
@@ -204,7 +222,7 @@ class _ForceUpdateGateState extends State<ForceUpdateGate> {
                             const LinearProgressIndicator(),
                             const SizedBox(height: 6),
                             Text(
-                              '正在打开安装器',
+                              AppUpdateUiCopy.openingInstaller(),
                               textAlign: TextAlign.center,
                               style: theme.textTheme.bodySmall,
                             ),
@@ -221,8 +239,8 @@ class _ForceUpdateGateState extends State<ForceUpdateGate> {
                             ),
                             label: Text(
                               updater.hasDownloadedInstaller
-                                  ? '安装已下载包'
-                                  : '下载并安装',
+                                  ? AppUpdateUiCopy.installDownloaded()
+                                  : AppUpdateUiCopy.downloadAndInstall(),
                             ),
                           ),
                         ],

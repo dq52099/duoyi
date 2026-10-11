@@ -34,6 +34,7 @@ enum AppUpdateNoticeKind {
   installPermissionRequired,
   unsupportedInstallPlatform,
   downloadFailed,
+  retry,
 }
 
 /// Lazy-rendered app-owned updater copy.
@@ -158,6 +159,7 @@ final class AppUpdateNotice {
         selected,
         pick,
       ),
+      AppUpdateNoticeKind.retry => pick('重试', 'Retry'),
     };
   }
 
@@ -210,4 +212,68 @@ final class AppUpdateNotice {
     if (detail == fallback) return detail;
     return pick('更新失败：$detail', 'Update failed: $detail');
   }
+}
+
+/// Static facade for lazily rendered updater copy.
+class AppUpdateUiCopy {
+  AppUpdateUiCopy._();
+
+  static bool get isEn => I18n.current == AppLocale.en;
+  static bool get isZh => I18n.current == AppLocale.zh;
+
+  static String pick(String zh, String en, {AppLocale? locale}) {
+    final selected = locale ?? I18n.current;
+    return selected == AppLocale.en ? en : zh;
+  }
+
+  static String notice(
+    AppUpdateNoticeKind kind, {
+    Object? error,
+    String? version,
+    double? progress,
+    AppLocale? locale,
+  }) =>
+      AppUpdateNotice(
+        kind,
+        error: error,
+        version: version,
+        progress: progress,
+      ).render(locale: locale);
+
+  static String requiredTitle({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.requiredTitle, locale: locale);
+  static String requiredDescription({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.requiredDescription, locale: locale);
+  static String currentVersionLabel({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.currentVersionLabel, locale: locale);
+  static String latestVersionLabel({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.latestVersionLabel, locale: locale);
+  static String unconfiguredVersion({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.unconfiguredVersion, locale: locale);
+  static String minimumVersionLabel({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.minimumVersionLabel, locale: locale);
+  static String installerLabel({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.installerLabel, locale: locale);
+  static String notesHeading({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.notesHeading, locale: locale);
+  static String installerUnavailableTitle({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.installerUnavailableTitle, locale: locale);
+  static String installerUnavailableMessage({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.installerUnavailableMessage, locale: locale);
+  static String unsupportedPlatformTitle({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.unsupportedPlatformTitle, locale: locale);
+  static String unsupportedPlatformMessage({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.unsupportedPlatformMessage, locale: locale);
+  static String downloading({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.downloading, locale: locale);
+  static String downloadProgress(double? progress, {AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.downloadProgress, progress: progress, locale: locale);
+  static String openingInstaller({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.openingInstaller, locale: locale);
+  static String installDownloaded({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.installDownloaded, locale: locale);
+  static String downloadAndInstall({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.downloadAndInstall, locale: locale);
+  static String retry({AppLocale? locale}) =>
+      notice(AppUpdateNoticeKind.retry, locale: locale);
 }
