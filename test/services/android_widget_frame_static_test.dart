@@ -52,6 +52,11 @@ void main() {
       contains('Looper.myLooper() != android.os.Looper.getMainLooper()'),
     );
     expect(source, contains('read.envelope?.document?.toFlatValues()'));
+    expect(
+      source,
+      contains('DuoyiWidgetFrameCore.deviceDisplayValues(backing.all, id)'),
+    );
+    expect(source, isNot(contains('display[key]?.let { raw[key] = it }')));
     expect(source, contains('store.acceptSnapshot(read.envelope)'));
     expect(source, contains('frame.core.rejectionReason(values(latest'));
     expect(source, contains('manager.updateAppWidget(id, built.views)'));

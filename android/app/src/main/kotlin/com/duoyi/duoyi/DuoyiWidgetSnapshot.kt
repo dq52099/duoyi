@@ -31,10 +31,7 @@ object DuoyiWidgetSnapshot {
         val raw = LinkedHashMap<String, Any?>()
         read.envelope?.document?.toFlatValues()?.let { raw.putAll(it) }
         // Launcher layout choices are device-owned and may live in preferences.
-        val display = backing.all
-        for (key in listOf("widget_display_mode", "widget_display_mode_$id")) {
-            display[key]?.let { raw[key] = it }
-        }
+        raw.putAll(DuoyiWidgetFrameCore.deviceDisplayValues(backing.all, id))
         return raw
     }
 

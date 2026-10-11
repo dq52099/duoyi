@@ -84,6 +84,18 @@ class DuoyiWidgetFrameCore(
     }
 
     companion object {
+        /** Only validated device-owned layout choices may accompany publication facts. */
+        fun deviceDisplayValues(values: Map<String, *>, widgetId: Int): Map<String, String> {
+            val display = LinkedHashMap<String, String>()
+            val keys = if (widgetId > 0) {
+                listOf("widget_display_mode", "widget_display_mode_$widgetId")
+            } else listOf("widget_display_mode")
+            for (key in keys) {
+                normalizeMode(values[key] as? String)?.let { display[key] = it }
+            }
+            return Collections.unmodifiableMap(display)
+        }
+
         fun immutableValues(values: Map<String, *>): Map<String, *> {
             val copy = LinkedHashMap<String, Any?>()
             values.forEach { (key, value) ->
