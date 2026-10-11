@@ -1,0 +1,5 @@
+Analyzing 10 items...                                           
+
+warning • The name CalendarEventTypeX is shown, but isn't used • lib/main.dart:49:44 • unused_shown_name
+
+1 issue found. (ran in 56.0s)

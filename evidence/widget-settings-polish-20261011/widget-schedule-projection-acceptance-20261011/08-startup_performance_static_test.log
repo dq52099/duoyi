@@ -1,0 +1,3 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/services/startup_performance_static_test.dart
+00:00 +0: startup keeps heavy reload sync notification and widget work staggered
+00:00 +1: All tests passed!

@@ -45,8 +45,7 @@ import 'providers/share_provider.dart';
 import 'providers/location_reminder_provider.dart';
 import 'models/goal.dart' show GoalStatus, ReminderKind, ReminderPlan;
 import 'models/habit.dart' show Habit, HabitKind;
-import 'models/calendar_event.dart'
-    show CalendarEvent, CalendarEventType, CalendarEventTypeX;
+import 'models/calendar_event.dart' show CalendarEvent, CalendarEventType;
 import 'models/note.dart' show NoteItem;
 import 'models/pomodoro.dart' show PomodoroType;
 import 'models/todo.dart' show TodoItem, TodoPriorityX;
@@ -57,6 +56,7 @@ import 'services/deep_link_service.dart';
 import 'services/daily_digest_reminder_sync.dart';
 import 'services/system_tray.dart';
 import 'services/home_widget_service.dart';
+import 'services/widget_schedule_projection.dart';
 import 'services/widget_publication.dart';
 import 'services/widget_publication_client.dart';
 import 'services/widget_publication_controller.dart';
@@ -3060,43 +3060,26 @@ List<CalendarEvent> _homeWidgetEventsForToday(
   TimeAuditProvider timeAudit,
   ThemeProvider themeProvider,
 ) {
-  final events = calendar.buildEventsForDateSnapshot(
-    today,
-    todos.todos,
-    habits.habits,
-    pomodoros.sessions,
-    themeProvider.brand.theme.colorScheme,
-    anniversaries: anniversaries.items,
-    courses: courses.courses,
-    courseSettings: courses.settings,
-    diaries: diaries.entries,
-    countdowns: countdowns.items,
-    goals: goals.goals,
-    timeEntries: timeAudit.entries,
+  return homeWidgetScheduleEvents(
+    calendar.buildEventsForDateSnapshot(
+      today,
+      todos.todos,
+      habits.habits,
+      pomodoros.sessions,
+      themeProvider.brand.theme.colorScheme,
+      anniversaries: anniversaries.items,
+      courses: courses.courses,
+      courseSettings: courses.settings,
+      diaries: diaries.entries,
+      countdowns: countdowns.items,
+      goals: goals.goals,
+      timeEntries: timeAudit.entries,
+    ),
   );
-  final filtered = events.where((event) {
-    if (event.type == CalendarEventType.todo && event.isCompleted) {
-      return false;
-    }
-    return event.sourceId?.trim().isNotEmpty == true;
-  }).toList();
-  filtered.sort((a, b) {
-    final aTime = a.date;
-    final bTime = b.date;
-    final timeOrder = aTime.compareTo(bTime);
-    if (timeOrder != 0) return timeOrder;
-    return a.title.compareTo(b.title);
-  });
-  return filtered;
 }
 
-String _homeWidgetEventLabel(CalendarEvent event) {
-  final time = event.time == null
-      ? ''
-      : '${event.time!.hour.toString().padLeft(2, '0')}:'
-            '${event.time!.minute.toString().padLeft(2, '0')} ';
-  return '$time${event.type.label} · ${event.title}';
-}
+String _homeWidgetEventLabel(CalendarEvent event) =>
+    homeWidgetScheduleEventLabel(event);
 
 String _homeWidgetEventDeepLink(CalendarEvent event) {
   final sourceId = event.sourceId?.trim();

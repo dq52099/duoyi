@@ -1,0 +1,460 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart
+00:00 +0: display mode rejects failed native storage without refreshing
+00:00 +1: display mode publications serialize later choices
+00:00 +2: display mode requires an acknowledged native write
+00:00 +3: account clear drains in-flight modes and rejects old queued modes
+00:00 +4: captured old epochs cannot publish after account clearing
+00:00 +5: preference cleanup invalidates an in-flight mode before refresh
+00:00 +6: empty highlights contain no invented rows and follow language changes
+00:00 +7: account clearing preserves the selected widget language
+00:00 +8: a language change during native refresh invalidates success
+00:00 +9: language changes invalidate an in-flight snapshot without translating user content
+00:00 +10: active habit count invalidates deduplication and clears with account
+00:00 +11: snapshot day is published last and widget actions bind to day, offset and account
+00:00 +12: same payload retries a failed refresh and force always repaints
+[HomeWidget] updateWidget(DuoyiTodoWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:764:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:350:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiFocusHabitWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:764:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:350:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiHabitWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:764:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:350:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiCalendarWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:764:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:350:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiScheduleWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:764:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:350:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiGoalWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:764:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:350:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiCourseWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:764:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:350:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiNoteWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:764:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:350:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiAnniversaryWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:764:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:350:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiDiaryWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.push.<anonymous closure> (package:duoyi/services/home_widget_service.dart:764:20)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:350:14)
+<asynchronous suspension>
+#7      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#9      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] one or more widget providers failed to update
+00:00 +13: old-date snapshot never gets published as today
+00:00 +14: reset invalidates an in-flight payload and queued previous-account push
+00:00 +15: storage-clear failure is separate from a cleared snapshot refresh failure
+[HomeWidget] updateWidget(DuoyiTodoWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:380:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:357:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:400:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiFocusHabitWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:380:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:357:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:400:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiHabitWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:380:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:357:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:400:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiCalendarWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:380:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:357:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:400:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiScheduleWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:380:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:357:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:400:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiGoalWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:380:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:357:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:400:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiCourseWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:380:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:357:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:400:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiNoteWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:380:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:357:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:400:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiAnniversaryWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:380:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:357:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:400:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] updateWidget(DuoyiDiaryWidgetProvider) failed: PlatformException(refresh_failed, null, null, null)
+#0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653:7)
+#1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366:18)
+<asynchronous suspension>
+#2      HomeWidgetService._updateWidgetFamily.updateOne (package:duoyi/services/home_widget_service.dart:815:9)
+<asynchronous suspension>
+#3      HomeWidgetService._updateWidgetFamily (package:duoyi/services/home_widget_service.dart:826:5)
+<asynchronous suspension>
+#4      HomeWidgetService._updateAllWidgets (package:duoyi/services/home_widget_service.dart:796:11)
+<asynchronous suspension>
+#5      HomeWidgetService.clearAccountWidgetData.<anonymous closure> (package:duoyi/services/home_widget_service.dart:380:20)
+<asynchronous suspension>
+#6      HomeWidgetService.waitForAccountClear (package:duoyi/services/home_widget_service.dart:357:26)
+<asynchronous suspension>
+#7      main.<anonymous closure> (file:///home/ubuntu/duoyi/test/services/home_widget_snapshot_test.dart:400:14)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+[HomeWidget] one or more widget providers failed to update
+00:00 +16: All tests passed!

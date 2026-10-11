@@ -1,0 +1,149 @@
+{
+  "started_at_utc": "2026-10-11T09:55:07.775491+00:00",
+  "suites": [
+    {
+      "suite": "test/services/widget_schedule_projection_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/widget_schedule_projection_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 9.547,
+      "passed": 6,
+      "log": "evidence/widget-settings-polish-20261011/widget-schedule-projection-final-acceptance-20261011/01-widget_schedule_projection_test.log"
+    },
+    {
+      "suite": "test/core/calendar_aggregator_conflict_pbt_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/core/calendar_aggregator_conflict_pbt_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 6.599,
+      "passed": 8,
+      "log": "evidence/widget-settings-polish-20261011/widget-schedule-projection-final-acceptance-20261011/02-calendar_aggregator_conflict_pbt_test.log"
+    },
+    {
+      "suite": "test/core/calendar_event_display_text_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/core/calendar_event_display_text_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 5.043,
+      "passed": 16,
+      "log": "evidence/widget-settings-polish-20261011/widget-schedule-projection-final-acceptance-20261011/03-calendar_event_display_text_test.log"
+    },
+    {
+      "suite": "test/services/home_widget_snapshot_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/home_widget_snapshot_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 8.217,
+      "passed": 16,
+      "log": "evidence/widget-settings-polish-20261011/widget-schedule-projection-final-acceptance-20261011/04-home_widget_snapshot_test.log"
+    },
+    {
+      "suite": "test/services/widget_publication_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/widget_publication_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 6.774,
+      "passed": 14,
+      "log": "evidence/widget-settings-polish-20261011/widget-schedule-projection-final-acceptance-20261011/05-widget_publication_test.log"
+    },
+    {
+      "suite": "test/services/android_widget_resources_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/android_widget_resources_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 7.24,
+      "passed": 39,
+      "log": "evidence/widget-settings-polish-20261011/widget-schedule-projection-final-acceptance-20261011/06-android_widget_resources_test.log"
+    },
+    {
+      "suite": "test/services/ios_widget_resources_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/ios_widget_resources_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 4.983,
+      "passed": 12,
+      "log": "evidence/widget-settings-polish-20261011/widget-schedule-projection-final-acceptance-20261011/07-ios_widget_resources_test.log"
+    },
+    {
+      "suite": "test/services/startup_performance_static_test.dart",
+      "command": [
+        "/home/ubuntu/flutter/bin/flutter",
+        "test",
+        "--no-pub",
+        "--concurrency=1",
+        "--reporter=expanded",
+        "test/services/startup_performance_static_test.dart"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 4.571,
+      "passed": 1,
+      "log": "evidence/widget-settings-polish-20261011/widget-schedule-projection-final-acceptance-20261011/08-startup_performance_static_test.log"
+    }
+  ],
+  "analysis": {
+    "command": [
+      "/home/ubuntu/flutter/bin/flutter",
+      "analyze",
+      "--no-pub",
+      "lib/main.dart",
+      "lib/services/widget_schedule_projection.dart",
+      "test/services/widget_schedule_projection_test.dart",
+      "test/core/calendar_aggregator_conflict_pbt_test.dart",
+      "test/core/calendar_event_display_text_test.dart",
+      "test/services/home_widget_snapshot_test.dart",
+      "test/services/widget_publication_test.dart",
+      "test/services/android_widget_resources_test.dart",
+      "test/services/ios_widget_resources_test.dart",
+      "test/services/startup_performance_static_test.dart"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 66.866
+  },
+  "source_hashes_unchanged": true,
+  "changed_source_files": [],
+  "finished_at_utc": "2026-10-11T09:57:07.626504+00:00",
+  "passed_total": 112,
+  "accepted": true
+}

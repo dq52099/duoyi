@@ -1,0 +1,10 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/core/calendar_aggregator_conflict_pbt_test.dart
+00:00 +0: CalendarAggregator 冲突检测 同一天多个事件不会全部标记冲突，只有时间真正重叠的才标记
+00:00 +1: CalendarAggregator 冲突检测 属性测试: 随机生成同时段事件 → 应该被标记冲突
+00:00 +2: CalendarAggregator 冲突检测 属性测试: 排序后日期递增
+00:00 +3: CalendarAggregator 冲突检测 habit + pomodoro + todo 混合不影响排序稳定性
+00:00 +4: CalendarAggregator 冲突检测 待办日历时间线优先使用提醒时间，不把日期型截止显示为 0 点
+00:00 +5: CalendarAggregator 冲突检测 没有提醒时间时用创建时间放入小时网格，不落到 0 点
+00:00 +6: CalendarAggregator 冲突检测 待办日历事件从进入日期延伸到截止日期或今天
+00:00 +7: CalendarAggregator 冲突检测 习惯起止周期外的补卡记录不生成日历事件
+00:00 +8: All tests passed!

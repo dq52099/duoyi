@@ -1,0 +1,15 @@
+{
+  "pid": 3594405,
+  "command": [
+    "./gradlew",
+    ":app:compileDebugKotlin",
+    "--offline",
+    "-x",
+    ":app:compileFlutterBuildDebug",
+    "--max-workers=1",
+    "--no-daemon",
+    "-Dorg.gradle.jvmargs=-Xmx2G",
+    "--console=plain"
+  ],
+  "started_at_utc": "2026-10-11T09:43:33.073367+00:00"
+}

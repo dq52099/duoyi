@@ -1,0 +1,8 @@
+00:00 +0: loading /home/ubuntu/duoyi/test/services/widget_schedule_projection_test.dart
+00:00 +0: homeWidgetScheduleEvents uses actual timed todo starts for the widget top three
+00:00 +1: homeWidgetScheduleEvents combines date clocks, explicit time overrides, and all-day dates
+00:00 +2: homeWidgetScheduleEvents filters invalid source IDs and only completed todos
+00:00 +3: homeWidgetScheduleEvents breaks equal starts by raw title and then event ID
+00:00 +4: event labels localize metadata fallbacks and preserve literal titles
+00:00 +5: main schedule and label wrappers delegate to the helpers
+00:00 +6: All tests passed!

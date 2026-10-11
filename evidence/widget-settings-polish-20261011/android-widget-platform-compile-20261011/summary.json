@@ -1,0 +1,89 @@
+{
+  "started_at_utc": "2026-10-11T09:43:33.073367+00:00",
+  "finished_at_utc": "2026-10-11T09:51:24.858376+00:00",
+  "duration_seconds": 471.793,
+  "head": "c9c742f4d9792a1dbb85923cfa455a7b72f63a79",
+  "command": [
+    "./gradlew",
+    ":app:compileDebugKotlin",
+    "--offline",
+    "-x",
+    ":app:compileFlutterBuildDebug",
+    "--max-workers=1",
+    "--no-daemon",
+    "-Dorg.gradle.jvmargs=-Xmx2G",
+    "--console=plain"
+  ],
+  "gradle_exit_code": 0,
+  "source_files": 273,
+  "changed_source_files": [],
+  "classes": {
+    "DuoyiWidgetSnapshot": {
+      "exists": true,
+      "sha256": "026cacc18d88694c39e328ede7c8e697a1af0a2615209c52099382a9a7cc8474"
+    },
+    "DuoyiWidgetPublicationStore": {
+      "exists": true,
+      "sha256": "04c8d41f86c86931a1d3fd03a34c6e2df84a5778a2735676a8eb45cad3683ebb"
+    },
+    "DuoyiWidgetPublicationBridge": {
+      "exists": true,
+      "sha256": "b9f52306d94fae263551b680aa273fb5a3160b4bde982743b054b8bc89083fc4"
+    },
+    "DuoyiWidgetLaunchBridge": {
+      "exists": true,
+      "sha256": "e8885240ccbad18912f9d27ebbbb0828c99eee448a7b2cdabf448dc356793596"
+    },
+    "DuoyiWidgetDayBoundaryScheduler": {
+      "exists": true,
+      "sha256": "c993d3769eaa143012de3b36d7473fbf786aae11a175607e9d3fc85f7d5875d7"
+    },
+    "DuoyiWidgetConfigActivity": {
+      "exists": true,
+      "sha256": "6b92f3ce1d140dbb17a75c336a72936840c123c73561fccf8906ce8d7238bc05"
+    },
+    "DuoyiTodoWidgetProvider": {
+      "exists": true,
+      "sha256": "f5f292e29041c6b76edc0f8375f89f9e911aff006fda6e9beb25448624f67de8"
+    },
+    "DuoyiFocusHabitWidgetProvider": {
+      "exists": true,
+      "sha256": "d195a75878ce26ccfb79916f26a75d0b07d5efd8864ff4b581a8a46da9faeceb"
+    },
+    "DuoyiHabitWidgetProvider": {
+      "exists": true,
+      "sha256": "8c0c053ae4fc684074189ed156098fe7dace62582cade1f745f876667f9e68b3"
+    },
+    "DuoyiCalendarWidgetProvider": {
+      "exists": true,
+      "sha256": "9e9b97e19ab33f0dd4bc00973df8572bd79a307ccf6097de3d2ca426bfb16529"
+    },
+    "DuoyiScheduleWidgetProvider": {
+      "exists": true,
+      "sha256": "198474e41df27672f28c04a6540cb9ca4a4192a4e3103a8848684dec800f19de"
+    },
+    "DuoyiGoalWidgetProvider": {
+      "exists": true,
+      "sha256": "877a4acde307425657325fdb129d887370cd0e6e091e4aae1503ed1215fce4cd"
+    },
+    "DuoyiCourseWidgetProvider": {
+      "exists": true,
+      "sha256": "fe6fd8182fb378800dd638d0dbdbf06418a26047d0a9f261aabea77837b8550f"
+    },
+    "DuoyiNoteWidgetProvider": {
+      "exists": true,
+      "sha256": "4cc0d07193581ab99ff693629856cfa5d5a1fb705d337f362baa4fa45aea5ef0"
+    },
+    "DuoyiAnniversaryWidgetProvider": {
+      "exists": true,
+      "sha256": "5081aa2d976b51bfbbbbce15ce9f418a1dbf6cff17acdc073d2428de1e5194a2"
+    },
+    "DuoyiDiaryWidgetProvider": {
+      "exists": true,
+      "sha256": "7da9da225fcaf3272f29d35f4fed9e075b7308c68645158b7b24429fcd47d23a"
+    }
+  },
+  "free_bytes_before": 33059119104,
+  "free_bytes_after": 30200655872,
+  "scope": "Android debug Kotlin/resource dependency compilation; Flutter compilation excluded; no APK, release, device execution, or deployment."
+}

@@ -1,0 +1,16 @@
+{
+  "lib/main.dart": "9e28661a4df3c42a1d4356b808da01df58aa30d68e0083db065c58ed8a8efdaf",
+  "lib/services/widget_schedule_projection.dart": "e18e9a096b8d6c9f6745fc99f58883d792123100e3f55dcc8aa802d58ad93e6f",
+  "test/services/widget_schedule_projection_test.dart": "d2a194b058fd949775ed56ef6924e77e26673d46ce256116e4083de0f305dc6a",
+  "test/core/calendar_aggregator_conflict_pbt_test.dart": "5f47a293b46cf694a1b437b22d3f446f34d64d4ca9969e3b456abe6898b6e206",
+  "test/core/calendar_event_display_text_test.dart": "986443a1f2aece8b5bc59e0f50be2b72a90db6331e3860b2594d804df128d955",
+  "test/services/home_widget_snapshot_test.dart": "f249038f0af2acedd82c76ff2b8beaea530339f9fafc57e497a555d17c97fca1",
+  "test/services/widget_publication_test.dart": "8e876378b9dfb20845d06510736844db392bbde2028882ae175281a9e8fd0d76",
+  "test/services/android_widget_resources_test.dart": "06404d18523116ff45b456bf0c3cd57a9727110b89993c38b018611cb6651a0f",
+  "test/services/ios_widget_resources_test.dart": "6332a6dfa20fa95a8ecaba511ff0501f7be524470e8f31bebdbb5b9e087b2258",
+  "test/services/startup_performance_static_test.dart": "f5e378a6fbc05460efc1b3913dfc4fe703241a3606c298abc344b05a19980489",
+  "lib/core/calendar_aggregator.dart": "b050d4ab0150e1c8e64438f49f05cf371f154788acaf8dd4c784ec4c4079af00",
+  "lib/core/calendar_event_display_text.dart": "ea7ad0079956431158d0c82fb733b1c51732ce5b40b03e63b477de39e0098fa1",
+  "lib/models/calendar_event.dart": "b715d746c11619ec6f17c2b4b25b807da213464bc32170cb1e8b93d4e78c6c8f",
+  "lib/services/home_widget_service.dart": "39cea8edbfa7149f4072f00ddde388af1638c579d1615802ad749d2802833a42"
+}
