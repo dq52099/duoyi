@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/app_config.dart';
 import '../core/app_update_policy.dart';
+import '../core/app_update_ui_copy.dart';
+import '../core/i18n.dart';
 import 'api_client.dart';
 import 'app_update_installer.dart';
 
@@ -30,7 +32,17 @@ class AppUpdateService extends ChangeNotifier {
     this.currentVersionCode,
     this.backendBaseUrl,
     http.Client? httpClient,
-  }) : _httpClient = httpClient ?? http.Client();
+  }) : _httpClient = httpClient ?? http.Client() {
+    I18n.localeListenable.addListener(_notifyLocaleChanged);
+  }
+
+  void _notifyLocaleChanged() => notifyListeners();
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_notifyLocaleChanged);
+    super.dispose();
+  }
 
   String? _latestVersion;
   int? _latestVersionCode;
@@ -47,7 +59,7 @@ class AppUpdateService extends ChangeNotifier {
   bool _installing = false;
   double? _downloadProgress;
   String? _downloadedFilePath;
-  String? _error;
+  AppUpdateNotice? _error;
   DateTime? _lastDownloadProgressNotifyAt;
   double? _lastNotifiedDownloadProgress;
 
@@ -61,10 +73,14 @@ class AppUpdateService extends ChangeNotifier {
   String? get forceUpdateBlockedReason => _forceUpdateBlockedReason;
   bool get forceUpdateRequired => _forceUpdateRequired;
   String get latestNotesForDisplay {
-    final notes = _formatReleaseNotes(_latestNotes);
-    if (notes.isNotEmpty) return notes;
-    if (_latestVersion != null) return '此版本没有填写更新说明。';
-    return '';
+    final notes = _latestNotes;
+    if (notes != null && notes.trim().isNotEmpty) return notes;
+    final target = _latestVersion ?? _minimumSupportedVersion;
+    if (target == null) return '';
+    return AppUpdateNotice(
+      AppUpdateNoticeKind.generatedReleaseNotes,
+      version: target,
+    ).render();
   }
 
   bool get checking => _checking;
@@ -73,7 +89,8 @@ class AppUpdateService extends ChangeNotifier {
   bool get busy => _checking || _downloading || _installing;
   double? get downloadProgress => _downloadProgress;
   String? get downloadedFilePath => _downloadedFilePath;
-  String? get error => _error;
+  String? get error => _error?.render();
+  AppUpdateNotice? get errorNotice => _error;
   bool get hasDownloadedInstaller =>
       _downloadedFilePath != null && _downloadedFilePath!.trim().isNotEmpty;
 
@@ -149,12 +166,9 @@ class AppUpdateService extends ChangeNotifier {
       } else {
         await _fillMissingDisplayDataFromGitHub();
       }
-      if (_serverPolicyLoaded && _latestNotes == null) {
-        _latestNotes = _fallbackUpdateNotes(_latestVersion);
-      }
       await _restoreDownloadedInstaller(allowPopulateUpdateInfo: false);
     } catch (e) {
-      _error = userVisibleApiError(e);
+      _error = AppUpdateNotice(AppUpdateNoticeKind.checkFailed, error: e);
       await _restoreDownloadedInstaller(allowPopulateUpdateInfo: true);
       if (hasDownloadedInstaller) _error = null;
     } finally {
@@ -202,11 +216,10 @@ class AppUpdateService extends ChangeNotifier {
             (mustUpdate || hasUpdate)) {
           await _fillMissingDisplayDataFromGitHub();
         }
-        _latestNotes ??= _fallbackUpdateNotes(_latestVersion);
       }
       await _restoreDownloadedInstaller(allowPopulateUpdateInfo: false);
     } catch (e) {
-      _error = userVisibleApiError(e);
+      _error = AppUpdateNotice(AppUpdateNoticeKind.checkFailed, error: e);
       await _restoreDownloadedInstaller(allowPopulateUpdateInfo: true);
       if (hasDownloadedInstaller) _error = null;
     } finally {
@@ -266,7 +279,7 @@ class AppUpdateService extends ChangeNotifier {
         base,
         _stringValue(data['update_download_url']),
       );
-      final notes = _stringValue(data['update_notes']);
+      final notes = _authoredText(data['update_notes']);
       final rawMinimum = _stringValue(data['minimum_supported_version']);
       final minimum = _versionAtLeastCurrent(rawMinimum);
       final minimumCode = _versionCodeAtLeastCurrent(
@@ -357,7 +370,7 @@ class AppUpdateService extends ChangeNotifier {
         base,
         _stringValue(data['download_url']),
       );
-      final notes = _stringValue(data['release_notes']);
+      final notes = _authoredText(data['release_notes']);
       final rawMinimum = _stringValue(data['minimum_supported_version']);
       final minimum = _versionAtLeastCurrent(rawMinimum);
       final minimumCode = _versionCodeAtLeastCurrent(
@@ -368,7 +381,7 @@ class AppUpdateService extends ChangeNotifier {
         rawDownloadUrl,
         latest.isEmpty ? minimum : latest,
       );
-      final blockedReason = _stringValue(data['force_update_blocked_reason']);
+      final blockedReason = _authoredText(data['force_update_blocked_reason']);
       final available =
           data['available'] == true ||
           _hasNewerVersionCode(latestCode) ||
@@ -407,6 +420,11 @@ class AppUpdateService extends ChangeNotifier {
   String get _serverBaseUrl => backendBaseUrl ?? AppConfig.bakedServerUrl;
 
   String _stringValue(dynamic value) => (value ?? '').toString().trim();
+
+  // Only externally authored strings belong in notes and policy-reason fields.
+  // Whitespace detects absence; supplied text is retained exactly for display.
+  String _authoredText(Object? value) =>
+      value is String && value.trim().isNotEmpty ? value : '';
 
   String _versionAtLeastCurrent(String value) {
     final normalized = value.trim();
@@ -463,7 +481,7 @@ class AppUpdateService extends ChangeNotifier {
     } catch (e) {
       _latestVersion = null;
       _latestVersionCode = null;
-      _error = userVisibleApiError(e);
+      _error = AppUpdateNotice(AppUpdateNoticeKind.checkFailed, error: e);
     }
   }
 
@@ -499,7 +517,7 @@ class AppUpdateService extends ChangeNotifier {
     if (clean.contains(target)) return false;
 
     final matches = RegExp(
-      r'(?:^|[^0-9])v?([0-9]+\.[0-9]+\.[0-9]+)(?:[^0-9]|$)',
+      r'(?:^|[^0-9])v?([0-9]+\.[0-9]+\.[0-9]+)(?=[^0-9]|$)',
     ).allMatches(clean);
     for (final match in matches) {
       final found = _normalizeVersionToken(match.group(1) ?? '');
@@ -666,19 +684,19 @@ class AppUpdateService extends ChangeNotifier {
     if (resp.statusCode == 404) {
       if (!keepServerPolicy) {
         _latestVersion = null;
-        _error = '尚未发布 Release';
+        _error = const AppUpdateNotice(AppUpdateNoticeKind.releaseNotPublished);
       }
       return;
     }
     if (resp.statusCode != 200) {
       if (!keepServerPolicy) {
-        _error = '检查更新失败: ${resp.statusCode}';
+        _error = const AppUpdateNotice(AppUpdateNoticeKind.checkFailed);
       }
       return;
     }
     final data = json.decode(utf8.decode(resp.bodyBytes));
     final releaseVersion = (data['tag_name'] as String?)?.trim();
-    final releaseNotes = (data['body'] as String?)?.trim();
+    final releaseNotes = _authoredText(data['body']);
     final assets = data['assets'];
     Map? asset;
     if (assets is List) {
@@ -689,40 +707,21 @@ class AppUpdateService extends ChangeNotifier {
       _latestVersionCode = releaseVersion == null
           ? null
           : _versionToCode(releaseVersion);
-      _latestNotes = releaseNotes;
+      _latestNotes = releaseNotes.isEmpty ? null : releaseNotes;
       _latestUrl = asset?['browser_download_url'] as String?;
       _latestAssetName = asset?['name'] as String?;
       return;
     }
-    final releaseIsNewerThanCurrent =
-        releaseVersion != null &&
-        releaseVersion.isNotEmpty &&
-        compareAppVersions(releaseVersion, currentVersion) > 0;
-    final releaseIsNewerThanLoaded =
-        releaseVersion != null &&
-        releaseVersion.isNotEmpty &&
-        (_latestVersion == null ||
-            _latestVersion!.trim().isEmpty ||
-            compareAppVersions(releaseVersion, _latestVersion!) > 0);
-    if (releaseIsNewerThanCurrent && releaseIsNewerThanLoaded) {
-      _latestVersion = releaseVersion;
-      _latestVersionCode = _versionToCode(releaseVersion);
-      if (releaseNotes != null && releaseNotes.isNotEmpty) {
-        _latestNotes = releaseNotes;
-      }
-      if (asset != null) {
-        _latestUrl = asset['browser_download_url'] as String?;
-        _latestAssetName = asset['name'] as String?;
-      }
+    // Backend policy owns the target. A different release must never provide
+    // its notes or APK while retaining the backend's minimum/build/force facts.
+    final targetVersion = _latestVersion ?? _minimumSupportedVersion;
+    if (releaseVersion == null ||
+        targetVersion == null ||
+        releaseVersion.replaceFirst(RegExp(r'^v'), '') !=
+            targetVersion.trim().replaceFirst(RegExp(r'^v'), '')) {
       return;
     }
-    if ((_latestVersion == null || _latestVersion!.trim().isEmpty) &&
-        releaseVersion != null &&
-        releaseVersion.isNotEmpty) {
-      _latestVersion = releaseVersion;
-    }
     if ((_latestNotes == null || _latestNotes!.trim().isEmpty) &&
-        releaseNotes != null &&
         releaseNotes.isNotEmpty) {
       _latestNotes = releaseNotes;
     }
@@ -838,7 +837,6 @@ class AppUpdateService extends ChangeNotifier {
           cachedAssetName.isNotEmpty) {
         _latestAssetName = cachedAssetName;
       }
-      _latestNotes ??= _fallbackUpdateNotes(_latestVersion);
     }
   }
 
@@ -931,7 +929,9 @@ class AppUpdateService extends ChangeNotifier {
     if (path == null || path.trim().isEmpty) return false;
     final canInstall = await AppUpdateInstaller.canInstallPackages();
     if (!canInstall) {
-      _error = '需要允许多仪安装未知应用；授权后返回这里再次点击安装';
+      _error = const AppUpdateNotice(
+        AppUpdateNoticeKind.installPermissionRequired,
+      );
       notifyListeners();
       await AppUpdateInstaller.openInstallPermissionSettings();
       return true;
@@ -950,13 +950,21 @@ class AppUpdateService extends ChangeNotifier {
 
   Future<void> downloadAndInstallLatest() async {
     if (!AppUpdateInstaller.supportsInstall) {
-      _error = '当前平台不支持应用内 APK 更新';
+      _error = const AppUpdateNotice(
+        AppUpdateNoticeKind.unsupportedInstallPlatform,
+      );
       notifyListeners();
       return;
     }
-    if (await _tryInstallDownloadedInstaller()) return;
+    try {
+      if (await _tryInstallDownloadedInstaller()) return;
+    } catch (e) {
+      _error = AppUpdateNotice(AppUpdateNoticeKind.downloadFailed, error: e);
+      notifyListeners();
+      return;
+    }
     if (_latestUrl == null) {
-      _error = '没有可下载的 APK';
+      _error = const AppUpdateNotice(AppUpdateNoticeKind.noDownloadableApk);
       notifyListeners();
       return;
     }
@@ -992,7 +1000,9 @@ class AppUpdateService extends ChangeNotifier {
       final canInstall = await AppUpdateInstaller.canInstallPackages();
       if (!canInstall) {
         _installing = false;
-        _error = '需要允许多仪安装未知应用；授权后返回这里再次点击安装';
+        _error = const AppUpdateNotice(
+          AppUpdateNoticeKind.installPermissionRequired,
+        );
         notifyListeners();
         await AppUpdateInstaller.openInstallPermissionSettings();
         return;
@@ -1000,7 +1010,7 @@ class AppUpdateService extends ChangeNotifier {
 
       await AppUpdateInstaller.installApk(path);
     } catch (e) {
-      _error = '更新失败: $e';
+      _error = AppUpdateNotice(AppUpdateNoticeKind.downloadFailed, error: e);
     } finally {
       _downloading = false;
       _installing = false;
@@ -1028,7 +1038,8 @@ class AppUpdateService extends ChangeNotifier {
     final apkAssets =
         assets.whereType<Map>().where((a) {
           final name = ((a['name'] as String?) ?? '').toLowerCase();
-          return name.endsWith('.apk');
+          return name.endsWith('.apk') &&
+              _releaseApkMatchesTarget(a, targetVersion);
         }).toList()..sort(
           (a, b) => _apkScore(
             b,
@@ -1038,6 +1049,31 @@ class AppUpdateService extends ChangeNotifier {
 
     if (apkAssets.isEmpty) return null;
     return apkAssets.first;
+  }
+
+  bool _releaseApkMatchesTarget(Map asset, String? targetVersion) {
+    final target = _normalizeVersionToken(targetVersion ?? '');
+    final url = _stringValue(asset['browser_download_url']);
+    if (target.isEmpty || url.isEmpty) return false;
+    final parsed = Uri.tryParse(url);
+    if (parsed == null ||
+        !const ['https', 'http'].contains(parsed.scheme) ||
+        parsed.host.isEmpty) {
+      return false;
+    }
+    final name = _stringValue(asset['name']);
+    final versionPattern = RegExp(
+      r'(?:^|[^0-9])v?([0-9]+\.[0-9]+\.[0-9]+)(?=[^0-9]|$)',
+    );
+    // Unversioned assets remain eligible. Every explicit version in the name
+    // or URL path must agree with the release; a matching tag alone is not
+    // evidence that a stale universal APK belongs to the selected target.
+    for (final text in [name, Uri.decodeComponent(parsed.path)]) {
+      for (final match in versionPattern.allMatches(text)) {
+        if (compareAppVersions(match.group(1)!, target) != 0) return false;
+      }
+    }
+    return true;
   }
 
   int _apkScore(Map asset, {String? targetVersion}) {
@@ -1058,14 +1094,6 @@ class AppUpdateService extends ChangeNotifier {
 
   String _formatReleaseNotes(String? notes) =>
       formatUpdateNotesForDisplay(notes);
-
-  String _fallbackUpdateNotes(String? version) {
-    final target = version?.trim();
-    if (target == null || target.isEmpty) {
-      return '本次更新会修复已知问题并优化稳定性。';
-    }
-    return '版本 $target 包含已知问题修复、稳定性优化和体验改进。';
-  }
 }
 
 class _BackendUpdateCheckException implements Exception {

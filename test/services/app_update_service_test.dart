@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:duoyi/core/app_update_policy.dart';
+import 'package:duoyi/core/app_update_ui_copy.dart';
 import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/services/api_client.dart';
 import 'package:duoyi/services/app_update_service.dart';
@@ -11,6 +12,293 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:test/test.dart';
 
 void main() {
+  setUp(() {
+    I18n.setLocale(AppLocale.zh);
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+  tearDown(() => I18n.setLocale(AppLocale.zh));
+
+  test('generated updater notices render both locales and sanitize errors', () {
+    for (final kind in AppUpdateNoticeKind.values) {
+      if (kind == AppUpdateNoticeKind.literal) continue;
+      final notice = AppUpdateNotice(
+        kind,
+        version: '2.0.0',
+        progress: 45,
+        error: StateError('private URL token diagnostic'),
+      );
+      final zh = notice.render(locale: AppLocale.zh);
+      final en = notice.render(locale: AppLocale.en);
+      expect(zh, isNotEmpty, reason: kind.name);
+      expect(en, isNotEmpty, reason: kind.name);
+      expect(zh, isNot(en), reason: kind.name);
+      expect(en, isNot(matches(RegExp(r'[\u3400-\u9fff]'))), reason: kind.name);
+      expect(en, isNot(contains('private URL token diagnostic')));
+      expect(zh, isNot(contains('private URL token diagnostic')));
+      expect(I18n.current, AppLocale.zh);
+    }
+    const authored = '  项目 Aurora [说明](https://example.test/notes)\r\n  ';
+    for (final locale in AppLocale.values) {
+      expect(
+        const AppUpdateNotice.literal(authored).render(locale: locale),
+        authored,
+      );
+      expect(
+        const AppUpdateNotice(
+          AppUpdateNoticeKind.downloadFailed,
+          error: ApiException('409: 用户提供的原因'),
+        ).render(locale: locale),
+        contains('用户提供的原因'),
+      );
+    }
+  });
+
+  for (final source in ['mobile', 'config', 'github']) {
+    test(
+      'authored $source release notes remain literal through locale changes',
+      () async {
+        const authored =
+            '  ## 用户 release notes\r\n- [Link](https://example.test/notes)\r\n<!-- keep -->\n  ';
+        const blockedReason = '  管理员：等待安装包\r\n保持原样  ';
+        var requests = 0;
+        final client = MockClient((request) async {
+          requests++;
+          Object? body;
+          if (request.url.path == '/api/mobile/apps/duoyi/update' &&
+              source == 'mobile') {
+            body = {
+              ..._mobileUpdatePayload(releaseNotes: authored),
+              'force_update_blocked_reason': blockedReason,
+            };
+          } else if (request.url.path == '/api/config' && source == 'config') {
+            body = {
+              'api_contract_version': ApiClient.requiredApiContractVersion,
+              'required_routes_hash': ApiClient.requiredApiContractRoutesHash,
+              'latest_version': '2.0.0',
+              'update_download_url': 'https://cdn.duoyi.test/duoyi-2.0.0.apk',
+              'update_notes': authored,
+              'force_update_required': true,
+            };
+          } else if (request.url.path.contains('/releases/latest') &&
+              source == 'github') {
+            body = {'tag_name': 'v2.0.0', 'body': authored, 'assets': []};
+          }
+          return body == null
+              ? http.Response('{}', 404)
+              : http.Response.bytes(utf8.encode(json.encode(body)), 200);
+        });
+        addTearDown(client.close);
+        final service = AppUpdateService(
+          repo: 'dq52099/duoyi',
+          currentVersion: '1.1.9',
+          backendBaseUrl: 'https://duoyi.test',
+          httpClient: client,
+        );
+        addTearDown(service.dispose);
+        await service.checkNow();
+        final requestsAtCheck = requests;
+        final facts = (
+          service.latestVersion,
+          service.latestVersionCode,
+          service.latestUrl,
+          service.latestAssetName,
+          service.minimumSupportedVersion,
+          service.minimumSupportedVersionCode,
+          service.forceUpdateRequired,
+          service.mustUpdate,
+          service.hasUpdate,
+        );
+        for (final locale in [AppLocale.en, AppLocale.zh]) {
+          I18n.setLocale(locale);
+          expect(service.latestNotes, authored);
+          expect(service.latestNotesForDisplay, authored);
+          if (source == 'mobile') {
+            expect(service.forceUpdateBlockedReason, blockedReason);
+          }
+          expect((
+            service.latestVersion,
+            service.latestVersionCode,
+            service.latestUrl,
+            service.latestAssetName,
+            service.minimumSupportedVersion,
+            service.minimumSupportedVersionCode,
+            service.forceUpdateRequired,
+            service.mustUpdate,
+            service.hasUpdate,
+          ), facts);
+        }
+        expect(requests, requestsAtCheck);
+      },
+    );
+  }
+
+  test(
+    'missing notes localize lazily and never imply unsupplied changes',
+    () async {
+      var requests = 0;
+      final client = MockClient((request) async {
+        requests++;
+        return http.Response.bytes(
+          utf8.encode(
+            json.encode({
+              ..._mobileUpdatePayload(),
+              'release_notes': 42,
+              'force_update_blocked_reason': {'diagnostic': true},
+            }),
+          ),
+          200,
+        );
+      });
+      addTearDown(client.close);
+      final service = AppUpdateService(
+        repo: 'dq52099/duoyi',
+        currentVersion: '1.1.9',
+        backendBaseUrl: 'https://duoyi.test',
+        httpClient: client,
+      );
+      await service.checkServerPolicyNow();
+      expect(service.latestNotes, isNull);
+      expect(service.forceUpdateBlockedReason, isNull);
+      final zh = service.latestNotesForDisplay;
+      expect(zh, contains('2.0.0'));
+      expect(zh, isNot(contains('修复')));
+      var notifications = 0;
+      service.addListener(() => notifications++);
+      I18n.setLocale(AppLocale.en);
+      expect(service.latestNotesForDisplay, contains('No release notes'));
+      expect(
+        service.latestNotesForDisplay,
+        isNot(matches(RegExp(r'[\u3400-\u9fff]'))),
+      );
+      expect(service.latestNotes, isNull);
+      expect(service.mustUpdate, isTrue);
+      expect(service.forceUpdateRequired, isTrue);
+      expect(service.latestVersion, '2.0.0');
+      I18n.setLocale(AppLocale.zh);
+      expect(service.latestNotesForDisplay, zh);
+      expect(notifications, 2);
+      expect(requests, 1);
+      service.dispose();
+      I18n.setLocale(AppLocale.en);
+      expect(notifications, 2);
+    },
+  );
+
+  for (final githubStatus in [404, 503]) {
+    test(
+      'cached GitHub failure re-renders without another check ($githubStatus)',
+      () async {
+        var requests = 0;
+        final client = MockClient((request) async {
+          requests++;
+          return http.Response(
+            '{}',
+            request.url.path.contains('/releases/latest') ? githubStatus : 404,
+          );
+        });
+        addTearDown(client.close);
+        final service = AppUpdateService(
+          repo: 'dq52099/duoyi',
+          currentVersion: '1.1.9',
+          backendBaseUrl: 'https://duoyi.test',
+          httpClient: client,
+        );
+        addTearDown(service.dispose);
+        await service.checkNow();
+        final count = requests;
+        final zh = service.error;
+        final notice = service.errorNotice;
+        expect(notice, isNotNull);
+        I18n.setLocale(AppLocale.en);
+        expect(service.error, isNot(zh));
+        expect(service.error, isNot(matches(RegExp(r'[\u3400-\u9fff]'))));
+        expect(service.errorNotice, same(notice));
+        expect(service.error, notice!.render(locale: AppLocale.en));
+        I18n.setLocale(AppLocale.zh);
+        expect(service.error, zh);
+        expect(requests, count);
+        expect(service.mustUpdate, isFalse);
+      },
+    );
+  }
+
+  test(
+    'cached backend exceptions sanitize diagnostics in both locales',
+    () async {
+      final client = MockClient(
+        (request) async => http.Response('private URL token diagnostic', 503),
+      );
+      addTearDown(client.close);
+      final service = AppUpdateService(
+        repo: 'dq52099/duoyi',
+        currentVersion: '1.1.9',
+        backendBaseUrl: 'https://duoyi.test',
+        httpClient: client,
+      );
+      addTearDown(service.dispose);
+      await service.checkNow();
+      final zh = service.error;
+      for (final locale in AppLocale.values) {
+        I18n.setLocale(locale);
+        expect(service.error, isNot(contains('private URL token diagnostic')));
+        expect(service.error, isNot(contains('/api/')));
+      }
+      expect(service.error, isNot(zh));
+      expect(service.errorNotice?.kind, AppUpdateNoticeKind.checkFailed);
+    },
+  );
+
+  for (final releaseTag in ['v1.9.0', 'v2.1.0', 'v2.0.0-rc.1', 'v2.0.0']) {
+    test('GitHub $releaseTag fills only the backend target 2.0.0', () async {
+      const rawNotes = '  Release-supplied notes\r\n  ';
+      final matchesTarget = releaseTag == 'v2.0.0';
+      final client = MockClient((request) async {
+        final body = request.url.path == '/api/mobile/apps/duoyi/update'
+            ? _mobileUpdatePayload(
+                latestVersionCode: 200001,
+                minimumSupportedVersion: '1.5.0',
+                minimumSupportedVersionCode: 150000,
+                downloadUrl: '',
+              )
+            : {
+                'tag_name': releaseTag,
+                'body': rawNotes,
+                'assets': [
+                  {
+                    'name': 'duoyi-$releaseTag.apk',
+                    'browser_download_url':
+                        'https://cdn.duoyi.test/duoyi-$releaseTag.apk',
+                  },
+                ],
+              };
+        return http.Response.bytes(utf8.encode(json.encode(body)), 200);
+      });
+      addTearDown(client.close);
+      final service = AppUpdateService(
+        repo: 'dq52099/duoyi',
+        currentVersion: '1.1.9',
+        backendBaseUrl: 'https://duoyi.test',
+        httpClient: client,
+      );
+      addTearDown(service.dispose);
+      await service.checkNow();
+      expect(service.latestVersion, '2.0.0');
+      expect(service.latestVersionCode, 200001);
+      expect(service.minimumSupportedVersion, '1.5.0');
+      expect(service.minimumSupportedVersionCode, 150000);
+      expect(service.forceUpdateRequired, isTrue);
+      expect(service.mustUpdate, isTrue);
+      expect(service.latestNotes, matchesTarget ? rawNotes : null);
+      expect(
+        service.latestUrl,
+        matchesTarget ? 'https://cdn.duoyi.test/duoyi-$releaseTag.apk' : null,
+      );
+      if (!matchesTarget) {
+        expect(service.latestNotesForDisplay, contains('未提供更新说明'));
+      }
+    });
+  }
+
   test('release notes display hides GitHub generated full changelog link', () {
     final display = formatUpdateNotesForDisplay('''
 ## 更新内容
@@ -161,6 +449,7 @@ void main() {
           return http.Response('{"tag_name":"v9.9.9","assets":[]}', 200);
         }),
       );
+      addTearDown(service.dispose);
 
       await service.checkNow();
 
@@ -195,6 +484,7 @@ void main() {
           return http.Response('{"tag_name":"v9.9.9","assets":[]}', 200);
         }),
       );
+      addTearDown(service.dispose);
 
       await service.checkNow();
 
@@ -228,6 +518,7 @@ void main() {
           return http.Response('{"tag_name":"v9.9.9","assets":[]}', 200);
         }),
       );
+      addTearDown(service.dispose);
 
       await service.checkNow();
 
@@ -260,6 +551,7 @@ void main() {
         return http.Response('{"detail":"Not Found"}', 404);
       }),
     );
+    addTearDown(service.dispose);
 
     await service.checkNow();
 
@@ -305,6 +597,7 @@ void main() {
         return http.Response('{"detail":"Not Found"}', 404);
       }),
     );
+    addTearDown(service.dispose);
 
     await service.checkNow();
 
@@ -339,6 +632,7 @@ void main() {
         return http.Response('{"detail":"Not Found"}', 404);
       }),
     );
+    addTearDown(service.dispose);
 
     await service.checkNow();
 
@@ -374,6 +668,7 @@ void main() {
           return http.Response('{"detail":"Not Found"}', 404);
         }),
       );
+      addTearDown(service.dispose);
 
       await service.checkServerPolicyNow();
 
@@ -406,6 +701,7 @@ void main() {
           return http.Response('{"tag_name":"v9.9.9","assets":[]}', 200);
         }),
       );
+      addTearDown(service.dispose);
 
       await service.checkServerPolicyNow();
 
@@ -439,6 +735,7 @@ void main() {
         return http.Response('{"tag_name":"v1.1.9","assets":[]}', 200);
       }),
     );
+    addTearDown(service.dispose);
 
     await service.checkNow();
 
@@ -481,6 +778,7 @@ void main() {
           return http.Response('{"detail":"Not Found"}', 404);
         }),
       );
+      addTearDown(service.dispose);
 
       await service.checkNow();
 
@@ -544,6 +842,7 @@ void main() {
         return http.Response('{"detail":"Not Found"}', 404);
       }),
     );
+    addTearDown(service.dispose);
 
     await service.checkNow();
 
@@ -586,6 +885,7 @@ void main() {
         return http.Response('{"detail":"Not Found"}', 404);
       }),
     );
+    addTearDown(service.dispose);
 
     await service.checkNow();
 
@@ -618,6 +918,7 @@ void main() {
         throw const SocketException('offline');
       }),
     );
+    addTearDown(service.dispose);
 
     await service.checkNow();
 
@@ -653,6 +954,7 @@ void main() {
         throw const SocketException('offline');
       }),
     );
+    addTearDown(service.dispose);
 
     await service.checkNow();
 
@@ -685,6 +987,7 @@ void main() {
           return http.Response('{"tag_name":"v9.9.9","assets":[]}', 200);
         }),
       );
+      addTearDown(service.dispose);
 
       await service.checkNow();
 
@@ -782,7 +1085,7 @@ void main() {
     expect(
       source,
       contains(
-        "final blockedReason = _stringValue(data['force_update_blocked_reason'])",
+        "final blockedReason = _authoredText(data['force_update_blocked_reason'])",
       ),
     );
     expect(
@@ -811,6 +1114,122 @@ void main() {
     expect(source, contains('_rememberDownloadedInstaller'));
     expect(source, contains('downloadedFileExists'));
   });
+  for (final fallback in [false, true]) {
+    for (final assetVersion in [
+      '1.9.0',
+      '2.1.0',
+      'path-mismatch',
+      'adjacent-path-mismatch',
+      'matching',
+    ]) {
+      test(
+        'GitHub assets match target before ranking (fallback=$fallback, asset=$assetVersion)',
+        () async {
+          final valid = assetVersion == 'matching';
+          final selectedUrl = assetVersion == 'adjacent-path-mismatch'
+              ? 'https://cdn.duoyi.test/v2.0.0/1.9.0.apk'
+              : assetVersion == 'path-mismatch'
+              ? 'https://github.com/dq52099/duoyi/releases/download/v2.0.0/duoyi-v1.9.0.apk'
+              : 'https://cdn.duoyi.test/duoyi-v$assetVersion-universal.apk';
+          final assets = [
+            {
+              'name': assetVersion == 'path-mismatch'
+                  ? 'duoyi-universal.apk'
+                  : 'duoyi-v$assetVersion-universal.apk',
+              'browser_download_url': selectedUrl,
+            },
+            if (valid)
+              {
+                'name': 'duoyi-v2.0.0-arm64-v8a.apk',
+                'browser_download_url':
+                    'https://cdn.duoyi.test/duoyi-v2.0.0-arm64-v8a.apk',
+              },
+          ];
+          final client = MockClient((request) async {
+            if (request.url.path == '/api/mobile/apps/duoyi/update' &&
+                !fallback) {
+              return http.Response(
+                json.encode(_mobileUpdatePayload(downloadUrl: '')),
+                200,
+              );
+            }
+            if (request.url.path.contains('/releases/latest')) {
+              return http.Response(
+                json.encode({
+                  'tag_name': 'v2.0.0',
+                  'body': '',
+                  'assets': assets,
+                }),
+                200,
+              );
+            }
+            return http.Response('{}', 404);
+          });
+          addTearDown(client.close);
+          final service = AppUpdateService(
+            repo: 'dq52099/duoyi',
+            currentVersion: '1.1.9',
+            backendBaseUrl: 'https://duoyi.test',
+            httpClient: client,
+          );
+          addTearDown(service.dispose);
+          await service.checkNow();
+          expect(service.latestVersion, fallback ? 'v2.0.0' : '2.0.0');
+          expect(service.latestUrl, valid ? selectedUrl : null);
+          expect(service.forceUpdateRequired, !fallback);
+        },
+      );
+    }
+    test(
+      'valid APK outranks mismatched universal APK (fallback=$fallback)',
+      () async {
+        final client = MockClient((request) async {
+          if (request.url.path == '/api/mobile/apps/duoyi/update' &&
+              !fallback) {
+            return http.Response(
+              json.encode(_mobileUpdatePayload(downloadUrl: '')),
+              200,
+            );
+          }
+          if (request.url.path.contains('/releases/latest')) {
+            return http.Response(
+              json.encode({
+                'tag_name': 'v2.0.0',
+                'body': '',
+                'assets': [
+                  {
+                    'name': 'duoyi-v1.9.0-universal.apk',
+                    'browser_download_url':
+                        'https://cdn.duoyi.test/duoyi-v1.9.0-universal.apk',
+                  },
+                  {
+                    'name': 'duoyi-v2.0.0-arm64-v8a.apk',
+                    'browser_download_url':
+                        'https://cdn.duoyi.test/duoyi-v2.0.0-arm64-v8a.apk',
+                  },
+                ],
+              }),
+              200,
+            );
+          }
+          return http.Response('{}', 404);
+        });
+        addTearDown(client.close);
+        final service = AppUpdateService(
+          repo: 'dq52099/duoyi',
+          currentVersion: '1.1.9',
+          backendBaseUrl: 'https://duoyi.test',
+          httpClient: client,
+        );
+        addTearDown(service.dispose);
+        await service.checkNow();
+        expect(
+          service.latestUrl,
+          'https://cdn.duoyi.test/duoyi-v2.0.0-arm64-v8a.apk',
+        );
+      },
+    );
+  }
 }
 
 Map<String, Object?> _mobileUpdatePayload({
