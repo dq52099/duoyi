@@ -75,6 +75,11 @@ jobs:
             echo "No tests found, skipping."
           fi
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Run backend tests
         run: |
           python -m pip install --upgrade pip
