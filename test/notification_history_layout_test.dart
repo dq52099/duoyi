@@ -387,13 +387,14 @@ Future<void> _pumpFixedFrames(
 }
 
 Future<void> _scrollTo(WidgetTester tester, Finder target) async {
-  expect(target, findsAtLeastNWidgets(1));
   await tester.scrollUntilVisible(
-    target.first,
+    target,
     360,
     scrollable: find.byType(Scrollable).last,
-    maxScrolls: 20,
+    maxScrolls: 30,
   );
+  expect(target, findsAtLeastNWidgets(1));
+  await tester.ensureVisible(target.first);
   await tester.pump();
 }
 

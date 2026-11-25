@@ -237,7 +237,11 @@ void main() {
           expect(tester.state(picker), same(retainedState));
           expect(tester.state<ScrollableState>(scroll), same(scrollState));
           final afterOffset = scrollState.position.pixels;
-          expect(afterOffset, closeTo(beforeOffset, .1));
+          final expectedOffset = beforeOffset.clamp(
+            scrollState.position.minScrollExtent,
+            scrollState.position.maxScrollExtent,
+          );
+          expect(afterOffset, closeTo(expectedOffset, .1));
           expect(
             tester
                 .widget<ChoiceChip>(

@@ -183,10 +183,19 @@ void main() {
                 // card aligned to the top has not yet used that space.
                 await tester.drag(listScrollable, const Offset(0, -500));
                 await tester.pumpAndSettle();
-                final list = tester.widget<ListView>(
-                  find.byKey(const ValueKey('anniversary_fixed_all')),
+                final scrollView = find.byKey(
+                  const ValueKey('anniversary_fixed_all'),
                 );
-                expect((list.padding! as EdgeInsets).bottom, 88);
+                expect(tester.widget(scrollView), isA<CustomScrollView>());
+                final listPadding = tester
+                    .widgetList<SliverPadding>(
+                      find.descendant(
+                        of: scrollView,
+                        matching: find.byType(SliverPadding),
+                      ),
+                    )
+                    .last;
+                expect((listPadding.padding as EdgeInsets).bottom, 88);
                 final cardRect = tester.getRect(card);
                 final fabRect = tester.getRect(
                   find.byType(FloatingActionButton),

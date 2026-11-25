@@ -1099,12 +1099,12 @@ class _Fixture {
         : FocusRoomUiCopy.copyMonthlyReportButton(I18n.current);
     final tabs = tester.widget<TabBar>(_tabs).controller!;
     expect(tabs.index, 1);
-    // The report buttons are lazy ListView children. In short landscape the
-    // first history card fills the viewport/cache, so the buttons have no
-    // Elements yet and cannot supply their Scrollable ancestor.
+    // The report buttons live inside the History tab's CustomScrollView. In short
+    // landscape the first history card fills the viewport/cache, so the buttons
+    // have no Elements yet and cannot supply their Scrollable ancestor.
     final historyList = find.descendant(
       of: _screen,
-      matching: find.byType(ListView),
+      matching: find.byType(CustomScrollView),
     );
     expect(historyList, findsOneWidget);
     final historyScrollable = find.descendant(

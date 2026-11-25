@@ -367,7 +367,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                     pillBg,
                     levelColor,
                     isDark: isDark,
-                    minContrast: 4.85,
+                    minContrast: 5.5,
                   );
                   final titleText = (a['title'] ?? '').toString();
                   final titleStyle = Theme.of(context).textTheme.titleSmall

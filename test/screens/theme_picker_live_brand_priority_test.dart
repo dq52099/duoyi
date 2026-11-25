@@ -721,6 +721,9 @@ void main() {
                 'liquidGlass scaffold must be transparent for glass backdrop',
           );
 
+          ScaffoldMessenger.of(tester.element(pickerFinder)).clearSnackBars();
+          await tester.pumpAndSettle();
+
           final actualGlassPixels = await _samplePoints(
             tester,
             boundary,
@@ -856,6 +859,9 @@ void main() {
             isNot(equals(Colors.transparent)),
             reason: 'defaultBrand scaffold background should be opaque again',
           );
+
+          ScaffoldMessenger.of(tester.element(pickerFinder)).clearSnackBars();
+          await tester.pumpAndSettle();
 
           final actualDefaultRevertedPixels = await _samplePoints(
             tester,

@@ -297,8 +297,22 @@ void main() {
       findsOneWidget,
     );
     expect(find.text(TodoPriority.high.label), findsWidgets);
-    expect(find.text(TodoPriority.low.label), findsWidgets);
     expect(find.text('高优先任务'), findsOneWidget);
+
+    final pendingColumnScrollable = find.descendant(
+      of: find.byKey(
+        const ValueKey('todo_kanban_board_column_$defaultKanbanPendingColumnId'),
+      ),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('低优先任务'),
+      120,
+      scrollable: pendingColumnScrollable,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(TodoPriority.low.label), findsWidgets);
     expect(find.text('低优先任务'), findsOneWidget);
   });
 

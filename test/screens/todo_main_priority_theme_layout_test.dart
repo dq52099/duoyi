@@ -207,15 +207,17 @@ Future<void> _ensureVisibleInHeader(
 }) async {
   expect(target, findsOneWidget);
   final element = tester.element(target);
+  final horizontal = Scrollable.maybeOf(element, axis: Axis.horizontal);
+  final verticalTarget =
+      horizontal?.context.findRenderObject() ?? element.findRenderObject()!;
   final vertical = Scrollable.maybeOf(element, axis: Axis.vertical);
   if (vertical != null) {
     await vertical.position.ensureVisible(
-      element.findRenderObject()!,
+      verticalTarget,
       alignment: alignment,
     );
     await tester.pumpAndSettle();
   }
-  final horizontal = Scrollable.maybeOf(element, axis: Axis.horizontal);
   if (horizontal != null) {
     await horizontal.position.ensureVisible(
       element.findRenderObject()!,

@@ -877,6 +877,8 @@ void main() {
         300,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(entrance);
+      await tester.pumpAndSettle();
       await tester.tap(entrance);
       await tester.pumpAndSettle();
       final route = find.byType(LockSettingsScreen);

@@ -1498,9 +1498,12 @@ Future<void> _save(
   String name,
   Map<String, Object?> observations,
 ) async {
-  final directory = _resolveEvidenceDirectory1247(
-    Platform.environment[_outputEnv], name,
-  );
+  final output = Platform.environment[_outputEnv];
+  final repo = Platform.environment[_repoRootEnv1247];
+  if ((output == null || output.isEmpty) && (repo == null || repo.isEmpty)) {
+    return;
+  }
+  final directory = _resolveEvidenceDirectory1247(output, name);
   await tester.runAsync(() async {
     final png = File('$directory/$name.png');
     final record = File('$directory/$name.json');
