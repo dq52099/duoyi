@@ -1557,6 +1557,7 @@ class _TodoScreenState extends State<TodoScreen> {
                     buildDefaultDragHandles: false,
                     itemCount: listRows.length,
                     itemBuilder: itemBuilder,
+                    // ignore: deprecated_member_use
                     onReorder: (oldIndex, newIndex) {
                       _reorderFlatListRows(listRows, oldIndex, newIndex);
                     },

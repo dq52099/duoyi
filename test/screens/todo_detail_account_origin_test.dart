@@ -89,7 +89,11 @@ void main() {
       final oldSubtaskList = tester.widget<ReorderableListView>(
         find.byType(ReorderableListView),
       );
-      final retainedReorder = oldSubtaskList.onReorder;
+      // ignore: deprecated_member_use
+      final retainedReorder = _nullableReorder(oldSubtaskList.onReorder);
+      if (retainedReorder == null) {
+        throw StateError('Expected ReorderableListView.onReorder');
+      }
 
       await tester.scrollUntilVisible(
         titleField,
@@ -385,3 +389,5 @@ class _SwitchAccountOnPushObserver extends NavigatorObserver {
     detailRoutePushed.complete();
   }
 }
+
+ReorderCallback? _nullableReorder(ReorderCallback? callback) => callback;
