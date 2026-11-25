@@ -73,6 +73,62 @@ private func localDate(
     )!
 }
 
+runCase("timer display uses running countdown and count-up anchors") {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let countdown = resolve(timerValues(
+        running: true, total: Int64(1500), endsAt: millis(now.addingTimeInterval(1200))
+    ), at: now)
+    expect(countdown.display(at: now) == .countdown(countdown.endDate!), "running countdown display")
+    let countUp = resolve(timerValues(
+        countUp: true, running: true, startedAt: millis(now.addingTimeInterval(-61))
+    ), at: now)
+    expect(countUp.display(at: now) == .countUp(countUp.startDate!, countUp.capDate!), "count-up display")
+}
+
+runCase("paused timers show saved seconds with complete hour formatting") {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    for (seconds, text) in [(59, "00:59"), (60, "01:00"), (61, "01:01"),
+                            (3600, "1:00:00"), (3601, "1:00:01")] {
+        for countUp in [false, true] {
+            let timer = resolve(timerValues(
+                countUp: countUp, saved: Int64(seconds), total: Int64(seconds + 1)
+            ), at: now)
+            expect(timer.display(at: now) == .fixed(text), "paused clock \(seconds), countUp=\(countUp)")
+        }
+    }
+    let wide = resolve(timerValues(saved: Int64(3_600_000_061), total: Int64(3_600_000_062)), at: now)
+    expect(wide.display(at: now) == .fixed("1000000:01:01"), "hour count is not truncated to 32 bits")
+}
+
+runCase("future count-up and capped count-up show fixed boundary values") {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let future = resolve(timerValues(
+        countUp: true, running: true, startedAt: millis(now.addingTimeInterval(60))
+    ), at: now)
+    expect(future.display(at: now) == .fixed("00:00"), "future start does not count down to the start")
+    let capped = resolve(timerValues(
+        countUp: true, running: true, startedAt: millis(now.addingTimeInterval(-86_401))
+    ), at: now)
+    expect(capped.display(at: now) == .fixed("24:00:00"), "cap does not continue counting")
+}
+
+runCase("idle and unavailable use plan copy while ended countdown stays at zero") {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    expect(resolve(timerValues(countUp: true), at: now).display(at: now) == .fallback, "idle plan")
+    expect(DuoyiFocusTimerState.unavailable.display(at: now) == .fallback, "unavailable plan")
+    let ended = resolve(timerValues(running: true, total: Int64(60), endsAt: millis(now)), at: now)
+    expect(ended.display(at: now) == .fixed("00:00"), "ended clock")
+}
+
+runCase("clock rollback keeps the displayed countdown within the saved total") {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let clamped = resolve(timerValues(
+        running: true, total: Int64(3), endsAt: millis(now.addingTimeInterval(12))
+    ), at: now)
+    expect(clamped.seconds == 3, "core clamps remaining duration")
+    expect(clamped.display(at: now) == .fixed("00:03"), "display honors the clamp")
+}
+
 runCase("count-up derives elapsed seconds from its start anchor") {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     let start = now.addingTimeInterval(-10.875)

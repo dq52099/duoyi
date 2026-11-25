@@ -7,13 +7,19 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../core/account_ui_copy.dart';
+import '../core/design_tokens.dart' show AppSurfaceStyle, DesignTokens;
 import '../core/i18n.dart';
+import '../core/image_decode_cache.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/user_provider.dart';
 import '../services/api_client.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../widgets/account_status_chip.dart';
+import '../widgets/brand_background.dart'
+    show BrandBackground, BrandRouteSurface;
 import '../widgets/cached_avatar_image.dart';
+import '../widgets/controller_dialog.dart' show createControllerDialogRoute;
 import '../widgets/surface_components.dart';
 import 'login_screen.dart';
 
@@ -27,6 +33,22 @@ double _profileInlineActionWidth(BuildContext context) {
       : _profileLongActionButtonWidth;
 }
 
+ThemeProvider? _readThemeProvider(BuildContext context) {
+  try {
+    final optional = Provider.of<ThemeProvider?>(context, listen: false);
+    if (optional != null) return optional;
+  } on ProviderNotFoundException {
+    // Optional in test fixtures and standalone routes.
+  } catch (_) {}
+  try {
+    return Provider.of<ThemeProvider>(context, listen: false);
+  } on ProviderNotFoundException {
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
 class ProfileScreen extends StatelessWidget {
   final bool openAvatarSheetOnStart;
 
@@ -34,7 +56,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppLocale>(
+    final child = ValueListenableBuilder<AppLocale>(
       valueListenable: I18n.localeListenable,
       builder: (context, locale, _) {
         final isLoggedIn = context.select<AuthProvider, bool>(
@@ -48,6 +70,33 @@ class ProfileScreen extends StatelessWidget {
                 openAvatarSheetOnStart: openAvatarSheetOnStart,
               );
       },
+    );
+
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+    if (!isLiquidGlass) {
+      return child;
+    }
+
+    final hasBrandSurface =
+        context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+        context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+    if (hasBrandSurface) {
+      return child;
+    }
+
+    if (_readThemeProvider(context) == null) {
+      return child;
+    }
+
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final routeBackground = theme.brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
+    return Material(
+      color: routeBackground,
+      child: BrandBackground(child: child),
     );
   }
 }
@@ -100,6 +149,15 @@ class _ProfileAvatarPreview extends StatelessWidget {
                 File(localPath),
                 width: radius * 2,
                 height: radius * 2,
+                cacheWidth: ImageDecodeCache.boundedCachePixels(
+                  radius * 2,
+                  MediaQuery.devicePixelRatioOf(context),
+                ),
+                cacheHeight: ImageDecodeCache.boundedCachePixels(
+                  radius * 2,
+                  MediaQuery.devicePixelRatioOf(context),
+                ),
+                gaplessPlayback: true,
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => _ProfileAvatarLetter(
                   letter: letter,
@@ -389,6 +447,11 @@ class _ProfileAvatarFullImage extends StatelessWidget {
         ? Image.file(
             File(localPath),
             fit: BoxFit.contain,
+            cacheWidth: ImageDecodeCache.boundedCachePixels(
+              MediaQuery.sizeOf(context).width,
+              MediaQuery.devicePixelRatioOf(context),
+            ),
+            gaplessPlayback: true,
             errorBuilder: (_, _, _) => _fallbackAvatar(context),
           )
         : null;
@@ -464,6 +527,25 @@ class _ProfileCopyText extends _ProfileStateText {
   String resolve() => resolver();
 }
 
+enum _ProfileMirrorReason { profile, email }
+
+class _PendingProfileMirror {
+  final _ProfileMirrorReason reason;
+
+  _PendingProfileMirror(this.reason);
+}
+
+class _ProfileMirrorFailureText extends _ProfileStateText {
+  final _ProfileMirrorReason reason;
+
+  const _ProfileMirrorFailureText(this.reason);
+
+  @override
+  String resolve() => reason == _ProfileMirrorReason.email
+      ? AccountUiCopy.emailBoundLocalSyncFailed
+      : AccountUiCopy.profileSavedLocalSyncFailed;
+}
+
 class _ProfileEmailCodeSentText extends _ProfileStateText {
   final String devCode;
   final String? rawMessage;
@@ -513,15 +595,30 @@ class _ProfileLocaleText extends StatelessWidget {
 }
 
 String _feedbackAvatarSaved() => AccountUiCopy.feedbackAvatarSaved;
+String _feedbackLocalSynced() => AccountUiCopy.feedbackLocalSynced;
 
 class _ChangePasswordDialog extends StatefulWidget {
-  const _ChangePasswordDialog();
+  final AuthProvider? auth;
+  final AuthSessionLease? sessionLease;
+  final int? originGeneration;
+  final String? originUserId;
+
+  const _ChangePasswordDialog({
+    this.auth,
+    this.sessionLease,
+    this.originGeneration,
+    this.originUserId,
+  });
 
   @override
   State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
 }
 
 class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  late final AuthProvider _auth;
+  late final AuthSessionLease? _sessionLease;
+  late final int _originGeneration;
+  late final String? _originUserId;
   final _currentCtrl = TextEditingController();
   final _newCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
@@ -530,15 +627,102 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
   bool _obscureNew = true;
   bool _obscureConfirm = true;
   _ProfileStateText? _error;
+  bool _hasDependencySnapshot = false;
+  ThemeData? _lastTheme;
+  Locale? _lastLocalizationsLocale;
+  AppLocale? _lastI18nLocale;
+  Size? _lastMediaSize;
+  EdgeInsets? _lastViewInsets;
+  EdgeInsets? _lastPadding;
+  EdgeInsets? _lastViewPadding;
+  TextScaler? _lastTextScaler;
+  bool _revealScheduled = false;
+  bool _insetTransitionPending = false;
+  Duration? _insetTransitionStart;
+  int _insetSettleProbes = 0;
+  double? _lastNotifiedViewportDimension;
+  double? _lastNotifiedMinScrollExtent;
+  double? _lastNotifiedMaxScrollExtent;
+  double? _lastRevealedViewportDimension;
+  double? _lastRevealedMinScrollExtent;
+  double? _lastRevealedMaxScrollExtent;
 
   @override
   void initState() {
     super.initState();
     I18n.localeListenable.addListener(_handleLocaleChanged);
+    _auth = widget.auth ?? context.read<AuthProvider>();
+    _sessionLease =
+        widget.sessionLease ??
+        (_auth.state.isLoggedIn ? _auth.captureSessionLease() : null);
+    _originGeneration =
+        widget.originGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    _originUserId = widget.originUserId ?? _auth.state.userId;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final theme = Theme.of(context);
+    final localizationsLocale = Localizations.maybeLocaleOf(context);
+    final i18nLocale = I18n.localeListenable.value;
+    final mediaSize = MediaQuery.maybeSizeOf(context);
+    final viewInsets = MediaQuery.maybeViewInsetsOf(context);
+    final padding = MediaQuery.maybePaddingOf(context);
+    final viewPadding = MediaQuery.maybeViewPaddingOf(context);
+    final textScaler = MediaQuery.maybeTextScalerOf(context);
+
+    if (!_hasDependencySnapshot) {
+      _hasDependencySnapshot = true;
+      _lastTheme = theme;
+      _lastLocalizationsLocale = localizationsLocale;
+      _lastI18nLocale = i18nLocale;
+      _lastMediaSize = mediaSize;
+      _lastViewInsets = viewInsets;
+      _lastPadding = padding;
+      _lastViewPadding = viewPadding;
+      _lastTextScaler = textScaler;
+      return;
+    }
+
+    final viewInsetsChanged = _lastViewInsets?.bottom != viewInsets?.bottom;
+    final layoutChanged =
+        _lastTheme != theme ||
+        _lastLocalizationsLocale != localizationsLocale ||
+        _lastI18nLocale != i18nLocale ||
+        _lastMediaSize != mediaSize ||
+        _lastViewInsets != viewInsets ||
+        _lastPadding != padding ||
+        _lastViewPadding != viewPadding ||
+        _lastTextScaler != textScaler;
+
+    _lastTheme = theme;
+    _lastLocalizationsLocale = localizationsLocale;
+    _lastI18nLocale = i18nLocale;
+    _lastMediaSize = mediaSize;
+    _lastViewInsets = viewInsets;
+    _lastPadding = padding;
+    _lastViewPadding = viewPadding;
+    _lastTextScaler = textScaler;
+
+    if (viewInsetsChanged && TickerMode.valuesOf(context).enabled) {
+      _insetTransitionPending = true;
+      _insetTransitionStart = null;
+      _insetSettleProbes = 0;
+    }
+
+    if (layoutChanged) {
+      _scheduleFocusedSelectionReveal();
+    }
   }
 
   @override
   void dispose() {
+    _revealScheduled = false;
+    _insetTransitionPending = false;
+    _insetTransitionStart = null;
+    _insetSettleProbes = 0;
     I18n.localeListenable.removeListener(_handleLocaleChanged);
     _currentCtrl.dispose();
     _newCtrl.dispose();
@@ -547,10 +731,172 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
   }
 
   void _handleLocaleChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    _lastI18nLocale = I18n.localeListenable.value;
+    _scheduleFocusedSelectionReveal();
+    setState(() {});
+  }
+
+  bool _handleScrollMetricsNotification(ScrollMetricsNotification notification) {
+    if (!mounted) return false;
+    if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    final metrics = notification.metrics;
+    if (!metrics.hasViewportDimension || !metrics.hasContentDimensions) {
+      return false;
+    }
+    final sameAsNotified =
+        _lastNotifiedViewportDimension != null &&
+        (metrics.viewportDimension - _lastNotifiedViewportDimension!).abs() <
+            0.01 &&
+        (metrics.minScrollExtent - _lastNotifiedMinScrollExtent!).abs() <
+            0.01 &&
+        (metrics.maxScrollExtent - _lastNotifiedMaxScrollExtent!).abs() < 0.01;
+    if (sameAsNotified) {
+      return false;
+    }
+    _lastNotifiedViewportDimension = metrics.viewportDimension;
+    _lastNotifiedMinScrollExtent = metrics.minScrollExtent;
+    _lastNotifiedMaxScrollExtent = metrics.maxScrollExtent;
+
+    final sameAsRevealed =
+        _lastRevealedViewportDimension != null &&
+        (metrics.viewportDimension - _lastRevealedViewportDimension!).abs() <
+            0.01 &&
+        (metrics.minScrollExtent - _lastRevealedMinScrollExtent!).abs() <
+            0.01 &&
+        (metrics.maxScrollExtent - _lastRevealedMaxScrollExtent!).abs() < 0.01;
+    if (!sameAsRevealed &&
+        metrics.viewportDimension > 0 &&
+        FocusManager.instance.primaryFocus?.hasFocus == true) {
+      _scheduleFocusedSelectionReveal(
+        requestFrame:
+            !_insetTransitionPending ||
+            WidgetsBinding.instance.transientCallbackCount == 0,
+      );
+    }
+    return false;
+  }
+
+  void _scheduleFocusedSelectionReveal({bool requestFrame = false}) {
+    if (!mounted) return;
+    if (requestFrame) {
+      WidgetsBinding.instance.scheduleFrame();
+    }
+    if (_revealScheduled) return;
+    _revealScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback(_onRevealPostFrame);
+  }
+
+  void _onRevealPostFrame(Duration timeStamp) {
+    _revealScheduled = false;
+    if (!mounted) {
+      _insetTransitionPending = false;
+      return;
+    }
+    final ownerRoute = ModalRoute.of(context);
+    if (ownerRoute != null && !ownerRoute.isCurrent) {
+      _insetTransitionPending = false;
+      return;
+    }
+    if (_insetTransitionPending) {
+      _insetTransitionStart ??= timeStamp;
+      final elapsed = timeStamp - _insetTransitionStart!;
+      final hasActiveTickers =
+          WidgetsBinding.instance.transientCallbackCount > 0;
+      final transitionSettled =
+          (!hasActiveTickers &&
+              elapsed >= const Duration(milliseconds: 180)) ||
+          elapsed >= const Duration(milliseconds: 250) ||
+          _insetSettleProbes >= 60;
+      if (!transitionSettled) {
+        _insetSettleProbes++;
+        _scheduleFocusedSelectionReveal(requestFrame: !hasActiveTickers);
+        return;
+      }
+      _insetTransitionPending = false;
+      _insetTransitionStart = null;
+      _insetSettleProbes = 0;
+    }
+    _revealFocusedSelectionIfNeeded();
+  }
+
+  void _revealFocusedSelectionIfNeeded() {
+    if (!mounted) return;
+    final ownerRoute = ModalRoute.of(context);
+    if (ownerRoute != null && !ownerRoute.isCurrent) return;
+
+    final primaryFocus = FocusManager.instance.primaryFocus;
+    final focusContext = primaryFocus?.context;
+    if (primaryFocus == null ||
+        !primaryFocus.hasFocus ||
+        focusContext == null ||
+        !focusContext.mounted) {
+      return;
+    }
+
+    final editableState =
+        focusContext.findAncestorStateOfType<EditableTextState>();
+    if (editableState == null || !editableState.mounted) return;
+
+    final controller = editableState.widget.controller;
+    final isOwnedController =
+        identical(controller, _currentCtrl) ||
+        identical(controller, _newCtrl) ||
+        identical(controller, _confirmCtrl);
+    if (!isOwnedController) return;
+    if (!identical(
+      editableState.context.findAncestorStateOfType<_ChangePasswordDialogState>(),
+      this,
+    )) {
+      return;
+    }
+
+    final selection = editableState.textEditingValue.selection;
+    final textLength = editableState.textEditingValue.text.length;
+    if (!selection.isValid || selection.extentOffset > textLength) return;
+
+    final editableRender = editableState.context.findRenderObject();
+    if (editableRender == null || !editableRender.attached) return;
+    final renderEditable = editableState.renderEditable;
+    if (!renderEditable.attached || !renderEditable.hasSize) return;
+
+    final scrollable = Scrollable.maybeOf(editableState.context);
+    if (scrollable != null) {
+      final position = scrollable.position;
+      if (!position.hasPixels || position.viewportDimension <= 0) {
+        return;
+      }
+      _lastRevealedViewportDimension = position.viewportDimension;
+      _lastRevealedMinScrollExtent = position.minScrollExtent;
+      _lastRevealedMaxScrollExtent = position.maxScrollExtent;
+    }
+
+    editableState.bringIntoView(selection.extent);
+  }
+
+  bool _isCurrentSession() {
+    if (!mounted) return false;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      _originGeneration,
+    )) {
+      return false;
+    }
+    if (_auth.state.userId != _originUserId) return false;
+    if (!_auth.state.isLoggedIn) return false;
+    if (_sessionLease != null && !_auth.isSessionLeaseCurrent(_sessionLease)) {
+      return false;
+    }
+    return true;
   }
 
   Future<void> _submit() async {
+    if (!mounted || _saving) return;
+    final ownerRoute = ModalRoute.of(context);
+    if (ownerRoute != null && !ownerRoute.isCurrent) return;
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
     final current = _currentCtrl.text;
     final next = _newCtrl.text;
     final confirm = _confirmCtrl.text;
@@ -576,21 +922,45 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
       );
       return;
     }
+    if (!_isCurrentSession()) {
+      setState(
+        () => _error = _ProfileStateText.error(AccountUiCopy.accountChanged),
+      );
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
-      await context.read<AuthProvider>().changePassword(
+      await _auth.changePassword(
         currentPassword: current,
         newPassword: next,
+        sessionLease: _sessionLease,
       );
-      if (!mounted) return;
-      Navigator.pop(context, true);
+      if (!mounted || (ownerRoute != null && !ownerRoute.isCurrent)) return;
+      if (_auth.state.isLoggedIn && !_isCurrentSession()) return;
+      final isExpectedGuest = !_auth.state.isLoggedIn;
+      final isOriginRetained = _isCurrentSession();
+      if (!isExpectedGuest && !isOriginRetained) return;
+      if (navigator.canPop()) navigator.pop(true);
+      messenger?.showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, _, _) =>
+                Text(AccountUiCopy.feedbackPasswordChangedRelogin),
+          ),
+        ),
+      );
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+      if (_isCurrentSession() && (ownerRoute == null || ownerRoute.isCurrent)) {
+        setState(() => _error = _ProfileStateText.error(e));
+      }
     } catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+      if (_isCurrentSession() && (ownerRoute == null || ownerRoute.isCurrent)) {
+        setState(() => _error = _ProfileStateText.error(e));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -598,129 +968,151 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AppDialog(
-      title: Text(I18n.tr('profile.change_password')),
-      icon: const Icon(Icons.lock_reset_outlined),
-      shiftForKeyboard: true,
-      content: AppSecondaryControlTheme(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _currentCtrl,
-              obscureText: _obscureCurrent,
-              decoration: InputDecoration(
-                labelText: I18n.tr('profile.current_password'),
-                suffixIcon: IconButton(
-                  tooltip: _obscureCurrent
-                      ? AccountUiCopy.tooltipShowPassword
-                      : AccountUiCopy.tooltipHidePassword,
-                  icon: Icon(
-                    _obscureCurrent
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 18,
+    return NotificationListener<ScrollMetricsNotification>(
+      onNotification: _handleScrollMetricsNotification,
+      child: AppDialog(
+        title: Text(I18n.tr('profile.change_password')),
+        icon: const Icon(Icons.lock_reset_outlined),
+        shiftForKeyboard: true,
+        content: AppSecondaryControlTheme(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _currentCtrl,
+                obscureText: _obscureCurrent,
+                decoration: InputDecoration(
+                  labelText: I18n.tr('profile.current_password'),
+                  hintText: I18n.tr('profile.current_password'),
+                  hintMaxLines: 3,
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                  suffixIcon: IconButton(
+                    tooltip: _obscureCurrent
+                        ? AccountUiCopy.tooltipShowPassword
+                        : AccountUiCopy.tooltipHidePassword,
+                    icon: Icon(
+                      _obscureCurrent
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 18,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureCurrent = !_obscureCurrent),
                   ),
-                  onPressed: () =>
-                      setState(() => _obscureCurrent = !_obscureCurrent),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _newCtrl,
-              obscureText: _obscureNew,
-              decoration: InputDecoration(
-                labelText: I18n.tr('auth.new_password'),
-                suffixIcon: IconButton(
-                  tooltip: _obscureNew
-                      ? AccountUiCopy.tooltipShowPassword
-                      : AccountUiCopy.tooltipHidePassword,
-                  icon: Icon(
-                    _obscureNew
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 18,
-                  ),
-                  onPressed: () => setState(() => _obscureNew = !_obscureNew),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _confirmCtrl,
-              obscureText: _obscureConfirm,
-              decoration: InputDecoration(
-                labelText: I18n.tr('profile.confirm_new_password'),
-                suffixIcon: IconButton(
-                  tooltip: _obscureConfirm
-                      ? AccountUiCopy.tooltipShowPassword
-                      : AccountUiCopy.tooltipHidePassword,
-                  icon: Icon(
-                    _obscureConfirm
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 18,
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscureConfirm = !_obscureConfirm),
-                ),
-              ),
-            ),
-            if (_error != null) ...[
               const SizedBox(height: 10),
-              AppInfoBanner(
-                icon: Icons.error_outline,
-                title: I18n.tr('profile.save_failed'),
-                message: _error!.resolve(),
-                color: Theme.of(context).colorScheme.error,
-                margin: EdgeInsets.zero,
-              ),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          style: TextButton.styleFrom(
-            minimumSize: const Size(0, 38),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-          ),
-          onPressed: _saving ? null : () => Navigator.pop(context, false),
-          child: Text(I18n.tr('action.cancel')),
-        ),
-        SizedBox(
-          width: _profileActionButtonWidth,
-          height: _profileActionButtonHeight,
-          child: FilledButton(
-            onPressed: _saving ? null : _submit,
-            style: appSecondaryFilledButtonStyle(context),
-            child: _saving
-                ? const SizedBox.square(
-                    dimension: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(I18n.tr('action.save'), maxLines: 1),
+              TextField(
+                controller: _newCtrl,
+                obscureText: _obscureNew,
+                decoration: InputDecoration(
+                  labelText: I18n.tr('auth.new_password'),
+                  hintText: I18n.tr('auth.new_password'),
+                  hintMaxLines: 3,
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                  suffixIcon: IconButton(
+                    tooltip: _obscureNew
+                        ? AccountUiCopy.tooltipShowPassword
+                        : AccountUiCopy.tooltipHidePassword,
+                    icon: Icon(
+                      _obscureNew
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 18,
+                    ),
+                    onPressed: () => setState(() => _obscureNew = !_obscureNew),
                   ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _confirmCtrl,
+                obscureText: _obscureConfirm,
+                decoration: InputDecoration(
+                  labelText: I18n.tr('profile.confirm_new_password'),
+                  hintText: I18n.tr('profile.confirm_new_password'),
+                  hintMaxLines: 3,
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                  suffixIcon: IconButton(
+                    tooltip: _obscureConfirm
+                        ? AccountUiCopy.tooltipShowPassword
+                        : AccountUiCopy.tooltipHidePassword,
+                    icon: Icon(
+                      _obscureConfirm
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 18,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureConfirm = !_obscureConfirm),
+                  ),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                AppInfoBanner(
+                  icon: Icons.error_outline,
+                  title: I18n.tr('profile.save_failed'),
+                  message: _error!.resolve(),
+                  color: Theme.of(context).colorScheme.error,
+                  margin: EdgeInsets.zero,
+                ),
+              ],
+            ],
           ),
         ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : () => Navigator.pop(context, false),
+            child: Text(I18n.tr('action.cancel')),
+          ),
+          SizedBox(
+            width: _profileActionButtonWidth,
+            height: _profileActionButtonHeight,
+            child: FilledButton(
+              onPressed: _saving ? null : _submit,
+              style: appSecondaryFilledButtonStyle(context),
+              child: _saving
+                  ? const SizedBox.square(
+                      dimension: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(I18n.tr('action.save'), maxLines: 1),
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _EmailBindingDialog extends StatefulWidget {
   final String initialEmail;
+  final AuthProvider? auth;
+  final AuthSessionLease? sessionLease;
+  final int? originGeneration;
+  final String? originUserId;
 
-  const _EmailBindingDialog({required this.initialEmail});
+  const _EmailBindingDialog({
+    required this.initialEmail,
+    this.auth,
+    this.sessionLease,
+    this.originGeneration,
+    this.originUserId,
+  });
 
   @override
   State<_EmailBindingDialog> createState() => _EmailBindingDialogState();
 }
 
 class _EmailBindingDialogState extends State<_EmailBindingDialog> {
+  late final AuthProvider _auth;
+  late final AuthSessionLease? _sessionLease;
+  late final int _originGeneration;
+  late final String? _originUserId;
   late final TextEditingController _emailCtrl;
   late final TextEditingController _emailCodeCtrl;
   bool _sending = false;
@@ -734,6 +1126,14 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
   void initState() {
     super.initState();
     I18n.localeListenable.addListener(_handleLocaleChanged);
+    _auth = widget.auth ?? context.read<AuthProvider>();
+    _sessionLease =
+        widget.sessionLease ??
+        (_auth.state.isLoggedIn ? _auth.captureSessionLease() : null);
+    _originGeneration =
+        widget.originGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    _originUserId = widget.originUserId ?? _auth.state.userId;
     _emailCtrl = TextEditingController(text: widget.initialEmail);
     _emailCodeCtrl = TextEditingController();
     _emailCtrl.addListener(_refresh);
@@ -757,6 +1157,21 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
     if (mounted) setState(() {});
   }
 
+  bool _isCurrentSession() {
+    if (!mounted) return false;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      _originGeneration,
+    )) {
+      return false;
+    }
+    if (_auth.state.userId != _originUserId) return false;
+    if (!_auth.state.isLoggedIn) return false;
+    if (_sessionLease != null && !_auth.isSessionLeaseCurrent(_sessionLease)) {
+      return false;
+    }
+    return true;
+  }
+
   void _startCooldown() {
     if (!mounted) return;
     _cooldownTimer?.cancel();
@@ -776,7 +1191,9 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
   }
 
   Future<void> _sendEmailCode() async {
-    if (_sending || _binding || _cooldownSeconds > 0) return;
+    if (!mounted || _sending || _binding || _cooldownSeconds > 0) return;
+    final ownerRoute = ModalRoute.of(context);
+    if (ownerRoute != null && !ownerRoute.isCurrent) return;
     final email = _emailCtrl.text.trim();
     if (email.isEmpty) {
       setState(
@@ -790,18 +1207,29 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
       );
       return;
     }
+    if (!_isCurrentSession()) {
+      setState(
+        () => _error = _ProfileStateText.error(AccountUiCopy.accountChanged),
+      );
+      return;
+    }
     setState(() {
       _sending = true;
       _error = null;
       _message = null;
     });
     try {
-      final result = await context.read<AuthProvider>().sendBindEmailCode(
+      final result = await _auth.sendBindEmailCode(
         email: email,
+        sessionLease: _sessionLease,
       );
       final devCode = (result['dev_code'] ?? '').toString();
       final rawMessage = result['message']?.toString();
-      if (!mounted) return;
+      if (!mounted ||
+          !_isCurrentSession() ||
+          (ownerRoute != null && !ownerRoute.isCurrent)) {
+        return;
+      }
       _startCooldown();
       setState(() {
         _message = _ProfileStateText.emailCodeSent(
@@ -810,16 +1238,22 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
         );
       });
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+      if (_isCurrentSession() && (ownerRoute == null || ownerRoute.isCurrent)) {
+        setState(() => _error = _ProfileStateText.error(e));
+      }
     } catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+      if (_isCurrentSession() && (ownerRoute == null || ownerRoute.isCurrent)) {
+        setState(() => _error = _ProfileStateText.error(e));
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
   Future<void> _bindEmail() async {
-    if (_sending || _binding) return;
+    if (!mounted || _sending || _binding) return;
+    final ownerRoute = ModalRoute.of(context);
+    if (ownerRoute != null && !ownerRoute.isCurrent) return;
     final email = _emailCtrl.text.trim();
     final code = _emailCodeCtrl.text.trim();
     if (email.isEmpty) {
@@ -842,19 +1276,37 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
       );
       return;
     }
+    if (!_isCurrentSession()) {
+      setState(
+        () => _error = _ProfileStateText.error(AccountUiCopy.accountChanged),
+      );
+      return;
+    }
     setState(() {
       _binding = true;
       _error = null;
       _message = null;
     });
     try {
-      await context.read<AuthProvider>().bindEmail(email: email, code: code);
-      if (!mounted) return;
+      await _auth.bindEmail(
+        email: email,
+        code: code,
+        sessionLease: _sessionLease,
+      );
+      if (!mounted ||
+          !_isCurrentSession() ||
+          (ownerRoute != null && !ownerRoute.isCurrent)) {
+        return;
+      }
       Navigator.pop(context, true);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+      if (_isCurrentSession() && (ownerRoute == null || ownerRoute.isCurrent)) {
+        setState(() => _error = _ProfileStateText.error(e));
+      }
     } catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+      if (_isCurrentSession() && (ownerRoute == null || ownerRoute.isCurrent)) {
+        setState(() => _error = _ProfileStateText.error(e));
+      }
     } finally {
       if (mounted) setState(() => _binding = false);
     }
@@ -924,7 +1376,7 @@ class _EmailBindingDialogState extends State<_EmailBindingDialog> {
                 icon: Icons.check_circle_outline,
                 title: I18n.tr('profile.saved'),
                 message: _message!.resolve(),
-                color: Colors.green,
+                color: DesignTokens.defaultSuccess,
                 margin: EdgeInsets.zero,
               ),
             ],
@@ -974,37 +1426,63 @@ class _ProfileMetricChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final bool tabularFigures;
 
   const _ProfileMetricChip({
     required this.icon,
     required this.label,
     required this.value,
+    this.tabularFigures = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final chipBackground = cs.primaryContainer.withValues(alpha: 0.52);
+    final Color foreground;
+    if (surfaceStyle != null) {
+      final cardFill = surfaceStyle.cardFillColor ?? cs.surface;
+      final cardBackground = Color.alphaBlend(
+        cardFill,
+        Color.alphaBlend(theme.scaffoldBackgroundColor, cs.surface),
+      );
+      final compositedBackground = Color.alphaBlend(
+        chipBackground,
+        cardBackground,
+      );
+      foreground = appReadableForeground(
+        compositedBackground,
+        cs.onPrimaryContainer,
+      );
+    } else {
+      foreground = cs.onPrimaryContainer;
+    }
     return Semantics(
       label: '$label $value',
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(
-          color: cs.primaryContainer.withValues(alpha: 0.52),
+          color: chipBackground,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(icon, size: 13, color: cs.onPrimaryContainer),
+            Icon(icon, size: 13, color: foreground),
             const SizedBox(width: 4),
             Flexible(
               child: Text(
                 '$label $value',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelSmall?.copyWith(color: cs.onPrimaryContainer),
+                softWrap: true,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: foreground,
+                  fontFeatures: tabularFigures
+                      ? const [FontFeature.tabularFigures()]
+                      : null,
+                ),
               ),
             ),
           ],
@@ -1066,6 +1544,12 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   late final TextEditingController _displayNameCtrl;
   late final TextEditingController _avatarCtrl;
   late final TextEditingController _bioCtrl;
+  late final int _originGeneration;
+  late final String? _originUserId;
+  late final bool _originIsLoggedIn;
+  AuthProvider? _originAuth;
+  late final UserProvider _originUserProvider;
+  AuthSessionLease? _originSessionLease;
   AuthProvider? _authProvider;
   String? _lastAccountSnapshot;
   bool _syncingControllers = false;
@@ -1074,12 +1558,28 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
   bool _avatarBusy = false;
   _ProfileStateText? _error;
   _ProfileStateText? _message;
+  _PendingProfileMirror? _pendingProfileMirror;
+
+  bool get _canRetryLocalMirror => _pendingProfileMirror != null;
 
   @override
   void initState() {
     super.initState();
     I18n.localeListenable.addListener(_handleLocaleChanged);
-    final state = context.read<AuthProvider>().state;
+    final auth = context.read<AuthProvider>();
+    final state = auth.state;
+    _originGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    _originUserId = state.userId;
+    _originIsLoggedIn = state.isLoggedIn;
+    _originAuth = auth;
+    _originUserProvider = context.read<UserProvider>();
+    try {
+      _originSessionLease = state.isLoggedIn
+          ? auth.captureSessionLease()
+          : null;
+    } catch (_) {
+      _originSessionLease = null;
+    }
     _usernameCtrl = TextEditingController(text: state.username ?? '');
     _displayNameCtrl = TextEditingController(text: state.displayName ?? '');
     _avatarCtrl = TextEditingController(text: state.avatar ?? '');
@@ -1131,6 +1631,28 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
 
   void _handleLocaleChanged() {
     if (mounted) setState(() {});
+  }
+
+  bool _isCurrentEditorFlow() {
+    if (!mounted) return false;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      _originGeneration,
+    )) {
+      return false;
+    }
+    final auth = _originAuth ?? context.read<AuthProvider>();
+    if (!identical(context.read<AuthProvider>(), auth) ||
+        !identical(context.read<UserProvider>(), _originUserProvider)) {
+      return false;
+    }
+    if (auth.state.userId != _originUserId) return false;
+    if (auth.state.isLoggedIn != _originIsLoggedIn) return false;
+    if (_originSessionLease != null &&
+        !auth.isSessionLeaseCurrent(_originSessionLease!)) {
+      return false;
+    }
+    if (_originIsLoggedIn && _originSessionLease == null) return false;
+    return true;
   }
 
   void _refreshPreview() {
@@ -1194,8 +1716,16 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
 
   Future<void> _uploadAvatar() async {
     if (_busy || _avatarBusy) return;
-    final auth = context.read<AuthProvider>();
+    final ownerRoute = ModalRoute.of(context);
+    if (!_isCurrentEditorFlow()) {
+      setState(
+        () => _error = _ProfileStateText.error(AccountUiCopy.accountChanged),
+      );
+      return;
+    }
+    final auth = _originAuth ?? context.read<AuthProvider>();
     final userProvider = context.read<UserProvider>();
+
     setState(() {
       _avatarBusy = true;
       _error = null;
@@ -1203,16 +1733,22 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
     });
     try {
       final file = await openFile(
-        acceptedTypeGroups: const [
+        acceptedTypeGroups: [
           XTypeGroup(
-            label: 'Image',
-            extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-            mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+            label: AccountUiCopy.imageFileTypeLabel,
+            extensions: const ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+            mimeTypes: const [
+              'image/jpeg',
+              'image/png',
+              'image/webp',
+              'image/gif',
+            ],
           ),
         ],
       );
-      if (file == null) return;
+      if (file == null || !_isCurrentEditorFlow()) return;
       final bytes = await file.readAsBytes();
+      if (!_isCurrentEditorFlow()) return;
       if (bytes.isEmpty) {
         if (mounted) {
           setState(
@@ -1231,7 +1767,12 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         }
         return;
       }
-      await auth.uploadAvatarBytes(filename: file.name, bytes: bytes);
+      await auth.uploadAvatarBytes(
+        filename: file.name,
+        bytes: bytes,
+        sessionLease: _originSessionLease,
+      );
+      if (!_isCurrentEditorFlow()) return;
       final state = auth.state;
       _applyUploadedAvatar(state);
       await userProvider.updateProfile(
@@ -1246,14 +1787,19 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         avatarUrl: state.avatar ?? '',
         bio: state.bio ?? '',
       );
-      if (!mounted) return;
+      if (!_isCurrentEditorFlow()) return;
+      if (ownerRoute != null && !ownerRoute.isCurrent) return;
       setState(
         () => _message = const _ProfileStateText.copy(_feedbackAvatarSaved),
       );
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+      if (_isCurrentEditorFlow()) {
+        setState(() => _error = _ProfileStateText.error(e));
+      }
     } catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+      if (_isCurrentEditorFlow()) {
+        setState(() => _error = _ProfileStateText.error(e));
+      }
     } finally {
       if (mounted) setState(() => _avatarBusy = false);
     }
@@ -1261,34 +1807,66 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
 
   void _showAvatarPreview() {
     if (_busy || _avatarBusy) return;
+    if (!_isCurrentEditorFlow()) {
+      setState(
+        () => _error = _ProfileStateText.error(AccountUiCopy.accountChanged),
+      );
+      return;
+    }
+    final authState = (_originAuth ?? context.read<AuthProvider>()).state;
     final displayName = _firstNonEmptyProfileText([
       _displayNameCtrl.text,
       _usernameCtrl.text,
-      context.read<AuthProvider>().state.displayName,
-      context.read<AuthProvider>().state.username,
+      authState.displayName,
+      authState.username,
     ]);
     final avatar = _avatarCtrl.text.trim().isEmpty
-        ? context.read<AuthProvider>().state.avatar
+        ? authState.avatar
         : _avatarCtrl.text.trim();
-    final auth = context.read<AuthProvider>().state;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => _ProfileAvatarFullScreen(
           avatar: avatar,
           displayName: displayName,
-          cacheKey: _avatarCacheKey(avatar, auth.userId),
-          onEdit: _uploadAvatar,
+          cacheKey: _avatarCacheKey(avatar, authState.userId),
+          onEdit: () {
+            if (!_isCurrentEditorFlow()) return;
+            _uploadAvatar();
+          },
         ),
       ),
     );
   }
 
   Future<void> _showChangePasswordDialog() async {
-    final changed = await showDialog<bool>(
+    if (_busy || _avatarBusy) return;
+    final ownerRoute = ModalRoute.of(context);
+    if (!_isCurrentEditorFlow()) {
+      setState(
+        () => _error = _ProfileStateText.error(AccountUiCopy.accountChanged),
+      );
+      return;
+    }
+    final auth = _originAuth ?? context.read<AuthProvider>();
+    final route = createControllerDialogRoute<bool>(
       context: context,
-      builder: (_) => const _ChangePasswordDialog(),
+      builder: (_) => _ChangePasswordDialog(
+        auth: auth,
+        sessionLease: _originSessionLease,
+        originGeneration: _originGeneration,
+        originUserId: _originUserId,
+      ),
     );
-    if (!mounted || changed != true) return;
+    final changed = await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push<bool>(route);
+    if (!mounted ||
+        !_isCurrentEditorFlow() ||
+        (ownerRoute != null && !ownerRoute.isCurrent) ||
+        changed != true) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: _ProfileLocaleText('profile.password.updated')),
     );
@@ -1296,62 +1874,134 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
 
   Future<void> _showEmailBindingDialog() async {
     if (_busy || _avatarBusy) return;
-    final auth = context.read<AuthProvider>();
-    final updated = await showDialog<bool>(
-      context: context,
-      builder: (_) => _EmailBindingDialog(initialEmail: auth.state.email ?? ''),
-    );
-    if (!mounted || updated != true) return;
-    final userProvider = context.read<UserProvider>();
-    final state = auth.state;
-    if (_hasLocalProfileEdits) {
-      _lastAccountSnapshot = _accountProfileSnapshot(state);
-      _refreshPreview();
-    } else {
-      _applyAccountState(state);
+    final ownerRoute = ModalRoute.of(context);
+    if (!_isCurrentEditorFlow()) {
+      setState(
+        () => _error = _ProfileStateText.error(AccountUiCopy.accountChanged),
+      );
+      return;
     }
-    await userProvider.updateProfile(
-      username: _firstNonEmptyProfileText([
-        state.username,
-        userProvider.profile.username,
-      ]),
-      displayName: state.displayName ?? '',
-      email: state.email ?? '',
-      emailVerified: state.emailVerified,
-      avatarUrl: state.avatar ?? '',
-      bio: state.bio ?? '',
+    final auth = _originAuth ?? context.read<AuthProvider>();
+    final route = createControllerDialogRoute<bool>(
+      context: context,
+      builder: (_) => _EmailBindingDialog(
+        initialEmail: auth.state.email ?? '',
+        auth: auth,
+        sessionLease: _originSessionLease,
+        originGeneration: _originGeneration,
+        originUserId: _originUserId,
+      ),
     );
-    if (!mounted) return;
-    setState(() {
-      _error = null;
-      _message = const _ProfileStateText.key('profile.updated');
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: _ProfileLocaleText('profile.updated')),
-    );
-  }
-
-  Future<void> _save() async {
-    if (_busy || _avatarBusy) return;
+    final updated = await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push<bool>(route);
+    if (!mounted ||
+        !_isCurrentEditorFlow() ||
+        (ownerRoute != null && !ownerRoute.isCurrent) ||
+        updated != true) {
+      return;
+    }
+    final pending = _PendingProfileMirror(_ProfileMirrorReason.email);
     setState(() {
       _busy = true;
+      _pendingProfileMirror = pending;
       _error = null;
       _message = null;
     });
     try {
-      final auth = context.read<AuthProvider>();
-      final userProvider = context.read<UserProvider>();
-      await auth.updateProfile(
-        displayName: _displayNameCtrl.text.trim(),
-        bio: _bioCtrl.text.trim(),
-      );
       final state = auth.state;
-      _applyAccountState(state);
-      await userProvider.updateProfile(
+      if (_hasLocalProfileEdits) {
+        _lastAccountSnapshot = _accountProfileSnapshot(state);
+        _refreshPreview();
+      } else {
+        _applyAccountState(state);
+      }
+      await _syncProfileMirror(pending, ownerRoute: ownerRoute);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  bool _canPublishProfileFeedback(ModalRoute<dynamic>? ownerRoute) {
+    return _isCurrentEditorFlow() &&
+        (ownerRoute == null || ownerRoute.isCurrent);
+  }
+
+  void _showProfileMirrorFailure(_PendingProfileMirror pending) {
+    final feedback = _ProfileMirrorFailureText(pending.reason);
+    setState(() {
+      _message = null;
+      _error = feedback;
+    });
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (context, _, _) {
+            final theme = Theme.of(context);
+            final cs = theme.colorScheme;
+            final surfaceStyle = appSurfaceStyleOf(context);
+            final snackBarBackground =
+                theme.snackBarTheme.backgroundColor ??
+                cs.surfaceContainerHighest;
+            final foreground = surfaceStyle != null
+                ? appReadableForeground(snackBarBackground, cs.primary)
+                : cs.inversePrimary;
+            return Row(
+              children: [
+                Expanded(child: Text(feedback.resolve())),
+                TextButton(
+                  onPressed: () {
+                    if (!mounted ||
+                        !identical(_pendingProfileMirror, pending) ||
+                        !_canPublishProfileFeedback(
+                          ModalRoute.of(this.context),
+                        )) {
+                      return;
+                    }
+                    ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+                    _retryProfileMirrorSync();
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: foreground,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: surfaceStyle != null
+                        ? const Size(48, 44)
+                        : const Size(48, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: surfaceStyle != null
+                        ? VisualDensity.standard
+                        : null,
+                  ),
+                  child: Text(AccountUiCopy.actionRetry),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _syncProfileMirror(
+    _PendingProfileMirror pending, {
+    required ModalRoute<dynamic>? ownerRoute,
+    bool recovery = false,
+  }) async {
+    if (!_canPublishProfileFeedback(ownerRoute) ||
+        !identical(_pendingProfileMirror, pending)) {
+      return;
+    }
+    final auth = _originAuth!;
+    // Read confirmed account data immediately before enqueueing the local write.
+    // A later avatar/email change must not be replaced with an old retry snapshot.
+    final state = auth.state;
+    try {
+      await _originUserProvider.updateProfile(
         username: _firstNonEmptyProfileText([
           state.username,
-          _usernameCtrl.text,
-          userProvider.profile.username,
+          _originUserProvider.profile.username,
         ]),
         displayName: state.displayName ?? '',
         email: state.email ?? '',
@@ -1359,15 +2009,100 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
         avatarUrl: state.avatar ?? '',
         bio: state.bio ?? '',
       );
-      if (!mounted) return;
-      setState(() => _message = const _ProfileStateText.key('profile.updated'));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: _ProfileLocaleText('profile.updated')),
+      if (!mounted ||
+          !_canPublishProfileFeedback(ownerRoute) ||
+          !identical(_pendingProfileMirror, pending)) {
+        return;
+      }
+      if (_accountProfileSnapshot(auth.state) !=
+          _accountProfileSnapshot(state)) {
+        _showProfileMirrorFailure(pending);
+        return;
+      }
+      // Auth may have changed while a prior local retry kept the editor busy.
+      // Bring a clean form up to date before a later Save can submit it again.
+      if (!_hasLocalProfileEdits) _applyAccountState(state);
+      setState(() {
+        _pendingProfileMirror = null;
+        _error = null;
+        _message = recovery
+            ? const _ProfileStateText.copy(_feedbackLocalSynced)
+            : const _ProfileStateText.key('profile.updated');
+      });
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: recovery
+              ? ValueListenableBuilder<AppLocale>(
+                  valueListenable: I18n.localeListenable,
+                  builder: (context, _, _) =>
+                      Text(AccountUiCopy.feedbackLocalSynced),
+                )
+              : const _ProfileLocaleText('profile.updated'),
+        ),
       );
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+    } catch (_) {
+      if (_canPublishProfileFeedback(ownerRoute) &&
+          identical(_pendingProfileMirror, pending)) {
+        _showProfileMirrorFailure(pending);
+      }
+    }
+  }
+
+  Future<void> _retryProfileMirrorSync() async {
+    if (!mounted || _busy || _avatarBusy) return;
+    final ownerRoute = ModalRoute.of(context);
+    if (!_canPublishProfileFeedback(ownerRoute)) return;
+    final pending = _pendingProfileMirror;
+    if (pending == null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      // Recovery only writes the original local provider, never the API or draft.
+      await _syncProfileMirror(pending, ownerRoute: ownerRoute, recovery: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (!mounted || _busy || _avatarBusy) return;
+    final ownerRoute = ModalRoute.of(context);
+    if (ownerRoute != null && !ownerRoute.isCurrent) return;
+    if (!_isCurrentEditorFlow()) {
+      setState(
+        () => _error = _ProfileStateText.error(AccountUiCopy.accountChanged),
+      );
+      return;
+    }
+    if (_canRetryLocalMirror && !_hasLocalProfileEdits) {
+      await _retryProfileMirrorSync();
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      final auth = _originAuth!;
+      await auth.updateProfile(
+        displayName: _displayNameCtrl.text.trim(),
+        bio: _bioCtrl.text.trim(),
+        sessionLease: _originSessionLease,
+      );
+      if (!_canPublishProfileFeedback(ownerRoute)) return;
+      // Only normal completion confirms this operation, including Auth storage.
+      final pending = _PendingProfileMirror(_ProfileMirrorReason.profile);
+      _pendingProfileMirror = pending;
+      _applyAccountState(auth.state);
+      await _syncProfileMirror(pending, ownerRoute: ownerRoute);
     } catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+      if (_canPublishProfileFeedback(ownerRoute)) {
+        setState(() => _error = _ProfileStateText.error(e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1455,92 +2190,103 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
             padding: const EdgeInsets.all(14),
             child: LayoutBuilder(
               builder: (context, constraints) {
+                final textScale = MediaQuery.textScalerOf(context).scale(1);
+                final reflow = constraints.maxWidth < 320 && textScale > 1.25;
                 final compact = constraints.maxWidth < 340;
                 final avatarSize = compact ? 66.0 : 76.0;
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _ProfileAvatarWithEdit(
-                      size: avatarSize,
-                      busy: _avatarBusy,
-                      onPreview: _showAvatarPreview,
-                      onEdit: _uploadAvatar,
-                      child: Container(
-                        width: avatarSize,
-                        height: avatarSize,
-                        padding:
-                            avatarFrame.id == ThemeProvider.defaultAvatarFrameId
-                            ? EdgeInsets.zero
-                            : const EdgeInsets.all(3),
-                        decoration:
-                            avatarFrame.id == ThemeProvider.defaultAvatarFrameId
-                            ? null
-                            : BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: avatarFrame.colors,
-                                ),
-                              ),
-                        child: Hero(
-                          tag: 'profile-avatar-preview',
-                          child: _ProfileAvatarPreview(
-                            avatar: previewAvatar,
-                            displayName: displayName,
-                            radius: (avatarSize / 2) - 2,
-                            cacheKey: avatarCacheKey,
+                final avatar = _ProfileAvatarWithEdit(
+                  size: avatarSize,
+                  busy: _avatarBusy,
+                  onPreview: _showAvatarPreview,
+                  onEdit: _uploadAvatar,
+                  child: Container(
+                    width: avatarSize,
+                    height: avatarSize,
+                    padding:
+                        avatarFrame.id == ThemeProvider.defaultAvatarFrameId
+                        ? EdgeInsets.zero
+                        : const EdgeInsets.all(3),
+                    decoration:
+                        avatarFrame.id == ThemeProvider.defaultAvatarFrameId
+                        ? null
+                        : BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: avatarFrame.colors,
+                            ),
                           ),
+                    child: Hero(
+                      tag: 'profile-avatar-preview',
+                      child: _ProfileAvatarPreview(
+                        avatar: previewAvatar,
+                        displayName: displayName,
+                        radius: (avatarSize / 2) - 2,
+                        cacheKey: avatarCacheKey,
+                      ),
+                    ),
+                  ),
+                );
+                final infoColumn = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName.isEmpty
+                          ? I18n.tr('profile.display_name.empty')
+                          : displayName,
+                      softWrap: true,
+                      style: appSecondaryRouteTitleTextStyle(context),
+                    ),
+                    const SizedBox(height: 4),
+                    Tooltip(
+                      message: account.email?.trim().isNotEmpty == true
+                          ? account.email!.trim()
+                          : I18n.tr('profile.email.unbound'),
+                      child: Text(
+                        account.email?.isNotEmpty == true
+                            ? '${account.email}${account.emailVerified ? ' · ${I18n.tr('profile.email.verified')}' : ' · ${I18n.tr('profile.email.unverified')}'}'
+                            : I18n.tr('profile.email.unbound'),
+                        softWrap: true,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.62),
                         ),
                       ),
                     ),
-                    SizedBox(width: compact ? 10 : 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            displayName.isEmpty
-                                ? I18n.tr('profile.display_name.empty')
-                                : displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: appSecondaryRouteTitleTextStyle(context),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        const AccountStatusChip(
+                          status: AccountDisplayStatus.loggedIn,
+                        ),
+                        _ProfileMetricChip(
+                          icon: Icons.savings_outlined,
+                          label: I18n.tr('profile.coins'),
+                          value: '${account.coinBalance}',
+                          tabularFigures: true,
+                        ),
+                        if (account.username?.trim().isNotEmpty == true)
+                          _ProfileMetricChip(
+                            icon: Icons.badge_outlined,
+                            label: I18n.tr('profile.account_id'),
+                            value: account.username!.trim(),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            account.email?.isNotEmpty == true
-                                ? '${account.email}${account.emailVerified ? ' · ${I18n.tr('profile.email.verified')}' : ' · ${I18n.tr('profile.email.unverified')}'}'
-                                : I18n.tr('profile.email.unbound'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: cs.onSurface.withValues(alpha: 0.62),
-                                ),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: [
-                              const AccountStatusChip(
-                                status: AccountDisplayStatus.loggedIn,
-                              ),
-                              _ProfileMetricChip(
-                                icon: Icons.savings_outlined,
-                                label: I18n.tr('profile.coins'),
-                                value: '${account.coinBalance}',
-                              ),
-                              if (account.username?.trim().isNotEmpty == true)
-                                _ProfileMetricChip(
-                                  icon: Icons.badge_outlined,
-                                  label: I18n.tr('profile.account_id'),
-                                  value: account.username!.trim(),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
+                      ],
                     ),
+                  ],
+                );
+                if (reflow) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [avatar, const SizedBox(height: 12), infoColumn],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    avatar,
+                    SizedBox(width: compact ? 10 : 14),
+                    Expanded(child: infoColumn),
                   ],
                 );
               },
@@ -1554,6 +2300,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                 children: [
                   TextField(
                     controller: _displayNameCtrl,
+                    enabled: !_busy && !_avatarBusy,
                     decoration: InputDecoration(
                       labelText: I18n.tr('profile.nickname'),
                     ),
@@ -1565,6 +2312,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                     decoration: InputDecoration(
                       labelText: I18n.tr('auth.username'),
                       helperText: I18n.tr('profile.username.locked'),
+                      helperMaxLines: 4,
                     ),
                   ),
                 ],
@@ -1590,8 +2338,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                     account.email?.trim().isEmpty != false
                         ? I18n.tr('profile.email.unbound')
                         : account.email!.trim(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    softWrap: true,
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: cs.onSurface),
@@ -1599,24 +2346,60 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                   const SizedBox(height: 10),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: SizedBox(
-                      height: _profileActionButtonHeight,
-                      child: TextButton.icon(
-                        onPressed: (_busy || _avatarBusy)
-                            ? null
-                            : _showEmailBindingDialog,
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        SizedBox(
+                          height: _profileActionButtonHeight,
+                          child: TextButton.icon(
+                            onPressed: (_busy || _avatarBusy)
+                                ? null
+                                : _showEmailBindingDialog,
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              textStyle: appSecondaryControlTextStyle(context),
+                            ),
+                            icon: const Icon(Icons.edit_outlined, size: 16),
+                            label: Text(I18n.tr('profile.email.binding')),
                           ),
-                          textStyle: appSecondaryControlTextStyle(context),
                         ),
-                        icon: const Icon(Icons.edit_outlined, size: 16),
-                        label: Text(I18n.tr('profile.email.binding')),
-                      ),
+                        if (_pendingProfileMirror?.reason ==
+                            _ProfileMirrorReason.email)
+                          SizedBox(
+                            height: _profileActionButtonHeight,
+                            child: TextButton.icon(
+                              onPressed: (_busy || _avatarBusy)
+                                  ? null
+                                  : _retryProfileMirrorSync,
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                textStyle: appSecondaryControlTextStyle(
+                                  context,
+                                ),
+                              ),
+                              icon: _busy
+                                  ? const SizedBox.square(
+                                      dimension: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.refresh, size: 16),
+                              label: const _ProfileLocaleText('action.retry'),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ],
@@ -1637,8 +2420,10 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: SizedBox(
-                    height: _profileActionButtonHeight,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minHeight: _profileActionButtonHeight,
+                    ),
                     child: TextButton.icon(
                       onPressed: (_busy || _avatarBusy)
                           ? null
@@ -1648,12 +2433,15 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
-                          vertical: 2,
+                          vertical: 4,
                         ),
                         textStyle: appSecondaryControlTextStyle(context),
                       ),
                       icon: const Icon(Icons.lock_reset_outlined, size: 16),
-                      label: Text(I18n.tr('profile.change_password')),
+                      label: Text(
+                        I18n.tr('profile.change_password'),
+                        softWrap: true,
+                      ),
                     ),
                   ),
                 ),
@@ -1661,6 +2449,7 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
                 AppSecondaryControlTheme(
                   child: TextField(
                     controller: _bioCtrl,
+                    enabled: !_busy && !_avatarBusy,
                     minLines: 3,
                     maxLines: 6,
                     decoration: InputDecoration(
@@ -1677,17 +2466,51 @@ class _AccountProfileEditorState extends State<_AccountProfileEditor> {
               icon: Icons.check_circle_outline,
               title: I18n.tr('profile.saved'),
               message: _message!.resolve(),
-              color: Colors.green,
+              color: DesignTokens.defaultSuccess,
             ),
           ],
           if (_error != null) ...[
             const SizedBox(height: 12),
             AppInfoBanner(
               icon: Icons.error_outline,
-              title: I18n.tr('profile.save_failed'),
+              title: _error is _ProfileMirrorFailureText
+                  ? AccountUiCopy.localProfileSyncPendingTitle
+                  : I18n.tr('profile.save_failed'),
               message: _error!.resolve(),
-              color: Colors.red,
+              color: _error is _ProfileMirrorFailureText
+                  ? cs.tertiary
+                  : cs.error,
             ),
+            if (_canRetryLocalMirror) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  height: _profileActionButtonHeight,
+                  child: OutlinedButton.icon(
+                    onPressed: (_busy || _avatarBusy)
+                        ? null
+                        : _retryProfileMirrorSync,
+                    style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
+                      ),
+                      textStyle: appSecondaryControlTextStyle(context),
+                    ),
+                    icon: _busy
+                        ? const SizedBox.square(
+                            dimension: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh, size: 16),
+                    label: const _ProfileLocaleText('action.retry'),
+                  ),
+                ),
+              ),
+            ],
           ],
         ],
       ),
@@ -1710,6 +2533,9 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
   late final TextEditingController _avatarCtrl;
   late final TextEditingController _emailCtrl;
   late final TextEditingController _bioCtrl;
+  late final int _originGeneration;
+  late final bool _originIsLoggedIn;
+  late final String? _originUserId;
   bool _busy = false;
   bool _avatarBusy = false;
   _ProfileStateText? _error;
@@ -1719,6 +2545,10 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
   void initState() {
     super.initState();
     I18n.localeListenable.addListener(_handleLocaleChanged);
+    final auth = context.read<AuthProvider>();
+    _originGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    _originIsLoggedIn = auth.state.isLoggedIn;
+    _originUserId = auth.state.userId;
     final profile = context.read<UserProvider>().profile;
     _usernameCtrl = TextEditingController(text: profile.username);
     _displayNameCtrl = TextEditingController(text: profile.displayName);
@@ -1757,12 +2587,32 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     if (mounted) setState(() {});
   }
 
+  bool _isCurrentLocalFlow() {
+    if (!mounted) return false;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      _originGeneration,
+    )) {
+      return false;
+    }
+    final auth = context.read<AuthProvider>();
+    if (auth.state.isLoggedIn != _originIsLoggedIn) return false;
+    if (auth.state.userId != _originUserId) return false;
+    return true;
+  }
+
   void _refreshPreview() {
     if (mounted) setState(() {});
   }
 
   Future<void> _pickLocalAvatar() async {
     if (_busy || _avatarBusy) return;
+    final ownerRoute = ModalRoute.of(context);
+    if (!_isCurrentLocalFlow()) {
+      setState(
+        () => _error = _ProfileStateText.error(AccountUiCopy.accountChanged),
+      );
+      return;
+    }
     setState(() {
       _avatarBusy = true;
       _error = null;
@@ -1770,28 +2620,38 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     });
     try {
       final file = await openFile(
-        acceptedTypeGroups: const [
+        acceptedTypeGroups: [
           XTypeGroup(
-            label: 'Image',
-            extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-            mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+            label: AccountUiCopy.imageFileTypeLabel,
+            extensions: const ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+            mimeTypes: const [
+              'image/jpeg',
+              'image/png',
+              'image/webp',
+              'image/gif',
+            ],
           ),
         ],
       );
-      if (file == null) return;
+      if (file == null || !_isCurrentLocalFlow()) return;
       final storedPath = await _copyLocalAvatarFile(file);
-      if (!mounted) return;
+      if (!_isCurrentLocalFlow()) return;
       setState(() {
         _avatarCtrl.text = storedPath;
-        _avatarBusy = false;
       });
-      await _save(showSnackBar: false);
-      if (!mounted) return;
+      final saved = await _save(showSnackBar: false, fromAvatarPicker: true);
+      if (!saved ||
+          !_isCurrentLocalFlow() ||
+          (ownerRoute != null && !ownerRoute.isCurrent)) {
+        return;
+      }
       setState(
         () => _message = const _ProfileStateText.key('profile.avatar.saved'),
       );
     } catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+      if (_isCurrentLocalFlow()) {
+        setState(() => _error = _ProfileStateText.error(e));
+      }
     } finally {
       if (mounted) setState(() => _avatarBusy = false);
     }
@@ -1799,6 +2659,12 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
 
   void _showAvatarPreview() {
     if (_busy || _avatarBusy) return;
+    if (!_isCurrentLocalFlow()) {
+      setState(
+        () => _error = _ProfileStateText.error(AccountUiCopy.accountChanged),
+      );
+      return;
+    }
     final displayName = _firstNonEmptyProfileText([
       _displayNameCtrl.text,
       _usernameCtrl.text,
@@ -1809,14 +2675,29 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
           avatar: _avatarCtrl.text.trim(),
           displayName: displayName,
           cacheKey: _avatarCacheKey(_avatarCtrl.text.trim(), null),
-          onEdit: _pickLocalAvatar,
+          onEdit: () {
+            if (!_isCurrentLocalFlow()) return;
+            _pickLocalAvatar();
+          },
         ),
       ),
     );
   }
 
-  Future<void> _save({bool showSnackBar = true}) async {
-    if (_busy || _avatarBusy) return;
+  Future<bool> _save({
+    bool showSnackBar = true,
+    bool fromAvatarPicker = false,
+  }) async {
+    if (_busy || (!fromAvatarPicker && _avatarBusy)) return false;
+    final ownerRoute = ModalRoute.of(context);
+    if (!mounted || (ownerRoute != null && !ownerRoute.isCurrent)) return false;
+    if (!_isCurrentLocalFlow()) {
+      setState(
+        () => _error = _ProfileStateText.error(AccountUiCopy.accountChanged),
+      );
+      return false;
+    }
+    final messenger = ScaffoldMessenger.maybeOf(context);
     final currentProfile = context.read<UserProvider>().profile;
     final username = currentProfile.username.trim().isNotEmpty
         ? currentProfile.username.trim()
@@ -1827,7 +2708,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
           'profile.error.nickname_required',
         ),
       );
-      return;
+      return false;
     }
     final displayName = _displayNameCtrl.text.trim();
     final avatar = _avatarCtrl.text.trim();
@@ -1851,17 +2732,25 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
         avatarUrl: avatarIsImage ? avatar : '',
         bio: _bioCtrl.text.trim(),
       );
-      if (!mounted) return;
+      if (!mounted ||
+          !_isCurrentLocalFlow() ||
+          (ownerRoute != null && !ownerRoute.isCurrent)) {
+        return false;
+      }
       setState(
         () => _message = const _ProfileStateText.key('profile.local.updated'),
       );
       if (showSnackBar) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger?.showSnackBar(
           const SnackBar(content: _ProfileLocaleText('profile.local.updated')),
         );
       }
+      return true;
     } catch (e) {
-      if (mounted) setState(() => _error = _ProfileStateText.error(e));
+      if (_isCurrentLocalFlow()) {
+        setState(() => _error = _ProfileStateText.error(e));
+      }
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1904,11 +2793,12 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
     ]);
     final previewAvatar = _avatarCtrl.text.trim();
     final avatarCacheKey = _avatarCacheKey(previewAvatar, null);
-    final subtitle = _firstNonEmptyProfileText([
-      _bioCtrl.text,
-      _emailCtrl.text,
-      AccountUiCopy.profileLocalHint,
-    ]);
+    final emailText = _emailCtrl.text.trim();
+    final bioText = _bioCtrl.text.trim();
+    final localHint = AccountUiCopy.profileLocalHint;
+    final bioOrHint = bioText.isNotEmpty
+        ? bioText
+        : (emailText.isEmpty ? localHint : '');
     final cs = Theme.of(context).colorScheme;
     final routeBackground = Colors.transparent;
 
@@ -1928,6 +2818,8 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
             padding: const EdgeInsets.all(14),
             child: LayoutBuilder(
               builder: (context, constraints) {
+                final textScale = MediaQuery.textScalerOf(context).scale(1);
+                final reflow = constraints.maxWidth < 320 && textScale > 1.25;
                 final compact = constraints.maxWidth < 330;
                 final avatarSize = compact ? 68.0 : 76.0;
                 final avatar = _ProfileAvatarWithEdit(
@@ -1972,11 +2864,10 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                 final textColumn = Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (compact) ...[
+                    if (reflow || compact) ...[
                       Text(
                         displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        softWrap: true,
                         style: appSecondaryRouteTitleTextStyle(context),
                       ),
                       const SizedBox(height: 8),
@@ -1990,8 +2881,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                           Expanded(
                             child: Text(
                               displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              softWrap: true,
                               style: appSecondaryRouteTitleTextStyle(context),
                             ),
                           ),
@@ -1999,22 +2889,46 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                           loginButton,
                         ],
                       ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      maxLines: compact ? 1 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.62),
-                        height: 1.25,
+                    if (emailText.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        emailText,
+                        softWrap: true,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                          height: 1.25,
+                        ),
                       ),
-                    ),
+                    ],
+                    if (bioOrHint.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        bioOrHint,
+                        softWrap: true,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 6),
                     const AccountStatusChip(
                       status: AccountDisplayStatus.localOnly,
+                      wrapLabel: true,
                     ),
                   ],
                 );
+                if (reflow) {
+                  return Column(
+                    key: const ValueKey('profile_local_header_row'),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      avatar,
+                      const SizedBox(height: 12),
+                      textColumn,
+                    ],
+                  );
+                }
                 return Row(
                   key: const ValueKey('profile_local_header_row'),
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -2046,15 +2960,33 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
                     decoration: InputDecoration(
                       labelText: I18n.tr('profile.local_nickname'),
                       helperText: I18n.tr('profile.username.locked'),
+                      helperMaxLines: 4,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      labelText: I18n.tr('profile.email.local_display'),
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ExcludeSemantics(
+                        child: Text(
+                          I18n.tr('profile.email.local_display'),
+                          softWrap: true,
+                          style: appSecondaryControlLabelStyle(context).copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Semantics(
+                        label: I18n.tr('profile.email.local_display'),
+                        child: TextField(
+                          key: const ValueKey('profile_local_email_field'),
+                          controller: _emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -2075,7 +3007,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
               icon: Icons.error_outline,
               title: I18n.tr('profile.save_failed'),
               message: _error!.resolve(),
-              color: Colors.red,
+              color: Theme.of(context).colorScheme.error,
             ),
           ],
           if (_message != null) ...[
@@ -2084,7 +3016,7 @@ class _LocalProfileEditorState extends State<_LocalProfileEditor> {
               icon: Icons.check_circle_outline,
               title: I18n.tr('profile.saved'),
               message: _message!.resolve(),
-              color: Colors.green,
+              color: DesignTokens.defaultSuccess,
             ),
           ],
         ],

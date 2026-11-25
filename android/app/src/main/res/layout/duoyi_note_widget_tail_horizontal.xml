@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layoutDirection="ltr"
+    android:orientation="horizontal">
+
+    <TextView
+        android:id="@id/widget_note_2"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginRight="6dp"
+        android:accessibilityTraversalAfter="@id/widget_note_1"
+        android:breakStrategy="simple"
+        android:fallbackLineSpacing="true"
+        android:hyphenationFrequency="none"
+        android:text="· 灵感清单"
+        android:textColor="#333333"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@id/widget_note_3"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:accessibilityTraversalAfter="@id/widget_note_2"
+        android:breakStrategy="simple"
+        android:fallbackLineSpacing="true"
+        android:hyphenationFrequency="none"
+        android:text="· 读书摘录"
+        android:textColor="#333333"
+        android:textSize="12sp" />
+</LinearLayout>

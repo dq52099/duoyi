@@ -8371,7 +8371,10 @@ def _countdown_from_legacy_anniversary(item: dict) -> dict:
     )
     if target_date:
         result["targetDate"] = target_date
-    result.setdefault("category", "默认")
+    category = result.get("category")
+    if category is None or not str(category).strip():
+        result["category"] = "默认"
+        result["categoryIsDefault"] = True
     return result
 
 
@@ -12541,3 +12544,8 @@ def admin_audit_log(
         return _admin_page_response([dict(r) for r in rows], total, limit, offset)
     finally:
         db.close()
+
+
+@app.get("/api/holidays/{year}")
+def get_holidays(year: int):
+    raise HTTPException(status_code=404, detail="No holiday override configured for year")

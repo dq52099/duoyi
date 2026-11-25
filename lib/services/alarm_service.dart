@@ -16,6 +16,8 @@ import 'notification_settings.dart';
 import 'reminder_sinks.dart';
 import 'reminder_ringtone_settings.dart';
 import 'reminder_notification_id.dart';
+import 'notification_action_envelope.dart';
+import 'account_local_data_cleaner.dart';
 
 /// 精准闹钟权限缺失异常。
 ///
@@ -72,13 +74,18 @@ class AlarmScheduleIssue {
 /// `tz.TZDateTime.from(when, tz.local)` 以获得"壁钟时间"语义。
 class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
   static final AlarmService instance = AlarmService._();
-  AlarmService._();
+  AlarmService._() : _plugin = FlutterLocalNotificationsPlugin();
 
-  /// 独立的插件实例，与 [LocalNotifications] 互不干扰：
-  /// - 各自维护自己的 `pendingNotificationRequests`；
-  /// - 避免一端 `cancelAll` 误杀另一端的调度。
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
+  @visibleForTesting
+  AlarmService.forTesting({
+    required FlutterLocalNotificationsPlugin plugin,
+    bool initialized = true,
+  }) : _plugin = plugin {
+    _initialized = initialized;
+  }
+
+  /// The plugin factory shares its process instance with LocalNotifications.
+  final FlutterLocalNotificationsPlugin _plugin;
 
   bool _pluginInitialized = false;
   bool _launchPayloadProbed = false;
@@ -86,6 +93,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
   Future<void>? _pluginInitFuture;
   Future<void>? _initFuture;
   String? _launchPayload;
+  int? _launchPayloadGeneration;
   AlarmScheduleIssue? _lastScheduleIssue;
   bool get isInitialized => _initialized;
   AlarmScheduleIssue? get lastScheduleIssue => _lastScheduleIssue;
@@ -424,7 +432,13 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         AndroidNotificationAction(
           'habit_checkin',
           '完成打卡',
-          showsUserInterface: true,
+          showsUserInterface: false,
+          cancelNotification: true,
+        ),
+        AndroidNotificationAction(
+          'habit_snooze_10m',
+          '10 分钟后',
+          showsUserInterface: false,
           cancelNotification: true,
         ),
         AndroidNotificationAction(
@@ -439,7 +453,13 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
         AndroidNotificationAction(
           'todo_complete',
           '完成任务',
-          showsUserInterface: true,
+          showsUserInterface: false,
+          cancelNotification: true,
+        ),
+        AndroidNotificationAction(
+          'todo_snooze_10m',
+          '10 分钟后',
+          showsUserInterface: false,
           cancelNotification: true,
         ),
         AndroidNotificationAction(
@@ -449,6 +469,42 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
           cancelNotification: true,
         ),
       ];
+
+  String _androidGroupKeyForPayload(String? payload) {
+    final uri = payload == null ? null : Uri.tryParse(payload);
+    return switch (uri?.host) {
+      'todo' => 'com.duoyi.duoyi.GROUP_TODO',
+      'habit' => 'com.duoyi.duoyi.GROUP_HABIT',
+      'focus' || 'pomodoro' => 'com.duoyi.duoyi.GROUP_FOCUS',
+      'report' => 'com.duoyi.duoyi.GROUP_DIGEST',
+      _ => 'com.duoyi.duoyi.GROUP_SCHEDULE',
+    };
+  }
+
+  String _iosCategoryIdentifierForPayload(String? payload) {
+    final uri = payload == null ? null : Uri.tryParse(payload);
+    return switch (uri?.host) {
+      'todo' => 'DUOYI_TODO_REMINDER',
+      'habit' => 'DUOYI_HABIT_REMINDER',
+      _ => 'DUOYI_ALARM_REMINDER',
+    };
+  }
+
+  List<String> _actionsToSignForPayload(String? payload) {
+    final ids = <String>{
+      ...?_actionsForPayload(payload)?.map((a) => a.id),
+      'alarm_snooze_10m',
+      'alarm_dismiss',
+    };
+    if (payload != null) {
+      if (payload.startsWith('duoyi://todo/')) {
+        ids.addAll(const ['todo_complete', 'todo_snooze_10m']);
+      } else if (payload.startsWith('duoyi://habit/')) {
+        ids.addAll(const ['habit_checkin', 'habit_snooze_10m']);
+      }
+    }
+    return ids.toList(growable: false);
+  }
   static const Duration _androidNativeFallbackDelay = Duration(minutes: 1);
 
   DateTime _androidFlutterFallbackWhen(DateTime when, bool nativeRingtoneOk) {
@@ -569,46 +625,26 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
   Future<void> _probeLaunchPayload() async {
     if (_launchPayloadProbed) return;
     _launchPayloadProbed = true;
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
 
     try {
       final launchDetails = await _plugin.getNotificationAppLaunchDetails();
       final response = launchDetails?.notificationResponse;
       final launchPayload = response == null
           ? null
-          : _payloadForResponse(response);
-      if (launchDetails?.didNotificationLaunchApp == true &&
+          : await LocalNotifications.instance.payloadForNotificationResponse(
+              response,
+            );
+      if (AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation) &&
+          launchDetails?.didNotificationLaunchApp == true &&
           launchPayload != null &&
           launchPayload.isNotEmpty) {
         _launchPayload = launchPayload;
+        _launchPayloadGeneration = generation;
       }
     } catch (e, st) {
       debugPrint('[AlarmService] launch payload probe failed: $e\n$st');
     }
-  }
-
-  String? _payloadForResponse(NotificationResponse resp) {
-    final actionId = resp.actionId;
-    final payload = resp.payload;
-    if (actionId == 'todo_complete' && payload != null) {
-      final id = _idFromPayload(payload, 'todo');
-      if (id != null && id.isNotEmpty) {
-        return 'duoyi://action/complete_todo?id=${Uri.encodeComponent(id)}';
-      }
-    }
-    if (actionId == 'habit_checkin' && payload != null) {
-      final id = _idFromPayload(payload, 'habit');
-      if (id != null && id.isNotEmpty) {
-        return 'duoyi://action/checkin_habit?id=${Uri.encodeComponent(id)}';
-      }
-    }
-    if (actionId != null && actionId.startsWith('todo_snooze_')) {
-      final id = actionId.substring('todo_snooze_'.length);
-      final originalPayload =
-          payload ?? 'duoyi://todo/${Uri.decodeComponent(id)}';
-      return 'duoyi://snooze/${resp.id ?? 0}'
-          '?delay=5&payload=${Uri.encodeComponent(originalPayload)}';
-    }
-    return payload;
   }
 
   bool get _isAndroid {
@@ -643,8 +679,10 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     bool vibrate = true,
     int snoozeMinutes = 5,
     int repeatCount = 0,
+    AppLocale? locale,
   }) async {
-    final nativeLocale = I18n.current;
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    final nativeLocale = locale ?? I18n.current;
     if (!_initialized) await init();
     clearScheduleIssue(id: id);
     if (!when.isAfter(DateTime.now())) {
@@ -733,16 +771,18 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       vibrationPattern: vibrate ? _vibrationPattern : null,
       audioAttributesUsage: AudioAttributesUsage.alarm,
       visibility: NotificationVisibility.public,
+      groupKey: _androidGroupKeyForPayload(payload),
       actions: _actionsForPayload(payload),
       icon: '@drawable/ic_stat_duoyi',
       ongoing: false,
       autoCancel: true,
     );
-    const iosDetails = DarwinNotificationDetails(
+    final iosDetails = DarwinNotificationDetails(
       interruptionLevel: InterruptionLevel.timeSensitive,
       presentAlert: true,
       presentSound: true,
       presentBadge: true,
+      categoryIdentifier: _iosCategoryIdentifierForPayload(payload),
     );
     const linuxDetails = LinuxNotificationDetails();
 
@@ -766,6 +806,17 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
             : AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
+        payload: await NotificationActionEnvelope.signPayload(
+          id,
+          payload,
+          actions: _actionsToSignForPayload(payload),
+          expectedAccountGeneration: generation,
+        ),
+      );
+      await LocalNotifications.instance.recordScheduledMetadata(
+        id: id,
+        title: title,
+        body: body,
         payload: payload,
       );
       await _verifyPluginPendingIds(
@@ -828,6 +879,17 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
             androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
             uiLocalNotificationDateInterpretation:
                 UILocalNotificationDateInterpretation.absoluteTime,
+            payload: await NotificationActionEnvelope.signPayload(
+              id,
+              payload,
+              actions: _actionsToSignForPayload(payload),
+              expectedAccountGeneration: generation,
+            ),
+          );
+          await LocalNotifications.instance.recordScheduledMetadata(
+            id: id,
+            title: title,
+            body: body,
             payload: payload,
           );
           await _verifyPluginPendingIds(
@@ -940,6 +1002,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     String body = '如果你看到弹屏、听到声音并有震动，强提醒通道正常。',
     String payload = 'duoyi://alarm-test',
   }) async {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     final nativeLocale = I18n.current;
     if (!_initialized) await init();
     String? channelIssueMessage;
@@ -995,7 +1058,13 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       title,
       body,
       _notificationDetails(fullScreen: true, payload: payload),
-      payload: payload,
+      payload: await NotificationActionEnvelope.signPayload(
+        id,
+        payload,
+        actions:
+            _actionsForPayload(payload)?.map((action) => action.id) ?? const [],
+        expectedAccountGeneration: generation,
+      ),
     );
     if (!_isAndroid) {
       await NativeReminderRingtone.showNow(
@@ -1030,8 +1099,10 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     bool vibrate = true,
     int snoozeMinutes = 5,
     int repeatCount = 0,
+    AppLocale? locale,
   }) async {
-    final nativeLocale = I18n.current;
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    final nativeLocale = locale ?? I18n.current;
     if (!_initialized) await init();
     final normalizedWeekdays = weekdays == null || weekdays.isEmpty
         ? const <int>[]
@@ -1134,6 +1205,17 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
               : DateTimeComponents.dayOfWeekAndTime,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
+          payload: await NotificationActionEnvelope.signPayload(
+            scheduleId,
+            payload,
+            actions: _actionsToSignForPayload(payload),
+            expectedAccountGeneration: generation,
+          ),
+        );
+        await LocalNotifications.instance.recordScheduledMetadata(
+          id: scheduleId,
+          title: title,
+          body: body,
           payload: payload,
         );
         scheduledIds.add(scheduleId);
@@ -1186,6 +1268,17 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
                   : DateTimeComponents.dayOfWeekAndTime,
               uiLocalNotificationDateInterpretation:
                   UILocalNotificationDateInterpretation.absoluteTime,
+              payload: await NotificationActionEnvelope.signPayload(
+                scheduleId,
+                payload,
+                actions: _actionsToSignForPayload(payload),
+                expectedAccountGeneration: generation,
+              ),
+            );
+            await LocalNotifications.instance.recordScheduledMetadata(
+              id: scheduleId,
+              title: title,
+              body: body,
               payload: payload,
             );
             scheduledIds.add(scheduleId);
@@ -1340,8 +1433,13 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
   }
 
   Future<void> cancelAll() async {
-    if (!_initialized) await init();
     final failures = <Object>[];
+    try {
+      if (!_initialized) await init();
+    } catch (e, st) {
+      failures.add(e);
+      debugPrint('[AlarmService] cancelAll initialization failed: $e\n$st');
+    }
     try {
       await _plugin.cancelAll();
     } catch (e, st) {
@@ -1349,7 +1447,7 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       debugPrint('[AlarmService] cancelAll plugin queue failed: $e\n$st');
     }
     try {
-      await NativeReminderRingtone.cancelAll();
+      await NativeReminderRingtone.cancelAllOrThrow();
     } catch (e, st) {
       failures.add(e);
       debugPrint('[AlarmService] cancelAll native queue failed: $e\n$st');
@@ -1515,8 +1613,13 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
 
   String? takeLaunchPayload() {
     final payload = _launchPayload;
+    final generation = _launchPayloadGeneration;
     _launchPayload = null;
-    return payload;
+    _launchPayloadGeneration = null;
+    return generation != null &&
+            AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)
+        ? payload
+        : null;
   }
 
   NotificationDetails _notificationDetails({
@@ -1538,16 +1641,18 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
       vibrationPattern: vibrate ? _vibrationPattern : null,
       audioAttributesUsage: AudioAttributesUsage.alarm,
       visibility: NotificationVisibility.public,
+      groupKey: _androidGroupKeyForPayload(payload),
       actions: _actionsForPayload(payload),
       icon: '@drawable/ic_stat_duoyi',
       ongoing: false,
       autoCancel: true,
     );
-    const iosDetails = DarwinNotificationDetails(
+    final iosDetails = DarwinNotificationDetails(
       interruptionLevel: InterruptionLevel.timeSensitive,
       presentAlert: true,
       presentSound: true,
       presentBadge: true,
+      categoryIdentifier: _iosCategoryIdentifierForPayload(payload),
     );
     const linuxDetails = LinuxNotificationDetails();
     return NotificationDetails(
@@ -1616,14 +1721,6 @@ class AlarmService implements ReminderAlarmSink, ReminderPendingSink {
     if (payload.startsWith('duoyi://habit/')) return _habitActions;
     if (payload.startsWith('duoyi://todo/')) return _todoActions;
     return null;
-  }
-
-  String? _idFromPayload(String payload, String host) {
-    final uri = Uri.tryParse(payload);
-    if (uri == null || uri.host != host || uri.pathSegments.isEmpty) {
-      return null;
-    }
-    return uri.pathSegments.first;
   }
 
   tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {

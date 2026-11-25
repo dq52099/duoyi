@@ -111,9 +111,9 @@ void main() {
     expect(screen, contains('_NoteCardAction.pin'));
     expect(screen, contains('_NoteCardAction.archive'));
     expect(screen, contains('_NoteCardAction.restore'));
-    expect(screen, contains('provider.togglePinned(note.id)'));
-    expect(screen, contains('provider.setArchived(note.id, true)'));
-    expect(screen, contains('provider.setArchived(note.id, false)'));
+    expect(screen, contains('provider.setPinnedPersisted'));
+    expect(screen, contains('provider.setArchivedPersisted'));
+    expect(screen, contains('provider.deleteNotePersisted'));
     expect(screen, contains('note.title.toLowerCase().contains(q)'));
     expect(screen, contains('note.content.toLowerCase().contains(q)'));
     expect(screen, contains('attachment.name.toLowerCase().contains(q)'));

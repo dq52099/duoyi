@@ -1,5 +1,9 @@
+import 'app_date_format.dart';
 import 'package:flutter/material.dart';
+import '../core/calendar_date_navigation.dart';
+import '../core/calendar_ui_copy.dart';
 import '../core/completion_visibility_policy.dart';
+import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
 import '../core/main_ui_copy.dart';
@@ -18,6 +22,7 @@ class CalendarWeekStrip extends StatelessWidget {
   final String? projectKey;
   final String? workspaceId;
   final bool? hasActiveFilters;
+  final int firstDayOfWeek;
 
   const CalendarWeekStrip({
     super.key,
@@ -29,9 +34,11 @@ class CalendarWeekStrip extends StatelessWidget {
     this.projectKey,
     this.workspaceId,
     this.hasActiveFilters,
+    this.firstDayOfWeek = DateTime.monday,
   });
 
   static Color _colorFor(CalendarEventType t, ColorScheme cs) {
+    final isDark = cs.brightness == Brightness.dark;
     switch (t) {
       case CalendarEventType.event:
         return const Color(0xFF5B6EE1);
@@ -40,7 +47,7 @@ class CalendarWeekStrip extends StatelessWidget {
       case CalendarEventType.habit:
         return cs.tertiary;
       case CalendarEventType.pomodoro:
-        return Colors.red;
+        return isDark ? DesignTokens.todoOverdueDark : DesignTokens.defaultError;
       case CalendarEventType.anniversary:
         return const Color(0xFFE91E63);
       case CalendarEventType.course:
@@ -48,7 +55,9 @@ class CalendarWeekStrip extends StatelessWidget {
       case CalendarEventType.diary:
         return const Color(0xFF26A69A);
       case CalendarEventType.countdown:
-        return Colors.orange;
+        return isDark
+            ? DesignTokens.todoDueSoonDark
+            : DesignTokens.defaultWarning;
       case CalendarEventType.goal:
         return const Color(0xFFFFA726);
       case CalendarEventType.timeEntry:
@@ -59,13 +68,23 @@ class CalendarWeekStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final monday = selectedDay.subtract(
-      Duration(days: selectedDay.weekday - 1),
+    final days = CalendarDateNavigation.weekDays(
+      selectedDay,
+      firstDayOfWeek: firstDayOfWeek,
     );
-    final days = List.generate(7, (i) => monday.add(Duration(days: i)));
+    final weekdayOrder = CalendarDateNavigation.orderedWeekdays(firstDayOfWeek);
+    final labels = [
+      I18n.tr('weekday.mon'),
+      I18n.tr('weekday.tue'),
+      I18n.tr('weekday.wed'),
+      I18n.tr('weekday.thu'),
+      I18n.tr('weekday.fri'),
+      I18n.tr('weekday.sat'),
+      I18n.tr('weekday.sun'),
+    ];
     final today = DateTime.now();
     final weekEvents = [
-      for (final d in days)
+      for (final d in days.whereType<DateTime>())
         _WeekDayEvents(
           date: d,
           events: calendarProvider.getEventsForDate(
@@ -77,18 +96,50 @@ class CalendarWeekStrip extends StatelessWidget {
         ),
     ];
 
-    return Column(
-      children: [
-        AppSurfaceCard(
-          key: const ValueKey('calendar_week_strip_skin_card'),
-          margin: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          borderRadius: BorderRadius.circular(12),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Row(
-              children: days.map((d) {
+    final textScaler = MediaQuery.textScalerOf(context);
+    final scale = textScaler.scale(14) / 14;
+    final double tileWidth;
+    final double tileHeight;
+    if (scale <= 1.05) {
+      tileWidth = 48.0;
+      tileHeight = 64.0;
+    } else {
+      final weekdayLabelHeight = textScaler.scale(12) * 1.3;
+      final dayNumHeight = textScaler.scale(16) * 1.3;
+      const dotsHeight = 7.0;
+      tileHeight = (weekdayLabelHeight + dayNumHeight + dotsHeight + 18.0)
+          .clamp(64.0, 115.0);
+      final weekdayLabelWidth = textScaler.scale(12) * 3.2;
+      final dayNumWidth = textScaler.scale(16) * 2.2;
+      final contentWidth =
+          weekdayLabelWidth > dayNumWidth ? weekdayLabelWidth : dayNumWidth;
+      tileWidth = (contentWidth + 16.0).clamp(48.0, 96.0);
+    }
+
+    final stripCard = AppSurfaceCard(
+      key: const ValueKey('calendar_week_strip_skin_card'),
+      margin: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      borderRadius: BorderRadius.circular(12),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Row(
+          children: days.asMap().entries.map((slot) {
+                final d = slot.value;
+                if (d == null) {
+                  return Semantics(
+                    key: ValueKey('calendar_week_unavailable_${slot.key}'),
+                    label:
+                        '${labels[weekdayOrder[slot.key] - 1]}, ${CalendarUiCopy.unavailable}',
+                    enabled: false,
+                    button: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: SizedBox(width: tileWidth, height: tileHeight),
+                    ),
+                  );
+                }
                 final key =
                     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
                 final types = dateEventTypes[key] ?? [];
@@ -100,15 +151,6 @@ class CalendarWeekStrip extends StatelessWidget {
                     d.year == today.year &&
                     d.month == today.month &&
                     d.day == today.day;
-                final labels = [
-                  I18n.tr('weekday.mon'),
-                  I18n.tr('weekday.tue'),
-                  I18n.tr('weekday.wed'),
-                  I18n.tr('weekday.thu'),
-                  I18n.tr('weekday.fri'),
-                  I18n.tr('weekday.sat'),
-                  I18n.tr('weekday.sun'),
-                ];
                 final selectedBackground = Color.alphaBlend(
                   cs.primary.withValues(
                     alpha: Theme.of(context).brightness == Brightness.dark
@@ -121,6 +163,7 @@ class CalendarWeekStrip extends StatelessWidget {
 
                 final semanticLabel = _weekDaySemanticLabel(
                   d,
+                  pattern: AppDateFormat.patternOf(context),
                   weekdayLabel: labels[d.weekday - 1],
                   isToday: isToday,
                   isSelected: isSelected,
@@ -134,8 +177,8 @@ class CalendarWeekStrip extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 2),
                     child: SizedBox(
-                      width: 48,
-                      height: 64,
+                      width: tileWidth,
+                      height: tileHeight,
                       child: Material(
                         color: Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
@@ -157,34 +200,41 @@ class CalendarWeekStrip extends StatelessWidget {
                                     )
                                   : null,
                             ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  labels[d.weekday - 1],
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isSelected
-                                        ? selectedForeground.withValues(
-                                            alpha: 0.70,
-                                          )
-                                        : cs.onSurfaceVariant,
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    labels[d.weekday - 1],
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isSelected
+                                          ? selectedForeground.withValues(
+                                              alpha: 0.70,
+                                            )
+                                          : cs.onSurfaceVariant,
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  '${d.day}',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.normal,
-                                    color: isSelected
-                                        ? selectedForeground
-                                        : null,
+                                  Text(
+                                    '${d.day}',
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.normal,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                      color: isSelected
+                                          ? selectedForeground
+                                          : null,
+                                    ),
                                   ),
-                                ),
-                                if (types.isNotEmpty)
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: types
+                                  if (types.isNotEmpty)
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: types
                                         .take(3)
                                         .map(
                                           (t) => Container(
@@ -200,8 +250,9 @@ class CalendarWeekStrip extends StatelessWidget {
                                           ),
                                         )
                                         .toList(),
-                                  ),
-                              ],
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -212,16 +263,49 @@ class CalendarWeekStrip extends StatelessWidget {
               }).toList(),
             ),
           ),
-        ),
-        Expanded(
-          child: _WeekAgendaList(
-            days: weekEvents,
-            onDaySelected: onDaySelected,
-            hasActiveFilters:
-                hasActiveFilters ?? (activeTypes != null || projectKey != null),
+        );
+
+    final agenda = _WeekAgendaList(
+      days: weekEvents,
+      onDaySelected: onDaySelected,
+      hasActiveFilters:
+          hasActiveFilters ?? (activeTypes != null || projectKey != null),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const verticalChrome = 26.0;
+        final stripHeight = tileHeight + verticalChrome;
+        final minAgendaHeight =
+            (textScaler.scale(120.0) + 20.0).clamp(120.0, 200.0);
+        final canFitAtOnce = constraints.hasBoundedHeight &&
+            constraints.maxHeight >= (stripHeight + minAgendaHeight);
+
+        if (canFitAtOnce) {
+          return Column(
+            children: [
+              stripCard,
+              Expanded(child: agenda),
+            ],
+          );
+        }
+
+        final agendaHeight =
+            (textScaler.scale(130.0) + 120.0).clamp(240.0, 420.0);
+        return SingleChildScrollView(
+          primary: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              stripCard,
+              SizedBox(
+                height: agendaHeight,
+                child: agenda,
+              ),
+            ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -239,25 +323,28 @@ class CalendarWeekStrip extends StatelessWidget {
     required bool isToday,
     required bool isSelected,
     required int eventTypeCount,
+    String? pattern,
   }) {
     if (MainUiCopy.isEn) {
       final parts = <String>[
-        I18nDateFormat.date(date),
+        I18nDateFormat.date(date, pattern: pattern),
         weekdayLabel,
-        if (isToday) 'Today',
+        if (isToday) MainUiCopy.calendarBackToToday,
         if (isSelected) 'Selected',
         eventTypeCount > 0
             ? '$eventTypeCount event type${eventTypeCount > 1 ? "s" : ""}'
-            : 'No events',
+            : MainUiCopy.calendarNoEventsDay,
       ];
       return parts.join(', ');
     }
     final parts = <String>[
-      '${date.year}年${date.month}月${date.day}日',
+      I18nDateFormat.date(date, pattern: pattern),
       weekdayLabel,
-      if (isToday) '今天',
+      if (isToday) MainUiCopy.calendarBackToToday,
       if (isSelected) '已选中',
-      eventTypeCount > 0 ? '$eventTypeCount 类事项' : '无事项',
+      eventTypeCount > 0
+          ? '$eventTypeCount 类事项'
+          : MainUiCopy.calendarNoEventsDay,
     ];
     return parts.join('，');
   }
@@ -542,7 +629,7 @@ class _WeekEventStatusBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.24), width: 0.7),
+        border: Border.all(color: color.withValues(alpha: 0.24), width: 0.55),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

@@ -60,15 +60,21 @@ void main() {
   testWidgets('从未同步：渲染引导文案，无任何手动触发按钮', (tester) async {
     final cloud = CloudSyncProvider();
     final controller = SyncStatusController(source: cloud);
-    await tester.pumpWidget(_wrap(controller));
-    await tester.pump();
+    try {
+      await tester.pumpWidget(_wrap(controller));
+      await tester.pump();
 
-    expect(controller.hasEverSynced, isFalse);
-    expect(find.text(I18n.tr('sync.status.title')), findsOneWidget);
-    expect(find.text(I18n.tr('sync.state.never')), findsOneWidget);
-    expect(find.text(I18n.tr('sync.state.never_hint')), findsOneWidget);
-    // 架构守卫要求：UI 不允许出现手动同步入口。
-    expect(find.byType(TextButton), findsNothing);
+      expect(controller.hasEverSynced, isFalse);
+      expect(find.text(I18n.tr('sync.status.title')), findsOneWidget);
+      expect(find.text(I18n.tr('sync.state.never')), findsOneWidget);
+      expect(find.text(I18n.tr('sync.state.never_hint')), findsOneWidget);
+      // 架构守卫要求：UI 不允许出现手动同步入口。
+      expect(find.byType(TextButton), findsNothing);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      cloud.dispose();
+    }
   });
 
   testWidgets('已同步：显示上次同步时间，无待同步角标', (tester) async {
@@ -78,19 +84,25 @@ void main() {
     final cloud = CloudSyncProvider();
     await cloud.loadFromStorage();
     final controller = SyncStatusController(source: cloud);
-    await tester.pumpWidget(_wrap(controller));
-    await tester.pump();
+    try {
+      await tester.pumpWidget(_wrap(controller));
+      await tester.pump();
 
-    expect(controller.hasEverSynced, isTrue);
-    expect(find.text(I18n.tr('sync.state.synced')), findsOneWidget);
-    expect(
-      find.textContaining(I18n.tr('sync.last_sync_prefix')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('sync_status_card_pending_badge')),
-      findsNothing,
-    );
+      expect(controller.hasEverSynced, isTrue);
+      expect(find.text(I18n.tr('sync.state.synced')), findsOneWidget);
+      expect(
+        find.textContaining(I18n.tr('sync.last_sync_prefix')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('sync_status_card_pending_badge')),
+        findsNothing,
+      );
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      cloud.dispose();
+    }
   });
 
   testWidgets('有本地改动未同步：已同步态追加待同步角标', (tester) async {
@@ -101,56 +113,70 @@ void main() {
     final cloud = CloudSyncProvider();
     await cloud.loadFromStorage();
     final controller = SyncStatusController(source: cloud);
-    await tester.pumpWidget(_wrap(controller));
-    await tester.pump();
+    try {
+      await tester.pumpWidget(_wrap(controller));
+      await tester.pump();
 
-    expect(controller.hasPendingChanges, isTrue);
-    expect(find.text(I18n.tr('sync.state.synced')), findsOneWidget);
-    expect(find.text(I18n.tr('sync.pending_badge')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('sync_status_card_pending_badge')),
-      findsOneWidget,
-    );
+      expect(controller.hasPendingChanges, isTrue);
+      expect(find.text(I18n.tr('sync.state.synced')), findsOneWidget);
+      expect(find.text(I18n.tr('sync.pending_badge')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('sync_status_card_pending_badge')),
+        findsOneWidget,
+      );
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      cloud.dispose();
+    }
   });
 
   testWidgets('同步中：渲染转圈与正在同步文案', (tester) async {
     final cloud = CloudSyncProvider();
-    // 注意：Completer 不能跨 tester.runAsync 的 zone 边界传递（监听者
-    // 留在 fake-async zone 不会被唤醒），这里用轮询布尔标志等待请求到达。
+    // 保持请求、状态持久化与收尾都在同一个 fake-async zone。
     var mockHit = false;
     final release = Completer<http.Response>();
+    final mockClient = MockClient((request) async {
+      if (request.url.path == '/api/sync') mockHit = true;
+      return release.future;
+    });
     final client = ApiClient(
       baseUrl: 'https://duoyi.test',
       token: 'test-token',
-      httpClient: MockClient((request) async {
-        if (request.url.path == '/api/sync') mockHit = true;
-        return release.future;
-      }),
+      httpClient: mockClient,
     );
     cloud.apiClientGetter = () => client;
     cloud.serverConfigGetter = () => <String, dynamic>{'backup_enabled': true};
     final controller = SyncStatusController(source: cloud);
 
-    await tester.pumpWidget(_wrap(controller));
-    await tester.pump();
-    // 卡片初始为"尚未同步"态。
-    expect(find.text(I18n.tr('sync.state.never')), findsOneWidget);
+    Future<void>? sync;
+    try {
+      await tester.pumpWidget(_wrap(controller));
+      await tester.pump();
+      // 卡片初始为"尚未同步"态。
+      expect(find.text(I18n.tr('sync.state.never')), findsOneWidget);
 
-    await tester.runAsync(() async {
-      unawaited(cloud.syncNow());
+      sync = cloud.syncNow();
       for (var i = 0; i < 50 && !mockHit; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 10));
       }
-    });
-    await tester.pump();
+      await tester.pump();
 
-    expect(mockHit, isTrue, reason: '同步请求应已到达 mock 客户端并保持阻塞');
-    expect(controller.isSyncing, isTrue);
-    expect(find.text(I18n.tr('sync.state.syncing')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('sync_status_card_spinner')),
-      findsOneWidget,
-    );
+      expect(mockHit, isTrue, reason: '同步请求应已到达 mock 客户端并保持阻塞');
+      expect(controller.isSyncing, isTrue);
+      expect(find.text(I18n.tr('sync.state.syncing')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('sync_status_card_spinner')),
+        findsOneWidget,
+      );
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      release.complete(http.Response('{"detail":"fixture released"}', 500));
+      if (sync != null) await sync;
+      controller.dispose();
+      cloud.dispose();
+      mockClient.close();
+    }
   });
 
   testWidgets('失败：显示失败原因与自动重试提示，不提供手动触发按钮', (tester) async {
@@ -159,41 +185,46 @@ void main() {
     });
     final cloud = CloudSyncProvider();
     // 有真实待上传改动时的请求失败才进入失败态；关闭备份属于不可用状态。
+    final mockClient = MockClient(
+      (request) async => http.Response(
+        '{"detail":"local upload failed"}',
+        500,
+        headers: <String, String>{'content-type': 'application/json'},
+      ),
+    );
     final client = ApiClient(
       baseUrl: 'https://duoyi.test',
       token: 'test-token',
-      httpClient: MockClient(
-        (request) async => http.Response(
-          '{"detail":"local upload failed"}',
-          500,
-          headers: <String, String>{'content-type': 'application/json'},
-        ),
-      ),
+      httpClient: mockClient,
     );
     cloud.apiClientGetter = () => client;
     cloud.serverConfigGetter = () => <String, dynamic>{'backup_enabled': true};
-    await tester.runAsync(() async {
+    final controller = SyncStatusController(source: cloud);
+    try {
       await cloud.loadFromStorage();
       await cloud.syncNow();
-    });
-    expect(cloud.lastError, '云同步暂不可用，请稍后重试或联系管理员');
-    expect(cloud.lastError, isNot(contains('local upload failed')));
-    expect(cloud.hasPendingChanges, isTrue);
+      expect(cloud.lastError, '云同步暂不可用，请稍后重试或联系管理员');
+      expect(cloud.lastError, isNot(contains('local upload failed')));
+      expect(cloud.hasPendingChanges, isTrue);
 
-    final controller = SyncStatusController(source: cloud);
-    addTearDown(() {
+      await tester.pumpWidget(_wrap(controller));
+      await tester.pump();
+
+      expect(find.text(I18n.tr('sync.state.failed')), findsOneWidget);
+      expect(find.text(cloud.lastError!), findsOneWidget);
+      expect(find.text(I18n.tr('sync.state.auto_retry_hint')), findsOneWidget);
+      // 架构守卫要求：失败态同样不出现手动重试/立即同步入口。
+      expect(find.byType(TextButton), findsNothing);
+      expect(
+        find.byKey(const ValueKey('sync_status_card_retry')),
+        findsNothing,
+      );
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();
       cloud.dispose();
-    });
-    await tester.pumpWidget(_wrap(controller));
-    await tester.pump();
-
-    expect(find.text(I18n.tr('sync.state.failed')), findsOneWidget);
-    expect(find.text(cloud.lastError!), findsOneWidget);
-    expect(find.text(I18n.tr('sync.state.auto_retry_hint')), findsOneWidget);
-    // 架构守卫要求：失败态同样不出现手动重试/立即同步入口。
-    expect(find.byType(TextButton), findsNothing);
-    expect(find.byKey(const ValueKey('sync_status_card_retry')), findsNothing);
+      mockClient.close();
+    }
   });
 
   test('sync.* 词条 zh/en 双语存在且不回退', () {

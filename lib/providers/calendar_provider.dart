@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,7 +18,14 @@ import '../models/countdown.dart';
 import '../models/goal.dart';
 import '../models/time_entry.dart';
 import '../services/account_local_data_cleaner.dart';
+import '../services/reminder_scheduler.dart';
+import '../core/account_preference_writes.dart';
 import 'cloud_sync_provider.dart';
+
+const int _calendarIsolateEncodeMinItems = 500;
+
+List<String> _encodeCalendarEventsPayload(List<CalendarEvent> events) =>
+    events.map((event) => jsonEncode(event.toJson())).toList(growable: false);
 
 class CalendarProvider extends ChangeNotifier {
   static const _localEventsKey = 'duoyi_local_calendar_events_v1';
@@ -27,12 +36,53 @@ class CalendarProvider extends ChangeNotifier {
   Object? _lastRebuildSignature;
   int _sourceRevision = 0;
   int _storageGeneration = 0;
+  int _cacheEpoch = 0;
+  Set<DateTime>? _cachedDatesWithEvents;
+  int? _cachedDatesEpoch;
+  Map<String, List<CalendarEventType>>? _cachedDateEventTypes;
+  int? _cachedDateEventTypesEpoch;
+  final Map<String, Map<String, List<CalendarEventType>>>
+  _cachedFilteredDateEventTypes = {};
+  int? _cachedFilteredTypesEpoch;
+  final Map<String, Map<String, int>> _cachedFilteredDateEventCounts = {};
+  int? _cachedFilteredCountsEpoch;
+  Future<void> _localWriteTail = Future<void>.value();
+  ReminderScheduler? _scheduler;
   VoidCallback? onLocalEventsChanged;
   Future<void> Function(String id)? localEventReminderCanceller;
+
+  set scheduler(ReminderScheduler? value) {
+    _scheduler = value;
+  }
 
   List<CalendarEvent> get events => _events;
   List<CalendarEvent> get localEvents => List.unmodifiable(_localEvents);
   int get sourceRevision => _sourceRevision;
+
+  void _invalidateDerivedCaches() {
+    _cacheEpoch++;
+    _cachedDatesWithEvents = null;
+    _cachedDateEventTypes = null;
+    _cachedFilteredDateEventTypes.clear();
+    _cachedFilteredDateEventCounts.clear();
+  }
+
+  Future<void> _syncLocalEventReminders(
+    int generation,
+    int accountGeneration,
+  ) async {
+    final scheduler = _scheduler;
+    if (scheduler == null ||
+        !_isCurrentStorageGeneration(generation, accountGeneration)) {
+      return;
+    }
+    final snapshot = List<CalendarEvent>.of(_localEvents);
+    try {
+      await scheduler.syncCalendarEvents(snapshot);
+    } catch (e, st) {
+      debugPrint('[CalendarProvider] local event reminder sync failed: $e\n$st');
+    }
+  }
 
   Future<void> loadFromStorage() async {
     final generation = _storageGeneration;
@@ -57,7 +107,9 @@ class CalendarProvider extends ChangeNotifier {
       );
     _lastRebuildSignature = null;
     _sourceRevision++;
+    _invalidateDerivedCaches();
     notifyListeners();
+    unawaited(_syncLocalEventReminders(generation, accountGeneration));
   }
 
   void resetLocalState() {
@@ -67,34 +119,63 @@ class CalendarProvider extends ChangeNotifier {
     _externalEvents = const <CalendarEvent>[];
     _lastRebuildSignature = null;
     _sourceRevision++;
+    _invalidateDerivedCaches();
     notifyListeners();
   }
 
-  Future<void> addLocalEvent(CalendarEvent event) async {
-    _localEvents.add(_asLocalEvent(event));
-    await _saveLocalEvents();
+  Future<void> addLocalEvent(
+    CalendarEvent event, {
+    bool Function()? canWrite,
+  }) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    bool isCurrent() =>
+        _isCurrentStorageGeneration(generation, accountGeneration) &&
+        canWrite?.call() != false;
+    await _enqueueLocalWrite(() async {
+      if (!isCurrent()) return;
+      final next = List<CalendarEvent>.of(_localEvents)
+        ..add(_asLocalEvent(event));
+      await _saveLocalEvents(
+        next,
+        generation,
+        accountGeneration,
+        canWrite: isCurrent,
+      );
+      if (!isCurrent()) return;
+      _publishLocalSnapshot(next);
+      await _syncLocalEventReminders(generation, accountGeneration);
+    });
   }
 
   Future<CalendarEventImportSummary> importLocalEvents(
     Iterable<CalendarEvent> events,
   ) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     var inserted = 0;
     var skippedDuplicates = 0;
-    final seen = _localEvents.map(_importDuplicateKey).toSet();
-    for (final event in events) {
-      if (event.title.trim().isEmpty) continue;
-      final key = _importDuplicateKey(event);
-      if (seen.contains(key)) {
-        skippedDuplicates++;
-        continue;
+    await _enqueueLocalWrite(() async {
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      final next = List<CalendarEvent>.of(_localEvents);
+      final seen = next.map(_importDuplicateKey).toSet();
+      for (final event in events) {
+        if (event.title.trim().isEmpty) continue;
+        final key = _importDuplicateKey(event);
+        if (seen.contains(key)) {
+          skippedDuplicates++;
+          continue;
+        }
+        seen.add(key);
+        next.add(_asLocalEvent(event));
+        inserted++;
       }
-      seen.add(key);
-      _localEvents.add(_asLocalEvent(event));
-      inserted++;
-    }
-    if (inserted > 0) {
-      await _saveLocalEvents();
-    }
+      if (inserted == 0) return;
+      await _saveLocalEvents(next, generation, accountGeneration);
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      _publishLocalSnapshot(next);
+      await _syncLocalEventReminders(generation, accountGeneration);
+    });
     return CalendarEventImportSummary(
       inserted: inserted,
       skippedDuplicates: skippedDuplicates,
@@ -102,36 +183,49 @@ class CalendarProvider extends ChangeNotifier {
   }
 
   Future<void> updateLocalEvent(CalendarEvent event) async {
-    final index = _localEvents.indexWhere((e) => e.id == event.id);
-    if (index == -1) return;
-    await _cancelLocalEventReminder(event.id);
-    _localEvents[index] = _asLocalEvent(event);
-    await _saveLocalEvents();
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    await _enqueueLocalWrite(() async {
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      final index = _localEvents.indexWhere((e) => e.id == event.id);
+      if (index == -1) return;
+      await _cancelLocalEventReminder(event.id);
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      final next = List<CalendarEvent>.of(_localEvents);
+      next[index] = _asLocalEvent(event);
+      await _saveLocalEvents(next, generation, accountGeneration);
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      _publishLocalSnapshot(next);
+      await _syncLocalEventReminders(generation, accountGeneration);
+    });
   }
 
   Future<void> deleteLocalEvent(String id) async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final existing = _localEvents
-        .where((event) => event.id == id)
-        .toList(growable: false);
-    await _cancelLocalEventReminder(id);
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    for (final event in existing) {
+    await _enqueueLocalWrite(() async {
       if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-      await CloudSyncProvider.recordDeletedItem(
-        'calendar_events',
-        event.id,
-        workspaceId: event.workspaceId,
-      );
+      final existing = _localEvents
+          .where((event) => event.id == id)
+          .toList(growable: false);
+      await _cancelLocalEventReminder(id);
       if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    }
-    if (existing.isNotEmpty) {
-      _localEvents.removeWhere((event) => event.id == id);
-    }
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    await _saveLocalEvents();
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      for (final event in existing) {
+        if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+        await CloudSyncProvider.recordDeletedItem(
+          'calendar_events',
+          event.id,
+          workspaceId: event.workspaceId,
+        );
+        if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      }
+      if (existing.isEmpty) return;
+      final next = _localEvents.where((event) => event.id != id).toList();
+      await _saveLocalEvents(next, generation, accountGeneration);
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      _publishLocalSnapshot(next);
+      await _syncLocalEventReminders(generation, accountGeneration);
+    });
   }
 
   Future<void> _cancelLocalEventReminder(String id) async {
@@ -144,22 +238,48 @@ class CalendarProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _saveLocalEvents() async {
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+  Future<void> _saveLocalEvents(
+    List<CalendarEvent> snapshot,
+    int generation,
+    int accountGeneration, {
+    bool Function()? canWrite,
+  }) => AccountPreferenceWrites.runResult<void>((token) async {
+    bool isCurrent() =>
+        token.isCurrent &&
+        _isCurrentStorageGeneration(generation, accountGeneration) &&
+        canWrite?.call() != false;
+    if (!isCurrent()) throw const AccountPreferenceWriteCanceled();
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return;
+    final data = snapshot.length >= _calendarIsolateEncodeMinItems
+        ? await compute(_encodeCalendarEventsPayload, snapshot)
+        : _encodeCalendarEventsPayload(snapshot);
+    final transaction = AccountPreferenceTransaction(prefs, isCurrent);
+    try {
+      await transaction.setStringList(_localEventsKey, data);
+      transaction.commit();
+    } catch (_) {
+      // Cleanup drains this tracked write before removing account keys.
+      await transaction.rollback(canceledBeforeCleanup: true);
+      rethrow;
     }
-    final data = _localEvents
-        .map((event) => jsonEncode(event.toJson()))
-        .toList(growable: false);
-    await prefs.setStringList(_localEventsKey, data);
+  }, canceledResult: () => throw const AccountPreferenceWriteCanceled());
+
+  Future<void> _enqueueLocalWrite(Future<void> Function() operation) {
+    final run = _localWriteTail.then((_) => operation());
+    _localWriteTail = run.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return run;
+  }
+
+  void _publishLocalSnapshot(List<CalendarEvent> snapshot) {
+    _localEvents
+      ..clear()
+      ..addAll(snapshot);
     _lastRebuildSignature = null;
     _sourceRevision++;
+    _invalidateDerivedCaches();
     onLocalEventsChanged?.call();
     _notifyListenersSafely();
   }
@@ -194,6 +314,7 @@ class CalendarProvider extends ChangeNotifier {
     _externalEvents = next;
     _lastRebuildSignature = null;
     _sourceRevision++;
+    _invalidateDerivedCaches();
     _notifyListenersSafely();
   }
 
@@ -249,6 +370,7 @@ class CalendarProvider extends ChangeNotifier {
 
     if (!_eventsEqual(previousEvents, _events)) {
       _lastRebuildSignature = signature;
+      _invalidateDerivedCaches();
       _notifyListenersSafely();
       return;
     }
@@ -372,6 +494,7 @@ class CalendarProvider extends ChangeNotifier {
           h.kind.index,
           h.targetCount,
           h.unit,
+          h.generatedUnitKey,
           Object.hashAll(h.activeWeekdays),
           h.weeklyTarget,
           h.flexTarget,
@@ -522,6 +645,7 @@ class CalendarProvider extends ChangeNotifier {
           event.workspaceId,
           event.note,
           event.updatedAt?.millisecondsSinceEpoch,
+          event.reminderMinutes,
           event.time == null
               ? null
               : Object.hash(event.time!.hour, event.time!.minute),
@@ -567,6 +691,7 @@ class CalendarProvider extends ChangeNotifier {
         a.conflictCount == b.conflictCount &&
         a.note == b.note &&
         a.updatedAt == b.updatedAt &&
+        a.reminderMinutes == b.reminderMinutes &&
         _timeEqual(a.time, b.time) &&
         _habitDisplayEqual(a, b);
   }
@@ -585,6 +710,7 @@ class CalendarProvider extends ChangeNotifier {
         left.count == right.count &&
         left.targetCount == right.targetCount &&
         left.unit == right.unit &&
+        left.generatedUnitKey == right.generatedUnitKey &&
         left.hasFlexRule == right.hasFlexRule &&
         (identical(leftProgress, rightProgress) ||
             (leftProgress != null &&
@@ -619,22 +745,53 @@ class CalendarProvider extends ChangeNotifier {
     }).toList();
   }
 
+  String _filterCacheKey(
+    Set<CalendarEventType>? activeTypes, {
+    String? projectKey,
+    String? workspaceId,
+  }) {
+    final typesKey = activeTypes == null
+        ? '*'
+        : (activeTypes.map((t) => t.name).toList()..sort()).join(',');
+    return '$typesKey|${projectKey ?? ''}|${workspaceId ?? ''}';
+  }
+
   Set<DateTime> get datesWithEvents {
+    if (_cachedDatesWithEvents != null && _cachedDatesEpoch == _cacheEpoch) {
+      return Set<DateTime>.of(_cachedDatesWithEvents!);
+    }
     final dates = <DateTime>{};
     for (final e in _events) {
       dates.addAll(_eventDates(e));
     }
-    return dates;
+    _cachedDatesWithEvents = Set<DateTime>.unmodifiable(dates);
+    _cachedDatesEpoch = _cacheEpoch;
+    return Set<DateTime>.of(_cachedDatesWithEvents!);
   }
 
   Map<String, List<CalendarEventType>> get dateEventTypes {
+    if (_cachedDateEventTypes != null &&
+        _cachedDateEventTypesEpoch == _cacheEpoch) {
+      return {
+        for (final entry in _cachedDateEventTypes!.entries)
+          entry.key: List<CalendarEventType>.of(entry.value),
+      };
+    }
     final map = <String, Set<CalendarEventType>>{};
     for (final e in _events) {
       for (final key in _eventDateKeys(e)) {
         map.putIfAbsent(key, () => {}).add(e.type);
       }
     }
-    return map.map((k, v) => MapEntry(k, v.toList()));
+    _cachedDateEventTypes = {
+      for (final entry in map.entries)
+        entry.key: List<CalendarEventType>.unmodifiable(entry.value),
+    };
+    _cachedDateEventTypesEpoch = _cacheEpoch;
+    return {
+      for (final entry in _cachedDateEventTypes!.entries)
+        entry.key: List<CalendarEventType>.of(entry.value),
+    };
   }
 
   /// Filtered variant: only include event types in [activeTypes].
@@ -646,6 +803,22 @@ class CalendarProvider extends ChangeNotifier {
     if (activeTypes == null && projectKey == null && workspaceId == null) {
       return dateEventTypes;
     }
+    if (_cachedFilteredTypesEpoch != _cacheEpoch) {
+      _cachedFilteredDateEventTypes.clear();
+      _cachedFilteredTypesEpoch = _cacheEpoch;
+    }
+    final filterKey = _filterCacheKey(
+      activeTypes,
+      projectKey: projectKey,
+      workspaceId: workspaceId,
+    );
+    final cached = _cachedFilteredDateEventTypes[filterKey];
+    if (cached != null) {
+      return {
+        for (final entry in cached.entries)
+          entry.key: List<CalendarEventType>.of(entry.value),
+      };
+    }
     final map = <String, Set<CalendarEventType>>{};
     for (final e in _events) {
       if (activeTypes != null && !activeTypes.contains(e.type)) continue;
@@ -655,7 +828,15 @@ class CalendarProvider extends ChangeNotifier {
         map.putIfAbsent(key, () => {}).add(e.type);
       }
     }
-    return map.map((k, v) => MapEntry(k, v.toList()));
+    final frozen = <String, List<CalendarEventType>>{
+      for (final entry in map.entries)
+        entry.key: List<CalendarEventType>.unmodifiable(entry.value),
+    };
+    _cachedFilteredDateEventTypes[filterKey] = frozen;
+    return {
+      for (final entry in frozen.entries)
+        entry.key: List<CalendarEventType>.of(entry.value),
+    };
   }
 
   Map<String, int> filteredDateEventCounts(
@@ -663,6 +844,19 @@ class CalendarProvider extends ChangeNotifier {
     String? projectKey,
     String? workspaceId,
   }) {
+    if (_cachedFilteredCountsEpoch != _cacheEpoch) {
+      _cachedFilteredDateEventCounts.clear();
+      _cachedFilteredCountsEpoch = _cacheEpoch;
+    }
+    final filterKey = _filterCacheKey(
+      activeTypes,
+      projectKey: projectKey,
+      workspaceId: workspaceId,
+    );
+    final cached = _cachedFilteredDateEventCounts[filterKey];
+    if (cached != null) {
+      return Map<String, int>.of(cached);
+    }
     final map = <String, int>{};
     for (final e in _events) {
       if (activeTypes != null && !activeTypes.contains(e.type)) continue;
@@ -672,7 +866,10 @@ class CalendarProvider extends ChangeNotifier {
         map[key] = (map[key] ?? 0) + 1;
       }
     }
-    return map;
+    _cachedFilteredDateEventCounts[filterKey] = Map<String, int>.unmodifiable(
+      map,
+    );
+    return Map<String, int>.of(map);
   }
 
   bool _matchesProject(CalendarEvent event, String? projectKey) {

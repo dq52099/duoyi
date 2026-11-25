@@ -1,3 +1,4 @@
+import 'app_date_format.dart';
 import 'package:flutter/material.dart';
 
 import '../core/i18n.dart';
@@ -13,21 +14,25 @@ bool habitDateRangeIsValid(DateTime? startDate, DateTime? endDate) {
   return !habitDateOnly(endDate).isBefore(habitDateOnly(startDate));
 }
 
-String habitDateRangeLabel(DateTime? startDate, DateTime? endDate) {
+String habitDateRangeLabel(
+  DateTime? startDate,
+  DateTime? endDate, {
+  String? pattern,
+}) {
   if (startDate == null && endDate == null) {
     return I18n.tr('habit.date_range.long_term');
   }
   if (startDate != null && endDate != null) {
-    return '${I18nDateFormat.date(startDate)} - ${I18nDateFormat.date(endDate)}';
+    return '${I18nDateFormat.date(startDate, pattern: pattern)} - ${I18nDateFormat.date(endDate, pattern: pattern)}';
   }
   if (startDate != null) {
     return _dateWithRangeSuffix(
-      I18nDateFormat.date(startDate),
+      I18nDateFormat.date(startDate, pattern: pattern),
       'habit.date_range.from_suffix',
     );
   }
   return _dateWithRangeSuffix(
-    I18nDateFormat.date(endDate!),
+    I18nDateFormat.date(endDate!, pattern: pattern),
     'habit.date_range.until_suffix',
   );
 }
@@ -59,6 +64,7 @@ class HabitDateRangeFields extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       borderRadius: BorderRadius.circular(16),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -168,7 +174,9 @@ class _HabitDateRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    value == null ? emptyLabel : I18nDateFormat.date(value!),
+                    value == null
+                        ? emptyLabel
+                        : AppDateFormat.date(context, value!),
                     style: TextStyle(
                       fontSize: 14,
                       color: value == null ? cs.onSurfaceVariant : cs.onSurface,

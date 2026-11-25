@@ -16,6 +16,7 @@ enum WidgetActionNotice {
   unknownEntry,
   quickTodoUnavailable,
   quickTodoFailed,
+  sharedImportFailed,
   hydrationFailed,
   staleContent,
   validationFailed,
@@ -188,6 +189,10 @@ final class WidgetActionMessage {
       WidgetActionNotice.quickTodoFailed => pick(
         '快捷待办创建失败，请稍后重试',
         'Could not create the task. Please try again',
+      ),
+      WidgetActionNotice.sharedImportFailed => pick(
+        '导入失败，请稍后重试',
+        'Could not import the text. Please try again',
       ),
       WidgetActionNotice.hydrationFailed => pick(
         '内容加载失败，请重新打开多仪',

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/account_preference_writes.dart';
+import '../core/ics_subscription_storage.dart';
+import '../core/oauth_calendar_storage.dart';
+import '../core/location_reminder_storage.dart';
 
 /// Clears data that belongs to the signed-in account.
 ///
@@ -38,6 +42,7 @@ class AccountLocalDataCleaner {
 
   static const accountScopedKeys = <String>{
     accountDataOwnerKey,
+    'duoyi_notification_action_key_v1',
     'todos',
     'habits',
     'pomodoro_sessions',
@@ -71,6 +76,7 @@ class AccountLocalDataCleaner {
     'duoyi_notif_history',
     'duoyi_notif_history_seen_at',
     'duoyi_widget_display_mode',
+    'duoyi_widget_display_selection_v1',
     'widget_display_mode',
     'todo_kanban_columns_v1',
     'reminder_scheduler_registry_v1',
@@ -187,20 +193,243 @@ class AccountLocalDataCleaner {
   static Future<T> runPreferenceBoundary<T>(Future<T> Function() operation) =>
       AccountPreferenceWrites.boundary(operation);
 
-  static Future<void> clearSharedPreferences() =>
-      AccountPreferenceWrites.boundary(_clearSharedPreferences);
+  static final Object _retirementZone = Object();
+  static final Object _retirementWorkZone = Object();
+  static Future<void>? _retirementTail;
 
-  static Future<void> _clearSharedPreferences() async {
+  /// One fence covers the callback, provider resets and every cleanup pass.
+  /// Nested callers inherit the same session and cannot finalize it early.
+  static Future<T> runAccountRetirement<T>(Future<T> Function() operation) {
+    final inherited = Zone.current[_retirementZone] as _AccountRetirementScope?;
+    if (inherited != null) {
+      if (inherited.session is OAuthScopeRetirementSession) {
+        return Future<T>.error(const OAuthAccountRetirementPending());
+      }
+      return inherited.enroll(operation, _retirementWorkZone);
+    }
+    final announcement = OAuthCalendarStorage.announceAccountRetirement();
+    return _runRetirement(operation, announcement: announcement);
+  }
+
+  /// Retires OAuth credentials and private journals without deleting ordinary
+  /// guest content or invoking full-account file/provider cleanup callbacks.
+  static Future<T> runOAuthScopeRetirement<T>(
+    OAuthScopeRetirementRequest request,
+    Future<T> Function() cleanupOwnedResources,
+  ) {
+    final inherited = Zone.current[_retirementZone] as _AccountRetirementScope?;
+    if (inherited != null) {
+      final session = inherited.session;
+      if (!identical(session.preferences, request.preferences) ||
+          (session is OAuthScopeRetirementSession &&
+              !identical(session.request, request))) {
+        return Future<T>.error(const OAuthAccountRetirementPending());
+      }
+      return inherited.enroll(cleanupOwnedResources, _retirementWorkZone);
+    }
+    if (!request.isCurrent) {
+      return Future<T>.error(const OAuthAccountRetirementPending());
+    }
+    final announcement = OAuthCalendarStorage.announceOAuthScopeRetirement(
+      store: request.preferences,
+    );
+    return _runRetirement(
+      cleanupOwnedResources,
+      announcement: announcement,
+      request: request,
+    );
+  }
+
+  static Future<T> _runRetirement<T>(
+    Future<T> Function() operation, {
+    required OAuthAccountRetirementAnnouncement announcement,
+    OAuthScopeRetirementRequest? request,
+  }) {
     invalidateInFlightAccountWrites();
-    final prefs = await SharedPreferences.getInstance();
+    final previous = _retirementTail;
+    final result = AccountPreferenceWrites.boundary<T>(() async {
+      if (previous != null) await previous;
+      final preferences =
+          request?.preferences ?? await SharedPreferences.getInstance();
+      final session = await OAuthCalendarStorage.run<OAuthRetirementSession>(
+        () => request == null
+            ? OAuthCalendarStorage.beginAccountRetirementLocked(
+                preferences,
+                announcement: announcement,
+              )
+            : OAuthCalendarStorage.beginOAuthScopeRetirementLocked(
+                preferences,
+                announcement: announcement,
+                request: request,
+              ),
+        epoch: OAuthCalendarStorage.epoch,
+        recovering: true,
+      );
+      final scope = _AccountRetirementScope(session);
+      final root = _AccountRetirementWork(isRoot: true);
+      return runZoned<Future<T>>(() async {
+        T? value;
+        try {
+          value = await operation();
+        } catch (error, stack) {
+          scope.fail(error, stack);
+        } finally {
+          root.active = false;
+          await scope.closeAndDrain();
+        }
+        try {
+          scope.ensureSucceeded();
+          if (session is OAuthScopeRetirementSession) {
+            await OAuthCalendarStorage.run<void>(
+              () async {
+                await _clearOAuthPreferences(session);
+                await OAuthCalendarStorage.finishOAuthScopeRetirementLocked(
+                  session,
+                );
+              },
+              epoch: OAuthCalendarStorage.epoch,
+              recovering: true,
+            );
+          } else if (session is OAuthAccountRetirementSession) {
+            await _clearPreferencesWithinSession(session);
+            await OAuthCalendarStorage.run<void>(
+              () => OAuthCalendarStorage.finishAccountRetirementLocked(
+                session,
+                hasRemainingOwnedData: (prefs) => prefs.getKeys().any(
+                  (key) => !_isRetirementFence(key) && _isAccountScopedKey(key),
+                ),
+                onConfirmed: () {
+                  LocationReminderStorage.confirmAccountClearLocked();
+                  IcsSubscriptionStorage.confirmAccountClearLocked();
+                  OAuthCalendarStorage.confirmAccountClearLocked(preferences);
+                },
+              ),
+              epoch: OAuthCalendarStorage.epoch,
+              recovering: true,
+            );
+          }
+          return value as T;
+        } catch (error, stack) {
+          scope.fail(error, stack);
+          scope.ensureSucceeded();
+          rethrow;
+        }
+      }, zoneValues: {_retirementZone: scope, _retirementWorkZone: root});
+    });
+    final tail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {
+        OAuthCalendarStorage.failAccountRetirementAnnouncement(announcement);
+      },
+    );
+    _retirementTail = tail;
+    tail.then<void>((_) {
+      if (identical(_retirementTail, tail)) _retirementTail = null;
+    });
+    return result;
+  }
+
+  static bool _isAccountScopedKey(String key) =>
+      accountScopedKeys.contains(key) ||
+      accountScopedPrefixes.any((prefix) => key.startsWith(prefix));
+
+  static bool _isRetirementFence(String key) =>
+      key == OAuthCalendarStorage.retirementFenceKey ||
+      key == OAuthCalendarStorage.scopeRetirementFenceKey;
+
+  static Future<void> _clearOAuthPreferences(
+    OAuthScopeRetirementSession session,
+  ) async {
+    final prefs = session.preferences;
+    await prefs.reload();
+    OAuthCalendarStorage.ensureRetirementCurrentLocked(session);
+    Object? firstError;
+    StackTrace? firstStack;
+    for (final key
+        in prefs
+            .getKeys()
+            .where(OAuthCalendarStorage.isOAuthScopeKey)
+            .toList(growable: false)) {
+      try {
+        OAuthCalendarStorage.ensureRetirementCurrentLocked(session);
+        final removed = await prefs.remove(key);
+        await prefs.reload();
+        OAuthCalendarStorage.ensureRetirementCurrentLocked(session);
+        if (!removed || prefs.containsKey(key)) {
+          throw const OAuthAccountRetirementPending();
+        }
+      } catch (error, stack) {
+        firstError ??= error;
+        firstStack ??= stack;
+      }
+    }
+    try {
+      await prefs.reload();
+      OAuthCalendarStorage.ensureRetirementCurrentLocked(session);
+      if (prefs.getKeys().any(OAuthCalendarStorage.isOAuthScopeKey)) {
+        throw const OAuthAccountRetirementPending();
+      }
+    } catch (error, stack) {
+      firstError ??= error;
+      firstStack ??= stack;
+    }
+    if (firstError != null) Error.throwWithStackTrace(firstError, firstStack!);
+  }
+
+  static Future<void> clearSharedPreferences() {
+    final scope = Zone.current[_retirementZone] as _AccountRetirementScope?;
+    if (scope == null) return runAccountRetirement<void>(() async {});
+    final session = scope.session;
+    if (session is! OAuthAccountRetirementSession) {
+      return Future<void>.error(const OAuthAccountRetirementPending());
+    }
+    // Check the inherited capability before opening a boundary, which changes
+    // the write generation even when no data is removed.
+    return scope.enroll(
+      () => _clearPreferencesWithinSession(session),
+      _retirementWorkZone,
+    );
+  }
+
+  static Future<void> _clearPreferencesWithinSession(
+    OAuthAccountRetirementSession session,
+  ) {
+    OAuthCalendarStorage.ensureRetirementCurrentLocked(session);
+    return AccountPreferenceWrites.boundary(
+      () => LocationReminderStorage.run(
+        () => IcsSubscriptionStorage.run(
+          () => OAuthCalendarStorage.run<void>(
+            () => _clearSharedPreferences(session),
+            epoch: OAuthCalendarStorage.epoch,
+            recovering: true,
+          ),
+          epoch: IcsSubscriptionStorage.epoch,
+          allowUncertain: true,
+        ),
+        allowUncertain: true,
+      ),
+    );
+  }
+
+  static Future<void> _clearSharedPreferences(
+    OAuthAccountRetirementSession session,
+  ) async {
+    final prefs = session.preferences;
+    await prefs.reload();
+    OAuthCalendarStorage.ensureRetirementCurrentLocked(session);
     Object? firstError;
     StackTrace? firstStackTrace;
 
     Future<void> removeKey(String key) async {
       try {
+        if (_isRetirementFence(key)) return;
+        OAuthCalendarStorage.ensureRetirementCurrentLocked(session);
         if (!prefs.containsKey(key)) return;
         final removed = await prefs.remove(key);
-        if (!removed || prefs.containsKey(key)) {
+        // A reader may reload the optimistic cache while removal awaits ACK.
+        // The final authoritative reload and complete residual check below
+        // prove deletion; a rejected ACK still fails this exact key.
+        if (!removed) {
           throw StateError('Account preference cleanup failed: $key');
         }
       } catch (e, st) {
@@ -218,10 +447,19 @@ class AccountLocalDataCleaner {
     for (final key in dynamicKeys.toList(growable: false)) {
       await removeKey(key);
     }
+    // SharedPreferences publishes cache changes before platform acknowledgement.
+    // Account storage retirement requires an authoritative reload as well.
+    try {
+      await prefs.reload();
+    } catch (e, st) {
+      firstError ??= e;
+      firstStackTrace ??= st;
+    }
     final remaining = prefs.getKeys().where(
       (key) =>
-          accountScopedKeys.contains(key) ||
-          accountScopedPrefixes.any((prefix) => key.startsWith(prefix)),
+          !_isRetirementFence(key) &&
+          (accountScopedKeys.contains(key) ||
+              accountScopedPrefixes.any((prefix) => key.startsWith(prefix))),
     );
     if (remaining.isNotEmpty) {
       firstError ??= StateError('Account preferences remain after cleanup');
@@ -232,6 +470,7 @@ class AccountLocalDataCleaner {
     if (error != null && stackTrace != null) {
       Error.throwWithStackTrace(error, stackTrace);
     }
+    OAuthCalendarStorage.ensureRetirementCurrentLocked(session);
   }
 
   static Future<void> clearLocalFiles({Directory? documentsDirectory}) async {
@@ -281,6 +520,96 @@ class AccountLocalDataCleaner {
       rethrow;
     }
     return AccountLocalFileCleanup._(quarantine);
+  }
+}
+
+class _AccountRetirementWork {
+  final bool isRoot;
+  final Set<Future<void>> children = {};
+  bool active = true;
+  _AccountRetirementWork({this.isRoot = false});
+}
+
+class _AccountRetirementScope {
+  final OAuthRetirementSession session;
+  final Set<Future<void>> _pending = {};
+  bool _accepting = true;
+  Object? _error;
+  StackTrace? _stack;
+
+  _AccountRetirementScope(this.session);
+
+  void fail(Object error, StackTrace stack) {
+    _error ??= error;
+    _stack ??= stack;
+    OAuthCalendarStorage.failAccountRetirementLocked(session);
+  }
+
+  void ensureSucceeded() {
+    if (_error != null) Error.throwWithStackTrace(_error!, _stack!);
+    OAuthCalendarStorage.ensureRetirementCurrentLocked(session);
+  }
+
+  Future<T> enroll<T>(Future<T> Function() operation, Object workZone) {
+    final parent = Zone.current[workZone] as _AccountRetirementWork?;
+    if (parent == null || !parent.active || (!_accepting && parent.isRoot)) {
+      return Future<T>.error(const OAuthAccountRetirementPending());
+    }
+    try {
+      ensureSucceeded();
+    } catch (error, stack) {
+      return Future<T>.error(error, stack);
+    }
+    final completion = Completer<void>();
+    final returned = Completer<T>();
+    _pending.add(completion.future);
+    parent.children.add(completion.future);
+    final member = _AccountRetirementWork();
+    final result = runZoned<Future<T>>(
+      () => Future<T>.sync(operation),
+      zoneValues: {workZone: member},
+    );
+    void settle() {
+      _pending.remove(completion.future);
+      parent.children.remove(completion.future);
+      completion.complete();
+    }
+
+    Future<void> drainChildren() async {
+      member.active = false;
+      while (member.children.isNotEmpty) {
+        await Future.wait(member.children.toList());
+      }
+    }
+
+    result.then<void>(
+      (value) async {
+        await drainChildren();
+        settle();
+        if (_error != null) {
+          returned.completeError(_error!, _stack!);
+        } else {
+          returned.complete(value);
+        }
+      },
+      onError: (Object error, StackTrace stack) async {
+        fail(error, stack);
+        await drainChildren();
+        settle();
+        returned.completeError(error, stack);
+      },
+    );
+    // The coordinator owns failures even when the caller did not await its
+    // child. The same error still reaches an awaiting caller and outer drain.
+    returned.future.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return returned.future;
+  }
+
+  Future<void> closeAndDrain() async {
+    _accepting = false;
+    while (_pending.isNotEmpty) {
+      await Future.wait(_pending.toList());
+    }
   }
 }
 

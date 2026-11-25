@@ -147,6 +147,8 @@ class HabitFlexProgress {
 }
 
 class Habit {
+  static const int defaultFreezeTokens = 2;
+
   final String id;
   String name;
   String icon;
@@ -155,10 +157,16 @@ class Habit {
   List<int> activeWeekdays;
   int targetCount;
   String? unit; // 计量单位，如 '次/杯/分钟'
+  // A non-null authored/legacy unit always takes precedence. Null key means
+  // generated repetitions; unknown keys survive round-trips unchanged.
+  String? generatedUnitKey;
   int currentStreak;
   int bestStreak;
   Map<String, int> completions;
   Map<String, DateTime> completionUpdatedAt;
+  Map<String, String> checkinNotes;
+  int freezeTokens;
+  List<String> frozenDates;
   String? category;
   List<String> tags;
   int weeklyTarget;
@@ -183,10 +191,14 @@ class Habit {
     List<int>? activeWeekdays,
     this.targetCount = 1,
     this.unit,
+    this.generatedUnitKey,
     this.currentStreak = 0,
     this.bestStreak = 0,
     Map<String, int>? completions,
     Map<String, DateTime>? completionUpdatedAt,
+    Map<String, String>? checkinNotes,
+    int? freezeTokens,
+    List<String>? frozenDates,
     this.category,
     List<String>? tags,
     this.weeklyTarget = 7,
@@ -204,6 +216,9 @@ class Habit {
   }) : activeWeekdays = activeWeekdays ?? [0, 1, 2, 3, 4, 5, 6],
        completions = completions ?? {},
        completionUpdatedAt = completionUpdatedAt ?? {},
+       checkinNotes = checkinNotes ?? {},
+       freezeTokens = (freezeTokens ?? defaultFreezeTokens).clamp(0, 99).toInt(),
+       frozenDates = frozenDates ?? [],
        tags = tags ?? [],
        reminderPlan = _normalizeHabitReminderPlan(
          reminderPlan ??
@@ -225,10 +240,14 @@ class Habit {
     List<int>? activeWeekdays,
     int? targetCount,
     String? unit,
+    String? generatedUnitKey,
     int? currentStreak,
     int? bestStreak,
     Map<String, int>? completions,
     Map<String, DateTime>? completionUpdatedAt,
+    Map<String, String>? checkinNotes,
+    int? freezeTokens,
+    List<String>? frozenDates,
     String? category,
     List<String>? tags,
     int? weeklyTarget,
@@ -244,6 +263,7 @@ class Habit {
     DateTime? createdAt,
     DateTime? updatedAt,
     bool clearUnit = false,
+    bool clearGeneratedUnitKey = false,
     bool clearCategory = false,
     bool clearFlexRule = false,
     bool clearStartDate = false,
@@ -279,6 +299,9 @@ class Habit {
       activeWeekdays: nextActiveWeekdays,
       targetCount: targetCount ?? this.targetCount,
       unit: clearUnit ? null : unit ?? this.unit,
+      generatedUnitKey: clearGeneratedUnitKey
+          ? null
+          : generatedUnitKey ?? this.generatedUnitKey,
       currentStreak: currentStreak ?? this.currentStreak,
       bestStreak: bestStreak ?? this.bestStreak,
       completions: completions != null
@@ -287,8 +310,15 @@ class Habit {
       completionUpdatedAt: completionUpdatedAt != null
           ? Map<String, DateTime>.from(completionUpdatedAt)
           : Map<String, DateTime>.from(this.completionUpdatedAt),
+      checkinNotes: checkinNotes != null
+          ? Map<String, String>.from(checkinNotes)
+          : Map<String, String>.from(this.checkinNotes),
+      freezeTokens: freezeTokens ?? this.freezeTokens,
+      frozenDates: frozenDates != null
+          ? List<String>.from(frozenDates)
+          : List<String>.from(this.frozenDates),
       category: clearCategory ? null : category ?? this.category,
-      tags: tags ?? List<String>.from(this.tags),
+      tags: tags != null ? List<String>.from(tags) : List<String>.from(this.tags),
       weeklyTarget: weeklyTarget ?? this.weeklyTarget,
       flexTarget: clearFlexRule ? null : flexTarget ?? this.flexTarget,
       flexPeriod: clearFlexRule ? null : flexPeriod ?? this.flexPeriod,
@@ -322,12 +352,16 @@ class Habit {
       'activeWeekdays': activeWeekdays,
       'targetCount': targetCount,
       'unit': unit,
+      if (generatedUnitKey != null) 'generatedUnitKey': generatedUnitKey,
       'currentStreak': currentStreak,
       'bestStreak': bestStreak,
       'completions': completions,
       'completionUpdatedAt': completionUpdatedAt.map(
         (key, value) => MapEntry(key, value.toIso8601String()),
       ),
+      if (checkinNotes.isNotEmpty) 'checkinNotes': checkinNotes,
+      if (freezeTokens != defaultFreezeTokens) 'freezeTokens': freezeTokens,
+      if (frozenDates.isNotEmpty) 'frozenDates': frozenDates,
       'category': category,
       'tags': tags,
       'weeklyTarget': weeklyTarget,
@@ -350,6 +384,8 @@ class Habit {
     final weekdaysRaw = json['activeWeekdays'] as List<dynamic>?;
     final completionsRaw = json['completions'];
     final completionUpdatedAtRaw = json['completionUpdatedAt'];
+    final checkinNotesRaw = json['checkinNotes'];
+    final frozenDatesRaw = json['frozenDates'];
     final createdAtRaw = json['createdAt']?.toString();
     final updatedAtRaw = json['updatedAt']?.toString();
     final target = _readInt(json['targetCount'], 1);
@@ -399,6 +435,7 @@ class Habit {
       activeWeekdays: activeWeekdays,
       targetCount: target < 1 ? 1 : target,
       unit: json['unit']?.toString(),
+      generatedUnitKey: json['generatedUnitKey']?.toString(),
       currentStreak: _readInt(json['currentStreak'], 0),
       bestStreak: _readInt(json['bestStreak'], 0),
       completions: completionsRaw is Map
@@ -414,9 +451,29 @@ class Habit {
                   entry.key.toString(): DateTime.parse(entry.value.toString()),
             }
           : {},
+      checkinNotes: checkinNotesRaw is Map
+          ? {
+              for (final entry in checkinNotesRaw.entries)
+                if ((entry.value?.toString().trim() ?? '').isNotEmpty)
+                  entry.key.toString(): entry.value.toString().trim(),
+            }
+          : {},
+      freezeTokens: json['freezeTokens'] == null
+          ? defaultFreezeTokens
+          : _readInt(json['freezeTokens'], defaultFreezeTokens),
+      frozenDates: frozenDatesRaw is List
+          ? {
+              for (final raw in frozenDatesRaw)
+                if (raw.toString().trim().isNotEmpty) raw.toString().trim(),
+            }.toList()
+          : const [],
       category: json['category']?.toString(),
       tags:
-          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          (json['tags'] as List<dynamic>?)
+              ?.map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList() ??
           [],
       weeklyTarget: _readInt(json['weeklyTarget'], 7),
       flexTarget: flexTarget,
@@ -449,6 +506,28 @@ class Habit {
 
   DateTime _dayOnly(DateTime value) =>
       DateTime(value.year, value.month, value.day);
+
+  bool get isEnded {
+    final end = endDate;
+    if (end == null) return false;
+    final now = DateTime.now();
+    return _dayOnly(now).isAfter(_dayOnly(end));
+  }
+
+  bool isFrozenForDate(DateTime d) => frozenDates.contains(dateKey(d));
+
+  String? noteForDate(DateTime d) {
+    final raw = checkinNotes[dateKey(d)]?.trim();
+    return (raw == null || raw.isEmpty) ? null : raw;
+  }
+
+  List<MapEntry<String, String>> get sortedCheckinNotes {
+    final list = checkinNotes.entries
+        .where((e) => e.value.trim().isNotEmpty)
+        .toList();
+    list.sort((a, b) => b.key.compareTo(a.key));
+    return list;
+  }
 
   bool isWithinDateRange(DateTime date) {
     final day = _dayOnly(date);
@@ -641,6 +720,7 @@ class Habit {
       negative: kind == HabitKind.negative,
       flexible: hasFlexRule,
       authoredUnit: unit,
+      generatedUnitKey: generatedUnitKey,
       flexProgressLabel: flexProgressForDate(d)?.labelFor(displayLocale),
     );
   }

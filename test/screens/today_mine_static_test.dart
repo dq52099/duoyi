@@ -99,8 +99,15 @@ void main() {
         isNot(contains("ValueKey('today_todo_swipe_detail_button')")),
       );
       expect(today, contains("ValueKey('today_todo_swipe_delete_button')"));
-      expect(today, contains("title: const Text('删除任务？')"));
-      expect(today, contains("await context.read<TodoProvider>().deleteTodo"));
+      expect(
+        today,
+        contains("title: Text(TodayUiCopy.deleteTaskTitle(locale))"),
+      );
+      expect(today, contains('await origin.todos.deleteTodo(origin.id)'));
+      expect(today, contains('class _TodayTodoDeleteOrigin'));
+      expect(today, contains('await dialogRoute?.completed'));
+      expect(today, contains('origin.isCurrent(checkRoute: checkRoute)'));
+      expect(today, contains('confirmed == true && _canDelete(origin)'));
       expect(today, contains('return _TodayTodoSwipeTile('));
       expect(today, contains('onToggleTodo(todo)'));
       expect(today, contains('onOpenTodo(t.id)'));
@@ -129,7 +136,10 @@ void main() {
       expect(today, contains('today_suggestion_template_icon'));
       expect(today, contains("import '../providers/share_provider.dart';"));
       expect(today, contains('context.select<ShareProvider?, bool>'));
-      expect(today, contains("共享空间只读，不能\$action"));
+      expect(
+        today,
+        contains("TodayUiCopy.readOnlyActionMessage(action, locale)"),
+      );
       expect(today, isNot(contains('void _openDetails()')));
       expect(today, isNot(contains('onTap: _openDetails')));
       expect(today, isNot(contains('Dismissible(')));
@@ -180,10 +190,18 @@ void main() {
       expect(mine, contains("key: const ValueKey('mine_user_info_row')"));
       expect(
         mine,
-        contains(
-          'borderRadius: BorderRadius.circular(DesignTokens.radiusCard)',
+        matches(
+          RegExp(
+            r'borderRadius:\s*BorderRadius\.circular\(\s*DesignTokens\.radiusCard\s*,?\s*\)',
+          ),
         ),
       );
+      final tileGroup = mine.substring(
+        mine.indexOf('class _TileGroup extends StatelessWidget'),
+        mine.indexOf('class _UpdateAvailableBadge extends StatelessWidget'),
+      );
+      expect(tileGroup, contains('appSurfaceStyleOf(context)?.cardBorder'));
+      expect(tileGroup, isNot(contains('borderRadius:')));
       expect(mine, contains('Expanded('));
       expect(mine, contains('Wrap('));
       expect(mine, contains('ConstrainedBox('));
@@ -217,13 +235,23 @@ void main() {
       expect(mine, contains('height: 20'));
       expect(mine, contains('size: 10'));
       expect(mine, contains('onPickAndSaveAvatar: _pickAndSaveAvatar'));
-      expect(mine, contains('onTap: () => onPickAndSaveAvatar(context)'));
+      expect(
+        mine,
+        matches(
+          RegExp(
+            r'if \(canAct\(\)\)\s*\{\s*onPickAndSaveAvatar\(actionContext\)',
+          ),
+        ),
+      );
       expect(mine, contains("label: '@\$usernameText'"));
       expect(mine, contains(r"label: '${I18n.tr('profile.coins')} $coins'"));
       expect(mine, contains('activeAvatarFrame'));
       expect(mine, contains('defaultAvatarFrameId'));
       expect(mine, contains('onShowAvatarPreview: _showAvatarPreview'));
-      expect(mine, contains('onTap: () => onShowAvatarPreview(context)'));
+      expect(
+        mine,
+        contains('if (canAct()) onShowAvatarPreview(actionContext)'),
+      );
       expect(mine, contains('child: Hero('));
       expect(
         mine,
@@ -270,12 +298,12 @@ void main() {
       expect(mine, contains("message: I18n.tr('auth.logout')"));
       expect(mine, contains("key: const ValueKey('mine_top_logout_button')"));
       expect(mine, contains('onConfirmLogout: _confirmLogout'));
-      expect(mine, contains('onPressed: () => onConfirmLogout(context)'));
+      expect(mine, contains('if (canAct()) onConfirmLogout(actionContext)'));
       expect(
         mine,
         contains('Future<void> _confirmLogout(BuildContext context)'),
       );
-      expect(mine, contains('await context.read<AuthProvider>().logout();'));
+      expect(mine, contains('await auth.logout();'));
       expect(mine, isNot(contains('greetingAfternoon')));
       expect(mine, contains('openFile('));
       expect(mine, isNot(contains('photo_library_outlined')));
@@ -299,7 +327,7 @@ void main() {
       final mineBody = mine.substring(mineBodyStart, mineBodyEnd);
       final bodyGroupMarkers = [
         "title: I18n.tr('mine.group.action_plan')",
-        '_MineRecordReviewGroup()',
+        '_MineRecordReviewGroup(columns: tileColumns)',
         "title: I18n.tr('mine.group.schedule')",
         "title: I18n.tr('mine.group.personal')",
         "title: I18n.tr('mine.group.data')",
@@ -357,8 +385,8 @@ void main() {
       expect(mine, contains('_UpdateAvailableBadge('));
       expect(mine, contains('version: updateLatestVersion'));
       expect(mine, contains('width: 8'));
-      expect(mine, contains('constraints: const BoxConstraints(maxWidth: 96)'));
-      expect(mine, contains('overflow: TextOverflow.ellipsis'));
+      // Badge layout and readability are covered by
+      // mine_update_badge_capture_test.dart, not a fixed source width.
       expect(mine, contains("I18n.tr('mine.update.badge')"));
       expect(mine, contains("I18n.tr('mine.update.badge_version_prefix')"));
       expect(
@@ -511,11 +539,11 @@ void main() {
           'final visible = (visibleBottomNavTabs ?? prefs.visibleBottomNavTabs)',
         ),
       );
-      expect(method, contains("label: '今日'"));
-      expect(method, contains("label: '待办'"));
-      expect(method, contains("label: '习惯'"));
-      expect(method, contains("label: '日历'"));
-      expect(method, contains("label: '小组件'"));
+      expect(method, contains("label: I18n.tr('nav.today')"));
+      expect(method, contains("label: I18n.tr('nav.todo')"));
+      expect(method, contains("label: I18n.tr('nav.habit')"));
+      expect(method, contains("label: I18n.tr('nav.calendar')"));
+      expect(method, contains("label: I18n.tr('nav.widget')"));
       expect(method, contains('builder: (_) => const WidgetScreen()'));
       expect(method, isNot(contains('opensStandalone')));
       expect(method, contains('builder: (_) => const TodayScreen()'));
@@ -530,7 +558,7 @@ void main() {
       expect(main, contains('List.generate('));
       expect(main, contains('_builtTabs.contains(tab)'));
       expect(main, contains('_LazyTabPlaceholder'));
-      expect(main, contains('_buildTab(tab, safeVisibleTabs)'));
+      expect(main, contains('_buildTab(tab, safeVisibleTabs, safeIndex)'));
       expect(
         main,
         isNot(contains('_builtTabs.contains(tab) && tab == safeIndex')),
@@ -551,9 +579,9 @@ void main() {
       );
       expect(moreApps, isNot(contains('shellOpen(app.tab);')));
       expect(main, contains('_HiddenTabReturnBar'));
-      expect(main, contains("const Text('返回我的')"));
+      expect(main, contains("? 'Back to Me' : '返回我的'"));
       expect(main, contains('_allowHiddenCurrentIndex = false'));
-      expect(main, contains('state.navigateTo(idx, allowHidden: true);'));
+      expect(main, contains('state.navigateTo(index, allowHidden: true);'));
 
       expect(mine, contains("import 'more_apps_screen.dart';"));
       final screenStart = moreApps.indexOf('class MoreApplicationsScreen');
@@ -561,8 +589,14 @@ void main() {
       expect(screenStart, greaterThanOrEqualTo(0));
       expect(buttonStart, greaterThan(screenStart));
       final screen = moreApps.substring(screenStart, buttonStart);
-      expect(screen, contains('return Scaffold('));
-      expect(screen, contains('backgroundColor: routeBackground'));
+      expect(screen, contains('final scaffold = Scaffold('));
+      expect(screen, contains('return scaffold;'));
+      expect(
+        screen,
+        contains(
+          'backgroundColor: isLiquidGlass ? Colors.transparent : routeBackground',
+        ),
+      );
       expect(
         screen,
         contains('titleTextStyle: appSecondaryRouteTitleTextStyle(context)'),
@@ -573,9 +607,10 @@ void main() {
       expect(screen, isNot(contains('child: BrandScaffold(')));
       expect(screen, contains('final routeBackground'));
       expect(screen, contains('routeBackground.withValues(alpha: 0.92)'));
-      expect(screen, contains("title: const Text('更多应用')"));
-      expect(screen, contains('? 2.55'));
-      expect(screen, contains(': 3.3'));
+      expect(screen, contains("title: Text(I18n.tr('mine.tile.more_apps'))"));
+      // Actual density and full labels are checked at narrow, landscape and
+      // wide sizes in more_apps_theme_layout_test.dart. The former aspect
+      // ratios were overridden by mainAxisExtent and did not guard layout.
 
       final buttonEnd = moreApps.length;
       expect(buttonEnd, greaterThan(buttonStart));
@@ -604,7 +639,8 @@ void main() {
       );
       expect(button, contains('appSecondaryMenuItemTextStyle('));
       expect(button, contains('appSecondaryMenuItemTextStyle(context)'));
-      expect(button, contains('maxLines: 1'));
+      // Full labels, including the single-column wrap fallback, are verified
+      // through the rendered More Apps scenarios instead of a maxLines token.
       expect(
         button,
         isNot(contains('return Scaffold(')),

@@ -1,7 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
@@ -12,14 +15,46 @@ import 'native_reminder_ringtone.dart';
 import 'notification_permission_exception.dart';
 import 'reminder_ringtone_settings.dart';
 import 'reminder_notification_id.dart';
+import 'account_local_data_cleaner.dart';
+import 'notification_action_envelope.dart';
+
+const String _kNotificationMetaPrefsKey = 'duoyi_notif_meta_v1';
+const int _kMaxPersistedNotificationMetaEntries = 400;
+
+@pragma('vm:entry-point')
+Future<void> duoyiBackgroundNotificationResponse(
+  NotificationResponse response,
+) async {
+  try {
+    final verified = await NotificationActionEnvelope.verifyResponse(response);
+    if (verified == null) return;
+    await LocalNotifications.instance.handleBackgroundNotificationResponse(
+      verified,
+    );
+  } catch (error, stack) {
+    debugPrint('[LocalNotifications] background action failed: $error\n$stack');
+  }
+}
 
 /// 本地通知 / 每日闹钟(Android + iOS + Linux 实现)。
 class LocalNotifications {
   static final LocalNotifications instance = LocalNotifications._();
-  LocalNotifications._();
+  LocalNotifications._()
+    : _plugin = FlutterLocalNotificationsPlugin(),
+      _androidOverride = null;
 
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
+  @visibleForTesting
+  LocalNotifications.forTesting({
+    required FlutterLocalNotificationsPlugin plugin,
+    required bool isAndroid,
+    bool initialized = true,
+  }) : _plugin = plugin,
+       _androidOverride = isAndroid {
+    _initialized = initialized;
+  }
+
+  final FlutterLocalNotificationsPlugin _plugin;
+  final bool? _androidOverride;
   bool _pluginInitialized = false;
   bool _launchPayloadProbed = false;
   bool _initialized = false;
@@ -27,6 +62,7 @@ class LocalNotifications {
   Future<void>? _initFuture;
   bool _granted = false;
   String? _launchPayload;
+  int? _launchPayloadGeneration;
   String? _lastQuickAddOngoingSignature;
   static const Duration _visibleNotificationDuplicateWindow = Duration(
     seconds: 3,
@@ -36,6 +72,21 @@ class LocalNotifications {
   final Map<String, DateTime> _recentVisibleNotificationContentSignatures =
       <String, DateTime>{};
   final Map<int, DateTime> _recentVisibleNotificationIds = <int, DateTime>{};
+  final Map<int, ({String title, String body, String? originalPayload})>
+  _notificationContentCache =
+      <int, ({String title, String body, String? originalPayload})>{};
+  static const List<String> _iosTodoActions = <String>[
+    'todo_complete',
+    'todo_snooze_10m',
+  ];
+  static const List<String> _iosHabitActions = <String>[
+    'habit_checkin',
+    'habit_snooze_10m',
+  ];
+  static const List<String> _iosAlarmActions = <String>[
+    'alarm_snooze_10m',
+    'alarm_dismiss',
+  ];
   bool get permissionGranted => _granted;
   String _androidSoundResourceName =
       ReminderRingtoneSettings.androidRawResourceNameFor(
@@ -260,8 +311,328 @@ class LocalNotifications {
       onDidReceiveNotificationResponse: (resp) {
         dispatchNotificationResponse(resp);
       },
+      onDidReceiveBackgroundNotificationResponse:
+          duoyiBackgroundNotificationResponse,
     );
     _pluginInitialized = true;
+  }
+
+  /// Stores title/body/payload metadata keyed by notification ID so snooze and
+  /// headless background action handlers retain the original alert copy.
+  Future<void> recordScheduledMetadata({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    _notificationContentCache[id] = (
+      title: title,
+      body: body,
+      originalPayload: payload,
+    );
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final owner = prefs.getString(AccountLocalDataCleaner.accountDataOwnerKey);
+      final raw = prefs.getString(_kNotificationMetaPrefsKey);
+      Map<String, dynamic> entries = <String, dynamic>{};
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic> && decoded['owner'] == owner) {
+          final map = decoded['items'];
+          if (map is Map) {
+            entries = Map<String, dynamic>.from(map);
+          }
+        }
+      }
+      entries[id.toString()] = <String, dynamic>{
+        't': title,
+        'b': body,
+        'p': ?payload,
+        'ts': DateTime.now().millisecondsSinceEpoch,
+      };
+      if (entries.length > _kMaxPersistedNotificationMetaEntries) {
+        final sortedKeys = entries.keys.toList()
+          ..sort((a, b) {
+            final ta = (entries[a] as Map?)?['ts'] as int? ?? 0;
+            final tb = (entries[b] as Map?)?['ts'] as int? ?? 0;
+            return ta.compareTo(tb);
+          });
+        final overflow = entries.length - _kMaxPersistedNotificationMetaEntries;
+        for (var i = 0; i < overflow; i++) {
+          entries.remove(sortedKeys[i]);
+        }
+      }
+      await prefs.setString(
+        _kNotificationMetaPrefsKey,
+        jsonEncode(<String, dynamic>{'owner': owner, 'items': entries}),
+      );
+    } catch (_) {
+      // Metadata persistence failure must never block reminder delivery.
+    }
+  }
+
+  Future<({String title, String body, String? originalPayload})?>
+  metadataForNotification(int id) async {
+    final mem = _notificationContentCache[id];
+    if (mem != null) return mem;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final owner = prefs.getString(AccountLocalDataCleaner.accountDataOwnerKey);
+      final raw = prefs.getString(_kNotificationMetaPrefsKey);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic> || decoded['owner'] != owner) {
+        return null;
+      }
+      final items = decoded['items'];
+      if (items is! Map) return null;
+      final entry = items[id.toString()];
+      if (entry is! Map) return null;
+      final title = entry['t']?.toString() ?? '';
+      final body = entry['b']?.toString() ?? '';
+      final payload = entry['p']?.toString();
+      if (title.isEmpty && body.isEmpty) return null;
+      final value = (title: title, body: body, originalPayload: payload);
+      _notificationContentCache[id] = value;
+      return value;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> handleBackgroundNotificationResponse(
+    NotificationResponse rawResp,
+  ) async {
+    final resp = await NotificationActionEnvelope.verifyResponse(rawResp);
+    if (resp == null) return;
+    final actionId = resp.actionId;
+    if (actionId == null || actionId.isEmpty) return;
+
+    if (actionId == 'alarm_dismiss') {
+      if (_isAndroid) {
+        unawaited(NativeReminderRingtone.stopActive());
+      }
+      if (resp.id != null) {
+        try {
+          await _plugin.cancel(resp.id!);
+        } catch (_) {}
+      }
+      return;
+    }
+
+    if (actionId == 'todo_complete' ||
+        actionId == 'action_complete' ||
+        actionId.startsWith('todo_complete_')) {
+      final id = actionId.startsWith('todo_complete_')
+          ? Uri.decodeComponent(actionId.substring('todo_complete_'.length))
+          : (resp.payload == null ? null : _idFromPayload(resp.payload!, 'todo'));
+      if (id != null && id.isNotEmpty) {
+        await _completeTodoInBackgroundStorage(id);
+      }
+      if (resp.id != null) {
+        try {
+          await _plugin.cancel(resp.id!);
+        } catch (_) {}
+      }
+      return;
+    }
+
+    if (actionId == 'habit_checkin' ||
+        actionId == 'action_habit_checkin' ||
+        actionId.startsWith('habit_checkin_')) {
+      final id = actionId.startsWith('habit_checkin_')
+          ? Uri.decodeComponent(actionId.substring('habit_checkin_'.length))
+          : (resp.payload == null
+                ? null
+                : _idFromPayload(resp.payload!, 'habit'));
+      if (id != null && id.isNotEmpty) {
+        await _checkInHabitInBackgroundStorage(id);
+      }
+      if (resp.id != null) {
+        try {
+          await _plugin.cancel(resp.id!);
+        } catch (_) {}
+      }
+      return;
+    }
+
+    final snooze = _parseSnoozeAction(actionId, resp.payload);
+    if (snooze != null) {
+      final notifId = resp.id ?? 0;
+      if (_isAndroid) {
+        unawaited(NativeReminderRingtone.stopActive());
+      }
+      final meta = await metadataForNotification(notifId);
+      final title = (meta?.title.trim().isNotEmpty == true)
+          ? meta!.title
+          : I18n.tr('action.snooze');
+      final body = meta?.body ?? '';
+      final originalPayload = meta?.originalPayload ?? snooze.originalPayload;
+      try {
+        tzdata.initializeTimeZones();
+        if (!LocalTimezoneResolver.isInitialized) {
+          await LocalTimezoneResolver.init();
+        }
+        final when = DateTime.now().add(Duration(minutes: snooze.delayMinutes));
+        final scheduledAt = tz.TZDateTime.from(when, tz.local);
+        final generation = AccountLocalDataCleaner.accountDataGeneration;
+        await _plugin.cancel(notifId);
+        if (_isAndroid) {
+          await NativeReminderRingtone.cancel(notifId);
+        }
+        await _plugin.zonedSchedule(
+          notifId,
+          title,
+          body,
+          scheduledAt,
+          _details(
+            channelId: _defaultChannelId,
+            groupKey: _androidGroupKeyFor(originalPayload),
+            iosCategoryIdentifier: _iosCategoryIdentifierFor(originalPayload),
+            androidActions: _todoActionsFor(originalPayload),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          payload: await NotificationActionEnvelope.signPayload(
+            notifId,
+            originalPayload,
+            actions: _actionsToSignFor(originalPayload),
+            expectedAccountGeneration: generation,
+          ),
+        );
+      } catch (e, st) {
+        debugPrint('[LocalNotifications] background snooze failed: $e\n$st');
+      }
+    }
+  }
+
+  Future<void> _completeTodoInBackgroundStorage(String todoId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('todos');
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      final nowIso = DateTime.now().toIso8601String();
+      var changed = false;
+      final updated = <dynamic>[];
+      for (final item in decoded) {
+        if (item is Map && item['id']?.toString() == todoId) {
+          final next = Map<String, dynamic>.from(item);
+          if (next['isCompleted'] != true) {
+            next['isCompleted'] = true;
+            next['completedAt'] ??= nowIso;
+            next['updatedAt'] = nowIso;
+            changed = true;
+          }
+          updated.add(next);
+        } else {
+          updated.add(item);
+        }
+      }
+      if (changed) {
+        await prefs.setString('todos', jsonEncode(updated));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _checkInHabitInBackgroundStorage(String habitId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('habits');
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      final now = DateTime.now();
+      final todayKey =
+          '${now.year.toString().padLeft(4, '0')}-'
+          '${now.month.toString().padLeft(2, '0')}-'
+          '${now.day.toString().padLeft(2, '0')}';
+      final nowIso = now.toIso8601String();
+      var changed = false;
+      final updated = <dynamic>[];
+      for (final item in decoded) {
+        if (item is Map && item['id']?.toString() == habitId) {
+          final next = Map<String, dynamic>.from(item);
+          final completions = next['completions'] is Map
+              ? Map<String, dynamic>.from(next['completions'] as Map)
+              : <String, dynamic>{};
+          final currentCount = (completions[todayKey] as num?)?.toInt() ?? 0;
+          final targetCount = (next['targetCount'] as num?)?.toInt() ?? 1;
+          if (currentCount < targetCount) {
+            completions[todayKey] = currentCount + 1;
+            next['completions'] = completions;
+            final updatedAtMap = next['completionUpdatedAt'] is Map
+                ? Map<String, dynamic>.from(next['completionUpdatedAt'] as Map)
+                : <String, dynamic>{};
+            updatedAtMap[todayKey] = nowIso;
+            next['completionUpdatedAt'] = updatedAtMap;
+            next['updatedAt'] = nowIso;
+            changed = true;
+          }
+          updated.add(next);
+        } else {
+          updated.add(item);
+        }
+      }
+      if (changed) {
+        await prefs.setString('habits', jsonEncode(updated));
+      }
+    } catch (_) {}
+  }
+
+  ({int delayMinutes, String originalPayload})? _parseSnoozeAction(
+    String actionId,
+    String? respPayload,
+  ) {
+    if (actionId == 'todo_snooze_10m' ||
+        actionId == 'habit_snooze_10m' ||
+        actionId == 'alarm_snooze_10m') {
+      return (delayMinutes: 10, originalPayload: respPayload ?? '');
+    }
+    if (actionId == 'action_snooze') {
+      return (delayMinutes: 5, originalPayload: respPayload ?? '');
+    }
+    if (actionId.startsWith('todo_snooze_')) {
+      final rest = actionId.substring('todo_snooze_'.length);
+      for (final minutes in const [10, 15, 60]) {
+        final exact = '${minutes}m';
+        final prefix = '${minutes}m_';
+        if (rest == exact) {
+          return (delayMinutes: minutes, originalPayload: respPayload ?? '');
+        }
+        if (rest.startsWith(prefix)) {
+          final id = rest.substring(prefix.length);
+          final originalPayload =
+              respPayload ?? 'duoyi://todo/${Uri.decodeComponent(id)}';
+          return (delayMinutes: minutes, originalPayload: originalPayload);
+        }
+      }
+      final originalPayload =
+          respPayload ?? 'duoyi://todo/${Uri.decodeComponent(rest)}';
+      return (delayMinutes: 5, originalPayload: originalPayload);
+    }
+    if (actionId.startsWith('habit_snooze_')) {
+      final rest = actionId.substring('habit_snooze_'.length);
+      for (final minutes in const [10, 15, 60]) {
+        final exact = '${minutes}m';
+        final prefix = '${minutes}m_';
+        if (rest == exact) {
+          return (delayMinutes: minutes, originalPayload: respPayload ?? '');
+        }
+        if (rest.startsWith(prefix)) {
+          final id = rest.substring(prefix.length);
+          final originalPayload =
+              respPayload ?? 'duoyi://habit/${Uri.decodeComponent(id)}';
+          return (delayMinutes: minutes, originalPayload: originalPayload);
+        }
+      }
+      final originalPayload =
+          respPayload ?? 'duoyi://habit/${Uri.decodeComponent(rest)}';
+      return (delayMinutes: 10, originalPayload: originalPayload);
+    }
+    return null;
   }
 
   /// Routes every plugin callback through the ordinary notification owner.
@@ -273,34 +644,76 @@ class LocalNotifications {
     NotificationResponse response, {
     void Function(String payload)? fallback,
   }) {
-    final payload = _payloadForResponse(response);
-    if (payload == null || payload.isEmpty) return;
-    final handler = onTap;
-    if (handler != null) {
-      handler(payload);
-    } else {
-      fallback?.call(payload);
-    }
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
+    unawaited(() async {
+      try {
+        final payload = await payloadForNotificationResponse(response);
+        if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          generation,
+        )) {
+          return;
+        }
+        if (payload == null || payload.isEmpty) return;
+        final handler = onTap;
+        if (handler != null) {
+          handler(payload);
+        } else {
+          fallback?.call(payload);
+        }
+      } catch (error, stack) {
+        debugPrint('[LocalNotifications] response rejected: $error\n$stack');
+      }
+    }());
+  }
+
+  /// Shared by local/alarm live callbacks and both cold-start probes.
+  Future<String?> payloadForNotificationResponse(
+    NotificationResponse response,
+  ) async {
+    final verified = await NotificationActionEnvelope.verifyResponse(response);
+    return verified == null ? null : _payloadForResponse(verified);
   }
 
   Future<void> _probeLaunchPayload() async {
     if (_launchPayloadProbed) return;
     _launchPayloadProbed = true;
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
 
     try {
       final launchDetails = await _plugin.getNotificationAppLaunchDetails();
       final response = launchDetails?.notificationResponse;
       final launchPayload = response == null
           ? null
-          : _payloadForResponse(response);
-      if (launchDetails?.didNotificationLaunchApp == true &&
+          : await payloadForNotificationResponse(response);
+      if (AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation) &&
+          launchDetails?.didNotificationLaunchApp == true &&
           launchPayload != null &&
           launchPayload.isNotEmpty) {
         _launchPayload = launchPayload;
+        _launchPayloadGeneration = generation;
       }
     } catch (e, st) {
       debugPrint('[LocalNotifications] launch payload probe failed: $e\n$st');
     }
+  }
+
+  String _buildSnoozeDeepLink({
+    required int? notificationId,
+    required int delayMinutes,
+    required String originalPayload,
+  }) {
+    final query = delayMinutes == 5
+        ? '?delay=5&payload=${Uri.encodeComponent(originalPayload)}'
+        : '?delay=$delayMinutes&payload=${Uri.encodeComponent(originalPayload)}';
+    final base = 'duoyi://snooze/${notificationId ?? 0}$query';
+    final cached = notificationId == null
+        ? null
+        : _notificationContentCache[notificationId];
+    if (cached == null || cached.title.trim().isEmpty) {
+      return base;
+    }
+    return '$base&title=${Uri.encodeComponent(cached.title)}'
+        '&body=${Uri.encodeComponent(cached.body)}';
   }
 
   String? _payloadForResponse(NotificationResponse resp) {
@@ -318,13 +731,21 @@ class LocalNotifications {
       if (actionId == 'quick_focus') {
         return 'duoyi://action/start_pomodoro';
       }
-      if (actionId == 'todo_complete' && resp.payload != null) {
+      if (actionId == 'alarm_dismiss') {
+        if (_isAndroid) {
+          unawaited(NativeReminderRingtone.stopActive());
+        }
+        return null;
+      }
+      if ((actionId == 'todo_complete' || actionId == 'action_complete') &&
+          resp.payload != null) {
         final id = _idFromPayload(resp.payload!, 'todo');
         if (id != null && id.isNotEmpty) {
           return 'duoyi://action/complete_todo?id=${Uri.encodeComponent(id)}';
         }
       }
-      if (actionId == 'habit_checkin' && resp.payload != null) {
+      if ((actionId == 'habit_checkin' || actionId == 'action_habit_checkin') &&
+          resp.payload != null) {
         final id = _idFromPayload(resp.payload!, 'habit');
         if (id != null && id.isNotEmpty) {
           return 'duoyi://action/checkin_habit?id=${Uri.encodeComponent(id)}';
@@ -334,12 +755,62 @@ class LocalNotifications {
         final id = actionId.substring('todo_complete_'.length);
         return 'duoyi://action/complete_todo?id=${Uri.encodeComponent(id)}';
       }
+      if (actionId.startsWith('habit_checkin_')) {
+        final id = actionId.substring('habit_checkin_'.length);
+        return 'duoyi://action/checkin_habit?id=${Uri.encodeComponent(id)}';
+      }
       if (actionId.startsWith('todo_snooze_')) {
-        final id = actionId.substring('todo_snooze_'.length);
+        final rest = actionId.substring('todo_snooze_'.length);
+        for (final minutes in const [10, 15, 60]) {
+          if (rest == '${minutes}m') {
+            final parsed = _parseSnoozeAction(actionId, resp.payload);
+            if (parsed != null) {
+              return _buildSnoozeDeepLink(
+                notificationId: resp.id,
+                delayMinutes: parsed.delayMinutes,
+                originalPayload: parsed.originalPayload,
+              );
+            }
+          }
+          final prefix = '${minutes}m_';
+          if (rest.startsWith(prefix)) {
+            final id = rest.substring(prefix.length);
+            final originalPayload =
+                resp.payload ?? 'duoyi://todo/${Uri.decodeComponent(id)}';
+            return _buildSnoozeDeepLink(
+              notificationId: resp.id,
+              delayMinutes: minutes,
+              originalPayload: originalPayload,
+            );
+          }
+        }
         final originalPayload =
-            resp.payload ?? 'duoyi://todo/${Uri.decodeComponent(id)}';
-        return 'duoyi://snooze/${resp.id ?? 0}'
+            resp.payload ?? 'duoyi://todo/${Uri.decodeComponent(rest)}';
+        final base =
+            'duoyi://snooze/${resp.id ?? 0}'
             '?delay=5&payload=${Uri.encodeComponent(originalPayload)}';
+        final cached = resp.id == null
+            ? null
+            : _notificationContentCache[resp.id!];
+        if (cached != null && cached.title.trim().isNotEmpty) {
+          return '$base&title=${Uri.encodeComponent(cached.title)}'
+              '&body=${Uri.encodeComponent(cached.body)}';
+        }
+        return base;
+      }
+      if (actionId.startsWith('habit_snooze_') ||
+          actionId == 'todo_snooze_10m' ||
+          actionId == 'habit_snooze_10m' ||
+          actionId == 'alarm_snooze_10m' ||
+          actionId == 'action_snooze') {
+        final parsed = _parseSnoozeAction(actionId, resp.payload);
+        if (parsed != null) {
+          return _buildSnoozeDeepLink(
+            notificationId: resp.id,
+            delayMinutes: parsed.delayMinutes,
+            originalPayload: parsed.originalPayload,
+          );
+        }
       }
     }
     return resp.payload;
@@ -355,6 +826,8 @@ class LocalNotifications {
 
   bool get _isAndroid {
     if (kIsWeb) return false;
+    final override = _androidOverride;
+    if (override != null) return override;
     try {
       return Platform.isAndroid;
     } catch (_) {
@@ -523,9 +996,89 @@ class LocalNotifications {
     throw const NotificationPermissionDeniedException();
   }
 
+  String? _androidGroupKeyFor(String? payload, {String? channelId}) {
+    final uri = payload == null ? null : Uri.tryParse(payload);
+    return switch (uri?.host) {
+      'todo' => 'com.duoyi.duoyi.GROUP_TODO',
+      'habit' => 'com.duoyi.duoyi.GROUP_HABIT',
+      'focus' || 'pomodoro' => 'com.duoyi.duoyi.GROUP_FOCUS',
+      'report' => 'com.duoyi.duoyi.GROUP_DIGEST',
+      'tab' when uri?.pathSegments.firstOrNull == 'today' =>
+        'com.duoyi.duoyi.GROUP_DIGEST',
+      'calendar' ||
+      'course' ||
+      'goal' ||
+      'anniversary' ||
+      'countdown' ||
+      'event' => 'com.duoyi.duoyi.GROUP_SCHEDULE',
+      _ =>
+        channelId == _alarmChannelId
+            ? 'com.duoyi.duoyi.GROUP_SCHEDULE'
+            : null,
+    };
+  }
+
+  String? _iosCategoryIdentifierFor(String? payload, {bool isAlarm = false}) {
+    if (isAlarm) return 'DUOYI_ALARM_REMINDER';
+    final uri = payload == null ? null : Uri.tryParse(payload);
+    return switch (uri?.host) {
+      'todo' => 'DUOYI_TODO_REMINDER',
+      'habit' => 'DUOYI_HABIT_REMINDER',
+      _ => null,
+    };
+  }
+
+  List<String> _actionsToSignFor(String? payload, {String? channelId}) {
+    final ids = <String>{
+      ...?_todoActionsFor(payload)?.map((action) => action.id),
+    };
+    if (payload != null) {
+      if (payload.startsWith('duoyi://todo/')) {
+        final rawId = payload.substring('duoyi://todo/'.length).split('?').first;
+        final id = Uri.encodeComponent(rawId);
+        ids.addAll(_iosTodoActions);
+        ids.add('action_complete');
+        ids.add('action_snooze');
+        if (id.isNotEmpty) {
+          ids.addAll(<String>[
+            'todo_complete_$id',
+            'todo_snooze_$id',
+            'todo_snooze_10m_$id',
+            'todo_snooze_15m_$id',
+            'todo_snooze_60m_$id',
+          ]);
+        }
+      } else if (payload.startsWith('duoyi://habit/')) {
+        final rawId = payload
+            .substring('duoyi://habit/'.length)
+            .split('?')
+            .first;
+        final id = Uri.encodeComponent(rawId);
+        ids.addAll(_iosHabitActions);
+        ids.add('action_habit_checkin');
+        ids.add('action_snooze');
+        if (id.isNotEmpty) {
+          ids.addAll(<String>[
+            'habit_checkin_$id',
+            'habit_snooze_10m_$id',
+            'habit_snooze_15m_$id',
+            'habit_snooze_60m_$id',
+          ]);
+        }
+      }
+    }
+    if (channelId == _alarmChannelId) {
+      ids.addAll(_iosAlarmActions);
+    }
+    return ids.toList(growable: false);
+  }
+
   NotificationDetails _details({
     String channelId = _defaultChannelId,
     List<AndroidNotificationAction>? androidActions,
+    String? groupKey,
+    String? iosCategoryIdentifier,
+    bool silent = false,
   }) {
     final isAlarm = channelId == _alarmChannelId;
     return NotificationDetails(
@@ -537,33 +1090,41 @@ class LocalNotifications {
         channelDescription: isAlarm
             ? I18n.tr('notification.channel.alarm.description')
             : I18n.tr('notification.channel.general.description'),
-        importance: isAlarm ? Importance.max : Importance.high,
-        priority: isAlarm ? Priority.max : Priority.high,
+        importance: isAlarm
+            ? Importance.max
+            : (silent ? Importance.low : Importance.high),
+        priority: isAlarm
+            ? Priority.max
+            : (silent ? Priority.low : Priority.high),
         category: isAlarm
             ? AndroidNotificationCategory.alarm
             : AndroidNotificationCategory.reminder,
-        playSound: true,
-        sound: isAlarm ? _alarmSound : _defaultSound,
-        enableVibration: true,
+        playSound: !silent,
+        sound: silent ? null : (isAlarm ? _alarmSound : _defaultSound),
+        enableVibration: !silent,
+        silent: silent,
         audioAttributesUsage: isAlarm
             ? AudioAttributesUsage.alarm
             : AudioAttributesUsage.notificationRingtone,
         visibility: NotificationVisibility.public,
         icon: '@drawable/ic_stat_duoyi',
         ticker: I18n.tr('notification.ticker.reminder'),
+        groupKey: groupKey,
         autoCancel: true,
         ongoing: false,
         actions: androidActions,
       ),
-      iOS: const DarwinNotificationDetails(
+      iOS: DarwinNotificationDetails(
         presentAlert: true,
-        presentSound: true,
+        presentSound: !silent,
         presentBadge: true,
+        categoryIdentifier: iosCategoryIdentifier,
       ),
-      macOS: const DarwinNotificationDetails(
+      macOS: DarwinNotificationDetails(
         presentAlert: true,
-        presentSound: true,
+        presentSound: !silent,
         presentBadge: true,
+        categoryIdentifier: iosCategoryIdentifier,
       ),
       linux: const LinuxNotificationDetails(),
     );
@@ -632,27 +1193,67 @@ class LocalNotifications {
     );
   }
 
-  /// 为待办提醒构建 "完成 / 稍后" 两个 action 按钮。
+  /// 为待办和习惯推送构建通知 action 按钮（支持后台静默完成/打卡与多档稍后提醒）。
   ///
-  /// payload 形如 `duoyi://todo/{id}`。每个 action 用 input ID 绑定深链方案。
+  /// payload 形如 `duoyi://todo/{id}` 或 `duoyi://habit/{id}`。
   List<AndroidNotificationAction>? _todoActionsFor(String? payload) {
     if (payload == null) return null;
+    if (payload.startsWith('duoyi://habit/')) {
+      final id = Uri.encodeComponent(
+        payload.substring('duoyi://habit/'.length).split('?').first,
+      );
+      if (id.isEmpty) return null;
+      final isEn = I18n.current == AppLocale.en;
+      return [
+        AndroidNotificationAction(
+          'habit_checkin_$id',
+          isEn ? 'Check in' : '完成打卡',
+          showsUserInterface: false,
+          cancelNotification: true,
+        ),
+        AndroidNotificationAction(
+          'habit_snooze_10m_$id',
+          isEn ? 'In 10 min' : '10 分钟后',
+          showsUserInterface: false,
+          cancelNotification: true,
+        ),
+        AndroidNotificationAction(
+          'habit_snooze_60m_$id',
+          isEn ? 'In 1 hour' : '1 小时后',
+          showsUserInterface: false,
+          cancelNotification: true,
+        ),
+      ];
+    }
     if (!payload.startsWith('duoyi://todo/')) return null;
     final id = Uri.encodeComponent(
       payload.substring('duoyi://todo/'.length).split('?').first,
     );
     if (id.isEmpty) return null;
+    final isEn = I18n.current == AppLocale.en;
     return [
       AndroidNotificationAction(
         'todo_complete_$id',
         I18n.tr('action.complete'),
-        showsUserInterface: true,
+        showsUserInterface: false,
         cancelNotification: true,
       ),
       AndroidNotificationAction(
         'todo_snooze_$id',
         I18n.tr('reminder.snooze_5min'),
-        showsUserInterface: true,
+        showsUserInterface: false,
+        cancelNotification: true,
+      ),
+      AndroidNotificationAction(
+        'todo_snooze_10m_$id',
+        isEn ? 'In 10 min' : '10 分钟后',
+        showsUserInterface: false,
+        cancelNotification: true,
+      ),
+      AndroidNotificationAction(
+        'todo_snooze_60m_$id',
+        isEn ? 'In 1 hour' : '1 小时后',
+        showsUserInterface: false,
         cancelNotification: true,
       ),
     ];
@@ -760,7 +1361,9 @@ class LocalNotifications {
     required String body,
     String? payload,
     String? channelId,
+    bool silent = false,
   }) async {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     if (!_initialized) await init();
     await _ensureAndroidFallbackChannelsForOperation('show');
     await _ensureDeliveryPermission('show');
@@ -784,7 +1387,30 @@ class LocalNotifications {
         _details(
           channelId: effectiveChannelId,
           androidActions: _todoActionsFor(payload),
+          groupKey: _androidGroupKeyFor(
+            payload,
+            channelId: effectiveChannelId,
+          ),
+          iosCategoryIdentifier: _iosCategoryIdentifierFor(
+            payload,
+            isAlarm: effectiveChannelId == _alarmChannelId,
+          ),
+          silent: silent,
         ),
+        payload: await NotificationActionEnvelope.signPayload(
+          id,
+          payload,
+          actions: _actionsToSignFor(
+            payload,
+            channelId: effectiveChannelId,
+          ),
+          expectedAccountGeneration: generation,
+        ),
+      );
+      await recordScheduledMetadata(
+        id: id,
+        title: title,
+        body: body,
         payload: payload,
       );
     } catch (_) {
@@ -840,6 +1466,7 @@ class LocalNotifications {
     bool requestIfNeeded = false,
     bool force = false,
   }) async {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     if (!_isAndroid) return;
     if (!_initialized) await init();
     await _ensureDeliveryPermission(
@@ -859,9 +1486,14 @@ class LocalNotifications {
         body: effectiveBody,
         enableQuickActions: enableQuickActions,
       ),
-      payload: enableQuickActions
-          ? 'duoyi://action/quick_todo'
-          : 'duoyi://tab/todo',
+      payload: await NotificationActionEnvelope.signPayload(
+        quickAddNotificationId,
+        enableQuickActions ? 'duoyi://action/quick_todo' : 'duoyi://tab/todo',
+        expectedAccountGeneration: generation,
+        actions: enableQuickActions
+            ? const ['quick_todo', 'quick_todo_open', 'quick_focus']
+            : const [],
+      ),
     );
     _lastQuickAddOngoingSignature = signature;
   }
@@ -880,7 +1512,9 @@ class LocalNotifications {
     String? payload,
     String? channelId,
     bool requestIfNeeded = false,
+    bool silent = false,
   }) async {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     if (!_initialized) await init();
     if (!when.isAfter(DateTime.now())) {
       throw StateError('提醒时间已过去，未注册到系统通知');
@@ -893,9 +1527,16 @@ class LocalNotifications {
     await _cancelNativeRingtoneQueue(id, operation: 'scheduleOnce handoff');
     await _cancelPluginNotificationOnly(id, operation: 'scheduleOnce replace');
     final scheduledAt = tz.TZDateTime.from(when, tz.local);
+    final effectiveChannelId = channelId ?? _defaultChannelId;
     final details = _details(
-      channelId: channelId ?? _defaultChannelId,
+      channelId: effectiveChannelId,
       androidActions: _todoActionsFor(payload),
+      groupKey: _androidGroupKeyFor(payload, channelId: effectiveChannelId),
+      iosCategoryIdentifier: _iosCategoryIdentifierFor(
+        payload,
+        isAlarm: effectiveChannelId == _alarmChannelId,
+      ),
+      silent: silent,
     );
     try {
       await _plugin.zonedSchedule(
@@ -907,7 +1548,12 @@ class LocalNotifications {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        payload: payload,
+        payload: await NotificationActionEnvelope.signPayload(
+          id,
+          payload,
+          actions: _actionsToSignFor(payload, channelId: effectiveChannelId),
+          expectedAccountGeneration: generation,
+        ),
       );
     } on PlatformException catch (e) {
       if (!_isExactAlarmDenied(e)) rethrow;
@@ -920,9 +1566,20 @@ class LocalNotifications {
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        payload: payload,
+        payload: await NotificationActionEnvelope.signPayload(
+          id,
+          payload,
+          actions: _actionsToSignFor(payload, channelId: effectiveChannelId),
+          expectedAccountGeneration: generation,
+        ),
       );
     }
+    await recordScheduledMetadata(
+      id: id,
+      title: title,
+      body: body,
+      payload: payload,
+    );
     await _logPendingVerification(<int>{id}, operation: 'scheduleOnce');
   }
 
@@ -938,7 +1595,9 @@ class LocalNotifications {
     String? channelId,
     List<int>? weekdays,
     bool requestIfNeeded = false,
+    bool silent = false,
   }) async {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     if (!_initialized) await init();
     await _ensureAndroidFallbackChannelsForOperation('scheduleDaily');
     await _ensureDeliveryPermission(
@@ -947,9 +1606,16 @@ class LocalNotifications {
     );
     await _cancelNativeRingtoneQueue(id, operation: 'scheduleDaily handoff');
     await _cancelPluginNotificationOnly(id, operation: 'scheduleDaily replace');
+    final effectiveChannelId = channelId ?? _defaultChannelId;
     final details = _details(
-      channelId: channelId ?? _defaultChannelId,
+      channelId: effectiveChannelId,
       androidActions: _todoActionsFor(payload),
+      groupKey: _androidGroupKeyFor(payload, channelId: effectiveChannelId),
+      iosCategoryIdentifier: _iosCategoryIdentifierFor(
+        payload,
+        isAlarm: effectiveChannelId == _alarmChannelId,
+      ),
+      silent: silent,
     );
 
     final expectedIds = <int>{};
@@ -958,12 +1624,20 @@ class LocalNotifications {
         // 每天
         expectedIds.add(id);
         await _scheduleRepeating(
+          generation: generation,
           id: id,
           title: title,
           body: body,
           when: _nextInstanceOfTime(hour, minute),
           details: details,
           components: DateTimeComponents.time,
+          payload: payload,
+          channelId: effectiveChannelId,
+        );
+        await recordScheduledMetadata(
+          id: id,
+          title: title,
+          body: body,
           payload: payload,
         );
       } else {
@@ -973,12 +1647,20 @@ class LocalNotifications {
           final subId = _subId(id, w);
           expectedIds.add(subId);
           await _scheduleRepeating(
+            generation: generation,
             id: subId,
             title: title,
             body: body,
             when: _nextInstanceOfWeekdayTime(w, hour, minute),
             details: details,
             components: DateTimeComponents.dayOfWeekAndTime,
+            payload: payload,
+            channelId: effectiveChannelId,
+          );
+          await recordScheduledMetadata(
+            id: subId,
+            title: title,
+            body: body,
             payload: payload,
           );
         }
@@ -991,6 +1673,7 @@ class LocalNotifications {
   }
 
   Future<void> _scheduleRepeating({
+    required int generation,
     required int id,
     required String title,
     required String body,
@@ -998,7 +1681,9 @@ class LocalNotifications {
     required NotificationDetails details,
     required DateTimeComponents components,
     String? payload,
+    String? channelId,
   }) async {
+    final effectiveChannelId = channelId ?? _defaultChannelId;
     try {
       await _plugin.zonedSchedule(
         id,
@@ -1010,7 +1695,12 @@ class LocalNotifications {
         matchDateTimeComponents: components,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        payload: payload,
+        payload: await NotificationActionEnvelope.signPayload(
+          id,
+          payload,
+          actions: _actionsToSignFor(payload, channelId: effectiveChannelId),
+          expectedAccountGeneration: generation,
+        ),
       );
     } on PlatformException catch (e) {
       if (!_isExactAlarmDenied(e)) rethrow;
@@ -1024,7 +1714,12 @@ class LocalNotifications {
         matchDateTimeComponents: components,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        payload: payload,
+        payload: await NotificationActionEnvelope.signPayload(
+          id,
+          payload,
+          actions: _actionsToSignFor(payload, channelId: effectiveChannelId),
+          expectedAccountGeneration: generation,
+        ),
       );
     }
   }
@@ -1161,13 +1856,21 @@ class LocalNotifications {
   }
 
   Future<void> cancelAll() async {
-    if (!_initialized) await init();
+    Object? firstError;
+    StackTrace? firstStack;
+    try {
+      if (!_initialized) await init();
+    } catch (e, st) {
+      firstError = e;
+      firstStack = st;
+      debugPrint(
+        '[LocalNotifications] cancelAll initialization failed: $e\n$st',
+      );
+    }
     _lastQuickAddOngoingSignature = null;
     _recentVisibleNotificationIds.clear();
     _recentVisibleNotificationSignatures.clear();
     _recentVisibleNotificationContentSignatures.clear();
-    Object? firstError;
-    StackTrace? firstStack;
     try {
       await _plugin.cancelAll();
     } catch (e, st) {
@@ -1177,7 +1880,7 @@ class LocalNotifications {
     }
     if (_isAndroid) {
       try {
-        await NativeReminderRingtone.cancelAll();
+        await NativeReminderRingtone.cancelAllOrThrow();
       } catch (e, st) {
         firstError ??= e;
         firstStack ??= st;
@@ -1206,8 +1909,13 @@ class LocalNotifications {
 
   String? takeLaunchPayload() {
     final payload = _launchPayload;
+    final generation = _launchPayloadGeneration;
     _launchPayload = null;
-    return payload;
+    _launchPayloadGeneration = null;
+    return generation != null &&
+            AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)
+        ? payload
+        : null;
   }
 
   Future<Set<String>?> notificationChannelIds() async {

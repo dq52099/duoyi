@@ -66,8 +66,12 @@ Finder _mineListFinder() => find.byWidgetPredicate(
       widget is Scrollable && widget.restorationId == 'mine_screen_list',
 );
 
-Finder _profileField(String key) =>
-    find.widgetWithText(TextField, I18n.tr(key));
+Finder _profileField(String key) {
+  if (key == 'profile.email.local_display' || key == 'profile_local_email_field') {
+    return find.byKey(const ValueKey('profile_local_email_field'));
+  }
+  return find.widgetWithText(TextField, I18n.tr(key));
+}
 
 Finder _textFieldWithLabel(String label) => find.byWidgetPredicate(
   (widget) => widget is TextField && widget.decoration?.labelText == label,

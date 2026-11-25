@@ -17,6 +17,7 @@ class BrandBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.watch<ThemeProvider>().brand;
+    final isLiquidGlass = brand.style == BrandStyle.liquidGlass;
     return LayoutBuilder(
       builder: (context, constraints) {
         final media = MediaQuery.sizeOf(context);
@@ -32,34 +33,123 @@ class BrandBackground extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            RepaintBoundary(
-              child: brand.backgroundAsset != null
-                  ? Image.asset(
-                      brand.backgroundAsset!,
-                      fit: BoxFit.cover,
-                      cacheWidth: cacheWidth,
-                      cacheHeight: cacheHeight,
-                      filterQuality: FilterQuality.low,
-                      gaplessPlayback: true,
-                      errorBuilder: (context, error, stack) =>
-                          Container(color: brand.backgroundOverlay),
-                    )
-                  : Container(color: brand.backgroundOverlay),
-            ),
-            RepaintBoundary(
-              child: Container(
-                color: brand.backgroundOverlay.withValues(
-                  alpha: (overlayOpacity ?? brand.backgroundOverlayOpacity)
-                      .clamp(0.0, 1.0),
+            if (isLiquidGlass) ...[
+              const IgnorePointer(
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    size: Size.infinite,
+                    isComplex: true,
+                    willChange: false,
+                    painter: _LiquidGlassBackdropPainter(),
+                  ),
                 ),
               ),
-            ),
+              if (overlayOpacity != null)
+                IgnorePointer(
+                  child: RepaintBoundary(
+                    child: Container(
+                      color: brand.backgroundOverlay.withValues(
+                        alpha: overlayOpacity!.clamp(0.0, 1.0),
+                      ),
+                    ),
+                  ),
+                ),
+            ] else ...[
+              IgnorePointer(
+                child: RepaintBoundary(
+                  child: brand.backgroundAsset != null
+                      ? Image.asset(
+                          brand.backgroundAsset!,
+                          fit: BoxFit.cover,
+                          cacheWidth: cacheWidth,
+                          cacheHeight: cacheHeight,
+                          filterQuality: FilterQuality.low,
+                          gaplessPlayback: true,
+                          errorBuilder: (context, error, stack) =>
+                              Container(color: brand.backgroundOverlay),
+                        )
+                      : Container(color: brand.backgroundOverlay),
+                ),
+              ),
+              IgnorePointer(
+                child: RepaintBoundary(
+                  child: Container(
+                    color: brand.backgroundOverlay.withValues(
+                      alpha: (overlayOpacity ?? brand.backgroundOverlayOpacity)
+                          .clamp(0.0, 1.0),
+                    ),
+                  ),
+                ),
+              ),
+            ],
             child,
           ],
         );
       },
     );
   }
+}
+
+/// Static, low-frequency, low-saturation code-native ambient gradient/glow for
+/// the [BrandStyle.liquidGlass] theme. Provides subtle contrast and depth
+/// behind translucent white cards and highlights, and feeds non-uniform texture
+/// into the bottom navigation bar's [BackdropFilter].
+class _LiquidGlassBackdropPainter extends CustomPainter {
+  const _LiquidGlassBackdropPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+
+    // 1. Subtle, low-frequency base gradient across the viewport
+    final basePaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFFE2ECF8),
+          Color(0xFFE9EEF6),
+          Color(0xFFDFEAF7),
+          Color(0xFFE7EFF8),
+        ],
+        stops: [0.0, 0.38, 0.70, 1.0],
+      ).createShader(rect);
+    canvas.drawRect(rect, basePaint);
+
+    // 2. Low-frequency, low-saturation ambient sky glow (top-right)
+    final glow1Center = Offset(size.width * 0.85, size.height * 0.12);
+    final glow1Radius = size.shortestSide * 0.65;
+    final glow1Paint = Paint()
+      ..shader = RadialGradient(
+        colors: const [Color(0x7ACCDEF8), Color(0x38D6E6F9), Color(0x00E9EEF6)],
+        stops: const [0.0, 0.50, 1.0],
+      ).createShader(Rect.fromCircle(center: glow1Center, radius: glow1Radius));
+    canvas.drawCircle(glow1Center, glow1Radius, glow1Paint);
+
+    // 3. Subtle mid-left cyan mist glow
+    final glow2Center = Offset(size.width * 0.10, size.height * 0.45);
+    final glow2Radius = size.shortestSide * 0.55;
+    final glow2Paint = Paint()
+      ..shader = RadialGradient(
+        colors: const [Color(0x66D2EDF7), Color(0x28DCF1F8), Color(0x00E9EEF6)],
+        stops: const [0.0, 0.45, 1.0],
+      ).createShader(Rect.fromCircle(center: glow2Center, radius: glow2Radius));
+    canvas.drawCircle(glow2Center, glow2Radius, glow2Paint);
+
+    // 4. Soft bottom periwinkle glow for bottom navigation and lower cards
+    final glow3Center = Offset(size.width * 0.70, size.height * 0.90);
+    final glow3Radius = size.shortestSide * 0.60;
+    final glow3Paint = Paint()
+      ..shader = RadialGradient(
+        colors: const [Color(0x80CCDFF5), Color(0x3CD7E5F8), Color(0x00E9EEF6)],
+        stops: const [0.0, 0.48, 1.0],
+      ).createShader(Rect.fromCircle(center: glow3Center, radius: glow3Radius));
+    canvas.drawCircle(glow3Center, glow3Radius, glow3Paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LiquidGlassBackdropPainter oldDelegate) =>
+      false;
 }
 
 /// Marker interface indicating that a route manages its own copy refresh on

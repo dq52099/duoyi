@@ -10,6 +10,7 @@ class HabitTemplate {
   final int targetCount;
   final String unit;
   final String unitEn;
+  final String? generatedUnitKey;
   final int? flexTarget;
   final HabitFlexPeriod? flexPeriod;
   final int colorValue;
@@ -24,6 +25,7 @@ class HabitTemplate {
     required this.targetCount,
     this.unit = '次',
     this.unitEn = 'times',
+    this.generatedUnitKey,
     this.flexTarget,
     this.flexPeriod,
     required this.colorValue,
@@ -67,6 +69,7 @@ class HabitTemplates {
       targetCount: 8,
       unit: '杯',
       unitEn: 'cups',
+      generatedUnitKey: 'cup',
       colorValue: 0xFF2196F3,
       icon: Icons.local_drink,
       category: '身体健康',

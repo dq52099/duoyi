@@ -35,7 +35,7 @@ void main() {
   });
 
   test(
-    'goal closure validator passes only when all gates and device evidence pass',
+    'goal closure validator rejects missing expanded gates despite passing legacy gates and devices',
     () async {
       _writeReport(reportDir, eighthStatus: 'passed');
       _writeAndroidEvidence(androidDir);
@@ -50,8 +50,22 @@ void main() {
         matrixFile,
       );
 
-      expect(result.exitCode, 0, reason: _combinedOutput(result));
-      expect(result.stdout, contains('Goal closure validation passed.'));
+      expect(result.exitCode, isNot(0), reason: _combinedOutput(result));
+      expect(result.stdout, contains('alignment_report: passed'));
+      expect(result.stdout, contains('alignment_report_freshness: passed'));
+      expect(result.stdout, contains('goal_requirement_matrix: passed'));
+      expect(result.stdout, contains('android_device_evidence: passed'));
+      expect(result.stdout, contains('ios_device_evidence: passed'));
+      expect(result.stdout, contains('goal_requirement_status: passed'));
+      expect(
+        result.stdout,
+        contains('goal_requirement_status_validation: passed'),
+      );
+      expect(result.stdout, contains('all_requirements_closed: failed(1)'));
+      expect(
+        _combinedOutput(result),
+        contains('Goal closure validation failed'),
+      );
       expect(File('${goalReportDir.path}/summary.tsv').existsSync(), isTrue);
       expect(
         File('${goalReportDir.path}/alignment_report.log').existsSync(),
@@ -84,10 +98,7 @@ void main() {
         ).readAsStringSync(),
         contains('Goal requirement status validation passed.'),
       );
-      expect(
-        File('${statusDir.path}/status.tsv').readAsStringSync(),
-        contains('REQ-DEVICE\tclosed\tall mapped gates passed'),
-      );
+      _expectLegacyGatesLeaveExpandedRequirementsOpen(statusDir);
     },
     timeout: _closureValidatorTimeout,
   );
@@ -120,6 +131,305 @@ void main() {
           '${goalReportDir.path}/goal_requirement_matrix.log',
         ).readAsStringSync(),
         contains('missing file:'),
+      );
+    },
+    timeout: _closureValidatorTimeout,
+  );
+
+  test(
+    'twelve passing synthetic gates close all fourteen fixture requirements',
+    () async {
+      _writeReport(
+        reportDir,
+        eighthStatus: 'passed',
+        extraGroups: _expandedGates.keys.toList(),
+      );
+      _writeAndroidEvidence(androidDir);
+      _writeIosEvidence(iosDir);
+      final result = await _runValidator(
+        reportDir,
+        androidDir,
+        iosDir,
+        goalReportDir,
+        statusDir,
+        matrixFile,
+      );
+      expect(result.exitCode, 0, reason: _combinedOutput(result));
+      expect(result.stdout, contains('all_requirements_closed: passed'));
+      final rows = File(
+        '${statusDir.path}/status.tsv',
+      ).readAsLinesSync().skip(1);
+      expect(rows, hasLength(14));
+      expect(rows.every((row) => row.split('\t')[1] == 'closed'), isTrue);
+    },
+    timeout: _closureValidatorTimeout,
+  );
+
+  for (final scenario in [
+    (
+      name: 'unchanged source survives append',
+      source: -5,
+      laterLogs: false,
+      olderSummary: false,
+      missingLog: false,
+      runtime: false,
+      olderOptional: false,
+      fresh: true,
+    ),
+    (
+      name: 'append cannot renew stale legacy evidence',
+      source: 10,
+      laterLogs: false,
+      olderSummary: false,
+      missingLog: false,
+      runtime: false,
+      olderOptional: false,
+      fresh: false,
+    ),
+    (
+      name: 'source change between legacy groups stays stale',
+      source: 10,
+      laterLogs: true,
+      olderSummary: false,
+      missingLog: false,
+      runtime: false,
+      olderOptional: false,
+      fresh: false,
+    ),
+    (
+      name: 'older summary still bounds freshness',
+      source: -5,
+      laterLogs: false,
+      olderSummary: true,
+      missingLog: false,
+      runtime: false,
+      olderOptional: false,
+      fresh: false,
+    ),
+    (
+      name: 'missing legacy log is unverifiable',
+      source: -5,
+      laterLogs: false,
+      olderSummary: false,
+      missingLog: true,
+      runtime: false,
+      olderOptional: false,
+      fresh: false,
+    ),
+    (
+      name: 'runtime churn survives append',
+      source: 10,
+      laterLogs: false,
+      olderSummary: false,
+      missingLog: false,
+      runtime: true,
+      olderOptional: false,
+      fresh: true,
+    ),
+    (
+      name: 'optional logs do not move the legacy bound',
+      source: -5,
+      laterLogs: false,
+      olderSummary: false,
+      missingLog: false,
+      runtime: false,
+      olderOptional: true,
+      fresh: true,
+    ),
+  ]) {
+    test(
+      'legacy freshness bound: ${scenario.name}',
+      () async {
+        _writeReport(reportDir, eighthStatus: 'passed');
+        _writeAndroidEvidence(androidDir);
+        _writeIosEvidence(iosDir);
+        final sourceRoot = _emptySourceRoot(reportDir);
+        final base = DateTime.now().subtract(const Duration(minutes: 5));
+        DateTime timestamp(int seconds) => base.add(Duration(seconds: seconds));
+        for (final name in ['pubspec.yaml', 'pubspec.lock']) {
+          File('${sourceRoot.path}/$name').setLastModifiedSync(timestamp(-100));
+        }
+        final summary = File('${reportDir.path}/summary.tsv');
+        final legacyLogs = summary
+            .readAsLinesSync()
+            .skip(1)
+            .map(
+              (line) => File(
+                '${reportDir.path}/${line.split('\t').first.hashCode}.log',
+              ),
+            )
+            .toList();
+        for (var index = 0; index < legacyLogs.length; index++) {
+          legacyLogs[index].setLastModifiedSync(
+            timestamp(scenario.laterLogs && index > 0 ? 20 : 0),
+          );
+        }
+        final originalLogTimes = legacyLogs
+            .map((log) => log.lastModifiedSync())
+            .toList();
+        // Append only the expanded results; the eight original logs stay intact.
+        for (final group in _expandedGates.keys) {
+          final log = File('${reportDir.path}/${group.hashCode}.log')
+            ..writeAsStringSync('synthetic expanded result for $group');
+          log.setLastModifiedSync(timestamp(scenario.olderOptional ? -20 : 40));
+          summary.writeAsStringSync(
+            '$group\tpassed\t1\t${bashPath(log.path)}\n',
+            mode: FileMode.append,
+          );
+          File('${reportDir.path}/summary.md').writeAsStringSync(
+            '| $group | passed | 1s | `${bashPath(log.path)}` |\n',
+            mode: FileMode.append,
+          );
+        }
+        summary.setLastModifiedSync(
+          timestamp(scenario.olderSummary ? -10 : 40),
+        );
+        expect(
+          legacyLogs.map((log) => log.lastModifiedSync()),
+          originalLogTimes,
+        );
+        final path = scenario.runtime
+            ? 'backend/uploads/new.png'
+            : 'lib/changed.dart';
+        final changed = File('${sourceRoot.path}/$path');
+        changed.parent.createSync(recursive: true);
+        changed.writeAsStringSync('controlled source or runtime mutation\n');
+        changed.setLastModifiedSync(timestamp(scenario.source));
+        if (scenario.missingLog) legacyLogs.first.deleteSync();
+        final result = await _runValidator(
+          reportDir,
+          androidDir,
+          iosDir,
+          goalReportDir,
+          statusDir,
+          matrixFile,
+          sourceRoot: sourceRoot.path,
+        );
+        expect(
+          result.exitCode,
+          scenario.fresh ? 0 : isNot(0),
+          reason: _combinedOutput(result),
+        );
+        expect(
+          result.stdout,
+          contains(
+            scenario.fresh
+                ? 'alignment_report_freshness: passed'
+                : 'alignment_report_freshness: failed(1)',
+          ),
+        );
+        if (!scenario.fresh) {
+          final diagnostic = File(
+            '${goalReportDir.path}/alignment_report_freshness.log',
+          ).readAsStringSync();
+          expect(
+            diagnostic,
+            contains(
+              scenario.missingLog
+                  ? 'freshness could not be verified'
+                  : 'alignment regression report is stale',
+            ),
+          );
+        }
+      },
+      timeout: _closureValidatorTimeout,
+    );
+  }
+
+  for (final entry in _expandedGates.entries) {
+    for (final missing in [true, false]) {
+      test(
+        'expanded gate ${entry.key} ${missing ? 'missing' : 'failed'} blocks closure',
+        () async {
+          _writeReport(
+            reportDir,
+            eighthStatus: 'passed',
+            extraGroups: _expandedGates.keys
+                .where((gate) => !missing || gate != entry.key)
+                .toList(),
+            gateStatuses: missing ? const {} : {entry.key: 'failed(7)'},
+          );
+          _writeAndroidEvidence(androidDir);
+          _writeIosEvidence(iosDir);
+          final result = await _runValidator(
+            reportDir,
+            androidDir,
+            iosDir,
+            goalReportDir,
+            statusDir,
+            matrixFile,
+          );
+          expect(result.exitCode, isNot(0), reason: _combinedOutput(result));
+          expect(result.stdout, contains('alignment_report: passed'));
+          expect(result.stdout, contains('all_requirements_closed: failed(1)'));
+          final row = File('${statusDir.path}/status.tsv')
+              .readAsLinesSync()
+              .map((line) => line.split('\t'))
+              .singleWhere((fields) => fields.first == entry.value);
+          expect(row[1], missing ? 'open(gate_missing)' : 'open(gate_failed)');
+        },
+        timeout: _closureValidatorTimeout,
+      );
+    }
+  }
+
+  for (final gate in ['6/8 Flutter analyzer', '7/8 debug APK build']) {
+    test(
+      'all expanded passes cannot close a failed legacy gate $gate',
+      () async {
+        _writeReport(
+          reportDir,
+          eighthStatus: 'passed',
+          extraGroups: _expandedGates.keys.toList(),
+          gateStatuses: {gate: 'failed(7)'},
+        );
+        _writeAndroidEvidence(androidDir);
+        _writeIosEvidence(iosDir);
+        final result = await _runValidator(
+          reportDir,
+          androidDir,
+          iosDir,
+          goalReportDir,
+          statusDir,
+          matrixFile,
+        );
+        expect(result.exitCode, isNot(0));
+        expect(result.stdout, contains('alignment_report: passed'));
+        expect(_combinedOutput(result), contains('failed(7)'));
+        expect(result.stdout, contains('alignment_gates_passed: failed(1)'));
+      },
+      timeout: _closureValidatorTimeout,
+    );
+  }
+
+  test(
+    'twelve passing gates do not mask a failed source scan',
+    () async {
+      _writeReport(
+        reportDir,
+        eighthStatus: 'passed',
+        extraGroups: _expandedGates.keys.toList(),
+      );
+      _writeAndroidEvidence(androidDir);
+      _writeIosEvidence(iosDir);
+      final sourceRoot = _emptySourceRoot(reportDir);
+      Directory('${sourceRoot.path}/lib').deleteSync();
+      final result = await _runValidator(
+        reportDir,
+        androidDir,
+        iosDir,
+        goalReportDir,
+        statusDir,
+        matrixFile,
+        sourceRoot: sourceRoot.path,
+      );
+      expect(result.exitCode, isNot(0));
+      expect(result.stdout, contains('alignment_report_freshness: failed(1)'));
+      expect(
+        File(
+          '${goalReportDir.path}/alignment_report_freshness.log',
+        ).readAsStringSync(),
+        contains('source scan failed'),
       );
     },
     timeout: _closureValidatorTimeout,
@@ -165,10 +475,15 @@ void main() {
       _writeReport(reportDir, eighthStatus: 'passed');
       _writeAndroidEvidence(androidDir);
       _writeIosEvidence(iosDir);
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      final sourceFile = File('${tempDir.path}/src/lib/changed.dart');
+      final sourceRoot = _emptySourceRoot(reportDir);
+      final sourceFile = File('${sourceRoot.path}/lib/changed.dart');
       sourceFile.parent.createSync(recursive: true);
       sourceFile.writeAsStringSync('// changed after alignment report\n');
+      sourceFile.setLastModifiedSync(
+        File(
+          '${reportDir.path}/summary.tsv',
+        ).lastModifiedSync().add(const Duration(seconds: 10)),
+      );
 
       final result = await _runValidator(
         reportDir,
@@ -177,7 +492,7 @@ void main() {
         goalReportDir,
         statusDir,
         matrixFile,
-        sourceRoot: sourceFile.parent.parent.path,
+        sourceRoot: sourceRoot.path,
       );
 
       expect(result.exitCode, isNot(0));
@@ -221,11 +536,267 @@ void main() {
         sourceRoot: sourceRoot.path,
       );
 
-      expect(result.exitCode, 0, reason: _combinedOutput(result));
+      expect(result.exitCode, isNot(0), reason: _combinedOutput(result));
       expect(result.stdout, contains('alignment_report_freshness: passed'));
+      expect(result.stdout, contains('all_requirements_closed: failed(1)'));
+      _expectLegacyGatesLeaveExpandedRequirementsOpen(statusDir);
     },
     timeout: _closureValidatorTimeout,
   );
+  test(
+    'source scan failure cannot pass alignment freshness',
+    () async {
+      _writeReport(reportDir, eighthStatus: 'passed');
+      _writeAndroidEvidence(androidDir);
+      _writeIosEvidence(iosDir);
+      final sourceRoot = _emptySourceRoot(reportDir);
+      Directory('${sourceRoot.path}/lib').deleteSync();
+      final result = await _runValidator(
+        reportDir,
+        androidDir,
+        iosDir,
+        goalReportDir,
+        statusDir,
+        matrixFile,
+        sourceRoot: sourceRoot.path,
+      );
+      expect(result.exitCode, isNot(0));
+      expect(result.stdout, contains('alignment_report_freshness: failed(1)'));
+      expect(
+        File(
+          '${goalReportDir.path}/alignment_report_freshness.log',
+        ).readAsStringSync(),
+        contains('source scan failed'),
+      );
+    },
+    timeout: _closureValidatorTimeout,
+  );
+
+  const runtimeOnlyPaths = <String>[
+    'backend/backups',
+    'backend/uploads',
+    'backend/backups/current.zip',
+    'backend/backups/nested/2026-11-07/duoyi.db-wal',
+    'backend/backups/nested/backup script.py',
+    'backend/uploads/avatar.png',
+    'backend/uploads/nested/user notes/file.txt',
+    'backend/uploads/nested/main.py',
+    'backend/duoyi.db',
+    'backend/duoyi.db-wal',
+    'backend/duoyi.db-shm',
+    'backend/duoyi.db-journal',
+    'backend/fingertip_time.db',
+    'backend/fingertip_time.db-wal',
+    'backend/fingertip_time.db-shm',
+    'backend/fingertip_time.db-journal',
+  ];
+  const sourcePaths = <String>[
+    'backend/main.py',
+    'backend/test_workspaces.py',
+    'backend/tests/test_schema.py',
+    'backend/schema.sql',
+    'backend/migrations/001.sql',
+    'backend/requirements.txt',
+    'backend/pyproject.toml',
+    'backend/config.json',
+    'backend/.env.example',
+    'backend/other.db',
+    'backend/schema.db',
+    'backend/duoyi.db.bak',
+    'backend/duoyi.db-wal.extra',
+    'backend/fingertip_time.db-journal.extra',
+    'backend/duoyi.db-extra',
+    'backend/fingertip_time.db-extra',
+    'backend/nested/duoyi.db',
+    'backend/nested/fingertip_time.db-wal',
+    'backend/tests/fixtures/duoyi.db',
+    'backend/tests/fixtures/fingertip_time.db-journal',
+    'backend/backups-old/current.zip',
+    'backend/uploads-old/avatar.png',
+    'backend/backups.py',
+    'backend/uploads.py',
+    'backend/Backups/current.zip',
+    'backend/Uploads/avatar.png',
+    'backend/nested/backups/current.zip',
+    'backend/nested/uploads/avatar.png',
+    'lib/backend/duoyi.db',
+    'test/backend/uploads/data.json',
+    'docs/backend/backups/current.zip',
+    'scripts/validate_goal_closure.sh',
+    'lib/changed.dart',
+    'test/changed_test.dart',
+    'pubspec.yaml',
+    'pubspec.lock',
+  ];
+
+  Future<void> expectFreshnessForMutations(
+    List<String> mutations, {
+    required bool expectStale,
+    List<String> diagnosticPaths = const [],
+    bool emptyDataDirectories = false,
+  }) async {
+    _writeReport(reportDir, eighthStatus: 'passed');
+    _writeAndroidEvidence(androidDir);
+    _writeIosEvidence(iosDir);
+    final sourceRoot = _emptySourceRoot(reportDir);
+    final summary = File('${reportDir.path}/summary.tsv');
+    final afterReport = summary.lastModifiedSync().add(
+      const Duration(seconds: 10),
+    );
+    if (emptyDataDirectories) {
+      for (final path in ['backend/backups', 'backend/uploads']) {
+        Directory('${sourceRoot.path}/$path').createSync(recursive: true);
+      }
+    }
+    for (final path in mutations) {
+      final changed = File('${sourceRoot.path}/$path');
+      changed.parent.createSync(recursive: true);
+      changed.writeAsStringSync('isolated mutation after alignment\n');
+      changed.setLastModifiedSync(afterReport);
+    }
+    final result = await _runValidator(
+      reportDir,
+      androidDir,
+      iosDir,
+      goalReportDir,
+      statusDir,
+      matrixFile,
+      sourceRoot: sourceRoot.path,
+    );
+    // Legacy/device fixture passes do not close the four expanded requirements.
+    expect(result.exitCode, isNot(0), reason: _combinedOutput(result));
+    expect(result.stdout, contains('alignment_report: passed'));
+    expect(result.stdout, contains('android_device_evidence: passed'));
+    expect(result.stdout, contains('ios_device_evidence: passed'));
+    expect(
+      result.stdout,
+      contains(
+        expectStale
+            ? 'alignment_report_freshness: failed(1)'
+            : 'alignment_report_freshness: passed',
+      ),
+    );
+    expect(result.stdout, contains('all_requirements_closed: failed(1)'));
+    _expectLegacyGatesLeaveExpandedRequirementsOpen(statusDir);
+    final log = File(
+      '${goalReportDir.path}/alignment_report_freshness.log',
+    ).readAsStringSync();
+    if (expectStale) {
+      expect(log, contains('alignment regression report is stale'));
+      for (final path in diagnosticPaths) {
+        expect(log, contains(bashPath('${sourceRoot.path}/$path')));
+      }
+    } else {
+      expect(log, isEmpty);
+    }
+  }
+
+  for (final path in runtimeOnlyPaths) {
+    test(
+      'freshness ignores exact runtime path $path',
+      () async {
+        await expectFreshnessForMutations([path], expectStale: false);
+      },
+      timeout: _closureValidatorTimeout,
+    );
+  }
+  for (final path in sourcePaths) {
+    test(
+      'freshness still rejects source or lookalike path $path',
+      () async {
+        await expectFreshnessForMutations(
+          [path],
+          expectStale: true,
+          diagnosticPaths: [path],
+        );
+      },
+      timeout: _closureValidatorTimeout,
+    );
+  }
+  test(
+    'pruned empty runtime directory names never appear as stale files',
+    () async {
+      await expectFreshnessForMutations(
+        [],
+        expectStale: false,
+        emptyDataDirectories: true,
+      );
+    },
+    timeout: _closureValidatorTimeout,
+  );
+  test(
+    'runtime churn cannot mask a real backend edit',
+    () async {
+      // More than the diagnostic 20-line limit of ignored runtime entries.
+      final runtimeChurn = List<String>.generate(
+        25,
+        (i) => 'backend/backups/active-$i.zip',
+      );
+      await expectFreshnessForMutations(
+        [
+          ...runtimeChurn,
+          'backend/uploads/current/avatar.png',
+          'backend/duoyi.db-wal',
+          'backend/fingertip_time.db-shm',
+          'backend/main.py',
+        ],
+        expectStale: true,
+        diagnosticPaths: ['backend/main.py'],
+      );
+      final log = File(
+        '${goalReportDir.path}/alignment_report_freshness.log',
+      ).readAsStringSync();
+      expect(log, isNot(contains('/backend/backups/')));
+      expect(log, isNot(contains('/backend/uploads/')));
+      expect(log, isNot(contains('/backend/duoyi.db-wal')));
+      expect(log, isNot(contains('/backend/fingertip_time.db-shm')));
+    },
+    timeout: _closureValidatorTimeout,
+  );
+}
+
+void _expectLegacyGatesLeaveExpandedRequirementsOpen(Directory statusDir) {
+  const closedIds = [
+    'REQ-404',
+    'REQ-STYLE',
+    'REQ-ADMIN',
+    'REQ-HABIT',
+    'REQ-MINE',
+    'REQ-COUNTDOWN',
+    'REQ-ALMANAC',
+    'REQ-NOTIFY',
+    'REQ-WIDGET',
+    'REQ-DEVICE',
+  ];
+  const missingGates = {
+    'REQ-DEFAULT-IOS': 'default iOS visual acceptance',
+    'REQ-I18N': 'global localization acceptance',
+    'REQ-SETTINGS': 'settings flow acceptance',
+    'REQ-FLUENCY': 'mobile performance acceptance',
+  };
+  final lines = File('${statusDir.path}/status.tsv').readAsLinesSync();
+  expect(lines, hasLength(15));
+  expect(lines.first, 'id\tstatus\treason\tgroups\trequirement');
+  final rows = lines.skip(1).map((line) => line.split('\t')).toList();
+  for (final row in rows) {
+    expect(row, hasLength(5));
+  }
+  final rowsById = {for (final row in rows) row.first: row};
+  expect(rowsById.keys, unorderedEquals([...closedIds, ...missingGates.keys]));
+  for (final id in closedIds) {
+    expect(rowsById[id]!.sublist(0, 3), [
+      id,
+      'closed',
+      'all mapped gates passed',
+    ]);
+  }
+  for (final entry in missingGates.entries) {
+    expect(rowsById[entry.key]!.sublist(0, 3), [
+      entry.key,
+      'open(gate_missing)',
+      'mapped gate is missing: ${entry.value}',
+    ]);
+  }
 }
 
 Future<ProcessResult> _runValidator(
@@ -244,6 +815,12 @@ Future<ProcessResult> _runValidator(
     environment: bashEnvironment(
       {
         'ROOT_DIR_OVERRIDE': sourceRoot ?? _emptySourceRoot(reportDir).path,
+        // These fixtures validate report rules, not the host's device inventory.
+        // Missing tools keep every case isolated from Flutter/ADB/SDK probes.
+        'FLUTTER_BIN': '${reportDir.parent.path}/missing-tools/flutter',
+        'ADB_BIN': '${reportDir.parent.path}/missing-tools/adb',
+        'ANDROID_SDK_ROOT': '${reportDir.parent.path}/missing-sdk',
+        'KVM_DEVICE': '${reportDir.parent.path}/missing-kvm',
         'REPORT_DIR': reportDir.path,
         'GOAL_REPORT_DIR': goalReportDir.path,
         'ANDROID_EVIDENCE_DIR': androidDir.path,
@@ -253,6 +830,10 @@ Future<ProcessResult> _runValidator(
       },
       pathVariables: {
         'ROOT_DIR_OVERRIDE',
+        'FLUTTER_BIN',
+        'ADB_BIN',
+        'ANDROID_SDK_ROOT',
+        'KVM_DEVICE',
         'REPORT_DIR',
         'GOAL_REPORT_DIR',
         'ANDROID_EVIDENCE_DIR',
@@ -294,7 +875,19 @@ Directory _emptySourceRoot(Directory reportDir) {
   return root;
 }
 
-void _writeReport(Directory dir, {required String eighthStatus}) {
+const _expandedGates = {
+  'default iOS visual acceptance': 'REQ-DEFAULT-IOS',
+  'global localization acceptance': 'REQ-I18N',
+  'settings flow acceptance': 'REQ-SETTINGS',
+  'mobile performance acceptance': 'REQ-FLUENCY',
+};
+
+void _writeReport(
+  Directory dir, {
+  required String eighthStatus,
+  List<String> extraGroups = const [],
+  Map<String, String> gateStatuses = const {},
+}) {
   final groups = <String>[
     '1/8 404 and route contracts',
     '2/8 style layout and readable selection',
@@ -304,6 +897,7 @@ void _writeReport(Directory dir, {required String eighthStatus}) {
     '6/8 Flutter analyzer',
     '7/8 debug APK build',
     '8/8 device-only notification alarm widget regression',
+    ...extraGroups,
   ];
   final summary = StringBuffer('group\tstatus\tduration_seconds\tlog\n');
   final markdown = StringBuffer('''# Alignment Regression Gate
@@ -315,7 +909,9 @@ void _writeReport(Directory dir, {required String eighthStatus}) {
     final log = File('${dir.path}/${group.hashCode}.log');
     log.writeAsStringSync('log for $group');
     final logPath = bashPath(log.path);
-    final status = group.startsWith('8/8') ? eighthStatus : 'passed';
+    final status =
+        gateStatuses[group] ??
+        (group.startsWith('8/8') ? eighthStatus : 'passed');
     summary.writeln('$group\t$status\t1\t$logPath');
     markdown.writeln('| $group | $status | 1s | `$logPath` |');
   }

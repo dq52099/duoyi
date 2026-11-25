@@ -1,5 +1,8 @@
 import 'dart:io';
 
+import 'package:duoyi/core/i18n.dart';
+import 'package:duoyi/core/account_preference_writes.dart';
+import 'package:duoyi/core/todo_board_ui_copy.dart';
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/core/todo_kanban.dart';
 import 'package:duoyi/providers/auth_provider.dart';
@@ -18,9 +21,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  late AppLocale previousLocale;
+
   setUp(() {
+    previousLocale = I18n.current;
+    I18n.setLocale(AppLocale.zh);
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
+
+  tearDown(() => I18n.setLocale(previousLocale));
 
   test('快速创建待办成功后显示本机保存和云同步状态', () {
     final source = File('lib/screens/todo_screen.dart').readAsStringSync();
@@ -41,11 +50,46 @@ void main() {
     expect(dialog, contains('addTodoWithResult('));
     expect(dialog, contains('reminderSyncIssue != null'));
     expect(dialog, contains('_localSaveSyncMessage('));
-    expect(dialog, contains("localSavedText: '待办已保存到本机'"));
+    expect(
+      RegExp(
+        r'localSavedText:\s*TodoBoardUiCopy\s*\.localSavedText',
+      ).hasMatch(dialog),
+      isTrue,
+    );
+    expect(dialog, contains('TodoBoardUiCopy.localSavedWithoutReminder('));
+
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.localSavedText,
+      zh: '待办已保存到本机',
+      en: 'Todo saved to this device',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.localSavedWithoutReminder('sync issue'),
+      zh: '待办已保存到本机，但提醒未注册：sync issue',
+      en: 'Todo saved to this device, but reminder not scheduled: sync issue',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.viewMatrix,
+      zh: '四象限',
+      en: 'Matrix',
+    );
+    _expectBilingualCopy(() => TodoBoardUiCopy.viewList, zh: '列表', en: 'List');
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.viewKanban,
+      zh: '看板',
+      en: 'Kanban',
+    );
   });
 
   testWidgets('TodoScreen can switch to kanban view', (tester) async {
     final todoProvider = TodoProvider();
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      todoProvider.dispose();
+      await AccountPreferenceWrites.drain();
+      await tester.pump();
+    });
     await todoProvider.addTodo(
       TodoItem(
         title: '准备汇报',
@@ -71,22 +115,33 @@ void main() {
       ),
     );
 
-    expect(find.text('四象限'), findsOneWidget);
-    expect(find.text('看板'), findsOneWidget);
+    expect(find.text(TodoBoardUiCopy.viewMatrix), findsOneWidget);
+    expect(find.text(TodoBoardUiCopy.viewKanban), findsOneWidget);
 
-    await tester.tap(find.text('看板'));
+    await tester.tap(find.text(TodoBoardUiCopy.viewKanban));
     await tester.pumpAndSettle();
 
-    expect(find.text('待处理'), findsOneWidget);
-    expect(find.text('进行中'), findsOneWidget);
-    expect(find.text('已完成'), findsWidgets);
+    expect(
+      find.text(_builtInColumnTitle(defaultKanbanPendingColumnId)),
+      findsOneWidget,
+    );
+    expect(
+      find.text(_builtInColumnTitle(defaultKanbanInProgressColumnId)),
+      findsOneWidget,
+    );
+    expect(
+      find.text(_builtInColumnTitle(defaultKanbanDoneColumnId)),
+      findsWidgets,
+    );
     expect(find.text('准备汇报'), findsOneWidget);
-    expect(find.text('高'), findsOneWidget);
-    expect(find.text('0/1 子任务'), findsOneWidget);
+    expect(find.text(TodoPriority.high.label), findsOneWidget);
+    expect(find.text(TodoBoardUiCopy.cardSubtasksBadge(0, 1)), findsOneWidget);
 
-    await tester.tap(find.byTooltip('移动到'));
+    await tester.tap(find.byTooltip(TodoBoardUiCopy.moveToTooltip));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('进行中').last);
+    await tester.tap(
+      find.text(_builtInColumnTitle(defaultKanbanInProgressColumnId)).last,
+    );
     await tester.pumpAndSettle();
 
     expect(
@@ -98,6 +153,13 @@ void main() {
 
   testWidgets('TodoScreen surfaces cloud sync submit failures', (tester) async {
     final todoProvider = TodoProvider();
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      todoProvider.dispose();
+      await AccountPreferenceWrites.drain();
+      await tester.pump();
+    });
     await todoProvider.addTodo(TodoItem(title: '需要同步的待办'));
     todoProvider.lastCloudSyncError = '服务器暂时不可用';
 
@@ -117,17 +179,28 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('本机待办已保存，但服务器同步失败'), findsOneWidget);
-    expect(find.textContaining('服务器暂时不可用'), findsOneWidget);
+    const syncError = '服务器暂时不可用';
+    expect(
+      find.text(TodoBoardUiCopy.syncNoticeError(syncError)),
+      findsOneWidget,
+    );
+    expect(find.textContaining(syncError), findsOneWidget);
 
     todoProvider.lastCloudSyncError = null;
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('本机待办已保存，但服务器同步失败'), findsNothing);
+    expect(find.text(TodoBoardUiCopy.syncNoticeError(syncError)), findsNothing);
   });
 
   testWidgets('TodoScreen surfaces pending cloud sync status', (tester) async {
     final todoProvider = TodoProvider();
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      todoProvider.dispose();
+      await AccountPreferenceWrites.drain();
+      await tester.pump();
+    });
     await todoProvider.addTodo(TodoItem(title: '离线保存的待办'));
     todoProvider.cloudSyncNotice = const TodoCloudSyncNotice(
       message: '未登录云同步账号。',
@@ -150,7 +223,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('服务器同步暂未完成'), findsOneWidget);
+    expect(
+      find.text(TodoBoardUiCopy.syncNoticeWarning('未登录云同步账号。')),
+      findsOneWidget,
+    );
     expect(find.textContaining('未登录云同步账号'), findsOneWidget);
 
     todoProvider.cloudSyncNotice = const TodoCloudSyncNotice(
@@ -159,7 +235,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('云同步正在排队'), findsOneWidget);
+    expect(
+      find.text(TodoBoardUiCopy.syncNoticeInfo('远端有更新，当前同步完成后会继续拉取。')),
+      findsOneWidget,
+    );
     expect(find.textContaining('远端有更新'), findsOneWidget);
   });
 
@@ -172,6 +251,13 @@ void main() {
     });
 
     final todoProvider = TodoProvider();
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      todoProvider.dispose();
+      await AccountPreferenceWrites.drain();
+      await tester.pump();
+    });
     await todoProvider.addTodo(
       TodoItem(
         title: '高优先任务',
@@ -203,12 +289,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('看板'));
+    await tester.tap(find.text(TodoBoardUiCopy.viewKanban));
     await tester.pumpAndSettle();
 
-    expect(find.text('看板分组：按优先级'), findsOneWidget);
-    expect(find.text('高'), findsWidgets);
-    expect(find.text('低'), findsWidgets);
+    expect(
+      find.text(TodoBoardUiCopy.kanbanGrouping(config.groupMode.label)),
+      findsOneWidget,
+    );
+    expect(find.text(TodoPriority.high.label), findsWidgets);
+    expect(find.text(TodoPriority.low.label), findsWidgets);
     expect(find.text('高优先任务'), findsOneWidget);
     expect(find.text('低优先任务'), findsOneWidget);
   });
@@ -217,6 +306,13 @@ void main() {
     tester,
   ) async {
     final todoProvider = TodoProvider();
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      todoProvider.dispose();
+      await AccountPreferenceWrites.drain();
+      await tester.pump();
+    });
     await todoProvider.addTodo(
       TodoItem(title: '左滑任务', quadrant: EisenhowerQuadrant.urgentImportant),
     );
@@ -237,7 +333,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('列表'));
+    await tester.tap(find.text(TodoBoardUiCopy.viewList));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('todo_swipe_detail_button')),
@@ -285,9 +381,9 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('todo_swipe_delete_button')));
     await tester.pumpAndSettle();
-    expect(find.text('删除任务？'), findsOneWidget);
+    expect(find.text(TodoBoardUiCopy.deleteTaskDialogTitle), findsOneWidget);
 
-    await tester.tap(find.text('取消'));
+    await tester.tap(find.text(TodoBoardUiCopy.cancel));
     await tester.pumpAndSettle();
     expect(todoProvider.todos.single.title, '左滑任务');
 
@@ -295,7 +391,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('todo_swipe_delete_button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.tap(find.widgetWithText(FilledButton, TodoBoardUiCopy.delete));
     await tester.pumpAndSettle();
 
     expect(todoProvider.todos, isEmpty);
@@ -313,6 +409,13 @@ void main() {
     });
 
     final todoProvider = TodoProvider();
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      todoProvider.dispose();
+      await AccountPreferenceWrites.drain();
+      await tester.pump();
+    });
     for (var i = 0; i < 18; i++) {
       await todoProvider.addTodo(
         TodoItem(title: '滑动$i', quadrant: EisenhowerQuadrant.urgentImportant),
@@ -335,7 +438,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('列表'));
+    await tester.tap(find.text(TodoBoardUiCopy.viewList));
     await tester.pumpAndSettle();
     await tester.drag(find.text('滑动0'), const Offset(-160, 0));
     await tester.pumpAndSettle();
@@ -349,10 +452,12 @@ void main() {
       findsOneWidget,
     );
 
-    final verticalScrollable = find.byWidgetPredicate(
-      (widget) =>
-          widget is Scrollable && widget.axisDirection == AxisDirection.down,
-      description: 'vertical Todo list scrollable',
+    final verticalScrollable = find.descendant(
+      of: find.byKey(const ValueKey('todo_list_scroll')),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      ),
     );
     expect(verticalScrollable, findsOneWidget);
     final verticalScrollState = tester.state<ScrollableState>(
@@ -382,6 +487,13 @@ void main() {
     tester,
   ) async {
     final todoProvider = TodoProvider();
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      todoProvider.dispose();
+      await AccountPreferenceWrites.drain();
+      await tester.pump();
+    });
     await todoProvider.addTodo(
       TodoItem(title: '看板左滑删除', kanbanColumnId: defaultKanbanPendingColumnId),
     );
@@ -402,7 +514,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('看板'));
+    await tester.tap(find.text(TodoBoardUiCopy.viewKanban));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('todo_swipe_detail_button')),
@@ -450,10 +562,33 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('todo_swipe_delete_button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.tap(find.widgetWithText(FilledButton, TodoBoardUiCopy.delete));
     await tester.pumpAndSettle();
 
     expect(todoProvider.todos, isEmpty);
     expect(find.text('看板左滑删除'), findsNothing);
   });
+}
+
+String _builtInColumnTitle(String id) {
+  final column = TodoKanbanBoardConfig.defaults().sortedColumns.singleWhere(
+    (item) => item.id == id,
+  );
+  return TodoBoardUiCopy.columnTitle(column);
+}
+
+void _expectBilingualCopy(
+  String Function() copy, {
+  required String zh,
+  required String en,
+}) {
+  final previousLocale = I18n.current;
+  try {
+    I18n.setLocale(AppLocale.zh);
+    expect(copy(), zh);
+    I18n.setLocale(AppLocale.en);
+    expect(copy(), en);
+  } finally {
+    I18n.setLocale(previousLocale);
+  }
 }

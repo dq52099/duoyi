@@ -1,3 +1,9 @@
+import 'dart:async' show Timer;
+import 'dart:math' as math;
+
+import '../widgets/app_date_format.dart';
+import 'package:duoyi/desktop_web/desktop_embedded_scope.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -5,81 +11,465 @@ import 'package:provider/provider.dart';
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
+import '../core/time_audit_ui_copy.dart';
 import '../models/time_entry.dart';
+import '../providers/app_lock_provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/time_audit_provider.dart';
+import '../services/account_local_data_cleaner.dart';
+import '../services/app_update_service.dart';
+import '../services/ics_exporter.dart';
+import '../services/web_file_download.dart';
 import '../widgets/app_date_picker.dart';
 import '../widgets/app_time_picker.dart';
+import '../widgets/brand_background.dart';
+import '../widgets/controller_dialog.dart' show showControllerDialog;
 import '../widgets/surface_components.dart';
 
 enum _AuditRange { today, week, month, all }
 
 enum _AuditView { timeline, category, calendar, trend }
 
-class TimeAuditScreen extends StatefulWidget {
-  final String? initialEntryId;
+class _TimeAuditOrigin {
+  _TimeAuditOrigin._({
+    required this.provider,
+    required this.storageGeneration,
+    required this.accountGeneration,
+    required this.auth,
+    required this.route,
+    required this.sessionLease,
+    required this.leaseFailed,
+  }) : sessionGeneration = auth?.sessionGeneration,
+       wasLoggedIn = auth?.state.isLoggedIn ?? false,
+       _userId = _normalize(auth?.state.userId);
 
-  const TimeAuditScreen({super.key, this.initialEntryId});
+  final TimeAuditProvider provider;
+  final int storageGeneration;
+  final int accountGeneration;
+  final AuthProvider? auth;
+  final ModalRoute<dynamic>? route;
+  final AuthSessionLease? sessionLease;
+  final bool leaseFailed;
+  final int? sessionGeneration;
+  final bool wasLoggedIn;
+  String? _userId;
+
+  static String? _normalize(String? raw) {
+    final value = raw?.trim();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  static T? _readOptional<T extends Object>(BuildContext context) {
+    try {
+      return context.read<T?>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static _TimeAuditOrigin capture(
+    BuildContext context, {
+    ModalRoute<dynamic>? route,
+  }) {
+    final provider = context.read<TimeAuditProvider>();
+    final auth = _readOptional<AuthProvider>(context);
+    AuthSessionLease? lease;
+    var failed = false;
+    if (auth?.state.isLoggedIn == true) {
+      try {
+        lease = auth!.captureSessionLease();
+      } catch (_) {
+        failed = true;
+      }
+    }
+    return _TimeAuditOrigin._(
+      provider: provider,
+      storageGeneration: provider.storageGeneration,
+      accountGeneration: AccountLocalDataCleaner.accountDataGeneration,
+      auth: auth,
+      route: route ?? ModalRoute.of(context),
+      sessionLease: lease,
+      leaseFailed: failed,
+    );
+  }
+
+  bool isCurrent(
+    BuildContext context, {
+    bool checkRoute = true,
+    bool checkAccess = true,
+  }) {
+    if (!context.mounted ||
+        leaseFailed ||
+        provider.isDisposed ||
+        provider.storageGeneration != storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return false;
+    }
+    if (route != null &&
+        (!route!.isActive || (checkRoute && !route!.isCurrent))) {
+      return false;
+    }
+    try {
+      TimeAuditProvider? currentProvider;
+      try {
+        currentProvider = context.read<TimeAuditProvider>();
+      } catch (_) {
+        return false;
+      }
+      if (!identical(currentProvider, provider)) {
+        return false;
+      }
+      final currentAuth = _readOptional<AuthProvider>(context);
+      if (!identical(currentAuth, auth)) {
+        return false;
+      }
+      if (currentAuth != null) {
+        if (currentAuth.sessionGeneration != sessionGeneration ||
+            currentAuth.state.isLoggedIn != wasLoggedIn ||
+            currentAuth.isAccountTransitionInProgress ||
+            currentAuth.isLocalAccountDataBlocked ||
+            (sessionLease != null &&
+                !currentAuth.isSessionLeaseCurrent(sessionLease!))) {
+          return false;
+        }
+        final id = _normalize(currentAuth.state.userId);
+        if (_userId != null && id != _userId) return false;
+        _userId ??= id;
+      }
+      if (checkAccess) {
+        final lock = _readOptional<AppLockProvider>(context);
+        final update = _readOptional<AppUpdateService>(context);
+        if (lock?.isLocked == true || update?.mustUpdate == true) {
+          return false;
+        }
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
+class TimeAuditScreen extends StatefulWidget
+    implements LocaleStatePreservingRoute {
+  final String? initialEntryId;
+  final bool openInitialEntrySheet;
+
+  const TimeAuditScreen({
+    super.key,
+    this.initialEntryId,
+    this.openInitialEntrySheet = true,
+  });
 
   @override
   State<TimeAuditScreen> createState() => _TimeAuditScreenState();
 }
 
 class _TimeAuditScreenState extends State<TimeAuditScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final Map<String, GlobalKey> _entryKeys = <String, GlobalKey>{};
   _AuditRange _range = _AuditRange.today;
   _AuditView _view = _AuditView.timeline;
   bool _openedInitialEntry = false;
+  _TimeAuditOrigin? _initialOrigin;
+  String? _highlightedEntryId;
+  String? _scrolledEntryId;
+
+  Timer? _stopwatchTimer;
+  bool _stopwatchRunning = false;
+  final ValueNotifier<int> _stopwatchElapsedSeconds = ValueNotifier<int>(0);
+  int _stopwatchAccumulatedSeconds = 0;
+  DateTime? _stopwatchSegmentStartedAt;
+  TimeEntryCategory _stopwatchCategory = TimeEntryCategory.focus;
+  String _stopwatchCustomTitle = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _highlightedEntryId = widget.initialEntryId;
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant TimeAuditScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialEntryId != widget.initialEntryId ||
+        oldWidget.openInitialEntrySheet != widget.openInitialEntrySheet) {
+      _openedInitialEntry = false;
+      _highlightedEntryId = widget.initialEntryId;
+      _scrolledEntryId = null;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _initialOrigin ??= _TimeAuditOrigin.capture(context);
+  }
+
+  @override
+  void dispose() {
+    _stopwatchTimer?.cancel();
+    _stopwatchElapsedSeconds.dispose();
+    _scrollController.dispose();
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  GlobalKey _keyForEntry(String id) =>
+      _entryKeys.putIfAbsent(id, () => GlobalKey());
+
+  void _scheduleHighlightScroll(List<TimeEntry> entries) {
+    final id = _highlightedEntryId;
+    if (id == null || id.isEmpty || _scrolledEntryId == id) return;
+    if (!entries.any((e) => e.id == id)) return;
+    _scrolledEntryId = id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final ctx = _entryKeys[id]?.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 220),
+          alignment: 0.2,
+        );
+      }
+    });
+  }
 
   void _openInitialEntryIfNeeded(TimeAuditProvider provider) {
     if (_openedInitialEntry) return;
+    final initialOrigin = _initialOrigin;
+    if (initialOrigin == null ||
+        !initialOrigin.isCurrent(context, checkRoute: false)) {
+      _openedInitialEntry = true;
+      return;
+    }
     final id = widget.initialEntryId;
-    if (id == null || id.isEmpty) return;
-    final index = provider.entries.indexWhere((entry) => entry.id == id);
-    if (index < 0) return;
+    if (id == null || id.isEmpty) {
+      _openedInitialEntry = true;
+      return;
+    }
+    final hasEntry = provider.entries.any((entry) => entry.id == id);
+    if (!hasEntry) return;
     _openedInitialEntry = true;
+    _highlightedEntryId = id;
     if (_range != _AuditRange.all) {
       _range = _AuditRange.all;
       _view = _AuditView.timeline;
     }
+    if (!widget.openInitialEntrySheet) return;
+    final scheduledOrigin = initialOrigin;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _showEditor(context, entry: provider.entries[index]);
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isActive) return;
+      if (!scheduledOrigin.isCurrent(context, checkRoute: false)) return;
+      final currentEntry = scheduledOrigin.provider.entries
+          .where((entry) => entry.id == id)
+          .firstOrNull;
+      if (currentEntry == null) return;
+      _showEditor(context, scheduledOrigin, entry: currentEntry);
     });
+  }
+
+  void _startOrResumeStopwatch() {
+    if (_stopwatchRunning) return;
+    _stopwatchTimer?.cancel();
+    setState(() {
+      _stopwatchRunning = true;
+      _stopwatchAccumulatedSeconds = _stopwatchElapsedSeconds.value;
+      _stopwatchSegmentStartedAt = DateTime.now();
+    });
+    _stopwatchTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !_stopwatchRunning) return;
+      var next = _stopwatchElapsedSeconds.value + 1;
+      final started = _stopwatchSegmentStartedAt;
+      if (started != null) {
+        final wallTotal =
+            _stopwatchAccumulatedSeconds +
+            DateTime.now().difference(started).inSeconds;
+        if (wallTotal > next) {
+          next = wallTotal;
+        }
+      }
+      _stopwatchElapsedSeconds.value = next;
+    });
+  }
+
+  void _pauseStopwatch() {
+    if (!_stopwatchRunning) return;
+    _stopwatchTimer?.cancel();
+    _stopwatchTimer = null;
+    setState(() {
+      _stopwatchRunning = false;
+      _stopwatchAccumulatedSeconds = _stopwatchElapsedSeconds.value;
+      _stopwatchSegmentStartedAt = null;
+    });
+  }
+
+  void _resetStopwatch() {
+    _stopwatchTimer?.cancel();
+    _stopwatchTimer = null;
+    _stopwatchElapsedSeconds.value = 0;
+    setState(() {
+      _stopwatchRunning = false;
+      _stopwatchAccumulatedSeconds = 0;
+      _stopwatchSegmentStartedAt = null;
+    });
+  }
+
+  Future<void> _stopAndSaveStopwatch(_TimeAuditOrigin origin) async {
+    _stopwatchTimer?.cancel();
+    _stopwatchTimer = null;
+    final seconds = math.max(1, _stopwatchElapsedSeconds.value);
+    final category = _stopwatchCategory;
+    final customTitle = _stopwatchCustomTitle.trim();
+    final title = customTitle.isEmpty
+        ? TimeAuditUiCopy.defaultSessionLabel(category)
+        : customTitle;
+    _stopwatchElapsedSeconds.value = 0;
+    setState(() {
+      _stopwatchRunning = false;
+      _stopwatchAccumulatedSeconds = 0;
+      _stopwatchSegmentStartedAt = null;
+    });
+    if (!origin.isCurrent(context)) return;
+    final endAt = DateTime.now();
+    final startAt = endAt.subtract(Duration(seconds: seconds));
+    await origin.provider.add(
+      TimeEntry(
+        title: title,
+        startAt: startAt,
+        endAt: endAt,
+        category: category,
+        source: TimeEntrySource.manual,
+        note: TimeAuditUiCopy.stopwatchRecordedNote,
+      ),
+    );
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger
+      ?..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(TimeAuditUiCopy.recordedSaved(title)),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+  Future<void> _renameStopwatchLabel() async {
+    final controller = TextEditingController(text: _stopwatchCustomTitle);
+    final result = await showControllerDialog<String>(
+      context: context,
+      controllers: [controller],
+      builder: (dialogCtx) => AlertDialog(
+        title: Text(TimeAuditUiCopy.renameDialogTitle),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: TimeAuditUiCopy.renameDialogHint,
+          ),
+          onSubmitted: (v) => Navigator.of(dialogCtx).pop(v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(''),
+            child: Text(TimeAuditUiCopy.clearLabel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: Text(I18n.tr('action.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(controller.text),
+            child: Text(I18n.tr('action.save')),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || result == null) return;
+    setState(() => _stopwatchCustomTitle = result.trim());
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<TimeAuditProvider>();
     _openInitialEntryIfNeeded(provider);
+    final origin = _TimeAuditOrigin.capture(context);
     final entries = _entriesFor(provider);
+    if (_view == _AuditView.timeline) {
+      _scheduleHighlightScroll(entries);
+    }
     final totalSeconds = entries.fold<int>(
       0,
       (sum, entry) => sum + entry.durationSeconds,
     );
-    return Scaffold(
+    final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+    final scaffold = Scaffold(
+      backgroundColor: isLiquidGlass ? Colors.transparent : null,
       appBar: AppBar(
         title: Text(I18n.tr('time_audit.title')),
         actions: [
           IconButton(
+            key: const ValueKey('time_audit_export_csv_btn'),
+            tooltip: TimeAuditUiCopy.exportCsvTooltip,
+            icon: const Icon(Icons.download_outlined),
+            onPressed: entries.isEmpty
+                ? null
+                : () => _exportCsv(origin, entries),
+          ),
+          IconButton(
             tooltip: I18n.tr('time_audit.copy_report'),
             icon: const Icon(Icons.content_copy_outlined),
-            onPressed: entries.isEmpty ? null : () => _copyReport(entries),
+            onPressed: entries.isEmpty
+                ? null
+                : () => _copyReport(origin, entries),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showEditor(context),
+        heroTag: 'time_audit_add_fab',
+        onPressed: () => _showEditor(context, origin),
         icon: const Icon(Icons.add),
         label: Text(I18n.tr('time_audit.add_manual')),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(12),
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
         children: [
+          _StopwatchTrackerCard(
+            running: _stopwatchRunning,
+            elapsedSecondsListenable: _stopwatchElapsedSeconds,
+            category: _stopwatchCategory,
+            customLabel: _stopwatchCustomTitle,
+            onSelectCategory: (c) => setState(() => _stopwatchCategory = c),
+            onRenameLabel: _renameStopwatchLabel,
+            onStartOrResume: _startOrResumeStopwatch,
+            onPause: _pauseStopwatch,
+            onStopAndSave: () => _stopAndSaveStopwatch(origin),
+            onDiscard: _resetStopwatch,
+          ),
+          const SizedBox(height: 8),
           _SummaryCard(
             rangeLabel: _rangeLabel(_range),
             totalSeconds: totalSeconds,
             entries: entries,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _HorizontalSegmentStrip(
             child: SegmentedButton<_AuditRange>(
               segments: [
@@ -105,7 +495,7 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
                   setState(() => _range = value.first),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _HorizontalSegmentStrip(
             child: SegmentedButton<_AuditView>(
               showSelectedIcon: false,
@@ -136,7 +526,7 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
                   setState(() => _view = value.first),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           if (entries.isEmpty)
             AppSurfaceCard(
               padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
@@ -157,18 +547,41 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
               ),
             )
           else
-            _buildActiveView(context, entries),
+            _buildActiveView(context, origin, entries),
         ],
       ),
     );
+
+    if (!isLiquidGlass) {
+      return scaffold;
+    }
+
+    final hasBrandSurface =
+        DesktopEmbeddedHostScope.isHosted(context) ||
+        context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+        context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+    if (hasBrandSurface) {
+      return scaffold;
+    }
+    return Material(
+      color: routeBackground,
+      child: BrandBackground(child: scaffold),
+    );
   }
 
-  Widget _buildActiveView(BuildContext context, List<TimeEntry> entries) {
+  Widget _buildActiveView(
+    BuildContext context,
+    _TimeAuditOrigin origin,
+    List<TimeEntry> entries,
+  ) {
     return switch (_view) {
       _AuditView.timeline => _TimelineView(
         rangeLabel: _rangeLabel(_range),
         entries: entries,
-        onEdit: (entry) => _showEditor(context, entry: entry),
+        highlightedEntryId: _highlightedEntryId,
+        entryKeyBuilder: _keyForEntry,
+        onEdit: (entry) => _showEditor(context, origin, entry: entry),
+        onDelete: (entry) => _deleteEntry(origin, entry),
       ),
       _AuditView.category => _CategoryView(
         entries: entries,
@@ -178,32 +591,117 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
       ),
       _AuditView.calendar => _CalendarAuditView(
         entries: entries,
-        onEdit: (entry) => _showEditor(context, entry: entry),
+        onEdit: (entry) => _showEditor(context, origin, entry: entry),
       ),
       _AuditView.trend => _TrendAuditView(entries: entries),
     };
   }
 
-  void _showEditor(BuildContext context, {TimeEntry? entry}) {
+  void _showEditor(
+    BuildContext context,
+    _TimeAuditOrigin origin, {
+    TimeEntry? entry,
+  }) {
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    if (route != null && (!route.isActive || !route.isCurrent)) return;
+    if (!origin.isCurrent(context)) return;
+    if (entry != null &&
+        !origin.provider.entries.any((e) => e.id == entry.id)) {
+      return;
+    }
     showAppModalSheet(
       context: context,
-      builder: (_) => _TimeEntrySheet(entry: entry),
+      builder: (_) => _TimeEntrySheet(origin: origin, entry: entry),
     );
   }
 
-  Future<void> _copyReport(List<TimeEntry> entries) async {
-    final report = _buildReport(entries);
+  Future<void> _deleteEntry(_TimeAuditOrigin origin, TimeEntry entry) async {
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    if (route != null && (!route.isActive || !route.isCurrent)) return;
+    if (!origin.isCurrent(context)) return;
+    if (!origin.provider.entries.any((e) => e.id == entry.id)) return;
+    await origin.provider.delete(entry.id);
+  }
+
+  Future<void> _exportCsv(
+    _TimeAuditOrigin origin,
+    List<TimeEntry> entries,
+  ) async {
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    if (route != null && (!route.isActive || !route.isCurrent)) return;
+    if (!origin.isCurrent(context)) return;
+    final csv = ModuleExporter.timeEntriesCsv(entries);
+    final now = DateTime.now();
+    final stamp =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final result = await WebFileDownload.saveText(
+      content: csv,
+      fileName: 'duoyi-time-audit-$stamp.csv',
+      mimeType: 'text/csv;charset=utf-8',
+    );
+    if (!mounted) return;
+    if (!origin.isCurrent(context)) return;
+    if (result.dismissed) return;
+    if (!result.saved) {
+      await Clipboard.setData(ClipboardData(text: csv));
+      if (!mounted) return;
+    }
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null || !messenger.mounted) return;
+    messenger
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            result.saved
+                ? TimeAuditUiCopy.csvExported(result.fileName)
+                : TimeAuditUiCopy.csvCopiedFallback,
+          ),
+          action: result.saved
+              ? SnackBarAction(
+                  label: TimeAuditUiCopy.copyCsvAction,
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: csv));
+                  },
+                )
+              : null,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+  Future<void> _copyReport(
+    _TimeAuditOrigin origin,
+    List<TimeEntry> entries,
+  ) async {
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    if (route != null && (!route.isActive || !route.isCurrent)) return;
+    if (!origin.isCurrent(context)) return;
+    final report = _buildReport(entries, AppDateFormat.readPattern(context));
     await Clipboard.setData(ClipboardData(text: report));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(I18n.tr('time_audit.report_copied')),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (route != null && (!route.isActive || !route.isCurrent)) return;
+    if (!origin.isCurrent(context)) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null || !messenger.mounted) return;
+    messenger
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (_, _, _) => Text(I18n.tr('time_audit.report_copied')),
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
-  String _buildReport(List<TimeEntry> entries) {
+  String _buildReport(List<TimeEntry> entries, String? pattern) {
     final totalSeconds = entries.fold<int>(
       0,
       (sum, entry) => sum + entry.durationSeconds,
@@ -241,7 +739,7 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
       ..writeln('## ${I18n.tr('time_audit.report.details')}');
     for (final entry in sorted) {
       buffer.writeln(
-        '- ${_date(entry.startAt)} ${_clock(entry.startAt)}-${_clock(entry.endAt)} '
+        '- ${I18nDateFormat.date(entry.startAt, pattern: pattern)} ${_clock(entry.startAt)}-${_clock(entry.endAt)} '
         '${entry.title} · ${entry.category.label} · ${_formatDuration(entry.durationSeconds)}',
       );
     }
@@ -278,15 +776,259 @@ class _TimeAuditScreenState extends State<TimeAuditScreen> {
   };
 }
 
+class _StopwatchTrackerCard extends StatelessWidget {
+  final bool running;
+  final ValueListenable<int> elapsedSecondsListenable;
+  final TimeEntryCategory category;
+  final String customLabel;
+  final ValueChanged<TimeEntryCategory> onSelectCategory;
+  final VoidCallback onRenameLabel;
+  final VoidCallback onStartOrResume;
+  final VoidCallback onPause;
+  final VoidCallback onStopAndSave;
+  final VoidCallback onDiscard;
+
+  const _StopwatchTrackerCard({
+    required this.running,
+    required this.elapsedSecondsListenable,
+    required this.category,
+    required this.customLabel,
+    required this.onSelectCategory,
+    required this.onRenameLabel,
+    required this.onStartOrResume,
+    required this.onPause,
+    required this.onStopAndSave,
+    required this.onDiscard,
+  });
+
+  String _formatClock(int totalSeconds) {
+    final hours = (totalSeconds ~/ 3600).toString().padLeft(2, '0');
+    final minutes = ((totalSeconds % 3600) ~/ 60).toString().padLeft(2, '0');
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$hours:$minutes:$seconds';
+  }
+
+  String get _startButtonLabel =>
+      I18n.current == AppLocale.en ? 'Start timer' : TimeAuditUiCopy.start;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final elapsedSeconds = elapsedSecondsListenable.value;
+    final statusText = running
+        ? TimeAuditUiCopy.statusRunning
+        : (elapsedSeconds > 0
+              ? TimeAuditUiCopy.statusPaused
+              : TimeAuditUiCopy.statusReady);
+    final labelText = customLabel.trim().isEmpty
+        ? TimeAuditUiCopy.defaultSessionLabel(category)
+        : customLabel.trim();
+    final accent = running ? cs.primary : cs.onSurfaceVariant;
+    final compactButtonStyle = ButtonStyle(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+
+    return AppSurfaceCard(
+      key: const ValueKey('time_audit_stopwatch_card'),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      border: running
+          ? Border.all(color: cs.primary, width: 0.6)
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.timer_outlined, size: 18, color: accent),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  TimeAuditUiCopy.stopwatchTitle,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: running
+                      ? cs.primary.withValues(alpha: 0.14)
+                      : cs.surfaceContainerHighest.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: running ? cs.primary : cs.onSurfaceVariant,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 10,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            alignment: WrapAlignment.spaceBetween,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  RepaintBoundary(
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: elapsedSecondsListenable,
+                      builder: (context, elapsed, _) => Text(
+                        _formatClock(elapsed),
+                        key: const ValueKey('time_audit_stopwatch_readout'),
+                        style: TextStyle(
+                          fontSize: 22,
+                          color: running ? cs.primary : cs.onSurface,
+                          fontWeight: FontWeight.normal,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    key: const ValueKey('time_audit_stopwatch_rename_btn'),
+                    onTap: onRenameLabel,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 2,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _iconFor(category),
+                            size: 14,
+                            color: _colorFor(category, cs),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            labelText,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: cs.onSurfaceVariant,
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 13,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  if (!running)
+                    FilledButton.icon(
+                      key: const ValueKey('time_audit_stopwatch_start_btn'),
+                      style: compactButtonStyle,
+                      onPressed: onStartOrResume,
+                      icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                      label: Text(
+                        elapsedSeconds > 0
+                            ? TimeAuditUiCopy.resume
+                            : _startButtonLabel,
+                      ),
+                    )
+                  else
+                    OutlinedButton.icon(
+                      key: const ValueKey('time_audit_stopwatch_pause_btn'),
+                      style: compactButtonStyle,
+                      onPressed: onPause,
+                      icon: const Icon(Icons.pause_rounded, size: 18),
+                      label: Text(TimeAuditUiCopy.pause),
+                    ),
+                  if (running || elapsedSeconds > 0)
+                    FilledButton.icon(
+                      key: const ValueKey('time_audit_stopwatch_stop_btn'),
+                      style: compactButtonStyle,
+                      onPressed: onStopAndSave,
+                      icon: const Icon(Icons.stop_rounded, size: 18),
+                      label: Text(TimeAuditUiCopy.stopAndSave),
+                    ),
+                  if (!running && elapsedSeconds > 0)
+                    TextButton(
+                      key: const ValueKey('time_audit_stopwatch_discard_btn'),
+                      style: compactButtonStyle,
+                      onPressed: onDiscard,
+                      child: Text(TimeAuditUiCopy.discard),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final item in TimeEntryCategory.values) ...[
+                  ChoiceChip(
+                    key: ValueKey('time_audit_stopwatch_cat_${item.name}'),
+                    avatar: Icon(
+                      _iconFor(item),
+                      size: 14,
+                      color: _colorFor(item, cs),
+                    ),
+                    label: Text(
+                      item.label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                    selected: category == item,
+                    onSelected: (_) => onSelectCategory(item),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TimelineView extends StatelessWidget {
   final String rangeLabel;
   final List<TimeEntry> entries;
+  final String? highlightedEntryId;
+  final GlobalKey Function(String id)? entryKeyBuilder;
   final ValueChanged<TimeEntry> onEdit;
+  final ValueChanged<TimeEntry> onDelete;
 
   const _TimelineView({
     required this.rangeLabel,
     required this.entries,
+    this.highlightedEntryId,
+    this.entryKeyBuilder,
     required this.onEdit,
+    required this.onDelete,
   });
 
   @override
@@ -302,7 +1044,13 @@ class _TimelineView extends StatelessWidget {
           ),
         ),
         for (final entry in entries) ...[
-          _TimeEntryCard(entry: entry, onTap: () => onEdit(entry)),
+          _TimeEntryCard(
+            key: entryKeyBuilder?.call(entry.id),
+            entry: entry,
+            highlighted: entry.id == highlightedEntryId,
+            onTap: () => onEdit(entry),
+            onDelete: () => onDelete(entry),
+          ),
           const SizedBox(height: 8),
         ],
       ],
@@ -402,7 +1150,7 @@ class _CategoryBreakdownTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _colorFor(category);
+    final color = _colorFor(category, Theme.of(context).colorScheme);
     final ratio = totalSeconds <= 0 ? 0.0 : seconds / totalSeconds;
     return InkWell(
       onTap: onTap,
@@ -427,17 +1175,13 @@ class _CategoryBreakdownTile extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Expanded(
-                        child: Text(
-                          category.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+                      Expanded(child: Text(category.label)),
+                      const SizedBox(width: 8),
                       Text(
                         _formatDuration(seconds),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
                       ),
                     ],
                   ),
@@ -478,37 +1222,32 @@ class _SourceBreakdownRow extends StatelessWidget {
     final ratio = totalSeconds <= 0 ? 0.0 : seconds / totalSeconds;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 54,
-            child: Text(
-              source.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: ratio,
-                minHeight: 7,
-                color: cs.primary,
-                backgroundColor: cs.primary.withValues(alpha: 0.12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(source.label, style: const TextStyle(fontSize: 12)),
               ),
-            ),
+              const SizedBox(width: 8),
+              Text(
+                _formatDuration(seconds),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 60,
-            child: Text(
-              _formatDuration(seconds),
-              maxLines: 1,
-              textAlign: TextAlign.end,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
+          const SizedBox(height: 5),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 7,
+              color: cs.primary,
+              backgroundColor: cs.primary.withValues(alpha: 0.12),
             ),
           ),
         ],
@@ -633,37 +1372,37 @@ class _TrendDayRow extends StatelessWidget {
     final topCategory = _topCategory(entries);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 58,
-            child: Text(
-              '${day.month}/${day.day}',
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: ratio,
-                minHeight: 9,
-                color: topCategory == null
-                    ? cs.primary
-                    : _colorFor(topCategory),
-                backgroundColor: cs.primary.withValues(alpha: 0.10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${day.month}/${day.day}',
+                  style: const TextStyle(fontSize: 12),
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Text(
+                _formatDuration(totalSeconds),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 74,
-            child: Text(
-              _formatDuration(totalSeconds),
-              maxLines: 1,
-              textAlign: TextAlign.end,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
+          const SizedBox(height: 5),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 9,
+              color: topCategory == null
+                  ? cs.primary
+                  : _colorFor(topCategory, cs),
+              backgroundColor: cs.primary.withValues(alpha: 0.10),
             ),
           ),
         ],
@@ -736,13 +1475,14 @@ class _CompactEntryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _colorFor(entry.category);
+    final color = _colorFor(entry.category, Theme.of(context).colorScheme);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               width: 7,
@@ -757,34 +1497,34 @@ class _CompactEntryRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    entry.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 2,
+                    children: [
+                      Text(
+                        entry.title,
+                        style: const TextStyle(fontWeight: FontWeight.normal),
+                      ),
+                      Text(
+                        _formatDuration(entry.durationSeconds),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '${_clock(entry.startAt)}-${_clock(entry.endAt)} · ${entry.category.label}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 11,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.62),
+                      color: appSecondaryDescriptionColor(context),
                     ),
                   ),
                 ],
-              ),
-            ),
-            SizedBox(
-              width: 64,
-              child: Text(
-                _formatDuration(entry.durationSeconds),
-                maxLines: 1,
-                textAlign: TextAlign.end,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12),
               ),
             ),
           ],
@@ -838,35 +1578,47 @@ class _SummaryCard extends StatelessWidget {
       ..sort((a, b) => b.value.compareTo(a.value));
 
     return AppSurfaceCard(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _MetricBlock(
-                  title:
-                      '$rangeLabel${I18n.tr('time_audit.investment_suffix')}',
-                  value: _formatDuration(totalSeconds),
-                  icon: Icons.timelapse_outlined,
-                  color: cs.primary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MetricBlock(
-                  title: I18n.tr('time_audit.entry_count'),
-                  value:
-                      '${entries.length}${I18n.tr('time_audit.entry_count_suffix')}',
-                  icon: Icons.list_alt_outlined,
-                  color: const Color(0xFF26A69A),
-                ),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final textScaler = MediaQuery.textScalerOf(context);
+              final sideBySideThreshold = 90.0 + 2.0 * textScaler.scale(98.0);
+              final useRow = constraints.maxWidth >= sideBySideThreshold;
+
+              final metric1 = _MetricBlock(
+                title: '$rangeLabel${I18n.tr('time_audit.investment_suffix')}',
+                value: _formatDuration(totalSeconds),
+                icon: Icons.timelapse_outlined,
+                color: cs.primary,
+              );
+              final metric2 = _MetricBlock(
+                title: I18n.tr('time_audit.entry_count'),
+                value:
+                    '${entries.length}${I18n.tr('time_audit.entry_count_suffix')}',
+                icon: Icons.list_alt_outlined,
+                color: DesignTokens.defaultAccent,
+              );
+
+              if (useRow) {
+                return Row(
+                  children: [
+                    Expanded(child: metric1),
+                    const SizedBox(width: 10),
+                    Expanded(child: metric2),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [metric1, const SizedBox(height: 10), metric2],
+              );
+            },
           ),
           if (categories.isNotEmpty) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             for (final entry in categories.take(4))
               _CategoryShareRow(
                 category: entry.key,
@@ -895,8 +1647,8 @@ class _MetricBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 36,
@@ -911,24 +1663,22 @@ class _MetricBlock extends StatelessWidget {
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontWeight: FontWeight.normal,
                   fontSize: 16,
+                  fontFeatures: [FontFeature.tabularFigures()],
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11,
-                  color: cs.onSurface.withValues(alpha: 0.62),
+                  color: appSecondaryDescriptionColor(context),
                 ),
               ),
             ],
@@ -952,47 +1702,45 @@ class _CategoryShareRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _colorFor(category);
+    final color = _colorFor(category, Theme.of(context).colorScheme);
     final ratio = totalSeconds <= 0 ? 0.0 : seconds / totalSeconds;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 48,
-            child: Text(
-              category.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: ratio,
-                minHeight: 7,
-                color: color,
-                backgroundColor: color.withValues(alpha: 0.12),
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  category.label,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _formatDuration(seconds),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 54,
-            child: Text(
-              _formatDuration(seconds),
-              textAlign: TextAlign.end,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11),
+          const SizedBox(height: 5),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 7,
+              color: color,
+              backgroundColor: color.withValues(alpha: 0.12),
             ),
           ),
         ],
@@ -1003,16 +1751,27 @@ class _CategoryShareRow extends StatelessWidget {
 
 class _TimeEntryCard extends StatelessWidget {
   final TimeEntry entry;
+  final bool highlighted;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
-  const _TimeEntryCard({required this.entry, required this.onTap});
+  const _TimeEntryCard({
+    super.key,
+    required this.entry,
+    this.highlighted = false,
+    required this.onTap,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final color = _colorFor(entry.category);
+    final color = _colorFor(entry.category, Theme.of(context).colorScheme);
     return AppSurfaceCard(
       onTap: onTap,
       padding: const EdgeInsets.all(14),
+      border: highlighted
+          ? Border.all(color: Theme.of(context).colorScheme.primary, width: 0.6)
+          : null,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1032,8 +1791,6 @@ class _TimeEntryCard extends StatelessWidget {
               children: [
                 Text(
                   entry.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.normal,
                     fontSize: 14,
@@ -1042,13 +1799,9 @@ class _TimeEntryCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   '${_formatDateTime(entry.startAt)} - ${_formatDateTime(entry.endAt)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.62),
+                    color: appSecondaryDescriptionColor(context),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1068,7 +1821,7 @@ class _TimeEntryCard extends StatelessWidget {
           IconButton(
             tooltip: I18n.tr('action.delete'),
             icon: const Icon(Icons.delete_outline),
-            onPressed: () => context.read<TimeAuditProvider>().delete(entry.id),
+            onPressed: onDelete,
           ),
         ],
       ),
@@ -1078,8 +1831,9 @@ class _TimeEntryCard extends StatelessWidget {
 
 class _TimeEntrySheet extends StatefulWidget {
   final TimeEntry? entry;
+  final _TimeAuditOrigin origin;
 
-  const _TimeEntrySheet({this.entry});
+  const _TimeEntrySheet({this.entry, required this.origin});
 
   @override
   State<_TimeEntrySheet> createState() => _TimeEntrySheetState();
@@ -1092,10 +1846,17 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
   late TimeEntryCategory _category;
   late DateTime _startAt;
   late DateTime _endAt;
+  late final String _draftId;
+  late final DateTime _draftCreatedAt;
+  late final bool _isExistingEntry;
+  ModalRoute<dynamic>? _owningRoute;
+  bool _saving = false;
+  bool _picking = false;
 
   @override
   void initState() {
     super.initState();
+    I18n.localeListenable.addListener(_onLocaleChanged);
     final entry = widget.entry;
     _titleCtrl = TextEditingController(
       text: entry?.title ?? I18n.tr('time_audit.default_title'),
@@ -1109,14 +1870,83 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
     _category = entry?.category ?? TimeEntryCategory.focus;
     _startAt = entry?.startAt ?? DateTime.now();
     _endAt = entry?.endAt ?? DateTime.now().add(const Duration(minutes: 25));
+    if (entry != null) {
+      _isExistingEntry = true;
+      _draftId = entry.id;
+      _draftCreatedAt = entry.createdAt;
+    } else {
+      _isExistingEntry = false;
+      final temp = TimeEntry(title: '', startAt: _startAt, endAt: _endAt);
+      _draftId = temp.id;
+      _draftCreatedAt = temp.createdAt;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _owningRoute ??= ModalRoute.of(context);
   }
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     _titleCtrl.dispose();
     _noteCtrl.dispose();
     _minutesCtrl.dispose();
     super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool _canAct({bool checkRoute = true}) {
+    if (!mounted) return false;
+    final route = _owningRoute ?? ModalRoute.of(context);
+    if (route != null) {
+      if (!route.isActive) return false;
+      if (checkRoute && !route.isCurrent) return false;
+    }
+    return widget.origin.isCurrent(context, checkRoute: false);
+  }
+
+  void _dismissOwningSheet() {
+    final route = _owningRoute ?? ModalRoute.of(context);
+    if (route != null && route.isActive) {
+      final nav = route.navigator ?? Navigator.maybeOf(context);
+      if (nav != null) {
+        if (route.isCurrent) {
+          nav.pop();
+        } else {
+          nav.removeRoute(route);
+        }
+      }
+    }
+  }
+
+  void _cancel() {
+    if (_saving || !_canAct()) return;
+    _dismissOwningSheet();
+  }
+
+  void _showSaveError() {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null || !messenger.mounted) return;
+    messenger
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (_, _, _) => Text(
+              '${I18n.tr('profile.save_failed')}, ${I18n.tr('action.retry')}',
+            ),
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   @override
@@ -1127,10 +1957,13 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
           : I18n.tr('time_audit.sheet.edit_title'),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _saving ? null : _cancel,
           child: Text(I18n.tr('action.cancel')),
         ),
-        FilledButton(onPressed: _save, child: Text(I18n.tr('action.save'))),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: Text(I18n.tr('action.save')),
+        ),
       ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1162,13 +1995,13 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
                 icon: Icons.play_arrow,
                 title: I18n.tr('time_audit.field.start'),
                 subtitle: _formatDateTime(_startAt),
-                onTap: _pickStart,
+                onTap: (_saving || _picking) ? null : _pickStart,
               );
               final endTile = _TimeEndpointTile(
                 icon: Icons.stop,
                 title: I18n.tr('time_audit.field.end'),
                 subtitle: _formatDateTime(_endAt),
-                onTap: _pickEnd,
+                onTap: (_saving || _picking) ? null : _pickEnd,
               );
               if (constraints.maxWidth < 360) {
                 return Column(
@@ -1211,90 +2044,140 @@ class _TimeEntrySheetState extends State<_TimeEntrySheet> {
   }
 
   Future<void> _pickStart() async {
-    final date = await AppDatePicker.pickSolar(
-      context,
-      initialDate: _startAt,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      title: I18n.tr('time_audit.picker.start_date'),
-    );
-    if (date == null) return;
-    if (!mounted) return;
-    final time = await AppTimePicker.show(
-      context,
-      initialTime: TimeOfDay.fromDateTime(_startAt),
-      title: I18n.tr('time_audit.picker.start_time'),
-      minuteStep: 5,
-    );
-    if (time == null) return;
-    if (!mounted) return;
-    setState(() {
-      _startAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
+    if (_saving || _picking || !_canAct()) return;
+    _picking = true;
+    try {
+      final date = await AppDatePicker.pickSolar(
+        context,
+        initialDate: _startAt,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+        titleKey: 'time_audit.picker.start_date',
       );
-      final minutes = int.tryParse(_minutesCtrl.text.trim()) ?? 25;
-      _endAt = _startAt.add(Duration(minutes: minutes));
-    });
+      if (date == null || !_canAct()) return;
+      if (!mounted) return;
+      final time = await AppTimePicker.show(
+        context,
+        initialTime: TimeOfDay.fromDateTime(_startAt),
+        titleKey: 'time_audit.picker.start_time',
+        minuteStep: 5,
+      );
+      if (time == null || !_canAct()) return;
+      setState(() {
+        _startAt = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          time.hour,
+          time.minute,
+        );
+        final minutes = int.tryParse(_minutesCtrl.text.trim()) ?? 25;
+        _endAt = _startAt.add(Duration(minutes: minutes));
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _picking = false);
+      } else {
+        _picking = false;
+      }
+    }
   }
 
   Future<void> _pickEnd() async {
-    final date = await AppDatePicker.pickSolar(
-      context,
-      initialDate: _endAt,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      title: I18n.tr('time_audit.picker.end_date'),
-    );
-    if (date == null) return;
-    if (!mounted) return;
-    final time = await AppTimePicker.show(
-      context,
-      initialTime: TimeOfDay.fromDateTime(_endAt),
-      title: I18n.tr('time_audit.picker.end_time'),
-      minuteStep: 5,
-    );
-    if (time == null) return;
-    if (!mounted) return;
-    setState(
-      () => _endAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      ),
-    );
+    if (_saving || _picking || !_canAct()) return;
+    _picking = true;
+    try {
+      final date = await AppDatePicker.pickSolar(
+        context,
+        initialDate: _endAt,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+        titleKey: 'time_audit.picker.end_date',
+      );
+      if (date == null || !_canAct()) return;
+      if (!mounted) return;
+      final time = await AppTimePicker.show(
+        context,
+        initialTime: TimeOfDay.fromDateTime(_endAt),
+        titleKey: 'time_audit.picker.end_time',
+        minuteStep: 5,
+      );
+      if (time == null || !_canAct()) return;
+      setState(() {
+        _endAt = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          time.hour,
+          time.minute,
+        );
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _picking = false);
+      } else {
+        _picking = false;
+      }
+    }
   }
 
   Future<void> _save() async {
-    final provider = context.read<TimeAuditProvider>();
-    final minutes = int.tryParse(_minutesCtrl.text.trim()) ?? 0;
-    final endAt = _endAt.isAfter(_startAt)
-        ? _endAt
-        : _startAt.add(Duration(minutes: minutes <= 0 ? 1 : minutes));
-    final entry = TimeEntry(
-      id: widget.entry?.id,
-      title: _titleCtrl.text.trim().isEmpty
-          ? I18n.tr('time_audit.default_title')
-          : _titleCtrl.text.trim(),
-      startAt: _startAt,
-      endAt: endAt,
-      category: _category,
-      source: TimeEntrySource.manual,
-      note: _noteCtrl.text.trim(),
-      createdAt: widget.entry?.createdAt,
-    );
-    if (widget.entry == null) {
-      await provider.add(entry);
-    } else {
-      await provider.update(entry);
+    if (_saving || _picking || !_canAct()) return;
+    final origin = widget.origin;
+
+    if (_isExistingEntry) {
+      final exists = origin.provider.entries.any((e) => e.id == _draftId);
+      if (!exists) {
+        if (mounted && _canAct(checkRoute: true)) {
+          _showSaveError();
+        }
+        return;
+      }
     }
-    if (!mounted) return;
-    Navigator.pop(context);
+
+    setState(() => _saving = true);
+    try {
+      final minutes = int.tryParse(_minutesCtrl.text.trim()) ?? 0;
+      final endAt = _endAt.isAfter(_startAt)
+          ? _endAt
+          : _startAt.add(Duration(minutes: minutes <= 0 ? 1 : minutes));
+      final entry = TimeEntry(
+        id: _draftId,
+        title: _titleCtrl.text.trim().isEmpty
+            ? I18n.tr('time_audit.default_title')
+            : _titleCtrl.text.trim(),
+        startAt: _startAt,
+        endAt: endAt,
+        category: _category,
+        source: widget.entry?.source ?? TimeEntrySource.manual,
+        sourceId: widget.entry?.sourceId,
+        dedupeKey: widget.entry?.dedupeKey,
+        note: _noteCtrl.text.trim(),
+        createdAt: _draftCreatedAt,
+      );
+
+      if (_isExistingEntry ||
+          origin.provider.entries.any((e) => e.id == _draftId)) {
+        await origin.provider.update(entry);
+      } else {
+        await origin.provider.add(entry);
+      }
+
+      if (!mounted) return;
+      if (!origin.isCurrent(context, checkRoute: false)) {
+        return;
+      }
+
+      _dismissOwningSheet();
+    } catch (_) {
+      if (mounted && _canAct(checkRoute: true)) {
+        _showSaveError();
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 }
 
@@ -1302,13 +2185,13 @@ class _TimeEndpointTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _TimeEndpointTile({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.onTap,
+    this.onTap,
   });
 
   @override
@@ -1346,8 +2229,6 @@ String _formatDateTime(DateTime d) => I18nDateFormat.shortDateTime(d);
 
 String _clock(DateTime d) => I18nDateFormat.time(d);
 
-String _date(DateTime d) => I18nDateFormat.date(d);
-
 String _formatDuration(int seconds) {
   if (seconds >= 3600) {
     return '${(seconds / 3600).toStringAsFixed(seconds % 3600 == 0 ? 0 : 1)} ${I18n.tr('unit.hour')}';
@@ -1369,16 +2250,17 @@ String _labelSeparator() {
   };
 }
 
-Color _colorFor(TimeEntryCategory category) => switch (category) {
-  TimeEntryCategory.focus => const Color(0xFFE53935),
-  TimeEntryCategory.todo => const Color(0xFF42A5F5),
-  TimeEntryCategory.habit => const Color(0xFF66BB6A),
-  TimeEntryCategory.goal => const Color(0xFFAB47BC),
-  TimeEntryCategory.study => const Color(0xFF26A69A),
-  TimeEntryCategory.work => const Color(0xFFFF9800),
-  TimeEntryCategory.life => const Color(0xFF8D6E63),
-  TimeEntryCategory.other => const Color(0xFF78909C),
-};
+Color _colorFor(TimeEntryCategory category, ColorScheme cs) =>
+    switch (category) {
+      TimeEntryCategory.focus => DesignTokens.defaultError,
+      TimeEntryCategory.todo => cs.primary,
+      TimeEntryCategory.habit => DesignTokens.defaultSuccess,
+      TimeEntryCategory.goal => cs.tertiary,
+      TimeEntryCategory.study => DesignTokens.defaultAccent,
+      TimeEntryCategory.work => DesignTokens.defaultWarning,
+      TimeEntryCategory.life => cs.secondary,
+      TimeEntryCategory.other => cs.onSurfaceVariant,
+    };
 
 IconData _iconFor(TimeEntryCategory category) => switch (category) {
   TimeEntryCategory.focus => Icons.timer_outlined,

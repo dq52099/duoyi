@@ -37,10 +37,6 @@ void main() {
     expect(result.exitCode, isNot(0));
     expect(
       _combinedOutput(result),
-      contains('summary.tsv must contain exactly 8 group rows'),
-    );
-    expect(
-      _combinedOutput(result),
       contains('summary.tsv missing group: 7/8 debug APK build'),
     );
   });
@@ -56,7 +52,101 @@ void main() {
     expect(result.exitCode, isNot(0));
     expect(_combinedOutput(result), contains('empty file:'));
   });
+
+  for (final count in [1, 4]) {
+    test(
+      'alignment report accepts $count recognized acceptance groups',
+      () async {
+        _writeReport(
+          tempDir,
+          extraGroups: _acceptanceGroups.take(count).toList(),
+        );
+        final result = await _runValidator(tempDir);
+        expect(result.exitCode, 0, reason: _combinedOutput(result));
+      },
+    );
+  }
+
+  for (final group in ['7/8 debug APK build', ..._acceptanceGroups]) {
+    test('alignment report rejects duplicate $group', () async {
+      _writeReport(tempDir, extraGroups: [..._acceptanceGroups, group]);
+      final result = await _runValidator(tempDir);
+      expect(result.exitCode, isNot(0));
+      expect(_combinedOutput(result), contains('duplicate group: $group'));
+    });
+  }
+
+  test('expanded rows cannot replace a mandatory legacy gate', () async {
+    _writeReport(
+      tempDir,
+      omitGroup: '7/8 debug APK build',
+      extraGroups: _acceptanceGroups,
+    );
+    final result = await _runValidator(tempDir);
+    expect(result.exitCode, isNot(0));
+    expect(
+      _combinedOutput(result),
+      contains('missing group: 7/8 debug APK build'),
+    );
+  });
+
+  for (final unknown in ['other acceptance', 'group']) {
+    test('alignment report rejects unknown row $unknown', () async {
+      _writeReport(tempDir, extraGroups: [unknown]);
+      final result = await _runValidator(tempDir);
+      expect(result.exitCode, isNot(0));
+      expect(_combinedOutput(result), contains('unknown group: $unknown'));
+    });
+  }
+
+  test('the final acceptance row is validated without a trailing newline', () async {
+    _writeReport(tempDir, extraGroups: _acceptanceGroups);
+    final summary = File('${tempDir.path}/summary.tsv');
+    final lines = summary.readAsLinesSync();
+    final fields = lines.last.split('\t');
+    fields[1] = 'unverified';
+    lines[lines.length - 1] = fields.join('\t');
+    summary.writeAsStringSync(lines.join('\n'));
+    final result = await _runValidator(tempDir);
+    expect(result.exitCode, isNot(0));
+    expect(_combinedOutput(result), contains('invalid status'));
+  });
+
+  test(
+    'expanded rows retain status duration column and log validation',
+    () async {
+      _writeReport(
+        tempDir,
+        extraGroups: _acceptanceGroups,
+        emptyLogFor: _acceptanceGroups.first,
+      );
+      final summary = File('${tempDir.path}/summary.tsv');
+      final lines = summary.readAsLinesSync();
+      final fields = lines.last.split('\t');
+      fields[1] = 'approved';
+      fields[2] = 'later';
+      lines[lines.length - 1] = '${fields.join('\t')}\textra';
+      summary.writeAsStringSync('${lines.join('\n')}\n');
+      final result = await _runValidator(tempDir);
+      expect(result.exitCode, isNot(0));
+      for (final message in [
+        'exactly four columns',
+        'invalid status',
+        'invalid duration',
+        'empty file:',
+      ]) {
+        expect(_combinedOutput(result), contains(message));
+      }
+    },
+  );
 }
+
+const _acceptanceGroups = [
+  'default iOS visual acceptance',
+  'global localization acceptance',
+  'settings flow acceptance',
+  'mobile performance acceptance',
+];
 
 Future<ProcessResult> _runValidator(Directory reportDir) {
   return Process.run(
@@ -71,7 +161,12 @@ Future<ProcessResult> _runValidator(Directory reportDir) {
   );
 }
 
-void _writeReport(Directory dir, {String? omitGroup, String? emptyLogFor}) {
+void _writeReport(
+  Directory dir, {
+  String? omitGroup,
+  String? emptyLogFor,
+  List<String> extraGroups = const [],
+}) {
   final groups = <String>[
     '1/8 404 and route contracts',
     '2/8 style layout and readable selection',
@@ -81,6 +176,7 @@ void _writeReport(Directory dir, {String? omitGroup, String? emptyLogFor}) {
     '6/8 Flutter analyzer',
     '7/8 debug APK build',
     '8/8 device-only notification alarm widget regression',
+    ...extraGroups,
   ];
 
   final summary = StringBuffer('group\tstatus\tduration_seconds\tlog\n');

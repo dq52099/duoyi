@@ -1,0 +1,5 @@
+module DuoyiWidgetStoreC [system] {
+    header "DuoyiWidgetStoreC.h"
+    link "sqlite3"
+    export *
+}

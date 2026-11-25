@@ -94,8 +94,9 @@
   "preferencesNotificationStatusBarDisabled": "Notification bar entry disabled",
   "preferencesNotificationStatusBarSyncFailed": "Notification bar sync failed, so the previous setting was restored. Check notification permission and channels.",
   "preferencesShowCompletedTitle": "Show completed tasks",
-  "preferencesShowCompletedSubtitle": "Hide completed items to focus on open work",
+  "preferencesShowCompletedSubtitle": "Show completed tasks in default views; Completed and Include archived remain available when off",
   "preferencesPomodoroLengthTitle": "Default Pomodoro length",
+  "preferencesPomodoroLengthSubtitle": "Used with “Default”; your current timer is preserved",
   "preferencesSectionBottomNav": "Bottom navigation",
   "preferencesSectionBottomNavSubtitle": "Show up to five bottom tabs; Me stays fixed, Widgets can be hidden",
   "preferencesSectionInteraction": "Interaction",
@@ -123,6 +124,11 @@
   "preferencesNotifyPendingCleared": "All scheduled reminders were canceled",
   "preferencesNotifyOpenSettingsFailed": "Unable to open system settings",
   "preferencesRingtoneSection": "Built-in reminder sounds",
+  "preferencesReportReminderDailyTime": "Daily review notification time",
+  "preferencesReportReminderWeeklyTime": "Weekly report notification time",
+  "preferencesReportReminderMonthlyTime": "Monthly report notification time",
+  "preferencesReportReminderYearlyTime": "Annual report notification time",
+  "preferencesReportReminderTimeSubtitle": "Updating will reschedule the next report notification",
   "preferencesRingtoneSectionSubtitle": "For HyperOS and other devices where default notifications are muted",
   "preferencesRingtoneSectionSubtitleAndroid": "Android uses the in-app ringtone service for devices where default notifications may be muted",
   "preferencesRingtoneSectionSubtitleApple": "iOS and macOS use system notification sounds and time-sensitive alerts, so Android-only ringtone choices are hidden",
@@ -143,6 +149,9 @@
   "preferencesDailyReminderTime": "Reminder time",
   "preferencesDailyReminderTimeSubtitle": "Send a reminder with sound and vibration at the selected time",
   "preferencesDailyReminderTimeSuffix": " time",
+  "preferencesDailyReminder1Time": "Reminder 1 time",
+  "preferencesDailyReminder2Time": "Reminder 2 time",
+  "preferencesDailyReminder3Time": "Reminder 3 time",
   "preferencesDailyReminderTimePickerSubtitle": "Set when this reminder fires",
   "preferencesDailyReminderKindTitle": "Reminder method",
   "preferencesDailyReminderKindPushDescription": "System notification reminder",
@@ -325,9 +334,9 @@
   "profileAvatarSelected": "Avatar selected. Save to apply it.",
   "profileCoins": "Coins",
   "profileAccountId": "Account",
-  "profileUsernameLocked": "Username is the unique account ID and cannot be changed here.",
+  "profileUsernameLocked": "Username is the account identifier and cannot be changed here",
   "profileAccountSecurity": "Account security",
-  "profileAccountSecuritySubtitle": "Password and sensitive actions are grouped here",
+  "profileAccountSecuritySubtitle": "Password and sensitive account actions live here",
   "profileBio": "Bio",
   "profileUpdated": "Profile updated",
   "profileSaved": "Saved",
@@ -417,6 +426,7 @@
   "noteUnpin": "Unpin",
   "noteArchive": "Archive",
   "noteRestore": "Restore",
+  "noteActionFailed": "Action failed. Nothing changed. Try again.",
   "noteLinkPlaceholder": "Link text",
   "noteAttachmentPickFile": "Choose from system files",
   "noteAttachmentPickFileSubtitle": "Images, PDFs, and documents are saved as attachments",
@@ -624,7 +634,10 @@
   "diarySummaryStreak": "Streak",
   "diaryRecentTitle": "Recent diary",
   "diaryRecentRecordsSuffix": " entries",
+  "diaryRecentRecordsSuffixSingular": " entry",
   "diaryEntryCountSuffix": " entries",
+  "diaryEntryCountSuffixSingular": " entry",
+  "diaryStreakDaySingular": "day",
   "diaryMoodStatsTitle": "Mood distribution, last 30 days",
   "diaryNoData": "No data yet",
   "diaryAiInsights": "AI diary insights",
@@ -686,9 +699,9 @@
   "countdownReminderExactAlarmMissing": "Exact alarm permission is off, so the reminder may be delayed",
   "countdownReminderFullscreenMissing": "Full-screen reminder permission is off, so lock-screen pop-up may not work",
   "countdownReminderSavedWithWarningsPrefix": "Countdown saved, ",
-  "countdownReminderEmailWarning": "Countdown saved, and email reminders will be sent by the server when online.",
+  "countdownReminderEmailWarning": "Countdown saved. Email reminder will be sent by the server when online.",
   "countdownReminderExceptionPrefix": "Countdown saved, but the reminder was not registered: ",
-  "countdownReminderTimePast": "Countdown saved, but the reminder time is already in the past. Please choose another reminder time.",
+  "countdownReminderTimePast": "Countdown saved, but the reminder time has passed. Choose another reminder time.",
   "countdownStatusPinned": "Pinned",
   "countdownStatusExpired": "Expired",
   "countdownStatusSoon": "Soon",
@@ -741,7 +754,7 @@
   "anniversaryReminderEmailWarning": "Email reminder will be sent by the server when online.",
   "anniversaryReminderExceptionPrefix": "Reminder was not registered: ",
   "anniversaryReminderSavedPrefix": "Saved, ",
-  "anniversaryReminderTimePast": "Saved, but the reminder time is already in the past. Please choose another reminder time.",
+  "anniversaryReminderTimePast": "Saved, but the reminder time has passed. Choose another reminder time.",
   "anniversaryLunarYearSuffix": "",
   "courseWeekPrefix": "Week ",
   "courseWeekSuffix": "",
@@ -921,6 +934,7 @@
   "habitWeekday5": "F",
   "habitWeekday6": "S",
   "habitWeekday7": "S",
+  "habitGroupUngrouped": "Ungrouped",
   "habitGroupTodaySuffix": " done today",
   "habitGroupMoreHabitsPrefix": "",
   "habitGroupMoreHabitsSuffix": " more habits. Use the Today tab or habit details to view them.",
@@ -1027,7 +1041,18 @@
   "calendarContentDatePickerSubtitle": "Jump to specified date",
   "calendarContentDatePickerTitle": "Select date",
   "calendarContentTimePickerStartTime": "Start time",
+  "calendarPickerStartDate": "Start date",
+  "calendarPickerEndDate": "End date",
+  "calendarPickerStartTime": "Start time",
+  "calendarPickerEndTime": "End time",
+  "calendarPickerRescheduleDate": "Reschedule",
+  "calendarPickerAdjustStartTime": "Adjust start time",
+  "calendarPickerAdjustStartTimeSubtitle": "Keep current date and duration, update end time",
+  "calendarPickerAdjustDueTime": "Adjust time",
+  "calendarPickerAdjustDueTimeSubtitle": "Keep current date, only adjust due time",
   "pickerActionToday": "Today",
+  "pickerEmpty": "No options available",
+  "pickerNotSet": "Not set",
   "pickerDateIgnoreYear": "Ignore year",
   "pickerDateIgnoreYearDesc": "Ideal for birthdays and recurring annual dates",
   "pickerDateNextMonth": "Next month",
@@ -1052,5 +1077,1186 @@
   "pickerWeekdayTue": "Tue",
   "pickerWeekdayWed": "Wed",
   "widgetHabitNoneToday": "No habits scheduled today",
-  "widgetHabitView": "View habits"
+  "widgetHabitView": "View habits",
+  "aiScheduleScreenTitle": "Create with AI",
+  "aiScheduleAiDisabledTitle": "AI is off",
+  "aiScheduleAiDisabledMessage": "Local time parsing will create a draft you can review before saving.",
+  "aiScheduleInputTitle": "Describe your plan",
+  "aiScheduleInputSubtitle": "For example: Meet the product team tomorrow at 3 pm and remind me beforehand",
+  "aiScheduleInputHint": "Describe an event, task or reminder in natural language",
+  "aiScheduleEmptyInput": "Please describe what you want to schedule or accomplish.",
+  "aiScheduleRecognize": "Recognize and review",
+  "aiScheduleRecognizing": "Recognizing",
+  "aiScheduleErrorTitle": "Could not create draft",
+  "aiScheduleDraftTitle": "Review draft",
+  "aiScheduleDraftAiMessage": "Review the type, title, time and reminder before creating it.",
+  "aiScheduleDraftFallbackMessage": "This is a local fallback draft. Confirm it before saving.",
+  "aiScheduleWarningAiIncomplete": "The AI result is incomplete.",
+  "aiScheduleWarningLocalFallback": "AI recognition was unavailable.",
+  "aiScheduleWarningAppendix": "Review the local draft below before creating it.",
+  "aiScheduleConfirmCardTitle": "What will be created",
+  "aiScheduleTypeLabel": "Type",
+  "aiScheduleTitleLabel": "Title",
+  "aiScheduleStartLabel": "Starts",
+  "aiScheduleEndLabel": "Ends",
+  "aiScheduleReminderLabel": "Reminder",
+  "aiScheduleNotesLabel": "Notes",
+  "aiScheduleSubtasksLabel": "Subtasks",
+  "aiScheduleCalendarType": "Event",
+  "aiScheduleTodoType": "Task",
+  "aiScheduleReminderEnabled": "System reminder enabled",
+  "aiScheduleReminderDisabled": "No reminder",
+  "aiScheduleSaving": "Saving",
+  "aiScheduleCreate": "Create",
+  "aiScheduleDone": "Done",
+  "aiScheduleViewDetails": "View details",
+  "aiScheduleCreatedEvent": "Event created",
+  "aiScheduleCreatedTask": "Task created",
+  "aiScheduleCreatedEventWithReminderIssue": "Event created, but reminder was not registered",
+  "aiScheduleCreatedTaskWithReminderIssue": "Task created, but reminder was not registered",
+  "aiScheduleCreatedItemSummary": "{typeLabel}: {title}",
+  "aiScheduleStartSummaryCalendar": "Starts: {value}",
+  "aiScheduleStartSummaryTodo": "Planned time: {value}",
+  "aiScheduleLocalSaved": "Saved on this device",
+  "aiScheduleLocalSavedCalendar": "Event saved on this device",
+  "aiScheduleLocalSavedTodo": "Task saved on this device",
+  "aiScheduleReminderRegistered": "Reminder registered with system notifications",
+  "aiScheduleTaskReminderSubmitted": "Task reminder submitted for system registration",
+  "aiScheduleGenericReminderIssue": "Reminder was not registered",
+  "aiScheduleAccountChanged": "Account changed. Reopen this page before trying again.",
+  "aiScheduleInputChanged": "The input changed. Recognize it again before creating.",
+  "aiScheduleGenericSaveFailed": "Could not save. Please try again.",
+  "aiScheduleAlarmPermissionRequired": "System notification permission is required to register alarm reminders. Please enable notification permission and save again.",
+  "aiScheduleEventReminderIssueTitle": "Event reminder registration failed",
+  "aiScheduleTaskReminderIssueTitle": "Task reminder registration failed",
+  "aiScheduleCalendarSubtitle": "Created with AI",
+  "aiScheduleCalendarSubtitleAllDay": "Created with AI · All day",
+  "aiScheduleCalendarReminderTitle": "Event reminder",
+  "aiScheduleSourceAi": "AI recognized the input. Confirm it before creating.",
+  "aiScheduleSourceAiWithLocalFallback": "The AI response was incomplete; local parsing filled the draft.",
+  "aiScheduleSourceLocalParser": "This uses local parsing. Confirm the time and type.",
+  "aiScheduleWarningReminderNotice": "Reminder notice",
+  "aiScheduleWarningNotice": "Notice",
+  "aiScheduleWarningUnavailable": "The AI service was unavailable, so a local draft was prepared.",
+  "aiScheduleWarningNoUsableDraft": "The AI did not return a usable draft, so a local draft was prepared.",
+  "aiScheduleWarningInvalidResponse": "The AI response could not be read, so a local draft was prepared.",
+  "aiScheduleWarningMissingReminderTime": "Specific reminder time was not recognized. Reminder is turned off.",
+  "aiScheduleWarningReviewDraft": "Please review the draft details before creating.",
+  "aiScheduleWarningGenericFallback": "A local draft was prepared for review.",
+  "aiScheduleErrorNotEnabled": "AI feature is not enabled. Please contact your administrator.",
+  "aiScheduleErrorQuotaExceeded": "Daily AI quota exceeded. Please try again tomorrow.",
+  "aiScheduleErrorRateLimit": "Too many requests. Please wait a moment and try again.",
+  "aiScheduleErrorTimeout": "AI service timed out. Please try again.",
+  "aiScheduleErrorGeneric": "Could not create draft. Please try again.",
+  "widgetHostSupportIosTitle": "Add from your Home Screen",
+  "widgetHostSupportWebTitle": "Widget previews for the web",
+  "widgetHostSupportMobileTitle": "Mobile widget previews",
+  "widgetHostSupportIosMessage": "Touch and hold an empty area on your Home Screen, open the widget gallery, then choose Duoyi.",
+  "widgetHostSupportMobileMessage": "Preview widget styles here. To add home screen widgets, use Duoyi on Android or iOS.",
+  "widgetHostAddIosAction": "How to add",
+  "widgetHostAddMobileAction": "Use on mobile",
+  "widgetHostHelpMobileTitle": "Use widgets on your phone",
+  "widgetAddDialogTitle": "Add to Home Screen",
+  "widgetHostHelpIosMessage": "Touch and hold an empty area on your Home Screen. Tap Edit or + to open the widget gallery. Search for Duoyi, choose a size, then tap Add Widget. Small, medium and large sizes are available; supported iPads also offer extra large. Choose the size in the system gallery.\n\nOn iPhone (iOS 16+) or iPad (iPadOS 17+), touch and hold the Lock Screen, tap Customize, tap a widget area, then choose Duoyi.",
+  "widgetHostHelpMobileMessage": "This page previews widget styles. Install and open Duoyi on Android or iOS to use home screen widgets. On Android, add from the app or your home screen widget picker. On iOS, find Duoyi in the Home Screen widget gallery.",
+  "widgetHostTipsIosMessage": "Choose the actual size in the system widget gallery. Widgets show the latest synced content; open Duoyi and refresh if it looks out of date.",
+  "widgetHostTipsPreviewMessage": "A preview here does not add a home screen widget. Add and use widgets in Duoyi on Android or iOS.",
+  "widgetTipsBannerMessage": "Compact and Detailed have fixed sizes. Touch and hold Standard to resize if your launcher supports it. To change size presets, remove the widget and add it again. Confirm additions in the system dialog; if it does not appear, check Duoyi permissions.",
+  "widgetHostStyleCompactDescription": "Compact highlights key information.",
+  "widgetHostStyleDetailedDescription": "Detailed shows more context.",
+  "widgetHostStyleStandardDescription": "Standard balances information and space.",
+  "widgetHostStyleDescriptionIos": "{description} Choose the actual size in the system gallery.",
+  "@widgetHostStyleDescriptionIos": {
+    "description": "hostStyleDescription / ios 外层",
+    "placeholders": {
+      "description": {
+        "type": "String",
+        "example": "Standard balances information and space."
+      }
+    }
+  },
+  "widgetStyleSyncSuccess": "Widget style set to {modeLabel}.",
+  "@widgetStyleSyncSuccess": {
+    "description": "styleSyncSuccess / —; hostStyleSyncSuccess / ios；android委托styleSyncSuccess",
+    "placeholders": {
+      "modeLabel": {
+        "type": "String",
+        "example": "Custom label"
+      }
+    }
+  },
+  "widgetPreviewStyleSyncSuccess": "Preview style set to {modeLabel}.",
+  "@widgetPreviewStyleSyncSuccess": {
+    "description": "hostStyleSyncSuccess / web/desktop",
+    "placeholders": {
+      "modeLabel": {
+        "type": "String",
+        "example": "Custom label"
+      }
+    }
+  },
+  "widgetRefreshTooltip": "Refresh widgets",
+  "widgetPreviewHeaderTitle": "Home Screen Widget Preview",
+  "widgetStylePanelTitle": "Widget Style",
+  "widgetCategoryAll": "All",
+  "widgetCategoryProductivity": "Productivity",
+  "widgetCategoryLife": "Lifestyle",
+  "widgetCatalogTodoTitle": "Today’s tasks",
+  "widgetCatalogCalendarTitle": "Calendar",
+  "widgetCatalogScheduleTitle": "Today’s schedule",
+  "widgetCatalogGoalTitle": "Goals",
+  "widgetCatalogNoteTitle": "Quick Notes",
+  "widgetCatalogAnniversaryTitle": "Anniversaries",
+  "widgetCatalogTodoSubtitle": "View and complete todos on home screen with quick capture",
+  "widgetCatalogFocusSubtitle": "Show today focus sessions, duration, and next plan",
+  "widgetCatalogHabitSubtitle": "Track today completion rate, streaks, and quick check-in",
+  "widgetCatalogCalendarSubtitle": "Monthly overview with today indicator",
+  "widgetCatalogScheduleSubtitle": "View today schedule items ordered chronologically",
+  "widgetCatalogGoalSubtitle": "Show active goals and progress status",
+  "widgetCatalogCourseSubtitle": "Show today class periods, classrooms, and times",
+  "widgetCatalogNoteSubtitle": "View recently updated memos and quick notes",
+  "widgetCatalogAnniversarySubtitle": "Count down important days and track total days",
+  "widgetCatalogDiarySubtitle": "Review recent mood entries and diary snippets",
+  "widgetDisplayModeCompactLabel": "Compact",
+  "widgetDisplayModeDetailedLabel": "Detailed",
+  "widgetDisplayModeStandardLabel": "Standard",
+  "widgetDisplayModeCompactDescription": "Compact highlights key information at a fixed size.",
+  "widgetDisplayModeDetailedDescription": "Detailed uses a fixed size; content adapts to available space.",
+  "widgetDisplayModeStandardDescription": "Standard adapts content to available space. Touch and hold to resize if your launcher supports it.",
+  "widgetStyleSyncFailed": "Failed to sync widget style to home screen. Please retry.",
+  "widgetCannotOpenSettings": "Unable to open app settings. Please check Duoyi permissions in system settings.",
+  "widgetRefreshSuccess": "Widgets refreshed",
+  "widgetRefreshFailed": "Failed to refresh. Please try again later.",
+  "widgetPinSupportCheckingTitle": "Checking home screen widget support",
+  "widgetPinSupportCheckingMessage": "Checking whether current launcher supports adding widgets directly.",
+  "widgetPinSupportSupportedTitle": "Current launcher supports adding from app",
+  "widgetPinSupportSupportedMessage": "Add from the app, then confirm in the system dialog.",
+  "widgetPinSupportUnsupportedPlatformTitle": "Platform does not support in-app pinning",
+  "widgetPinSupportUnsupportedLauncherTitle": "Current launcher does not support in-app pinning",
+  "widgetPinSupportPermissionDeniedTitle": "Home screen permission denied",
+  "widgetPinSupportConfirmationBlockedTitle": "Confirmation dialog may be blocked",
+  "widgetPinSupportInvalidKindTitle": "Widget kind cannot be pinned",
+  "widgetPinSupportFallbackTitle": "Current launcher may not support in-app pinning",
+  "widgetPinSupportUnsupportedPlatformMessage": "Please add Duoyi via the system widget picker on Android.",
+  "widgetPinSupportUnsupportedLauncherMessage": "Current launcher has not enabled in-app pinning. Please add from system widget picker.",
+  "widgetPinSupportPermissionDeniedMessage": "System did not allow Duoyi to add widgets. Enable permission in settings and retry.",
+  "widgetPinSupportConfirmationBlockedMessage": "Confirmation dialog may be blocked. Please check background pop-up permissions.",
+  "widgetPinSupportInvalidKindMessage": "Please update the app and retry.",
+  "widgetPinSupportFallbackMessage": "If no dialog appears, check widget and pop-up permissions in system settings, or add via system widget picker.",
+  "widgetActionAppSettings": "App Settings",
+  "widgetActionRecheck": "Recheck",
+  "widgetActionOpenPermissions": "Open Permissions",
+  "widgetActionGotIt": "Got It",
+  "widgetPinHelpUnsupportedMessage": "Current launcher does not support direct pinning. Long press an empty area on your home screen to add from the widget picker.",
+  "widgetPinHelpUnsupportedPlatformMessage": "Current platform does not support adding Android widgets. Please add Duoyi from the system widget picker on Android.",
+  "widgetPinHelpUnsupportedLauncherMessage": "Current launcher has not enabled in-app pinning. Long press an empty area on home screen to add from widget picker.",
+  "widgetPinHelpPermissionDeniedMessage": "System did not allow Duoyi to add widgets. Enable permission in system settings and retry, or add from widget picker.",
+  "widgetPinHelpConfirmationBlockedMessage": "System confirmation dialog may be blocked. Please check background pop-up permissions.",
+  "widgetPinHelpInvalidKindMessage": "This widget type is not supported yet. Update the app and try again.",
+  "widgetPinHelpUnavailableMessage": "Failed to send request. Check home screen permissions and retry, or add from widget picker.",
+  "widgetPinHelpRequestedMessage": "Pin request initiated. Please confirm in the system dialog.",
+  "widgetPinConfirmationInvalidWidgetIdTitle": "Addition Incomplete",
+  "widgetPinConfirmationInvalidWidgetIdMessage": "Widget was not created on home screen. Retry or add from system widget picker.",
+  "widgetPinConfirmationTimeoutTitle": "Awaiting Confirmation",
+  "widgetPinConfirmationTimeoutMessage": "Request sent, but system confirmation not received. Check home screen for dialog or verify permissions.",
+  "widgetPinConfirmationUnavailableTitle": "Addition Error",
+  "widgetPinConfirmationUnavailableMessage": "No result returned by launcher. Retry or add from system widget picker.",
+  "widgetPinConfirmationSuccessTitle": "Added",
+  "widgetPinConfirmationSuccessMessage": "Home screen widget added.",
+  "widgetCheckingDesktopSupport": "Checking support",
+  "widgetPinDisabledAndroidOnly": "In-app pin is Android only",
+  "widgetPinDisabledPicker": "Add via system widget picker",
+  "widgetPinDisabledHelp": "View Pin Help",
+  "widgetLoadingStyle": "Loading style",
+  "widgetStyleLoadFailed": "Could not load style. Retry or choose a style.",
+  "widgetStyleSyncPending": "Style saved. Home screen sync is unconfirmed. Retry or refresh.",
+  "widgetUpdatingStyle": "Updating style",
+  "widgetRequestingAdd": "Requesting...",
+  "widgetAddWidgetButtonLabel": "Add {modeLabel} {launcherRequestLabel}",
+  "@widgetAddWidgetButtonLabel": {
+    "description": "addWidgetButtonLabel / —",
+    "placeholders": {
+      "modeLabel": {
+        "type": "String",
+        "example": "Custom label"
+      },
+      "launcherRequestLabel": {
+        "type": "String",
+        "example": "request label"
+      }
+    }
+  },
+  "widgetPinInitiatedSnackBar": "Request sent. Confirm the {modeLabel} widget in the system dialog.",
+  "@widgetPinInitiatedSnackBar": {
+    "description": "pinInitiatedSnackBar / —",
+    "placeholders": {
+      "modeLabel": {
+        "type": "String",
+        "example": "Custom label"
+      }
+    }
+  },
+  "widgetPinSuccessSnackBar": "Added {modeLabel} widget to home screen.",
+  "@widgetPinSuccessSnackBar": {
+    "description": "pinSuccessSnackBar / —",
+    "placeholders": {
+      "modeLabel": {
+        "type": "String",
+        "example": "Custom label"
+      }
+    }
+  },
+  "widgetTipsBannerTitle": "Home Screen Widget Tips",
+  "widgetDesktopWebTitle": "Web Calendar View",
+  "widgetDesktopWebMessage": "Home screen widgets require Android or iOS. Web desktop hides widget pinning and preserves monthly calendar preview and entry.",
+  "widgetDesktopWebTileSubtitle": "Web desktop displays calendar by default without widget pin controls",
+  "widgetDesktopWebOpenCalendar": "Open Calendar",
+  "widgetPreviewTodoTitle": "Tasks",
+  "widgetPreviewScheduleTitle": "Schedule",
+  "widgetPreviewSampleBadge": "Sample · {title}",
+  "@widgetPreviewSampleBadge": {
+    "description": "previewSampleBadge / —",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Raw title"
+      }
+    }
+  },
+  "widgetSampleHeaderDate": "{cellLabel} · {monthLabel} {day}",
+  "@widgetSampleHeaderDate": {
+    "description": "sampleHeaderDate / date ?? 2026-05-17",
+    "placeholders": {
+      "cellLabel": {
+        "type": "String",
+        "example": "Sample"
+      },
+      "monthLabel": {
+        "type": "String",
+        "example": "Dec"
+      },
+      "day": {
+        "type": "String",
+        "example": "3"
+      }
+    }
+  },
+  "widgetRefreshPreviewTooltip": "Refresh preview",
+  "widgetCalendarMonthHeader": "{monthLabel} {yearText}",
+  "@widgetCalendarMonthHeader": {
+    "description": "calendarMonthHeader / 整数转为原始十进制字符串",
+    "placeholders": {
+      "yearText": {
+        "type": "String",
+        "example": "2026"
+      },
+      "monthLabel": {
+        "type": "String",
+        "example": "Dec"
+      }
+    }
+  },
+  "widgetTodoItem1": "Organize daily plan",
+  "widgetTodoItem2": "Review project proposal",
+  "widgetTodoItem3": "30-min evening workout",
+  "widgetTodoSummaryCount": "Today’s tasks · 3 items",
+  "widgetTodoQuickAdd": "+ Quick Add",
+  "widgetFocusMetricSessions": "Sessions",
+  "widgetFocusMetricDuration": "Minutes",
+  "widgetFocusMetricNext": "Next (min)",
+  "widgetFocusTimerUnit": "min",
+  "widgetFocusStartButton": "Start 25-min focus",
+  "widgetFocusLine1": "Today: 2 sessions · 50 min deep work",
+  "widgetFocusLine2": "Next: 25-min focus",
+  "widgetFocusLine3": "Tap to start focus",
+  "widgetHabitTitle": "Today’s habits",
+  "widgetCalendarCurrentDate": "May 17 · Sunday",
+  "widgetCalendarCurrentDay": "May 17",
+  "widgetHabitLine1": "· Evening Stretch · Pending",
+  "widgetHabitLine2": "· 5-day streak",
+  "widgetHabitCheckInButton": "Check-in: Stretch",
+  "widgetScheduleItem1": "09:00 Daily planning · Reminder",
+  "widgetScheduleItem2": "14:30 Team sync",
+  "widgetScheduleItem3": "19:00 Evening review",
+  "widgetGoalItem1": "Release prep · 68%",
+  "widgetGoalItem2": "Workouts 3/5 this week",
+  "widgetGoalItem3": "Evening review · Pending",
+  "widgetCourseItem1": "Period 1-2 Advanced Math · Rm 203",
+  "widgetCourseItem2": "Period 3-4 Product Design · Online",
+  "widgetCourseItem3": "Period 5-6 English · Rm 305",
+  "widgetNoteItem1": "Meeting notes",
+  "widgetNoteItem2": "Idea checklist",
+  "widgetNoteItem3": "Book highlights",
+  "widgetAnniversaryItem1": "Anniversary · 6 days left",
+  "widgetAnniversaryItem2": "Work Anniversary · 18 days left",
+  "widgetAnniversaryItem3": "Trip Anniversary · 32 days left",
+  "widgetDiaryItem1": "May 17 Completed focus review today",
+  "widgetDiaryItem2": "May 16 Logged an evening walk",
+  "widgetDiaryItem3": "May 15 Bedtime reflection",
+  "widgetCalendarMonthJan": "Jan",
+  "widgetCalendarMonthFeb": "Feb",
+  "widgetCalendarMonthMar": "Mar",
+  "widgetCalendarMonthApr": "Apr",
+  "widgetCalendarMonthMay": "May",
+  "widgetCalendarMonthJun": "Jun",
+  "widgetCalendarMonthJul": "Jul",
+  "widgetCalendarMonthAug": "Aug",
+  "widgetCalendarMonthSep": "Sep",
+  "widgetCalendarMonthOct": "Oct",
+  "widgetCalendarMonthNov": "Nov",
+  "widgetCalendarMonthDec": "Dec",
+  "dataSettingsThemeSaveFailed": "Failed to save theme settings",
+  "@dataSettingsThemeSaveFailed": {
+    "description": "Theme and widget appearance: themeSaveFailed."
+  },
+  "dataSettingsRewardShopReason": "Reward shop theme decoration",
+  "@dataSettingsRewardShopReason": {
+    "description": "Theme and widget appearance: rewardShopReason."
+  },
+  "dataSettingsRedeemThemeTitle": "Redeem theme: {name}",
+  "@dataSettingsRedeemThemeTitle": {
+    "description": "Theme and widget appearance: redeemThemeTitle.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsRedeemFocusBackdropTitle": "Redeem focus backdrop: {name}",
+  "@dataSettingsRedeemFocusBackdropTitle": {
+    "description": "Theme and widget appearance: redeemFocusBackdropTitle.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsRedeemAvatarFrameTitle": "Redeem avatar frame: {name}",
+  "@dataSettingsRedeemAvatarFrameTitle": {
+    "description": "Theme and widget appearance: redeemAvatarFrameTitle.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsRedeemCardSkinTitle": "Redeem card skin: {name}",
+  "@dataSettingsRedeemCardSkinTitle": {
+    "description": "Theme and widget appearance: redeemCardSkinTitle.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsInsufficientCoins": "Not enough Time Coins, need {diff} more",
+  "@dataSettingsInsufficientCoins": {
+    "description": "Theme and widget appearance: insufficientCoins.",
+    "placeholders": {
+      "diff": {
+        "type": "int"
+      }
+    }
+  },
+  "dataSettingsThemeApplied": "Applied {name}",
+  "@dataSettingsThemeApplied": {
+    "description": "Theme and widget appearance: themeApplied.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsThemeRedeemedAndApplied": "Redeemed and applied {name}",
+  "@dataSettingsThemeRedeemedAndApplied": {
+    "description": "Theme and widget appearance: themeRedeemedAndApplied.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsWidgetBackgroundSwitched": "Widget background switched to {label}",
+  "@dataSettingsWidgetBackgroundSwitched": {
+    "description": "Theme and widget appearance: widgetBackgroundSwitched.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsUnlockThemeFirst": "Please unlock this theme first",
+  "@dataSettingsUnlockThemeFirst": {
+    "description": "Theme and widget appearance: unlockThemeFirst."
+  },
+  "dataSettingsWidgetCardSkinSwitched": "Widget card skin switched to {label}",
+  "@dataSettingsWidgetCardSkinSwitched": {
+    "description": "Theme and widget appearance: widgetCardSkinSwitched.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsUnlockCardSkinFirst": "Please unlock this card skin first",
+  "@dataSettingsUnlockCardSkinFirst": {
+    "description": "Theme and widget appearance: unlockCardSkinFirst."
+  },
+  "dataSettingsWidgetFollowCurrentTheme": "Follow Current Theme",
+  "@dataSettingsWidgetFollowCurrentTheme": {
+    "description": "Theme and widget appearance: widgetFollowCurrentTheme."
+  },
+  "dataSettingsWidgetFollowCardSkin": "Follow Card Skin",
+  "@dataSettingsWidgetFollowCardSkin": {
+    "description": "Theme and widget appearance: widgetFollowCardSkin."
+  },
+  "dataSettingsWidgetThemeTitle": "Desktop Widget Theme",
+  "@dataSettingsWidgetThemeTitle": {
+    "description": "Theme and widget appearance: widgetThemeTitle."
+  },
+  "dataSettingsWidgetThemeSubtitle": "Adjust desktop widget background and card skin individually",
+  "@dataSettingsWidgetThemeSubtitle": {
+    "description": "Theme and widget appearance: widgetThemeSubtitle."
+  },
+  "dataSettingsWidgetBackgroundLabel": "Background",
+  "@dataSettingsWidgetBackgroundLabel": {
+    "description": "Theme and widget appearance: widgetBackgroundLabel."
+  },
+  "dataSettingsWidgetCardSkinLabel": "Card Skin",
+  "@dataSettingsWidgetCardSkinLabel": {
+    "description": "Theme and widget appearance: widgetCardSkinLabel."
+  },
+  "dataSettingsCoinCount": "Time Coins {count}",
+  "@dataSettingsCoinCount": {
+    "description": "Theme and widget appearance: coinCount.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataSettingsCoinCost": "{cost} Coins",
+  "@dataSettingsCoinCost": {
+    "description": "Theme and widget appearance: coinCost.",
+    "placeholders": {
+      "cost": {
+        "type": "int"
+      }
+    }
+  },
+  "dataSettingsFocusBackdropSectionTitle": "Focus Backdrops",
+  "@dataSettingsFocusBackdropSectionTitle": {
+    "description": "Theme and widget appearance: focusBackdropSectionTitle."
+  },
+  "dataSettingsFocusBackdropSectionSubtitle": "Redeem Pomodoro card decorations with Time Coins",
+  "@dataSettingsFocusBackdropSectionSubtitle": {
+    "description": "Theme and widget appearance: focusBackdropSectionSubtitle."
+  },
+  "dataSettingsAvatarFrameSectionTitle": "Avatar Frames",
+  "@dataSettingsAvatarFrameSectionTitle": {
+    "description": "Theme and widget appearance: avatarFrameSectionTitle."
+  },
+  "dataSettingsAvatarFrameSectionSubtitle": "Redeem Profile avatar decorations with Time Coins",
+  "@dataSettingsAvatarFrameSectionSubtitle": {
+    "description": "Theme and widget appearance: avatarFrameSectionSubtitle."
+  },
+  "dataSettingsCardSkinSectionTitle": "Card Skins",
+  "@dataSettingsCardSkinSectionTitle": {
+    "description": "Theme and widget appearance: cardSkinSectionTitle."
+  },
+  "dataSettingsCardSkinSectionSubtitle": "Redeem information card styles with Time Coins",
+  "@dataSettingsCardSkinSectionSubtitle": {
+    "description": "Theme and widget appearance: cardSkinSectionSubtitle."
+  },
+  "dataSettingsWidgetSyncNoticeTitle": "Widget Theme",
+  "@dataSettingsWidgetSyncNoticeTitle": {
+    "description": "Theme and widget appearance: widgetSyncNoticeTitle."
+  },
+  "dataSettingsWidgetSyncNoticeSubtitle": "Background and card skin sync to device home widgets",
+  "@dataSettingsWidgetSyncNoticeSubtitle": {
+    "description": "Theme and widget appearance: widgetSyncNoticeSubtitle."
+  },
+  "dataSettingsFocusBackdropClassicName": "Classic Focus",
+  "@dataSettingsFocusBackdropClassicName": {
+    "description": "Built-in reward display name for stable ID classic_focus."
+  },
+  "dataSettingsFocusBackdropMorningName": "Morning Desk",
+  "@dataSettingsFocusBackdropMorningName": {
+    "description": "Built-in reward display name for stable ID morning_focus."
+  },
+  "dataSettingsFocusBackdropForestName": "Forest Breeze",
+  "@dataSettingsFocusBackdropForestName": {
+    "description": "Built-in reward display name for stable ID forest_focus."
+  },
+  "dataSettingsFocusBackdropOceanName": "Ocean Flow",
+  "@dataSettingsFocusBackdropOceanName": {
+    "description": "Built-in reward display name for stable ID ocean_focus."
+  },
+  "dataSettingsFocusBackdropNightName": "Night Flight",
+  "@dataSettingsFocusBackdropNightName": {
+    "description": "Built-in reward display name for stable ID night_focus."
+  },
+  "dataSettingsFocusBackdropClassicDescription": "Clean gradient Pomodoro background",
+  "@dataSettingsFocusBackdropClassicDescription": {
+    "description": "Built-in reward display description for stable ID classic_focus."
+  },
+  "dataSettingsFocusBackdropMorningDescription": "Warm background ideal for morning study and reading",
+  "@dataSettingsFocusBackdropMorningDescription": {
+    "description": "Built-in reward display description for stable ID morning_focus."
+  },
+  "dataSettingsFocusBackdropForestDescription": "Natural green background for deep, sustained focus",
+  "@dataSettingsFocusBackdropForestDescription": {
+    "description": "Built-in reward display description for stable ID forest_focus."
+  },
+  "dataSettingsFocusBackdropOceanDescription": "Calm cyan background for review and low-pressure focus",
+  "@dataSettingsFocusBackdropOceanDescription": {
+    "description": "Built-in reward display description for stable ID ocean_focus."
+  },
+  "dataSettingsFocusBackdropNightDescription": "Low-brightness dark background for night study",
+  "@dataSettingsFocusBackdropNightDescription": {
+    "description": "Built-in reward display description for stable ID night_focus."
+  },
+  "dataSettingsAvatarFrameSimpleName": "Simple Frame",
+  "@dataSettingsAvatarFrameSimpleName": {
+    "description": "Built-in reward display name for stable ID simple_frame."
+  },
+  "dataSettingsAvatarFrameGoldenName": "Golden Medal Frame",
+  "@dataSettingsAvatarFrameGoldenName": {
+    "description": "Built-in reward display name for stable ID golden_frame."
+  },
+  "dataSettingsAvatarFrameForestName": "Green Leaf Frame",
+  "@dataSettingsAvatarFrameForestName": {
+    "description": "Built-in reward display name for stable ID forest_frame."
+  },
+  "dataSettingsAvatarFrameAuroraName": "Aurora Energy Frame",
+  "@dataSettingsAvatarFrameAuroraName": {
+    "description": "Built-in reward display name for stable ID aurora_frame."
+  },
+  "dataSettingsAvatarFrameSimpleDescription": "Default avatar frame style",
+  "@dataSettingsAvatarFrameSimpleDescription": {
+    "description": "Built-in reward display description for stable ID simple_frame."
+  },
+  "dataSettingsAvatarFrameGoldenDescription": "Golden frame for achievement masters",
+  "@dataSettingsAvatarFrameGoldenDescription": {
+    "description": "Built-in reward display description for stable ID golden_frame."
+  },
+  "dataSettingsAvatarFrameForestDescription": "Natural leafy frame for consistent habit streaks",
+  "@dataSettingsAvatarFrameForestDescription": {
+    "description": "Built-in reward display description for stable ID forest_frame."
+  },
+  "dataSettingsAvatarFrameAuroraDescription": "Glowing aurora frame for productive weeks",
+  "@dataSettingsAvatarFrameAuroraDescription": {
+    "description": "Built-in reward display description for stable ID aurora_frame."
+  },
+  "dataSettingsCardSkinPlainName": "Plain Card",
+  "@dataSettingsCardSkinPlainName": {
+    "description": "Built-in reward display name for stable ID plain_card."
+  },
+  "dataSettingsCardSkinPaperName": "Paper Planner Card",
+  "@dataSettingsCardSkinPaperName": {
+    "description": "Built-in reward display name for stable ID paper_card."
+  },
+  "dataSettingsCardSkinMintName": "Mint Checklist Card",
+  "@dataSettingsCardSkinMintName": {
+    "description": "Built-in reward display name for stable ID mint_card."
+  },
+  "dataSettingsCardSkinStarlightName": "Starlight Glass Card",
+  "@dataSettingsCardSkinStarlightName": {
+    "description": "Built-in reward display name for stable ID starlight_card."
+  },
+  "dataSettingsCardSkinPlainDescription": "Default card surface style",
+  "@dataSettingsCardSkinPlainDescription": {
+    "description": "Built-in reward display description for stable ID plain_card."
+  },
+  "dataSettingsCardSkinPaperDescription": "Gentle paper texture for schedules and todos",
+  "@dataSettingsCardSkinPaperDescription": {
+    "description": "Built-in reward display description for stable ID paper_card."
+  },
+  "dataSettingsCardSkinMintDescription": "Refreshing card style for habits and focus logs",
+  "@dataSettingsCardSkinMintDescription": {
+    "description": "Built-in reward display description for stable ID mint_card."
+  },
+  "dataSettingsCardSkinStarlightDescription": "Low-light glass texture for evening reviews",
+  "@dataSettingsCardSkinStarlightDescription": {
+    "description": "Built-in reward display description for stable ID starlight_card."
+  },
+  "settingsUiSaveFailed": "Could not save this setting. Please try again.",
+  "@settingsUiSaveFailed": {
+    "description": "Settings presentation copy: saveFailed"
+  },
+  "settingsUiDecreaseValue": "Decrease",
+  "@settingsUiDecreaseValue": {
+    "description": "Settings presentation copy: decreaseValue"
+  },
+  "settingsUiIncreaseValue": "Increase",
+  "@settingsUiIncreaseValue": {
+    "description": "Settings presentation copy: increaseValue"
+  },
+  "settingsUiDecreaseSetting": "Decrease {title}",
+  "@settingsUiDecreaseSetting": {
+    "description": "Settings presentation copy: decreaseSetting",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiIncreaseSetting": "Increase {title}",
+  "@settingsUiIncreaseSetting": {
+    "description": "Settings presentation copy: increaseSetting",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiCurrentFirstWeekday": "Currently {weekday}",
+  "@settingsUiCurrentFirstWeekday": {
+    "description": "Settings presentation copy: currentFirstWeekday",
+    "placeholders": {
+      "weekday": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiPreferencesHeroExplanation": "Customize display and behavior preferences, and manage bottom navigation layout and widgets.",
+  "@settingsUiPreferencesHeroExplanation": {
+    "description": "Settings presentation copy: preferencesHeroExplanation"
+  },
+  "settingsUiPreferencesCategoriesSectionTitle": "Personalization",
+  "@settingsUiPreferencesCategoriesSectionTitle": {
+    "description": "Settings presentation copy: preferencesCategoriesSectionTitle"
+  },
+  "settingsUiPreferencesCategoriesSectionSubtitle": "Choose a category to customize",
+  "@settingsUiPreferencesCategoriesSectionSubtitle": {
+    "description": "Settings presentation copy: preferencesCategoriesSectionSubtitle"
+  },
+  "settingsUiDisplayAndBehaviorTitle": "Display & Behavior",
+  "@settingsUiDisplayAndBehaviorTitle": {
+    "description": "Settings presentation copy: displayAndBehaviorTitle"
+  },
+  "settingsUiDisplayAndBehaviorSubtitle": "Date formats, time zone, startup tab, haptics, and auto-archive",
+  "@settingsUiDisplayAndBehaviorSubtitle": {
+    "description": "Settings presentation copy: displayAndBehaviorSubtitle"
+  },
+  "settingsUiDisplayAndBehaviorHeroSubtitle": "Manage date format, app time zone, startup defaults, haptic feedback, and auto-archive.",
+  "@settingsUiDisplayAndBehaviorHeroSubtitle": {
+    "description": "Settings presentation copy: displayAndBehaviorHeroSubtitle"
+  },
+  "settingsUiNavigationSectionTitle": "Navigation",
+  "@settingsUiNavigationSectionTitle": {
+    "description": "Settings presentation copy: navigationSectionTitle"
+  },
+  "settingsUiNavigationSectionSubtitle": "Up to 5 bottom tabs; \"Me\" is pinned, Widgets can be hidden",
+  "@settingsUiNavigationSectionSubtitle": {
+    "description": "Settings presentation copy: navigationSectionSubtitle"
+  },
+  "settingsUiJumpToMenuTitle": "Jump To",
+  "@settingsUiJumpToMenuTitle": {
+    "description": "Settings presentation copy: jumpToMenuTitle"
+  },
+  "settingsUiJumpToDate": "Date & Calendar",
+  "@settingsUiJumpToDate": {
+    "description": "Settings presentation copy: jumpToDate"
+  },
+  "settingsUiJumpToDefaults": "Defaults",
+  "@settingsUiJumpToDefaults": {
+    "description": "Settings presentation copy: jumpToDefaults"
+  },
+  "settingsUiJumpToInteraction": "Interaction",
+  "@settingsUiJumpToInteraction": {
+    "description": "Settings presentation copy: jumpToInteraction"
+  },
+  "settingsUiDateFormatIso": "ISO ({pattern})",
+  "@settingsUiDateFormatIso": {
+    "description": "Settings presentation copy: dateFormatLabel",
+    "placeholders": {
+      "pattern": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiDateFormatUs": "US ({pattern})",
+  "@settingsUiDateFormatUs": {
+    "description": "Settings presentation copy: dateFormatLabel",
+    "placeholders": {
+      "pattern": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiDateFormatEurope": "UK/EU ({pattern})",
+  "@settingsUiDateFormatEurope": {
+    "description": "Settings presentation copy: dateFormatLabel",
+    "placeholders": {
+      "pattern": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiDateFormatEastAsian": "East Asian ({pattern})",
+  "@settingsUiDateFormatEastAsian": {
+    "description": "Settings presentation copy: dateFormatLabel",
+    "placeholders": {
+      "pattern": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiTimeZoneShanghai": "China Standard Time (Shanghai)",
+  "@settingsUiTimeZoneShanghai": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneMexicoCity": "Mexico City Time",
+  "@settingsUiTimeZoneMexicoCity": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneTijuana": "Tijuana Time",
+  "@settingsUiTimeZoneTijuana": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneTokyo": "Tokyo Time (Japan)",
+  "@settingsUiTimeZoneTokyo": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneHongKong": "Hong Kong Time",
+  "@settingsUiTimeZoneHongKong": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneSingapore": "Singapore Time",
+  "@settingsUiTimeZoneSingapore": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneNewYork": "New York Time (Eastern)",
+  "@settingsUiTimeZoneNewYork": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneLosAngeles": "Los Angeles Time (Pacific)",
+  "@settingsUiTimeZoneLosAngeles": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneLondon": "London Time",
+  "@settingsUiTimeZoneLondon": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneParis": "Paris Time (Central Europe)",
+  "@settingsUiTimeZoneParis": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneSydney": "Sydney Time (Eastern Australia)",
+  "@settingsUiTimeZoneSydney": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiNavigationBannerMessage": "The bottom navigation bar displays up to 5 tabs. \"Me\" is pinned. Widgets can be hidden and accessed from the \"Me\" tab.",
+  "@settingsUiNavigationBannerMessage": {
+    "description": "Settings presentation copy: navigationBannerMessage"
+  },
+  "settingsUiMaxTabsConstraint": "Max {max} tabs allowed",
+  "@settingsUiMaxTabsConstraint": {
+    "description": "Settings presentation copy: maxTabsConstraint",
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsUiNavigationHiddenAtLimit": "Limit reached, hide another tab first",
+  "@settingsUiNavigationHiddenAtLimit": {
+    "description": "Settings presentation copy: navigationHiddenAtLimit"
+  },
+  "settingsUiNavigationMoveUp": "Move {label} up",
+  "@settingsUiNavigationMoveUp": {
+    "description": "Settings presentation copy: navigationMoveUp",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiNavigationMoveDown": "Move {label} down",
+  "@settingsUiNavigationMoveDown": {
+    "description": "Settings presentation copy: navigationMoveDown",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiSelectOption": "Select Option",
+  "@settingsUiSelectOption": {
+    "description": "Settings presentation copy: selectOption"
+  },
+  "settingsUiSelectFirstDay": "First Day of Week",
+  "@settingsUiSelectFirstDay": {
+    "description": "Settings presentation copy: selectFirstDay"
+  },
+  "settingsUiSelectDateFormat": "Date Format",
+  "@settingsUiSelectDateFormat": {
+    "description": "Settings presentation copy: selectDateFormat"
+  },
+  "settingsUiSelectTimeZone": "App Time Zone",
+  "@settingsUiSelectTimeZone": {
+    "description": "Settings presentation copy: selectTimeZone"
+  },
+  "settingsUiSelectDefaultTab": "Default Startup Tab",
+  "@settingsUiSelectDefaultTab": {
+    "description": "Settings presentation copy: selectDefaultTab"
+  },
+  "settingsUiSelectAutoLock": "Auto-Lock Timeout",
+  "@settingsUiSelectAutoLock": {
+    "description": "Settings presentation copy: selectAutoLock"
+  },
+  "settingsUiAutoLockMinutes": "{minutes} min",
+  "@settingsUiAutoLockMinutes": {
+    "description": "Settings presentation copy: autoLockOptionLabel",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsUiAutoLockAfter": "Lock after {minutes} min in background",
+  "@settingsUiAutoLockAfter": {
+    "description": "Settings presentation copy: autoLockSubtitle",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "habitCopyWeekGoal": "Weekly goal: {target} {unit}/week",
+  "@habitCopyWeekGoal": {
+    "description": "Exact goal copy. Chinese intentionally ignores unit and retains literal 次; English uses default occurrence singular/plural only.",
+    "placeholders": {
+      "target": {
+        "type": "int"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyMonthGoal": "Monthly goal: {target} {unit}/month",
+  "@habitCopyMonthGoal": {
+    "description": "Exact goal copy. Chinese intentionally ignores unit and retains literal 次; English uses default occurrence singular/plural only.",
+    "placeholders": {
+      "target": {
+        "type": "int"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyActionEnd": "End",
+  "@habitCopyActionEnd": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyDeleteConfirmTitle": "Delete habit?",
+  "@habitCopyDeleteConfirmTitle": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyDeleteConfirmContent": "This habit and its records will be permanently deleted.",
+  "@habitCopyDeleteConfirmContent": {
+    "description": "Exact copy; habitName is intentionally unused in English.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyEndConfirmTitle": "End habit?",
+  "@habitCopyEndConfirmTitle": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyEndConfirmContent": "End \"{habitName}\"? Past history will be preserved.",
+  "@habitCopyEndConfirmContent": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyEndHabitAction": "End",
+  "@habitCopyEndHabitAction": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyDeleteHabitAction": "Delete",
+  "@habitCopyDeleteHabitAction": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyMoreActions": "More",
+  "@habitCopyMoreActions": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyEndedFeedback": "Habit ended, history preserved",
+  "@habitCopyEndedFeedback": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyDeletedFeedback": "Habit deleted",
+  "@habitCopyDeletedFeedback": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopySaveSuccess": "Habit saved",
+  "@habitCopySaveSuccess": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyCheckInFailedWithRetry": "Failed to record check-in. Please try again.",
+  "@habitCopyCheckInFailedWithRetry": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyUndoFailedWithRetry": "Failed to undo check-in. Please try again.",
+  "@habitCopyUndoFailedWithRetry": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopySaveFailedWithRetry": "Failed to save habit. Please try again.",
+  "@habitCopySaveFailedWithRetry": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyActionFailedWithRetry": "Action failed. Please try again.",
+  "@habitCopyActionFailedWithRetry": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyNameRequired": "Please enter a habit name",
+  "@habitCopyNameRequired": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyDailyTargetInvalid": "Daily target must be at least 1",
+  "@habitCopyDailyTargetInvalid": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyReminderSchedulerMissing": "Reminder scheduler is not initialized. Please reopen the app before saving reminders.",
+  "@habitCopyReminderSchedulerMissing": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyNotificationsNotGranted": "Notifications not granted. Habit reminders will not sound or pop up",
+  "@habitCopyNotificationsNotGranted": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyReminderPermissionError": "Notification permission is required to set reminders.",
+  "@habitCopyReminderPermissionError": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyReminderRegisterFailed": "Failed to schedule reminder",
+  "@habitCopyReminderRegisterFailed": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyReminderSyncWarning": "Habit saved, but reminders not synced: {issueText}",
+  "@habitCopyReminderSyncWarning": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "issueText": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyPeriodGoalReached": "\"{habitName}\" {periodLabel} goal reached",
+  "@habitCopyPeriodGoalReached": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      },
+      "periodLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopySingleSessionGoalReached": "\"{habitName}\" single session goal reached today",
+  "@habitCopySingleSessionGoalReached": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCheckInSuccessNegative": "Recorded once for \"{habitName}\"",
+  "@habitCopyCheckInSuccessNegative": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyDateRecordFeedback": "Recorded for \"{habitName}\"",
+  "@habitCopyDateRecordFeedback": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyDateUndoFeedback": "Check-in undone for \"{habitName}\"",
+  "@habitCopyDateUndoFeedback": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyUnitCup": "cup",
+  "@habitCopyUnitCup": {
+    "description": "Exact lowercase cup key; count == 1 only.",
+    "placeholders": {}
+  },
+  "habitCopyUnitCups": "cups",
+  "@habitCopyUnitCups": {
+    "description": "Exact lowercase cup key; count != 1.",
+    "placeholders": {}
+  },
+  "habitCopyUnitTime": "time",
+  "@habitCopyUnitTime": {
+    "description": "Default generated occurrence singular; count == 1 only.",
+    "placeholders": {}
+  },
+  "habitCopyMeasuredCount": "{count} {unit}",
+  "@habitCopyMeasuredCount": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCountWithFlexProgress": "{measuredCount} · {flexProgressLabel}",
+  "@habitCopyCountWithFlexProgress": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "measuredCount": {
+        "type": "String"
+      },
+      "flexProgressLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCountRecorded": "Recorded {measuredCount}",
+  "@habitCopyCountRecorded": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "measuredCount": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCountRatio": "{measuredCount} / {target} {targetUnit}",
+  "@habitCopyCountRatio": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "measuredCount": {
+        "type": "String"
+      },
+      "target": {
+        "type": "int"
+      },
+      "targetUnit": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCheckInSuccessStandardReached": "\"{habitName}\" goal reached today",
+  "@habitCopyCheckInSuccessStandardReached": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCheckInSuccessStandardProgress": "Checked in \"{habitName}\" {count}/{target}",
+  "@habitCopyCheckInSuccessStandardProgress": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "target": {
+        "type": "int"
+      }
+    }
+  },
+  "habitCopyPeriodFallback": "Period",
+  "@habitCopyPeriodFallback": {
+    "description": "Null flexPrefix only; empty or blank authored prefix must remain literal.",
+    "placeholders": {}
+  },
+  "habitCopyCheckInSuccessFlexProgress": "Checked in \"{habitName}\" {flexLabel}",
+  "@habitCopyCheckInSuccessFlexProgress": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      },
+      "flexLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiAutoArchiveDayOne": "1 day",
+  "@settingsUiAutoArchiveDayOne": {
+    "description": "Complete settings label with locale-specific grammar and punctuation.",
+    "placeholders": {}
+  },
+  "settingsUiAutoArchiveDayMany": "{days} days",
+  "@settingsUiAutoArchiveDayMany": {
+    "description": "Complete settings label with locale-specific grammar and punctuation.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsUiAutoArchiveAfterOneDay": "Auto-hide after 1 day",
+  "@settingsUiAutoArchiveAfterOneDay": {
+    "description": "Complete settings label with locale-specific grammar and punctuation.",
+    "placeholders": {}
+  },
+  "settingsUiAutoArchiveAfterDays": "Auto-hide after {days} days",
+  "@settingsUiAutoArchiveAfterDays": {
+    "description": "Complete settings label with locale-specific grammar and punctuation.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsUiFollowingSystemTimeZone": "Follow phone: {timeZoneName}",
+  "@settingsUiFollowingSystemTimeZone": {
+    "description": "Complete settings label with locale-specific grammar and punctuation.",
+    "placeholders": {
+      "timeZoneName": {
+        "type": "String"
+      }
+    }
+  }
 }

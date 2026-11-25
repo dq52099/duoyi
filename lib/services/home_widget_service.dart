@@ -8,6 +8,7 @@ import '../core/app_brand.dart';
 import '../core/brand_strings.dart';
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
+import '../core/calendar_date_navigation.dart';
 import '../core/platform_info.dart';
 import '../providers/theme_provider.dart';
 import 'android_widget_manager.dart';
@@ -41,6 +42,9 @@ class HomeWidgetService {
   static const String _iosAnniversaryWidgetName = 'DuoyiAnniversaryWidget';
   static const String _iosDiaryWidgetName = 'DuoyiDiaryWidget';
   static const String _appGroupId = 'group.com.duoyi.duoyi';
+  static const String _pendingBgActionsKey = 'duoyi_widget_pending_bg_actions';
+  static const String _todoCompletedBgIdsKey = 'todo_completed_bg_ids';
+  static const String _habitCheckedBgIdsKey = 'habit_checked_bg_ids';
 
   /// 账号清理（登出/切号）时写回小组件的兜底 payload。文案值经 I18n 取词：
   /// en 用户登出后小组件不应回退为中文占位；其余为与语言无关的默认数值。
@@ -49,6 +53,7 @@ class HomeWidgetService {
     'widget_snapshot_day': '',
     'widget_snapshot_utc_offset_minutes': 0,
     'widget_locale': I18n.current.name,
+    'widget_first_day_of_week': DateTime.monday,
     'todo_count': 0,
     'habit_percent': 0,
     'habit_active_count': 0,
@@ -126,16 +131,16 @@ class HomeWidgetService {
     'widget_theme_brand_id': 'defaultBrand',
     'widget_theme_card_skin_id': 'plain_card',
     'widget_theme_dark': false,
-    'widget_theme_primary': '#FFC85656',
+    'widget_theme_primary': '#FF0066D6',
     'widget_theme_background': '#FFF6F7F9',
     'widget_theme_surface': '#FFFFFFFF',
     'widget_theme_nav_background': '#FFF1F3F6',
-    'widget_theme_border': '#00C85656',
+    'widget_theme_border': '#000066D6',
     'widget_theme_text': '#FF1F2933',
     'widget_theme_muted_text': '#FF667085',
     'widget_theme_on_primary': '#FFFFFFFF',
-    'widget_theme_accent_start': '#FFC85656',
-    'widget_theme_accent_end': '#FF2F8F83',
+    'widget_theme_accent_start': '#FF0066D6',
+    'widget_theme_accent_end': '#FF3898FF',
     'widget_theme_background_asset_key': '',
     'widget_theme_corner_radius_dp': 16,
     'widget_theme_control_radius_dp': 12,
@@ -143,8 +148,15 @@ class HomeWidgetService {
   };
   static Future<bool> Function()? dashboardDataRefresher;
 
-  /// Android publishes one complete native snapshot instead of exposing
-  /// partially updated HomeWidget preference keys to launcher readers.
+  /// A hint to the hydrated publication queue; the OS may suspend before finish.
+  static void Function(bool inBackground)? widgetLifecycleChanged;
+
+  static void setAppInBackground(bool value) {
+    widgetLifecycleChanged?.call(value);
+  }
+
+  /// Android and iOS publish one complete native snapshot instead of exposing
+  /// partially updated HomeWidget preference keys to native readers.
   static Future<bool> Function(Map<String, Object> values, DateTime capturedAt)?
   publicationWriter;
   static Future<bool> Function(Uri uri)? publicationActionValidator;
@@ -165,6 +177,16 @@ class HomeWidgetService {
   @visibleForTesting
   static bool? supportedForTesting;
 
+  @visibleForTesting
+  static bool? isAndroidForTesting;
+
+  @visibleForTesting
+  static bool? nativePublicationForTesting;
+
+  static bool get usesNativePublication =>
+      nativePublicationForTesting ??
+      (!kIsWeb && (PlatformInfo.isAndroid || PlatformInfo.isIOS));
+
   static String _lastThemeSignature = '';
   static String _lastPushSignature = '';
   static final Map<String, Object> _lastSavedPayloadValues = <String, Object>{};
@@ -173,6 +195,7 @@ class HomeWidgetService {
   static int _accountGeneration = 0;
   static int get accountGeneration => _accountGeneration;
   static bool _refreshPending = false;
+  static bool _clearOptimisticBgIdsOnNextRefresh = false;
   static bool _accountPayloadStorageCleared = true;
   static String? _accountActionNonce;
   static Future<void>? _nonceInitialization;
@@ -215,7 +238,8 @@ class HomeWidgetService {
   static Future<bool> isCurrentWidgetAction(Uri uri) async {
     if (uri.queryParameters['source'] != 'widget') return true;
     final nativeValidator = publicationActionValidator;
-    if (PlatformInfo.isAndroid && nativeValidator != null) {
+    if (usesNativePublication) {
+      if (nativeValidator == null) return false;
       try {
         return await nativeValidator(uri);
       } catch (error, stackTrace) {
@@ -251,14 +275,21 @@ class HomeWidgetService {
     final override = supportedForTesting;
     if (override != null) return override;
     if (kIsWeb) return false;
-    return PlatformInfo.isAndroid || PlatformInfo.isIOS;
+    return (isAndroidForTesting ?? PlatformInfo.isAndroid) ||
+        PlatformInfo.isIOS;
+  }
+
+  static bool get _isAndroid {
+    if (kIsWeb) return false;
+    if (supportedForTesting == false) return false;
+    return isAndroidForTesting ?? PlatformInfo.isAndroid;
   }
 
   static Future<bool> init() async {
     if (!_supported) return true;
     try {
       await HomeWidget.setAppGroupId(_appGroupId);
-      await _ensureActionNonce();
+      if (!usesNativePublication) await _ensureActionNonce();
       return true;
     } catch (e, st) {
       debugPrint('[HomeWidget] init failed: $e\n$st');
@@ -310,7 +341,7 @@ class HomeWidgetService {
 
   static Future<bool> updateTheme(HomeWidgetThemePayload theme) async {
     if (!_supported) return true;
-    if (PlatformInfo.isAndroid && publicationWriter != null) return true;
+    if (usesNativePublication) return publicationWriter != null;
     final generation = _accountGeneration;
     await _drainPendingAccountClear();
     return _serializePayload(() async {
@@ -377,6 +408,7 @@ class HomeWidgetService {
         if (!saveResult.ok) return false;
         _accountPayloadStorageCleared = true;
         _refreshPending = true;
+        await _clearPendingBgState(includeActionQueue: true);
         final ok = await _updateAllWidgets();
         if (ok) _refreshPending = false;
         return ok;
@@ -464,6 +496,7 @@ class HomeWidgetService {
     String? habitSummary,
     String? streakSummary,
     String? nextFocusLabel,
+    String? calendarMonthSummary,
     bool focusTimerCountUp = false,
     int focusTimerStartedAtMillis = 0,
     bool focusTimerRunning = false,
@@ -476,6 +509,8 @@ class HomeWidgetService {
     required HomeWidgetThemePayload theme,
     bool force = false,
     DateTime? snapshotAt,
+    int firstDayOfWeek = DateTime.monday,
+    bool Function()? isPresentationCurrent,
   }) async {
     if (!_supported) return true;
     final locale = I18n.current;
@@ -490,21 +525,30 @@ class HomeWidgetService {
         '${I18n.tr('widget.streak_record_prefix')}0${I18n.tr('widget.streak_suffix')}';
     final resolvedNextFocusLabel =
         nextFocusLabel ?? '25${I18n.tr('widget.next_focus_suffix')}';
+    final resolvedCalendarMonthSummary =
+        calendarMonthSummary ?? I18n.tr('widget.calendar_month_summary');
     final resolvedFocusTimerLabel =
         focusTimerLabel ?? I18n.tr('widget.focus_countdown');
     final resolvedHabitQuickCheckLabel =
         habitQuickCheckLabel ?? I18n.tr('widget.habit_quick_check_hint');
     final capturedAt = snapshotAt ?? DateTime.now();
     final generation = _accountGeneration;
+    final first = CalendarDateNavigation.normalizeFirstDayOfWeek(
+      firstDayOfWeek,
+    );
+    bool isCurrent() =>
+        generation == _accountGeneration &&
+        locale == I18n.current &&
+        (isPresentationCurrent?.call() ?? true);
+    if (!isCurrent()) return false;
     await _drainPendingAccountClear();
     return _serializePayload(() async {
-      final nativeWriter = PlatformInfo.isAndroid ? publicationWriter : null;
-      if (generation != _accountGeneration || locale != I18n.current) {
+      final nativeWriter = usesNativePublication ? publicationWriter : null;
+      if (usesNativePublication && nativeWriter == null) return false;
+      if (!isCurrent()) {
         return false;
       }
-      if ((nativeWriter == null && !await init()) ||
-          generation != _accountGeneration ||
-          locale != I18n.current) {
+      if ((nativeWriter == null && !await init()) || !isCurrent()) {
         return false;
       }
       final now = capturedAt;
@@ -538,6 +582,7 @@ class HomeWidgetService {
         habitSummary: resolvedHabitSummary,
         streakSummary: resolvedStreakSummary,
         nextFocusLabel: resolvedNextFocusLabel,
+        calendarMonthSummary: resolvedCalendarMonthSummary,
         focusTimerCountUp: focusTimerCountUp,
         focusTimerStartedAtMillis: focusTimerStartedAtMillis,
         focusTimerRunning: focusTimerRunning,
@@ -550,7 +595,7 @@ class HomeWidgetService {
         theme: theme,
       );
       final datedSignature =
-          '$day|$offset|${locale.name}|$habitActiveCount|$signature';
+          '$day|$offset|${locale.name}|$first|$habitActiveCount|$signature';
       if (!force && datedSignature == _lastPushSignature && !_refreshPending) {
         return true;
       }
@@ -561,6 +606,7 @@ class HomeWidgetService {
         final payload = <String, Object>{
           'widget_account_nonce': _accountActionNonce ?? '',
           'widget_locale': locale.name,
+          'widget_first_day_of_week': first,
           'todo_count': todoCount,
           'habit_percent': habitPercent.clamp(0, 100),
           'habit_active_count': habitActiveCount,
@@ -701,7 +747,7 @@ class HomeWidgetService {
           'schedule_highlight_3_id': scheduleHighlightIds.length > 2
               ? scheduleHighlightIds[2]
               : '',
-          'calendar_month_summary': I18n.tr('widget.calendar_month_summary'),
+          'calendar_month_summary': resolvedCalendarMonthSummary,
           'focus_summary': resolvedFocusSummary,
           'habit_summary': resolvedHabitSummary,
           'streak_summary': resolvedStreakSummary,
@@ -718,24 +764,31 @@ class HomeWidgetService {
           ...theme.payloadValues,
         };
         if (nativeWriter != null) {
-          final ok = await nativeWriter(payload, now);
-          if (ok &&
-              generation == _accountGeneration &&
-              locale == I18n.current) {
-            _refreshPending = false;
-            _lastPushSignature = datedSignature;
-            _lastThemeSignature = theme.signature;
-            return true;
+          _clearOptimisticBgIdsOnNextRefresh = true;
+          try {
+            final ok = await nativeWriter(payload, now);
+            if (ok && isCurrent()) {
+              if (_clearOptimisticBgIdsOnNextRefresh) {
+                _clearOptimisticBgIdsOnNextRefresh = false;
+                await _clearPendingBgState();
+              }
+              _refreshPending = false;
+              _lastPushSignature = datedSignature;
+              _lastThemeSignature = theme.signature;
+              return true;
+            }
+            return false;
+          } finally {
+            _clearOptimisticBgIdsOnNextRefresh = false;
           }
-          return false;
         }
+        if (!isCurrent()) return false;
         if (!await _saveWidgetPayloadValue('widget_snapshot_day', '')) {
           return false;
         }
+        if (!isCurrent()) return false;
         final saveResult = await _saveWidgetPayload(payload);
-        if (!saveResult.ok ||
-            generation != _accountGeneration ||
-            locale != I18n.current) {
+        if (!saveResult.ok || !isCurrent()) {
           return false;
         }
         if (!await _saveWidgetPayloadValue(
@@ -744,7 +797,7 @@ class HomeWidgetService {
         )) {
           return false;
         }
-        if (generation != _accountGeneration || locale != I18n.current) {
+        if (!isCurrent()) {
           return false;
         }
         final current = DateTime.now();
@@ -757,12 +810,13 @@ class HomeWidgetService {
         if (!await _saveWidgetPayloadValue('widget_snapshot_day', day)) {
           return false;
         }
-        if (generation != _accountGeneration || locale != I18n.current) {
+        if (!isCurrent()) {
           return false;
         }
+        await _clearPendingBgState();
         _refreshPending = true;
-        final ok = await _updateAllWidgets();
-        if (generation != _accountGeneration || locale != I18n.current) {
+        final ok = await _updateAllWidgets(isCurrent: isCurrent);
+        if (!isCurrent()) {
           return false;
         }
         if (ok) {
@@ -778,7 +832,13 @@ class HomeWidgetService {
     });
   }
 
-  static Future<bool> _updateAllWidgets() async {
+  static Future<bool> _updateAllWidgets({bool Function()? isCurrent}) async {
+    if (!(isCurrent?.call() ?? true)) return false;
+    if (_clearOptimisticBgIdsOnNextRefresh) {
+      _clearOptimisticBgIdsOnNextRefresh = false;
+      await _clearPendingBgState();
+      if (!(isCurrent?.call() ?? true)) return false;
+    }
     if (PlatformInfo.isAndroid) {
       final updated = await AndroidWidgetManager.refreshAllWidgets();
       if (updated == null) {
@@ -790,19 +850,34 @@ class HomeWidgetService {
       }
       return true;
     }
+    // WidgetKit exposes several independent families. Keep a small bounded
+    // fan-out so a refresh does not wait for ten sequential platform calls,
+    // while avoiding an unbounded burst on older devices.
+    const maxConcurrentUpdates = 3;
+    var nextIndex = 0;
     var ok = true;
-    for (final target in _widgetUpdateTargets) {
-      ok =
-          await _updateWidgetFamily(
-            androidName: target.androidName,
-            iOSName: target.iOSName,
-          ) &&
-          ok;
+    Future<void> worker() async {
+      while (true) {
+        if (!(isCurrent?.call() ?? true)) return;
+        final index = nextIndex++;
+        if (index >= _widgetUpdateTargets.length) return;
+        final target = _widgetUpdateTargets[index];
+        final updated = await _updateWidgetFamily(
+          androidName: target.androidName,
+          iOSName: target.iOSName,
+        );
+        ok = updated && ok;
+      }
     }
+
+    final workerCount = maxConcurrentUpdates < _widgetUpdateTargets.length
+        ? maxConcurrentUpdates
+        : _widgetUpdateTargets.length;
+    await Future.wait([for (var i = 0; i < workerCount; i++) worker()]);
     if (!ok) {
       debugPrint('[HomeWidget] one or more widget providers failed to update');
     }
-    return ok;
+    return ok && (isCurrent?.call() ?? true);
   }
 
   static Future<bool> _updateWidgetFamily({
@@ -853,6 +928,54 @@ class HomeWidgetService {
       (PlatformInfo.isAndroid || PlatformInfo.isIOS) &&
       WidgetLaunchService.instance.ownsDelivery(uri);
 
+  /// Reads and clears any pending Android background widget action URIs
+  /// (`duoyi_widget_pending_bg_actions`) and resets optimistic background
+  /// completion/check-in ID sets. No-op outside Android.
+  static Future<List<Uri>> drainPendingBgActions() async {
+    if (!_isAndroid) return const <Uri>[];
+    try {
+      final raw = await HomeWidget.getWidgetData<String>(_pendingBgActionsKey);
+      if (raw == null || raw.trim().isEmpty) {
+        if (raw != null) {
+          await _clearPendingBgState(includeActionQueue: true);
+        }
+        return const <Uri>[];
+      }
+      final actions = <Uri>[];
+      for (final line in raw.split('\n')) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+        final uri = Uri.tryParse(trimmed);
+        if (uri != null && uri.scheme == 'duoyi' && uri.hasAuthority) {
+          actions.add(uri);
+        }
+      }
+      await _clearPendingBgState(includeActionQueue: true);
+      return actions;
+    } catch (e, st) {
+      debugPrint('[HomeWidget] drainPendingBgActions failed: $e\n$st');
+      return const <Uri>[];
+    }
+  }
+
+  static Future<void> _clearPendingBgState({
+    bool includeActionQueue = false,
+  }) async {
+    if (!_isAndroid) return;
+    try {
+      final keys = <String>[
+        if (includeActionQueue) _pendingBgActionsKey,
+        _todoCompletedBgIdsKey,
+        _habitCheckedBgIdsKey,
+      ];
+      await Future.wait(
+        keys.map((key) => HomeWidget.saveWidgetData<String>(key, null)),
+      );
+    } catch (e, st) {
+      debugPrint('[HomeWidget] clear pending bg state failed: $e\n$st');
+    }
+  }
+
   static String _pushSignature({
     required int todoCount,
     required int habitPercent,
@@ -880,6 +1003,7 @@ class HomeWidgetService {
     required String habitSummary,
     required String streakSummary,
     required String nextFocusLabel,
+    required String calendarMonthSummary,
     required bool focusTimerCountUp,
     required int focusTimerStartedAtMillis,
     required bool focusTimerRunning,
@@ -922,6 +1046,7 @@ class HomeWidgetService {
       habitSummary,
       streakSummary,
       nextFocusLabel,
+      calendarMonthSummary,
       focusTimerCountUp,
       focusTimerStartedAtMillis,
       focusTimerRunning,
@@ -991,18 +1116,188 @@ class HomeWidgetThemePayload {
     required this.borderWidthDp,
   });
 
-  factory HomeWidgetThemePayload.fromThemeProvider(ThemeProvider provider) {
+  factory HomeWidgetThemePayload.fromThemeProvider(
+    ThemeProvider provider, {
+    bool? darkOverride,
+  }) {
     final brand = provider.activeWidgetBackgroundBrand;
+    final cardSkin = provider.activeWidgetCardSkin;
+    final isBrandDark = brand.theme.brightness == Brightness.dark;
+    if (darkOverride == true &&
+        (!isBrandDark ||
+            brand.id == AppBrands.defaultBrand.id ||
+            brand.id == AppBrands.liquidGlass.id)) {
+      return HomeWidgetThemePayload.darkVariantFor(brand, cardSkin);
+    }
+    if (darkOverride == false && isBrandDark) {
+      return HomeWidgetThemePayload._lightVariantFor(brand, cardSkin);
+    }
+    return HomeWidgetThemePayload._fromBrandAndSkin(
+      brand,
+      cardSkin,
+      dark: darkOverride ?? isBrandDark,
+    );
+  }
+
+  /// Dark Mode widget theme palette for light-first themes (`defaultBrand` &
+  /// `liquidGlass`) and fallback dark preview for any light brand.
+  factory HomeWidgetThemePayload.darkVariantFor(
+    AppBrand brand,
+    CardSkinReward skin,
+  ) {
+    final usesCardSkin = skin.id != ThemeProvider.defaultCardSkinId;
+    final cornerRadiusDp = _cornerRadiusForSkin(
+      skin.id,
+      defaultOrGlass:
+          (brand.id == AppBrands.defaultBrand.id ||
+              brand.id == AppBrands.liquidGlass.id) &&
+          !usesCardSkin,
+    );
+    final controlRadiusDp =
+        !usesCardSkin &&
+            (brand.id == AppBrands.defaultBrand.id ||
+                brand.id == AppBrands.liquidGlass.id)
+        ? 12
+        : 8;
+    if (brand.id == AppBrands.liquidGlass.id) {
+      return HomeWidgetThemePayload(
+        brandId: brand.id,
+        cardSkinId: skin.id,
+        dark: true,
+        primary: const Color(0xFF0A84FF),
+        background: const Color(0xE6161B24),
+        surface: const Color(0xD91F2633),
+        navBackground: const Color(0xCC283142),
+        border: const Color(0xFF3A465C),
+        text: const Color(0xFFF5F8FC),
+        mutedText: const Color(0xFFB0BCD0),
+        onPrimary: const Color(0xFFFFFFFF),
+        accentStart: usesCardSkin
+            ? skin.colors.first
+            : const Color(0xFF0A84FF),
+        accentEnd: usesCardSkin ? skin.colors.last : const Color(0xFF5AC8FA),
+        backgroundAssetKey: _backgroundAssetKey(brand.backgroundAsset),
+        cornerRadiusDp: cornerRadiusDp,
+        controlRadiusDp: controlRadiusDp,
+        borderWidthDp: 1,
+      );
+    }
+    if (brand.id == AppBrands.defaultBrand.id ||
+        brand.theme.brightness == Brightness.light) {
+      final cs = brand.theme.colorScheme;
+      final isDefault = brand.id == AppBrands.defaultBrand.id;
+      const baseBg = Color(0xFF14171F);
+      const baseSurface = Color(0xFF1C212B);
+      const baseNav = Color(0xFF242A36);
+      const baseBorder = Color(0xFF2F3847);
+      final primary = isDefault ? const Color(0xFF0A84FF) : cs.primary;
+      return HomeWidgetThemePayload(
+        brandId: brand.id,
+        cardSkinId: skin.id,
+        dark: true,
+        primary: primary,
+        background: isDefault
+            ? baseBg
+            : Color.alphaBlend(primary.withValues(alpha: 0.12), baseBg),
+        surface: isDefault
+            ? baseSurface
+            : Color.alphaBlend(primary.withValues(alpha: 0.10), baseSurface),
+        navBackground: isDefault
+            ? baseNav
+            : Color.alphaBlend(primary.withValues(alpha: 0.14), baseNav),
+        border: baseBorder,
+        text: const Color(0xFFF2F5FA),
+        mutedText: const Color(0xFFA5B0C2),
+        onPrimary: isDefault ? const Color(0xFFFFFFFF) : cs.onPrimary,
+        accentStart: usesCardSkin
+            ? skin.colors.first
+            : (isDefault ? const Color(0xFF0A84FF) : cs.primary),
+        accentEnd: usesCardSkin
+            ? skin.colors.last
+            : (isDefault ? const Color(0xFF409CFF) : cs.secondary),
+        backgroundAssetKey: _backgroundAssetKey(brand.backgroundAsset),
+        cornerRadiusDp: cornerRadiusDp,
+        controlRadiusDp: controlRadiusDp,
+        borderWidthDp: 1,
+      );
+    }
+    return HomeWidgetThemePayload._fromBrandAndSkin(brand, skin, dark: true);
+  }
+
+  factory HomeWidgetThemePayload._lightVariantFor(
+    AppBrand brand,
+    CardSkinReward skin,
+  ) {
+    final cs = brand.theme.colorScheme;
+    final usesCardSkin = skin.id != ThemeProvider.defaultCardSkinId;
+    final accentStart = usesCardSkin ? skin.colors.first : cs.primary;
+    final accentEnd = usesCardSkin ? skin.colors.last : cs.secondary;
+    final cornerRadiusDp = _cornerRadiusForSkin(skin.id, defaultOrGlass: false);
+    const lightBase = DesignTokens.defaultPageBackground;
+    final primaryTint = cs.primary.computeLuminance() > 0.45
+        ? const Color(0xFF0066D6)
+        : cs.primary;
+    return HomeWidgetThemePayload(
+      brandId: brand.id,
+      cardSkinId: skin.id,
+      dark: false,
+      primary: primaryTint,
+      background: Color.alphaBlend(primaryTint.withValues(alpha: 0.06), lightBase),
+      surface: DesignTokens.defaultSurface,
+      navBackground: Color.alphaBlend(
+        primaryTint.withValues(alpha: 0.08),
+        DesignTokens.defaultSurfaceMuted,
+      ),
+      border: Color.alphaBlend(
+        accentStart.withValues(alpha: usesCardSkin ? 0.34 : 0.20),
+        const Color(0xFFD0D5DD),
+      ),
+      text: DesignTokens.defaultText,
+      mutedText: DesignTokens.defaultTextMuted,
+      onPrimary: const Color(0xFFFFFFFF),
+      accentStart: accentStart,
+      accentEnd: accentEnd,
+      backgroundAssetKey: _backgroundAssetKey(brand.backgroundAsset),
+      cornerRadiusDp: cornerRadiusDp,
+      controlRadiusDp: 8,
+      borderWidthDp: usesCardSkin ? 1 : 0,
+    );
+  }
+
+  static int _cornerRadiusForSkin(
+    String cardSkinId, {
+    required bool defaultOrGlass,
+  }) {
+    return switch (cardSkinId) {
+      'paper_card' => 14,
+      'mint_card' => 15,
+      'starlight_card' => 16,
+      _ => defaultOrGlass ? 16 : 13,
+    };
+  }
+
+  factory HomeWidgetThemePayload._fromBrandAndSkin(
+    AppBrand brand,
+    CardSkinReward cardSkin, {
+    required bool dark,
+  }) {
     final theme = brand.theme;
     final cs = theme.colorScheme;
-    final dark = theme.brightness == Brightness.dark;
-    final cardSkin = provider.activeWidgetCardSkin;
     final usesCardSkin = cardSkin.id != ThemeProvider.defaultCardSkinId;
     final defaultIosStyle =
         brand.id == AppBrands.defaultBrand.id && !usesCardSkin;
+    final glassStyle = brand.id == AppBrands.liquidGlass.id && !usesCardSkin;
+    // Native widget hosts cannot reproduce the app's backdrop. Publish opaque
+    // glass surfaces composed on the brand's known base instead of wallpaper.
+    final glassBase = Color.alphaBlend(
+      brand.backgroundOverlay,
+      const Color(0xFFFFFFFF),
+    );
     final imageBacked = brand.backgroundAsset != null;
     final accentStart = usesCardSkin ? cardSkin.colors.first : cs.primary;
-    final accentEnd = usesCardSkin ? cardSkin.colors.last : cs.secondary;
+    final accentEnd = defaultIosStyle
+        ? const Color(0xFF3898FF)
+        : (usesCardSkin ? cardSkin.colors.last : cs.secondary);
     final baseBackground = defaultIosStyle
         ? DesignTokens.defaultPageBackground
         : Color.alphaBlend(
@@ -1015,6 +1310,11 @@ class HomeWidgetThemePayload {
           );
     final background = defaultIosStyle
         ? DesignTokens.defaultPageBackground
+        : glassStyle
+        ? Color.alphaBlend(
+            AppSurfaceStyle.liquidGlass.cardFillColor!,
+            glassBase,
+          )
         : Color.alphaBlend(
             accentEnd.withValues(
               alpha: imageBacked ? (dark ? 0.22 : 0.14) : 0.08,
@@ -1026,6 +1326,13 @@ class HomeWidgetThemePayload {
           );
     final surface = defaultIosStyle
         ? DesignTokens.defaultSurface
+        : glassStyle
+        ? Color.alphaBlend(
+            const Color(
+              0xFFFFFFFF,
+            ).withValues(alpha: DesignTokens.navBarIosBackgroundAlpha),
+            glassBase,
+          )
         : Color.alphaBlend(
             accentEnd.withValues(
               alpha: usesCardSkin
@@ -1043,6 +1350,11 @@ class HomeWidgetThemePayload {
           );
     final navBackground = defaultIosStyle
         ? DesignTokens.defaultSurfaceMuted
+        : glassStyle
+        ? Color.alphaBlend(
+            const Color(0xFFFFFFFF).withValues(alpha: 0.28),
+            glassBase,
+          )
         : Color.alphaBlend(
             cs.primary.withValues(
               alpha: imageBacked ? (dark ? 0.24 : 0.12) : 0.10,
@@ -1050,19 +1362,21 @@ class HomeWidgetThemePayload {
             surface,
           );
     final border = defaultIosStyle
-        ? const Color(0x00C85656)
+        ? const Color(0x000066D6)
+        : glassStyle
+        ? const Color(
+            0xFFFFFFFF,
+          ).withValues(alpha: DesignTokens.glassHighlightAlpha)
         : Color.alphaBlend(
             accentStart.withValues(
               alpha: usesCardSkin ? (dark ? 0.50 : 0.34) : 0.18,
             ),
             cs.outlineVariant,
           );
-    final cornerRadiusDp = switch (cardSkin.id) {
-      'paper_card' => 14,
-      'mint_card' => 15,
-      'starlight_card' => 16,
-      _ => defaultIosStyle ? 16 : 13,
-    };
+    final cornerRadiusDp = _cornerRadiusForSkin(
+      cardSkin.id,
+      defaultOrGlass: defaultIosStyle || glassStyle,
+    );
     return HomeWidgetThemePayload(
       brandId: brand.id,
       cardSkinId: cardSkin.id,
@@ -1073,14 +1387,18 @@ class HomeWidgetThemePayload {
       navBackground: navBackground,
       border: border,
       text: cs.onSurface,
-      mutedText: cs.onSurfaceVariant,
+      mutedText: defaultIosStyle
+          ? DesignTokens.defaultTextMuted
+          : cs.onSurfaceVariant,
       onPrimary: cs.onPrimary,
       accentStart: accentStart,
       accentEnd: accentEnd,
       backgroundAssetKey: _backgroundAssetKey(brand.backgroundAsset),
       cornerRadiusDp: cornerRadiusDp,
-      controlRadiusDp: defaultIosStyle ? 12 : 8,
-      borderWidthDp: usesCardSkin ? 1 : 0,
+      controlRadiusDp: defaultIosStyle || glassStyle ? 12 : 8,
+      // Publication v1 uses integer dp: retain a 1dp static highlight rather
+      // than rounding the app's 0.55px border down to zero.
+      borderWidthDp: usesCardSkin || glassStyle ? 1 : 0,
     );
   }
 

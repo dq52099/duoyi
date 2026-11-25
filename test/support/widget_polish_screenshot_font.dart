@@ -4,10 +4,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 bool _loaded = false;
+Future<void>? _fontRegistration;
 
 /// Use packaged fonts for readable optional evidence instead of test glyphs.
 Future<void> loadWidgetPolishScreenshotFonts() async {
+  final pending = _fontRegistration;
+  if (pending != null) {
+    await pending;
+    return;
+  }
   if (_loaded) return;
+  final registration = _registerWidgetPolishScreenshotFonts();
+  _fontRegistration = registration;
+  try {
+    await registration;
+  } catch (_) {
+    _loaded = false;
+    rethrow;
+  } finally {
+    _fontRegistration = null;
+  }
+}
+
+Future<void> _registerWidgetPolishScreenshotFonts() async {
+  // These native fonts remain registered for the lifetime of this test engine.
   final textBytes = File(
     'assets/fonts/DroidSansFallbackFull.ttf',
   ).readAsBytesSync();
@@ -31,6 +51,9 @@ Future<void> loadWidgetPolishScreenshotFonts() async {
     }
   }
   _loaded = true;
+  await PaintingBinding.instance.handleSystemMessage(<String, dynamic>{
+    'type': 'fontsChange',
+  });
 }
 
 ThemeData widgetPolishScreenshotTheme() {

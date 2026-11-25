@@ -14,6 +14,7 @@ class EmptyState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final double? minCardHeight;
+  final bool embedded;
 
   const EmptyState({
     super.key,
@@ -23,11 +24,14 @@ class EmptyState extends StatelessWidget {
     this.actionLabel,
     this.onAction,
     this.minCardHeight,
+    this.embedded = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     return LayoutBuilder(
       builder: (context, constraints) {
         final narrow = constraints.maxWidth.isFinite
@@ -38,15 +42,19 @@ class EmptyState extends StatelessWidget {
             (constraints.maxHeight.isFinite
                 ? constraints.maxHeight < 280
                 : false);
-        final outerPadding = narrow ? 8.0 : (compact ? 12.0 : 24.0);
+        final outerPadding = embedded
+            ? 0.0
+            : (narrow ? 8.0 : (compact ? 12.0 : 24.0));
         final cardPadding = narrow
             ? const EdgeInsets.symmetric(horizontal: 12, vertical: 14)
             : compact
             ? const EdgeInsets.symmetric(horizontal: 18, vertical: 14)
-            : const EdgeInsets.symmetric(horizontal: 32, vertical: 28);
-        final iconSize = compact ? 44.0 : 72.0;
-        final iconGlyphSize = compact ? 24.0 : 36.0;
-        final gap = compact ? 10.0 : 20.0;
+            : (embedded
+                  ? const EdgeInsets.symmetric(horizontal: 24, vertical: 22)
+                  : const EdgeInsets.symmetric(horizontal: 32, vertical: 28));
+        final iconSize = compact ? 44.0 : (embedded ? 56.0 : 72.0);
+        final iconGlyphSize = compact ? 24.0 : (embedded ? 28.0 : 36.0);
+        final gap = compact ? 10.0 : (embedded ? 14.0 : 20.0);
         final cardWidth = constraints.maxWidth.isFinite
             ? math.max(
                 0.0,
@@ -61,6 +69,70 @@ class EmptyState extends StatelessWidget {
                   ? math.max(0.0, math.min(minCardHeight!, maxAvailableHeight))
                   : math.max(0.0, minCardHeight!))
             : 0.0;
+        final content = Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: iconSize,
+              height: iconSize,
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(compact ? 14 : 20),
+              ),
+              child:
+                  iconWidget ??
+                  Icon(icon, size: iconGlyphSize, color: cs.primary),
+            ),
+            SizedBox(height: gap),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.72),
+                fontSize: compact ? 13 : 15,
+                height: compact ? 1.35 : 1.55,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              SizedBox(height: gap),
+              SizedBox(
+                width: narrow ? double.infinity : null,
+                child: FilledButton.tonalIcon(
+                  onPressed: onAction,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text(
+                    actionLabel!,
+                    style: const TextStyle(fontWeight: FontWeight.normal),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        );
+
+        final bodyContainer = embedded
+            ? Container(
+                padding: cardPadding,
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+                  border: Border.all(
+                    color: cs.outlineVariant.withValues(
+                      alpha: isDark ? 0.24 : 0.35,
+                    ),
+                    width: 0.5,
+                  ),
+                ),
+                child: content,
+              )
+            : AppSurfaceCard(
+                padding: cardPadding,
+                borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+                child: content,
+              );
+
         return Center(
           child: SingleChildScrollView(
             primary: false,
@@ -72,58 +144,7 @@ class EmptyState extends StatelessWidget {
                   maxWidth: cardWidth,
                   minHeight: effectiveMinHeight,
                 ),
-                child: AppSurfaceCard(
-                  padding: cardPadding,
-                  borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: iconSize,
-                        height: iconSize,
-                        decoration: BoxDecoration(
-                          color: cs.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(
-                            compact ? 14 : 20,
-                          ),
-                        ),
-                        child:
-                            iconWidget ??
-                            Icon(icon, size: iconGlyphSize, color: cs.primary),
-                      ),
-                      SizedBox(height: gap),
-                      Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: cs.onSurface.withValues(alpha: 0.72),
-                          fontSize: compact ? 13 : 15,
-                          height: compact ? 1.35 : 1.55,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      if (actionLabel != null && onAction != null) ...[
-                        SizedBox(height: gap),
-                        SizedBox(
-                          width: narrow ? double.infinity : null,
-                          child: FilledButton.tonalIcon(
-                            onPressed: onAction,
-                            icon: const Icon(Icons.add, size: 18),
-                            label: Text(
-                              actionLabel!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+                child: bodyContainer,
               ),
             ),
           ),

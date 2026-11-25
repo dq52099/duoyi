@@ -73,9 +73,13 @@ class ApiClient {
     throw ApiException('接口返回结构错误：$path 需要列表，实际为 ${_shapeName(res)}');
   }
 
-  Future<dynamic> getRaw(String path) => _sendRaw('GET', path);
+  Future<dynamic> getRaw(String path, {bool diagnoseMissingRoute = true}) =>
+      _sendRaw('GET', path, diagnoseMissingRoute: diagnoseMissingRoute);
 
-  Future<String> getText(String path) async {
+  Future<String> getText(
+    String path, {
+    bool diagnoseMissingRoute = true,
+  }) async {
     if (baseUrl.isEmpty && !kIsWeb) {
       throw const ApiException(
         '当前安装包未配置服务器地址，公告、登录和云同步不可用。请在构建时注入 DUOYI_SERVER_URL。',
@@ -110,7 +114,12 @@ class ApiClient {
       if (m is Map && m['detail'] != null) detail = m['detail'].toString();
     } catch (_) {}
     throw ApiException(
-      await _buildHttpErrorMessage(resp.statusCode, detail, path),
+      await _buildHttpErrorMessage(
+        resp.statusCode,
+        detail,
+        path,
+        diagnoseMissingRoute: diagnoseMissingRoute,
+      ),
     );
   }
 

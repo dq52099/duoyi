@@ -1,10 +1,14 @@
 import 'dart:io';
 
 import 'package:duoyi/core/ai_command.dart';
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/models/recurrence.dart';
 import 'package:test/test.dart';
 
 void main() {
+  setUp(() => I18n.setLocale(AppLocale.zh));
+  tearDown(() => I18n.setLocale(AppLocale.zh));
+
   test('AiCommandParser supports bounded conversational actions', () {
     final source = File('lib/core/ai_command.dart').readAsStringSync();
 
@@ -63,6 +67,27 @@ void main() {
       expect(batch.commands[1].payload, '项目想法');
       expect(batch.commands[2].type, AiCommandType.startFocus);
       expect(batch.preview, contains('将执行 3 条指令'));
+    },
+  );
+
+  test(
+    'AI command previews follow the selected locale without translating input',
+    () {
+      final batch = AiCommandParser.parseBatch(
+        '添加待办 明天下午3点买菜；记笔记 项目想法\n开始专注',
+        now: DateTime(2026, 5, 15, 10),
+      );
+
+      expect(batch.preview, contains('将执行 3 条指令'));
+      expect(batch.commands.first.preview, contains('创建待办'));
+
+      I18n.setLocale(AppLocale.en);
+
+      expect(batch.preview, contains('Will run 3 commands'));
+      expect(batch.commands.first.title, 'Create task');
+      expect(batch.commands.first.preview, contains('Create task'));
+      expect(batch.commands[1].preview, contains('项目想法'));
+      expect(batch.commands[2].title, 'Start focus');
     },
   );
 }

@@ -2,6 +2,9 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import 'package:duoyi/core/habit_ui_copy.dart';
+import 'package:duoyi/core/i18n.dart';
+
 void main() {
   test('习惯页提供可见分组列表并沿用习惯分类字段', () {
     final source = File('lib/screens/habit_screen.dart').readAsStringSync();
@@ -39,8 +42,16 @@ void main() {
     expect(source, contains('selectedKind = HabitKind.positive'));
     expect(source, contains('selectedIcon = habitIconTokenForIcon('));
     expect(source, contains('t.icon'));
-    expect(source, contains('unitCtrl.text = t.localizedUnit'));
-    expect(source, contains('categoryCtrl.text = t.localizedCategory'));
+    expect(
+      source,
+      matches(
+        RegExp(r'unitDraft\.selectGenerated\(\s*t\.generatedUnitKey,?\s*\)'),
+      ),
+    );
+    expect(
+      source,
+      matches(RegExp(r'categoryCtrl\.text\s*=\s*t\.localizedCategory')),
+    );
     expect(source, contains('flexRuleEnabled = t.hasFlexRule'));
     expect(source, contains('selectedFlexPeriod = t.flexPeriod!'));
     expect(source, contains('flexTargetCtrl.text = t.flexTarget!'));
@@ -74,104 +85,166 @@ void main() {
     final source = File(
       'lib/screens/habit_detail_screen.dart',
     ).readAsStringSync();
-    final headerStart = source.indexOf('width: 64,');
-    final headerEnd = source.indexOf(
-      "I18n.tr('habit.heatmap.title')",
-      headerStart,
-    );
-    expect(headerStart, greaterThanOrEqualTo(0));
-    expect(headerEnd, greaterThan(headerStart));
-    final header = source.substring(headerStart, headerEnd);
+    final copy = File('lib/core/habit_ui_copy.dart').readAsStringSync();
+    final compactSource = source.replaceAll(RegExp(r'\s+'), '');
 
-    expect(header, contains('OutlinedButton.icon('));
-    expect(header, contains("label: const Text('结束习惯')"));
-    expect(header, contains('Icons.event_busy_outlined'));
-    expect(header, contains('provider.endHabit(habit.id)'));
-    expect(header, contains('_habitDangerOutlinedButtonStyle(context)'));
-    expect(header, contains("label: const Text('删除')"));
-    expect(header, contains('Icons.delete_outline'));
-    expect(source, contains("title: const Text('删除习惯？')"));
-    expect(header, contains('deleteHabit('));
-    expect(source, contains("tooltip: '更多操作'"));
+    expect(source, contains('OutlinedButton.icon('));
+    expect(source, contains('HabitUiCopy.endHabitAction(locale)'));
+    expect(source, contains('HabitUiCopy.actionDelete(locale)'));
+    expect(source, contains('_habitDetailActionButtonStyle(context)'));
+    expect(source, contains('_habitDangerOutlinedButtonStyle(context)'));
+    expect(source, contains('Icons.event_busy_outlined'));
+    expect(source, contains('Icons.delete_outline'));
+    expect(source, contains('origin.habitProvider.endHabit(habit.id)'));
+    expect(source, contains('origin.habitProvider.deleteHabit(habit.id)'));
+    expect(source, contains('_executeEndHabit(context, habit, origin)'));
+    expect(source, contains('_executeDeleteHabit(context, habit, origin)'));
+    expect(
+      source,
+      contains('origin.isValid(context, checkCurrentRoute: true)'),
+    );
+    expect(source, contains('HabitUiCopy.deleteConfirmTitle(locale)'));
+    expect(source, contains('HabitUiCopy.endConfirmTitle(locale)'));
+    expect(source, contains('HabitUiCopy.actionCancel(locale)'));
+    expect(source, contains('HabitUiCopy.endedFeedback(loc)'));
+    expect(source, contains('HabitUiCopy.deletedFeedback(loc)'));
+    expect(copy, contains('static String actionCancel('));
+    expect(copy, contains('static String endHabitAction('));
+    expect(copy, contains('static String deleteHabitAction('));
+    expect(copy, contains('static String deleteConfirmTitle('));
+    expect(copy, contains('static String endConfirmTitle('));
+    expect(source, contains('HabitUiCopy.moreActions(locale)'));
     expect(source, contains("value: 'end'"));
-    expect(source, contains("title: Text('结束习惯')"));
+    expect(source, contains('title: Text(HabitUiCopy.endHabitAction(locale))'));
     expect(source, contains("value: 'delete'"));
-    expect(source, contains("title: Text('删除习惯'"));
+    expect(source, contains('HabitUiCopy.deleteHabitAction(locale)'));
     expect(source, isNot(contains("value == 'detail'")));
-    expect(header, contains('habitDisplayIconFor(habit)'));
+    expect(source, contains('habitDisplayIconFor(habit)'));
     expect(
       File('lib/core/habit_icons.dart').readAsStringSync(),
       contains('IconData habitDisplayIconFor(Habit habit)'),
     );
     expect(source, isNot(contains('IconData(codePoint')));
     expect(source, isNot(contains('child: Icon(Icons.star')));
-    expect(source, contains('builder: (ctx) => AppDialog('));
-    expect(source, isNot(contains('builder: (ctx) => AlertDialog(')));
+    expect(
+      compactSource,
+      contains('builder:(ctx)=>ValueListenableBuilder<AppLocale>('),
+    );
+    expect(compactSource, contains('returnAppDialog('));
+    expect(
+      compactSource,
+      contains('authority.isValid(ctx,specificRoute:route)'),
+    );
+    expect(compactSource, isNot(contains('builder:(ctx)=>AlertDialog(')));
   });
 
   test('习惯打卡提供完成反馈和轻量动效', () {
     final source = File('lib/screens/habit_screen.dart').readAsStringSync();
+    final feedback = File(
+      'lib/screens/habit_detail_screen.dart',
+    ).readAsStringSync();
+    final copy = File('lib/core/habit_ui_copy.dart').readAsStringSync();
+    final undoStart = source.indexOf('class _HabitUndoButton');
+    final undoEnd = source.indexOf('class _HabitFeedbackBadge', undoStart);
+    expect(undoStart, greaterThanOrEqualTo(0));
+    expect(undoEnd, greaterThan(undoStart));
+    final undoSource = source.substring(undoStart, undoEnd);
+    final presentationStart = source.indexOf('class _HabitCheckinPresentation {');
+    final presentationEnd = source.indexOf('class _HabitCheckinCardLayout {');
+    expect(presentationStart, greaterThanOrEqualTo(0));
+    expect(presentationEnd, greaterThan(presentationStart));
+    final presentationSource = source.substring(presentationStart, presentationEnd);
 
     expect(source, contains("import 'package:flutter/services.dart';"));
+    expect(source, contains("import '../services/app_haptics.dart';"));
     expect(source, isNot(contains('AnimatedScale(')));
     expect(source, contains('AnimatedSwitcher('));
     expect(source, contains('_HabitFeedbackBadge'));
-    expect(source, contains('HapticFeedback.mediumImpact()'));
+    expect(source, contains('AppHaptic.mediumImpact'));
+    expect(source, contains('await performAppHaptic('));
     expect(source, contains('SystemSound.play(SystemSoundType.click)'));
-    expect(source, contains('HapticFeedback.selectionClick()'));
+    expect(source, contains('AppHaptic.selectionClick'));
     expect(source, contains("'habit-undo-inline-button'"));
     expect(source, contains('IconButton('));
-    expect(source, contains("message: '撤回一次'"));
+    // Public geometry cases check the actual Undo node and localized tooltip.
+    expect(undoSource, contains("'撤回一次'"));
+    expect(undoSource, contains("'Undo once'"));
     expect(source, isNot(contains("label: const Text('还原')")));
-    expect(source, contains('width: _habitUndoButtonWidth'));
-    expect(source, contains('height: 26'));
+    // 2351 measures the independent undo hit/semantics bounds and edge taps.
+    // Its public oracle replaces the old compact painted-size ceiling.
+    expect(undoSource, contains('minimumSize:'));
+    expect(undoSource, contains('tapTargetSize: MaterialTapTargetSize.padded'));
+    expect(undoSource, isNot(contains('fixedSize:')));
+    expect(source, contains('showHabitSafeFeedback('));
+    expect(source, contains('HabitUiCopy.checkInSuccessStandard('));
+    expect(source, contains('HabitUiCopy.checkInSuccessFlex('));
+    expect(source, contains('HabitUiCopy.checkInSuccessNegative('));
+    expect(feedback, contains('void showHabitSafeFeedback('));
+    expect(feedback, contains('messenger.removeCurrentSnackBar()'));
+    expect(feedback, contains('messageBuilder(locale)'));
+    expect(feedback, contains('origin.isValid('));
+    expect(copy, contains('static String checkInSuccessStandard('));
+    expect(copy, contains('static String checkInSuccessFlex('));
+    expect(copy, contains('static String checkInSuccessNegative('));
     expect(
-      source,
-      contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'),
+      HabitUiCopy.checkInSuccessStandard('Habit', 1, 1, true, AppLocale.zh),
+      '「Habit」今日已达标',
     );
     expect(
-      source,
-      contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'),
+      HabitUiCopy.checkInSuccessStandard('Habit', 1, 1, true, AppLocale.en),
+      '"Habit" goal reached today',
     );
-    expect(source, contains('tapTargetSize: MaterialTapTargetSize.shrinkWrap'));
-    expect(source, isNot(contains('dimension: 48')));
-    expect(source, contains('messenger.hideCurrentSnackBar()'));
-    expect(source, contains('今日已达标'));
-    expect(source, contains("label: habit.hasFlexRule"));
-    expect(source, contains(": '已达标'"));
-    expect(source, contains("label: '已记录'"));
+    expect(copy, contains('l10n.habitCopyCheckInSuccessStandardReached(habitName)'));
+    expect(presentationSource, contains("feedbackLabel = habit.hasFlexRule"));
+    expect(source, contains("isEn ? 'Completed' : '已达标'"));
+    expect(presentationSource, contains("feedbackLabel = isEn ? 'Recorded' : '已记录'"));
   });
 
   test('习惯打卡卡片采用紧凑排版让一屏展示更多任务', () {
     final source = File('lib/screens/habit_screen.dart').readAsStringSync();
-    final cardStart = source.indexOf('class _HabitCheckinCard');
+    final copy = File('lib/core/habit_ui_copy.dart').readAsStringSync();
+    final cardStart = source.indexOf('class _HabitCheckinCard extends StatelessWidget');
     final cardEnd = source.indexOf('Future<void> _handleCheckIn', cardStart);
     expect(cardStart, greaterThanOrEqualTo(0));
     expect(cardEnd, greaterThan(cardStart));
     final cardSource = source.substring(cardStart, cardEnd);
+    final presentationStart = source.indexOf('class _HabitCheckinPresentation {');
+    final presentationEnd = source.indexOf('class _HabitCheckinCardLayout {');
+    expect(presentationStart, greaterThanOrEqualTo(0));
+    expect(presentationEnd, greaterThan(presentationStart));
+    final presentationSource = source.substring(presentationStart, presentationEnd);
+    final sliverStart = source.indexOf('Widget _buildTodayCheckinSliver(');
+    final sliverEnd = source.indexOf('bool _habitCanEnd(', sliverStart);
+    expect(sliverStart, greaterThanOrEqualTo(0));
+    expect(sliverEnd, greaterThan(sliverStart));
+    final checkinSliverSource = source.substring(sliverStart, sliverEnd);
+    final swipeActionsStart = source.indexOf('class _HabitInlineSwipeActions');
+    final swipeButtonStart = source.indexOf(
+      'class _HabitSwipeButton',
+      swipeActionsStart,
+    );
+    expect(swipeActionsStart, greaterThanOrEqualTo(0));
+    expect(swipeButtonStart, greaterThan(swipeActionsStart));
+    final swipeActions = source.substring(swipeActionsStart, swipeButtonStart);
 
     expect(
       cardSource,
-      contains('margin: const EdgeInsets.fromLTRB(10, 0, 10, 1)'),
+      contains('this.margin = const EdgeInsets.fromLTRB(10, 0, 10, 1)'),
     );
-    expect(
-      cardSource,
-      contains('padding: const EdgeInsets.fromLTRB(7, 2, 6, 2)'),
-    );
-    expect(source, contains('const double _habitCheckinCardBodyHeight = 38'));
-    expect(source, contains('const double _habitTitleStatusHeight = 15'));
-    expect(source, contains('const double _habitUndoButtonWidth = 28'));
+    // 2351 observes full paragraphs and real card/row bounds; density cannot
+    // require fixed body/title/control heights or the old vertical padding.
+    expect(cardSource, contains('LayoutBuilder('));
+    expect(cardSource, isNot(contains('FittedBox(')));
     expect(source, isNot(contains('const double _habitMenuButtonWidth')));
-    expect(source, contains('const double _habitActionButtonGap = 3'));
-    expect(source, contains('const double _habitActionRailWidth'));
-    expect(cardSource, contains('height: _habitCheckinCardBodyHeight'));
+    // Lazy paired rows retain reachability without a uniform private extent.
+    expect(checkinSliverSource, contains('SliverList.builder('));
+    expect(checkinSliverSource, contains('itemBuilder:'));
     expect(cardSource, contains('width: 20'));
     expect(cardSource, contains('height: 20'));
     expect(cardSource, contains('height: 2'));
-    expect(cardSource, contains('width: _habitCheckinButtonWidth'));
-    expect(cardSource, contains('height: 25'));
+    // Public target/semantics rectangles and edge taps own minimum sizing.
     expect(cardSource, contains('minimumSize: const Size('));
-    expect(cardSource, contains('_habitCheckinButtonWidth'));
+    expect(cardSource, contains('tapTargetSize: MaterialTapTargetSize.padded'));
     expect(cardSource, contains('_habitDisplayIcon(habit)'));
     expect(source, contains('_HabitSummaryTile'));
     expect(source, contains('_habitDisplayIcon(habit)'));
@@ -201,9 +274,25 @@ void main() {
       source,
       contains("key: const ValueKey('habit_swipe_delete_button')"),
     );
-    expect(source, contains("label: '编辑'"));
-    expect(source, contains("label: '结束'"));
-    expect(source, contains("label: '删除'"));
+    expect(swipeActions, contains('label: HabitUiCopy.actionEdit(locale)'));
+    expect(swipeActions, contains('label: HabitUiCopy.actionEnd(locale)'));
+    expect(swipeActions, contains('label: HabitUiCopy.actionDelete(locale)'));
+    expect(source, contains('Semantics('));
+    expect(source, contains('button: true'));
+    expect(source, contains('label: label'));
+    expect(source, contains('Tooltip(message: label, child: child)'));
+    expect(copy, contains('static String actionEdit('));
+    expect(copy, contains('static String actionEnd('));
+    expect(copy, contains('static String actionDelete('));
+    expect(HabitUiCopy.actionEdit(AppLocale.zh), '编辑');
+    expect(HabitUiCopy.actionEdit(AppLocale.en), 'Edit');
+    expect(HabitUiCopy.actionEnd(AppLocale.zh), '结束');
+    expect(HabitUiCopy.actionEnd(AppLocale.en), 'End');
+    expect(HabitUiCopy.actionDelete(AppLocale.zh), '删除');
+    expect(HabitUiCopy.actionDelete(AppLocale.en), 'Delete');
+    expect(copy, contains('_l10nFor(locale).actionEdit'));
+    expect(copy, contains('_l10nFor(locale).habitCopyActionEnd'));
+    expect(copy, contains('_l10nFor(locale).actionDelete'));
     expect(source, isNot(contains("PopupMenuItem(value: 'end'")));
     expect(source, isNot(contains("value: 'delete'")));
     expect(
@@ -211,14 +300,15 @@ void main() {
       isNot(contains("AppSecondaryMenuText('删除习惯', color: cs.error)")),
     );
     expect(cardSource, contains('Visibility('));
-    expect(cardSource, contains('maintainSize: true'));
+    expect(cardSource, isNot(contains('maintainSize: true')));
     expect(
       cardSource,
       contains('const SizedBox(width: _habitActionButtonGap)'),
     );
-    expect(cardSource, contains("'\$targetText · \$countText'"));
-    expect(cardSource, contains('if (habit.currentStreak > 0)'));
-    expect(cardSource, contains('overflow: TextOverflow.ellipsis'));
+    expect(presentationSource, contains("'\$targetText · \$countText'"));
+    expect(presentationSource, contains('habit.currentStreak > 0'));
+    expect(cardSource, contains('presentation.streakText != null'));
+    expect(cardSource, isNot(contains('TextOverflow.ellipsis')));
   });
 
   test('习惯本周概览置顶且保持紧凑', () {
@@ -280,18 +370,29 @@ void main() {
 
   test('习惯达标状态与任务名同一行靠右展示', () {
     final source = File('lib/screens/habit_screen.dart').readAsStringSync();
-    final cardStart = source.indexOf('class _HabitCheckinCard');
-    final cardSource = source.substring(cardStart);
+    final cardStart = source.indexOf('class _HabitCheckinCard extends StatelessWidget');
+    expect(cardStart, greaterThanOrEqualTo(0));
+    final cardEnd = source.indexOf('Future<void> _handleCheckIn', cardStart);
+    expect(cardEnd, greaterThan(cardStart));
+    final cardSource = source.substring(cardStart, cardEnd);
+    final presentationStart = source.indexOf('class _HabitCheckinPresentation {');
+    final presentationEnd = source.indexOf('class _HabitCheckinCardLayout {');
+    expect(presentationStart, greaterThanOrEqualTo(0));
+    expect(presentationEnd, greaterThan(presentationStart));
+    final presentationSource = source.substring(presentationStart, presentationEnd);
     final nameIndex = cardSource.indexOf('habit.name');
     final badgeIndex = cardSource.indexOf('_HabitFeedbackBadge');
-    final streakIndex = cardSource.indexOf("\${habit.currentStreak}");
+    final streakIndex = cardSource.indexOf('presentation.streakText != null');
 
     expect(nameIndex, greaterThanOrEqualTo(0));
     expect(badgeIndex, greaterThan(nameIndex));
     expect(streakIndex, greaterThan(badgeIndex));
-    expect(cardSource, contains("'habit-completed-feedback'"));
+    expect(presentationSource, contains("'habit-completed-feedback'"));
+    expect(presentationSource, contains("'\${habit.currentStreak} \${habit.streakUnitLabel}'"));
     expect(cardSource, contains('key: const ValueKey('));
-    expect(cardSource, contains("'habit-warning-feedback'"));
+    expect(presentationSource, contains("'habit-warning-feedback'"));
+    // Inline when content fits, reflow below otherwise; 2351 owns real bounds.
+    expect(cardSource, contains('layout.inlineTitleAndBadge'));
   });
 
   test('习惯打卡先落盘再通知界面，且不被耗时记录拖住状态', () {
@@ -391,11 +492,14 @@ void main() {
     final zh = File('lib/l10n/app_zh.arb').readAsStringSync();
     final en = File('lib/l10n/app_en.arb').readAsStringSync();
     final compactScreen = screen.replaceAll(RegExp(r'\s+'), '');
+    final periodSelector = RegExp(
+      r'(?:SegmentedButton|DropdownButtonFormField|DropdownButton|DropdownMenu|PopupMenuButton)\s*<\s*HabitFlexPeriod\s*>',
+    );
 
     expect(screen, contains('flexRuleEnabled'));
-    expect(screen, contains('SegmentedButton<HabitFlexPeriod>'));
-    expect(screen, contains("I18n.tr('habit.unit.week')"));
-    expect(screen, contains("I18n.tr('habit.unit.month')"));
+    expect(screen, matches(periodSelector));
+    expect(screen, contains('copy.weekGoal(template.flexTarget!)'));
+    expect(screen, contains('copy.monthGoal(template.flexTarget!)'));
     expect(screen, contains("'habit.flex.period_target'"));
     expect(screen, contains("'habit.flex.period_target_hint'"));
     expect(
@@ -407,25 +511,42 @@ void main() {
       contains('flexPeriod:shouldUseFlex?selectedFlexPeriod:null,'),
     );
     expect(screen, contains('_habitFlexGoalText(habit)'));
-    expect(screen, contains("HabitFlexPeriod.week => '每周目标:"));
-    expect(screen, contains("HabitFlexPeriod.month => '每月目标:"));
+    expect(screen, contains('copy.weekGoal(habit.effectiveFlexTarget)'));
+    expect(screen, contains('copy.monthGoal(habit.effectiveFlexTarget)'));
     expect(screen, contains('habit.streakUnitLabel'));
-    expect(screen, contains("I18n.tr('habit.flex.weekly')"));
-    expect(screen, contains("I18n.tr('habit.flex.monthly')"));
-    expect(screen, contains('周期目标至少为 1'));
-    expect(screen, contains("HabitFlexPeriod.week => '每周目标'"));
-    expect(screen, contains("HabitFlexPeriod.month => '每月目标'"));
+    expect(compactScreen, contains("I18n.tr('habit.flex.weekly',)"));
+    expect(compactScreen, contains("I18n.tr('habit.flex.monthly',)"));
+    expect(screen, contains('HabitUiCopy.flexTargetInvalid(loc)'));
+    final copy = File('lib/core/habit_ui_copy.dart').readAsStringSync();
+    expect(copy, contains('static String flexTargetInvalid('));
+    expect(HabitUiCopy.flexTargetInvalid(AppLocale.zh), '周期目标至少为 1');
+    expect(
+      HabitUiCopy.flexTargetInvalid(AppLocale.en),
+      'Period target must be at least 1',
+    );
+    expect(copy, contains('_l10nFor(locale).habitErrorFlexTarget'));
+    expect(
+      screen,
+      contains('HabitFlexPeriod.week => copy.weekGoal(template.flexTarget!)'),
+    );
+    expect(
+      screen,
+      contains('HabitFlexPeriod.month => copy.monthGoal(template.flexTarget!)'),
+    );
 
     expect(detail, contains("I18n.tr('habit.flex.rule')"));
+    expect(detail, matches(periodSelector));
     expect(detail, contains('flexRuleEnabled = habit.hasFlexRule'));
     expect(detail, contains('clearFlexRule: !shouldUseFlex'));
-    expect(detail, contains('localizedFlexPeriodGoalLabel(habit)'));
+    expect(detail, contains('localizedFlexPeriodGoalLabel(habit, locale)'));
     expect(detail, contains('habit.flexProgressForDate(DateTime.now())'));
-    expect(detail, contains('localizedHabitCountForDate(habit, d)'));
-    expect(detail, contains('_localizedHabitStreakUnit(habit)'));
+    expect(detail, contains('localizedHabitCountForDate(habit, d, locale)'));
+    expect(detail, contains('_localizedHabitStreakUnit(habit, locale)'));
     expect(detail, contains("'habit.flex.period_target'"));
-    expect(detail, contains("I18n.tr('habit.flex.weekly_goal_prefix')"));
-    expect(detail, contains("I18n.tr('habit.flex.monthly_goal_prefix')"));
+    expect(detail, contains('copy.weekGoal(habit.effectiveFlexTarget)'));
+    expect(detail, contains('copy.monthGoal(habit.effectiveFlexTarget)'));
+    expect(detail, contains('String localizedFlexPeriodGoalLabel('));
+    expect(detail, contains('I18n.trForLocale(key, locale ?? I18n.current)'));
 
     expect(provider, contains('_recalcFlexStreak'));
     expect(provider, contains('h.periodBoundsForDate(DateTime.now())'));
@@ -469,6 +590,7 @@ void main() {
       detail,
       contains("import '../widgets/habit_date_range_fields.dart';"),
     );
+    expect(detail, contains("import '../widgets/app_date_format.dart';"));
     expect(detail, contains('DateTime? startDate = habit.startDate'));
     expect(detail, contains('DateTime? endDate = habit.endDate'));
     expect(detail, contains('HabitDateRangeFields('));
@@ -486,13 +608,37 @@ void main() {
     );
     expect(detail, contains('clearStartDate: startDate == null'));
     expect(detail, contains('clearEndDate: endDate == null'));
+    expect(detail, contains('habitDateRangeLabel('));
+    expect(detail, contains('AppDateFormat.patternOf(context)'));
+    expect(dateFields, contains('String habitDateRangeLabel('));
     expect(
-      detail,
-      contains('habitDateRangeLabel(habit.startDate, habit.endDate)'),
+      dateFields,
+      contains('I18nDateFormat.date(startDate, pattern: pattern)'),
+    );
+    expect(
+      dateFields,
+      contains('I18nDateFormat.date(endDate, pattern: pattern)'),
     );
     expect(detail, contains('final activeForDay = habit.activeForDate(d)'));
     expect(detail, contains("I18n.tr('habit.records.inactive')"));
-    expect(detail, contains('onPressed: activeForDay'));
+    expect(
+      compactDetail,
+      contains(
+        "if(count>0&&activeForDay)Tooltip(message:I18n.tr('habit.records.undo_once')",
+      ),
+    );
+    expect(
+      compactDetail,
+      contains(
+        'onPressed:(origin==null||!origin.isValid(context,checkCurrentRoute:true,))?null:()=>_handleDateUndo(context,habit,d,origin,)',
+      ),
+    );
+    expect(
+      compactDetail,
+      contains(
+        'onPressed:(activeForDay&&origin!=null&&origin.isValid(context,checkCurrentRoute:true,))?()=>_handleDateRecord(context,habit,d,origin,):null',
+      ),
+    );
 
     expect(dateFields, contains("I18n.tr('habit.date_range.start')"));
     expect(dateFields, contains("I18n.tr('habit.date_range.end')"));

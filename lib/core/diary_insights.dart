@@ -1,4 +1,7 @@
+import 'dart:collection';
+
 import '../models/diary_entry.dart';
+import 'diary_insight_copy.dart';
 
 enum DiaryInsightKind { overview, emotionTrend, theme, streak, attention }
 
@@ -19,43 +22,115 @@ class DiaryInsight {
 class DiaryInsightEngine {
   const DiaryInsightEngine._();
 
+  static const int _maxCacheEntries = 16;
+  static final LinkedHashMap<Object, List<DiaryInsight>> _cache =
+      LinkedHashMap<Object, List<DiaryInsight>>();
+
   static List<DiaryInsight> buildInsights(
     Iterable<DiaryEntry> entries, {
     DateTime? today,
     int days = 30,
     int limit = 4,
+    Object? locale = 'zh',
   }) {
     final now = _dateOnly(today ?? DateTime.now());
+    final resolvedLocale = DiaryInsightLocale.resolve(locale);
+    final fingerprint = _entriesFingerprint(entries);
+    final cacheKey = (
+      now.year,
+      now.month,
+      now.day,
+      days,
+      limit,
+      resolvedLocale,
+      fingerprint.$1,
+      fingerprint.$2,
+      fingerprint.$3,
+    );
+    final cached = _cache.remove(cacheKey);
+    if (cached != null) {
+      _cache[cacheKey] = cached;
+      return cached;
+    }
+
     final cutoff = now.subtract(Duration(days: days - 1));
     final recent =
         entries
             .where((entry) => !_dateOnly(entry.date).isBefore(cutoff))
             .toList()
           ..sort((a, b) => b.date.compareTo(a.date));
-    if (recent.isEmpty) return const <DiaryInsight>[];
+    if (recent.isEmpty) {
+      const empty = <DiaryInsight>[];
+      _putCache(cacheKey, empty);
+      return empty;
+    }
 
-    final insights = <DiaryInsight>[_overviewInsight(recent, days)];
-    final trend = _emotionTrendInsight(recent, now, days);
+    final copy = DiaryInsightCopy(resolvedLocale);
+    final insights = <DiaryInsight>[_overviewInsight(recent, days, copy)];
+    final trend = _emotionTrendInsight(recent, now, days, copy);
     if (trend != null) insights.add(trend);
-    final theme = _themeInsight(recent);
+    final theme = _themeInsight(recent, copy);
     if (theme != null) insights.add(theme);
-    final streak = _streakInsight(recent, now);
+    final streak = _streakInsight(recent, now, copy);
     if (streak != null) insights.add(streak);
-    final attention = _attentionInsight(recent);
+    final attention = _attentionInsight(recent, copy);
     if (attention != null) insights.add(attention);
 
-    return insights.take(limit).toList(growable: false);
+    final result = List<DiaryInsight>.unmodifiable(insights.take(limit));
+    _putCache(cacheKey, result);
+    return result;
   }
 
-  static DiaryInsight _overviewInsight(List<DiaryEntry> entries, int days) {
+  static void _putCache(Object key, List<DiaryInsight> value) {
+    if (_cache.length >= _maxCacheEntries) {
+      _cache.remove(_cache.keys.first);
+    }
+    _cache[key] = value;
+  }
+
+  static (int, int, int) _entriesFingerprint(Iterable<DiaryEntry> entries) {
+    var count = 0;
+    var hashA = 0x811c9dc5;
+    var hashB = 0;
+    for (final entry in entries) {
+      count++;
+      var tagsHash = 0;
+      for (final tag in entry.tags) {
+        tagsHash = Object.hash(tagsHash, tag);
+      }
+      final itemHash = Object.hash(
+        entry.id,
+        entry.date.year,
+        entry.date.month,
+        entry.date.day,
+        entry.updatedAt.millisecondsSinceEpoch,
+        entry.mood?.index ?? -1,
+        entry.weather?.index ?? -1,
+        entry.content.hashCode,
+        entry.tags.length,
+        tagsHash,
+      );
+      hashA = Object.hash(hashA, itemHash);
+      hashB = ((hashB * 31) ^ itemHash ^ (count * 0x9e3779b9)) & 0x3fffffff;
+    }
+    return (count, hashA, hashB);
+  }
+
+  static DiaryInsight _overviewInsight(
+    List<DiaryEntry> entries,
+    int days,
+    DiaryInsightCopy copy,
+  ) {
     final moodEntries = entries.where((entry) => entry.mood != null).toList();
     final dominantMood = _dominantMood(moodEntries);
-    final title = dominantMood == null
-        ? '日记记录已开始'
-        : '近期心情以${dominantMood.label}为主';
+    final title = copy.overviewTitle(dominantMood);
     final message = dominantMood == null
-        ? '近 $days 天记录 ${entries.length} 篇，可继续补充心情来生成情绪走势。'
-        : '近 $days 天记录 ${entries.length} 篇，其中 ${moodEntries.length} 篇带有心情。';
+        ? copy.overviewMessage(days: days, entryCount: entries.length)
+        : copy.overviewMessage(
+            days: days,
+            entryCount: entries.length,
+            moodCount: moodEntries.length,
+          );
     return DiaryInsight(
       kind: DiaryInsightKind.overview,
       title: title,
@@ -68,6 +143,7 @@ class DiaryInsightEngine {
     List<DiaryEntry> entries,
     DateTime today,
     int days,
+    DiaryInsightCopy copy,
   ) {
     final midpoint = today.subtract(Duration(days: (days / 2).floor() - 1));
     final currentScores = <int>[];
@@ -90,28 +166,31 @@ class DiaryInsightEngine {
     if (delta.abs() < 0.35) {
       return DiaryInsight(
         kind: DiaryInsightKind.emotionTrend,
-        title: '情绪走势平稳',
-        message: '最近半月平均心情与前半月接近，记录节奏比较稳定。',
+        title: copy.emotionTrendTitle(0),
+        message: copy.emotionTrendMessage(0),
         score: delta.abs(),
       );
     }
     if (delta > 0) {
       return DiaryInsight(
         kind: DiaryInsightKind.emotionTrend,
-        title: '情绪正在回升',
-        message: '最近半月平均心情比前半月更积极，可以留意哪些安排带来了改善。',
+        title: copy.emotionTrendTitle(1),
+        message: copy.emotionTrendMessage(1),
         score: delta,
       );
     }
     return DiaryInsight(
       kind: DiaryInsightKind.emotionTrend,
-      title: '情绪有走低迹象',
-      message: '最近半月平均心情低于前半月，建议减少高压安排并记录触发原因。',
+      title: copy.emotionTrendTitle(-1),
+      message: copy.emotionTrendMessage(-1),
       score: delta.abs(),
     );
   }
 
-  static DiaryInsight? _themeInsight(List<DiaryEntry> entries) {
+  static DiaryInsight? _themeInsight(
+    List<DiaryEntry> entries,
+    DiaryInsightCopy copy,
+  ) {
     final tagCounts = <String, int>{};
     for (final entry in entries) {
       for (final tag in entry.tags) {
@@ -126,11 +205,12 @@ class DiaryInsightEngine {
         return byCount != 0 ? byCount : a.key.compareTo(b.key);
       });
     if (topTags.isNotEmpty) {
-      final labels = topTags.take(3).map((entry) => '#${entry.key}').join('、');
+      final tags =
+          topTags.take(3).map((entry) => entry.key).toList(growable: false);
       return DiaryInsight(
         kind: DiaryInsightKind.theme,
-        title: '近期主题集中',
-        message: '出现最多的主题是 $labels，可作为本月复盘线索。',
+        title: copy.themeTagsTitle(),
+        message: copy.themeTagsMessage(tags),
         score: topTags.first.value.toDouble(),
       );
     }
@@ -139,8 +219,10 @@ class DiaryInsightEngine {
     if (keywords.isEmpty) return null;
     return DiaryInsight(
       kind: DiaryInsightKind.theme,
-      title: '近期内容线索',
-      message: '日记中反复出现 ${keywords.take(3).join('、')}，适合继续观察。',
+      title: copy.themeKeywordsTitle(),
+      message: copy.themeKeywordsMessage(
+        keywords.take(3).toList(growable: false),
+      ),
       score: keywords.length.toDouble(),
     );
   }
@@ -148,6 +230,7 @@ class DiaryInsightEngine {
   static DiaryInsight? _streakInsight(
     List<DiaryEntry> entries,
     DateTime today,
+    DiaryInsightCopy copy,
   ) {
     final dates = entries.map((entry) => _dateOnly(entry.date)).toSet();
     var cursor = today;
@@ -163,13 +246,16 @@ class DiaryInsightEngine {
     if (streak < 3) return null;
     return DiaryInsight(
       kind: DiaryInsightKind.streak,
-      title: '记录连续性不错',
-      message: '已连续记录 $streak 天，适合在每天固定时段做简短复盘。',
+      title: copy.streakTitle(),
+      message: copy.streakMessage(streak),
       score: streak.toDouble(),
     );
   }
 
-  static DiaryInsight? _attentionInsight(List<DiaryEntry> entries) {
+  static DiaryInsight? _attentionInsight(
+    List<DiaryEntry> entries,
+    DiaryInsightCopy copy,
+  ) {
     final lowMoodEntries = entries
         .where((entry) => entry.mood == Mood.bad || entry.mood == Mood.terrible)
         .toList();
@@ -178,8 +264,8 @@ class DiaryInsightEngine {
     if (ratio < 0.35) return null;
     return DiaryInsight(
       kind: DiaryInsightKind.attention,
-      title: '低落心情偏多',
-      message: '近期待关注心情占比 ${(ratio * 100).round()}%，可以标记原因并安排休息。',
+      title: copy.attentionTitle(),
+      message: copy.attentionMessage((ratio * 100).round()),
       score: ratio,
     );
   }

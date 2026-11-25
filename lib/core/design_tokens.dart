@@ -29,9 +29,9 @@ class DesignTokens {
   static const Color defaultText = Color(0xFF1F2933);
   static const Color defaultTextMuted = Color(0xFF667085);
   static const Color defaultBorder = Color(0xFFD9E0E8);
-  static const Color defaultPrimary = Color(0xFFC85656);
-  static const Color defaultPrimarySoft = Color(0xFFF7E3E3);
-  static const Color defaultPrimaryPressed = Color(0xFFA94444);
+  static const Color defaultPrimary = Color(0xFF0066D6);
+  static const Color defaultPrimarySoft = Color(0xFFE5F1FF);
+  static const Color defaultPrimaryPressed = Color(0xFF0051AB);
   static const Color defaultAccent = Color(0xFF2F8F83);
   static const Color defaultInfo = Color(0xFF2F6FAE);
   static const Color defaultSuccess = Color(0xFF2E7D62);
@@ -157,20 +157,31 @@ class DesignTokens {
   //
   // 这些是跨主题通用的"语义颜色"。具体视觉状态（已完成、临期、过期、归档、普通）
   // 由 `CompletionVisibilityPolicy.visualState(...)` 决定，颜色映射用这里的 token。
-  static const Color todoNormal = Color(0xDE000000); // black87 ~ onSurface
-  static const Color todoDueSoon = Color(0xFFFFB74D); // orange.shade400
-  static const Color todoOverdue = Color(0xFFEF5350); // red.shade400
-  static const Color todoCompleted = Color(0xFF66BB6A); // green.shade400
-  static const Color todoArchived = Color(0xFFBDBDBD); // grey.shade400
+  static const Color todoNormal = defaultText;
+  static const Color todoDueSoon = Color(0xFFB45309);
+  static const Color todoOverdue = Color(0xFFB91C1C);
+  static const Color todoCompleted = Color(0xFF15803D);
+  static const Color todoArchived = defaultTextMuted;
+
+  // 深色主题下的语义色（保持 >= 4.5:1 对比度，避免纯黑或低对比暖色失真）
+  static const Color todoNormalDark = Color(0xFFF2F4F7);
+  static const Color todoDueSoonDark = Color(0xFFFBBF24);
+  static const Color todoOverdueDark = Color(0xFFFF6961);
+  static const Color todoCompletedDark = Color(0xFF4ADE80);
+  static const Color todoArchivedDark = Color(0xFF98A2B3);
 
   /// 完成态文本的"灰度 70%"：与 `todoCompleted` 配套使用。
   static const double completedTextOpacity = 0.7;
 
   // ----- 结果态 -----
-  static const Color resultEmpty = Color(0xFF9E9E9E); // grey.shade500
-  static const Color resultError = Color(0xFFEF5350); // red.shade400
-  static const Color resultLoadingShimmerBase = Color(0xFFEEEEEE);
-  static const Color resultLoadingShimmerHighlight = Color(0xFFFAFAFA);
+  static const Color resultEmpty = defaultTextMuted;
+  static const Color resultEmptyDark = Color(0xFF98A2B3);
+  static const Color resultError = Color(0xFFC62828);
+  static const Color resultErrorDark = Color(0xFFFF6961);
+  static const Color resultLoadingShimmerBase = Color(0xFFE9EDF3);
+  static const Color resultLoadingShimmerHighlight = Color(0xFFF7F9FC);
+  static const Color resultLoadingShimmerBaseDark = Color(0xFF232834);
+  static const Color resultLoadingShimmerHighlightDark = Color(0xFF2F3646);
 
   // ----- 优先级色标（对齐 TodoItem.priority） -----
   static const Color priorityHigh = Color(0xFFE53935); // red 600
@@ -196,9 +207,10 @@ class DesignTokens {
 
 /// 表面 / 控件的"观感档位"（ThemeExtension）。
 ///
-/// 仅默认主题在 `_defaultTheme` 注册 [AppSurfaceStyle.ios]：共享组件
+/// 默认 iOS 主题和液态玻璃主题分别注册 [AppSurfaceStyle.ios] 与
+/// [AppSurfaceStyle.liquidGlass]：共享组件
 /// （AppSurfaceCard / AppModalSheet / AppMetricCard / AppSettingsSection /
-/// 主底部导航）据此取 iOS 档圆角、去描边留极淡阴影、半透明底导航与毛玻璃。
+/// 主底部导航）据此取优先主题的圆角、卡片表面和导航效果。
 /// 未注册该 extension 的主题（re0..botw）在调用点取各自既有默认值，
 /// 观感与改造前逐像素一致。
 class AppSurfaceStyle extends ThemeExtension<AppSurfaceStyle> {

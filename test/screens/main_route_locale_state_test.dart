@@ -385,8 +385,21 @@ void main() {
           tester.widget<ListView>(listFinder).controller,
           same(scrollController),
         );
-        expect(tester.widget<FilterChip>(completedChip).selected, isTrue);
-        expect(find.text('自定义视图 · 20/40'), findsOneWidget);
+        final localizedCompletedChip = find.widgetWithText(
+          FilterChip,
+          locale == AppLocale.en ? 'Completed' : '已完成',
+        );
+        expect(localizedCompletedChip, findsOneWidget);
+        expect(
+          tester.widget<FilterChip>(localizedCompletedChip).selected,
+          isTrue,
+        );
+        expect(
+          find.text(
+            locale == AppLocale.en ? 'Custom view · 20/40' : '自定义视图 · 20/40',
+          ),
+          findsOneWidget,
+        );
         final expectedOffset = offsetBefore
             .clamp(0, scrollController.position.maxScrollExtent)
             .toDouble();

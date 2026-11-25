@@ -13,23 +13,11 @@ void main() {
       contains('final preferredRowHeight = showLunar ? 58.0 : 48.0'),
     );
     expect(source, contains('final maxRowHeight = showLunar ? 72.0 : 62.0'));
-    expect(source, contains('availableRowHeight.clamp(30.0, maxRowHeight)'));
-    expect(source, contains('(rowSlotHeight - 4).clamp(28.0, maxRowHeight)'));
-    expect(source, contains('child: ClipRect('));
-    expect(source, contains('height: cellHeight < 14'));
-    expect(source, contains('? 0.95'));
-    expect(source, contains(': 1.05'));
-    expect(source, contains('final showDots = cellHeight >= 36'));
-    expect(source, contains('final canShowEventCount = cellHeight >= 40'));
-    expect(source, contains('final showEventCount ='));
+    // Exact cell-fitting implementation is exercised on real rendered grids in
+    // calendar_month_grid_priority_scaled_content_test.dart and civil-day tests.
     expect(source, contains('final showEventCountBadge ='));
-    expect(source, contains('showEventCount &&'));
     expect(source, contains('eventCount > 1'));
     expect(source, contains('Widget _eventDots('));
-    expect(
-      source,
-      contains('final showSubText = showLunar && cellHeight >= 44'),
-    );
     expect(source, contains('button: true'));
     expect(source, contains('selected: isSelected'));
     expect(source, contains('label: semanticLabel'));
@@ -51,7 +39,7 @@ void main() {
     expect(source, contains('final Map<String, int> dateEventCounts'));
     expect(source, contains('final eventCount = dateEventCounts[key]'));
     expect(source, contains('CalendarAgendaUiCopy.monthEventBadge(count)'));
-    expect(source, contains('CalendarAgendaUiCopy.weekdayInitials'));
+    expect(source, contains('CalendarAgendaUiCopy.weekdayInitialsFor(first)'));
     expect(source, contains('CalendarAgendaUiCopy.daySemanticLabel('));
     expect(source, contains('Widget _eventCountBadge('));
     expect(

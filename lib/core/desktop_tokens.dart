@@ -10,6 +10,12 @@ class DesktopTokens {
   /// 三栏布局最小宽度（左侧边栏 + 主内容 + 右侧边栏）
   static const double breakpointThreeColumn = 1400;
 
+  /// 今日页三栏布局最小内容宽度（对齐桌面壳 maxContentWidth 1280 内的可用内容区）
+  static const double todayThreeColumnContentBreakpoint = 1040;
+
+  /// 今日页两栏右侧边栏收容效率卡最小内容宽度
+  static const double todayTwoColumnContentBreakpoint = 900;
+
   /// 两栏布局最小宽度（主内容 + 右侧边栏）
   static const double breakpointTwoColumn = 1100;
 
@@ -41,10 +47,10 @@ class DesktopTokens {
   static const double railCompactWidth = 80;
 
   /// 左侧边栏宽度（日历 + 快捷入口）
-  static const double leftSidebarWidth = 420;
+  static const double leftSidebarWidth = 276;
 
   /// 右侧边栏宽度（目标 + 课程 + 纪念日）
-  static const double rightSidebarWidth = 380;
+  static const double rightSidebarWidth = 328;
 
   /// Header 高度
   static const double headerHeight = 120;
@@ -52,16 +58,16 @@ class DesktopTokens {
   // ========== 间距 ==========
 
   /// 页面外边距（水平）
-  static const double pageHorizontalPadding = 40;
+  static const double pageHorizontalPadding = 24;
 
   /// 页面外边距（顶部）
-  static const double pageTopPadding = 32;
+  static const double pageTopPadding = 24;
 
   /// 页面外边距（底部）
-  static const double pageBottomPadding = 40;
+  static const double pageBottomPadding = 36;
 
   /// 卡片间距（大）
-  static const double cardSpacing = 20;
+  static const double cardSpacing = 18;
 
   /// 卡片间距（中）
   static const double cardSpacingMedium = 16;
@@ -73,7 +79,7 @@ class DesktopTokens {
   static const double cardPadding = 20;
 
   /// 列间距（主内容与侧边栏）
-  static const double columnSpacing = 28;
+  static const double columnSpacing = 20;
 
   /// 列间距（紧凑）
   static const double columnSpacingCompact = 20;

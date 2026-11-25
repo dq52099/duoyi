@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class DeepLinkService {
@@ -9,6 +10,7 @@ class DeepLinkService {
   static void Function(String text)? onSharedText;
 
   static Future<void> init() async {
+    if (kIsWeb) return;
     _channel.setMethodCallHandler((call) async {
       if (call.method != 'onLink' && call.method != 'onSharedText') {
         return null;
@@ -26,18 +28,21 @@ class DeepLinkService {
   }
 
   static Future<Uri?> takeInitialLink() async {
+    if (kIsWeb) return null;
     final raw = await _channel.invokeMethod<String>('takeInitialLink');
     final uri = raw == null ? null : Uri.tryParse(raw);
     return _isDuoyiDeepLink(uri) ? uri : null;
   }
 
   static Future<Uri?> takeInitialOAuthLink() async {
+    if (kIsWeb) return null;
     final raw = await _channel.invokeMethod<String>('takeInitialOAuthLink');
     final uri = raw == null ? null : Uri.tryParse(raw);
     return _isOAuthDeepLink(uri) ? uri : null;
   }
 
   static Future<String?> takeInitialSharedText() async {
+    if (kIsWeb) return null;
     final raw = await _channel.invokeMethod<String>('takeInitialSharedText');
     final text = raw?.trim();
     return text == null || text.isEmpty ? null : text;

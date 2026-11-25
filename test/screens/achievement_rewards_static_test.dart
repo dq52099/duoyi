@@ -35,10 +35,13 @@ void main() {
     expect(screen, contains('growthLevel.coinsRemaining'));
     expect(screen, contains('最近奖励'));
     expect(screen, contains('_RewardLedgerCard'));
-    expect(screen, contains("tooltip: '成就分享图'"));
+    expect(
+      screen,
+      contains("AchievementUiCopy.text('成就分享图', 'Share achievements')"),
+    );
     expect(screen, contains('_AchievementShareDialog'));
     expect(screen, contains('_AchievementShareCard'));
-    expect(screen, contains('_achievementShareMarkdown'));
+    expect(screen, contains('String markdown()'));
     expect(screen, contains('RenderRepaintBoundary'));
     expect(screen, contains('ui.ImageByteFormat.png'));
     expect(screen, contains("package:share_plus/share_plus.dart"));
@@ -46,7 +49,7 @@ void main() {
     expect(screen, contains('ShareParams('));
     expect(screen, contains('XFile(file.path)'));
     expect(screen, contains('duoyi_achievement_'));
-    expect(screen, contains('成就分享图已保存并打开系统分享面板'));
+    expect(screen, contains('Could not share. Please try again.'));
     expect(backup, contains("'duoyi_virtual_rewards'"));
     expect(cloudSync, contains("'duoyi_virtual_rewards': 'virtual_rewards'"));
     expect(main, contains('String _achievementPersistedSignature'));

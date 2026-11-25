@@ -305,10 +305,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get preferencesShowCompletedSubtitle =>
-      'Hide completed items to focus on open work';
+      'Show completed tasks in default views; Completed and Include archived remain available when off';
 
   @override
   String get preferencesPomodoroLengthTitle => 'Default Pomodoro length';
+
+  @override
+  String get preferencesPomodoroLengthSubtitle =>
+      'Used with “Default”; your current timer is preserved';
 
   @override
   String get preferencesSectionBottomNav => 'Bottom navigation';
@@ -405,6 +409,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get preferencesRingtoneSection => 'Built-in reminder sounds';
 
   @override
+  String get preferencesReportReminderDailyTime =>
+      'Daily review notification time';
+
+  @override
+  String get preferencesReportReminderWeeklyTime =>
+      'Weekly report notification time';
+
+  @override
+  String get preferencesReportReminderMonthlyTime =>
+      'Monthly report notification time';
+
+  @override
+  String get preferencesReportReminderYearlyTime =>
+      'Annual report notification time';
+
+  @override
+  String get preferencesReportReminderTimeSubtitle =>
+      'Updating will reschedule the next report notification';
+
+  @override
   String get preferencesRingtoneSectionSubtitle =>
       'For HyperOS and other devices where default notifications are muted';
 
@@ -472,6 +496,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get preferencesDailyReminderTimeSuffix => ' time';
+
+  @override
+  String get preferencesDailyReminder1Time => 'Reminder 1 time';
+
+  @override
+  String get preferencesDailyReminder2Time => 'Reminder 2 time';
+
+  @override
+  String get preferencesDailyReminder3Time => 'Reminder 3 time';
 
   @override
   String get preferencesDailyReminderTimePickerSubtitle =>
@@ -1055,14 +1088,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileUsernameLocked =>
-      'Username is the unique account ID and cannot be changed here.';
+      'Username is the account identifier and cannot be changed here';
 
   @override
   String get profileAccountSecurity => 'Account security';
 
   @override
   String get profileAccountSecuritySubtitle =>
-      'Password and sensitive actions are grouped here';
+      'Password and sensitive account actions live here';
 
   @override
   String get profileBio => 'Bio';
@@ -1333,6 +1366,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noteRestore => 'Restore';
+
+  @override
+  String get noteActionFailed => 'Action failed. Nothing changed. Try again.';
 
   @override
   String get noteLinkPlaceholder => 'Link text';
@@ -1984,7 +2020,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diaryRecentRecordsSuffix => ' entries';
 
   @override
+  String get diaryRecentRecordsSuffixSingular => ' entry';
+
+  @override
   String get diaryEntryCountSuffix => ' entries';
+
+  @override
+  String get diaryEntryCountSuffixSingular => ' entry';
+
+  @override
+  String get diaryStreakDaySingular => 'day';
 
   @override
   String get diaryMoodStatsTitle => 'Mood distribution, last 30 days';
@@ -2183,7 +2228,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get countdownReminderEmailWarning =>
-      'Countdown saved, and email reminders will be sent by the server when online.';
+      'Countdown saved. Email reminder will be sent by the server when online.';
 
   @override
   String get countdownReminderExceptionPrefix =>
@@ -2191,7 +2236,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get countdownReminderTimePast =>
-      'Countdown saved, but the reminder time is already in the past. Please choose another reminder time.';
+      'Countdown saved, but the reminder time has passed. Choose another reminder time.';
 
   @override
   String get countdownStatusPinned => 'Pinned';
@@ -2366,7 +2411,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get anniversaryReminderTimePast =>
-      'Saved, but the reminder time is already in the past. Please choose another reminder time.';
+      'Saved, but the reminder time has passed. Choose another reminder time.';
 
   @override
   String get anniversaryLunarYearSuffix => '';
@@ -2915,6 +2960,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get habitWeekday7 => 'S';
 
   @override
+  String get habitGroupUngrouped => 'Ungrouped';
+
+  @override
   String get habitGroupTodaySuffix => ' done today';
 
   @override
@@ -3247,7 +3295,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calendarContentTimePickerStartTime => 'Start time';
 
   @override
+  String get calendarPickerStartDate => 'Start date';
+
+  @override
+  String get calendarPickerEndDate => 'End date';
+
+  @override
+  String get calendarPickerStartTime => 'Start time';
+
+  @override
+  String get calendarPickerEndTime => 'End time';
+
+  @override
+  String get calendarPickerRescheduleDate => 'Reschedule';
+
+  @override
+  String get calendarPickerAdjustStartTime => 'Adjust start time';
+
+  @override
+  String get calendarPickerAdjustStartTimeSubtitle =>
+      'Keep current date and duration, update end time';
+
+  @override
+  String get calendarPickerAdjustDueTime => 'Adjust time';
+
+  @override
+  String get calendarPickerAdjustDueTimeSubtitle =>
+      'Keep current date, only adjust due time';
+
+  @override
   String get pickerActionToday => 'Today';
+
+  @override
+  String get pickerEmpty => 'No options available';
+
+  @override
+  String get pickerNotSet => 'Not set';
 
   @override
   String get pickerDateIgnoreYear => 'Ignore year';
@@ -3324,4 +3407,1384 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get widgetHabitView => 'View habits';
+
+  @override
+  String get aiScheduleScreenTitle => 'Create with AI';
+
+  @override
+  String get aiScheduleAiDisabledTitle => 'AI is off';
+
+  @override
+  String get aiScheduleAiDisabledMessage =>
+      'Local time parsing will create a draft you can review before saving.';
+
+  @override
+  String get aiScheduleInputTitle => 'Describe your plan';
+
+  @override
+  String get aiScheduleInputSubtitle =>
+      'For example: Meet the product team tomorrow at 3 pm and remind me beforehand';
+
+  @override
+  String get aiScheduleInputHint =>
+      'Describe an event, task or reminder in natural language';
+
+  @override
+  String get aiScheduleEmptyInput =>
+      'Please describe what you want to schedule or accomplish.';
+
+  @override
+  String get aiScheduleRecognize => 'Recognize and review';
+
+  @override
+  String get aiScheduleRecognizing => 'Recognizing';
+
+  @override
+  String get aiScheduleErrorTitle => 'Could not create draft';
+
+  @override
+  String get aiScheduleDraftTitle => 'Review draft';
+
+  @override
+  String get aiScheduleDraftAiMessage =>
+      'Review the type, title, time and reminder before creating it.';
+
+  @override
+  String get aiScheduleDraftFallbackMessage =>
+      'This is a local fallback draft. Confirm it before saving.';
+
+  @override
+  String get aiScheduleWarningAiIncomplete => 'The AI result is incomplete.';
+
+  @override
+  String get aiScheduleWarningLocalFallback =>
+      'AI recognition was unavailable.';
+
+  @override
+  String get aiScheduleWarningAppendix =>
+      'Review the local draft below before creating it.';
+
+  @override
+  String get aiScheduleConfirmCardTitle => 'What will be created';
+
+  @override
+  String get aiScheduleTypeLabel => 'Type';
+
+  @override
+  String get aiScheduleTitleLabel => 'Title';
+
+  @override
+  String get aiScheduleStartLabel => 'Starts';
+
+  @override
+  String get aiScheduleEndLabel => 'Ends';
+
+  @override
+  String get aiScheduleReminderLabel => 'Reminder';
+
+  @override
+  String get aiScheduleNotesLabel => 'Notes';
+
+  @override
+  String get aiScheduleSubtasksLabel => 'Subtasks';
+
+  @override
+  String get aiScheduleCalendarType => 'Event';
+
+  @override
+  String get aiScheduleTodoType => 'Task';
+
+  @override
+  String get aiScheduleReminderEnabled => 'System reminder enabled';
+
+  @override
+  String get aiScheduleReminderDisabled => 'No reminder';
+
+  @override
+  String get aiScheduleSaving => 'Saving';
+
+  @override
+  String get aiScheduleCreate => 'Create';
+
+  @override
+  String get aiScheduleDone => 'Done';
+
+  @override
+  String get aiScheduleViewDetails => 'View details';
+
+  @override
+  String get aiScheduleCreatedEvent => 'Event created';
+
+  @override
+  String get aiScheduleCreatedTask => 'Task created';
+
+  @override
+  String get aiScheduleCreatedEventWithReminderIssue =>
+      'Event created, but reminder was not registered';
+
+  @override
+  String get aiScheduleCreatedTaskWithReminderIssue =>
+      'Task created, but reminder was not registered';
+
+  @override
+  String aiScheduleCreatedItemSummary(String typeLabel, String title) {
+    return '$typeLabel: $title';
+  }
+
+  @override
+  String aiScheduleStartSummaryCalendar(String value) {
+    return 'Starts: $value';
+  }
+
+  @override
+  String aiScheduleStartSummaryTodo(String value) {
+    return 'Planned time: $value';
+  }
+
+  @override
+  String get aiScheduleLocalSaved => 'Saved on this device';
+
+  @override
+  String get aiScheduleLocalSavedCalendar => 'Event saved on this device';
+
+  @override
+  String get aiScheduleLocalSavedTodo => 'Task saved on this device';
+
+  @override
+  String get aiScheduleReminderRegistered =>
+      'Reminder registered with system notifications';
+
+  @override
+  String get aiScheduleTaskReminderSubmitted =>
+      'Task reminder submitted for system registration';
+
+  @override
+  String get aiScheduleGenericReminderIssue => 'Reminder was not registered';
+
+  @override
+  String get aiScheduleAccountChanged =>
+      'Account changed. Reopen this page before trying again.';
+
+  @override
+  String get aiScheduleInputChanged =>
+      'The input changed. Recognize it again before creating.';
+
+  @override
+  String get aiScheduleGenericSaveFailed => 'Could not save. Please try again.';
+
+  @override
+  String get aiScheduleAlarmPermissionRequired =>
+      'System notification permission is required to register alarm reminders. Please enable notification permission and save again.';
+
+  @override
+  String get aiScheduleEventReminderIssueTitle =>
+      'Event reminder registration failed';
+
+  @override
+  String get aiScheduleTaskReminderIssueTitle =>
+      'Task reminder registration failed';
+
+  @override
+  String get aiScheduleCalendarSubtitle => 'Created with AI';
+
+  @override
+  String get aiScheduleCalendarSubtitleAllDay => 'Created with AI · All day';
+
+  @override
+  String get aiScheduleCalendarReminderTitle => 'Event reminder';
+
+  @override
+  String get aiScheduleSourceAi =>
+      'AI recognized the input. Confirm it before creating.';
+
+  @override
+  String get aiScheduleSourceAiWithLocalFallback =>
+      'The AI response was incomplete; local parsing filled the draft.';
+
+  @override
+  String get aiScheduleSourceLocalParser =>
+      'This uses local parsing. Confirm the time and type.';
+
+  @override
+  String get aiScheduleWarningReminderNotice => 'Reminder notice';
+
+  @override
+  String get aiScheduleWarningNotice => 'Notice';
+
+  @override
+  String get aiScheduleWarningUnavailable =>
+      'The AI service was unavailable, so a local draft was prepared.';
+
+  @override
+  String get aiScheduleWarningNoUsableDraft =>
+      'The AI did not return a usable draft, so a local draft was prepared.';
+
+  @override
+  String get aiScheduleWarningInvalidResponse =>
+      'The AI response could not be read, so a local draft was prepared.';
+
+  @override
+  String get aiScheduleWarningMissingReminderTime =>
+      'Specific reminder time was not recognized. Reminder is turned off.';
+
+  @override
+  String get aiScheduleWarningReviewDraft =>
+      'Please review the draft details before creating.';
+
+  @override
+  String get aiScheduleWarningGenericFallback =>
+      'A local draft was prepared for review.';
+
+  @override
+  String get aiScheduleErrorNotEnabled =>
+      'AI feature is not enabled. Please contact your administrator.';
+
+  @override
+  String get aiScheduleErrorQuotaExceeded =>
+      'Daily AI quota exceeded. Please try again tomorrow.';
+
+  @override
+  String get aiScheduleErrorRateLimit =>
+      'Too many requests. Please wait a moment and try again.';
+
+  @override
+  String get aiScheduleErrorTimeout =>
+      'AI service timed out. Please try again.';
+
+  @override
+  String get aiScheduleErrorGeneric =>
+      'Could not create draft. Please try again.';
+
+  @override
+  String get widgetHostSupportIosTitle => 'Add from your Home Screen';
+
+  @override
+  String get widgetHostSupportWebTitle => 'Widget previews for the web';
+
+  @override
+  String get widgetHostSupportMobileTitle => 'Mobile widget previews';
+
+  @override
+  String get widgetHostSupportIosMessage =>
+      'Touch and hold an empty area on your Home Screen, open the widget gallery, then choose Duoyi.';
+
+  @override
+  String get widgetHostSupportMobileMessage =>
+      'Preview widget styles here. To add home screen widgets, use Duoyi on Android or iOS.';
+
+  @override
+  String get widgetHostAddIosAction => 'How to add';
+
+  @override
+  String get widgetHostAddMobileAction => 'Use on mobile';
+
+  @override
+  String get widgetHostHelpMobileTitle => 'Use widgets on your phone';
+
+  @override
+  String get widgetAddDialogTitle => 'Add to Home Screen';
+
+  @override
+  String get widgetHostHelpIosMessage =>
+      'Touch and hold an empty area on your Home Screen. Tap Edit or + to open the widget gallery. Search for Duoyi, choose a size, then tap Add Widget. Small, medium and large sizes are available; supported iPads also offer extra large. Choose the size in the system gallery.\n\nOn iPhone (iOS 16+) or iPad (iPadOS 17+), touch and hold the Lock Screen, tap Customize, tap a widget area, then choose Duoyi.';
+
+  @override
+  String get widgetHostHelpMobileMessage =>
+      'This page previews widget styles. Install and open Duoyi on Android or iOS to use home screen widgets. On Android, add from the app or your home screen widget picker. On iOS, find Duoyi in the Home Screen widget gallery.';
+
+  @override
+  String get widgetHostTipsIosMessage =>
+      'Choose the actual size in the system widget gallery. Widgets show the latest synced content; open Duoyi and refresh if it looks out of date.';
+
+  @override
+  String get widgetHostTipsPreviewMessage =>
+      'A preview here does not add a home screen widget. Add and use widgets in Duoyi on Android or iOS.';
+
+  @override
+  String get widgetTipsBannerMessage =>
+      'Compact and Detailed have fixed sizes. Touch and hold Standard to resize if your launcher supports it. To change size presets, remove the widget and add it again. Confirm additions in the system dialog; if it does not appear, check Duoyi permissions.';
+
+  @override
+  String get widgetHostStyleCompactDescription =>
+      'Compact highlights key information.';
+
+  @override
+  String get widgetHostStyleDetailedDescription =>
+      'Detailed shows more context.';
+
+  @override
+  String get widgetHostStyleStandardDescription =>
+      'Standard balances information and space.';
+
+  @override
+  String widgetHostStyleDescriptionIos(String description) {
+    return '$description Choose the actual size in the system gallery.';
+  }
+
+  @override
+  String widgetStyleSyncSuccess(String modeLabel) {
+    return 'Widget style set to $modeLabel.';
+  }
+
+  @override
+  String widgetPreviewStyleSyncSuccess(String modeLabel) {
+    return 'Preview style set to $modeLabel.';
+  }
+
+  @override
+  String get widgetRefreshTooltip => 'Refresh widgets';
+
+  @override
+  String get widgetPreviewHeaderTitle => 'Home Screen Widget Preview';
+
+  @override
+  String get widgetStylePanelTitle => 'Widget Style';
+
+  @override
+  String get widgetCategoryAll => 'All';
+
+  @override
+  String get widgetCategoryProductivity => 'Productivity';
+
+  @override
+  String get widgetCategoryLife => 'Lifestyle';
+
+  @override
+  String get widgetCatalogTodoTitle => 'Today’s tasks';
+
+  @override
+  String get widgetCatalogCalendarTitle => 'Calendar';
+
+  @override
+  String get widgetCatalogScheduleTitle => 'Today’s schedule';
+
+  @override
+  String get widgetCatalogGoalTitle => 'Goals';
+
+  @override
+  String get widgetCatalogNoteTitle => 'Quick Notes';
+
+  @override
+  String get widgetCatalogAnniversaryTitle => 'Anniversaries';
+
+  @override
+  String get widgetCatalogTodoSubtitle =>
+      'View and complete todos on home screen with quick capture';
+
+  @override
+  String get widgetCatalogFocusSubtitle =>
+      'Show today focus sessions, duration, and next plan';
+
+  @override
+  String get widgetCatalogHabitSubtitle =>
+      'Track today completion rate, streaks, and quick check-in';
+
+  @override
+  String get widgetCatalogCalendarSubtitle =>
+      'Monthly overview with today indicator';
+
+  @override
+  String get widgetCatalogScheduleSubtitle =>
+      'View today schedule items ordered chronologically';
+
+  @override
+  String get widgetCatalogGoalSubtitle =>
+      'Show active goals and progress status';
+
+  @override
+  String get widgetCatalogCourseSubtitle =>
+      'Show today class periods, classrooms, and times';
+
+  @override
+  String get widgetCatalogNoteSubtitle =>
+      'View recently updated memos and quick notes';
+
+  @override
+  String get widgetCatalogAnniversarySubtitle =>
+      'Count down important days and track total days';
+
+  @override
+  String get widgetCatalogDiarySubtitle =>
+      'Review recent mood entries and diary snippets';
+
+  @override
+  String get widgetDisplayModeCompactLabel => 'Compact';
+
+  @override
+  String get widgetDisplayModeDetailedLabel => 'Detailed';
+
+  @override
+  String get widgetDisplayModeStandardLabel => 'Standard';
+
+  @override
+  String get widgetDisplayModeCompactDescription =>
+      'Compact highlights key information at a fixed size.';
+
+  @override
+  String get widgetDisplayModeDetailedDescription =>
+      'Detailed uses a fixed size; content adapts to available space.';
+
+  @override
+  String get widgetDisplayModeStandardDescription =>
+      'Standard adapts content to available space. Touch and hold to resize if your launcher supports it.';
+
+  @override
+  String get widgetStyleSyncFailed =>
+      'Failed to sync widget style to home screen. Please retry.';
+
+  @override
+  String get widgetCannotOpenSettings =>
+      'Unable to open app settings. Please check Duoyi permissions in system settings.';
+
+  @override
+  String get widgetRefreshSuccess => 'Widgets refreshed';
+
+  @override
+  String get widgetRefreshFailed =>
+      'Failed to refresh. Please try again later.';
+
+  @override
+  String get widgetPinSupportCheckingTitle =>
+      'Checking home screen widget support';
+
+  @override
+  String get widgetPinSupportCheckingMessage =>
+      'Checking whether current launcher supports adding widgets directly.';
+
+  @override
+  String get widgetPinSupportSupportedTitle =>
+      'Current launcher supports adding from app';
+
+  @override
+  String get widgetPinSupportSupportedMessage =>
+      'Add from the app, then confirm in the system dialog.';
+
+  @override
+  String get widgetPinSupportUnsupportedPlatformTitle =>
+      'Platform does not support in-app pinning';
+
+  @override
+  String get widgetPinSupportUnsupportedLauncherTitle =>
+      'Current launcher does not support in-app pinning';
+
+  @override
+  String get widgetPinSupportPermissionDeniedTitle =>
+      'Home screen permission denied';
+
+  @override
+  String get widgetPinSupportConfirmationBlockedTitle =>
+      'Confirmation dialog may be blocked';
+
+  @override
+  String get widgetPinSupportInvalidKindTitle => 'Widget kind cannot be pinned';
+
+  @override
+  String get widgetPinSupportFallbackTitle =>
+      'Current launcher may not support in-app pinning';
+
+  @override
+  String get widgetPinSupportUnsupportedPlatformMessage =>
+      'Please add Duoyi via the system widget picker on Android.';
+
+  @override
+  String get widgetPinSupportUnsupportedLauncherMessage =>
+      'Current launcher has not enabled in-app pinning. Please add from system widget picker.';
+
+  @override
+  String get widgetPinSupportPermissionDeniedMessage =>
+      'System did not allow Duoyi to add widgets. Enable permission in settings and retry.';
+
+  @override
+  String get widgetPinSupportConfirmationBlockedMessage =>
+      'Confirmation dialog may be blocked. Please check background pop-up permissions.';
+
+  @override
+  String get widgetPinSupportInvalidKindMessage =>
+      'Please update the app and retry.';
+
+  @override
+  String get widgetPinSupportFallbackMessage =>
+      'If no dialog appears, check widget and pop-up permissions in system settings, or add via system widget picker.';
+
+  @override
+  String get widgetActionAppSettings => 'App Settings';
+
+  @override
+  String get widgetActionRecheck => 'Recheck';
+
+  @override
+  String get widgetActionOpenPermissions => 'Open Permissions';
+
+  @override
+  String get widgetActionGotIt => 'Got It';
+
+  @override
+  String get widgetPinHelpUnsupportedMessage =>
+      'Current launcher does not support direct pinning. Long press an empty area on your home screen to add from the widget picker.';
+
+  @override
+  String get widgetPinHelpUnsupportedPlatformMessage =>
+      'Current platform does not support adding Android widgets. Please add Duoyi from the system widget picker on Android.';
+
+  @override
+  String get widgetPinHelpUnsupportedLauncherMessage =>
+      'Current launcher has not enabled in-app pinning. Long press an empty area on home screen to add from widget picker.';
+
+  @override
+  String get widgetPinHelpPermissionDeniedMessage =>
+      'System did not allow Duoyi to add widgets. Enable permission in system settings and retry, or add from widget picker.';
+
+  @override
+  String get widgetPinHelpConfirmationBlockedMessage =>
+      'System confirmation dialog may be blocked. Please check background pop-up permissions.';
+
+  @override
+  String get widgetPinHelpInvalidKindMessage =>
+      'This widget type is not supported yet. Update the app and try again.';
+
+  @override
+  String get widgetPinHelpUnavailableMessage =>
+      'Failed to send request. Check home screen permissions and retry, or add from widget picker.';
+
+  @override
+  String get widgetPinHelpRequestedMessage =>
+      'Pin request initiated. Please confirm in the system dialog.';
+
+  @override
+  String get widgetPinConfirmationInvalidWidgetIdTitle => 'Addition Incomplete';
+
+  @override
+  String get widgetPinConfirmationInvalidWidgetIdMessage =>
+      'Widget was not created on home screen. Retry or add from system widget picker.';
+
+  @override
+  String get widgetPinConfirmationTimeoutTitle => 'Awaiting Confirmation';
+
+  @override
+  String get widgetPinConfirmationTimeoutMessage =>
+      'Request sent, but system confirmation not received. Check home screen for dialog or verify permissions.';
+
+  @override
+  String get widgetPinConfirmationUnavailableTitle => 'Addition Error';
+
+  @override
+  String get widgetPinConfirmationUnavailableMessage =>
+      'No result returned by launcher. Retry or add from system widget picker.';
+
+  @override
+  String get widgetPinConfirmationSuccessTitle => 'Added';
+
+  @override
+  String get widgetPinConfirmationSuccessMessage => 'Home screen widget added.';
+
+  @override
+  String get widgetCheckingDesktopSupport => 'Checking support';
+
+  @override
+  String get widgetPinDisabledAndroidOnly => 'In-app pin is Android only';
+
+  @override
+  String get widgetPinDisabledPicker => 'Add via system widget picker';
+
+  @override
+  String get widgetPinDisabledHelp => 'View Pin Help';
+
+  @override
+  String get widgetLoadingStyle => 'Loading style';
+
+  @override
+  String get widgetStyleLoadFailed =>
+      'Could not load style. Retry or choose a style.';
+
+  @override
+  String get widgetStyleSyncPending =>
+      'Style saved. Home screen sync is unconfirmed. Retry or refresh.';
+
+  @override
+  String get widgetUpdatingStyle => 'Updating style';
+
+  @override
+  String get widgetRequestingAdd => 'Requesting...';
+
+  @override
+  String widgetAddWidgetButtonLabel(
+    String modeLabel,
+    String launcherRequestLabel,
+  ) {
+    return 'Add $modeLabel $launcherRequestLabel';
+  }
+
+  @override
+  String widgetPinInitiatedSnackBar(String modeLabel) {
+    return 'Request sent. Confirm the $modeLabel widget in the system dialog.';
+  }
+
+  @override
+  String widgetPinSuccessSnackBar(String modeLabel) {
+    return 'Added $modeLabel widget to home screen.';
+  }
+
+  @override
+  String get widgetTipsBannerTitle => 'Home Screen Widget Tips';
+
+  @override
+  String get widgetDesktopWebTitle => 'Web Calendar View';
+
+  @override
+  String get widgetDesktopWebMessage =>
+      'Home screen widgets require Android or iOS. Web desktop hides widget pinning and preserves monthly calendar preview and entry.';
+
+  @override
+  String get widgetDesktopWebTileSubtitle =>
+      'Web desktop displays calendar by default without widget pin controls';
+
+  @override
+  String get widgetDesktopWebOpenCalendar => 'Open Calendar';
+
+  @override
+  String get widgetPreviewTodoTitle => 'Tasks';
+
+  @override
+  String get widgetPreviewScheduleTitle => 'Schedule';
+
+  @override
+  String widgetPreviewSampleBadge(String title) {
+    return 'Sample · $title';
+  }
+
+  @override
+  String widgetSampleHeaderDate(
+    String cellLabel,
+    String monthLabel,
+    String day,
+  ) {
+    return '$cellLabel · $monthLabel $day';
+  }
+
+  @override
+  String get widgetRefreshPreviewTooltip => 'Refresh preview';
+
+  @override
+  String widgetCalendarMonthHeader(String yearText, String monthLabel) {
+    return '$monthLabel $yearText';
+  }
+
+  @override
+  String get widgetTodoItem1 => 'Organize daily plan';
+
+  @override
+  String get widgetTodoItem2 => 'Review project proposal';
+
+  @override
+  String get widgetTodoItem3 => '30-min evening workout';
+
+  @override
+  String get widgetTodoSummaryCount => 'Today’s tasks · 3 items';
+
+  @override
+  String get widgetTodoQuickAdd => '+ Quick Add';
+
+  @override
+  String get widgetFocusMetricSessions => 'Sessions';
+
+  @override
+  String get widgetFocusMetricDuration => 'Minutes';
+
+  @override
+  String get widgetFocusMetricNext => 'Next (min)';
+
+  @override
+  String get widgetFocusTimerUnit => 'min';
+
+  @override
+  String get widgetFocusStartButton => 'Start 25-min focus';
+
+  @override
+  String get widgetFocusLine1 => 'Today: 2 sessions · 50 min deep work';
+
+  @override
+  String get widgetFocusLine2 => 'Next: 25-min focus';
+
+  @override
+  String get widgetFocusLine3 => 'Tap to start focus';
+
+  @override
+  String get widgetHabitTitle => 'Today’s habits';
+
+  @override
+  String get widgetCalendarCurrentDate => 'May 17 · Sunday';
+
+  @override
+  String get widgetCalendarCurrentDay => 'May 17';
+
+  @override
+  String get widgetHabitLine1 => '· Evening Stretch · Pending';
+
+  @override
+  String get widgetHabitLine2 => '· 5-day streak';
+
+  @override
+  String get widgetHabitCheckInButton => 'Check-in: Stretch';
+
+  @override
+  String get widgetScheduleItem1 => '09:00 Daily planning · Reminder';
+
+  @override
+  String get widgetScheduleItem2 => '14:30 Team sync';
+
+  @override
+  String get widgetScheduleItem3 => '19:00 Evening review';
+
+  @override
+  String get widgetGoalItem1 => 'Release prep · 68%';
+
+  @override
+  String get widgetGoalItem2 => 'Workouts 3/5 this week';
+
+  @override
+  String get widgetGoalItem3 => 'Evening review · Pending';
+
+  @override
+  String get widgetCourseItem1 => 'Period 1-2 Advanced Math · Rm 203';
+
+  @override
+  String get widgetCourseItem2 => 'Period 3-4 Product Design · Online';
+
+  @override
+  String get widgetCourseItem3 => 'Period 5-6 English · Rm 305';
+
+  @override
+  String get widgetNoteItem1 => 'Meeting notes';
+
+  @override
+  String get widgetNoteItem2 => 'Idea checklist';
+
+  @override
+  String get widgetNoteItem3 => 'Book highlights';
+
+  @override
+  String get widgetAnniversaryItem1 => 'Anniversary · 6 days left';
+
+  @override
+  String get widgetAnniversaryItem2 => 'Work Anniversary · 18 days left';
+
+  @override
+  String get widgetAnniversaryItem3 => 'Trip Anniversary · 32 days left';
+
+  @override
+  String get widgetDiaryItem1 => 'May 17 Completed focus review today';
+
+  @override
+  String get widgetDiaryItem2 => 'May 16 Logged an evening walk';
+
+  @override
+  String get widgetDiaryItem3 => 'May 15 Bedtime reflection';
+
+  @override
+  String get widgetCalendarMonthJan => 'Jan';
+
+  @override
+  String get widgetCalendarMonthFeb => 'Feb';
+
+  @override
+  String get widgetCalendarMonthMar => 'Mar';
+
+  @override
+  String get widgetCalendarMonthApr => 'Apr';
+
+  @override
+  String get widgetCalendarMonthMay => 'May';
+
+  @override
+  String get widgetCalendarMonthJun => 'Jun';
+
+  @override
+  String get widgetCalendarMonthJul => 'Jul';
+
+  @override
+  String get widgetCalendarMonthAug => 'Aug';
+
+  @override
+  String get widgetCalendarMonthSep => 'Sep';
+
+  @override
+  String get widgetCalendarMonthOct => 'Oct';
+
+  @override
+  String get widgetCalendarMonthNov => 'Nov';
+
+  @override
+  String get widgetCalendarMonthDec => 'Dec';
+
+  @override
+  String get dataSettingsThemeSaveFailed => 'Failed to save theme settings';
+
+  @override
+  String get dataSettingsRewardShopReason => 'Reward shop theme decoration';
+
+  @override
+  String dataSettingsRedeemThemeTitle(String name) {
+    return 'Redeem theme: $name';
+  }
+
+  @override
+  String dataSettingsRedeemFocusBackdropTitle(String name) {
+    return 'Redeem focus backdrop: $name';
+  }
+
+  @override
+  String dataSettingsRedeemAvatarFrameTitle(String name) {
+    return 'Redeem avatar frame: $name';
+  }
+
+  @override
+  String dataSettingsRedeemCardSkinTitle(String name) {
+    return 'Redeem card skin: $name';
+  }
+
+  @override
+  String dataSettingsInsufficientCoins(int diff) {
+    return 'Not enough Time Coins, need $diff more';
+  }
+
+  @override
+  String dataSettingsThemeApplied(String name) {
+    return 'Applied $name';
+  }
+
+  @override
+  String dataSettingsThemeRedeemedAndApplied(String name) {
+    return 'Redeemed and applied $name';
+  }
+
+  @override
+  String dataSettingsWidgetBackgroundSwitched(String label) {
+    return 'Widget background switched to $label';
+  }
+
+  @override
+  String get dataSettingsUnlockThemeFirst => 'Please unlock this theme first';
+
+  @override
+  String dataSettingsWidgetCardSkinSwitched(String label) {
+    return 'Widget card skin switched to $label';
+  }
+
+  @override
+  String get dataSettingsUnlockCardSkinFirst =>
+      'Please unlock this card skin first';
+
+  @override
+  String get dataSettingsWidgetFollowCurrentTheme => 'Follow Current Theme';
+
+  @override
+  String get dataSettingsWidgetFollowCardSkin => 'Follow Card Skin';
+
+  @override
+  String get dataSettingsWidgetThemeTitle => 'Desktop Widget Theme';
+
+  @override
+  String get dataSettingsWidgetThemeSubtitle =>
+      'Adjust desktop widget background and card skin individually';
+
+  @override
+  String get dataSettingsWidgetBackgroundLabel => 'Background';
+
+  @override
+  String get dataSettingsWidgetCardSkinLabel => 'Card Skin';
+
+  @override
+  String dataSettingsCoinCount(int count) {
+    return 'Time Coins $count';
+  }
+
+  @override
+  String dataSettingsCoinCost(int cost) {
+    return '$cost Coins';
+  }
+
+  @override
+  String get dataSettingsFocusBackdropSectionTitle => 'Focus Backdrops';
+
+  @override
+  String get dataSettingsFocusBackdropSectionSubtitle =>
+      'Redeem Pomodoro card decorations with Time Coins';
+
+  @override
+  String get dataSettingsAvatarFrameSectionTitle => 'Avatar Frames';
+
+  @override
+  String get dataSettingsAvatarFrameSectionSubtitle =>
+      'Redeem Profile avatar decorations with Time Coins';
+
+  @override
+  String get dataSettingsCardSkinSectionTitle => 'Card Skins';
+
+  @override
+  String get dataSettingsCardSkinSectionSubtitle =>
+      'Redeem information card styles with Time Coins';
+
+  @override
+  String get dataSettingsWidgetSyncNoticeTitle => 'Widget Theme';
+
+  @override
+  String get dataSettingsWidgetSyncNoticeSubtitle =>
+      'Background and card skin sync to device home widgets';
+
+  @override
+  String get dataSettingsFocusBackdropClassicName => 'Classic Focus';
+
+  @override
+  String get dataSettingsFocusBackdropMorningName => 'Morning Desk';
+
+  @override
+  String get dataSettingsFocusBackdropForestName => 'Forest Breeze';
+
+  @override
+  String get dataSettingsFocusBackdropOceanName => 'Ocean Flow';
+
+  @override
+  String get dataSettingsFocusBackdropNightName => 'Night Flight';
+
+  @override
+  String get dataSettingsFocusBackdropClassicDescription =>
+      'Clean gradient Pomodoro background';
+
+  @override
+  String get dataSettingsFocusBackdropMorningDescription =>
+      'Warm background ideal for morning study and reading';
+
+  @override
+  String get dataSettingsFocusBackdropForestDescription =>
+      'Natural green background for deep, sustained focus';
+
+  @override
+  String get dataSettingsFocusBackdropOceanDescription =>
+      'Calm cyan background for review and low-pressure focus';
+
+  @override
+  String get dataSettingsFocusBackdropNightDescription =>
+      'Low-brightness dark background for night study';
+
+  @override
+  String get dataSettingsAvatarFrameSimpleName => 'Simple Frame';
+
+  @override
+  String get dataSettingsAvatarFrameGoldenName => 'Golden Medal Frame';
+
+  @override
+  String get dataSettingsAvatarFrameForestName => 'Green Leaf Frame';
+
+  @override
+  String get dataSettingsAvatarFrameAuroraName => 'Aurora Energy Frame';
+
+  @override
+  String get dataSettingsAvatarFrameSimpleDescription =>
+      'Default avatar frame style';
+
+  @override
+  String get dataSettingsAvatarFrameGoldenDescription =>
+      'Golden frame for achievement masters';
+
+  @override
+  String get dataSettingsAvatarFrameForestDescription =>
+      'Natural leafy frame for consistent habit streaks';
+
+  @override
+  String get dataSettingsAvatarFrameAuroraDescription =>
+      'Glowing aurora frame for productive weeks';
+
+  @override
+  String get dataSettingsCardSkinPlainName => 'Plain Card';
+
+  @override
+  String get dataSettingsCardSkinPaperName => 'Paper Planner Card';
+
+  @override
+  String get dataSettingsCardSkinMintName => 'Mint Checklist Card';
+
+  @override
+  String get dataSettingsCardSkinStarlightName => 'Starlight Glass Card';
+
+  @override
+  String get dataSettingsCardSkinPlainDescription =>
+      'Default card surface style';
+
+  @override
+  String get dataSettingsCardSkinPaperDescription =>
+      'Gentle paper texture for schedules and todos';
+
+  @override
+  String get dataSettingsCardSkinMintDescription =>
+      'Refreshing card style for habits and focus logs';
+
+  @override
+  String get dataSettingsCardSkinStarlightDescription =>
+      'Low-light glass texture for evening reviews';
+
+  @override
+  String get settingsUiSaveFailed =>
+      'Could not save this setting. Please try again.';
+
+  @override
+  String get settingsUiDecreaseValue => 'Decrease';
+
+  @override
+  String get settingsUiIncreaseValue => 'Increase';
+
+  @override
+  String settingsUiDecreaseSetting(String title) {
+    return 'Decrease $title';
+  }
+
+  @override
+  String settingsUiIncreaseSetting(String title) {
+    return 'Increase $title';
+  }
+
+  @override
+  String settingsUiCurrentFirstWeekday(String weekday) {
+    return 'Currently $weekday';
+  }
+
+  @override
+  String get settingsUiPreferencesHeroExplanation =>
+      'Customize display and behavior preferences, and manage bottom navigation layout and widgets.';
+
+  @override
+  String get settingsUiPreferencesCategoriesSectionTitle => 'Personalization';
+
+  @override
+  String get settingsUiPreferencesCategoriesSectionSubtitle =>
+      'Choose a category to customize';
+
+  @override
+  String get settingsUiDisplayAndBehaviorTitle => 'Display & Behavior';
+
+  @override
+  String get settingsUiDisplayAndBehaviorSubtitle =>
+      'Date formats, time zone, startup tab, haptics, and auto-archive';
+
+  @override
+  String get settingsUiDisplayAndBehaviorHeroSubtitle =>
+      'Manage date format, app time zone, startup defaults, haptic feedback, and auto-archive.';
+
+  @override
+  String get settingsUiNavigationSectionTitle => 'Navigation';
+
+  @override
+  String get settingsUiNavigationSectionSubtitle =>
+      'Up to 5 bottom tabs; \"Me\" is pinned, Widgets can be hidden';
+
+  @override
+  String get settingsUiJumpToMenuTitle => 'Jump To';
+
+  @override
+  String get settingsUiJumpToDate => 'Date & Calendar';
+
+  @override
+  String get settingsUiJumpToDefaults => 'Defaults';
+
+  @override
+  String get settingsUiJumpToInteraction => 'Interaction';
+
+  @override
+  String settingsUiDateFormatIso(String pattern) {
+    return 'ISO ($pattern)';
+  }
+
+  @override
+  String settingsUiDateFormatUs(String pattern) {
+    return 'US ($pattern)';
+  }
+
+  @override
+  String settingsUiDateFormatEurope(String pattern) {
+    return 'UK/EU ($pattern)';
+  }
+
+  @override
+  String settingsUiDateFormatEastAsian(String pattern) {
+    return 'East Asian ($pattern)';
+  }
+
+  @override
+  String get settingsUiTimeZoneShanghai => 'China Standard Time (Shanghai)';
+
+  @override
+  String get settingsUiTimeZoneMexicoCity => 'Mexico City Time';
+
+  @override
+  String get settingsUiTimeZoneTijuana => 'Tijuana Time';
+
+  @override
+  String get settingsUiTimeZoneTokyo => 'Tokyo Time (Japan)';
+
+  @override
+  String get settingsUiTimeZoneHongKong => 'Hong Kong Time';
+
+  @override
+  String get settingsUiTimeZoneSingapore => 'Singapore Time';
+
+  @override
+  String get settingsUiTimeZoneNewYork => 'New York Time (Eastern)';
+
+  @override
+  String get settingsUiTimeZoneLosAngeles => 'Los Angeles Time (Pacific)';
+
+  @override
+  String get settingsUiTimeZoneLondon => 'London Time';
+
+  @override
+  String get settingsUiTimeZoneParis => 'Paris Time (Central Europe)';
+
+  @override
+  String get settingsUiTimeZoneSydney => 'Sydney Time (Eastern Australia)';
+
+  @override
+  String get settingsUiNavigationBannerMessage =>
+      'The bottom navigation bar displays up to 5 tabs. \"Me\" is pinned. Widgets can be hidden and accessed from the \"Me\" tab.';
+
+  @override
+  String settingsUiMaxTabsConstraint(int max) {
+    return 'Max $max tabs allowed';
+  }
+
+  @override
+  String get settingsUiNavigationHiddenAtLimit =>
+      'Limit reached, hide another tab first';
+
+  @override
+  String settingsUiNavigationMoveUp(String label) {
+    return 'Move $label up';
+  }
+
+  @override
+  String settingsUiNavigationMoveDown(String label) {
+    return 'Move $label down';
+  }
+
+  @override
+  String get settingsUiSelectOption => 'Select Option';
+
+  @override
+  String get settingsUiSelectFirstDay => 'First Day of Week';
+
+  @override
+  String get settingsUiSelectDateFormat => 'Date Format';
+
+  @override
+  String get settingsUiSelectTimeZone => 'App Time Zone';
+
+  @override
+  String get settingsUiSelectDefaultTab => 'Default Startup Tab';
+
+  @override
+  String get settingsUiSelectAutoLock => 'Auto-Lock Timeout';
+
+  @override
+  String settingsUiAutoLockMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String settingsUiAutoLockAfter(int minutes) {
+    return 'Lock after $minutes min in background';
+  }
+
+  @override
+  String habitCopyWeekGoal(int target, String unit) {
+    return 'Weekly goal: $target $unit/week';
+  }
+
+  @override
+  String habitCopyMonthGoal(int target, String unit) {
+    return 'Monthly goal: $target $unit/month';
+  }
+
+  @override
+  String get habitCopyActionEnd => 'End';
+
+  @override
+  String get habitCopyDeleteConfirmTitle => 'Delete habit?';
+
+  @override
+  String habitCopyDeleteConfirmContent(String habitName) {
+    return 'This habit and its records will be permanently deleted.';
+  }
+
+  @override
+  String get habitCopyEndConfirmTitle => 'End habit?';
+
+  @override
+  String habitCopyEndConfirmContent(String habitName) {
+    return 'End \"$habitName\"? Past history will be preserved.';
+  }
+
+  @override
+  String get habitCopyEndHabitAction => 'End';
+
+  @override
+  String get habitCopyDeleteHabitAction => 'Delete';
+
+  @override
+  String get habitCopyMoreActions => 'More';
+
+  @override
+  String get habitCopyEndedFeedback => 'Habit ended, history preserved';
+
+  @override
+  String get habitCopyDeletedFeedback => 'Habit deleted';
+
+  @override
+  String get habitCopySaveSuccess => 'Habit saved';
+
+  @override
+  String get habitCopyCheckInFailedWithRetry =>
+      'Failed to record check-in. Please try again.';
+
+  @override
+  String get habitCopyUndoFailedWithRetry =>
+      'Failed to undo check-in. Please try again.';
+
+  @override
+  String get habitCopySaveFailedWithRetry =>
+      'Failed to save habit. Please try again.';
+
+  @override
+  String get habitCopyActionFailedWithRetry =>
+      'Action failed. Please try again.';
+
+  @override
+  String get habitCopyNameRequired => 'Please enter a habit name';
+
+  @override
+  String get habitCopyDailyTargetInvalid => 'Daily target must be at least 1';
+
+  @override
+  String get habitCopyReminderSchedulerMissing =>
+      'Reminder scheduler is not initialized. Please reopen the app before saving reminders.';
+
+  @override
+  String get habitCopyNotificationsNotGranted =>
+      'Notifications not granted. Habit reminders will not sound or pop up';
+
+  @override
+  String get habitCopyReminderPermissionError =>
+      'Notification permission is required to set reminders.';
+
+  @override
+  String get habitCopyReminderRegisterFailed => 'Failed to schedule reminder';
+
+  @override
+  String habitCopyReminderSyncWarning(String issueText) {
+    return 'Habit saved, but reminders not synced: $issueText';
+  }
+
+  @override
+  String habitCopyPeriodGoalReached(String habitName, String periodLabel) {
+    return '\"$habitName\" $periodLabel goal reached';
+  }
+
+  @override
+  String habitCopySingleSessionGoalReached(String habitName) {
+    return '\"$habitName\" single session goal reached today';
+  }
+
+  @override
+  String habitCopyCheckInSuccessNegative(String habitName) {
+    return 'Recorded once for \"$habitName\"';
+  }
+
+  @override
+  String habitCopyDateRecordFeedback(String habitName) {
+    return 'Recorded for \"$habitName\"';
+  }
+
+  @override
+  String habitCopyDateUndoFeedback(String habitName) {
+    return 'Check-in undone for \"$habitName\"';
+  }
+
+  @override
+  String get habitCopyUnitCup => 'cup';
+
+  @override
+  String get habitCopyUnitCups => 'cups';
+
+  @override
+  String get habitCopyUnitTime => 'time';
+
+  @override
+  String habitCopyMeasuredCount(int count, String unit) {
+    return '$count $unit';
+  }
+
+  @override
+  String habitCopyCountWithFlexProgress(
+    String measuredCount,
+    String flexProgressLabel,
+  ) {
+    return '$measuredCount · $flexProgressLabel';
+  }
+
+  @override
+  String habitCopyCountRecorded(String measuredCount) {
+    return 'Recorded $measuredCount';
+  }
+
+  @override
+  String habitCopyCountRatio(
+    String measuredCount,
+    int target,
+    String targetUnit,
+  ) {
+    return '$measuredCount / $target $targetUnit';
+  }
+
+  @override
+  String habitCopyCheckInSuccessStandardReached(String habitName) {
+    return '\"$habitName\" goal reached today';
+  }
+
+  @override
+  String habitCopyCheckInSuccessStandardProgress(
+    String habitName,
+    int count,
+    int target,
+  ) {
+    return 'Checked in \"$habitName\" $count/$target';
+  }
+
+  @override
+  String get habitCopyPeriodFallback => 'Period';
+
+  @override
+  String habitCopyCheckInSuccessFlexProgress(
+    String habitName,
+    String flexLabel,
+  ) {
+    return 'Checked in \"$habitName\" $flexLabel';
+  }
+
+  @override
+  String get settingsUiAutoArchiveDayOne => '1 day';
+
+  @override
+  String settingsUiAutoArchiveDayMany(int days) {
+    return '$days days';
+  }
+
+  @override
+  String get settingsUiAutoArchiveAfterOneDay => 'Auto-hide after 1 day';
+
+  @override
+  String settingsUiAutoArchiveAfterDays(int days) {
+    return 'Auto-hide after $days days';
+  }
+
+  @override
+  String settingsUiFollowingSystemTimeZone(String timeZoneName) {
+    return 'Follow phone: $timeZoneName';
+  }
 }

@@ -1,34 +1,48 @@
+import '../widgets/app_date_format.dart';
+import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/almanac_locale_format.dart';
+import '../core/almanac_ui_copy.dart';
+import '../core/app_brand.dart';
+import '../core/brand_strings.dart';
 import '../core/completion_visibility_policy.dart';
 import '../core/design_tokens.dart';
 import '../core/desktop_tokens.dart';
 import '../core/goal_icons.dart';
 import '../core/i18n.dart';
+import '../core/calendar_date_navigation.dart';
 import '../core/i18n_date_format.dart';
 import '../core/lunar_calendar.dart';
 import '../core/quotes.dart';
 import '../core/report_engine.dart';
 import '../core/smart_schedule_advisor.dart';
 import '../core/today_ui_copy.dart';
+import '../core/todo_board_ui_copy.dart';
+import '../core/todo_ui_copy.dart';
 import '../core/todo_templates.dart';
 import '../models/course_schedule.dart' show CourseItem, ScheduleSettings;
 import '../models/todo.dart';
 import '../providers/anniversary_provider.dart';
+import '../providers/app_lock_provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/course_provider.dart';
 import '../providers/diary_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/pomodoro_provider.dart';
+import '../providers/preferences_provider.dart';
 import '../providers/share_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/user_provider.dart';
 import '../services/account_local_data_cleaner.dart';
+import '../services/app_update_service.dart';
+import '../services/holiday_calendar.dart';
+import '../services/settings_action_origin.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/surface_components.dart';
 import '../widgets/todo_completion_flow.dart';
@@ -47,7 +61,12 @@ List<TodoItem> _visibleTodayOverviewTodos(
 ) {
   final today = CompletionVisibilityPolicy.dateOnly(now);
   return todos.where((todo) {
-    if (todo.isArchivedAfterRollover || todo.isCompleted) return false;
+    if (todo.isArchivedAfterRollover) return false;
+    if (todo.isCompleted) {
+      final completedAt = todo.completedAt;
+      return completedAt != null &&
+          CompletionVisibilityPolicy.dateOnly(completedAt) == today;
+    }
     final due = todo.dueDate;
     if (due == null) return true;
     final dueDay = CompletionVisibilityPolicy.dateOnly(due);
@@ -57,13 +76,70 @@ List<TodoItem> _visibleTodayOverviewTodos(
   }).toList();
 }
 
+VoidCallback _todayTodoCompletionAction(BuildContext context, TodoItem todo) {
+  final origin = SettingsActionOrigin(context);
+  final todos = context.read<TodoProvider>();
+  final share = context.read<ShareProvider?>();
+
+  bool isCurrent({bool checkRoute = true, bool checkTodo = true}) =>
+      origin.isCurrent(checkRoute: checkRoute) &&
+      identical(context.read<TodoProvider>(), todos) &&
+      identical(context.read<ShareProvider?>(), share) &&
+      (share?.canEdit(todo.workspaceId) ?? true) &&
+      (!checkTodo || todos.todos.any((item) => identical(item, todo)));
+
+  return () async {
+    if (!isCurrent()) return;
+    if (!todo.isCompleted) {
+      await completeTodoWithOptionalTimeRecord(
+        context,
+        todo,
+        isAccessAvailable: () => isCurrent(checkRoute: false),
+        isFeedbackAvailable: () => isCurrent(checkTodo: false),
+      );
+      return;
+    }
+    try {
+      final changed = await todos.reopenTodos([todo.id]);
+      if (!context.mounted || changed == 0 || !isCurrent(checkTodo: false)) {
+        return;
+      }
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (_, _, _) =>
+                Text(TodoBoardUiCopy.restoredFeedback(todo.title)),
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error, stack) {
+      debugPrint('[Today] reopen failed: $error\n$stack');
+      if (!context.mounted || !isCurrent(checkTodo: false)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (_, _, _) => Text(TodoUiCopy.completionFailedFeedback),
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  };
+}
+
 /// 今日概览：登录后展示的聚合首屏。
-class TodayScreen extends StatelessWidget {
+class TodayScreen extends StatelessWidget
+    implements LocaleStatePreservingRoute {
   const TodayScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
+    final brand = context.select<ThemeProvider, AppBrand>((t) => t.brand);
 
     final todoP = context.watch<TodoProvider>();
     final habitP = context.watch<HabitProvider>();
@@ -75,11 +151,27 @@ class TodayScreen extends StatelessWidget {
     final courseP = context.watch<CourseProvider>();
     final goalP = context.watch<GoalProvider>();
     final user = context.watch<UserProvider>();
+    final showLunar = context.select<PreferencesProvider?, bool>(
+      (p) => p?.showLunar ?? true,
+    );
+    final shareProvider = context.watch<ShareProvider?>();
+    context.select<AuthProvider?, Object?>(
+      (auth) => (
+        auth?.sessionGeneration,
+        auth?.isAccountTransitionInProgress,
+        auth?.isLocalAccountDataBlocked,
+      ),
+    );
+    context.select<PreferencesProvider?, int?>(
+      (prefs) => prefs?.storageGeneration,
+    );
+    context.select<AppLockProvider?, bool?>((lock) => lock?.isLocked);
+    context.select<AppUpdateService?, bool?>((update) => update?.mustUpdate);
 
     return ValueListenableBuilder<AppLocale>(
       valueListenable: I18n.localeListenable,
       builder: (context, locale, _) {
-        final s = themeProvider.brand.strings;
+        final s = brand.strings;
         final now = DateTime.now();
         final todayKey = DateTime(now.year, now.month, now.day);
         final lunar = LunarCalendar.fromSolar(now);
@@ -114,6 +206,7 @@ class TodayScreen extends StatelessWidget {
         final todayCourses = courseP.todayCourses
           ..sort((a, b) => a.startSection.compareTo(b.startSection));
         final reminderGroups = _TodayReminderGroups.build(
+          datePattern: AppDateFormat.patternOf(context),
           todos: todoP.todos,
           courses: todayCourses,
           courseSettings: courseP.settings,
@@ -156,6 +249,9 @@ class TodayScreen extends StatelessWidget {
           avoid: avoid,
           term: term,
           festival: festival,
+          showLunar: showLunar,
+          isHoliday: HolidayCalendar.isHoliday(now),
+          isWorkMakeupDay: HolidayCalendar.isWorkMakeupDay(now),
           onTap: () => _go(context, AlmanacScreen(initialDate: now)),
         );
         final productivityCard = _TodayProductivitySection(
@@ -187,15 +283,15 @@ class TodayScreen extends StatelessWidget {
               final iconBox = desktop ? 32.0 : 28.0;
               final spacing = desktop ? DesktopTokens.cardSpacingMedium : 8.0;
               final totalSpacing = (crossAxisCount - 1) * spacing;
-              final textContentHeight = textScaler.scale(titleFont * 1.1) +
+              final textContentHeight =
+                  textScaler.scale(titleFont * 1.1) +
                   2 +
                   textScaler.scale(valueFont * (desktop ? 1.08 : 1.1));
-              final minTileExtent = verticalPadding +
-                  math.max(iconBox, textContentHeight) +
-                  3;
+              final minTileExtent =
+                  verticalPadding + math.max(iconBox, textContentHeight) + 3;
               final naturalTileHeight =
                   ((constraints.maxWidth - totalSpacing) / crossAxisCount) /
-                      aspectRatio;
+                  aspectRatio;
               final tileExtent = math.max(naturalTileHeight, minTileExtent);
 
               // 桌面端使用更大的字体和图标
@@ -217,6 +313,7 @@ class TodayScreen extends StatelessWidget {
                         alpha: DesktopTokens.opacityTextPrimary,
                       ),
                       height: 1.08,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     )
                   : null;
 
@@ -238,15 +335,20 @@ class TodayScreen extends StatelessWidget {
               final iconBoxSize = desktop ? 32.0 : 28.0;
               final iconSize = desktop ? 17.0 : 15.0;
 
-              return GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: crossAxisCount,
-                childAspectRatio: aspectRatio,
-                mainAxisExtent: tileExtent,
-                mainAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
-                crossAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
-                children: [
+              return DefaultTextStyle.merge(
+                style: const TextStyle(
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+                child: GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: crossAxisCount,
+                  childAspectRatio: aspectRatio,
+                  mainAxisExtent: tileExtent,
+                  mainAxisSpacing: desktop ? DesktopTokens.cardSpacingMedium : 8,
+                  crossAxisSpacing:
+                      desktop ? DesktopTokens.cardSpacingMedium : 8,
+                  children: [
                   AppMetricCard(
                     title: s.navTodo,
                     value: '${todayTodos.length}',
@@ -280,7 +382,7 @@ class TodayScreen extends StatelessWidget {
                     value: '$todayFocusCount',
                     unit: I18n.tr('today.unit.times'),
                     icon: Icons.timer,
-                    color: Colors.redAccent,
+                    color: DesignTokens.defaultError,
                     onTap: () => _go(
                       context,
                       const PomodoroScreen(useShellBackground: true),
@@ -308,6 +410,7 @@ class TodayScreen extends StatelessWidget {
                     iconSize: iconSize,
                   ),
                 ],
+              ),
               );
             },
           );
@@ -330,8 +433,8 @@ class TodayScreen extends StatelessWidget {
                       return _TodayTodoSwipeTile(
                         key: ValueKey('today_todo_${t.id}'),
                         todo: t,
-                        onToggle: () =>
-                            completeTodoWithOptionalTimeRecord(context, t),
+                        canEdit: shareProvider?.canEdit(t.workspaceId) ?? true,
+                        onToggle: _todayTodoCompletionAction(context, t),
                         onOpen: () => TodayDetailRouter.open(
                           context,
                           TodaySectionKind.todos,
@@ -345,49 +448,55 @@ class TodayScreen extends StatelessWidget {
 
         Widget? reminderSection() {
           if (!showReminderSection) return null;
-          final boundAccountGeneration =
-              AccountLocalDataCleaner.accountDataGeneration;
-          return _TodayReminderSection(
-            groups: reminderGroups,
-            suggestions: suggestions,
-            todayKey: todayKey,
-            now: now,
-            onOpenTodo: (id) => TodayDetailRouter.open(
-              context,
-              TodaySectionKind.todos,
-              id: id,
-              accountGeneration: boundAccountGeneration,
-            ),
-            onToggleTodo: (todo) =>
-                completeTodoWithOptionalTimeRecord(context, todo),
-            onOpenCourses: () =>
-                TodayDetailRouter.open(context, TodaySectionKind.courses),
-            onAddToday: (todo) async {
-              if (AccountLocalDataCleaner.accountDataGeneration !=
-                  boundAccountGeneration) {
-                return;
-              }
-              final actionNow = DateTime.now();
-              final changed = await context
-                  .read<TodoProvider>()
-                  .scheduleTodoForToday(
-                    todo.id,
-                    now: actionNow,
-                    expectedAccountDataGeneration: boundAccountGeneration,
-                  );
-              if (!context.mounted ||
-                  AccountLocalDataCleaner.accountDataGeneration !=
-                      boundAccountGeneration ||
-                  !changed) {
-                return;
-              }
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '${I18n.tr('today.added_prefix')}${todo.title}',
-                  ),
-                  behavior: SnackBarBehavior.floating,
+          return ValueListenableBuilder<int>(
+            valueListenable:
+                AccountLocalDataCleaner.accountDataGenerationListenable,
+            builder: (sectionContext, boundAccountGeneration, _) {
+              return _TodayReminderSection(
+                groups: reminderGroups,
+                suggestions: suggestions,
+                todayKey: todayKey,
+                now: now,
+                onOpenTodo: (id) => TodayDetailRouter.open(
+                  sectionContext,
+                  TodaySectionKind.todos,
+                  id: id,
+                  accountGeneration: boundAccountGeneration,
                 ),
+                onToggleTodo: (todo) =>
+                    _todayTodoCompletionAction(sectionContext, todo),
+                onOpenCourses: () => TodayDetailRouter.open(
+                  sectionContext,
+                  TodaySectionKind.courses,
+                ),
+                onAddToday: (todo) async {
+                  if (AccountLocalDataCleaner.accountDataGeneration !=
+                      boundAccountGeneration) {
+                    return;
+                  }
+                  final actionNow = DateTime.now();
+                  final changed = await sectionContext
+                      .read<TodoProvider>()
+                      .scheduleTodoForToday(
+                        todo.id,
+                        now: actionNow,
+                        expectedAccountDataGeneration: boundAccountGeneration,
+                      );
+                  if (!sectionContext.mounted ||
+                      AccountLocalDataCleaner.accountDataGeneration !=
+                          boundAccountGeneration ||
+                      !changed) {
+                    return;
+                  }
+                  ScaffoldMessenger.of(sectionContext).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '${I18n.tr('today.added_prefix')}${todo.title}',
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
               );
             },
           );
@@ -548,8 +657,9 @@ class TodayScreen extends StatelessWidget {
         if (isDesktopLayout) {
           return _TodayDesktopDashboard(
             greeting: greeting,
-            dateText:
-                '${I18nDateFormat.monthDayWithWeekday(now)} · ${AlmanacLocaleFormat.formatLunarDate(lunar)}',
+            dateText: showLunar
+                ? '${I18nDateFormat.monthDayWithWeekday(now)} · ${AlmanacLocaleFormat.formatLunarDate(lunar)}'
+                : I18nDateFormat.monthDayWithWeekday(now),
             almanacCard: almanacCard,
             productivityCard: productivityCard,
             metricsGrid: metricsGrid(desktop: true),
@@ -562,6 +672,7 @@ class TodayScreen extends StatelessWidget {
           );
         }
 
+        final isUltraNarrow = MediaQuery.sizeOf(context).width < 240;
         return Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
@@ -573,17 +684,22 @@ class TodayScreen extends StatelessWidget {
             restorationId: 'today_screen_list',
             // Keep the final card clear of the bottom navigation bar and FAB when
             // the mobile Today list is scrolled to its end.
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 96),
+            padding: EdgeInsets.fromLTRB(
+              isUltraNarrow ? 4 : 12,
+              0,
+              isUltraNarrow ? 4 : 12,
+              112,
+            ),
             children: [
               almanacCard,
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
 
               productivityCard,
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               metricsGrid(desktop: false),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
 
               todosSection(),
               const SizedBox(height: 10),
@@ -607,11 +723,10 @@ class TodayScreen extends StatelessWidget {
     String? actionLabel,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.only(top: 2),
       child: AppSurfaceCard(
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 8),
         padding: EdgeInsets.zero,
-        borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -626,7 +741,7 @@ class TodayScreen extends StatelessWidget {
                       ? null
                       : actionLabel ?? I18n.tr('today.view'),
                   onAction: onMore,
-                  padding: const EdgeInsets.fromLTRB(16, 12, 12, 6),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 12, 4),
                   titleStyle: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: 14,
                     height: 1.25,
@@ -690,21 +805,26 @@ class _CompactMonthCalendar extends StatelessWidget {
     final now = currentDate;
 
     // 当月第一天和最后一天
-    final firstDay = DateTime(now.year, now.month, 1);
-    final lastDay = DateTime(now.year, now.month + 1, 0);
+    final firstDay = DateTime.utc(now.year, now.month, 1);
+    final lastDay = DateTime.utc(now.year, now.month + 1, 0);
 
-    // 第一天是星期几（0=周日）
-    final firstWeekday = firstDay.weekday % 7;
+    final firstDayOfWeek = context.select<PreferencesProvider?, int>(
+      (p) => CalendarDateNavigation.normalizeFirstDayOfWeek(
+        p?.firstDayOfWeek ?? 1,
+      ),
+    );
+    final firstWeekday = (firstDay.weekday - firstDayOfWeek) % 7;
 
     // 构建日历网格
     final days = <Widget>[];
 
     // 星期标题
     final weekdays = switch (I18n.current) {
-      AppLocale.en => const ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-      AppLocale.zh => const ['日', '一', '二', '三', '四', '五', '六'],
+      AppLocale.en => const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      AppLocale.zh => const ['一', '二', '三', '四', '五', '六', '日'],
     };
-    for (final weekday in weekdays) {
+    for (final iso in CalendarDateNavigation.orderedWeekdays(firstDayOfWeek)) {
+      final weekday = weekdays[iso - 1];
       days.add(
         Center(
           child: Text(
@@ -726,7 +846,7 @@ class _CompactMonthCalendar extends StatelessWidget {
     // 填充日期
     for (int day = 1; day <= lastDay.day; day++) {
       final isToday = day == now.day;
-      final date = DateTime(now.year, now.month, day);
+      final date = DateTime.utc(now.year, now.month, day);
       final isWeekend =
           date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
 
@@ -751,20 +871,9 @@ class _CompactMonthCalendar extends StatelessWidget {
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.all(DesktopTokens.cardPadding),
-      decoration: BoxDecoration(
-        color: cs.surface.withValues(
-          alpha: DesktopTokens.opacityCardBackground,
-        ),
-        borderRadius: BorderRadius.circular(DesktopTokens.cardRadius),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(
-            alpha: DesktopTokens.opacityBorder,
-          ),
-          width: DesktopTokens.cardBorderWidth,
-        ),
-      ),
+    return AppSurfaceCard(
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.all(16),
       child: Column(
         children: [
           // 月份标题
@@ -814,7 +923,7 @@ class _QuickAccessPanel extends StatelessWidget {
       _QuickAction(
         icon: Icons.timer_outlined,
         label: TodayUiCopy.quickAccessPomodoro,
-        color: Colors.redAccent,
+        color: DesignTokens.defaultError,
         onTap: () => Navigator.pushNamed(context, '/pomodoro'),
       ),
       _QuickAction(
@@ -831,20 +940,9 @@ class _QuickAccessPanel extends StatelessWidget {
       ),
     ];
 
-    return Container(
-      padding: const EdgeInsets.all(DesktopTokens.cardPadding),
-      decoration: BoxDecoration(
-        color: cs.surface.withValues(
-          alpha: DesktopTokens.opacityCardBackground,
-        ),
-        borderRadius: BorderRadius.circular(DesktopTokens.cardRadius),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(
-            alpha: DesktopTokens.opacityBorder,
-          ),
-          width: DesktopTokens.cardBorderWidth,
-        ),
-      ),
+    return AppSurfaceCard(
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -862,7 +960,7 @@ class _QuickAccessPanel extends StatelessWidget {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: 2,
-            childAspectRatio: 1.4,
+            childAspectRatio: 1.25,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
             children: quickActions,
@@ -948,8 +1046,6 @@ class _TodayDesktopDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final now = DateTime.now(); // 用于左侧边栏日历
 
     return Scaffold(
@@ -982,12 +1078,11 @@ class _TodayDesktopDashboard extends StatelessWidget {
                     LayoutBuilder(
                       builder: (context, constraints) {
                         final showLeftSidebar =
-                            DesktopTokens.isThreeColumnLayout(
-                              constraints.maxWidth,
-                            );
+                            constraints.maxWidth >=
+                            DesktopTokens.todayThreeColumnContentBreakpoint;
                         final moveProductivityToRail =
                             constraints.maxWidth >=
-                            DesktopTokens.breakpointTwoColumn;
+                            DesktopTokens.todayTwoColumnContentBreakpoint;
                         final rightSidebarChildren = <Widget>[
                           quoteCard,
                           const SizedBox(height: DesktopTokens.cardSpacing),
@@ -1079,12 +1174,6 @@ class _TodayDesktopDashboard extends StatelessWidget {
                         );
                       },
                     ),
-
-                    const SizedBox(height: 4),
-                    Divider(
-                      height: 1,
-                      color: cs.outlineVariant.withValues(alpha: 0.20),
-                    ),
                   ],
                 ),
               ),
@@ -1106,27 +1195,19 @@ class _TodayDesktopHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    return Container(
+    return AppSurfaceCard(
+      margin: EdgeInsets.zero,
       padding: const EdgeInsets.symmetric(
         horizontal: DesktopTokens.cardPadding,
         vertical: 16,
       ),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.alphaBlend(cs.primary.withValues(alpha: 0.045), cs.surface),
-            cs.surface.withValues(alpha: DesktopTokens.opacityCardBackground),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(DesktopTokens.cardRadius),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(
-            alpha: DesktopTokens.opacityBorder,
-          ),
-          width: DesktopTokens.cardBorderWidth,
-        ),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color.alphaBlend(cs.primary.withValues(alpha: 0.045), cs.surface),
+          cs.surface.withValues(alpha: DesktopTokens.opacityCardBackground),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -1202,6 +1283,155 @@ class _TodayDesktopHeader extends StatelessWidget {
   }
 }
 
+TextStyle _todayEffectiveTextStyle(BuildContext context, TextStyle? style) {
+  final defaultTextStyle = DefaultTextStyle.of(context);
+  var effectiveTextStyle = style;
+  if (style == null || style.inherit) {
+    effectiveTextStyle = defaultTextStyle.style.merge(style);
+  }
+  if (MediaQuery.boldTextOf(context)) {
+    effectiveTextStyle = effectiveTextStyle!.merge(
+      const TextStyle(fontWeight: FontWeight.bold),
+    );
+  }
+  final lineHeightScaleFactor =
+      MediaQuery.maybeLineHeightScaleFactorOverrideOf(context);
+  final letterSpacing = MediaQuery.maybeLetterSpacingOverrideOf(context);
+  final wordSpacing = MediaQuery.maybeWordSpacingOverrideOf(context);
+  if (lineHeightScaleFactor != null ||
+      letterSpacing != null ||
+      wordSpacing != null) {
+    final overrideTextStyle = TextStyle(
+      height: lineHeightScaleFactor,
+      letterSpacing: letterSpacing,
+      wordSpacing: wordSpacing,
+    );
+    effectiveTextStyle =
+        effectiveTextStyle?.merge(overrideTextStyle) ?? overrideTextStyle;
+  }
+  return effectiveTextStyle ?? const TextStyle();
+}
+
+double _measureTodayTextWidth(
+  BuildContext context,
+  String text,
+  TextStyle? style,
+) {
+  final effectiveStyle = _todayEffectiveTextStyle(context, style);
+  final locale = Localizations.maybeLocaleOf(context);
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: effectiveStyle, locale: locale),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    locale: locale,
+    maxLines: 1,
+  )..layout();
+  final width = painter.width;
+  painter.dispose();
+  return width;
+}
+
+double _overdueBadgeEstimatedWidth(BuildContext context) {
+  // Border (1.4) + horizontal padding (12) + icon (10) + gap (2) + text width.
+  return 25.4 +
+      _measureTodayTextWidthCached(
+        context,
+        I18n.tr('todo.status.overdue'),
+        const TextStyle(fontSize: 10),
+      );
+}
+
+class _TodayTextMeasureKey {
+  final String text;
+  final TextStyle style;
+  final TextStyle defaultStyle;
+  final double textScale;
+  final bool boldText;
+  final double? lineHeightScaleFactor;
+  final double? letterSpacing;
+  final double? wordSpacing;
+  final TextDirection textDirection;
+  final Locale? locale;
+
+  const _TodayTextMeasureKey({
+    required this.text,
+    required this.style,
+    required this.defaultStyle,
+    required this.textScale,
+    required this.boldText,
+    required this.lineHeightScaleFactor,
+    required this.letterSpacing,
+    required this.wordSpacing,
+    required this.textDirection,
+    required this.locale,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _TodayTextMeasureKey &&
+          other.text == text &&
+          other.style == style &&
+          other.defaultStyle == defaultStyle &&
+          other.textScale == textScale &&
+          other.boldText == boldText &&
+          other.lineHeightScaleFactor == lineHeightScaleFactor &&
+          other.letterSpacing == letterSpacing &&
+          other.wordSpacing == wordSpacing &&
+          other.textDirection == textDirection &&
+          other.locale == locale;
+
+  @override
+  int get hashCode => Object.hash(
+    text,
+    style,
+    defaultStyle,
+    textScale,
+    boldText,
+    lineHeightScaleFactor,
+    letterSpacing,
+    wordSpacing,
+    textDirection,
+    locale,
+  );
+}
+
+const int _maxTodayTextMeasureCacheEntries = 128;
+final LinkedHashMap<_TodayTextMeasureKey, double> _todayTextMeasureCache =
+    LinkedHashMap<_TodayTextMeasureKey, double>();
+
+double _measureTodayTextWidthCached(
+  BuildContext context,
+  String text,
+  TextStyle? style,
+) {
+  final key = _TodayTextMeasureKey(
+    text: text,
+    style: style ?? const TextStyle(),
+    defaultStyle: DefaultTextStyle.of(context).style,
+    textScale: MediaQuery.textScalerOf(context).scale(1.0),
+    boldText: MediaQuery.boldTextOf(context),
+    lineHeightScaleFactor: MediaQuery.maybeLineHeightScaleFactorOverrideOf(
+      context,
+    ),
+    letterSpacing: MediaQuery.maybeLetterSpacingOverrideOf(context),
+    wordSpacing: MediaQuery.maybeWordSpacingOverrideOf(context),
+    textDirection: Directionality.of(context),
+    locale: Localizations.maybeLocaleOf(context),
+  );
+  final existing = _todayTextMeasureCache.remove(key);
+  if (existing != null) {
+    _todayTextMeasureCache[key] = existing;
+    return existing;
+  }
+  final width = _measureTodayTextWidth(context, text, style);
+  if (_todayTextMeasureCache.length >= _maxTodayTextMeasureCacheEntries) {
+    _todayTextMeasureCache.remove(_todayTextMeasureCache.keys.first);
+  }
+  _todayTextMeasureCache[key] = width;
+  return width;
+}
+
 class _TodayAlmanacCard extends StatelessWidget {
   final DateTime now;
   final LunarDate lunar;
@@ -1209,6 +1439,9 @@ class _TodayAlmanacCard extends StatelessWidget {
   final String avoid;
   final String? term;
   final String? festival;
+  final bool showLunar;
+  final bool isHoliday;
+  final bool isWorkMakeupDay;
   final VoidCallback onTap;
 
   const _TodayAlmanacCard({
@@ -1218,6 +1451,9 @@ class _TodayAlmanacCard extends StatelessWidget {
     required this.avoid,
     required this.term,
     required this.festival,
+    this.showLunar = true,
+    this.isHoliday = false,
+    this.isWorkMakeupDay = false,
     required this.onTap,
   });
 
@@ -1226,7 +1462,7 @@ class _TodayAlmanacCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final brand = context.watch<ThemeProvider>().brand;
+    final brand = context.select<ThemeProvider, AppBrand>((t) => t.brand);
     final radius = BorderRadius.circular(
       appSurfaceStyleOf(context)?.cardRadius ?? DesignTokens.radiusCard,
     );
@@ -1240,19 +1476,22 @@ class _TodayAlmanacCard extends StatelessWidget {
     final termText = AlmanacLocaleFormat.formatSolarTerm(term);
     final festivalText = AlmanacLocaleFormat.formatFestival(festival);
     final backgroundAsset = brand.backgroundAsset;
-    final panelFill = foreground.withValues(alpha: isDark ? 0.045 : 0.018);
-    final panelBorder = foreground.withValues(alpha: isDark ? 0.13 : 0.09);
+    // Keep the calendar surface airy in the default light theme.  The card
+    // already has enough separation from its border and date badge; a darker
+    // translucent panel made the whole calendar area read like a shadow.
+    final panelFill = foreground.withValues(alpha: isDark ? 0.035 : 0.006);
+    final panelBorder = foreground.withValues(alpha: isDark ? 0.10 : 0.035);
 
     final fallbackGradient = LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
         Color.alphaBlend(
-          accent.withValues(alpha: isDark ? 0.12 : 0.045),
+          accent.withValues(alpha: isDark ? 0.12 : 0.020),
           cs.surface,
         ),
         Color.alphaBlend(
-          cs.secondary.withValues(alpha: isDark ? 0.09 : 0.025),
+          cs.secondary.withValues(alpha: isDark ? 0.09 : 0.010),
           cs.surface,
         ),
       ],
@@ -1279,7 +1518,7 @@ class _TodayAlmanacCard extends StatelessWidget {
       border: Border.all(
         color: isDark
             ? Colors.white.withValues(alpha: 0.10)
-            : cs.outlineVariant.withValues(alpha: 0.18),
+            : cs.outlineVariant.withValues(alpha: 0.08),
         width: 0.55,
       ),
       elevation: 0,
@@ -1337,141 +1576,230 @@ class _TodayAlmanacCard extends StatelessWidget {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 11),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _TodayDateBadge(
-                            date: now,
-                            accent: accent,
-                            foreground: foreground,
-                            muted: muted,
-                            isDark: isDark,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final availableWidth = constraints.maxWidth;
+                      final stackDateBadge = availableWidth < 200;
+                      final stackYiji = availableWidth < 180;
+
+                      final dateBadge = _TodayDateBadge(
+                        date: now,
+                        accent: accent,
+                        foreground: foreground,
+                        muted: muted,
+                        isDark: isDark,
+                      );
+                      final almanacIcon = Container(
+                        width: 24,
+                        height: 24,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: isDark ? 0.20 : 0.10),
+                          borderRadius: BorderRadius.circular(
+                            DesignTokens.radiusSm,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
+                        ),
+                        child: Icon(
+                          Icons.calendar_month_rounded,
+                          size: 14,
+                          color: accent,
+                        ),
+                      );
+                      final chevron = Container(
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: foreground.withValues(
+                            alpha: isDark ? 0.12 : 0.05,
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.chevron_right_rounded,
+                          size: 17,
+                          color: foreground.withValues(alpha: 0.62),
+                        ),
+                      );
+                      final almanacTitle = Text(
+                        '${I18n.tr('today.almanac.title')} · ${I18nDateFormat.monthDayWithWeekday(now)}',
+                        maxLines: stackDateBadge ? null : 1,
+                        softWrap: stackDateBadge,
+                        overflow: stackDateBadge
+                            ? TextOverflow.visible
+                            : TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: muted,
+                          fontSize: 12.5,
+                          height: 1.2,
+                        ),
+                      );
+                      final lunarTitle = Text(
+                        showLunar
+                            ? '$lunarLabel · $lunarText'
+                            : (I18n.current == AppLocale.en
+                                  ? 'Daily Almanac'
+                                  : '今日黄历'),
+                        maxLines: stackDateBadge ? null : 1,
+                        softWrap: stackDateBadge,
+                        overflow: stackDateBadge
+                            ? TextOverflow.visible
+                            : TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: foreground,
+                          fontSize: 16,
+                          height: 1.25,
+                          fontWeight: FontWeight.normal,
+                        ),
+                      );
+                      final holidayChipText = isWorkMakeupDay
+                          ? AlmanacUiCopy.makeupWorkdayBadge
+                          : isHoliday
+                          ? AlmanacUiCopy.holidayBadge
+                          : null;
+                      final holidayChipColor = isWorkMakeupDay
+                          ? (isDark
+                                ? const Color(0xFFC4B5FD)
+                                : const Color(0xFF5B21B6))
+                          : (isDark
+                                ? const Color(0xFF6EE7B7)
+                                : const Color(0xFF0F766E));
+                      final chipsWidget = (termText != null ||
+                              festivalText != null ||
+                              holidayChipText != null)
+                          ? Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                if (holidayChipText != null)
+                                  _TodayCalendarChip(
+                                    text: holidayChipText,
+                                    color: holidayChipColor,
+                                  ),
+                                if (termText != null)
+                                  _TodayCalendarChip(
+                                    text: termText,
+                                    color: accent,
+                                  ),
+                                if (festivalText != null)
+                                  _TodayCalendarChip(
+                                    text: festivalText,
+                                    color: cs.tertiary,
+                                  ),
+                              ],
+                            )
+                          : null;
+
+                      final fitPreview = _TodayYijiPreview(
+                        label: TodayUiCopy.auspiciousLabel,
+                        text: suitable,
+                        color: DesignTokens.defaultSuccess,
+                        foreground: foreground,
+                        isDark: isDark,
+                      );
+                      final avoidPreview = _TodayYijiPreview(
+                        label: TodayUiCopy.inauspiciousLabel,
+                        text: avoid,
+                        color: DesignTokens.defaultError,
+                        foreground: foreground,
+                        isDark: isDark,
+                      );
+
+                      final Widget headerSection;
+                      if (stackDateBadge) {
+                        headerSection = Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (availableWidth >= 102)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [dateBadge, chevron],
+                              )
+                            else
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [dateBadge, chevron],
+                              ),
+                            const SizedBox(height: 10),
+                            Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 24,
-                                      height: 24,
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: accent.withValues(
-                                          alpha: isDark ? 0.20 : 0.13,
-                                        ),
-                                        borderRadius: BorderRadius.circular(
-                                          DesignTokens.radiusSm,
-                                        ),
-                                      ),
-                                      child: Icon(
-                                        Icons.calendar_month_rounded,
-                                        size: 14,
-                                        color: accent,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 7),
-                                    Expanded(
-                                      child: Text(
-                                        '${I18n.tr('today.almanac.title')} · ${I18nDateFormat.monthDayWithWeekday(now)}',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: muted,
-                                              fontSize: 12.5,
-                                              height: 1.2,
-                                            ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      width: 26,
-                                      height: 26,
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: foreground.withValues(
-                                          alpha: isDark ? 0.12 : 0.08,
-                                        ),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.chevron_right_rounded,
-                                        size: 17,
-                                        color: foreground.withValues(
-                                          alpha: 0.62,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '$lunarLabel · $lunarText',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    color: foreground,
-                                    fontSize: 16,
-                                    height: 1.25,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                                ),
-                                if (termText != null ||
-                                    festivalText != null) ...[
-                                  const SizedBox(height: 9),
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 6,
-                                    children: [
-                                      if (termText != null)
-                                        _TodayCalendarChip(
-                                          text: termText,
-                                          color: accent,
-                                        ),
-                                      if (festivalText != null)
-                                        _TodayCalendarChip(
-                                          text: festivalText,
-                                          color: cs.tertiary,
-                                        ),
-                                    ],
-                                  ),
-                                ],
+                                almanacIcon,
+                                const SizedBox(width: 7),
+                                Expanded(child: almanacTitle),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
+                            const SizedBox(height: 8),
+                            lunarTitle,
+                            if (chipsWidget != null) ...[
+                              const SizedBox(height: 9),
+                              chipsWidget,
+                            ],
+                          ],
+                        );
+                      } else {
+                        headerSection = Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            dateBadge,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      almanacIcon,
+                                      const SizedBox(width: 7),
+                                      Expanded(child: almanacTitle),
+                                      const SizedBox(width: 6),
+                                      chevron,
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  lunarTitle,
+                                  if (chipsWidget != null) ...[
+                                    const SizedBox(height: 9),
+                                    chipsWidget,
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: _TodayYijiPreview(
-                              label: TodayUiCopy.auspiciousLabel,
-                              text: suitable,
-                              color: const Color(0xFF2E7D32),
-                              foreground: foreground,
-                              isDark: isDark,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _TodayYijiPreview(
-                              label: TodayUiCopy.inauspiciousLabel,
-                              text: avoid,
-                              color: const Color(0xFFC62828),
-                              foreground: foreground,
-                              isDark: isDark,
-                            ),
-                          ),
+                          headerSection,
+                          if (showLunar) ...[
+                            const SizedBox(height: 12),
+                            if (stackYiji)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  fitPreview,
+                                  const SizedBox(height: 8),
+                                  avoidPreview,
+                                ],
+                              )
+                            else
+                              Row(
+                                children: [
+                                  Expanded(child: fitPreview),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: avoidPreview),
+                                ],
+                              ),
+                          ],
                         ],
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -1506,10 +1834,10 @@ class _TodayDateBadge extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 76),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: foreground.withValues(alpha: isDark ? 0.08 : 0.05),
+        color: foreground.withValues(alpha: isDark ? 0.08 : 0.035),
         borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
         border: Border.all(
-          color: foreground.withValues(alpha: isDark ? 0.12 : 0.10),
+          color: foreground.withValues(alpha: isDark ? 0.12 : 0.065),
           width: 0.55,
         ),
       ),
@@ -1520,7 +1848,7 @@ class _TodayDateBadge extends StatelessWidget {
             width: double.infinity,
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(vertical: 5),
-            color: accent.withValues(alpha: isDark ? 0.20 : 0.13),
+            color: accent.withValues(alpha: isDark ? 0.20 : 0.10),
             child: Text(
               TodayUiCopy.monthBadge(date),
               maxLines: 1,
@@ -1626,13 +1954,24 @@ class _TodayYijiPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tileFill = color.withValues(alpha: isDark ? 0.17 : 0.075);
+    final badgeFill = color.withValues(alpha: isDark ? 0.18 : 0.09);
+    final pillBg = Color.alphaBlend(
+      badgeFill,
+      Color.alphaBlend(tileFill, cs.surface),
+    );
+    final labelColor = appReadableForeground(pillBg, color);
     return Container(
       constraints: const BoxConstraints(minHeight: 48),
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: isDark ? 0.17 : 0.105),
+        color: tileFill,
         borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
-        border: Border.all(color: color.withValues(alpha: 0.22), width: 0.45),
+        border: Border.all(
+          color: color.withValues(alpha: isDark ? 0.22 : 0.14),
+          width: 0.45,
+        ),
       ),
       child: Row(
         children: [
@@ -1641,7 +1980,7 @@ class _TodayYijiPreview extends StatelessWidget {
             height: 22,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: isDark ? 0.18 : 0.12),
+              color: badgeFill,
               borderRadius: BorderRadius.circular(7),
             ),
             child: FittedBox(
@@ -1649,7 +1988,7 @@ class _TodayYijiPreview extends StatelessWidget {
               child: Text(
                 label,
                 style: TextStyle(
-                  color: color,
+                  color: labelColor,
                   fontSize: 11,
                   height: 1,
                   fontWeight: FontWeight.normal,
@@ -1677,19 +2016,72 @@ class _TodayYijiPreview extends StatelessWidget {
 }
 
 String _wholeTermPreview(String value) {
-  return AlmanacLocaleFormat.formatActivitiesPreview(value);
+  return AlmanacLocaleFormat.formatActivitiesPreview(
+    value,
+    maxTerms: I18n.current == AppLocale.en ? 2 : 3,
+  );
 }
 
-class _TodayProductivitySection extends StatelessWidget {
+class _TodayProductivitySection extends StatefulWidget {
   final VoidCallback onTap;
 
   const _TodayProductivitySection({required this.onTap});
 
   @override
+  State<_TodayProductivitySection> createState() =>
+      _TodayProductivitySectionState();
+}
+
+class _TodayProductivitySectionState extends State<_TodayProductivitySection> {
+  Object? _cachedSignature;
+  ReportComparison? _cachedComparison;
+
+  Object _buildInputSignature({
+    required DateTime todayKey,
+    required List<TodoItem> todos,
+    required List<dynamic> habits,
+    required int pomoRevision,
+    required List<dynamic> timeEntries,
+  }) {
+    var todoFp = todos.length;
+    for (final t in todos) {
+      todoFp = Object.hash(
+        todoFp,
+        t.id,
+        t.updatedAt.millisecondsSinceEpoch,
+        t.completedAt?.millisecondsSinceEpoch ?? 0,
+      );
+    }
+    var habitFp = habits.length;
+    for (final h in habits) {
+      habitFp = Object.hash(
+        habitFp,
+        h.id,
+        h.updatedAt.millisecondsSinceEpoch,
+      );
+    }
+    var timeFp = timeEntries.length;
+    for (final e in timeEntries) {
+      timeFp = Object.hash(
+        timeFp,
+        e.id,
+        e.updatedAt.millisecondsSinceEpoch,
+      );
+    }
+    return Object.hash(
+      todayKey.millisecondsSinceEpoch,
+      todoFp,
+      habitFp,
+      pomoRevision,
+      timeFp,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final todoP = context.watch<TodoProvider>();
     final habitP = context.watch<HabitProvider>();
-    context.select<PomodoroProvider, int>(
+    final pomoRevision = context.select<PomodoroProvider, int>(
       (provider) => provider.persistedRevision,
     );
     final pomoP = context.read<PomodoroProvider>();
@@ -1697,41 +2089,101 @@ class _TodayProductivitySection extends StatelessWidget {
 
     final now = DateTime.now();
     final todayKey = DateTime(now.year, now.month, now.day);
-    final weekStart = todayKey.subtract(Duration(days: todayKey.weekday - 1));
-    final weekEnd = todayKey;
-    final previousWeekStart = weekStart.subtract(const Duration(days: 7));
-    final previousWeekEnd = weekEnd.subtract(const Duration(days: 7));
-    final weeklyReport = ReportEngine.buildReport(
-      start: weekStart,
-      end: weekEnd,
+    final sig = _buildInputSignature(
+      todayKey: todayKey,
       todos: todoP.todos,
       habits: habitP.habits,
-      sessions: pomoP.sessions,
+      pomoRevision: pomoRevision,
       timeEntries: timeEntries,
     );
-    final previousWeeklyReport = ReportEngine.buildReport(
-      start: previousWeekStart,
-      end: previousWeekEnd,
-      todos: todoP.todos,
-      habits: habitP.habits,
-      sessions: pomoP.sessions,
-      timeEntries: timeEntries,
-    );
-    return _TodayProductivityCard(
-      comparison: ReportEngine.compare(
+    var comparison = _cachedComparison;
+    if (comparison == null || _cachedSignature != sig) {
+      final weekStart = todayKey.subtract(Duration(days: todayKey.weekday - 1));
+      final weekEnd = todayKey;
+      final previousWeekStart = weekStart.subtract(const Duration(days: 7));
+      final previousWeekEnd = weekEnd.subtract(const Duration(days: 7));
+      final weeklyReport = ReportEngine.buildReport(
+        start: weekStart,
+        end: weekEnd,
+        todos: todoP.todos,
+        habits: habitP.habits,
+        sessions: pomoP.sessions,
+        timeEntries: timeEntries,
+      );
+      final previousWeeklyReport = ReportEngine.buildReport(
+        start: previousWeekStart,
+        end: previousWeekEnd,
+        todos: todoP.todos,
+        habits: habitP.habits,
+        sessions: pomoP.sessions,
+        timeEntries: timeEntries,
+      );
+      comparison = ReportEngine.compare(
         current: weeklyReport,
         previous: previousWeeklyReport,
-      ),
-      onTap: onTap,
+      );
+      _cachedSignature = sig;
+      _cachedComparison = comparison;
+    }
+    return _TodayProductivityCard(
+      comparison: comparison,
+      onTap: widget.onTap,
     );
   }
 }
 
 class _TodayProductivityCard extends StatelessWidget {
+  static const int _maxMeasureCacheEntries = 64;
+  static final LinkedHashMap<_TodayTextMeasureKey, double> _measureCache =
+      LinkedHashMap<_TodayTextMeasureKey, double>();
+
   final ReportComparison comparison;
   final VoidCallback onTap;
 
   const _TodayProductivityCard({required this.comparison, required this.onTap});
+
+  static double _measureTextWidth(
+    BuildContext context,
+    String text,
+    TextStyle style,
+  ) {
+    final textScaler = MediaQuery.textScalerOf(context);
+    final textDirection = Directionality.of(context);
+    final locale = Localizations.maybeLocaleOf(context);
+    final defaultStyle = DefaultTextStyle.of(context).style;
+    final key = _TodayTextMeasureKey(
+      text: text,
+      style: style,
+      defaultStyle: defaultStyle,
+      textScale: textScaler.scale(1.0),
+      boldText: false,
+      lineHeightScaleFactor: null,
+      letterSpacing: null,
+      wordSpacing: null,
+      textDirection: textDirection,
+      locale: locale,
+    );
+    final existing = _measureCache.remove(key);
+    if (existing != null) {
+      _measureCache[key] = existing;
+      return existing;
+    }
+    final effectiveStyle = defaultStyle.merge(style);
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: effectiveStyle),
+      textDirection: textDirection,
+      textScaler: textScaler,
+      locale: locale,
+      maxLines: 1,
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    if (_measureCache.length >= _maxMeasureCacheEntries) {
+      _measureCache.remove(_measureCache.keys.first);
+    }
+    _measureCache[key] = width;
+    return width;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1742,11 +2194,118 @@ class _TodayProductivityCard extends StatelessWidget {
     final trendColor = _trendColor(cs, comparison.productivityScore.direction);
     final textScaler = MediaQuery.textScalerOf(context);
     final scoreSize = math.max(60.0, textScaler.scale(40.0) + 20.0);
+    final weeklyHeading = I18n.tr('today.productivity.weekly');
+    final subtitleText = I18n.tr('today.productivity.subtitle');
+    final trendText = scoreDelta == 0
+        ? I18n.tr('today.productivity.flat')
+        : '${scoreDelta > 0 ? '+' : ''}$scoreDelta ${I18n.tr('today.unit.point')}';
+
+    final headingStyle =
+        (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
+          fontSize: 16,
+          fontWeight: FontWeight.normal,
+        );
+    final trendStyle = TextStyle(fontSize: 12, color: trendColor);
+    final subtitleStyle = TextStyle(
+      fontSize: 12,
+      color: cs.onSurface.withValues(alpha: 0.58),
+    );
+
+    final scoreProgress =
+        (comparison.current.productivityScore.clamp(0, 100)) / 100.0;
+    final scoreCircle = SizedBox(
+      width: scoreSize,
+      height: scoreSize,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: scoreSize,
+            height: scoreSize,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color.alphaBlend(
+                cs.primary.withValues(alpha: isDark ? 0.16 : 0.09),
+                cs.surface,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: cs.primary.withValues(alpha: isDark ? 0.16 : 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+          ),
+          Positioned.fill(
+            child: CircularProgressIndicator(
+              value: scoreProgress,
+              strokeWidth: 3.5,
+              strokeCap: StrokeCap.round,
+              backgroundColor: cs.primary.withValues(alpha: 0.12),
+              color: cs.primary,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(6),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    comparison.current.productivityScore.toString(),
+                    style: TextStyle(
+                      fontSize: 22,
+                      height: 1,
+                      color: cs.primary,
+                      fontWeight: FontWeight.normal,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    I18n.tr('today.productivity.score'),
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: cs.onSurface.withValues(alpha: 0.58),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final unitSpacer = I18n.current == AppLocale.en ? ' ' : '';
+    List<_TodayProductivityPill> buildPills({double? maxWidth}) => [
+      _TodayProductivityPill(
+        label: I18n.tr('today.productivity.completion_rate'),
+        value:
+            '${(comparison.current.todoCompletionRate * 100).round()}%',
+        maxWidth: maxWidth,
+      ),
+      _TodayProductivityPill(
+        label: I18n.tr('nav.focus'),
+        value:
+            '${comparison.current.focusMinutes}$unitSpacer${I18n.tr('unit.min')}',
+        maxWidth: maxWidth,
+      ),
+      _TodayProductivityPill(
+        label: I18n.tr('nav.habit'),
+        value:
+            '${comparison.current.habitCheckIns}$unitSpacer${I18n.tr('today.unit.times')}',
+        maxWidth: maxWidth,
+      ),
+    ];
+
     return AppSurfaceCard(
       onTap: onTap,
       margin: const EdgeInsets.only(bottom: 2),
       padding: const EdgeInsets.fromLTRB(16, 15, 16, 15),
-      borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -1766,71 +2325,174 @@ class _TodayProductivityCard extends StatelessWidget {
         width: 0.55,
       ),
       elevation: 1.5,
-      child: Row(
-        children: [
-          Container(
-            width: scoreSize,
-            height: scoreSize,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color.alphaBlend(
-                cs.primary.withValues(alpha: isDark ? 0.18 : 0.11),
-                cs.surface,
-              ),
-              border: Border.all(color: cs.primary.withValues(alpha: 0.28)),
-              boxShadow: [
-                BoxShadow(
-                  color: cs.primary.withValues(alpha: isDark ? 0.16 : 0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final availableWidth = constraints.maxWidth;
+          final wideTextWidth =
+              availableWidth - scoreSize - 12.0 - 6.0 - 18.0;
+
+          final headingWidth = _measureTextWidth(
+            context,
+            weeklyHeading,
+            headingStyle,
+          );
+          final trendTextWidth = _measureTextWidth(
+            context,
+            trendText,
+            trendStyle,
+          );
+          final trendRowWidth = 16.0 + 4.0 + trendTextWidth;
+          final minHeadingAndTrendWidth = headingWidth + 8.0 + trendRowWidth;
+
+          final subtitleWords = subtitleText.split(RegExp(r'\s+'));
+          var maxSubtitleWordWidth = 0.0;
+          for (final word in subtitleWords) {
+            final w = _measureTextWidth(context, word, subtitleStyle);
+            if (w > maxSubtitleWordWidth) maxSubtitleWordWidth = w;
+          }
+
+          final fitsWide = wideTextWidth >= minHeadingAndTrendWidth &&
+              wideTextWidth >= maxSubtitleWordWidth;
+
+          if (fitsWide) {
+            return Row(
+              children: [
+                scoreCircle,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              weeklyHeading,
+                              style: headingStyle,
+                            ),
+                          ),
+                          Icon(
+                            _trendIcon(comparison.productivityScore.direction),
+                            color: trendColor,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            trendText,
+                            style: trendStyle,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitleText,
+                        style: subtitleStyle,
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: buildPills(maxWidth: wideTextWidth),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: cs.onSurface.withValues(alpha: 0.38),
                 ),
               ],
-            ),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    comparison.current.productivityScore.toString(),
-                    style: TextStyle(
-                      fontSize: 22,
-                      height: 1,
-                      color: cs.primary,
-                      fontWeight: FontWeight.normal,
-                    ),
+            );
+          }
+
+          final compactTextWidth =
+              availableWidth - scoreSize - 12.0 - 4.0 - 18.0;
+          final headingWords = weeklyHeading.split(RegExp(r'\s+'));
+          var maxHeadingWordWidth = 0.0;
+          for (final word in headingWords) {
+            final w = _measureTextWidth(context, word, headingStyle);
+            if (w > maxHeadingWordWidth) maxHeadingWordWidth = w;
+          }
+
+          final headerSideBySide = compactTextWidth >= maxHeadingWordWidth &&
+              compactTextWidth >= trendRowWidth;
+
+          Widget headerSection;
+          if (headerSideBySide) {
+            headerSection = Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                scoreCircle,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              weeklyHeading,
+                              style: headingStyle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.chevron_right,
+                            size: 18,
+                            color: cs.onSurface.withValues(alpha: 0.38),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _trendIcon(comparison.productivityScore.direction),
+                            color: trendColor,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            trendText,
+                            style: trendStyle,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    I18n.tr('today.productivity.score'),
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: cs.onSurface.withValues(alpha: 0.58),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+                ),
+              ],
+            );
+          } else {
+            headerSection = Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: Text(
-                        I18n.tr('today.productivity.weekly'),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: 16,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
+                    scoreCircle,
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: cs.onSurface.withValues(alpha: 0.38),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  weeklyHeading,
+                  style: headingStyle,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Icon(
                       _trendIcon(comparison.productivityScore.direction),
                       color: trendColor,
@@ -1838,61 +2500,48 @@ class _TodayProductivityCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      scoreDelta == 0
-                          ? I18n.tr('today.productivity.flat')
-                          : '${scoreDelta > 0 ? '+' : ''}$scoreDelta ${I18n.tr('today.unit.point')}',
-                      style: TextStyle(fontSize: 12, color: trendColor),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  I18n.tr('today.productivity.subtitle'),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: cs.onSurface.withValues(alpha: 0.58),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    _TodayProductivityPill(
-                      label: I18n.tr('today.productivity.completion_rate'),
-                      value:
-                          '${(comparison.current.todoCompletionRate * 100).round()}%',
-                    ),
-                    _TodayProductivityPill(
-                      label: I18n.tr('nav.focus'),
-                      value:
-                          '${comparison.current.focusMinutes}${I18n.tr('unit.min')}',
-                    ),
-                    _TodayProductivityPill(
-                      label: I18n.tr('nav.habit'),
-                      value:
-                          '${comparison.current.habitCheckIns}${I18n.tr('today.unit.times')}',
+                      trendText,
+                      style: trendStyle,
                     ),
                   ],
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          Icon(
-            Icons.chevron_right,
-            size: 18,
-            color: cs.onSurface.withValues(alpha: 0.38),
-          ),
-        ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              headerSection,
+              const SizedBox(height: 10),
+              Text(
+                subtitleText,
+                style: subtitleStyle,
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: buildPills(maxWidth: availableWidth),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
   Color _trendColor(ColorScheme cs, ReportTrendDirection direction) =>
       switch (direction) {
-        ReportTrendDirection.up => const Color(0xFF2E7D32),
-        ReportTrendDirection.down => const Color(0xFFC62828),
+        ReportTrendDirection.up => appReadableForeground(
+          cs.surface,
+          DesignTokens.defaultSuccess,
+        ),
+        ReportTrendDirection.down => appReadableForeground(
+          cs.surface,
+          DesignTokens.defaultError,
+        ),
         ReportTrendDirection.flat => cs.onSurface.withValues(alpha: 0.62),
       };
 
@@ -1906,12 +2555,46 @@ class _TodayProductivityCard extends StatelessWidget {
 class _TodayProductivityPill extends StatelessWidget {
   final String label;
   final String value;
+  final double? maxWidth;
 
-  const _TodayProductivityPill({required this.label, required this.value});
+  const _TodayProductivityPill({
+    required this.label,
+    required this.value,
+    this.maxWidth,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    Widget content = Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 4,
+      runSpacing: 2,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: cs.onSurface.withValues(alpha: 0.56),
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.normal,
+          ),
+        ),
+      ],
+    );
+
+    if (maxWidth != null && maxWidth! > 0) {
+      content = ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth!),
+        child: content,
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
@@ -1922,34 +2605,7 @@ class _TodayProductivityPill extends StatelessWidget {
           width: 0.45,
         ),
       ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 150),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: cs.onSurface.withValues(alpha: 0.56),
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              value,
-              maxLines: 1,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: content,
     );
   }
 }
@@ -1968,96 +2624,142 @@ class _TodayTodoEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final strings = context.watch<ThemeProvider>().brand.strings;
-    final compactLayout = MediaQuery.sizeOf(context).width < 1100;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 2, compactLayout ? 72 : 16, 14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+    final strings = context.select<ThemeProvider, BrandStrings>(
+      (t) => t.brand.strings,
+    );
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final tileRadius = BorderRadius.circular(
+      surfaceStyle?.smallTileRadius ?? DesignTokens.radiusControl,
+    );
+    final cardRadius = BorderRadius.circular(
+      surfaceStyle?.cardRadius ?? DesignTokens.radiusCard,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrowCard =
+            constraints.maxWidth.isFinite && constraints.maxWidth < 260;
+        final rightPadding = narrowCard ? 12.0 : 16.0;
+        final leftPadding = narrowCard ? 12.0 : 16.0;
+        final innerWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth - leftPadding - rightPadding - 22.0 - 1.4
+            : double.infinity;
+        final stackContent = innerWidth < 160.0;
+
+        final leadingIcon = Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                Color.alphaBlend(
-                  cs.primary.withValues(alpha: 0.075),
-                  cs.surface,
-                ),
-                cs.surfaceContainerHighest.withValues(alpha: 0.30),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
-            border: Border.all(
-              color: cs.primary.withValues(alpha: 0.20),
-              width: 0.7,
-            ),
+            color: cs.primary.withValues(alpha: 0.12),
+            borderRadius: tileRadius,
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.add_task_rounded,
-                  size: 21,
-                  color: cs.primary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      strings.todoAddAction,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.normal,
-                      ),
+          child: Icon(Icons.add_task_rounded, size: 19, color: cs.primary),
+        );
+        final trailingArrow = Container(
+          width: 30,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.arrow_forward_rounded,
+            size: 16,
+            color: cs.primary,
+          ),
+        );
+        final titleText = Text(
+          strings.todoAddAction,
+          maxLines: stackContent ? null : 1,
+          softWrap: stackContent,
+          overflow: stackContent ? TextOverflow.visible : TextOverflow.ellipsis,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: cs.onSurface,
+            fontWeight: FontWeight.normal,
+          ),
+        );
+        final subtitleText = Text(
+          I18n.tr('today.todos.empty'),
+          maxLines: stackContent ? null : 2,
+          softWrap: true,
+          overflow: stackContent ? TextOverflow.visible : TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: cs.onSurfaceVariant,
+            height: 1.25,
+          ),
+        );
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(leftPadding, 0, rightPadding, 10),
+          child: InkWell(
+            borderRadius: cardRadius,
+            onTap: onTap,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Color.alphaBlend(
+                      cs.primary.withValues(alpha: 0.075),
+                      cs.surface,
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      I18n.tr('today.todos.empty'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                        height: 1.25,
-                      ),
-                    ),
+                    cs.surfaceContainerHighest.withValues(alpha: 0.30),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                width: 30,
-                height: 30,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 16,
-                  color: cs.primary,
+                borderRadius: cardRadius,
+                border: Border.all(
+                  color: cs.primary.withValues(alpha: 0.20),
+                  width: 0.6,
                 ),
               ),
-            ],
+              child: stackContent
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (innerWidth >= 78)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [leadingIcon, trailingArrow],
+                          )
+                        else
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [leadingIcon, trailingArrow],
+                          ),
+                        const SizedBox(height: 10),
+                        titleText,
+                        const SizedBox(height: 3),
+                        subtitleText,
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        leadingIcon,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              titleText,
+                              const SizedBox(height: 3),
+                              subtitleText,
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        trailingArrow,
+                      ],
+                    ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -2153,7 +2855,7 @@ class _TodayTodoStatusPill extends StatelessWidget {
       TodoVisualState.dueSoon => (
         I18n.tr('todo.status.due_soon'),
         Icons.alarm_outlined,
-        Colors.orange.shade700,
+        DesignTokens.defaultWarning,
       ),
       _ => (
         I18n.tr('todo.status.normal'),
@@ -2161,6 +2863,10 @@ class _TodayTodoStatusPill extends StatelessWidget {
         cs.onSurfaceVariant,
       ),
     };
+    final foreground = appReadableForeground(
+      Color.alphaBlend(color.withValues(alpha: 0.10), cs.surface),
+      color,
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
@@ -2172,9 +2878,9 @@ class _TodayTodoStatusPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 10, color: color),
+            Icon(icon, size: 10, color: foreground),
             const SizedBox(width: 3),
-            Text(label, style: TextStyle(fontSize: 10, color: color)),
+            Text(label, style: TextStyle(fontSize: 10, color: foreground)),
           ],
         ),
       ),
@@ -2339,6 +3045,7 @@ class _TodayTodoTitleLine extends StatelessWidget {
   final bool completed;
   final bool overdue;
   final String iconKeyPrefix;
+  final bool allowTitleWrap;
 
   const _TodayTodoTitleLine({
     required this.todo,
@@ -2347,38 +3054,75 @@ class _TodayTodoTitleLine extends StatelessWidget {
     required this.overdue,
     required this.iconKeyPrefix,
     this.titleColor,
+    this.allowTitleWrap = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final effectiveColor = titleColor ?? (overdue ? cs.error : cs.onSurface);
-    return Row(
-      children: [
-        _TodoTemplateAvatar(
-          todo: todo,
-          keyPrefix: iconKeyPrefix,
-          radius: 10,
-          iconSize: 12,
-        ),
-        const SizedBox(width: 7),
-        Expanded(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: effectiveColor,
-              decoration: completed ? TextDecoration.lineThrough : null,
-              fontWeight: FontWeight.normal,
-            ),
-          ),
-        ),
-        if (overdue) ...[
-          const SizedBox(width: 6),
-          _OverdueReminderBadge(color: cs.error),
-        ],
-      ],
+    final titleStyle = TextStyle(
+      color: effectiveColor,
+      decoration: completed ? TextDecoration.lineThrough : null,
+      fontWeight: FontWeight.normal,
+    );
+    final avatar = _TodoTemplateAvatar(
+      todo: todo,
+      keyPrefix: iconKeyPrefix,
+      radius: 10,
+      iconSize: 12,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        final textScaler = MediaQuery.textScalerOf(context);
+        final titleTextWidth = _measureTodayTextWidthCached(
+          context,
+          title,
+          titleStyle,
+        );
+        final badgeWidth = overdue ? _overdueBadgeEstimatedWidth(context) : 0.0;
+        final minTitleReserve = math.min(
+          titleTextWidth,
+          textScaler.scale(14.0) * 4.0,
+        );
+        final singleLineFits = !overdue ||
+            !maxWidth.isFinite ||
+            maxWidth >= 20.0 + 7.0 + minTitleReserve + 6.0 + badgeWidth + 1.0;
+        final wrapTitle = allowTitleWrap || !singleLineFits;
+        final titleWidget = Text(
+          title,
+          maxLines: wrapTitle ? null : 1,
+          softWrap: wrapTitle,
+          overflow: wrapTitle ? TextOverflow.visible : TextOverflow.ellipsis,
+          style: titleStyle,
+        );
+        final titleRow = Row(
+          crossAxisAlignment: wrapTitle
+              ? CrossAxisAlignment.start
+              : CrossAxisAlignment.center,
+          children: [
+            avatar,
+            const SizedBox(width: 7),
+            Expanded(child: titleWidget),
+            if (overdue && singleLineFits) ...[
+              const SizedBox(width: 6),
+              _OverdueReminderBadge(color: cs.error),
+            ],
+          ],
+        );
+        if (!overdue || singleLineFits) {
+          return titleRow;
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            titleRow,
+            const SizedBox(height: 4),
+            _OverdueReminderBadge(color: cs.error),
+          ],
+        );
+      },
     );
   }
 }
@@ -2462,6 +3206,8 @@ class _TodayTodoSwipeTile extends StatefulWidget {
   final bool showStatusDecoration;
   final String iconKeyPrefix;
   final bool showOverdueBadge;
+  final double? trailingLayoutWidth;
+  final bool? canEdit;
 
   const _TodayTodoSwipeTile({
     super.key,
@@ -2479,6 +3225,8 @@ class _TodayTodoSwipeTile extends StatefulWidget {
     this.showStatusDecoration = true,
     this.iconKeyPrefix = 'today_todo_template_icon',
     this.showOverdueBadge = false,
+    this.trailingLayoutWidth,
+    this.canEdit,
   });
 
   @override
@@ -2525,47 +3273,73 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context) async {
+  bool _canDelete(_TodayTodoDeleteOrigin origin, {bool checkRoute = true}) =>
+      mounted &&
+      widget.todo.id == origin.id &&
+      widget.todo.workspaceId == origin.workspaceId &&
+      origin.isCurrent(checkRoute: checkRoute);
+
+  Future<void> _confirmDelete(_TodayTodoDeleteOrigin origin) async {
+    if (!_canDelete(origin)) return;
     _closeSwipe();
-    final targetTodoId = widget.todo.id;
-    final targetTodoTitle = widget.todo.title;
-    final targetGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    ModalRoute<dynamic>? dialogRoute;
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogCtx) => ValueListenableBuilder<AppLocale>(
-        valueListenable: I18n.localeListenable,
-        builder: (context, locale, _) => AppDialog(
-          icon: const Icon(Icons.delete_outline),
-          title: Text(TodayUiCopy.deleteTaskTitle(locale)),
-          content: Text(TodayUiCopy.deleteTaskContent(targetTodoTitle, locale)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(false),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(true),
-              child: Text(I18n.tr('action.delete')),
-            ),
-          ],
-        ),
-      ),
+      builder: (dialogCtx) {
+        final route = ModalRoute.of(dialogCtx);
+        dialogRoute = route;
+        bool canClose() =>
+            dialogCtx.mounted &&
+            route?.isActive == true &&
+            route?.isCurrent == true;
+        return ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (context, locale, _) => AppDialog(
+            icon: const Icon(Icons.delete_outline),
+            title: Text(TodayUiCopy.deleteTaskTitle(locale)),
+            content: Text(TodayUiCopy.deleteTaskContent(origin.title, locale)),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  if (canClose()) Navigator.of(dialogCtx).pop(false);
+                },
+                child: Text(I18n.tr('action.cancel')),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (canClose() && _canDelete(origin, checkRoute: false)) {
+                    Navigator.of(dialogCtx).pop(true);
+                  }
+                },
+                child: Text(I18n.tr('action.delete')),
+              ),
+            ],
+          ),
+        );
+      },
     );
-    if (!context.mounted) return;
-    if (confirmed == true &&
-        context.mounted &&
-        mounted &&
-        AccountLocalDataCleaner.accountDataGeneration == targetGeneration &&
-        widget.todo.id == targetTodoId) {
-      await context.read<TodoProvider>().deleteTodo(targetTodoId);
-    } else {
-      _closeSwipe();
+    await dialogRoute?.completed;
+    if (confirmed == true && _canDelete(origin)) {
+      await origin.todos.deleteTodo(origin.id);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final providedCanEdit = widget.canEdit;
+    if (providedCanEdit != null) {
+      return _buildWithPermission(context, providedCanEdit);
+    }
+    return _TodayTodoTilePermissionScope(
+      workspaceId: widget.todo.workspaceId,
+      builder: (canEdit) => _buildWithPermission(context, canEdit),
+    );
+  }
+
+  Widget _buildWithPermission(BuildContext context, bool canEdit) {
+    final deleteOrigin = _TodayTodoDeleteOrigin(context, widget.todo);
+    final toggleTodo = widget.onToggle;
     final cs = Theme.of(context).colorScheme;
     final todo = widget.todo;
     final visual = CompletionVisibilityPolicy.visualState(todo);
@@ -2576,7 +3350,10 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
         ? switch (visual) {
             TodoVisualState.completed => cs.tertiary,
             TodoVisualState.overdue => cs.error,
-            TodoVisualState.dueSoon => Colors.orange.shade700,
+            TodoVisualState.dueSoon => appReadableForeground(
+              cs.surface,
+              DesignTokens.defaultWarning,
+            ),
             TodoVisualState.normal => templateVisual.color,
             TodoVisualState.archived => cs.outline,
           }
@@ -2605,48 +3382,226 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
               ));
     final effectiveTileBorderColor =
         widget.tileBorderColor ?? statusColor?.withValues(alpha: borderAlpha);
-    final canEdit = context.select<ShareProvider?, bool>(
-      (share) => share?.canEdit(todo.workspaceId) ?? true,
-    );
     final effectiveTitleColor = todo.isCompleted
         ? widget.completedTextColor ?? cs.onSurface.withValues(alpha: 0.52)
         : widget.titleColor ?? (isOverdue ? cs.error : null);
     final compact = MediaQuery.sizeOf(context).width < 360;
-    Widget tile = Material(
-      color: Colors.transparent,
-      child: ListTile(
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        contentPadding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
-        horizontalTitleGap: 4,
-        minLeadingWidth: widget.leading == null ? _TodayTodoLeading.width : 30,
-        leading:
-            widget.leading ??
-            _TodayTodoLeading(
-              statusColor: statusColor,
-              isCompleted: isCompleted,
-              completedCheckColor: cs.onTertiary,
-              onChanged: canEdit
-                  ? (_) => widget.onToggle()
-                  : (_) => _showReadOnlyMessage('完成任务'),
-            ),
-        title: _TodayTodoTitleLine(
-          todo: todo,
-          title: widget.title ?? todo.title,
-          titleColor: effectiveTitleColor,
-          completed: todo.isCompleted,
-          overdue: widget.showOverdueBadge || isOverdue,
-          iconKeyPrefix: widget.iconKeyPrefix,
-        ),
-        subtitle: widget.subtitle ?? _TodoTodaySubtitle(todo: todo),
-        trailing: widget.trailing == null
-            ? null
-            : ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: compact ? 72 : 96),
-                child: widget.trailing!,
+    final leadingWidget =
+        widget.leading ??
+        _TodayTodoLeading(
+          statusColor: statusColor,
+          isCompleted: isCompleted,
+          completedCheckColor: cs.onTertiary,
+          onChanged: canEdit
+              ? (_) => toggleTodo()
+              : (_) => _showReadOnlyMessage('完成任务'),
+        );
+    final subtitleWidget = widget.subtitle ?? _TodoTodaySubtitle(todo: todo);
+    final trailingWidget = widget.trailing;
+    Widget tile = LayoutBuilder(
+      builder: (context, constraints) {
+        final narrowTile =
+            constraints.maxWidth.isFinite && constraints.maxWidth < 210;
+        final trailingLayoutWidth = widget.trailingLayoutWidth;
+        if (trailingLayoutWidth != null && trailingWidget != null) {
+          final horizontalPad = compact ? 16.0 : 24.0;
+          final leadingAndGap =
+              (widget.leading == null ? _TodayTodoLeading.width : 30.0) + 8.0;
+          final minTitleReserve =
+              27.0 + MediaQuery.textScalerOf(context).scale(14.0) * 4.5;
+          final fitsInline = !narrowTile &&
+              (!constraints.maxWidth.isFinite ||
+                  (constraints.maxWidth -
+                          horizontalPad -
+                          leadingAndGap -
+                          trailingLayoutWidth) >=
+                      minTitleReserve);
+          if (!fitsInline) {
+            final tileInnerWidth = constraints.maxWidth.isFinite
+                ? constraints.maxWidth - 18.0
+                : double.infinity;
+            final canShareLeadingRow =
+                narrowTile &&
+                (44.0 + 6.0 + trailingLayoutWidth) <= tileInnerWidth;
+            final titleWidget = _TodayTodoTitleLine(
+              todo: todo,
+              title: widget.title ?? todo.title,
+              titleColor: effectiveTitleColor,
+              completed: todo.isCompleted,
+              overdue: widget.showOverdueBadge || isOverdue,
+              iconKeyPrefix: widget.iconKeyPrefix,
+              allowTitleWrap: true,
+            );
+            final styledSubtitle = DefaultTextStyle.merge(
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              child: subtitleWidget,
+            );
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _swipeOpen ? _closeSwipe : widget.onOpen,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 10, 10),
+                  child: narrowTile
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                leadingWidget,
+                                if (canShareLeadingRow) trailingWidget,
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 6),
+                              child: titleWidget,
+                            ),
+                            const SizedBox(height: 4),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 6),
+                              child: styledSubtitle,
+                            ),
+                            if (!canShareLeadingRow) ...[
+                              const SizedBox(height: 6),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: trailingWidget,
+                              ),
+                            ],
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                leadingWidget,
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        titleWidget,
+                                        const SizedBox(height: 4),
+                                        styledSubtitle,
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: trailingWidget,
+                            ),
+                          ],
+                        ),
+                ),
               ),
-        onTap: _swipeOpen ? _closeSwipe : widget.onOpen,
-      ),
+            );
+          }
+        }
+        if (narrowTile) {
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: _swipeOpen ? _closeSwipe : widget.onOpen,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 10, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          leadingWidget,
+                          if (trailingWidget != null)
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 96),
+                              child: trailingWidget,
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: _TodayTodoTitleLine(
+                        todo: todo,
+                        title: widget.title ?? todo.title,
+                        titleColor: effectiveTitleColor,
+                        completed: todo.isCompleted,
+                        overdue: widget.showOverdueBadge || isOverdue,
+                        iconKeyPrefix: widget.iconKeyPrefix,
+                        allowTitleWrap: true,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: DefaultTextStyle.merge(
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                        child: subtitleWidget,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return Material(
+          color: Colors.transparent,
+          child: ListTile(
+            dense: true,
+            visualDensity: VisualDensity.standard,
+            contentPadding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
+            horizontalTitleGap: 4,
+            minLeadingWidth: widget.leading == null
+                ? _TodayTodoLeading.width
+                : 30,
+            leading: leadingWidget,
+            title: _TodayTodoTitleLine(
+              todo: todo,
+              title: widget.title ?? todo.title,
+              titleColor: effectiveTitleColor,
+              completed: todo.isCompleted,
+              overdue: widget.showOverdueBadge || isOverdue,
+              iconKeyPrefix: widget.iconKeyPrefix,
+            ),
+            subtitle: subtitleWidget,
+            trailing: trailingWidget == null
+                ? null
+                : ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: trailingLayoutWidth != null
+                          ? math.max(compact ? 72 : 96, trailingLayoutWidth)
+                          : (compact ? 72 : 96),
+                    ),
+                    child: trailingWidget,
+                  ),
+            onTap: _swipeOpen ? _closeSwipe : widget.onOpen,
+          ),
+        );
+      },
     );
     if (effectiveTileBackground != null || effectiveTileBorderColor != null) {
       tile = Container(
@@ -2712,7 +3667,7 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
                                 ),
                           foreground: canEdit ? cs.error : cs.onSurfaceVariant,
                           onTap: canEdit
-                              ? () => _confirmDelete(context)
+                              ? () => _confirmDelete(deleteOrigin)
                               : () => _showReadOnlyMessage('删除任务'),
                         ),
                       ],
@@ -2732,6 +3687,62 @@ class _TodayTodoSwipeTileState extends State<_TodayTodoSwipeTile> {
         ],
       ),
     );
+  }
+}
+
+class _TodayTodoTilePermissionScope extends StatelessWidget {
+  final String workspaceId;
+  final Widget Function(bool canEdit) builder;
+
+  const _TodayTodoTilePermissionScope({
+    required this.workspaceId,
+    required this.builder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final canEdit = context.select<ShareProvider?, bool>(
+      (share) => share?.canEdit(workspaceId) ?? true,
+    );
+    return builder(canEdit);
+  }
+}
+
+class _TodayTodoDeleteOrigin {
+  _TodayTodoDeleteOrigin(this.context, TodoItem todo)
+    : authority = SettingsActionOrigin(context),
+      todos = context.read<TodoProvider>(),
+      share = context.read<ShareProvider?>(),
+      id = todo.id,
+      title = todo.title,
+      workspaceId = todo.workspaceId {
+    revision = todos.revision;
+  }
+
+  final BuildContext context;
+  final SettingsActionOrigin authority;
+  final TodoProvider todos;
+  final ShareProvider? share;
+  final String id;
+  final String title;
+  final String workspaceId;
+  late final int revision;
+
+  bool isCurrent({bool checkRoute = true}) {
+    if (!authority.isCurrent(checkRoute: checkRoute)) return false;
+    try {
+      if (!identical(context.read<TodoProvider>(), todos) ||
+          !identical(context.read<ShareProvider?>(), share) ||
+          todos.revision != revision ||
+          !(share?.canEdit(workspaceId) ?? true)) {
+        return false;
+      }
+      return todos.todos.any(
+        (todo) => todo.id == id && todo.workspaceId == workspaceId,
+      );
+    } catch (_) {
+      return false;
+    }
   }
 }
 
@@ -2759,14 +3770,24 @@ class _TodayTodoSwipeButton extends StatelessWidget {
         button: true,
         label: label,
         child: Material(
-          color: background,
+          color: Colors.transparent,
           shape: const CircleBorder(),
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: onTap,
             child: SizedBox.square(
-              dimension: 38,
-              child: Icon(icon, size: 17, color: foreground),
+              dimension: 44,
+              child: Center(
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: background,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 17, color: foreground),
+                ),
+              ),
             ),
           ),
         ),
@@ -2818,6 +3839,7 @@ class _TodayReminderGroups {
     required ScheduleSettings courseSettings,
     required DateTime now,
     required DateTime todayKey,
+    String? datePattern,
   }) {
     final dueToday = <_TodayReminderItem>[];
     final upcoming = <_TodayReminderItem>[];
@@ -2834,7 +3856,7 @@ class _TodayReminderGroups {
         id: todo.id,
         title: todo.title,
         time: trigger,
-        subtitle: _todoReminderSubtitle(todo, trigger, now),
+        subtitle: _todoReminderSubtitle(todo, trigger, now, datePattern),
         todo: todo,
         completed: todo.isCompleted,
       );
@@ -2904,6 +3926,7 @@ class _TodayReminderGroups {
     TodoItem todo,
     DateTime trigger,
     DateTime now,
+    String? pattern,
   ) {
     final prefix = trigger.isBefore(now)
         ? TodayUiCopy.reminderPrefixPast
@@ -2911,7 +3934,7 @@ class _TodayReminderGroups {
         ? TodayUiCopy.reminderPrefixToday
         : TodayUiCopy.reminderPrefixUpcoming;
     final meta = <String>[
-      I18nDateFormat.smartDate(trigger, includeTime: true),
+      I18nDateFormat.smartDate(trigger, includeTime: true, pattern: pattern),
       if (todo.listGroupName != null && todo.listGroupName!.isNotEmpty)
         todo.listGroupName!,
     ];
@@ -2925,7 +3948,7 @@ class _TodayReminderSection extends StatefulWidget {
   final DateTime todayKey;
   final DateTime now;
   final ValueChanged<String> onOpenTodo;
-  final ValueChanged<TodoItem> onToggleTodo;
+  final VoidCallback Function(TodoItem) onToggleTodo;
   final VoidCallback onOpenCourses;
   final Future<void> Function(TodoItem todo) onAddToday;
 
@@ -2969,71 +3992,178 @@ class _TodayReminderSectionState extends State<_TodayReminderSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            InkWell(
-              key: const ValueKey('today_reminder_header_toggle'),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(DesignTokens.radiusCard),
-              ),
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-                child: Row(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final availableWidth = constraints.maxWidth;
+                final viewLabel = I18n.tr('today.view');
+                final titleText = TodayUiCopy.reminderHeaderTitle;
+                final subtitleText = _expanded
+                    ? subtitle
+                    : '$subtitle · ${TodayUiCopy.collapsedByDefault}';
+                final titleStyle = theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: 14,
+                  height: 1.25,
+                  fontWeight: FontWeight.normal,
+                );
+                final subtitleStyle = theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.56),
+                  fontWeight: FontWeight.normal,
+                );
+                final viewTextStyle = theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.normal,
+                );
+
+                final chevronIcon = Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  size: 18,
+                  color: cs.onSurfaceVariant,
+                );
+
+                Widget buildViewButton() => TextButton(
+                  onPressed: () =>
+                      TodayDetailRouter.open(context, TodaySectionKind.todos),
+                  style: TextButton.styleFrom(
+                    foregroundColor: cs.primary,
+                    textStyle: viewTextStyle,
+                    minimumSize: const Size(44, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    visualDensity: VisualDensity.standard,
+                    tapTargetSize: MaterialTapTargetSize.padded,
+                  ),
+                  child: Text(viewLabel),
+                );
+
+                final viewButtonWidth = math.max(
+                  48.0,
+                  24.0 +
+                      _measureTodayTextWidthCached(
+                        context,
+                        viewLabel,
+                        viewTextStyle,
+                      ) +
+                      2.0,
+                );
+                var maxTitleWordWidth = 0.0;
+                for (final word in titleText.split(RegExp(r'\s+'))) {
+                  if (word.isEmpty) continue;
+                  final w = _measureTodayTextWidthCached(
+                    context,
+                    word,
+                    titleStyle,
+                  );
+                  if (w > maxTitleWordWidth) {
+                    maxTitleWordWidth = w;
+                  }
+                }
+                final requiredWordWidth = maxTitleWordWidth + 4.0;
+                const normalHorizontalPadding = 24.0;
+                const chevronReserve = 24.0;
+
+                final canFitInlineRow = !availableWidth.isFinite ||
+                    (availableWidth -
+                            normalHorizontalPadding -
+                            chevronReserve -
+                            viewButtonWidth) >=
+                        math.max(requiredWordWidth, 100.0);
+
+                final titleWidget = Text(
+                  TodayUiCopy.reminderHeaderTitle,
+                  softWrap: true,
+                  style: titleStyle,
+                );
+                final subtitleWidget = Text(
+                  subtitleText,
+                  softWrap: true,
+                  style: subtitleStyle,
+                );
+                final titleAndSubtitle = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      _expanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      size: 18,
-                      color: cs.onSurfaceVariant,
+                    titleWidget,
+                    const SizedBox(height: 2),
+                    subtitleWidget,
+                  ],
+                );
+
+                if (canFitInlineRow) {
+                  return InkWell(
+                    key: const ValueKey('today_reminder_header_toggle'),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(DesignTokens.radiusCard),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                      child: Row(
                         children: [
-                          Text(
-                            TodayUiCopy.reminderHeaderTitle,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontSize: 14,
-                              height: 1.25,
-                              fontWeight: FontWeight.normal,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _expanded
-                                ? subtitle
-                                : '$subtitle · ${TodayUiCopy.collapsedByDefault}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: cs.onSurface.withValues(alpha: 0.56),
-                              fontWeight: FontWeight.normal,
-                            ),
-                          ),
+                          chevronIcon,
+                          const SizedBox(width: 6),
+                          Expanded(child: titleAndSubtitle),
+                          buildViewButton(),
                         ],
                       ),
                     ),
-                    TextButton(
-                      onPressed: () => TodayDetailRouter.open(
-                        context,
-                        TodaySectionKind.todos,
+                  );
+                }
+
+                final canFitChevronBesideTitle =
+                    (availableWidth -
+                            normalHorizontalPadding -
+                            chevronReserve) >=
+                        requiredWordWidth;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    InkWell(
+                      key: const ValueKey('today_reminder_header_toggle'),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(DesignTokens.radiusCard),
                       ),
-                      style: TextButton.styleFrom(
-                        foregroundColor: cs.primary,
-                        textStyle: theme.textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.normal,
-                        ),
-                        minimumSize: const Size(44, 44),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.padded,
+                      onTap: () => setState(() => _expanded = !_expanded),
+                      child: Padding(
+                        padding: canFitChevronBesideTitle
+                            ? const EdgeInsets.fromLTRB(16, 12, 8, 4)
+                            : const EdgeInsets.fromLTRB(4, 12, 4, 4),
+                        child: canFitChevronBesideTitle
+                            ? Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: chevronIcon,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(child: titleAndSubtitle),
+                                ],
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  chevronIcon,
+                                  const SizedBox(height: 6),
+                                  titleAndSubtitle,
+                                ],
+                              ),
                       ),
-                      child: Text(I18n.tr('today.view')),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        canFitChevronBesideTitle ? 16 : 4,
+                        0,
+                        canFitChevronBesideTitle ? 8 : 4,
+                        4,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: buildViewButton(),
+                      ),
                     ),
                   ],
-                ),
-              ),
+                );
+              },
             ),
             if (_expanded && widget.groups.dueToday.isNotEmpty)
               _ReminderGroupBlock(
@@ -3085,7 +4215,7 @@ class _ReminderGroupBlock extends StatelessWidget {
   final DateTime now;
   final bool overdue;
   final ValueChanged<String> onOpenTodo;
-  final ValueChanged<TodoItem> onToggleTodo;
+  final VoidCallback Function(TodoItem) onToggleTodo;
   final VoidCallback onOpenCourses;
 
   const _ReminderGroupBlock({
@@ -3124,35 +4254,94 @@ class _ReminderGroupBlock extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 9, 12, 2),
-              child: Row(
-                children: [
-                  Icon(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final titleStyle = Theme.of(context).textTheme.labelMedium
+                      ?.copyWith(
+                        color: overdue ? cs.error : cs.onSurface,
+                        fontWeight: FontWeight.normal,
+                      );
+                  final countText = TodayUiCopy.itemCount(items.length);
+                  final countStyle = Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(color: cs.onSurfaceVariant);
+                  final icon = Icon(
                     overdue
                         ? Icons.warning_amber_outlined
                         : Icons.notifications_none_outlined,
                     size: 16,
                     color: color,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
+                  );
+
+                  final titleWidth = _measureTodayTextWidthCached(
+                    context,
                     title,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: overdue ? cs.error : cs.onSurface,
-                      fontWeight: FontWeight.normal,
-                    ),
-                  ),
-                  if (overdue) ...[
-                    const SizedBox(width: 8),
-                    _OverdueReminderBadge(color: cs.error),
-                  ],
-                  const Spacer(),
-                  Text(
-                    TodayUiCopy.itemCount(items.length),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+                    titleStyle,
+                  );
+                  final countWidth = _measureTodayTextWidthCached(
+                    context,
+                    countText,
+                    countStyle,
+                  );
+                  final badgeWidth = overdue
+                      ? 8.0 + _overdueBadgeEstimatedWidth(context)
+                      : 0.0;
+                  final requiredSingleLineWidth =
+                      16.0 +
+                      6.0 +
+                      titleWidth +
+                      badgeWidth +
+                      8.0 +
+                      countWidth +
+                      1.0;
+
+                  if (!constraints.maxWidth.isFinite ||
+                      constraints.maxWidth >= requiredSingleLineWidth) {
+                    return Row(
+                      children: [
+                        icon,
+                        const SizedBox(width: 6),
+                        Text(title, style: titleStyle),
+                        if (overdue) ...[
+                          const SizedBox(width: 8),
+                          _OverdueReminderBadge(color: cs.error),
+                        ],
+                        const Spacer(),
+                        Text(countText, style: countStyle),
+                      ],
+                    );
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          icon,
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              title,
+                              softWrap: true,
+                              style: titleStyle,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (overdue) _OverdueReminderBadge(color: cs.error),
+                          Text(countText, style: countStyle),
+                        ],
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             ...items.map(
@@ -3180,19 +4369,50 @@ class _OverdueReminderTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _OverdueReminderBadge(color: color),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: color),
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final badgeWidth = _overdueBadgeEstimatedWidth(context);
+        final textScaler = MediaQuery.textScalerOf(context);
+        final titleWidth = _measureTodayTextWidthCached(
+          context,
+          title,
+          TextStyle(color: color),
+        );
+        final minTitleReserve = math.min(
+          titleWidth,
+          textScaler.scale(14.0) * 4.0,
+        );
+        final singleLineFits = !constraints.maxWidth.isFinite ||
+            constraints.maxWidth >= badgeWidth + 6.0 + minTitleReserve + 1.0;
+        if (singleLineFits) {
+          return Row(
+            children: [
+              _OverdueReminderBadge(color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: color),
+                ),
+              ),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _OverdueReminderBadge(color: color),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              softWrap: true,
+              style: TextStyle(color: color),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -3217,9 +4437,11 @@ class _OverdueReminderBadge extends StatelessWidget {
           children: [
             Icon(Icons.priority_high_rounded, size: 10, color: color),
             const SizedBox(width: 2),
-            Text(
-              I18n.tr('todo.status.overdue'),
-              style: TextStyle(fontSize: 10, color: color),
+            Flexible(
+              child: Text(
+                I18n.tr('todo.status.overdue'),
+                style: TextStyle(fontSize: 10, color: color),
+              ),
             ),
           ],
         ),
@@ -3233,7 +4455,7 @@ class _TodayReminderTile extends StatelessWidget {
   final DateTime now;
   final bool overdue;
   final ValueChanged<String> onOpenTodo;
-  final ValueChanged<TodoItem> onToggleTodo;
+  final VoidCallback Function(TodoItem) onToggleTodo;
   final VoidCallback onOpenCourses;
 
   const _TodayReminderTile({
@@ -3277,10 +4499,12 @@ class _TodayReminderTile extends StatelessWidget {
             ),
           );
     if (isTodo && todo != null) {
+      final toggleTodo = onToggleTodo(todo);
       return _TodayTodoSwipeTile(
         key: ValueKey('today_reminder_todo_${todo.id}'),
         todo: todo,
-        onToggle: () => onToggleTodo(todo),
+        canEdit: context.read<ShareProvider?>()?.canEdit(todo.workspaceId) ?? true,
+        onToggle: toggleTodo,
         onOpen: () => onOpenTodo(item.id),
         leading: _TodayTodoLeading(
           statusColor: overdue
@@ -3290,7 +4514,7 @@ class _TodayReminderTile extends StatelessWidget {
               : _todoTemplateVisual(context, todo).color,
           isCompleted: completed,
           completedCheckColor: overdue ? cs.onError : cs.onTertiary,
-          onChanged: (_) => onToggleTodo(todo),
+          onChanged: (_) => toggleTodo(),
         ),
         title: item.title,
         titleColor: overdue
@@ -3472,7 +4696,9 @@ class _SuggestionSectionState extends State<_SuggestionSection> {
     required int rowGeneration,
     required Future<void> Function(TodoItem todo) action,
   }) async {
-    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(rowGeneration)) {
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      rowGeneration,
+    )) {
       return;
     }
     if (_addingTodoIds.contains(todo.id)) return;
@@ -3491,98 +4717,203 @@ class _SuggestionSectionState extends State<_SuggestionSection> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final suggestionsTitle = I18n.tr('today.suggestions');
+    final suggestionsSubtitle = _expanded
+        ? I18n.tr('today.suggestions.subtitle')
+        : '${I18n.tr('today.suggestions.subtitle')} · ${TodayUiCopy.collapsedByDefault}';
+    final titleStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontSize: 14,
+      fontWeight: FontWeight.normal,
+    );
+    final subtitleStyle = theme.textTheme.bodySmall?.copyWith(
+      color: cs.onSurface.withValues(alpha: 0.58),
+    );
+    final addLabel = I18n.tr('today.add_to_today');
+    final addButtonTextStyle =
+        theme.textButtonTheme.style?.textStyle?.resolve(
+          const <WidgetState>{},
+        ) ??
+        theme.textTheme.labelLarge;
+    final addButtonWidth = math.max(
+      56.0,
+      _measureTodayTextWidthCached(context, addLabel, addButtonTextStyle) +
+          22.0,
+    );
+
     return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        key: const PageStorageKey<String>('today_suggestions_expansion_tile'),
-        controller: _expansionController,
-        initiallyExpanded: _expanded,
-        maintainState: true,
-        onExpansionChanged: (expanded) {
-          setState(() => _expanded = expanded);
-        },
-        tilePadding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
-        childrenPadding: const EdgeInsets.only(bottom: 4),
-        leading: Icon(
-          Icons.auto_awesome,
-          size: 18,
-          color: cs.primary.withValues(alpha: 0.72),
-        ),
-        title: Text(
-          I18n.tr('today.suggestions'),
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontSize: 14,
-            fontWeight: FontWeight.normal,
-          ),
-        ),
-        subtitle: Text(
-          _expanded
-              ? I18n.tr('today.suggestions.subtitle')
-              : '${I18n.tr('today.suggestions.subtitle')} · ${TodayUiCopy.collapsedByDefault}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: cs.onSurface.withValues(alpha: 0.58),
-          ),
-        ),
-        children: widget.suggestions.map((suggestion) {
-          final t = suggestion.todo;
-          final adding = _addingTodoIds.contains(t.id);
-          final rowGeneration = AccountLocalDataCleaner.accountDataGeneration;
-          final rowAction = widget.onAddToday;
-          return _TodayTodoSwipeTile(
-            key: ValueKey('today_suggestion_todo_${t.id}'),
-            todo: t,
-            onToggle: () {},
-            onOpen: () => widget.onOpenTodo(t.id),
-            title: t.title,
-            titleColor: cs.onSurface.withValues(alpha: 0.76),
-            iconKeyPrefix: 'today_suggestion_template_icon',
-            subtitle: Text(
-              TodayUiCopy.formatSuggestionReason(suggestion.reason),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11),
-            ),
-            trailing:
-                _sameDay(t.date, widget.todayKey) || t.isArchivedAfterRollover
-                ? null
-                : SizedBox(
-                    width: MediaQuery.sizeOf(context).width < 360 ? 72 : 88,
-                    height: 40,
-                    child: TextButton(
-                      key: ValueKey('today_suggestion_add_${t.id}'),
-                      onPressed: adding
-                          ? null
-                          : () => _addToday(
-                              t,
-                              rowGeneration: rowGeneration,
-                              action: rowAction,
-                            ),
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(56, 40),
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.padded,
-                      ),
-                      child: adding
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                I18n.tr('today.add_to_today'),
-                                maxLines: 1,
-                              ),
-                            ),
-                    ),
-                  ),
+      data: theme.copyWith(dividerColor: Colors.transparent),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final availableWidth = constraints.maxWidth;
+          var maxTitleWordWidth = 0.0;
+          for (final word in suggestionsTitle.split(RegExp(r'\s+'))) {
+            if (word.isEmpty) continue;
+            final w = _measureTodayTextWidthCached(context, word, titleStyle);
+            if (w > maxTitleWordWidth) {
+              maxTitleWordWidth = w;
+            }
+          }
+          const inlineTilePadding = EdgeInsets.fromLTRB(16, 4, 12, 4);
+          const leadingIconSize = 18.0;
+          final listTileTheme = ListTileTheme.of(context);
+          final effectiveVisualDensity =
+              listTileTheme.visualDensity ??
+              theme.listTileTheme.visualDensity ??
+              theme.visualDensity;
+          final horizontalTitleGap =
+              listTileTheme.horizontalTitleGap ??
+              theme.listTileTheme.horizontalTitleGap ??
+              16.0;
+          final effectiveTitleGap =
+              horizontalTitleGap + effectiveVisualDensity.horizontal * 2.0;
+          final minLeadingWidth =
+              listTileTheme.minLeadingWidth ??
+              theme.listTileTheme.minLeadingWidth ??
+              (theme.useMaterial3 ? 24.0 : 40.0);
+          final chevronWidth = IconTheme.of(context).size ?? 24.0;
+          final leadingReservation = math.max(
+            0.0,
+            math.max(minLeadingWidth, leadingIconSize) + effectiveTitleGap,
           );
-        }).toList(),
+          final trailingReservation = math.max(
+            chevronWidth + effectiveTitleGap,
+            32.0,
+          );
+          final inlineOverhead =
+              inlineTilePadding.horizontal +
+              leadingReservation +
+              trailingReservation;
+          final reflowHeader = availableWidth.isFinite &&
+              (availableWidth - inlineOverhead) < (maxTitleWordWidth + 4.0);
+          final leadingSparkIcon = Icon(
+            Icons.auto_awesome,
+            size: leadingIconSize,
+            color: cs.primary.withValues(alpha: 0.72),
+          );
+
+          return ExpansionTile(
+            key: const PageStorageKey<String>(
+              'today_suggestions_expansion_tile',
+            ),
+            controller: _expansionController,
+            initiallyExpanded: _expanded,
+            maintainState: true,
+            onExpansionChanged: (expanded) {
+              setState(() => _expanded = expanded);
+            },
+            tilePadding: reflowHeader
+                ? EdgeInsets.fromLTRB(
+                    availableWidth < 240 ? 8 : 14,
+                    6,
+                    availableWidth < 240 ? 8 : 14,
+                    6,
+                  )
+                : inlineTilePadding,
+            childrenPadding: const EdgeInsets.only(bottom: 4),
+            leading: reflowHeader ? null : leadingSparkIcon,
+            showTrailingIcon: !reflowHeader,
+            title: reflowHeader
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          leadingSparkIcon,
+                          Icon(
+                            _expanded
+                                ? Icons.keyboard_arrow_up
+                                : Icons.keyboard_arrow_down,
+                            size: 20,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        suggestionsTitle,
+                        softWrap: true,
+                        style: titleStyle,
+                      ),
+                    ],
+                  )
+                : Text(
+                    suggestionsTitle,
+                    softWrap: true,
+                    style: titleStyle,
+                  ),
+            subtitle: Text(
+              suggestionsSubtitle,
+              softWrap: true,
+              style: subtitleStyle,
+            ),
+            children: widget.suggestions.map((suggestion) {
+              final t = suggestion.todo;
+              final adding = _addingTodoIds.contains(t.id);
+              final rowGeneration =
+                  AccountLocalDataCleaner.accountDataGeneration;
+              final rowAction = widget.onAddToday;
+              final onOpenTodo = widget.onOpenTodo;
+              final hasAddAction =
+                  !_sameDay(t.date, widget.todayKey) &&
+                  !t.isArchivedAfterRollover;
+              return _TodayTodoSwipeTile(
+                key: ValueKey('today_suggestion_todo_${t.id}'),
+                todo: t,
+                canEdit:
+                    context.read<ShareProvider?>()?.canEdit(t.workspaceId) ??
+                    true,
+                onToggle: () {},
+                onOpen: () => onOpenTodo(t.id),
+                title: t.title,
+                titleColor: cs.onSurface.withValues(alpha: 0.76),
+                iconKeyPrefix: 'today_suggestion_template_icon',
+                trailingLayoutWidth: hasAddAction ? addButtonWidth : null,
+                subtitle: Text(
+                  TodayUiCopy.formatSuggestionReason(suggestion.reason),
+                  softWrap: true,
+                  style: const TextStyle(fontSize: 11),
+                ),
+                trailing: !hasAddAction
+                    ? null
+                    : TextButton(
+                        key: ValueKey('today_suggestion_add_${t.id}'),
+                        onPressed: adding
+                            ? null
+                            : () => _addToday(
+                                t,
+                                rowGeneration: rowGeneration,
+                                action: rowAction,
+                              ),
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size(56, 44),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          visualDensity: VisualDensity.standard,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: adding
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                addLabel,
+                                softWrap: true,
+                                textAlign: TextAlign.center,
+                              ),
+                      ),
+              );
+            }).toList(),
+          );
+        },
       ),
     );
   }
@@ -3592,12 +4923,12 @@ class _SuggestionSectionState extends State<_SuggestionSection> {
 }
 
 class _QuoteCardState extends State<_QuoteCard> {
-  late String _text;
+  late int _quoteIndex;
 
   @override
   void initState() {
     super.initState();
-    _text = DailyQuotes.today();
+    _quoteIndex = DailyQuotes.todayIndex();
   }
 
   @override
@@ -3605,9 +4936,9 @@ class _QuoteCardState extends State<_QuoteCard> {
     final theme = Theme.of(context);
     final cs = Theme.of(context).colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    final text = DailyQuotes.at(_quoteIndex, locale: I18n.current);
     return AppSurfaceCard(
-      onTap: () => setState(() => _text = DailyQuotes.random()),
-      borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+      onTap: () => setState(() => _quoteIndex = DailyQuotes.randomIndex()),
       padding: const EdgeInsets.all(14),
       gradient: LinearGradient(
         begin: Alignment.centerLeft,
@@ -3646,7 +4977,7 @@ class _QuoteCardState extends State<_QuoteCard> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              _text,
+              text,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 13, height: 1.55),

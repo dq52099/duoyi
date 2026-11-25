@@ -26,6 +26,7 @@ const _documentKeys = <String>{
 };
 
 const _presentationKeys = <String>{
+  'widget_first_day_of_week',
   'brand_app_title',
   'nav_todo',
   'nav_habit',
@@ -51,6 +52,7 @@ const _presentationKeys = <String>{
 };
 
 const _int32Keys = <String>{
+  'widget_first_day_of_week',
   'todo_count',
   'habit_percent',
   'habit_active_count',
@@ -95,9 +97,17 @@ Map<String, Object> _publishedValuesWithInt32(String key, int value) {
   return values;
 }
 
-int _int32Minimum(String key) => key == 'habit_active_count' ? -1 : 0;
+int _int32Minimum(String key) => key == 'habit_active_count'
+    ? -1
+    : key == 'widget_first_day_of_week'
+    ? 1
+    : 0;
 
-int _int32Maximum(String key) => key == 'habit_percent' ? 100 : 2147483647;
+int _int32Maximum(String key) => key == 'habit_percent'
+    ? 100
+    : key == 'widget_first_day_of_week'
+    ? 7
+    : 2147483647;
 
 WidgetPublication _publication({
   String ownerEpoch = 'owner-epoch-a',
@@ -140,7 +150,7 @@ void main() {
   });
 
   test(
-    'v1 has exactly ten document fields and the complete 89-field producer value catalog',
+    'v1 has exactly ten document fields and the complete 90-field producer value catalog',
     () {
       for (final locale in AppLocale.values) {
         I18n.setLocale(locale);
@@ -150,7 +160,7 @@ void main() {
           expect(expectedValues.remove(key), isNotNull, reason: key);
         }
 
-        expect(expectedValues, hasLength(89));
+        expect(expectedValues, hasLength(90));
         expect(WidgetPublication.valueKeys, expectedValues.keys.toSet());
         final publication = _publication(
           locale: locale,
@@ -220,7 +230,7 @@ void main() {
   });
 
   test(
-    'clearedValuesFrom zeroes 67 business fields and preserves 22 presentation fields',
+    'clearedValuesFrom zeroes 67 business fields and preserves 23 presentation fields',
     () {
       final source = _producerValues();
       final originalSource = Map<String, Object>.of(source);
@@ -231,8 +241,8 @@ void main() {
 
       expect(source, originalSource);
       expect(cleared.keys.toSet(), source.keys.toSet());
-      expect(cleared, hasLength(89));
-      expect(_presentationKeys, hasLength(22));
+      expect(cleared, hasLength(90));
+      expect(_presentationKeys, hasLength(23));
       expect(businessKeys, hasLength(67));
       for (final key in businessKeys) {
         switch (source[key]) {
@@ -524,7 +534,7 @@ void main() {
   test(
     'every Int32 value accepts its field range and rejects each adjacent overflow',
     () {
-      expect(_int32Keys, hasLength(11));
+      expect(_int32Keys, hasLength(12));
       for (final key in _int32Keys) {
         final minimum = _int32Minimum(key);
         final maximum = _int32Maximum(key);

@@ -29,7 +29,7 @@ void main() {
     expect(adminApi, contains(r"'/api/admin/users/$userId/coins'"));
     expect(
       adminApi,
-      contains(r"client.post('/api/admin/users/$userId/coins', body)"),
+      contains(r"'/api/admin/users/$userId/coins'"),
       reason: '时光币调整应直连当前主路由，避免连续探测兼容别名导致 404 噪声。',
     );
     for (final noisyFallback in [
@@ -47,11 +47,9 @@ void main() {
     expect(adminApi, contains('Future<AdminPage> listGroupsPage'));
     expect(adminApi, contains('Future<List<Map<String, dynamic>>> listGroups'));
     expect(adminApi, contains("'/api/admin/groups',"));
-    expect(adminApi, contains('return await _getPage(path'));
-    expect(
-      adminApi,
-      contains("client.getRaw('/api/admin/groups?limit=500&offset=0')"),
-    );
+    expect(adminApi, contains('final page = await _getPage('));
+    expect(adminApi, contains('_requireCurrentAdminAction(isCurrent);'));
+    expect(adminApi, contains("'/api/admin/groups?limit=500&offset=0'"));
     expect(adminApi, contains('Future<Map<String, dynamic>> saveGroup'));
     expect(adminApi, contains('Future<Map<String, dynamic>> deleteGroup'));
     expect(adminApi, isNot(contains('defaultGenerateQuota')));
@@ -67,7 +65,7 @@ void main() {
     expect(adminApi, contains("const ['DELETE']"));
     expect(adminApi, contains('管理员用户组删除'));
     expect(adminApi, contains('Future<List<Map<String, dynamic>>> listRoles'));
-    expect(adminApi, contains("client.getRaw('/api/admin/roles')"));
+    expect(adminApi, contains("'/api/admin/roles'"));
     expect(adminApi, contains('Future<Map<String, dynamic>> saveRole'));
     expect(adminApi, contains("client.post('/api/admin/roles', body)"));
     expect(
@@ -258,23 +256,12 @@ void main() {
     expect(adminScreen, contains('List<Map<String, dynamic>> _roles = [];'));
     expect(adminScreen, contains('widget.api.listGroups()'));
     expect(adminScreen, contains('widget.api.listRoles()'));
-    expect(adminScreen, contains('String? _groupsRolesError;'));
-    expect(
-      adminScreen,
-      contains('Future<List<Map<String, dynamic>>> _loadUserGroupsForUsers'),
-    );
-    expect(
-      adminScreen,
-      contains('Future<List<Map<String, dynamic>>> _loadUserRolesForUsers'),
-    );
-    expect(
-      adminScreen,
-      contains("errors.add(_adminErrorMessage(error, '用户组'))"),
-    );
-    expect(
-      adminScreen,
-      contains("errors.add(_adminErrorMessage(error, '角色'))"),
-    );
+    expect(adminScreen, contains('List<(Object, String)> _auxiliaryErrors'));
+    expect(adminScreen, contains("api.listGroups(isCurrent: allowed)"));
+    expect(adminScreen, contains("api.listRoles(isCurrent: allowed)"));
+    expect(adminScreen, contains('errors.add((error, target))'));
+    expect(adminScreen, contains('_canReadGroupNames'));
+    expect(adminScreen, contains('_canReadRoleNames'));
     expect(adminScreen, contains('用户组或角色加载失败'));
     expect(
       adminScreen,
@@ -293,7 +280,10 @@ void main() {
     expect(adminScreen, contains('用户组与角色'));
     expect(adminScreen, contains('widget.api.saveGroup('));
     expect(adminScreen, contains('widget.api.saveRole('));
-    expect(adminScreen, contains('默认时光币'));
+    expect(
+      adminScreen,
+      contains('AdminUiCopy.groupDefaultCoinsLabelFor(locale)'),
+    );
     expect(adminScreen, isNot(contains('图片额度模式')));
     expect(adminScreen, isNot(contains('生图')));
     expect(adminScreen, isNot(contains('改图')));
@@ -318,12 +308,12 @@ void main() {
     );
     expect(dashboardBody, isNot(contains("'时光币余额'")));
     expect(dashboardBody, isNot(contains("'累计时光币'")));
-    expect(adminScreen, contains(r"'管理权限: ${_adminPermissionsLabel"));
-    expect(adminScreen, contains(r"'用户组: ${_adminEntityName"));
-    expect(adminScreen, contains(r"'角色: ${_adminEntityName"));
-    expect(adminScreen, contains(r"'时光币: ${_adminIntValue"));
-    expect(adminScreen, contains("label: '细分权限'"));
-    expect(adminScreen, contains(r"'当前排序: ${_adminUserSortLabel(_sort)}'"));
+    expect(adminScreen, contains("_userText('管理权限', 'Admin permissions')"));
+    expect(adminScreen, contains("_userText('用户组', 'Group')"));
+    expect(adminScreen, contains("_userText('角色', 'Role')"));
+    expect(adminScreen, contains("_userText('时光币', 'Coins')"));
+    expect(adminScreen, contains("_userText('细分权限', 'Limited permissions')"));
+    expect(adminScreen, contains("_userText('当前排序', 'Sort order')"));
     expect(adminScreen, contains('ListView.separated'));
     expect(adminScreen, contains('_AdminPaginationBar('));
     expect(
@@ -341,86 +331,51 @@ void main() {
     );
   });
 
-  test('admin user menu can set permissions and adjust coins', () {
-    final adminScreen = File(
-      'lib/screens/admin_screen.dart',
-    ).readAsStringSync();
-
-    expect(adminScreen, contains('Future<void> _editAdminPermissions'));
-    expect(adminScreen, contains('Future<void> _editUserGroupRole'));
-    expect(adminScreen, contains('Future<void> _adjustCoins'));
-    expect(
-      adminScreen,
-      contains('selfAdminPermissions: auth.state.adminPermissions'),
+  test('admin user controls preserve permission and source boundaries', () {
+    final source = File('lib/screens/admin_screen.dart').readAsStringSync();
+    final users = source.substring(
+      source.indexOf('class _UsersTabState'),
+      source.indexOf('class _AnnouncementAction'),
     );
-    expect(adminScreen, contains('final List<String>? selfAdminPermissions;'));
-    expect(adminScreen, contains("bool get _canManageCoins"));
-    expect(adminScreen, contains("_canUseAdminPermission('coins')"));
-    expect(adminScreen, contains("bool get _canManageGroups"));
-    expect(adminScreen, contains("bool get _canAssignGroups"));
+    for (final method in [
+      '_editAdminPermissions',
+      '_editUserGroupRole',
+      '_adjustCoins',
+    ]) {
+      expect(users, contains('Future<void> $method'));
+    }
+    expect(users, contains('permissions.contains(_adminNoPermission)'));
     expect(
-      adminScreen,
-      contains(
-        'bool get _canAssignGroups => _canManageGroups || _canManageCoins',
-      ),
+      users,
+      contains('_canManageUsers && (_canManageGroups || _canManageCoins)'),
     );
-    expect(adminScreen, contains("bool get _canManageRoles"));
-    expect(adminScreen, contains("bool get _canManagePermissions"));
-    expect(adminScreen, contains("bool get _canManageAdminAccess"));
-    expect(adminScreen, contains("_canUseAdminPermission('groups')"));
-    expect(adminScreen, contains("_canUseAdminPermission('roles')"));
-    expect(adminScreen, contains("_canUseAdminPermission('permissions')"));
-    expect(adminScreen, contains("case 'permissions':"));
-    expect(adminScreen, contains("case 'group_role':"));
-    expect(adminScreen, contains("case 'coins':"));
-    expect(adminScreen, contains("value: 'permissions'"));
-    expect(adminScreen, contains("? '设置管理权限' : '设置管理权限（无权限）'"));
-    expect(adminScreen, contains('设置管理权限（无权限）'));
-    expect(adminScreen, contains('缺少权限管理权限'));
-    expect(adminScreen, contains("value: 'group_role'"));
-    expect(adminScreen, contains('设置用户组/角色'));
-    expect(adminScreen, contains('缺少用户组或角色管理权限'));
+    expect(users, contains('_canManageUsers && _canManageAdminAccess'));
+    expect(users, contains("const {'coins'}"));
+    expect(users, contains('() => _canManageCoins'));
+    expect(users, contains('isAdmin: _hasAllAdminPermission && admin'));
+    expect(users, contains('isAdmin: isAdmin ? null : true'));
+    expect(users, contains('roleId: isAdmin ? null : roleIdForPromotion'));
+    expect(users, contains('adminPermissions: permissions'));
+    expect(users, contains('groupId: _canAssignGroups ? groupId : null'));
+    expect(users, contains('roleId: canEditRole ? roleId : null'));
+    expect(users, contains("roleId != 'role_admin'"));
+    expect(users, contains('activeOnly: true'));
+    expect(users, contains("item['is_active'] == false"));
     expect(
-      adminScreen,
-      contains('isAdmin: _hasAllAdminPermission ? isAdmin : false'),
+      users,
+      contains('AdminApi(operation.origin.client).adjustUserCoins('),
     );
-    expect(adminScreen, contains('widget.api.updateUser('));
-    expect(adminScreen, contains('activeOnly: true'));
-    expect(adminScreen, contains("item['is_active'] == false"));
-    expect(adminScreen, contains("isInactive ? ' · 停用' : ''"));
-    expect(
-      adminScreen,
-      contains('groupId: _canAssignGroups ? selectedGroupId : null'),
-    );
-    expect(
-      adminScreen,
-      contains('roleId: _canManageRoles ? selectedRoleId : null'),
-    );
-    expect(adminScreen, contains("value: 'coins'"));
-    expect(adminScreen, contains('enabled: _canManageCoins'));
-    expect(adminScreen, contains("调整时光币（无权限）"));
-    expect(adminScreen, contains("缺少时光币管理权限"));
-    expect(adminScreen, contains('isAdmin: isAdmin ? null : true'));
-    expect(adminScreen, contains('final roleIdForPromotion ='));
-    expect(adminScreen, contains('existingRoleId.isNotEmpty'));
-    expect(
-      adminScreen,
-      contains('roleId: isAdmin ? null : roleIdForPromotion'),
-    );
-    expect(adminScreen, contains('adminPermissions: permissions'));
-    expect(
-      adminScreen,
-      isNot(contains('await widget.api.setUserAdminPermissions(')),
-    );
-    expect(adminScreen, contains('widget.api.adjustUserCoins('));
-    expect(adminScreen, contains("u['coin_balance'] = adjusted['balance'];"));
-    expect(
-      adminScreen,
-      contains("u['lifetime_coins'] = adjusted['lifetime'];"),
-    );
-    expect(adminScreen, contains("helperText: '正数增加，负数扣减'"));
-    expect(adminScreen, contains("SnackBar(content: Text('管理权限已更新'))"));
-    expect(adminScreen, contains("SnackBar(content: Text('时光币已调整'))"));
+    expect(users, contains("item['coin_balance'] = adjusted['balance']"));
+    expect(users, contains("item['lifetime_coins'] = adjusted['lifetime']"));
+    expect(users, contains("_userText('管理权限已更新', 'Permissions updated.', l)"));
+    expect(users, contains("_userText('时光币已调整', 'Coins adjusted.', l)"));
+    expect(users, contains('isCurrent: () => _operationCurrent(operation)'));
+    expect(users, contains('await route.completed'));
+    expect(users, contains('controller.dispose()'));
+    expect(users, contains('_refreshWritten('));
+    expect(users, contains('List refresh failed. Refresh manually.'));
+    expect(users, contains('_listOrigin = source'));
+    expect(users, contains('identical(_writeOperation, operation)'));
   });
 
   test('admin group and coin contracts keep snake case output with camel aliases', () {
@@ -460,10 +415,7 @@ void main() {
       apiAdjustCoins,
       contains("final body = <String, dynamic>{'delta': delta};"),
     );
-    expect(
-      apiAdjustCoins,
-      contains(r"client.post('/api/admin/users/$userId/coins', body)"),
-    );
+    expect(apiAdjustCoins, contains(r"'/api/admin/users/$userId/coins'"));
 
     final userUpdateModel = backend.substring(
       backend.indexOf('class UserUpdate'),

@@ -144,6 +144,9 @@ void main() {
         for (final item in items) item.id: item.originDate,
       };
       final asOf = DateTime(2025, 1, 10, 23, 55);
+      final storedBefore = {
+        for (final item in provider.itemsAt(asOf)) item.id: item.toJson(),
+      };
 
       late List<Anniversary> sortedAt;
       withClock(Clock.fixed(DateTime(2040, 7, 1)), () {
@@ -172,8 +175,12 @@ void main() {
       ]);
       final expectedItems = [pinnedPast, pinnedNear, todayAnnual, farAnnual];
       for (var index = 0; index < expectedItems.length; index++) {
-        expect(identical(sortedAt[index], expectedItems[index]), isTrue);
+        expect(sortedAt[index].toJson(), storedBefore[expectedItems[index].id]);
+        expect(identical(sortedAt[index], expectedItems[index]), isFalse);
       }
+      expect({
+        for (final item in provider.itemsAt(asOf)) item.id: item.toJson(),
+      }, storedBefore);
       for (final item in items) {
         expect(item.originDate, originalDates[item.id]);
         expect(item.toJson()['originDate'], originalDateJson[item.id]);

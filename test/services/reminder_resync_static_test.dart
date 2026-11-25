@@ -200,10 +200,24 @@ void main() {
         goalProvider,
         contains('set scheduler(ReminderScheduler? scheduler)'),
       );
-      expect(goalProvider, contains('Future<void> _syncGoalRemindersNow()'));
       expect(
         goalProvider,
-        contains('await scheduler.syncGoals(List.of(_goals))'),
+        matches(
+          RegExp(
+            r'Future<void> _syncGoalRemindersNow\(\s*'
+            r'bool Function\(\) isCurrent,?\s*\) async',
+          ),
+        ),
+      );
+      expect(
+        goalProvider,
+        contains('if (scheduler == null || !isCurrent()) return;'),
+        reason: '失效来源不能启动写入后的提醒同步。',
+      );
+      expect(
+        goalProvider,
+        contains('await scheduler.syncGoals(_snapshot())'),
+        reason: '提醒同步必须使用独立快照，避免共享已确认模型的可变字段。',
       );
       expect(goalProvider, contains('set reminderResyncRequester'));
       expect(goalProvider, contains('await requester();'));
@@ -216,9 +230,14 @@ void main() {
       );
       expect(timezoneHookStart, greaterThanOrEqualTo(0));
       expect(timeEntriesStart, greaterThan(timezoneHookStart));
+      final timezoneHook = goalProvider.substring(
+        timezoneHookStart,
+        timeEntriesStart,
+      );
+      expect(timezoneHook, contains('await requester();'));
       expect(
-        goalProvider.substring(timezoneHookStart, timeEntriesStart),
-        isNot(contains('syncGoals(List.of(_goals))')),
+        timezoneHook,
+        isNot(contains(RegExp(r'\bsyncGoals\s*\('))),
         reason:
             'Timezone changes must go through the full resync queue so they '
             'do not overlap startup, permission, or cloud-sync resyncs.',
@@ -243,10 +262,30 @@ void main() {
       sources['todo'],
       matches(
         RegExp(
-          r'Future<TodoReminderSyncResult> _syncTodoRemindersNow\(\{\s*String\? reportTodoId,?\s*\}\)',
+          r'Future<TodoReminderSyncResult> _syncTodoRemindersNow\(\{\s*'
+          r'String\? reportTodoId,\s*'
+          r'bool Function\(\)\? canWrite,?\s*\}\)',
         ),
       ),
     );
+    final todoProvider = sources['todo']!;
+    final todoSyncStart = todoProvider.indexOf(
+      'Future<TodoReminderSyncResult> _syncTodoRemindersNow(',
+    );
+    final todoSyncEnd = todoProvider.indexOf(
+      'void _applyReminderSyncResult(',
+      todoSyncStart,
+    );
+    expect(todoSyncStart, greaterThanOrEqualTo(0));
+    expect(todoSyncEnd, greaterThan(todoSyncStart));
+    final todoSync = todoProvider.substring(todoSyncStart, todoSyncEnd);
+    expect(todoSync, contains('if (_disposed || canWrite?.call() == false)'));
+    expect(
+      todoSync,
+      contains('canWrite?.call() != false'),
+      reason: '调用方撤销授权后，迟到的提醒结果不能发布为当前来源的成功。',
+    );
+    expect(todoSync, contains('if (!isCurrent()) return;'));
     expect(sources['todo'], contains('.syncTodos(List.of(_todos))'));
     expect(
       sources['todo'],
@@ -256,15 +295,58 @@ void main() {
     expect(sources['todo'], contains('lastReminderScheduleIssue'));
     expect(
       sources['habit'],
-      contains('Future<void> _syncRemindersNow() async'),
+      matches(
+        RegExp(
+          r'Future<void> _syncRemindersNow\(\s*'
+          r'bool Function\(\) isCurrent,?\s*\) async',
+        ),
+      ),
     );
     expect(sources['habit'], contains('syncHabits(List.of(_habits))'));
-    expect(sources['anniversary'], contains('syncAnniversaries(items)'));
-    expect(sources['countdown'], contains('syncCountdowns(items)'));
+    expect(sources['habit'], contains('await _syncRemindersNow(isCurrent);'));
+    for (final entry in const {
+      'anniversary': 'syncAnniversaries',
+      'countdown': 'syncCountdowns',
+    }.entries) {
+      final provider = sources[entry.key]!;
+      final afterCommitStart = provider.indexOf(
+        'Future<String?> _afterCommit(',
+      );
+      final afterCommitEnd = provider.indexOf(
+        'Future<String?> add',
+        afterCommitStart,
+      );
+      expect(afterCommitStart, greaterThanOrEqualTo(0));
+      expect(afterCommitEnd, greaterThan(afterCommitStart));
+      final afterCommit = provider.substring(afterCommitStart, afterCommitEnd);
+      const ownershipGuard =
+          'if (!syncReminders || !ownsStorage()) return null;';
+      final syncCall = 'await scheduler.${entry.value}(snapshot)';
+      expect(afterCommit, contains(ownershipGuard));
+      expect(afterCommit, contains(syncCall));
+      expect(
+        afterCommit.indexOf(ownershipGuard),
+        lessThan(afterCommit.indexOf(syncCall)),
+        reason: '${entry.key} must retain storage ownership before syncing.',
+      );
+      expect(
+        afterCommit,
+        contains('return ownsStorage() ? lastReminderSyncIssue : null;'),
+      );
+    }
     expect(
       sources['goal'],
-      contains('Future<void> _syncGoalRemindersNow() async'),
+      matches(
+        RegExp(
+          r'Future<void> _syncGoalRemindersNow\(\s*'
+          r'bool Function\(\) isCurrent,?\s*\) async',
+        ),
+      ),
     );
-    expect(sources['goal'], contains('syncGoals(List.of(_goals))'));
+    expect(sources['goal'], contains('syncGoals(_snapshot())'));
+    expect(
+      sources['goal'],
+      contains('await _syncGoalRemindersNow(canFinish);'),
+    );
   });
 }

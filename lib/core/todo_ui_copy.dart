@@ -63,4 +63,8 @@ class TodoUiCopy {
 
   static String completedFeedback(String title) =>
       isEn ? 'Completed: $title' : '已完成：$title';
+
+  static String get completionFailedFeedback => isEn
+      ? 'Could not save the completion record. Check the task and try again.'
+      : '未能保存完成记录，请检查任务状态后重试';
 }

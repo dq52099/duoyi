@@ -16,9 +16,9 @@ void main() {
 
     expect(
       habitProvider,
-      contains('Future<void> incrementHabitForDate(\n    String id,'),
+      matches(RegExp(r'Future<void>\s+incrementHabitForDate\(\s*String id,')),
     );
-    expect(habitProvider, contains('int? amount,'));
+    expect(habitProvider, matches(RegExp(r'\{\s*int\? amount\s*,?\s*\}')));
     expect(
       habitProvider,
       contains('final previousCount = habit.completions[key] ?? 0;'),
@@ -41,9 +41,14 @@ void main() {
 
     expect(
       habitProvider,
-      contains('habitCheckInRecordedAmount(\n              _habits[idx],'),
+      matches(RegExp(r'habitCheckInRecordedAmount\(\s*habit,')),
     );
-    expect(habitProvider, contains('??\n            _defaultUndoAmount('));
+    expect(
+      habitProvider,
+      matches(RegExp(r'\?\?\s*_defaultUndoAmount\(habit, v\)')),
+    );
+    expect(habitProvider, contains('final nextHabits = _snapshot();'));
+    expect(habitProvider, contains('final habit = nextHabits[idx];'));
     expect(habitProvider, contains('if (next <= 0)'));
 
     expect(timeAuditProvider, contains('static int? habitUnitSeconds('));

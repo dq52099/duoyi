@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../core/design_tokens.dart';
+import '../core/i18n.dart';
+import '../core/notification_ui_copy.dart';
 import '../models/goal.dart' show ReminderKind;
 import '../services/permission_health_service.dart';
 import 'surface_components.dart';
@@ -32,13 +35,19 @@ class _ReminderHealthHintState extends State<ReminderHealthHint>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    I18n.localeListenable.addListener(_onLocaleChanged);
     _future = PermissionHealthService.instance.check();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -75,12 +84,16 @@ class _ReminderHealthHintState extends State<ReminderHealthHint>
     return FutureBuilder<NotificationHealthReport>(
       future: _future,
       builder: (context, snap) {
+        final cs = Theme.of(context).colorScheme;
+        final isDark = cs.brightness == Brightness.dark;
         if (snap.hasError) {
           return AppActionTile(
             icon: Icons.error_outline,
-            label: '提醒健康',
-            color: Colors.red,
-            subtitle: '无法读取系统提醒状态',
+            label: NotificationUiCopy.reminderHealthLabel,
+            color: isDark
+                ? DesignTokens.todoOverdueDark
+                : DesignTokens.defaultError,
+            subtitle: NotificationUiCopy.reminderHealthReadFailed,
             onTap: widget.onOpenSystemSettings,
           );
         }
@@ -94,7 +107,7 @@ class _ReminderHealthHintState extends State<ReminderHealthHint>
         final alarmKind = widget.reminderKind == ReminderKind.alarm;
 
         PermissionHealthStatus status = PermissionHealthStatus.unknown;
-        String subtitle = '正在读取提醒健康状态';
+        String subtitle = NotificationUiCopy.reminderHealthLoading;
         VoidCallback? action;
         String? actionLabel;
         IconData icon = Icons.notifications_outlined;
@@ -102,55 +115,65 @@ class _ReminderHealthHintState extends State<ReminderHealthHint>
         if (report != null) {
           if (!notificationGranted) {
             status = PermissionHealthStatus.blocked;
-            subtitle = '系统通知未授权，提醒不会正常显示';
+            subtitle = NotificationUiCopy.notificationPermissionMissing;
             action = _handleNotificationPermission;
-            actionLabel = '通知授权';
+            actionLabel = NotificationUiCopy.notificationPermissionAction;
             icon = Icons.notifications_off_outlined;
           } else if (alarmKind && !exactGranted) {
             status = PermissionHealthStatus.blocked;
-            subtitle = '系统通知已授权，但精准闹钟未开启，强提醒可能延后';
+            subtitle = NotificationUiCopy.exactAlarmMissing;
             action = _handleExactAlarmPermission;
-            actionLabel = '精准闹钟';
+            actionLabel = NotificationUiCopy.exactAlarmAction;
             icon = Icons.alarm_off_outlined;
           } else if (alarmKind && !fullScreenIntentGranted) {
             status = PermissionHealthStatus.blocked;
-            subtitle = '弹出屏幕权限未允许，强提醒可能只显示在通知栏';
+            subtitle = NotificationUiCopy.fullScreenMissing;
             action = _handleFullScreenIntentPermission;
-            actionLabel = '弹屏权限';
+            actionLabel = NotificationUiCopy.fullScreenAction;
             icon = Icons.phonelink_lock_outlined;
           } else if (report.hasWarnings) {
             status = PermissionHealthStatus.warning;
             subtitle = isXiaomi
-                ? 'HyperOS/MIUI 需确认自启动、后台、电池、锁屏、横幅和渠道声音'
-                : 'Android 设备还要检查后台和电池限制';
+                ? NotificationUiCopy.xiaomiPolicyWarning
+                : NotificationUiCopy.androidPolicyWarning;
             icon = Icons.tips_and_updates_outlined;
           } else if (report.hasUnknown) {
             status = PermissionHealthStatus.unknown;
-            subtitle = '部分系统状态无法自动读取';
+            subtitle = NotificationUiCopy.unknownPolicyWarning;
             icon = Icons.help_outline;
           } else {
             status = PermissionHealthStatus.ok;
-            subtitle = alarmKind ? '系统通知、精准闹钟和弹屏权限均已就绪' : '系统通知已授权，提醒可正常进入通知中心';
+            subtitle = alarmKind
+                ? NotificationUiCopy.alarmReadySubtitle
+                : NotificationUiCopy.notificationReadySubtitle;
             icon = Icons.notifications_active_outlined;
           }
         }
 
         final color = switch (status) {
-          PermissionHealthStatus.ok => Colors.green,
-          PermissionHealthStatus.warning => Colors.orange,
-          PermissionHealthStatus.blocked => Colors.red,
-          PermissionHealthStatus.unknown => Colors.blueGrey,
+          PermissionHealthStatus.ok =>
+            isDark
+                ? DesignTokens.todoCompletedDark
+                : DesignTokens.defaultSuccess,
+          PermissionHealthStatus.warning =>
+            isDark ? DesignTokens.todoDueSoonDark : DesignTokens.todoDueSoon,
+          PermissionHealthStatus.blocked =>
+            isDark ? DesignTokens.todoOverdueDark : DesignTokens.defaultError,
+          PermissionHealthStatus.unknown => cs.onSurfaceVariant,
         };
 
         return AppActionTile(
           icon: icon,
-          label: '提醒健康',
+          label: NotificationUiCopy.reminderHealthLabel,
           color: color,
           subtitle: subtitle,
           onTap: widget.onOpenSystemSettings,
           trailing: action == null
               ? Icon(Icons.check_circle, color: color)
-              : TextButton(onPressed: action, child: Text(actionLabel ?? '处理')),
+              : TextButton(
+                  onPressed: action,
+                  child: Text(actionLabel ?? NotificationUiCopy.handleAction),
+                ),
         );
       },
     );

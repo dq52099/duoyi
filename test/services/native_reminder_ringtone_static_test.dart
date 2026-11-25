@@ -1193,22 +1193,40 @@ void main() {
     final alarmService = File(
       'lib/services/alarm_service.dart',
     ).readAsStringSync();
+    final localNotifications = File(
+      'lib/services/local_notifications_io.dart',
+    ).readAsStringSync();
 
-    expect(alarmService, contains("actionId == 'todo_complete'"));
-    expect(alarmService, contains("actionId == 'habit_checkin'"));
-    expect(alarmService, contains("_idFromPayload(payload, 'todo')"));
-    expect(alarmService, contains("_idFromPayload(payload, 'habit')"));
-    expect(alarmService, contains('duoyi://action/complete_todo?id='));
-    expect(alarmService, contains('duoyi://action/checkin_habit?id='));
+    expect(localNotifications, contains("actionId == 'todo_complete'"));
+    expect(localNotifications, contains("actionId == 'habit_checkin'"));
+    expect(
+      localNotifications,
+      contains("_idFromPayload(resp.payload!, 'todo')"),
+    );
+    expect(
+      localNotifications,
+      contains("_idFromPayload(resp.payload!, 'habit')"),
+    );
+    expect(localNotifications, contains('duoyi://action/complete_todo?id='));
+    expect(localNotifications, contains('duoyi://action/checkin_habit?id='));
     expect(
       alarmService,
       contains('final response = launchDetails?.notificationResponse;'),
     );
-    expect(alarmService, contains('_payloadForResponse(response)'));
-    expect(alarmService, contains("actionId.startsWith('todo_snooze_')"));
-    expect(alarmService, contains("'duoyi://snooze/\${resp.id ?? 0}'"));
-    expect(alarmService, contains('return payload;'));
-    expect(alarmService, contains('Uri.encodeComponent(id)'));
+    expect(
+      RegExp(
+        r'LocalNotifications\s*\.\s*instance\s*\.\s*payloadForNotificationResponse\(\s*response\s*,?\s*\)',
+      ).hasMatch(alarmService),
+      isTrue,
+    );
+    expect(
+      localNotifications,
+      contains('NotificationActionEnvelope.verifyResponse(response)'),
+    );
+    expect(localNotifications, contains("actionId.startsWith('todo_snooze_')"));
+    expect(localNotifications, contains("'duoyi://snooze/\${resp.id ?? 0}'"));
+    expect(localNotifications, contains('return resp.payload;'));
+    expect(localNotifications, contains('Uri.encodeComponent(id)'));
   });
 
   test('强提醒注册会记录精准闹钟降级和渠道静音风险', () {
@@ -2269,7 +2287,10 @@ void main() {
     expect(cancelAll, isNot(contains('if (!_initialized) return;')));
     expect(cancelAll, contains('if (!_initialized) await init();'));
     expect(cancelAll, contains('await _plugin.cancelAll();'));
-    expect(cancelAll, contains('await NativeReminderRingtone.cancelAll();'));
+    expect(
+      cancelAll,
+      contains('await NativeReminderRingtone.cancelAllOrThrow();'),
+    );
     expect(cancelAll, contains('闹钟队列批量清理失败'));
 
     final pendingEnd = alarmService.indexOf(

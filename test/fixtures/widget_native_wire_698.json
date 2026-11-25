@@ -1,0 +1,115 @@
+{
+  "schema": 1,
+  "scope": "Original Java StandardMethodCodec bytes; fake BinaryMessenger producer, host Dart consumer; no JNI/device/Auth/Store mutation proof",
+  "producer": {
+    "acceptance": "evidence/theme-widget-resume-20261109-v898/native-channel-terminal-acceptance-699.json",
+    "acceptanceSha256": "39d5b6563876d62f28e5eb168f9c647513cc82166bde87cd9862c2eb718b5125",
+    "wireLog": "evidence/theme-widget-resume-20261109-v898/native-channels-698-run/wire.jsonl",
+    "wireLogSha256": "af6294e651fcfb9c7ec47f9b0770014a72fdb6c3398cb8cdf15bfa19ce862092",
+    "runOutcomeSha256": "d3165663f8140eaaa166c709fad14214ad6e0bc2822d5d9de4540449a52a6b87",
+    "exporterSha256": "e8ddf709ea8e70610c7e6d93ef0d081a42eb25acb68e1772ae11d61b7cba9c80"
+  },
+  "packets": {
+    "orderedBacklogReply": {
+      "sourceCase": "unsubscribeRetainsAndRedrains",
+      "kind": "reply",
+      "method": "subscribe",
+      "wireBase64": "AAwCDQIHAmlkByQwYmQ4Njc1ZS1lNjM2LTRkNTMtODU0ZS1iNGJhODc0NTJhZTAHA3VyaQfCZHVveWk6Ly90b2RvL3JlYWQlMjAlMkYlRTQlQjglQUQlRTYlOTYlODclM0YlMjYlM0QlMkI/d2lkZ2V0X2RheT0yMDI2LTExLTEwJndpZGdldF9vZmZzZXQ9MCZ3aWRnZXRfYWNjb3VudD1hY2NvdW50LUEtZml4dHVyZTY2NCZzb3VyY2U9d2lkZ2V0JndpZGdldF9kZWxpdmVyeT0wYmQ4Njc1ZS1lNjM2LTRkNTMtODU0ZS1iNGJhODc0NTJhZTANAgcCaWQHJGEzOTYyZTMzLTZlMmMtNDE2My1iN2Q4LTY3NDExODJhOTQwNgcDdXJpB9VkdW95aTovL2FjdGlvbi9jb21wbGV0ZV90b2RvP2lkPXJlYWQlMjAlMkYlRTQlQjglQUQlRTYlOTYlODclM0YlMjYlM0QlMkImd2lkZ2V0X2RheT0yMDI2LTExLTEwJndpZGdldF9vZmZzZXQ9MCZ3aWRnZXRfYWNjb3VudD1hY2NvdW50LUEtZml4dHVyZTY2NCZzb3VyY2U9d2lkZ2V0JndpZGdldF9kZWxpdmVyeT1hMzk2MmUzMy02ZTJjLTQxNjMtYjdkOC02NzQxMTgyYTk0MDY=",
+      "expected": [
+        {
+          "id": "0bd8675e-e636-4d53-854e-b4ba87452ae0",
+          "uri": "duoyi://todo/read%20%2F%E4%B8%AD%E6%96%87%3F%26%3D%2B?widget_day=2026-11-10&widget_offset=0&widget_account=account-A-fixture664&source=widget&widget_delivery=0bd8675e-e636-4d53-854e-b4ba87452ae0"
+        },
+        {
+          "id": "a3962e33-6e2c-4163-b7d8-6741182a9406",
+          "uri": "duoyi://action/complete_todo?id=read%20%2F%E4%B8%AD%E6%96%87%3F%26%3D%2B&widget_day=2026-11-10&widget_offset=0&widget_account=account-A-fixture664&source=widget&widget_delivery=a3962e33-6e2c-4163-b7d8-6741182a9406"
+        }
+      ]
+    },
+    "overlapHot": {
+      "sourceCase": "unsubscribeRetainsAndRedrains",
+      "kind": "hot",
+      "method": "onLaunch",
+      "wireBase64": "BwhvbkxhdW5jaA0CBwJpZAckMGJkODY3NWUtZTYzNi00ZDUzLTg1NGUtYjRiYTg3NDUyYWUwBwN1cmkHwmR1b3lpOi8vdG9kby9yZWFkJTIwJTJGJUU0JUI4JUFEJUU2JTk2JTg3JTNGJTI2JTNEJTJCP3dpZGdldF9kYXk9MjAyNi0xMS0xMCZ3aWRnZXRfb2Zmc2V0PTAmd2lkZ2V0X2FjY291bnQ9YWNjb3VudC1BLWZpeHR1cmU2NjQmc291cmNlPXdpZGdldCZ3aWRnZXRfZGVsaXZlcnk9MGJkODY3NWUtZTYzNi00ZDUzLTg1NGUtYjRiYTg3NDUyYWUw",
+      "expected": {
+        "id": "0bd8675e-e636-4d53-854e-b4ba87452ae0",
+        "uri": "duoyi://todo/read%20%2F%E4%B8%AD%E6%96%87%3F%26%3D%2B?widget_day=2026-11-10&widget_offset=0&widget_account=account-A-fixture664&source=widget&widget_delivery=0bd8675e-e636-4d53-854e-b4ba87452ae0"
+      }
+    },
+    "legacyHot": {
+      "sourceCase": "unsubscribeRetainsAndRedrains",
+      "kind": "hot",
+      "method": "onLaunch",
+      "wireBase64": "BwhvbkxhdW5jaA0CBwJpZAckODMyYmFhNDYtMjY1MC00MjU2LWJhOWUtN2I1NGM4MTVhOGUwBwN1cmkHVGR1b3lpOi8vdGFiL2hhYml0P3NvdXJjZT13aWRnZXQmd2lkZ2V0X2RlbGl2ZXJ5PTgzMmJhYTQ2LTI2NTAtNDI1Ni1iYTllLTdiNTRjODE1YThlMA==",
+      "expected": {
+        "id": "832baa46-2650-4256-ba9e-7b54c815a8e0",
+        "uri": "duoyi://tab/habit?source=widget&widget_delivery=832baa46-2650-4256-ba9e-7b54c815a8e0"
+      }
+    },
+    "emptyBacklogReply": {
+      "sourceCase": "subscribedCaptureUsesRealCodec",
+      "kind": "reply",
+      "method": "subscribe",
+      "wireBase64": "AAwA",
+      "expected": []
+    },
+    "successNullReply": {
+      "sourceCase": "subscribedCaptureUsesRealCodec",
+      "kind": "reply",
+      "method": "ack",
+      "wireBase64": "AAA=",
+      "expected": null
+    },
+    "repeatedHotFirst": {
+      "sourceCase": "fullBridgeBacklogRejectsNewestUntilAck",
+      "kind": "hot",
+      "method": "onLaunch",
+      "wireBase64": "BwhvbkxhdW5jaA0CBwJpZAckY2NmZmMxZjUtNGY2ZC00OWU0LTg2OTQtZDRiZWU2ZTIzM2YyBwN1cmkHwmR1b3lpOi8vdG9kby9yZWFkJTIwJTJGJUU0JUI4JUFEJUU2JTk2JTg3JTNGJTI2JTNEJTJCP3dpZGdldF9kYXk9MjAyNi0xMS0xMCZ3aWRnZXRfb2Zmc2V0PTAmd2lkZ2V0X2FjY291bnQ9YWNjb3VudC1BLWZpeHR1cmU2NjQmc291cmNlPXdpZGdldCZ3aWRnZXRfZGVsaXZlcnk9Y2NmZmMxZjUtNGY2ZC00OWU0LTg2OTQtZDRiZWU2ZTIzM2Yy",
+      "expected": {
+        "id": "ccffc1f5-4f6d-49e4-8694-d4bee6e233f2",
+        "uri": "duoyi://todo/read%20%2F%E4%B8%AD%E6%96%87%3F%26%3D%2B?widget_day=2026-11-10&widget_offset=0&widget_account=account-A-fixture664&source=widget&widget_delivery=ccffc1f5-4f6d-49e4-8694-d4bee6e233f2"
+      }
+    },
+    "repeatedHotSecond": {
+      "sourceCase": "fullBridgeBacklogRejectsNewestUntilAck",
+      "kind": "hot",
+      "method": "onLaunch",
+      "wireBase64": "BwhvbkxhdW5jaA0CBwJpZAckMmUxNzQ2NGUtOTY0NC00MjljLWI2YzEtMTY2ZDM1MzY3NTRhBwN1cmkHwmR1b3lpOi8vdG9kby9yZWFkJTIwJTJGJUU0JUI4JUFEJUU2JTk2JTg3JTNGJTI2JTNEJTJCP3dpZGdldF9kYXk9MjAyNi0xMS0xMCZ3aWRnZXRfb2Zmc2V0PTAmd2lkZ2V0X2FjY291bnQ9YWNjb3VudC1BLWZpeHR1cmU2NjQmc291cmNlPXdpZGdldCZ3aWRnZXRfZGVsaXZlcnk9MmUxNzQ2NGUtOTY0NC00MjljLWI2YzEtMTY2ZDM1MzY3NTRh",
+      "expected": {
+        "id": "2e17464e-9644-429c-b6c1-166d3536754a",
+        "uri": "duoyi://todo/read%20%2F%E4%B8%AD%E6%96%87%3F%26%3D%2B?widget_day=2026-11-10&widget_offset=0&widget_account=account-A-fixture664&source=widget&widget_delivery=2e17464e-9644-429c-b6c1-166d3536754a"
+      }
+    },
+    "actionHot": {
+      "sourceCase": "subscribedCaptureUsesRealCodec",
+      "kind": "hot",
+      "method": "onLaunch",
+      "wireBase64": "BwhvbkxhdW5jaA0CBwJpZAckOTNiYjA0ZjUtYjY5NS00Yzg3LTkyYzMtMDIzNGIxM2JhYTIyBwN1cmkH1WR1b3lpOi8vYWN0aW9uL2NvbXBsZXRlX3RvZG8/aWQ9cmVhZCUyMCUyRiVFNCVCOCVBRCVFNiU5NiU4NyUzRiUyNiUzRCUyQiZ3aWRnZXRfZGF5PTIwMjYtMTEtMTAmd2lkZ2V0X29mZnNldD0wJndpZGdldF9hY2NvdW50PWFjY291bnQtQS1maXh0dXJlNjY0JnNvdXJjZT13aWRnZXQmd2lkZ2V0X2RlbGl2ZXJ5PTkzYmIwNGY1LWI2OTUtNGM4Ny05MmMzLTAyMzRiMTNiYWEyMg==",
+      "expected": {
+        "id": "93bb04f5-b695-4c87-92c3-0234b13baa22",
+        "uri": "duoyi://action/complete_todo?id=read%20%2F%E4%B8%AD%E6%96%87%3F%26%3D%2B&widget_day=2026-11-10&widget_offset=0&widget_account=account-A-fixture664&source=widget&widget_delivery=93bb04f5-b695-4c87-92c3-0234b13baa22"
+      }
+    },
+    "subscribeRequest": {
+      "sourceCase": "subscribedCaptureUsesRealCodec",
+      "kind": "request",
+      "method": "subscribe",
+      "wireBase64": "BwlzdWJzY3JpYmUA",
+      "expected": null
+    },
+    "actionAckRequest": {
+      "sourceCase": "subscribedCaptureUsesRealCodec",
+      "kind": "request",
+      "method": "ack",
+      "wireBase64": "BwNhY2sHJDkzYmIwNGY1LWI2OTUtNGM4Ny05MmMzLTAyMzRiMTNiYWEyMg==",
+      "expected": "93bb04f5-b695-4c87-92c3-0234b13baa22"
+    },
+    "repeatAckRequest": {
+      "sourceCase": "fullBridgeBacklogRejectsNewestUntilAck",
+      "kind": "request",
+      "method": "ack",
+      "wireBase64": "BwNhY2sHJGNjZmZjMWY1LTRmNmQtNDllNC04Njk0LWQ0YmVlNmUyMzNmMg==",
+      "expected": "ccffc1f5-4f6d-49e4-8694-d4bee6e233f2"
+    }
+  }
+}

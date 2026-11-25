@@ -447,7 +447,7 @@ void main() {
       }
 
       final actionStart = source.indexOf(
-        'Future<void> _createQuickTodoFromAction(',
+        'Future<bool> _createQuickTodoFromAction(',
       );
       final actionEnd = source.indexOf(
         '\nbool _widgetAccountUnavailable',
@@ -472,8 +472,13 @@ void main() {
       expect(todoBinding, lessThan(coordinatorCall));
       expect(
         actionSource,
-        contains('context.mounted && !_widgetAccountUnavailable(auth)'),
+        matches(r'context\.mounted\s*&&\s*!_widgetAccountUnavailable\(auth\)'),
       );
+      expect(
+        actionSource,
+        contains('access?.canProceed ?? !_appAccessBlocked'),
+      );
+      expect(actionSource, contains('access?.markActionStarted()'));
       expect(
         actionSource,
         contains(
@@ -491,7 +496,7 @@ void main() {
         'void _showWidgetActionFeedbackFromShell(',
       );
       final createActionStart = source.indexOf(
-        'Future<void> _createQuickTodoFromAction(',
+        'Future<bool> _createQuickTodoFromAction(',
       );
       expect(localFeedbackStart, greaterThanOrEqualTo(0));
       expect(shellFeedbackStart, greaterThan(localFeedbackStart));
@@ -502,18 +507,12 @@ void main() {
       );
       final shellFeedbackSource = functionSource(
         'void _showWidgetActionFeedbackFromShell(',
-        '\nFuture<void> _createQuickTodoFromAction',
+        '\nFuture<bool> _createQuickTodoFromAction',
       );
       expect(localFeedbackSource, contains('WidgetActionMessage message'));
-      expect(
-        localFeedbackSource,
-        contains('WidgetActionScope().afterFrame(() {'),
-      );
+      expect(localFeedbackSource, contains('.afterFrame(() {'));
       expect(shellFeedbackSource, contains('WidgetActionMessage message'));
-      expect(
-        shellFeedbackSource,
-        contains('WidgetActionScope(isCallerAvailable: isCurrentAction)'),
-      );
+      expect(shellFeedbackSource, contains('isCurrentAction?.call()'));
       expect(shellFeedbackSource, contains('.afterFrame(() {'));
       expect(
         shellFeedbackSource,
@@ -527,7 +526,7 @@ void main() {
       ) {
         final frame = function.indexOf(frameMarker);
         final mounted = function.indexOf(mountedMarker);
-        final render = function.indexOf('Text(message.render())');
+        final render = function.indexOf('Text(message.render(locale: locale))');
         expect(frame, greaterThanOrEqualTo(0));
         expect(mounted, greaterThan(frame));
         expect(render, greaterThan(mounted));
@@ -535,30 +534,18 @@ void main() {
 
       expectRenderAfterFrameAndMountedCheck(
         localFeedbackSource,
-        'WidgetActionScope().afterFrame(() {',
+        '.afterFrame(() {',
         'if (!latestContext.mounted) return;',
       );
       expectRenderAfterFrameAndMountedCheck(
         shellFeedbackSource,
-        'WidgetActionScope(isCallerAvailable: isCurrentAction).afterFrame(() {',
+        '.afterFrame(() {',
         'if (latestContext == null || !latestContext.mounted) return;',
       );
 
-      final legacyPreflightSource = functionSource(
-        'Future<bool> _preflightQuickTodoReminder(',
-        '\nFuture<bool> _preflightWidgetTodoReminder',
-      );
-      expect(
-        legacyPreflightSource,
-        contains('required void Function(String message) feedback'),
-      );
-      expect(
-        legacyPreflightSource,
-        contains('feedback: (message) => feedback(message.render())'),
-      );
       final typedPreflightSource = functionSource(
         'Future<bool> _preflightWidgetTodoReminder(',
-        '\nString _quickTodoCreatedMessage',
+        '\nWidgetActionMessage _quickTodoCreatedNotice',
       );
       expect(
         typedPreflightSource,
@@ -583,14 +570,6 @@ void main() {
         contains('WidgetActionNotice.alarmPermissionDenied'),
       );
 
-      final legacyCreatedMessageSource = functionSource(
-        'String _quickTodoCreatedMessage(TodoItem todo) =>',
-        '\nWidgetActionMessage _quickTodoCreatedNotice',
-      );
-      expect(
-        legacyCreatedMessageSource,
-        contains('_quickTodoCreatedNotice(todo).render()'),
-      );
       final createdNoticeSource = functionSource(
         'WidgetActionMessage _quickTodoCreatedNotice(TodoItem todo)',
         '\nFuture<bool> _syncNotificationQuickAdd',
@@ -631,9 +610,11 @@ void main() {
               ? 'await WidgetLinkDispatch.resolve'
               : 'await _ensureHomeWidgetDataReady',
         );
-        final guardedFeedback = function.indexOf(
-          'isCurrentAction: () => scope.isCurrent',
-        );
+        final guardedFeedback =
+            RegExp(
+              r'isCurrentAction: \(\) =>\s*scope\.isCurrent',
+            ).firstMatch(function)?.start ??
+            -1;
         expect(scope, greaterThanOrEqualTo(0), reason: name);
         expect(firstAwait, greaterThan(scope), reason: name);
         expect(guardedFeedback, greaterThan(scope), reason: name);

@@ -22,7 +22,7 @@ void main() {
       source.indexOf('class _TodoSummaryChipData'),
     );
     expect(summary, contains('constraints.maxWidth < 420'));
-    expect(summary, contains("'今日还要完成 \$remaining 项'"));
+    expect(summary, contains('TodoBoardUiCopy.todayRemainingTasks(remaining)'));
     expect(
       summary,
       contains(
@@ -36,7 +36,12 @@ void main() {
     expect(summary, isNot(contains("'今日还要完成 \$actionableRemaining 项'")));
     expect(
       summary,
-      contains("'日常 \$dailyRemaining / 待办 \$todoCount / 目标 \$activeGoalCount'"),
+      matches(
+        RegExp(
+          r'TodoBoardUiCopy\.todaySummaryBreakdown\(\s*'
+          r'dailyRemaining,\s*todoCount,\s*activeGoalCount,?\s*\)',
+        ),
+      ),
     );
     expect(summary, isNot(contains('代表')));
 
@@ -44,9 +49,11 @@ void main() {
       source.indexOf('class _TodoSummaryChip'),
       source.indexOf('class _TodoFilterBar'),
     );
-    expect(chip, contains('BoxConstraints(minWidth: 86, maxWidth: 118)'));
-    expect(chip, contains('Flexible('));
-    expect(chip, contains('overflow: TextOverflow.ellipsis'));
+    expect(chip, contains('minWidth: 86'));
+    expect(chip, contains('? 168'));
+    expect(chip, contains(': 118'));
+    expect(chip, contains('Wrap('));
+    expect(summary, contains('final chipRow = Wrap('));
 
     final groupTile = source.substring(
       source.indexOf('class _ListGroupTile'),
@@ -77,16 +84,38 @@ void main() {
       source.indexOf('class _TaskCommentsPanel'),
     );
     expect(assignment, contains('helperMaxLines: 2'));
-    expect(assignment, contains('maxLines: 2'));
+    // Complete private-task guidance is measured by todo_detail_copy_fit_test.
     expect(assignment, contains('overflow: TextOverflow.ellipsis'));
 
-    final locationDialog = source.substring(
-      source.indexOf("title: const Text('添加位置提醒')"),
-      source.indexOf('if (ok != true) return;'),
+    final locationStart = source.indexOf(
+      'Future<void> _addLinkedLocationReminder(',
     );
-    expect(locationDialog, contains('LayoutBuilder('));
-    expect(locationDialog, contains('constraints.maxWidth < 260'));
-    expect(locationDialog, contains('Wrap('));
+    expect(locationStart, greaterThanOrEqualTo(0));
+    final locationEnd = source.indexOf(
+      'final title = titleCtrl.text.trim();',
+      locationStart,
+    );
+    expect(locationEnd, greaterThan(locationStart));
+    final locationDialog = source.substring(locationStart, locationEnd);
+    expect(
+      locationDialog,
+      contains('TodoDetailUiCopy.addLocationReminderDialogTitle'),
+    );
+    expect(locationDialog, contains('textScaler: media.textScaler'));
+    expect(
+      locationDialog,
+      contains('labelWidth + chipsWidth + minSpacerWidth <= contentWidth'),
+    );
+    expect(locationDialog, contains('final chipWrap = Wrap('));
+    expect(locationDialog, contains('final triggerControl = fitsInline'));
+    expect(locationDialog, contains('? Row('));
+    expect(locationDialog, contains(': Column('));
+    expect(locationDialog, contains('SingleChildScrollView('));
+    expect(locationDialog, contains('if (ok != true ||'));
+    expect(
+      locationDialog,
+      contains('AccountLocalDataCleaner.isCurrentAccountDataGeneration('),
+    );
 
     final comments = source.substring(
       source.indexOf('class _TaskCommentsPanel'),

@@ -18,6 +18,24 @@
 		E00000000000000000000005 /* DuoyiWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00000000000000000000001 /* DuoyiWidgets.swift */; };
 		E00000000000000000000006 /* DuoyiWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = E00000000000000000000004 /* DuoyiWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E00000000000000000000015 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E00000000000000000000014 /* Assets.xcassets */; };
+		F21000000000000000000011 /* DuoyiWidgetPublicationEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000001 /* DuoyiWidgetPublicationEnvelope.swift */; };
+		F21000000000000000000021 /* DuoyiWidgetPublicationEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000001 /* DuoyiWidgetPublicationEnvelope.swift */; };
+		F21000000000000000000012 /* DuoyiWidgetPublicationRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000002 /* DuoyiWidgetPublicationRow.swift */; };
+		F21000000000000000000022 /* DuoyiWidgetPublicationRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000002 /* DuoyiWidgetPublicationRow.swift */; };
+		F21000000000000000000013 /* DuoyiWidgetPublicationRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000003 /* DuoyiWidgetPublicationRequest.swift */; };
+		F21000000000000000000023 /* DuoyiWidgetPublicationRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000003 /* DuoyiWidgetPublicationRequest.swift */; };
+		F21000000000000000000014 /* DuoyiWidgetPublicationTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000004 /* DuoyiWidgetPublicationTransition.swift */; };
+		F21000000000000000000024 /* DuoyiWidgetPublicationTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000004 /* DuoyiWidgetPublicationTransition.swift */; };
+		F21000000000000000000061 /* DuoyiWidgetPublicationDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000051 /* DuoyiWidgetPublicationDatabase.swift */; };
+		F21000000000000000000071 /* DuoyiWidgetPublicationDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000051 /* DuoyiWidgetPublicationDatabase.swift */; };
+		F21000000000000000000062 /* DuoyiWidgetPublicationLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000052 /* DuoyiWidgetPublicationLock.swift */; };
+		F21000000000000000000072 /* DuoyiWidgetPublicationLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000052 /* DuoyiWidgetPublicationLock.swift */; };
+		F21000000000000000000063 /* DuoyiWidgetPublicationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000053 /* DuoyiWidgetPublicationStore.swift */; };
+		F21000000000000000000073 /* DuoyiWidgetPublicationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000053 /* DuoyiWidgetPublicationStore.swift */; };
+		F21000000000000000000084 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F21000000000000000000083 /* libsqlite3.tbd */; };
+		F21000000000000000000085 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F21000000000000000000083 /* libsqlite3.tbd */; };
+		F21000000000000000000092 /* DuoyiWidgetPublicationBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21000000000000000000091 /* DuoyiWidgetPublicationBridge.swift */; };
+		F210000000000000000000A2 /* DuoyiWidgetPublicationCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = F210000000000000000000A1 /* DuoyiWidgetPublicationCapture.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -84,6 +102,18 @@
 		E00000000000000000000004 /* DuoyiWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DuoyiWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E00000000000000000000013 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		E00000000000000000000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F21000000000000000000001 /* DuoyiWidgetPublicationEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoyiWidgetPublicationEnvelope.swift; sourceTree = "<group>"; };
+		F21000000000000000000002 /* DuoyiWidgetPublicationRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoyiWidgetPublicationRow.swift; sourceTree = "<group>"; };
+		F21000000000000000000003 /* DuoyiWidgetPublicationRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoyiWidgetPublicationRequest.swift; sourceTree = "<group>"; };
+		F21000000000000000000004 /* DuoyiWidgetPublicationTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoyiWidgetPublicationTransition.swift; sourceTree = "<group>"; };
+		F21000000000000000000051 /* DuoyiWidgetPublicationDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoyiWidgetPublicationDatabase.swift; sourceTree = "<group>"; };
+		F21000000000000000000052 /* DuoyiWidgetPublicationLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoyiWidgetPublicationLock.swift; sourceTree = "<group>"; };
+		F21000000000000000000053 /* DuoyiWidgetPublicationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoyiWidgetPublicationStore.swift; sourceTree = "<group>"; };
+		F21000000000000000000081 /* DuoyiWidgetStoreC.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DuoyiWidgetStoreC.h; sourceTree = "<group>"; };
+		F21000000000000000000082 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
+		F21000000000000000000083 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
+		F21000000000000000000091 /* DuoyiWidgetPublicationBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoyiWidgetPublicationBridge.swift; sourceTree = "<group>"; };
+		F210000000000000000000A1 /* DuoyiWidgetPublicationCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoyiWidgetPublicationCapture.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,6 +121,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F21000000000000000000084 /* libsqlite3.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -98,6 +129,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F21000000000000000000085 /* libsqlite3.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -128,6 +160,7 @@
 			children = (
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
+				F21000000000000000000030 /* WidgetPublicationShared */,
 				E0000000000000000000000F /* DuoyiWidgets */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
@@ -147,6 +180,7 @@
 		97C146F01CF9000F007C117D /* Runner */ = {
 			isa = PBXGroup;
 			children = (
+				F21000000000000000000091 /* DuoyiWidgetPublicationBridge.swift */,
 				97C146FA1CF9000F007C117D /* Main.storyboard */,
 				97C146FD1CF9000F007C117D /* Assets.xcassets */,
 				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
@@ -164,12 +198,38 @@
 		E0000000000000000000000F /* DuoyiWidgets */ = {
 			isa = PBXGroup;
 			children = (
+				F210000000000000000000A1 /* DuoyiWidgetPublicationCapture.swift */,
 				E00000000000000000000001 /* DuoyiWidgets.swift */,
 				E00000000000000000000002 /* Info.plist */,
 				E00000000000000000000003 /* DuoyiWidgets.entitlements */,
 				E00000000000000000000014 /* Assets.xcassets */,
 			);
 			path = DuoyiWidgets;
+			sourceTree = "<group>";
+		};
+		F21000000000000000000030 /* WidgetPublicationShared */ = {
+			isa = PBXGroup;
+			children = (
+				F21000000000000000000051 /* DuoyiWidgetPublicationDatabase.swift */,
+				F21000000000000000000052 /* DuoyiWidgetPublicationLock.swift */,
+				F21000000000000000000053 /* DuoyiWidgetPublicationStore.swift */,
+				F21000000000000000000080 /* DuoyiWidgetStoreC */,
+				F21000000000000000000083 /* libsqlite3.tbd */,
+				F21000000000000000000001 /* DuoyiWidgetPublicationEnvelope.swift */,
+				F21000000000000000000002 /* DuoyiWidgetPublicationRow.swift */,
+				F21000000000000000000003 /* DuoyiWidgetPublicationRequest.swift */,
+				F21000000000000000000004 /* DuoyiWidgetPublicationTransition.swift */,
+			);
+			path = WidgetPublicationShared;
+			sourceTree = "<group>";
+		};
+		F21000000000000000000080 /* DuoyiWidgetStoreC */ = {
+			isa = PBXGroup;
+			children = (
+				F21000000000000000000081 /* DuoyiWidgetStoreC.h */,
+				F21000000000000000000082 /* module.modulemap */,
+			);
+			path = DuoyiWidgetStoreC;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -350,6 +410,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F21000000000000000000092 /* DuoyiWidgetPublicationBridge.swift in Sources */,
+				F21000000000000000000061 /* DuoyiWidgetPublicationDatabase.swift in Sources */,
+				F21000000000000000000062 /* DuoyiWidgetPublicationLock.swift in Sources */,
+				F21000000000000000000063 /* DuoyiWidgetPublicationStore.swift in Sources */,
+				F21000000000000000000011 /* DuoyiWidgetPublicationEnvelope.swift in Sources */,
+				F21000000000000000000012 /* DuoyiWidgetPublicationRow.swift in Sources */,
+				F21000000000000000000013 /* DuoyiWidgetPublicationRequest.swift in Sources */,
+				F21000000000000000000014 /* DuoyiWidgetPublicationTransition.swift in Sources */,
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
@@ -360,6 +428,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F210000000000000000000A2 /* DuoyiWidgetPublicationCapture.swift in Sources */,
+				F21000000000000000000071 /* DuoyiWidgetPublicationDatabase.swift in Sources */,
+				F21000000000000000000072 /* DuoyiWidgetPublicationLock.swift in Sources */,
+				F21000000000000000000073 /* DuoyiWidgetPublicationStore.swift in Sources */,
+				F21000000000000000000021 /* DuoyiWidgetPublicationEnvelope.swift in Sources */,
+				F21000000000000000000022 /* DuoyiWidgetPublicationRow.swift in Sources */,
+				F21000000000000000000023 /* DuoyiWidgetPublicationRequest.swift in Sources */,
+				F21000000000000000000024 /* DuoyiWidgetPublicationTransition.swift in Sources */,
 				E00000000000000000000005 /* DuoyiWidgets.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -468,6 +544,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.duoyi.duoyi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
+				SWIFT_INCLUDE_PATHS = ("$(inherited)", "$(SRCROOT)/WidgetPublicationShared/DuoyiWidgetStoreC", );
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -649,6 +726,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_INCLUDE_PATHS = ("$(inherited)", "$(SRCROOT)/WidgetPublicationShared/DuoyiWidgetStoreC", );
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -671,6 +749,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.duoyi.duoyi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
+				SWIFT_INCLUDE_PATHS = ("$(inherited)", "$(SRCROOT)/WidgetPublicationShared/DuoyiWidgetStoreC", );
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -698,6 +777,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_INCLUDE_PATHS = ("$(inherited)", "$(SRCROOT)/WidgetPublicationShared/DuoyiWidgetStoreC", );
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -724,6 +804,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.duoyi.duoyi.DuoyiWidgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = ("$(inherited)", "$(SRCROOT)/WidgetPublicationShared/DuoyiWidgetStoreC", );
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -750,6 +831,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.duoyi.duoyi.DuoyiWidgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = ("$(inherited)", "$(SRCROOT)/WidgetPublicationShared/DuoyiWidgetStoreC", );
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

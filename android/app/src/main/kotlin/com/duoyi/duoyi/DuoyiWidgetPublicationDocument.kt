@@ -63,6 +63,7 @@ class DuoyiWidgetPublicationDocument private constructor(
             "nav_habit" to ValueType.STRING,
             "nav_calendar" to ValueType.STRING,
             "nav_focus" to ValueType.STRING,
+            "widget_first_day_of_week" to ValueType.INT32,
             "todo_top3_count" to ValueType.INT32,
             "todo_top3_1" to ValueType.STRING,
             "todo_top3_1_id" to ValueType.STRING,
@@ -146,7 +147,8 @@ class DuoyiWidgetPublicationDocument private constructor(
         val valueKeys: Set<String> = Collections.unmodifiableSet(LinkedHashSet(valueTypes.keys))
 
         private fun businessKey(key: String): Boolean =
-            !key.startsWith("widget_theme_") && key != "brand_app_title" && !key.startsWith("nav_")
+            !key.startsWith("widget_theme_") && key != "widget_first_day_of_week" &&
+                key != "brand_app_title" && !key.startsWith("nav_")
 
         /** Input must be the same complete presentation snapshot, never a patch. */
         fun clearedValuesFrom(completeValues: Map<String, *>): Map<String, Any>? {
@@ -165,7 +167,7 @@ class DuoyiWidgetPublicationDocument private constructor(
             return Collections.unmodifiableMap(clean)
         }
 
-        fun tryFromMap(raw: Any?): DuoyiWidgetPublicationDocument? {
+        fun tryFromMap(raw: Any?, allowLegacyWeekStart: Boolean = false): DuoyiWidgetPublicationDocument? {
             if (raw !is Map<*, *> || raw.keys != documentKeys) return null
             if (exactInteger(raw["schemaVersion"]) != SCHEMA_VERSION.toLong()) return null
             val epoch = raw["ownerEpoch"] as? String ?: return null
@@ -183,10 +185,15 @@ class DuoyiWidgetPublicationDocument private constructor(
                 if (revision == 0L || !validDay(day)) return null
             } else if (day.isNotEmpty() || offset != 0L) return null
             val rawValues = raw["values"] as? Map<*, *> ?: return null
-            if (rawValues.keys != valueKeys) return null
+            // Upgrade only the exact stored original v1 manifest. New mutation
+            // requests retain the strict complete contract (default false).
+            val legacy = allowLegacyWeekStart &&
+                rawValues.keys == valueKeys - "widget_first_day_of_week"
+            if (rawValues.keys != valueKeys && !legacy) return null
             val values = LinkedHashMap<String, Any>()
             for ((key, type) in valueTypes) {
-                val parsed = parseValue(key, type, rawValues[key]) ?: return null
+                val input = if (legacy && key == "widget_first_day_of_week") 1 else rawValues[key]
+                val parsed = parseValue(key, type, input) ?: return null
                 if (state != State.PUBLISHED && businessKey(key)) {
                     val empty = when (type) {
                         ValueType.STRING -> parsed == ""
@@ -210,8 +217,16 @@ class DuoyiWidgetPublicationDocument private constructor(
             ValueType.INT64 -> nonnegativeExact(value)
             ValueType.INT32 -> {
                 val integer = exactInteger(value)
-                val minimum = if (key == "habit_active_count") -1L else 0L
-                val maximum = if (key == "habit_percent") 100L else Int.MAX_VALUE.toLong()
+                val minimum = when (key) {
+                    "habit_active_count" -> -1L
+                    "widget_first_day_of_week" -> 1L
+                    else -> 0L
+                }
+                val maximum = when (key) {
+                    "habit_percent" -> 100L
+                    "widget_first_day_of_week" -> 7L
+                    else -> Int.MAX_VALUE.toLong()
+                }
                 integer?.takeIf { it in minimum..maximum }?.toInt()
             }
         }

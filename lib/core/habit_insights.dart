@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import '../models/habit.dart';
 import 'habit_trend.dart';
 import 'i18n.dart';
@@ -149,12 +151,34 @@ final class HabitAttentionInsightText extends HabitInsightText {
 class HabitInsightEngine {
   const HabitInsightEngine._();
 
+  static const int _maxCacheEntries = 16;
+  static final LinkedHashMap<Object, List<HabitInsight>> _cache =
+      LinkedHashMap<Object, List<HabitInsight>>();
+
   static List<HabitInsight> buildInsights(
     Iterable<Habit> habits, {
     DateTime? today,
     HabitTrendWindow window = HabitTrendWindow.days30,
     int limit = 5,
   }) {
+    final anchor = today ?? DateTime.now();
+    final fingerprint = _habitsFingerprint(habits);
+    final cacheKey = (
+      anchor.year,
+      anchor.month,
+      anchor.day,
+      window,
+      limit,
+      fingerprint.$1,
+      fingerprint.$2,
+      fingerprint.$3,
+    );
+    final cached = _cache.remove(cacheKey);
+    if (cached != null) {
+      _cache[cacheKey] = cached;
+      return cached;
+    }
+
     final summaries = [
       for (final habit in habits)
         _HabitWithSummary(
@@ -162,7 +186,11 @@ class HabitInsightEngine {
           buildHabitTrendSummary(habit, window: window, today: today),
         ),
     ].where((item) => item.summary.activeDays > 0).toList(growable: false);
-    if (summaries.isEmpty) return const <HabitInsight>[];
+    if (summaries.isEmpty) {
+      const empty = <HabitInsight>[];
+      _putCache(cacheKey, empty);
+      return empty;
+    }
 
     final insights = <HabitInsight>[];
     insights.add(_overviewInsight(summaries, window));
@@ -171,7 +199,59 @@ class HabitInsightEngine {
     _bestStreak(summaries)?.let(insights.add);
     _needsAttention(summaries)?.let(insights.add);
 
-    return insights.take(limit).toList(growable: false);
+    final result = List<HabitInsight>.unmodifiable(insights.take(limit));
+    _putCache(cacheKey, result);
+    return result;
+  }
+
+  static void _putCache(Object key, List<HabitInsight> value) {
+    if (_cache.length >= _maxCacheEntries) {
+      _cache.remove(_cache.keys.first);
+    }
+    _cache[key] = value;
+  }
+
+  static (int, int, int) _habitsFingerprint(Iterable<Habit> habits) {
+    var count = 0;
+    var hashA = 0x811c9dc5;
+    var hashB = 0;
+    for (final habit in habits) {
+      count++;
+      var compHash = 0;
+      for (final entry in habit.completions.entries) {
+        compHash ^= Object.hash(entry.key, entry.value);
+      }
+      var frozenHash = 0;
+      for (final d in habit.frozenDates) {
+        frozenHash ^= d.hashCode;
+      }
+      var weekdaysHash = 0;
+      for (final w in habit.activeWeekdays) {
+        weekdaysHash = (weekdaysHash * 13 + w) & 0x3fffffff;
+      }
+      final itemHash = Object.hash(
+        habit.id,
+        habit.name,
+        habit.kind.index,
+        habit.targetCount,
+        habit.flexTarget ?? -1,
+        habit.flexPeriod?.index ?? -1,
+        habit.startDate?.millisecondsSinceEpoch ?? -1,
+        habit.endDate?.millisecondsSinceEpoch ?? -1,
+        habit.createdAt.millisecondsSinceEpoch,
+        habit.updatedAt.millisecondsSinceEpoch,
+        habit.currentStreak,
+        habit.bestStreak,
+        habit.completions.length,
+        compHash,
+        habit.frozenDates.length,
+        frozenHash,
+        weekdaysHash,
+      );
+      hashA = Object.hash(hashA, itemHash);
+      hashB = ((hashB * 31) ^ itemHash ^ (count * 0x9e3779b9)) & 0x3fffffff;
+    }
+    return (count, hashA, hashB);
   }
 
   static HabitInsight _overviewInsight(

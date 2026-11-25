@@ -157,6 +157,80 @@ void main() {
 
   group('WidgetLinkDispatch binding policy', () {
     test(
+      'external unbound writes cannot use reminder validation bypass',
+      () async {
+        for (final link in [
+          'duoyi://action/complete_todo?id=task',
+          'duoyi://action/checkin_habit?id=habit&source=notification',
+          'duoyi://action/start_pomodoro?trusted=true',
+          'duoyi://action/quick_todo?text=external%20write&source=internalNotification',
+        ]) {
+          var validations = 0;
+          final uri = Uri.parse(link);
+          expect(WidgetLinkDispatch.requiresBinding(uri), isTrue);
+          final result = await WidgetLinkDispatch.resolve(
+            uri,
+            hydrate: () async {},
+            validate: (_) async {
+              validations++;
+              return true;
+            },
+            isCurrent: () => true,
+          );
+          expect(result.uri, isNull, reason: link);
+          expect(result.stale, isTrue, reason: link);
+          expect(validations, 0, reason: link);
+        }
+      },
+    );
+
+    test(
+      'trusted internal notification action keeps its unbound target',
+      () async {
+        final uri = Uri.parse(
+          'duoyi://action/complete_todo?id=notification-task',
+        );
+        var validations = 0;
+        final result = await WidgetLinkDispatch.resolve(
+          uri,
+          origin: WidgetLinkOrigin.internalNotification,
+          hydrate: () async {},
+          validate: (_) async {
+            validations++;
+            return false;
+          },
+          isCurrent: () => true,
+        );
+        expect(result.uri, uri);
+        expect(result.stale, isFalse);
+        expect(validations, 0);
+      },
+    );
+
+    test(
+      'notification origin does not bypass a marked widget binding',
+      () async {
+        final uri = Uri.parse(
+          'duoyi://action/complete_todo?id=stale&source=widget',
+        );
+        var validations = 0;
+        final result = await WidgetLinkDispatch.resolve(
+          uri,
+          origin: WidgetLinkOrigin.internalNotification,
+          hydrate: () async {},
+          validate: (_) async {
+            validations++;
+            return false;
+          },
+          isCurrent: () => true,
+        );
+        expect(result.uri, isNull);
+        expect(result.stale, isTrue);
+        expect(validations, 1);
+      },
+    );
+
+    test(
       'legacy unbound entity link keeps its ID and bypasses validation',
       () async {
         final uri = Uri.parse('duoyi://todo/legacy-task?confirm=1');
@@ -231,9 +305,14 @@ void main() {
 
           expect(validationCalls, 1, reason: host);
           expect(validated, uri, reason: host);
+          final fallback = switch (host) {
+            'event' => 'calendar',
+            'pomodoro' => 'focus',
+            _ => host,
+          };
           expect(
             result.uri,
-            Uri(scheme: 'duoyi', host: host),
+            Uri(scheme: 'duoyi', host: fallback),
             reason: host,
           );
           expect(result.stale, isTrue, reason: host);

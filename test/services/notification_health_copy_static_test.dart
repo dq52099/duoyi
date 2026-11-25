@@ -14,6 +14,9 @@ void main() {
       final hint = File(
         'lib/widgets/reminder_health_hint.dart',
       ).readAsStringSync();
+      final copy = File(
+        'lib/core/notification_ui_copy.dart',
+      ).readAsStringSync();
       final checklist = File(
         'docs/manual-regression-checklist.md',
       ).readAsStringSync();
@@ -39,11 +42,26 @@ void main() {
       expect(service, isNot(contains('xiaomi_notification_policy')));
       expect(service, isNot(contains('小米通知策略')));
       expect(service, isNot(contains('后台、锁屏和电池策略')));
-      expect(card, contains('疑难设置入口'));
-      expect(card, contains('先按上方检查项逐项确认'));
-      expect(card, contains('测试强提醒铃声'));
-      expect(card, contains('验证闹钟提醒、内置铃声和通知停止按钮'));
+      expect(card, contains('NotificationUiCopy.troubleshootingSettingsTitle'));
+      expect(
+        card,
+        contains('NotificationUiCopy.troubleshootingSettingsSubtitle'),
+      );
+      expect(card, contains('NotificationUiCopy.strongTestTitle'));
+      expect(card, contains('NotificationUiCopy.strongTestSubtitle'));
       expect(card, contains('onSendStrongTest'));
+      expect(copy, contains("isEn ? 'Test strong reminder sound' : '测试强提醒铃声'"));
+      expect(
+        copy,
+        contains('Verify alarm reminders, built-in sounds, stop actions'),
+      );
+      expect(copy, contains('验证闹钟提醒、内置铃声和通知停止按钮'));
+      expect(copy, contains("isEn ? 'Troubleshooting settings' : '疑难设置入口'"));
+      expect(
+        copy,
+        contains('If the launcher cannot open vendor controls directly'),
+      );
+      expect(copy, contains('先按上方检查项逐项确认'));
       expect(
         File('lib/screens/notification_history_screen.dart').readAsStringSync(),
         contains('AlarmService.instance.showFullScreenTest()'),
@@ -78,7 +96,7 @@ void main() {
       expect(service, contains("title: '系统闹钟音量'"));
       expect(service, contains("title: '勿扰模式'"));
       expect(service, contains('通知音量为 0'));
-      expect(card, contains('系统闹钟音量和勿扰影响'));
+      expect(copy, contains('系统闹钟音量和勿扰影响'));
       expect(
         service,
         contains('NotificationSettings.notificationChannelStatuses'),
@@ -101,9 +119,12 @@ void main() {
         File('lib/screens/notification_history_screen.dart').readAsStringSync(),
         contains('_openSystemSettings([String? channelId])'),
       );
-      expect(hint, contains("actionLabel = '通知授权'"));
-      expect(hint, contains("actionLabel = '精准闹钟'"));
-      expect(hint, contains("actionLabel = '弹屏权限'"));
+      expect(hint, contains('NotificationUiCopy.notificationPermissionAction'));
+      expect(hint, contains('NotificationUiCopy.exactAlarmAction'));
+      expect(hint, contains('NotificationUiCopy.fullScreenAction'));
+      expect(copy, contains("isEn ? 'Notifications' : '通知授权'"));
+      expect(copy, contains("isEn ? 'Exact alarms' : '精准闹钟'"));
+      expect(copy, contains("isEn ? 'Full-screen alerts' : '弹屏权限'"));
       expect(hint, isNot(contains("actionLabel = '去授权'")));
     });
   });

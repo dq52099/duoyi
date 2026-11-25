@@ -14,13 +14,13 @@ void main() {
     expect(source, contains('_QuadrantDistributionCard'));
     expect(source, contains('_QuadrantDistributionRow'));
     expect(source, contains('_QuadrantMetric'));
-    expect(source, contains('四象限执行分布'));
-    expect(source, contains('当前待办池'));
-    expect(source, contains('按重要/紧急象限拆解未完成压力、今日到期和已完成沉淀。'));
-    expect(source, contains('未完成 \${stat.activeCount} 项'));
-    expect(source, contains('逾期 \${stat.overdueCount} 项'));
-    expect(source, contains('今日到期 \${stat.dueTodayCount} 项'));
-    expect(source, contains('完成 \${stat.completedCount} 项'));
+    expect(source, contains('.quadrantTitle'));
+    expect(source, contains('.quadrantSubtitle'));
+    expect(source, contains('.quadrantDescription'));
+    expect(source, contains('.quadrantRowSummary('));
+    expect(source, contains('.quadrantRowSummary('));
+    expect(source, contains('.quadrantRowSummary('));
+    expect(source, contains('.quadrantRowSummary('));
   });
 
   test('统计页四象限分析覆盖四类行动建议', () {
@@ -28,21 +28,21 @@ void main() {
       'lib/screens/statistics_screen.dart',
     ).readAsStringSync();
 
-    for (final text in [
-      '重要紧急',
-      '立即处理',
-      '重要不紧急',
-      '安排计划',
-      '紧急不重要',
-      '委派或限时',
-      '不重要不紧急',
-      '清理剔除',
-      '优先清空逾期和今天到期事项。',
-      '保持推进节奏，避免滚入紧急区。',
-      '用批量处理减少被打断时间。',
-      '定期归档，避免待办池膨胀。',
+    for (final property in [
+      'quadrantUrgentImportantLabel',
+      'quadrantUrgentImportantAction',
+      'quadrantNotUrgentImportantLabel',
+      'quadrantNotUrgentImportantAction',
+      'quadrantUrgentNotImportantLabel',
+      'quadrantUrgentNotImportantAction',
+      'quadrantNotUrgentNotImportantLabel',
+      'quadrantNotUrgentNotImportantAction',
+      'quadrantUrgentImportantGuidance',
+      'quadrantNotUrgentImportantGuidance',
+      'quadrantUrgentNotImportantGuidance',
+      'quadrantNotUrgentNotImportantGuidance',
     ]) {
-      expect(source, contains(text));
+      expect(source, contains('.$property'));
     }
   });
 }

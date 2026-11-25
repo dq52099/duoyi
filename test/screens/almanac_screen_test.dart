@@ -5,6 +5,7 @@ import 'package:duoyi/models/countdown.dart';
 import 'package:duoyi/providers/anniversary_provider.dart';
 import 'package:duoyi/providers/countdown_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -277,8 +278,33 @@ void main() {
     expect(clashDirectionText.style?.fontSize, clashText.style?.fontSize);
     expect(pengZuText.style?.height, greaterThan(fetalGodText.style!.height!));
     expect(pengZuText.style?.fontSize, mansionText.style?.fontSize);
-    expect(clashText.maxLines, 1);
-    expect(clashText.softWrap, isFalse);
+    final clashParagraph = tester.renderObject<RenderParagraph>(
+      find.descendant(
+        of: find.text('猴日冲虎（壬寅）'),
+        matching: find.byType(RichText),
+      ),
+    );
+    expect(clashParagraph.didExceedMaxLines, isFalse);
+    final clashBoxes = clashParagraph.getBoxesForSelection(
+      TextSelection(baseOffset: 0, extentOffset: clashText.data!.length),
+    );
+    expect(clashBoxes, isNotEmpty);
+    for (final box in clashBoxes) {
+      expect(
+        box.top,
+        closeTo(clashBoxes.first.top, .1),
+        reason:
+            'The full clash label still fits one natural line at normal size.',
+      );
+    }
+    expect(
+      clashParagraph.textSize.width,
+      lessThanOrEqualTo(clashParagraph.size.width + .1),
+    );
+    expect(
+      clashParagraph.textSize.height,
+      lessThanOrEqualTo(clashParagraph.size.height + .1),
+    );
 
     for (final branch in [
       '子',
@@ -373,65 +399,126 @@ void main() {
     expect(section, contains('class _VerticalYijiColumn'));
   });
 
-  test(
-    'almanac month highlights include holidays and local date providers',
-    () {
-      final source = File('lib/screens/almanac_screen.dart').readAsStringSync();
+  test('almanac month highlights include holidays and local date providers', () {
+    final source = File('lib/screens/almanac_screen.dart').readAsStringSync();
 
-      expect(source, contains("import '../services/holiday_calendar.dart';"));
-      expect(source, contains('context.watch<CountdownProvider?>()'));
-      expect(source, contains('context.watch<AnniversaryProvider?>()'));
-      expect(source, contains('LunarCalendar.almanacDetail(selectedDate)'));
-      expect(source, contains('final selectedDate = _date'));
-      expect(source, contains('final lunar = almanacDetail.lunarDate'));
-      expect(source, contains('class _MonthCalendar'));
-      expect(source, contains('class _SelectedDateSummaryCard'));
-      expect(source, contains('class _AlmanacDetailPage'));
-      expect(source, contains('class _ClassicalAlmanacCard'));
-      final monthCalendar = source.substring(
-        source.indexOf('class _MonthCalendar extends StatelessWidget'),
-        source.indexOf('class _MonthNavButton'),
+    expect(source, contains("import '../services/holiday_calendar.dart';"));
+    expect(source, contains('context.watch<CountdownProvider?>()'));
+    expect(source, contains('context.watch<AnniversaryProvider?>()'));
+    expect(source, contains('LunarCalendar.tryAlmanacDetail(selectedDate)'));
+    expect(source, contains('final selectedDate = _date'));
+    expect(
+      source,
+      contains(
+        'almanacDetail?.lunarDate ?? LunarCalendar.tryFromSolar(selectedDate)',
+      ),
+    );
+    expect(source, contains('class _MonthCalendar'));
+    expect(source, contains('class _SelectedDateSummaryCard'));
+    expect(source, contains('class _AlmanacDetailPage'));
+    expect(source, contains('class _ClassicalAlmanacCard'));
+    final monthCalendar = source.substring(
+      source.indexOf('class _MonthCalendar extends StatelessWidget'),
+      source.indexOf('class _MonthNavButton'),
+    );
+    expect(monthCalendar, isNot(contains('return AppSurfaceCard(')));
+    expect(source, contains('class _MonthNavButton'));
+    expect(source, contains('class _SoftAlmanacTag'));
+    expect(source, contains('Navigator.of(context).push<DateTime?>('));
+    expect(source, contains('PageView.builder'));
+    expect(source, contains('itemCount: _pageCount'));
+    expect(source, contains('DateTime _clampDate(DateTime value)'));
+    expect(source, contains('AlmanacUiCopy.dayCellSemanticLabel('));
+    expect(source, contains('Semantics('));
+    expect(source, contains('button: true'));
+    expect(source, contains('InkWell('));
+    expect(source, contains('_detailCache.putIfAbsent'));
+    expect(source, contains('onPageChanged: (page)'));
+    expect(source, isNot(contains('showModalBottomSheet<void>')));
+    final infoTableStart = source.indexOf(
+      'class _ClassicalInfoTable extends StatelessWidget',
+    );
+    final infoTableEnd = source.indexOf(
+      'class _ClassicalInfoCell extends StatelessWidget',
+    );
+    expect(infoTableStart, greaterThanOrEqualTo(0));
+    expect(infoTableEnd, greaterThan(infoTableStart));
+    final infoTable = source.substring(infoTableStart, infoTableEnd);
+    for (final (title, field) in <(String, String)>[
+      ('胎神', 'fetalGod'),
+      ('彭祖', 'pengZu'),
+      ('五行', 'fiveElements'),
+      ('星宿', 'mansion'),
+      ('冲煞', 'clash'),
+    ]) {
+      expect(
+        infoTable,
+        matches(
+          RegExp(
+            'final\\s+$field\\s*=\\s*detail\\?\\.$field\\s*'
+            '\\?\\?\\s*AlmanacUiCopy\\.unavailable\\s*;',
+          ),
+        ),
       );
-      expect(monthCalendar, isNot(contains('return AppSurfaceCard(')));
-      expect(source, contains('class _MonthNavButton'));
-      expect(source, contains('class _SoftAlmanacTag'));
-      expect(source, contains('Navigator.of(context).push<DateTime>('));
-      expect(source, contains('PageView.builder'));
-      expect(source, contains('itemCount: _pageCount'));
-      expect(source, contains('DateTime _clampDate(DateTime value)'));
+      expect(
+        infoTable,
+        matches(
+          RegExp(
+            "_ClassicalInfoCell\\(\\s*title:\\s*'$title'\\s*,\\s*"
+            'value:\\s*$field\\s*,?\\s*\\)',
+          ),
+        ),
+      );
+    }
+    expect(source, contains('class _ClassicalInfoTable'));
+    expect(source, contains('class _ClassicalHourRow'));
+    expect(source, contains('class _VerticalYijiPanel'));
+    expect(source, contains('class _MonthHighlightsCard'));
+    final copy = File('lib/core/almanac_ui_copy.dart').readAsStringSync();
+    for (final (member, english, chinese) in <(String, String, String)>[
+      ('monthHighlightsTitle', 'Monthly Highlights', '本月重点日期'),
+      ('monthHighlightsEmpty', 'No highlights this month', '本月暂无重点日期'),
+      ('holidayBadge', 'Public Holiday', '法定假日'),
+      ('makeupWorkdayBadge', 'Makeup Workday', '调休上班'),
+    ]) {
+      expect(source, contains('AlmanacUiCopy.$member'));
+      final englishLiteral = RegExp.escape("'$english'");
+      final chineseLiteral = RegExp.escape("'$chinese'");
+      expect(
+        copy,
+        matches(
+          RegExp(
+            'static\\s+String\\s+get\\s+$member\\s*=>\\s*'
+            'isEn\\s*\\?\\s*$englishLiteral\\s*:\\s*$chineseLiteral\\s*;',
+          ),
+        ),
+      );
+    }
+    for (final (member, english, chinese) in <(String, String, String)>[
+      ('countdownHighlight', r'Countdown · $title', r'倒数日 · $title'),
+      ('birthdayHighlight', r'Birthday · $title', r'生日 · $title'),
+      ('memorialHighlight', r'Anniversary · $title', r'纪念日 · $title'),
+    ]) {
       expect(
         source,
-        contains("label: '\${day.year}年\${day.month}月\$d日 \$dayLabel'"),
+        matches(
+          RegExp('AlmanacUiCopy\\.$member\\(\\s*item\\.title\\s*,?\\s*\\)'),
+        ),
       );
-      expect(source, contains('Semantics('));
-      expect(source, contains('button: true'));
-      expect(source, contains('InkWell('));
-      expect(source, contains('_detailCache.putIfAbsent'));
-      expect(source, contains('onPageChanged: (page)'));
-      expect(source, isNot(contains('showModalBottomSheet<void>')));
-      expect(source, contains("title: '胎神'"));
-      expect(source, contains('value: detail.fetalGod'));
-      expect(source, contains("title: '彭祖'"));
-      expect(source, contains('value: detail.pengZu'));
-      expect(source, contains("title: '五行'"));
-      expect(source, contains('value: detail.fiveElements'));
-      expect(source, contains("title: '星宿'"));
-      expect(source, contains('value: detail.mansion'));
-      expect(source, contains("title: '冲煞'"));
-      expect(source, contains('value: detail.clash'));
-      expect(source, contains('class _ClassicalInfoTable'));
-      expect(source, contains('class _ClassicalHourRow'));
-      expect(source, contains('class _VerticalYijiPanel'));
-      expect(source, contains('class _MonthHighlightsCard'));
-      expect(source, contains("'本月重点日期'"));
-      expect(source, contains("'本月暂无重点日期'"));
-      expect(source, contains("'法定假日'"));
-      expect(source, contains("'调休上班'"));
-      expect(source, contains(r"'倒数日 · ${item.title}'"));
-      expect(source, contains(r"'生日 · ${item.title}'"));
-      expect(source, contains(r"'纪念日 · ${item.title}'"));
-      expect(source, contains('HolidayCalendar.isHoliday(day)'));
-      expect(source, contains('HolidayCalendar.isWorkMakeupDay(day)'));
-    },
-  );
+      final englishLiteral = RegExp.escape("'$english'");
+      final chineseLiteral = RegExp.escape("'$chinese'");
+      expect(
+        copy,
+        matches(
+          RegExp(
+            'static\\s+String\\s+$member\\(\\s*String\\s+title\\s*,?\\s*'
+            '\\)\\s*=>\\s*isEn\\s*\\?\\s*$englishLiteral\\s*:\\s*'
+            '$chineseLiteral\\s*;',
+          ),
+        ),
+      );
+    }
+    expect(source, contains('HolidayCalendar.isHoliday(day)'));
+    expect(source, contains('HolidayCalendar.isWorkMakeupDay(day)'));
+  });
 }

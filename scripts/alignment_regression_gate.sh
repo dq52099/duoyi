@@ -10,6 +10,10 @@ SUMMARY_MD="$REPORT_DIR/summary.md"
 FAILURES=0
 
 cd "$ROOT_DIR"
+mkdir -p "$ROOT_DIR/evidence/priority-content-20261024"
+exec 9>>"$ROOT_DIR/evidence/priority-content-20261024/flutter-serial.lock"
+flock -n 9 || { echo 'Verification is already running.' >&2; exit 1; }
+"$PYTHON_BIN" "$ROOT_DIR/scripts/disk_budget.py" check --min-free-gib 25
 rm -rf "$REPORT_DIR"
 mkdir -p "$REPORT_DIR"
 printf 'group\tstatus\tduration_seconds\tlog\n' > "$SUMMARY_TSV"
@@ -28,15 +32,23 @@ run_group() {
   local status
   local exit_code=0
   local duration
+  local guard_args=(--lock-fd 9)
   shift
 
+  "$PYTHON_BIN" "$ROOT_DIR/scripts/disk_budget.py" check --min-free-gib 12
+  if [[ "$name" == '7/8 debug APK build' ]]; then
+    "$PYTHON_BIN" "$ROOT_DIR/scripts/disk_budget.py" check --min-free-gib 25
+    export GRADLE_USER_HOME="${GRADLE_USER_HOME:-/home/ubuntu/duoyi-gradle-cache-20261010}"
+    guard_args+=(--build)
+  fi
   slug="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '_' | sed -E 's/^_+|_+$//g')"
   log_file="$REPORT_DIR/${slug}.log"
   echo
   echo "== $name =="
   start="$(date +%s)"
   set +e
-  "$@" 2>&1 | tee "$log_file"
+  "$PYTHON_BIN" "$ROOT_DIR/scripts/resource_guard.py" "${guard_args[@]}" \
+    --report "$REPORT_DIR/${slug}.guard.json" -- "$@" 2>&1 | tee "$log_file"
   exit_code=${PIPESTATUS[0]}
   set -e
   duration=$(( $(date +%s) - start ))
@@ -57,19 +69,36 @@ run_group() {
 }
 
 run_group "1/8 404 and route contracts" \
-  "$FLUTTER_BIN" test \
+  "$FLUTTER_BIN" test --concurrency=1 --no-pub \
     test/screens/today_detail_router_test.dart \
     test/screens/today_detail_router_static_test.dart \
     test/services/api_route_contract_static_test.dart \
     test/services/api_client_error_test.dart
 
 run_group "2/8 style layout and readable selection" \
-  "$FLUTTER_BIN" test \
+  "$FLUTTER_BIN" test --concurrency=1 --no-pub \
     test/services/no_global_bold_static_test.dart \
     test/screens/style_layout_regression_static_test.dart \
+    test/screens/theme_shop_price_contrast_test.dart \
+    test/screens/diary_editor_account_boundary_test.dart \
+    test/screens/widget_theme_description_contrast_test.dart \
+    test/screens/diary_tag_hint_layout_test.dart \
+    test/screens/admin_mail_endpoint_layout_test.dart \
+    test/screens/admin_mail_provider_labels_test.dart \
+    test/screens/admin_navigation_selection_labels_test.dart \
+    test/screens/admin_settings_field_labels_test.dart \
+    test/screens/theme_widget_choice_targets_test.dart \
+    test/screens/hidden_widget_return_theme_test.dart \
+    test/widgets/calendar_diary_entry_priority_test.dart \
+    test/widgets/calendar_summary_theme_test.dart \
+    test/widgets/calendar_lunar_header_theme_test.dart \
+    test/widgets/calendar_untimed_surface_theme_test.dart \
+    test/widgets/sync_status_theme_layout_test.dart \
+    test/screens/sync_conflict_live_status_theme_test.dart \
     test/widgets/surface_secondary_control_static_test.dart \
     test/screens/almanac_screen_test.dart \
     test/screens/almanac_actions_static_test.dart \
+    test/screens/almanac_month_grid_theme_layout_test.dart \
     test/screens/countdown_screen_test.dart \
     test/screens/countdown_visibility_static_test.dart \
     test/services/backup_service_test.dart \
@@ -80,6 +109,8 @@ run_group "2/8 style layout and readable selection" \
     test/screens/habit_screen_test.dart \
     test/screens/habit_grouping_static_test.dart \
     test/screens/profile_screen_test.dart \
+    test/providers/focus_room_account_boundary_test.dart \
+    test/screens/focus_social_account_boundary_test.dart \
     test/screens/today_mine_static_test.dart \
     test/screens/today_mine_smoke_test.dart \
     test/providers/auth_provider_profile_static_test.dart \
@@ -89,7 +120,7 @@ run_group "2/8 style layout and readable selection" \
     test/services/admin_force_update_settings_test.dart
 
 run_group "3/8 notification ringtone and status progress" \
-  "$FLUTTER_BIN" test \
+  "$FLUTTER_BIN" test --concurrency=1 --no-pub \
     test/services/device_regression_script_static_test.dart \
     test/services/device_readiness_report_test.dart \
     test/services/device_evidence_validator_test.dart \
@@ -113,8 +144,10 @@ run_group "3/8 notification ringtone and status progress" \
     test/services/notification_today_progress_preferences_test.dart
 
 run_group "4/8 widgets Android and iOS static contracts" \
-  "$FLUTTER_BIN" test \
+  "$FLUTTER_BIN" test --concurrency=1 --no-pub \
+    test/providers/widget_theme_unknown_selection_test.dart \
     test/services/android_widget_resources_test.dart \
+    test/services/home_widget_push_queue_test.dart \
     test/services/ios_widget_resources_test.dart
 
 run_group "5/8 admin groups default coins and permissions" \

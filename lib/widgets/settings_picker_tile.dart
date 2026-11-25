@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
-import '../services/account_local_data_cleaner.dart';
+import '../services/settings_action_origin.dart';
 import 'surface_components.dart';
 
 /// Single option entry for [SettingsPickerTile].
@@ -42,6 +42,7 @@ class SettingsPickerTile<T> extends StatelessWidget {
   final ValueGetter<List<SettingsPickerOption<T>>> optionsBuilder;
   final FutureOr<void> Function(T) onSelected;
   final EdgeInsetsGeometry padding;
+  final SettingsActionOrigin? actionOrigin;
 
   const SettingsPickerTile({
     super.key,
@@ -55,10 +56,15 @@ class SettingsPickerTile<T> extends StatelessWidget {
     required this.optionsBuilder,
     required this.onSelected,
     this.padding = const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+    this.actionOrigin,
   });
 
-  Future<void> _showPicker(BuildContext context) async {
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+  Future<void> _showPicker(
+    BuildContext context,
+    SettingsActionOrigin origin,
+  ) async {
+    if (!context.mounted || !origin.isCurrent()) return;
+    ModalRoute<dynamic>? selectedSheet;
     final picked = await showAppModalSheet<T>(
       context: context,
       builder: (sheetContext) => ValueListenableBuilder<AppLocale>(
@@ -100,7 +106,20 @@ class SettingsPickerTile<T> extends StatelessWidget {
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: InkWell(
-                        onTap: () => Navigator.of(ctx).pop(opt.value),
+                        onTap: () {
+                          if (!ctx.mounted ||
+                              !origin.isCurrent(checkRoute: false)) {
+                            return;
+                          }
+                          final route = ModalRoute.of(ctx);
+                          if (route == null ||
+                              !route.isActive ||
+                              !route.isCurrent) {
+                            return;
+                          }
+                          selectedSheet = route;
+                          Navigator.of(ctx).pop(opt.value);
+                        },
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(minHeight: 44),
                           child: Padding(
@@ -135,9 +154,10 @@ class SettingsPickerTile<T> extends StatelessWidget {
                                               appSecondaryControlLabelStyle(
                                                 ctx,
                                               ).copyWith(
-                                                color: cs.onSurface.withValues(
-                                                  alpha: 0.62,
-                                                ),
+                                                color:
+                                                    appSecondaryDescriptionColor(
+                                                      ctx,
+                                                    ),
                                                 fontWeight: FontWeight.normal,
                                               ),
                                         ),
@@ -167,12 +187,8 @@ class SettingsPickerTile<T> extends StatelessWidget {
       ),
     );
 
-    if (!context.mounted) return;
-    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-      accountGeneration,
-    )) {
-      return;
-    }
+    await selectedSheet?.completed;
+    if (!origin.isCurrent()) return;
     if (picked != null) {
       final result = onSelected(picked);
       if (result is Future) {
@@ -183,6 +199,7 @@ class SettingsPickerTile<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final origin = actionOrigin ?? SettingsActionOrigin(context);
     return ValueListenableBuilder<AppLocale>(
       valueListenable: I18n.localeListenable,
       builder: (context, _, _) {
@@ -233,7 +250,7 @@ class SettingsPickerTile<T> extends StatelessWidget {
                     subtitle,
                     softWrap: true,
                     style: appSecondaryControlLabelStyle(context).copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.62),
+                      color: appSecondaryDescriptionColor(context),
                       fontWeight: FontWeight.normal,
                     ),
                   ),
@@ -285,7 +302,7 @@ class SettingsPickerTile<T> extends StatelessWidget {
             return Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () => _showPicker(context),
+                onTap: () => _showPicker(context, origin),
                 borderRadius: controlBorderRadius,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 44),

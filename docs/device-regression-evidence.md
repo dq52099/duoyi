@@ -4,7 +4,13 @@ The full alignment gate is `scripts/alignment_regression_gate.sh`. The first sev
 
 Before collecting device evidence, run `scripts/generate_device_readiness_report.sh` and `scripts/validate_device_readiness_report.sh`. They write `build/device-readiness/latest` and record host architecture, whether Flutter detects Android/iOS runtimes, whether adb sees a device, whether Android Emulator/AVD/system images/KVM are available and launchable on this host, and whether the host can collect iOS evidence. This readiness report explains missing external prerequisites; it does not replace Android or iOS evidence.
 
+Both readiness and runtime discovery parse `flutter devices --machine` through `scripts/flutter_device_platform.py`. Detection reads the JSON `targetPlatform` field, accepts Flutter's formatted or compact output and rejects malformed/non-list JSON; platform words in device names do not establish a mobile runtime. Synthetic discovery tests prove routing only and cannot mark device evidence passed.
+
+For a named evidence batch, set `EVIDENCE_DIR` when calling `scripts/device_regression_check.sh`. The combined command treats it as the batch root and sends Android collection and validation to its `android/` subdirectory, and iOS collection and validation to its `ios/` subdirectory. `ANDROID_EVIDENCE_DIR` and `IOS_EVIDENCE_DIR` can override these paths independently. Direct calls to either platform collector still use `EVIDENCE_DIR` as that collector's output directory.
+
 ## Android Evidence
+
+The [Android widget validation guide](android-widget-validation.md) distinguishes Flutter previews, default JVM contracts, explicit host JNI/POSIX/SQLite checks and actual Android APIs. In particular, the default JVM jar cannot execute `Os.lstat`; its four StoreAdmission failures must not be hidden by default null returns or treated as platform acceptance. The separate [current build and quality report](../evidence/android-debug-current-20261023/summary.md) records actual analyzer/backend/APK outcomes without closing this device section.
 
 Run `scripts/device_regression_check.sh` with an attached Android phone or emulator. When Android is detected, it calls `scripts/android_device_evidence.sh` and writes evidence to `build/device-regression/android`.
 After collection, `scripts/validate_device_evidence.sh android` must pass.

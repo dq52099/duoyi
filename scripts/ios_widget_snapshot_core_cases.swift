@@ -862,4 +862,30 @@ snapshotRunCase("dated Calendar targets become stale when daylight-saving offset
                    "dated Calendar target is withheld after the published offset becomes stale")
 }
 
+snapshotRunCase("local event and focus session details stay bound through native receipt and ACK") {
+    let calendar = snapshotGregorianCalendar(snapshotTimeZone("UTC"))
+    let capturedAt = snapshotLocalDate(2026, 4, 5, hour: 12, calendar: calendar)
+    let staleAt = snapshotLocalDate(2026, 4, 6, hour: 12, calendar: calendar)
+    let snapshot = DuoyiWidgetSnapshot(values: snapshotValues())
+    let unpublished = DuoyiWidgetSnapshot(values: snapshotValues(nonce: ""))
+    var sequence = 0
+    let buffer = DuoyiWidgetLaunchBuffer(nextID: { sequence += 1; return "object-tap-\(sequence)" })
+    for host in ["event", "pomodoro"] {
+        let components = URLComponents(string: "duoyi://\(host)/%20object%2F%E6%B5%8B%E8%AF%95%20")!
+        let bound = snapshot.actionURL(components, at: capturedAt, calendar: calendar)
+        snapshotAssertBindings(bound, day: "2026-04-05", offset: 0, nonce: "snapshot-nonce", context: host)
+        snapshotExpect(snapshot.actionURL(components, at: staleAt, calendar: calendar) == nil, "expired object snapshot rejects")
+        snapshotExpect(unpublished.actionURL(components, at: capturedAt, calendar: calendar) == nil, "unpublished object snapshot rejects")
+        let delivery = buffer.receive(url: bound!).delivery
+        snapshotExpect(delivery != nil, "new object host enters launch queue")
+        let received = URLComponents(string: delivery!.uri)!
+        snapshotExpect(received.host == host && received.percentEncodedPath == components.percentEncodedPath, "native queue retains one encoded identity")
+        let query = received.queryItems!
+        snapshotExpect(query.filter { $0.name == "widget_account" }.first?.value == "snapshot-nonce", "queue retains originating owner")
+        snapshotExpect(query.filter { $0.name == "widget_delivery" }.first?.value == delivery!.id, "queue assigns receipt identity")
+        buffer.acknowledge(delivery!.id)
+        snapshotExpect(buffer.snapshot().isEmpty, "terminal ACK consumes only this receipt")
+    }
+}
+
 print("PASS: all production-extracted snapshot and launch core cases")

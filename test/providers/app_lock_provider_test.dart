@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:duoyi/providers/app_lock_provider.dart';
@@ -64,4 +65,58 @@ void main() {
     final i18n = File('lib/core/i18n.dart').readAsStringSync();
     expect(i18n, contains("'app_lock.pin_invalid': '需要 4-8 位数字'"));
   });
+
+  for (final transition in ['relock', 'change PIN', 'reload', 'dispose']) {
+    test('pending verification cannot unlock after $transition', () async {
+      final provider = _HeldVerificationLock();
+      await provider.setPin('246813');
+      provider.lock();
+      final pending = provider.unlockWith('246813');
+      expect(provider.verifyCalls, 1);
+
+      switch (transition) {
+        case 'relock':
+          provider.lock();
+        case 'change PIN':
+          await provider.setPin('135790');
+          provider.lock();
+        case 'reload':
+          await provider.loadFromStorage();
+        case 'dispose':
+          provider.dispose();
+      }
+      provider.verification.complete(true);
+      await pending;
+      expect(provider.isLocked, isTrue);
+      if (transition != 'dispose') provider.dispose();
+    });
+  }
+
+  test(
+    'pending verification requires its initiating screen to remain current',
+    () async {
+      final provider = _HeldVerificationLock();
+      addTearDown(provider.dispose);
+      await provider.setPin('246813');
+      provider.lock();
+      var current = true;
+      final pending = provider.unlockWith('246813', isCurrent: () => current);
+      current = false;
+      provider.verification.complete(true);
+      await pending;
+      expect(provider.isLocked, isTrue);
+      expect(provider.verifyCalls, 1);
+    },
+  );
+}
+
+class _HeldVerificationLock extends AppLockProvider {
+  final verification = Completer<bool>();
+  int verifyCalls = 0;
+
+  @override
+  Future<bool> verify(String pin) {
+    verifyCalls++;
+    return verification.future;
+  }
 }

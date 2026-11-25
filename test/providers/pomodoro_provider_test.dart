@@ -7,6 +7,7 @@ import 'package:duoyi/providers/pomodoro_provider.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -124,8 +125,8 @@ void main() {
     expect(provider, contains('_previewWhiteNoiseSound(normalized)'));
     expect(provider, contains('Future<bool> _previewWhiteNoiseSound'));
     expect(provider, contains('Future<bool> _syncSoundToState()'));
-    expect(provider, contains('return _sound.preview(sound)'));
-    expect(provider, contains('Future<bool> _playFocusSound(String sound)'));
+    expect(provider, contains('final started = await _sound.preview(sound);'));
+    expect(provider, contains('Future<bool> _playFocusSound('));
     expect(provider, contains('_state.isRunning'));
     final setter = provider.substring(
       provider.indexOf(
@@ -140,14 +141,28 @@ void main() {
     );
     expect(
       setter,
-      contains('_config.whiteNoiseSound = FocusSoundCatalog.none;'),
+      contains(
+        'guard: () => _isCurrentConfigReceipt(receipt) && ownsEffect(),',
+      ),
+    );
+    expect(
+      setter,
+      isNot(contains('_config.whiteNoiseSound = FocusSoundCatalog.none;')),
     );
     expect(setter, isNot(contains('return _playFocusSound(normalized);')));
     expect(
       provider,
-      contains('await _sound.setVolume(_config.focusSoundVolume)'),
+      contains(
+        'return _playFocusSound(sound, volume: volume, isCurrent: ownsEffect);',
+      ),
     );
-    expect(provider, contains('return _sound.play(sound)'));
+    expect(provider, contains('Future<bool> _playFocusSound('));
+    expect(provider, contains('required bool Function() isCurrent,'));
+    expect(provider, contains('return isCurrent() && started;'));
+    expect(provider, contains('if (!isCurrent()) return false;'));
+    expect(provider, contains('await _sound.setVolume(volume);'));
+    expect(provider, contains('final started = await _sound.play(sound);'));
+    expect(provider, contains('return ownsEffect() && started;'));
 
     final service = File(
       'lib/services/focus_sound_service.dart',
@@ -180,11 +195,20 @@ void main() {
     );
     expect(screen, contains('ChoiceChip('));
     expect(screen, contains('.setFocusSoundVolume(value)'));
-    expect(screen, contains('点击声音会自动试听，也可以先点试听确认音量。'));
+    final copy = File('lib/core/focus_room_ui_copy.dart').readAsStringSync();
+    expect(screen, contains('FocusRoomUiCopy.soundPreviewHint(locale)'));
+    expect(screen, contains('FocusRoomUiCopy.soundVolumePreviewFailed('));
+    expect(screen, contains('FocusRoomUiCopy.previewAudioTooltip(locale)'));
     expect(screen, contains('final VoidCallback? onPreview;'));
-    expect(screen, contains("tooltip: '试听'"));
     expect(screen, contains('onPreview: () async'));
-    expect(screen, contains('专注声音试听启动失败，请检查系统音量或音频资源'));
+    expect(
+      copy,
+      contains(
+        'Tap a sound to preview automatically, or test volume beforehand.',
+      ),
+    );
+    expect(copy, contains('点击声音会自动试听，也可以先点试听确认音量。'));
+    expect(copy, contains("isEn(locale) ? 'Preview' : '试听'"));
   });
 
   test('goal focus noise choices preview and report failures', () {
@@ -223,7 +247,11 @@ void main() {
     expect(editor, contains('FocusSoundService.instance.stop()'));
     expect(editor, contains('provider.config.focusSoundVolume'));
     expect(editor, contains('FocusSoundService.instance.preview(value)'));
-    expect(editor, contains('专注声音预览启动失败'));
+    expect(
+      editor,
+      contains('FocusRoomUiCopy.soundPreviewFailed(I18n.current)'),
+    );
+    expect(editor, isNot(contains('专注声音预览启动失败')));
     expect(editor, contains('previewSound(value ?? FocusSoundCatalog.none)'));
     expect(editor, isNot(contains('provider.setWhiteNoiseSound(')));
   });
@@ -260,19 +288,72 @@ void main() {
   });
 
   test(
-    'strict focus switch notifies before async persistence completes',
+    'strict focus publishes only after config persistence is confirmed',
     () async {
+      final store = _ConfigStore();
+      SharedPreferencesStorePlatform.instance = store;
       final provider = PomodoroProvider();
+      addTearDown(() async {
+        if (!store.configRelease.isCompleted) store.configRelease.complete();
+        provider.dispose();
+        await provider.waitForSnapshotWrites();
+      });
       var notifications = 0;
       provider.addListener(() => notifications++);
+      final revision = provider.persistedRevision;
+      store.holdNextConfig = true;
 
-      final future = provider.setStrictFocusMode(true);
+      final saving = provider.setStrictFocusMode(true);
+      await store.configStarted.future;
+
+      expect(provider.config.strictFocusMode, isFalse);
+      expect(provider.persistedRevision, revision);
+      expect(notifications, 0);
+
+      store.configRelease.complete();
+      await saving;
 
       expect(provider.config.strictFocusMode, isTrue);
+      expect(provider.persistedRevision, revision + 1);
       expect(notifications, 1);
+    },
+  );
 
-      await future;
-      provider.dispose();
+  test(
+    'rejected strict focus save preserves config and paused timer state',
+    () async {
+      final store = _ConfigStore();
+      SharedPreferencesStorePlatform.instance = store;
+      final provider = PomodoroProvider();
+      addTearDown(() async {
+        if (!store.configRelease.isCompleted) store.configRelease.complete();
+        provider.dispose();
+        await provider.waitForSnapshotWrites();
+      });
+      await provider.setConfig(PomodoroConfig(focusDuration: 1500));
+      provider.startIfIdle();
+      await provider.waitForSnapshotWrites();
+      provider.toggleTimer();
+      await provider.waitForSnapshotWrites();
+
+      final before = provider.state;
+      final anchor = provider.focusTimerEndsAtMillis;
+      final revision = provider.persistedRevision;
+      store.rejectNextConfig = true;
+      await expectLater(
+        provider.setStrictFocusMode(true),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(provider.config.strictFocusMode, isFalse);
+      expect(provider.persistedRevision, revision);
+      expect(provider.state.totalSeconds, before.totalSeconds);
+      expect(provider.state.remainingSeconds, before.remainingSeconds);
+      expect(provider.state.isRunning, before.isRunning);
+      expect(provider.focusTimerEndsAtMillis, anchor);
+      final prefs = await SharedPreferences.getInstance();
+      final stored = jsonDecode(prefs.getString('pomodoro_config')!) as Map;
+      expect(stored['strictFocusMode'], isFalse);
     },
   );
 
@@ -920,4 +1001,31 @@ void main() {
       });
     });
   });
+}
+
+class _ConfigStore extends InMemorySharedPreferencesStore {
+  _ConfigStore() : super.withData(<String, Object>{});
+
+  bool holdNextConfig = false;
+  bool rejectNextConfig = false;
+  final configStarted = Completer<void>();
+  final configRelease = Completer<void>();
+
+  @override
+  Future<bool> setValue(String type, String key, Object value) async {
+    if (key != 'flutter.pomodoro_config') {
+      return super.setValue(type, key, value);
+    }
+    if (holdNextConfig) {
+      holdNextConfig = false;
+      configStarted.complete();
+      await configRelease.future;
+    }
+    final result = await super.setValue(type, key, value);
+    if (rejectNextConfig) {
+      rejectNextConfig = false;
+      return false;
+    }
+    return result;
+  }
 }

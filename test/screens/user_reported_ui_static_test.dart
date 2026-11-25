@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('用户反馈 UI 静态回归', () {
-    test('黄历宜忌条目在列内容区内缩放，避免 6 月 28 日宜项溢出', () {
+    test('黄历宜忌条目在列内容区保留自然字号，避免 6 月 28 日宜项溢出', () {
       final source = File('lib/screens/almanac_screen.dart').readAsStringSync();
       final panel = _sourceBlock(
         source,
@@ -23,8 +23,8 @@ void main() {
         contains(').take(_visibleTermLimit).toList(growable: false)'),
       );
       expect(column, contains('Expanded('));
-      expect(column, contains('FittedBox('));
-      expect(column, contains('fit: BoxFit.scaleDown'));
+      expect(column, isNot(contains('FittedBox(')));
+      expect(column, isNot(contains('fit: BoxFit.scaleDown')));
       expect(
         column,
         contains("ValueKey('almanac_vertical_\${keyName}_terms_box')"),
@@ -101,7 +101,17 @@ void main() {
       expect(stableGrid, contains("ValueKey('mine_stats_stable_grid')"));
       expect(stableGrid, contains('SizedBox('));
       expect(stableGrid, contains('final baseHeight = compact ? 70.0 : 64.0'));
-      expect(stableGrid, contains('height: rowHeight'));
+      expect(
+        stableGrid,
+        contains('constraints: BoxConstraints(minHeight: baseHeight)'),
+      );
+      expect(stableGrid, contains('IntrinsicHeight('));
+      expect(
+        stableGrid,
+        contains('crossAxisAlignment: CrossAxisAlignment.stretch'),
+      );
+      expect(stableGrid, contains('MediaQuery.textScalerOf(context)'));
+      expect(stableGrid, contains('.clamp(1, compact ? 2 : 4)'));
       expect(stableGrid, contains('Row('));
       expect(stableGrid, isNot(contains('shrinkWrap: true')));
       expect(stableGrid, isNot(contains('NeverScrollableScrollPhysics')));

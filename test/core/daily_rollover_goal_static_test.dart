@@ -10,6 +10,9 @@ void main() {
         'lib/core/completion_visibility_policy.dart',
       ).readAsStringSync();
       final main = File('lib/main.dart').readAsStringSync();
+      final coordinator = File(
+        'lib/services/auto_archive_coordinator.dart',
+      ).readAsStringSync();
 
       expect(policy, contains('materializeTodayFromRecurring'));
       expect(policy, contains('已由冷启动和 `AppLifecycleState.resumed` 跨天路径传入'));
@@ -28,9 +31,12 @@ void main() {
       final startupBlock = main.substring(startup, startupEnd);
       expect(
         startupBlock,
-        contains('CompletionVisibilityPolicy.runDailyRollover'),
+        contains('autoArchiveCoordinator.request(recurringGoals: true)'),
       );
-      expect(startupBlock, contains('goalProvider: goalProvider'));
+      expect(
+        startupBlock,
+        isNot(contains('CompletionVisibilityPolicy.runDailyRollover(')),
+      );
       expect(startupBlock, contains('refreshUserStatsNow();'));
       expect(startupBlock, contains('refreshAchievements();'));
       expect(startupBlock, contains("reason: 'daily rollover completed'"));
@@ -46,15 +52,20 @@ void main() {
       expect(resume, greaterThanOrEqualTo(0));
       expect(resumeEnd, greaterThan(resume));
       final resumeBlock = main.substring(resume, resumeEnd);
+      expect(resumeBlock, contains('_autoArchiveCoordinator?.onResume()'));
       expect(
         resumeBlock,
-        contains('final goalProv = Provider.of<GoalProvider>'),
+        isNot(contains('CompletionVisibilityPolicy.runDailyRollover(')),
       );
       expect(
-        resumeBlock,
-        contains('CompletionVisibilityPolicy.runDailyRollover'),
+        coordinator,
+        contains('CompletionVisibilityPolicy.runRecurringGoalRollover('),
       );
-      expect(resumeBlock, contains('goalProvider: goalProv'));
+      expect(coordinator, contains('completedDays: days'));
+      expect(
+        main,
+        contains('autoArchiveCoordinator.resumeAfterAccountPreflightFailure()'),
+      );
     },
   );
 }

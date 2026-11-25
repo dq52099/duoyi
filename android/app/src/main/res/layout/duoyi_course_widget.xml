@@ -34,6 +34,7 @@
         android:visibility="gone" />
 
     <LinearLayout
+        android:id="@+id/widget_course_content"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
@@ -53,7 +54,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:text="多仪"
-            android:textColor="#FF6B6B"
+            android:textColor="#0066D6"
             android:textSize="14sp" />
 
         <TextView
@@ -119,7 +120,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:text="14:30 团队例会"
-            android:textColor="#1E88E5"
+            android:textColor="#0066D6"
             android:textSize="11sp"
             android:visibility="gone" />
     </LinearLayout>
@@ -127,7 +128,8 @@
     <LinearLayout
         android:id="@+id/widget_course_bottom_nav"
         android:layout_width="match_parent"
-        android:layout_height="30dp"
+        android:layout_height="wrap_content"
+        android:minHeight="30dp"
         android:layout_marginTop="8dp"
         android:background="@drawable/widget_nav_bg"
         android:gravity="center"
@@ -140,7 +142,8 @@
         <TextView
             android:id="@+id/widget_course_nav_todo"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
             android:layout_weight="1"
             android:gravity="center"
             android:ellipsize="end"
@@ -152,7 +155,8 @@
         <TextView
             android:id="@+id/widget_course_nav_habit"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
             android:layout_weight="1"
             android:gravity="center"
             android:ellipsize="end"
@@ -164,19 +168,21 @@
         <TextView
             android:id="@+id/widget_course_nav_calendar"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
             android:layout_weight="1"
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
             android:text="@string/widget_tab_calendar"
-            android:textColor="#1E88E5"
+            android:textColor="#0066D6"
             android:textSize="10sp" />
 
         <TextView
             android:id="@+id/widget_course_nav_focus"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
             android:layout_weight="1"
             android:gravity="center"
             android:ellipsize="end"

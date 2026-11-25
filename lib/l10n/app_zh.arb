@@ -97,8 +97,9 @@
   "preferencesNotificationStatusBarDisabled": "通知栏入口已关闭",
   "preferencesNotificationStatusBarSyncFailed": "通知栏同步失败，已恢复原设置。请检查系统通知权限和通知渠道。",
   "preferencesShowCompletedTitle": "待办页显示已完成",
-  "preferencesShowCompletedSubtitle": "关闭后只看未完成和进行中的事项",
+  "preferencesShowCompletedSubtitle": "默认列表显示已完成事项；关闭后仍可通过“已完成”或“包含归档”查看",
   "preferencesPomodoroLengthTitle": "默认番茄钟长度",
+  "preferencesPomodoroLengthSubtitle": "选择“默认”时生效，当前计时保持不变",
   "preferencesSectionBottomNav": "底部导航栏",
   "preferencesSectionBottomNavSubtitle": "底部导航最多显示 5 个入口；我的固定显示，小组件可隐藏",
   "preferencesSectionInteraction": "交互",
@@ -126,6 +127,11 @@
   "preferencesNotifyPendingCleared": "已取消全部待调度提醒",
   "preferencesNotifyOpenSettingsFailed": "无法打开系统设置",
   "preferencesRingtoneSection": "内置提醒铃声",
+  "preferencesReportReminderDailyTime": "每日复盘推送时间",
+  "preferencesReportReminderWeeklyTime": "周报推送时间",
+  "preferencesReportReminderMonthlyTime": "月报推送时间",
+  "preferencesReportReminderYearlyTime": "年报推送时间",
+  "preferencesReportReminderTimeSubtitle": "修改后会重排下一次报告通知",
   "preferencesRingtoneSectionSubtitle": "用于 HyperOS 等默认静音通知场景",
   "preferencesRingtoneSectionSubtitleAndroid": "Android 使用应用内置铃声服务，适配 HyperOS 等默认静音通知场景",
   "preferencesRingtoneSectionSubtitleApple": "iOS/macOS 使用系统通知声音和 time-sensitive 强提醒，不显示仅 Android 生效的内置铃声选择",
@@ -146,6 +152,9 @@
   "preferencesDailyReminderTime": "提醒时间",
   "preferencesDailyReminderTimeSubtitle": "到点发送带声音和震动的提醒",
   "preferencesDailyReminderTimeSuffix": "时间",
+  "preferencesDailyReminder1Time": "提醒一时间",
+  "preferencesDailyReminder2Time": "提醒二时间",
+  "preferencesDailyReminder3Time": "提醒三时间",
   "preferencesDailyReminderTimePickerSubtitle": "设置提醒触发时间",
   "preferencesDailyReminderKindTitle": "提醒方式",
   "preferencesDailyReminderKindPushDescription": "系统通知栏提醒",
@@ -420,6 +429,7 @@
   "noteUnpin": "取消置顶",
   "noteArchive": "归档",
   "noteRestore": "恢复",
+  "noteActionFailed": "操作失败，内容未变更，请重试",
   "noteLinkPlaceholder": "链接文字",
   "noteAttachmentPickFile": "从系统文件选择",
   "noteAttachmentPickFileSubtitle": "图片、PDF、文档等都会作为附件保存",
@@ -627,7 +637,10 @@
   "diarySummaryStreak": "连续",
   "diaryRecentTitle": "最近日记",
   "diaryRecentRecordsSuffix": " 篇记录",
+  "diaryRecentRecordsSuffixSingular": " 篇记录",
   "diaryEntryCountSuffix": " 篇",
+  "diaryEntryCountSuffixSingular": " 篇",
+  "diaryStreakDaySingular": "天",
   "diaryMoodStatsTitle": "近 30 天心情分布",
   "diaryNoData": "暂无数据",
   "diaryAiInsights": "AI 日记洞察",
@@ -924,6 +937,7 @@
   "habitWeekday5": "五",
   "habitWeekday6": "六",
   "habitWeekday7": "日",
+  "habitGroupUngrouped": "未分组",
   "habitGroupTodaySuffix": " 今日达标",
   "habitGroupMoreHabitsPrefix": "还有 ",
   "habitGroupMoreHabitsSuffix": " 个习惯，请进入今日打卡或习惯详情查看",
@@ -1033,7 +1047,18 @@
   "calendarContentDatePickerSubtitle": "手动跳转到指定日期",
   "calendarContentDatePickerTitle": "选择日期",
   "calendarContentTimePickerStartTime": "开始时间",
+  "calendarPickerStartDate": "开始日期",
+  "calendarPickerEndDate": "结束日期",
+  "calendarPickerStartTime": "开始时间",
+  "calendarPickerEndTime": "结束时间",
+  "calendarPickerRescheduleDate": "调整日期",
+  "calendarPickerAdjustStartTime": "调整开始时间",
+  "calendarPickerAdjustStartTimeSubtitle": "保留当前日期和时长，自动更新结束时间",
+  "calendarPickerAdjustDueTime": "调整时间",
+  "calendarPickerAdjustDueTimeSubtitle": "保留当前日期，只调整当天截止时间",
   "pickerActionToday": "今天",
+  "pickerEmpty": "暂无可选项",
+  "pickerNotSet": "未设置",
   "pickerDateIgnoreYear": "忽略年份",
   "pickerDateIgnoreYearDesc": "适合生日、纪念日每年重复",
   "pickerDateNextMonth": "下个月",
@@ -1058,5 +1083,1213 @@
   "pickerWeekdayTue": "二",
   "pickerWeekdayWed": "三",
   "widgetHabitNoneToday": "今天没有安排习惯",
-  "widgetHabitView": "查看习惯"
+  "widgetHabitView": "查看习惯",
+  "aiScheduleScreenTitle": "AI 创建日程",
+  "aiScheduleAiDisabledTitle": "AI 未启用",
+  "aiScheduleAiDisabledMessage": "将使用本地时间解析生成草稿，仍可确认创建日程或待办。",
+  "aiScheduleInputTitle": "输入安排",
+  "aiScheduleInputSubtitle": "例如：明天下午 3 点和产品开会，提前提醒我",
+  "aiScheduleInputHint": "输入自然语言安排、待办或提醒",
+  "aiScheduleEmptyInput": "请输入要创建的日程或待办内容",
+  "aiScheduleRecognize": "识别并生成确认信息",
+  "aiScheduleRecognizing": "识别中",
+  "aiScheduleErrorTitle": "AI 创建失败",
+  "aiScheduleDraftTitle": "已生成确认草稿",
+  "aiScheduleDraftAiMessage": "请核对类型、标题、时间和提醒设置。",
+  "aiScheduleDraftFallbackMessage": "当前不是完整 AI 识别结果，请确认本地兜底草稿无误后再写入。",
+  "aiScheduleWarningAiIncomplete": "AI 识别结果不完整",
+  "aiScheduleWarningLocalFallback": "AI 识别未完成",
+  "aiScheduleWarningAppendix": "请核对下方本地草稿后再确认创建。",
+  "aiScheduleConfirmCardTitle": "确认创建内容",
+  "aiScheduleTypeLabel": "类型",
+  "aiScheduleTitleLabel": "标题",
+  "aiScheduleStartLabel": "开始",
+  "aiScheduleEndLabel": "结束",
+  "aiScheduleReminderLabel": "提醒",
+  "aiScheduleNotesLabel": "备注",
+  "aiScheduleSubtasksLabel": "子任务",
+  "aiScheduleCalendarType": "日程",
+  "aiScheduleTodoType": "待办",
+  "aiScheduleReminderEnabled": "已开启系统推送提醒",
+  "aiScheduleReminderDisabled": "未设置提醒",
+  "aiScheduleSaving": "保存中",
+  "aiScheduleCreate": "确认创建",
+  "aiScheduleDone": "完成",
+  "aiScheduleViewDetails": "查看详情",
+  "aiScheduleCreatedEvent": "日程已创建",
+  "aiScheduleCreatedTask": "待办已创建",
+  "aiScheduleCreatedEventWithReminderIssue": "日程已创建，但提醒未注册",
+  "aiScheduleCreatedTaskWithReminderIssue": "待办已创建，但提醒未注册",
+  "aiScheduleCreatedItemSummary": "{typeLabel}：{title}",
+  "@aiScheduleCreatedItemSummary": {
+    "description": "Created item summary",
+    "placeholders": {
+      "typeLabel": {
+        "type": "String"
+      },
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "aiScheduleStartSummaryCalendar": "开始时间：{value}",
+  "@aiScheduleStartSummaryCalendar": {
+    "description": "Start summary for calendar event",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "aiScheduleStartSummaryTodo": "计划时间：{value}",
+  "@aiScheduleStartSummaryTodo": {
+    "description": "Start summary for todo task",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "aiScheduleLocalSaved": "已保存到本机",
+  "aiScheduleLocalSavedCalendar": "日程已保存到本机",
+  "aiScheduleLocalSavedTodo": "待办已保存到本机",
+  "aiScheduleReminderRegistered": "提醒已注册到系统通知",
+  "aiScheduleTaskReminderSubmitted": "待办提醒已提交系统注册",
+  "aiScheduleGenericReminderIssue": "提醒未注册",
+  "aiScheduleAccountChanged": "账号已切换，请重新打开页面后再操作。",
+  "aiScheduleInputChanged": "输入内容已变更，请重新识别后再创建。",
+  "aiScheduleGenericSaveFailed": "保存失败，请重试。",
+  "aiScheduleAlarmPermissionRequired": "AI 待办提醒注册失败：系统通知权限未开启，闹钟提醒未注册。请开启通知权限后重新保存提醒。",
+  "aiScheduleEventReminderIssueTitle": "AI 日程提醒注册失败",
+  "aiScheduleTaskReminderIssueTitle": "AI 待办提醒注册失败",
+  "aiScheduleCalendarSubtitle": "AI 创建",
+  "aiScheduleCalendarSubtitleAllDay": "AI 创建 · 全天",
+  "aiScheduleCalendarReminderTitle": "日程提醒",
+  "aiScheduleSourceAi": "AI 已识别输入内容，请确认无误后创建",
+  "aiScheduleSourceAiWithLocalFallback": "AI 返回不完整，已用本地解析补全",
+  "aiScheduleSourceLocalParser": "当前使用本地解析结果，请确认时间和类型",
+  "aiScheduleWarningReminderNotice": "提醒提示",
+  "aiScheduleWarningNotice": "提示",
+  "aiScheduleWarningUnavailable": "AI 服务暂不可用，已准备本地兜底草稿。",
+  "aiScheduleWarningNoUsableDraft": "AI 未返回可用草稿，已准备本地兜底草稿。",
+  "aiScheduleWarningInvalidResponse": "AI 返回内容无法读取，已准备本地兜底草稿。",
+  "aiScheduleWarningMissingReminderTime": "未识别到具体提醒时间，提醒已关闭。",
+  "aiScheduleWarningReviewDraft": "请核对草稿内容后再确认创建。",
+  "aiScheduleWarningGenericFallback": "已准备本地草稿供你核对。",
+  "aiScheduleErrorNotEnabled": "AI 功能未启用，请联系管理员。",
+  "aiScheduleErrorQuotaExceeded": "今日 AI 额度已用尽，请明日再试。",
+  "aiScheduleErrorRateLimit": "请求过于频繁，请稍候重试。",
+  "aiScheduleErrorTimeout": "AI 服务响应超时，请稍后重试。",
+  "aiScheduleErrorGeneric": "创建草稿失败，请重试。",
+  "widgetHostSupportIosTitle": "从主屏幕添加小组件",
+  "widgetHostSupportWebTitle": "网页版小组件预览",
+  "widgetHostSupportMobileTitle": "手机端小组件预览",
+  "widgetHostSupportIosMessage": "在主屏幕长按空白处，打开小组件图库，搜索“多仪”并添加。",
+  "widgetHostSupportMobileMessage": "这里可以查看小组件样式；添加到主屏幕需使用 Android 或 iOS 版多仪。",
+  "widgetHostAddIosAction": "查看添加步骤",
+  "widgetHostAddMobileAction": "手机端使用方式",
+  "widgetHostHelpMobileTitle": "在手机端使用小组件",
+  "widgetAddDialogTitle": "添加到桌面",
+  "widgetHostHelpIosMessage": "长按主屏幕空白处，点击“编辑”或“+”，进入小组件图库。搜索“多仪”，选择尺寸后点击“添加小组件”。系统提供小、中、大尺寸；支持的 iPad 还可选择超大尺寸。实际尺寸以系统图库为准。\n\niPhone（iOS 16 及以上）或 iPad（iPadOS 17 及以上）：长按锁定屏幕，点“自定”，再点小组件区域并选择多仪。",
+  "widgetHostHelpMobileMessage": "本页展示小组件样式预览。要在手机主屏幕使用，请安装并打开 Android 或 iOS 版多仪。Android 可从 App 内添加，或长按主屏幕空白处选择小组件；iOS 请从主屏幕的小组件图库搜索“多仪”并添加。",
+  "widgetHostTipsIosMessage": "实际尺寸在系统小组件图库中选择。小组件显示最近同步的内容；若内容较旧，打开多仪后刷新。",
+  "widgetHostTipsPreviewMessage": "这里的预览不等同于已添加的桌面小组件。实际添加与使用需在 Android 或 iOS 手机端完成。",
+  "widgetTipsBannerMessage": "紧凑版和详细版为固定尺寸；标准版在桌面支持时可长按调整大小。要更换尺寸版本，请移除后重新添加。添加时需在系统弹窗中确认；若未出现弹窗，请检查多仪的桌面小组件权限。",
+  "widgetHostStyleCompactDescription": "紧凑样式，突出核心信息。",
+  "widgetHostStyleDetailedDescription": "详细样式，展示更多内容。",
+  "widgetHostStyleStandardDescription": "标准样式，平衡信息与留白。",
+  "widgetHostStyleDescriptionIos": "{description} 实际尺寸在系统图库中选择。",
+  "@widgetHostStyleDescriptionIos": {
+    "description": "hostStyleDescription / ios 外层",
+    "placeholders": {
+      "description": {
+        "type": "String",
+        "example": "Standard balances information and space."
+      }
+    }
+  },
+  "widgetStyleSyncSuccess": "小组件样式已设为{modeLabel}。",
+  "@widgetStyleSyncSuccess": {
+    "description": "styleSyncSuccess / —; hostStyleSyncSuccess / ios；android委托styleSyncSuccess",
+    "placeholders": {
+      "modeLabel": {
+        "type": "String",
+        "example": "Custom label"
+      }
+    }
+  },
+  "widgetPreviewStyleSyncSuccess": "预览样式已设为{modeLabel}。",
+  "@widgetPreviewStyleSyncSuccess": {
+    "description": "hostStyleSyncSuccess / web/desktop",
+    "placeholders": {
+      "modeLabel": {
+        "type": "String",
+        "example": "Custom label"
+      }
+    }
+  },
+  "widgetRefreshTooltip": "刷新小组件",
+  "widgetPreviewHeaderTitle": "桌面小组件预览",
+  "widgetStylePanelTitle": "小组件样式",
+  "widgetCategoryAll": "全部",
+  "widgetCategoryProductivity": "效率",
+  "widgetCategoryLife": "生活",
+  "widgetCatalogTodoTitle": "今日待办",
+  "widgetCatalogCalendarTitle": "月历",
+  "widgetCatalogScheduleTitle": "今日日程",
+  "widgetCatalogGoalTitle": "目标",
+  "widgetCatalogNoteTitle": "随手记",
+  "widgetCatalogAnniversaryTitle": "纪念日",
+  "widgetCatalogTodoSubtitle": "桌面查看与完成待办，支持快速记一笔",
+  "widgetCatalogFocusSubtitle": "展示今日专注次数、时长与下一轮计划",
+  "widgetCatalogHabitSubtitle": "查看今日完成率、连续记录与快捷打卡",
+  "widgetCatalogCalendarSubtitle": "月视图概览与今日标记",
+  "widgetCatalogScheduleSubtitle": "查看今日按时间排序的日程安排",
+  "widgetCatalogGoalSubtitle": "展示当前目标与推进进度",
+  "widgetCatalogCourseSubtitle": "展示今日课程节次、教室与时间",
+  "widgetCatalogNoteSubtitle": "查看最近更新的便签与随手记",
+  "widgetCatalogAnniversarySubtitle": "倒数重要日子与累计天数",
+  "widgetCatalogDiarySubtitle": "回顾最近记录的心情与日记摘要",
+  "widgetDisplayModeCompactLabel": "紧凑",
+  "widgetDisplayModeDetailedLabel": "详细",
+  "widgetDisplayModeStandardLabel": "标准",
+  "widgetDisplayModeCompactDescription": "紧凑版，固定尺寸，突出核心信息",
+  "widgetDisplayModeDetailedDescription": "详细版，固定尺寸，内容随可用空间调整",
+  "widgetDisplayModeStandardDescription": "标准版，内容随可用空间调整；桌面支持时可长按调整大小",
+  "widgetStyleSyncFailed": "桌面小组件样式同步失败，请重试",
+  "widgetCannotOpenSettings": "无法打开应用设置，请手动进入系统设置检查多仪权限",
+  "widgetRefreshSuccess": "小组件已刷新",
+  "widgetRefreshFailed": "刷新失败，请稍后重试",
+  "widgetPinSupportCheckingTitle": "正在检查桌面小组件支持",
+  "widgetPinSupportCheckingMessage": "正在检测当前桌面是否支持直接添加小组件。",
+  "widgetPinSupportSupportedTitle": "当前桌面支持应用内添加",
+  "widgetPinSupportSupportedMessage": "可从 App 添加到桌面，请在系统弹窗中确认。",
+  "widgetPinSupportUnsupportedPlatformTitle": "当前平台不支持应用内添加",
+  "widgetPinSupportUnsupportedLauncherTitle": "当前桌面不支持应用内添加",
+  "widgetPinSupportPermissionDeniedTitle": "桌面添加权限未通过",
+  "widgetPinSupportConfirmationBlockedTitle": "桌面确认弹窗可能被拦截",
+  "widgetPinSupportInvalidKindTitle": "当前小组件类型不可添加",
+  "widgetPinSupportFallbackTitle": "当前桌面可能不支持应用内添加",
+  "widgetPinSupportUnsupportedPlatformMessage": "请在 Android 手机上通过系统小组件列表添加多仪。",
+  "widgetPinSupportUnsupportedLauncherMessage": "当前桌面启动器未开放应用内添加，请从系统小组件列表选择添加。",
+  "widgetPinSupportPermissionDeniedMessage": "系统未允许多仪添加桌面小组件，请在系统设置中开启权限后重试。",
+  "widgetPinSupportConfirmationBlockedMessage": "桌面确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。",
+  "widgetPinSupportInvalidKindMessage": "请更新应用后重试。",
+  "widgetPinSupportFallbackMessage": "若未弹出确认框，请打开系统设置检查桌面小组件与后台弹窗权限，或从系统小组件列表添加。",
+  "widgetActionAppSettings": "应用设置",
+  "widgetActionRecheck": "重新检测",
+  "widgetActionOpenPermissions": "打开权限设置",
+  "widgetActionGotIt": "知道了",
+  "widgetPinHelpUnsupportedMessage": "当前桌面不支持应用内直接添加小组件。请长按桌面空白处，从系统小组件列表添加。",
+  "widgetPinHelpUnsupportedPlatformMessage": "当前平台不支持直接添加 Android 桌面小组件。请在 Android 手机上从系统小组件列表添加多仪。",
+  "widgetPinHelpUnsupportedLauncherMessage": "当前桌面启动器未开放应用内添加，请长按桌面空白处从系统小组件列表添加。",
+  "widgetPinHelpPermissionDeniedMessage": "系统未允许多仪添加桌面小组件。请在系统设置中开启权限后重试，或从系统小组件列表添加。",
+  "widgetPinHelpConfirmationBlockedMessage": "系统确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。",
+  "widgetPinHelpInvalidKindMessage": "当前小组件类型暂不支持添加，请更新应用后重试。",
+  "widgetPinHelpUnavailableMessage": "无法发起添加请求，请检查桌面权限后重试，或从系统小组件列表添加。",
+  "widgetPinHelpRequestedMessage": "已发起添加请求，请在桌面系统弹窗中确认。",
+  "widgetPinConfirmationInvalidWidgetIdTitle": "添加未完成",
+  "widgetPinConfirmationInvalidWidgetIdMessage": "桌面未成功创建小组件，请重试或从系统小组件列表添加。",
+  "widgetPinConfirmationTimeoutTitle": "等待桌面确认",
+  "widgetPinConfirmationTimeoutMessage": "已发起添加请求，但尚未收到系统确认。请查看桌面是否有确认弹窗，或在系统设置中检查权限。",
+  "widgetPinConfirmationUnavailableTitle": "添加异常",
+  "widgetPinConfirmationUnavailableMessage": "桌面未返回添加结果。请重试或从系统小组件列表添加。",
+  "widgetPinConfirmationSuccessTitle": "已添加",
+  "widgetPinConfirmationSuccessMessage": "桌面小组件已添加。",
+  "widgetCheckingDesktopSupport": "正在检查桌面支持",
+  "widgetPinDisabledAndroidOnly": "仅 Android 支持应用内添加",
+  "widgetPinDisabledPicker": "请从系统小组件列表添加",
+  "widgetPinDisabledHelp": "查看添加帮助",
+  "widgetLoadingStyle": "正在读取样式",
+  "widgetStyleLoadFailed": "样式读取失败，请重试或重新选择",
+  "widgetStyleSyncPending": "已保存所选样式，桌面小组件尚未确认同步。请重试或刷新。",
+  "widgetUpdatingStyle": "正在更新样式",
+  "widgetRequestingAdd": "正在请求添加",
+  "widgetAddWidgetButtonLabel": "添加{modeLabel} {launcherRequestLabel}",
+  "@widgetAddWidgetButtonLabel": {
+    "description": "addWidgetButtonLabel / —",
+    "placeholders": {
+      "modeLabel": {
+        "type": "String",
+        "example": "Custom label"
+      },
+      "launcherRequestLabel": {
+        "type": "String",
+        "example": "request label"
+      }
+    }
+  },
+  "widgetPinInitiatedSnackBar": "已发起添加，请在系统弹窗中确认添加{modeLabel}小组件。",
+  "@widgetPinInitiatedSnackBar": {
+    "description": "pinInitiatedSnackBar / —",
+    "placeholders": {
+      "modeLabel": {
+        "type": "String",
+        "example": "Custom label"
+      }
+    }
+  },
+  "widgetPinSuccessSnackBar": "已添加{modeLabel}小组件到桌面。",
+  "@widgetPinSuccessSnackBar": {
+    "description": "pinSuccessSnackBar / —",
+    "placeholders": {
+      "modeLabel": {
+        "type": "String",
+        "example": "Custom label"
+      }
+    }
+  },
+  "widgetTipsBannerTitle": "桌面小组件使用提示",
+  "widgetDesktopWebTitle": "电脑网页版显示日历",
+  "widgetDesktopWebMessage": "桌面小组件依赖 Android 或 iOS 系统；电脑网页版默认隐藏小组件入口，保留月历预览和日历入口。",
+  "widgetDesktopWebTileSubtitle": "电脑网页版默认展示日历，不显示添加桌面小组件按钮",
+  "widgetDesktopWebOpenCalendar": "打开日历",
+  "widgetPreviewTodoTitle": "今日待办",
+  "widgetPreviewScheduleTitle": "今日日程",
+  "widgetPreviewSampleBadge": "示例 · {title}",
+  "@widgetPreviewSampleBadge": {
+    "description": "previewSampleBadge / —",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Raw title"
+      }
+    }
+  },
+  "widgetSampleHeaderDate": "{cellLabel} · {monthLabel}/{day}",
+  "@widgetSampleHeaderDate": {
+    "description": "sampleHeaderDate / date ?? 2026-05-17",
+    "placeholders": {
+      "cellLabel": {
+        "type": "String",
+        "example": "Sample"
+      },
+      "monthLabel": {
+        "type": "String",
+        "example": "Dec"
+      },
+      "day": {
+        "type": "String",
+        "example": "3"
+      }
+    }
+  },
+  "widgetRefreshPreviewTooltip": "刷新预览",
+  "widgetCalendarMonthHeader": "{yearText}年{monthLabel}月",
+  "@widgetCalendarMonthHeader": {
+    "description": "calendarMonthHeader / 整数转为原始十进制字符串",
+    "placeholders": {
+      "yearText": {
+        "type": "String",
+        "example": "2026"
+      },
+      "monthLabel": {
+        "type": "String",
+        "example": "Dec"
+      }
+    }
+  },
+  "widgetTodoItem1": "整理今日计划",
+  "widgetTodoItem2": "项目方案复盘",
+  "widgetTodoItem3": "晚间运动 30 分钟",
+  "widgetTodoSummaryCount": "今日待办 · 3 项",
+  "widgetTodoQuickAdd": "+ 记一笔",
+  "widgetFocusMetricSessions": "今日专注",
+  "widgetFocusMetricDuration": "时长(分)",
+  "widgetFocusMetricNext": "下一轮(分)",
+  "widgetFocusTimerUnit": "分钟",
+  "widgetFocusStartButton": "开始 25 分钟专注",
+  "widgetFocusLine1": "今日专注 2 次 · 深度工作 50 分钟",
+  "widgetFocusLine2": "下一轮：25 分钟专注",
+  "widgetFocusLine3": "点击开始专注",
+  "widgetHabitTitle": "今日习惯",
+  "widgetCalendarCurrentDate": "5月17日 · 周日",
+  "widgetCalendarCurrentDay": "5月17日",
+  "widgetHabitLine1": "· 晚间拉伸 · 今日待打卡",
+  "widgetHabitLine2": "· 连续记录 5 天",
+  "widgetHabitCheckInButton": "打卡：晚间拉伸",
+  "widgetScheduleItem1": "09:00 今日计划 · 到点提醒",
+  "widgetScheduleItem2": "14:30 团队例会",
+  "widgetScheduleItem3": "19:00 晚间复盘",
+  "widgetGoalItem1": "发版准备 · 68%",
+  "widgetGoalItem2": "本周运动 3/5 次",
+  "widgetGoalItem3": "晚间复盘 · 今日待推进",
+  "widgetCourseItem1": "第 1-2 节 高等数学 · 教 203",
+  "widgetCourseItem2": "第 3-4 节 产品设计 · 线上",
+  "widgetCourseItem3": "第 5-6 节 英语 · 教 305",
+  "widgetNoteItem1": "会议纪要",
+  "widgetNoteItem2": "灵感清单",
+  "widgetNoteItem3": "读书摘录",
+  "widgetAnniversaryItem1": "相识纪念日 · 还有 6 天",
+  "widgetAnniversaryItem2": "入职周年 · 还有 18 天",
+  "widgetAnniversaryItem3": "旅行纪念 · 还有 32 天",
+  "widgetDiaryItem1": "5/17 今天完成了专注复盘",
+  "widgetDiaryItem2": "5/16 记录一次散步",
+  "widgetDiaryItem3": "5/15 睡前整理心情",
+  "widgetCalendarMonthJan": "1",
+  "widgetCalendarMonthFeb": "2",
+  "widgetCalendarMonthMar": "3",
+  "widgetCalendarMonthApr": "4",
+  "widgetCalendarMonthMay": "5",
+  "widgetCalendarMonthJun": "6",
+  "widgetCalendarMonthJul": "7",
+  "widgetCalendarMonthAug": "8",
+  "widgetCalendarMonthSep": "9",
+  "widgetCalendarMonthOct": "10",
+  "widgetCalendarMonthNov": "11",
+  "widgetCalendarMonthDec": "12",
+  "dataSettingsThemeSaveFailed": "主题保存失败",
+  "@dataSettingsThemeSaveFailed": {
+    "description": "Theme and widget appearance: themeSaveFailed."
+  },
+  "dataSettingsRewardShopReason": "奖励商店主题装饰",
+  "@dataSettingsRewardShopReason": {
+    "description": "Theme and widget appearance: rewardShopReason."
+  },
+  "dataSettingsRedeemThemeTitle": "兑换主题：{name}",
+  "@dataSettingsRedeemThemeTitle": {
+    "description": "Theme and widget appearance: redeemThemeTitle.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsRedeemFocusBackdropTitle": "兑换专注背景：{name}",
+  "@dataSettingsRedeemFocusBackdropTitle": {
+    "description": "Theme and widget appearance: redeemFocusBackdropTitle.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsRedeemAvatarFrameTitle": "兑换头像框：{name}",
+  "@dataSettingsRedeemAvatarFrameTitle": {
+    "description": "Theme and widget appearance: redeemAvatarFrameTitle.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsRedeemCardSkinTitle": "兑换卡片皮肤：{name}",
+  "@dataSettingsRedeemCardSkinTitle": {
+    "description": "Theme and widget appearance: redeemCardSkinTitle.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsInsufficientCoins": "时光币不足，还差 {diff}",
+  "@dataSettingsInsufficientCoins": {
+    "description": "Theme and widget appearance: insufficientCoins.",
+    "placeholders": {
+      "diff": {
+        "type": "int"
+      }
+    }
+  },
+  "dataSettingsThemeApplied": "已启用 {name}",
+  "@dataSettingsThemeApplied": {
+    "description": "Theme and widget appearance: themeApplied.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsThemeRedeemedAndApplied": "已兑换并启用 {name}",
+  "@dataSettingsThemeRedeemedAndApplied": {
+    "description": "Theme and widget appearance: themeRedeemedAndApplied.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsWidgetBackgroundSwitched": "小组件背景已切换为 {label}",
+  "@dataSettingsWidgetBackgroundSwitched": {
+    "description": "Theme and widget appearance: widgetBackgroundSwitched.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsUnlockThemeFirst": "请先解锁该主题",
+  "@dataSettingsUnlockThemeFirst": {
+    "description": "Theme and widget appearance: unlockThemeFirst."
+  },
+  "dataSettingsWidgetCardSkinSwitched": "小组件卡片皮肤已切换为 {label}",
+  "@dataSettingsWidgetCardSkinSwitched": {
+    "description": "Theme and widget appearance: widgetCardSkinSwitched.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "dataSettingsUnlockCardSkinFirst": "请先解锁该卡片皮肤",
+  "@dataSettingsUnlockCardSkinFirst": {
+    "description": "Theme and widget appearance: unlockCardSkinFirst."
+  },
+  "dataSettingsWidgetFollowCurrentTheme": "跟随当前主题",
+  "@dataSettingsWidgetFollowCurrentTheme": {
+    "description": "Theme and widget appearance: widgetFollowCurrentTheme."
+  },
+  "dataSettingsWidgetFollowCardSkin": "跟随卡片皮肤",
+  "@dataSettingsWidgetFollowCardSkin": {
+    "description": "Theme and widget appearance: widgetFollowCardSkin."
+  },
+  "dataSettingsWidgetThemeTitle": "桌面小组件主题",
+  "@dataSettingsWidgetThemeTitle": {
+    "description": "Theme and widget appearance: widgetThemeTitle."
+  },
+  "dataSettingsWidgetThemeSubtitle": "单独调整桌面小组件背景和卡片皮肤",
+  "@dataSettingsWidgetThemeSubtitle": {
+    "description": "Theme and widget appearance: widgetThemeSubtitle."
+  },
+  "dataSettingsWidgetBackgroundLabel": "背景图",
+  "@dataSettingsWidgetBackgroundLabel": {
+    "description": "Theme and widget appearance: widgetBackgroundLabel."
+  },
+  "dataSettingsWidgetCardSkinLabel": "卡片皮肤",
+  "@dataSettingsWidgetCardSkinLabel": {
+    "description": "Theme and widget appearance: widgetCardSkinLabel."
+  },
+  "dataSettingsCoinCount": "时光币 {count}",
+  "@dataSettingsCoinCount": {
+    "description": "Theme and widget appearance: coinCount.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataSettingsCoinCost": "{cost} 币",
+  "@dataSettingsCoinCost": {
+    "description": "Theme and widget appearance: coinCost.",
+    "placeholders": {
+      "cost": {
+        "type": "int"
+      }
+    }
+  },
+  "dataSettingsFocusBackdropSectionTitle": "专注背景",
+  "@dataSettingsFocusBackdropSectionTitle": {
+    "description": "Theme and widget appearance: focusBackdropSectionTitle."
+  },
+  "dataSettingsFocusBackdropSectionSubtitle": "用时光币兑换番茄钟卡片装饰",
+  "@dataSettingsFocusBackdropSectionSubtitle": {
+    "description": "Theme and widget appearance: focusBackdropSectionSubtitle."
+  },
+  "dataSettingsAvatarFrameSectionTitle": "头像框",
+  "@dataSettingsAvatarFrameSectionTitle": {
+    "description": "Theme and widget appearance: avatarFrameSectionTitle."
+  },
+  "dataSettingsAvatarFrameSectionSubtitle": "用时光币兑换我的页头像装饰",
+  "@dataSettingsAvatarFrameSectionSubtitle": {
+    "description": "Theme and widget appearance: avatarFrameSectionSubtitle."
+  },
+  "dataSettingsCardSkinSectionTitle": "卡片皮肤",
+  "@dataSettingsCardSkinSectionTitle": {
+    "description": "Theme and widget appearance: cardSkinSectionTitle."
+  },
+  "dataSettingsCardSkinSectionSubtitle": "用时光币兑换信息卡片质感",
+  "@dataSettingsCardSkinSectionSubtitle": {
+    "description": "Theme and widget appearance: cardSkinSectionSubtitle."
+  },
+  "dataSettingsWidgetSyncNoticeTitle": "小组件主题",
+  "@dataSettingsWidgetSyncNoticeTitle": {
+    "description": "Theme and widget appearance: widgetSyncNoticeTitle."
+  },
+  "dataSettingsWidgetSyncNoticeSubtitle": "背景图和卡片皮肤会同步到手机桌面小组件",
+  "@dataSettingsWidgetSyncNoticeSubtitle": {
+    "description": "Theme and widget appearance: widgetSyncNoticeSubtitle."
+  },
+  "dataSettingsFocusBackdropClassicName": "经典专注",
+  "@dataSettingsFocusBackdropClassicName": {
+    "description": "Built-in reward display name for stable ID classic_focus."
+  },
+  "dataSettingsFocusBackdropMorningName": "晨光书桌",
+  "@dataSettingsFocusBackdropMorningName": {
+    "description": "Built-in reward display name for stable ID morning_focus."
+  },
+  "dataSettingsFocusBackdropForestName": "林间深呼吸",
+  "@dataSettingsFocusBackdropForestName": {
+    "description": "Built-in reward display name for stable ID forest_focus."
+  },
+  "dataSettingsFocusBackdropOceanName": "海岸静流",
+  "@dataSettingsFocusBackdropOceanName": {
+    "description": "Built-in reward display name for stable ID ocean_focus."
+  },
+  "dataSettingsFocusBackdropNightName": "夜航模式",
+  "@dataSettingsFocusBackdropNightName": {
+    "description": "Built-in reward display name for stable ID night_focus."
+  },
+  "dataSettingsFocusBackdropClassicDescription": "简洁的番茄钟渐变背景",
+  "@dataSettingsFocusBackdropClassicDescription": {
+    "description": "Built-in reward display description for stable ID classic_focus."
+  },
+  "dataSettingsFocusBackdropMorningDescription": "适合清晨阅读和学习的暖色背景",
+  "@dataSettingsFocusBackdropMorningDescription": {
+    "description": "Built-in reward display description for stable ID morning_focus."
+  },
+  "dataSettingsFocusBackdropForestDescription": "适合长时间深度工作的自然绿色背景",
+  "@dataSettingsFocusBackdropForestDescription": {
+    "description": "Built-in reward display description for stable ID forest_focus."
+  },
+  "dataSettingsFocusBackdropOceanDescription": "适合复盘、写作和低压专注的蓝绿色背景",
+  "@dataSettingsFocusBackdropOceanDescription": {
+    "description": "Built-in reward display description for stable ID ocean_focus."
+  },
+  "dataSettingsFocusBackdropNightDescription": "适合夜间学习的低亮度深色背景",
+  "@dataSettingsFocusBackdropNightDescription": {
+    "description": "Built-in reward display description for stable ID night_focus."
+  },
+  "dataSettingsAvatarFrameSimpleName": "简洁头像",
+  "@dataSettingsAvatarFrameSimpleName": {
+    "description": "Built-in reward display name for stable ID simple_frame."
+  },
+  "dataSettingsAvatarFrameGoldenName": "金色勋章框",
+  "@dataSettingsAvatarFrameGoldenName": {
+    "description": "Built-in reward display name for stable ID golden_frame."
+  },
+  "dataSettingsAvatarFrameForestName": "绿叶守护框",
+  "@dataSettingsAvatarFrameForestName": {
+    "description": "Built-in reward display name for stable ID forest_frame."
+  },
+  "dataSettingsAvatarFrameAuroraName": "极光能量框",
+  "@dataSettingsAvatarFrameAuroraName": {
+    "description": "Built-in reward display name for stable ID aurora_frame."
+  },
+  "dataSettingsAvatarFrameSimpleDescription": "默认头像样式",
+  "@dataSettingsAvatarFrameSimpleDescription": {
+    "description": "Built-in reward display description for stable ID simple_frame."
+  },
+  "dataSettingsAvatarFrameGoldenDescription": "适合成就达人展示的金色头像框",
+  "@dataSettingsAvatarFrameGoldenDescription": {
+    "description": "Built-in reward display description for stable ID golden_frame."
+  },
+  "dataSettingsAvatarFrameForestDescription": "适合习惯连续打卡的自然头像框",
+  "@dataSettingsAvatarFrameForestDescription": {
+    "description": "Built-in reward display description for stable ID forest_frame."
+  },
+  "dataSettingsAvatarFrameAuroraDescription": "适合高效专注周的流光头像框",
+  "@dataSettingsAvatarFrameAuroraDescription": {
+    "description": "Built-in reward display description for stable ID aurora_frame."
+  },
+  "dataSettingsCardSkinPlainName": "素净卡片",
+  "@dataSettingsCardSkinPlainName": {
+    "description": "Built-in reward display name for stable ID plain_card."
+  },
+  "dataSettingsCardSkinPaperName": "纸感计划卡",
+  "@dataSettingsCardSkinPaperName": {
+    "description": "Built-in reward display name for stable ID paper_card."
+  },
+  "dataSettingsCardSkinMintName": "薄荷清单卡",
+  "@dataSettingsCardSkinMintName": {
+    "description": "Built-in reward display name for stable ID mint_card."
+  },
+  "dataSettingsCardSkinStarlightName": "星光玻璃卡",
+  "@dataSettingsCardSkinStarlightName": {
+    "description": "Built-in reward display name for stable ID starlight_card."
+  },
+  "dataSettingsCardSkinPlainDescription": "默认信息卡片样式",
+  "@dataSettingsCardSkinPlainDescription": {
+    "description": "Built-in reward display description for stable ID plain_card."
+  },
+  "dataSettingsCardSkinPaperDescription": "适合日程和待办整理的柔和纸感",
+  "@dataSettingsCardSkinPaperDescription": {
+    "description": "Built-in reward display description for stable ID paper_card."
+  },
+  "dataSettingsCardSkinMintDescription": "适合习惯和专注记录的清爽卡片",
+  "@dataSettingsCardSkinMintDescription": {
+    "description": "Built-in reward display description for stable ID mint_card."
+  },
+  "dataSettingsCardSkinStarlightDescription": "适合夜间复盘的低亮度玻璃质感",
+  "@dataSettingsCardSkinStarlightDescription": {
+    "description": "Built-in reward display description for stable ID starlight_card."
+  },
+  "settingsUiSaveFailed": "设置未保存，请重试。",
+  "@settingsUiSaveFailed": {
+    "description": "Settings presentation copy: saveFailed"
+  },
+  "settingsUiDecreaseValue": "减少",
+  "@settingsUiDecreaseValue": {
+    "description": "Settings presentation copy: decreaseValue"
+  },
+  "settingsUiIncreaseValue": "增加",
+  "@settingsUiIncreaseValue": {
+    "description": "Settings presentation copy: increaseValue"
+  },
+  "settingsUiDecreaseSetting": "减少“{title}”",
+  "@settingsUiDecreaseSetting": {
+    "description": "Settings presentation copy: decreaseSetting",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiIncreaseSetting": "增加“{title}”",
+  "@settingsUiIncreaseSetting": {
+    "description": "Settings presentation copy: increaseSetting",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiCurrentFirstWeekday": "当前为{weekday}",
+  "@settingsUiCurrentFirstWeekday": {
+    "description": "Settings presentation copy: currentFirstWeekday",
+    "placeholders": {
+      "weekday": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiPreferencesHeroExplanation": "自定义显示与行为偏好，管理底部导航入口与小组件显示。",
+  "@settingsUiPreferencesHeroExplanation": {
+    "description": "Settings presentation copy: preferencesHeroExplanation"
+  },
+  "settingsUiPreferencesCategoriesSectionTitle": "个性入口",
+  "@settingsUiPreferencesCategoriesSectionTitle": {
+    "description": "Settings presentation copy: preferencesCategoriesSectionTitle"
+  },
+  "settingsUiPreferencesCategoriesSectionSubtitle": "选择要调整的设置类别",
+  "@settingsUiPreferencesCategoriesSectionSubtitle": {
+    "description": "Settings presentation copy: preferencesCategoriesSectionSubtitle"
+  },
+  "settingsUiDisplayAndBehaviorTitle": "显示与行为",
+  "@settingsUiDisplayAndBehaviorTitle": {
+    "description": "Settings presentation copy: displayAndBehaviorTitle"
+  },
+  "settingsUiDisplayAndBehaviorSubtitle": "日期格式、应用时区、启动入口、交互与归档",
+  "@settingsUiDisplayAndBehaviorSubtitle": {
+    "description": "Settings presentation copy: displayAndBehaviorSubtitle"
+  },
+  "settingsUiDisplayAndBehaviorHeroSubtitle": "管理日期格式、应用时区、启动默认项、交互反馈与待办归档。",
+  "@settingsUiDisplayAndBehaviorHeroSubtitle": {
+    "description": "Settings presentation copy: displayAndBehaviorHeroSubtitle"
+  },
+  "settingsUiNavigationSectionTitle": "导航入口",
+  "@settingsUiNavigationSectionTitle": {
+    "description": "Settings presentation copy: navigationSectionTitle"
+  },
+  "settingsUiNavigationSectionSubtitle": "最多 5 个底部入口；“我的”固定，小组件可隐藏",
+  "@settingsUiNavigationSectionSubtitle": {
+    "description": "Settings presentation copy: navigationSectionSubtitle"
+  },
+  "settingsUiJumpToMenuTitle": "快捷定位",
+  "@settingsUiJumpToMenuTitle": {
+    "description": "Settings presentation copy: jumpToMenuTitle"
+  },
+  "settingsUiJumpToDate": "日期日历",
+  "@settingsUiJumpToDate": {
+    "description": "Settings presentation copy: jumpToDate"
+  },
+  "settingsUiJumpToDefaults": "默认行为",
+  "@settingsUiJumpToDefaults": {
+    "description": "Settings presentation copy: jumpToDefaults"
+  },
+  "settingsUiJumpToInteraction": "交互归档",
+  "@settingsUiJumpToInteraction": {
+    "description": "Settings presentation copy: jumpToInteraction"
+  },
+  "settingsUiDateFormatIso": "标准 ({pattern})",
+  "@settingsUiDateFormatIso": {
+    "description": "Settings presentation copy: dateFormatLabel",
+    "placeholders": {
+      "pattern": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiDateFormatUs": "美式 ({pattern})",
+  "@settingsUiDateFormatUs": {
+    "description": "Settings presentation copy: dateFormatLabel",
+    "placeholders": {
+      "pattern": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiDateFormatEurope": "欧式 ({pattern})",
+  "@settingsUiDateFormatEurope": {
+    "description": "Settings presentation copy: dateFormatLabel",
+    "placeholders": {
+      "pattern": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiDateFormatEastAsian": "中文年月日 ({pattern})",
+  "@settingsUiDateFormatEastAsian": {
+    "description": "Settings presentation copy: dateFormatLabel",
+    "placeholders": {
+      "pattern": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiTimeZoneShanghai": "中国标准时间 (上海)",
+  "@settingsUiTimeZoneShanghai": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneMexicoCity": "墨西哥城时间",
+  "@settingsUiTimeZoneMexicoCity": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneTijuana": "蒂华纳时间",
+  "@settingsUiTimeZoneTijuana": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneTokyo": "东京时间 (日本)",
+  "@settingsUiTimeZoneTokyo": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneHongKong": "香港时间",
+  "@settingsUiTimeZoneHongKong": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneSingapore": "新加坡时间",
+  "@settingsUiTimeZoneSingapore": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneNewYork": "纽约时间 (美东)",
+  "@settingsUiTimeZoneNewYork": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneLosAngeles": "洛杉矶时间 (美西)",
+  "@settingsUiTimeZoneLosAngeles": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneLondon": "伦敦时间",
+  "@settingsUiTimeZoneLondon": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneParis": "巴黎时间 (中欧)",
+  "@settingsUiTimeZoneParis": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiTimeZoneSydney": "悉尼时间 (澳洲东部)",
+  "@settingsUiTimeZoneSydney": {
+    "description": "Settings presentation copy: timeZoneDisplayName"
+  },
+  "settingsUiNavigationBannerMessage": "底部导航最多显示 5 个入口，我的固定显示；小组件可隐藏，隐藏入口可在“我的”页面访问。",
+  "@settingsUiNavigationBannerMessage": {
+    "description": "Settings presentation copy: navigationBannerMessage"
+  },
+  "settingsUiMaxTabsConstraint": "最多显示 {max} 个入口",
+  "@settingsUiMaxTabsConstraint": {
+    "description": "Settings presentation copy: maxTabsConstraint",
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsUiNavigationHiddenAtLimit": "已达上限，先隐藏其他项",
+  "@settingsUiNavigationHiddenAtLimit": {
+    "description": "Settings presentation copy: navigationHiddenAtLimit"
+  },
+  "settingsUiNavigationMoveUp": "上移“{label}”",
+  "@settingsUiNavigationMoveUp": {
+    "description": "Settings presentation copy: navigationMoveUp",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiNavigationMoveDown": "下移“{label}”",
+  "@settingsUiNavigationMoveDown": {
+    "description": "Settings presentation copy: navigationMoveDown",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiSelectOption": "选择设置",
+  "@settingsUiSelectOption": {
+    "description": "Settings presentation copy: selectOption"
+  },
+  "settingsUiSelectFirstDay": "选择一周第一天",
+  "@settingsUiSelectFirstDay": {
+    "description": "Settings presentation copy: selectFirstDay"
+  },
+  "settingsUiSelectDateFormat": "选择日期格式",
+  "@settingsUiSelectDateFormat": {
+    "description": "Settings presentation copy: selectDateFormat"
+  },
+  "settingsUiSelectTimeZone": "选择应用时区",
+  "@settingsUiSelectTimeZone": {
+    "description": "Settings presentation copy: selectTimeZone"
+  },
+  "settingsUiSelectDefaultTab": "选择启动默认 Tab",
+  "@settingsUiSelectDefaultTab": {
+    "description": "Settings presentation copy: selectDefaultTab"
+  },
+  "settingsUiSelectAutoLock": "选择自动锁定时间",
+  "@settingsUiSelectAutoLock": {
+    "description": "Settings presentation copy: selectAutoLock"
+  },
+  "settingsUiAutoLockMinutes": "{minutes} 分钟",
+  "@settingsUiAutoLockMinutes": {
+    "description": "Settings presentation copy: autoLockOptionLabel",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsUiAutoLockAfter": "离开 {minutes} 分钟后锁定",
+  "@settingsUiAutoLockAfter": {
+    "description": "Settings presentation copy: autoLockSubtitle",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "habitCopyWeekGoal": "每周目标: {target} 次/周",
+  "@habitCopyWeekGoal": {
+    "description": "Exact goal copy. Chinese intentionally ignores unit and retains literal 次; English uses default occurrence singular/plural only.",
+    "placeholders": {
+      "target": {
+        "type": "int"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyMonthGoal": "每月目标: {target} 次/月",
+  "@habitCopyMonthGoal": {
+    "description": "Exact goal copy. Chinese intentionally ignores unit and retains literal 次; English uses default occurrence singular/plural only.",
+    "placeholders": {
+      "target": {
+        "type": "int"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyActionEnd": "结束",
+  "@habitCopyActionEnd": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyDeleteConfirmTitle": "删除习惯？",
+  "@habitCopyDeleteConfirmTitle": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyDeleteConfirmContent": "会删除“{habitName}”和关联记录，不可恢复。",
+  "@habitCopyDeleteConfirmContent": {
+    "description": "Exact copy; habitName is intentionally unused in English.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyEndConfirmTitle": "结束习惯？",
+  "@habitCopyEndConfirmTitle": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyEndConfirmContent": "结束“{habitName}”？历史记录将保留。",
+  "@habitCopyEndConfirmContent": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyEndHabitAction": "结束习惯",
+  "@habitCopyEndHabitAction": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyDeleteHabitAction": "删除习惯",
+  "@habitCopyDeleteHabitAction": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyMoreActions": "更多操作",
+  "@habitCopyMoreActions": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyEndedFeedback": "习惯已结束，历史记录已保留",
+  "@habitCopyEndedFeedback": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyDeletedFeedback": "习惯已删除",
+  "@habitCopyDeletedFeedback": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopySaveSuccess": "习惯已保存",
+  "@habitCopySaveSuccess": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyCheckInFailedWithRetry": "打卡失败，请重试",
+  "@habitCopyCheckInFailedWithRetry": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyUndoFailedWithRetry": "撤销打卡失败，请重试",
+  "@habitCopyUndoFailedWithRetry": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopySaveFailedWithRetry": "保存习惯失败，请重试",
+  "@habitCopySaveFailedWithRetry": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyActionFailedWithRetry": "操作失败，请重试",
+  "@habitCopyActionFailedWithRetry": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyNameRequired": "请输入习惯名称",
+  "@habitCopyNameRequired": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyDailyTargetInvalid": "每日目标至少为 1",
+  "@habitCopyDailyTargetInvalid": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyReminderSchedulerMissing": "提醒调度器尚未初始化，请重新打开应用后再保存提醒",
+  "@habitCopyReminderSchedulerMissing": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyNotificationsNotGranted": "系统通知未授权，习惯提醒不会响铃或弹出",
+  "@habitCopyNotificationsNotGranted": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyReminderPermissionError": "需要系统通知权限以接收提醒",
+  "@habitCopyReminderPermissionError": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyReminderRegisterFailed": "提醒注册失败",
+  "@habitCopyReminderRegisterFailed": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {}
+  },
+  "habitCopyReminderSyncWarning": "习惯已保存，但提醒未同步：{issueText}",
+  "@habitCopyReminderSyncWarning": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "issueText": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyPeriodGoalReached": "「{habitName}」{periodLabel}目标已达标",
+  "@habitCopyPeriodGoalReached": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      },
+      "periodLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopySingleSessionGoalReached": "「{habitName}」今日单次目标已完成",
+  "@habitCopySingleSessionGoalReached": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCheckInSuccessNegative": "已记录一次「{habitName}」",
+  "@habitCopyCheckInSuccessNegative": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyDateRecordFeedback": "已记录「{habitName}」",
+  "@habitCopyDateRecordFeedback": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyDateUndoFeedback": "已撤销「{habitName}」记录",
+  "@habitCopyDateUndoFeedback": {
+    "description": "Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyUnitCup": "杯",
+  "@habitCopyUnitCup": {
+    "description": "Exact lowercase cup key; count == 1 only.",
+    "placeholders": {}
+  },
+  "habitCopyUnitCups": "杯",
+  "@habitCopyUnitCups": {
+    "description": "Exact lowercase cup key; count != 1.",
+    "placeholders": {}
+  },
+  "habitCopyUnitTime": "次",
+  "@habitCopyUnitTime": {
+    "description": "Default generated occurrence singular; count == 1 only.",
+    "placeholders": {}
+  },
+  "habitCopyMeasuredCount": "{count} {unit}",
+  "@habitCopyMeasuredCount": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCountWithFlexProgress": "{measuredCount} · {flexProgressLabel}",
+  "@habitCopyCountWithFlexProgress": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "measuredCount": {
+        "type": "String"
+      },
+      "flexProgressLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCountRecorded": "已记录 {measuredCount}",
+  "@habitCopyCountRecorded": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "measuredCount": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCountRatio": "{measuredCount} / {target} {targetUnit}",
+  "@habitCopyCountRatio": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "measuredCount": {
+        "type": "String"
+      },
+      "target": {
+        "type": "int"
+      },
+      "targetUnit": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCheckInSuccessStandardReached": "「{habitName}」今日已达标",
+  "@habitCopyCheckInSuccessStandardReached": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      }
+    }
+  },
+  "habitCopyCheckInSuccessStandardProgress": "已打卡「{habitName}」 {count}/{target}",
+  "@habitCopyCheckInSuccessStandardProgress": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "target": {
+        "type": "int"
+      }
+    }
+  },
+  "habitCopyPeriodFallback": "本周期",
+  "@habitCopyPeriodFallback": {
+    "description": "Null flexPrefix only; empty or blank authored prefix must remain literal.",
+    "placeholders": {}
+  },
+  "habitCopyCheckInSuccessFlexProgress": "已打卡「{habitName}」 {flexLabel}",
+  "@habitCopyCheckInSuccessFlexProgress": {
+    "description": "Preserve the current HabitUiCopy output exactly.",
+    "placeholders": {
+      "habitName": {
+        "type": "String"
+      },
+      "flexLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUiAutoArchiveDayOne": "1 天",
+  "@settingsUiAutoArchiveDayOne": {
+    "description": "Complete settings label with locale-specific grammar and punctuation.",
+    "placeholders": {}
+  },
+  "settingsUiAutoArchiveDayMany": "{days} 天",
+  "@settingsUiAutoArchiveDayMany": {
+    "description": "Complete settings label with locale-specific grammar and punctuation.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsUiAutoArchiveAfterOneDay": "1 天后自动隐藏",
+  "@settingsUiAutoArchiveAfterOneDay": {
+    "description": "Complete settings label with locale-specific grammar and punctuation.",
+    "placeholders": {}
+  },
+  "settingsUiAutoArchiveAfterDays": "{days} 天后自动隐藏",
+  "@settingsUiAutoArchiveAfterDays": {
+    "description": "Complete settings label with locale-specific grammar and punctuation.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsUiFollowingSystemTimeZone": "跟随手机：{timeZoneName}",
+  "@settingsUiFollowingSystemTimeZone": {
+    "description": "Complete settings label with locale-specific grammar and punctuation.",
+    "placeholders": {
+      "timeZoneName": {
+        "type": "String"
+      }
+    }
+  }
 }

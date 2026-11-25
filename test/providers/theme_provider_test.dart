@@ -19,6 +19,293 @@ void main() {
     await AccountPreferenceWrites.drain();
   });
 
+  for (final item in [
+    (type: 'brand', id: 're0', active: 'activeBrand', cost: 140),
+    (
+      type: 'focus_backdrop',
+      id: 'forest_focus',
+      active: 'activeFocusBackdropId',
+      cost: 100,
+    ),
+    (
+      type: 'avatar_frame',
+      id: 'forest_frame',
+      active: 'activeAvatarFrameId',
+      cost: 100,
+    ),
+    (type: 'card_skin', id: 'paper_card', active: 'activeCardSkinId', cost: 90),
+  ]) {
+    test(
+      'guest ${item.type} redeem commits once and survives reload',
+      () async {
+        final theme = ThemeProvider();
+        final rewards = AchievementProvider();
+        addTearDown(theme.dispose);
+        addTearDown(rewards.dispose);
+        await _seedGuestRewards(rewards);
+        expect(
+          await _redeemGuest(
+            theme,
+            rewards,
+            itemType: item.type,
+            itemId: item.id,
+          ),
+          isTrue,
+        );
+        expect(
+          await _redeemGuest(
+            theme,
+            rewards,
+            itemType: item.type,
+            itemId: item.id,
+          ),
+          isTrue,
+        );
+        expect(rewards.coinBalance, 1000 - item.cost);
+        expect(
+          rewards.rewardLedger.where((entry) => entry.coins < 0),
+          hasLength(1),
+        );
+        expect(theme.shopStateSnapshot[item.active], item.id);
+        final reloadedTheme = ThemeProvider();
+        final reloadedRewards = AchievementProvider();
+        addTearDown(reloadedTheme.dispose);
+        addTearDown(reloadedRewards.dispose);
+        await reloadedTheme.loadFromStorage();
+        await reloadedRewards.loadFromStorage();
+        expect(reloadedTheme.shopStateSnapshot[item.active], item.id);
+        expect(reloadedRewards.coinBalance, 1000 - item.cost);
+      },
+    );
+  }
+
+  for (final rejectedKey in [
+    'duoyi_virtual_rewards',
+    'active_brand',
+    'theme_unlocked_brands',
+    'theme_switch_count',
+    'theme_shop_state',
+  ]) {
+    test(
+      'guest redeem rolls back rejected $rejectedKey and ledger history',
+      () async {
+        final store = _ThemeStore();
+        SharedPreferencesStorePlatform.instance = store;
+        final theme = ThemeProvider();
+        final rewards = AchievementProvider();
+        addTearDown(theme.dispose);
+        addTearDown(rewards.dispose);
+        await _seedGuestRewards(rewards, ledgerSize: 50);
+        final beforeLedger = rewards.rewardLedger
+            .map((entry) => entry.id)
+            .toList();
+        final beforeTheme = theme.shopStateSnapshot;
+        final prefs = await SharedPreferences.getInstance();
+        final beforeRewards = prefs.getString('duoyi_virtual_rewards');
+        store.rejectKeyOnce = 'flutter.$rejectedKey';
+        await expectLater(_redeemGuest(theme, rewards), throwsStateError);
+        expect(rewards.coinBalance, 1000);
+        expect(rewards.lifetimeCoins, 1000);
+        expect(rewards.rewardLedger.map((entry) => entry.id), beforeLedger);
+        expect(prefs.getString('duoyi_virtual_rewards'), beforeRewards);
+        expect(theme.shopStateSnapshot, beforeTheme);
+        expect(theme.isBrandUnlocked('re0'), isFalse);
+        expect(prefs.getString('active_brand'), isNull);
+        expect(prefs.getInt('theme_switch_count'), isNull);
+        expect(prefs.getStringList('theme_unlocked_brands'), isNull);
+      },
+    );
+  }
+
+  test('two queued guest redeems charge once', () async {
+    final store = _ThemeStore();
+    SharedPreferencesStorePlatform.instance = store;
+    final theme = ThemeProvider();
+    final rewards = AchievementProvider();
+    addTearDown(theme.dispose);
+    addTearDown(rewards.dispose);
+    await _seedGuestRewards(rewards);
+    store.holdKey = 'flutter.theme_shop_state';
+    final first = _redeemGuest(theme, rewards);
+    await store.started.future.timeout(const Duration(seconds: 5));
+    final second = _redeemGuest(theme, rewards);
+    expect(
+      theme.isBrandUnlocked('re0'),
+      isFalse,
+      reason: 'Pending state is not published',
+    );
+    store.release.complete();
+    expect(await first, isTrue);
+    expect(await second, isTrue);
+    expect(rewards.coinBalance, 860);
+    expect(theme.themeSwitchCount, 1);
+    expect(
+      rewards.rewardLedger.where((entry) => entry.coins < 0),
+      hasLength(1),
+    );
+  });
+
+  for (final hydration in ['load', 'snapshot', 'failed purchase']) {
+    test(
+      'guest purchase preserves real award after queued $hydration',
+      () async {
+        final store = _ThemeStore();
+        SharedPreferencesStorePlatform.instance = store;
+        final theme = ThemeProvider();
+        final rewards = AchievementProvider();
+        addTearDown(theme.dispose);
+        addTearDown(rewards.dispose);
+        await rewards.loadFromStorage();
+        await _seedGuestRewards(rewards);
+        store.holdKey = 'flutter.theme_shop_state';
+        final operation = _redeemGuest(theme, rewards);
+        final failure = hydration == 'failed purchase';
+        final assertion = failure
+            ? expectLater(operation, throwsStateError)
+            : null;
+        await store.started.future.timeout(const Duration(seconds: 5));
+        if (failure) store.rejectKeyOnce = store.holdKey;
+        final pendingHydration = hydration == 'snapshot'
+            ? rewards.applyRewardsSnapshot({
+                'balance': 860,
+                'lifetime': 1000,
+                'updatedAt': DateTime.now()
+                    .add(const Duration(minutes: 1))
+                    .toUtc()
+                    .toIso8601String(),
+              })
+            : rewards.loadFromStorage();
+        DomainEventBus.instance.publish(
+          DomainEvent(
+            type: DomainEventType.todoCompleted,
+            objectId: 'guest-award-$hydration',
+          ),
+        );
+        store.release.complete();
+        if (failure) {
+          await assertion;
+        } else {
+          expect(await operation, isTrue);
+        }
+        await pendingHydration;
+        await AccountPreferenceWrites.drain();
+        expect(rewards.coinBalance, (failure ? 1000 : 860) + 5);
+        expect(rewards.lifetimeCoins, 1005);
+        expect(
+          rewards.rewardLedger.any(
+            (entry) => entry.id == 'event:todo:guest-award-$hydration',
+          ),
+          isTrue,
+        );
+        final prefs = await SharedPreferences.getInstance();
+        final stored =
+            jsonDecode(prefs.getString('duoyi_virtual_rewards')!) as Map;
+        expect(stored['balance'], rewards.coinBalance);
+        expect(stored['lifetime'], 1005);
+        expect(
+          stored['grantIds'],
+          contains('event:todo:guest-award-$hydration'),
+        );
+      },
+    );
+  }
+
+  for (final resetAccount in [false, true]) {
+    test('guest purchase cancels with account reset=$resetAccount', () async {
+      final store = _ThemeStore();
+      SharedPreferencesStorePlatform.instance = store;
+      final theme = ThemeProvider();
+      final rewards = AchievementProvider();
+      addTearDown(theme.dispose);
+      addTearDown(rewards.dispose);
+      await _seedGuestRewards(rewards);
+      store.holdKey = 'flutter.theme_shop_state';
+      final operation = _redeemGuest(theme, rewards);
+      await store.started.future.timeout(const Duration(seconds: 5));
+      Future<void>? boundary;
+      Future<void>? expectedFailure;
+      if (resetAccount) {
+        AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+        theme.resetLocalState();
+        rewards.resetLocalState();
+      } else {
+        boundary = AccountLocalDataCleaner.runPreferenceBoundary<void>(
+          () async {
+            throw StateError('Synthetic aborted transition');
+          },
+        );
+        expectedFailure = expectLater(boundary, throwsStateError);
+      }
+      store.release.complete();
+      expect(await operation, isFalse);
+      if (expectedFailure != null) await expectedFailure;
+      expect(rewards.coinBalance, resetAccount ? 0 : 1000);
+      expect(rewards.rewardLedger.where((entry) => entry.coins < 0), isEmpty);
+      expect(theme.isBrandUnlocked('re0'), isFalse);
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        (jsonDecode(prefs.getString('duoyi_virtual_rewards')!)
+            as Map)['balance'],
+        1000,
+      );
+      expect(prefs.getString('active_brand'), isNull);
+    });
+  }
+
+  test('guest authorization is checked at the final shared commit', () async {
+    final theme = ThemeProvider();
+    final rewards = AchievementProvider();
+    addTearDown(theme.dispose);
+    addTearDown(rewards.dispose);
+    await _seedGuestRewards(rewards);
+    var commitAuthorizationChecks = 0;
+    final applied = await theme.redeemGuestItem(
+      rewards: rewards,
+      itemType: 'brand',
+      itemId: 're0',
+      title: 'Synthetic theme',
+      reason: 'Synthetic',
+      isAuthorized: () {
+        // The staged selection is applied after the last platform write.
+        // Reject only the commit-time check, after write-time checks passed.
+        if (theme.brand.id == 're0') {
+          commitAuthorizationChecks++;
+          return false;
+        }
+        return true;
+      },
+    );
+    expect(commitAuthorizationChecks, greaterThan(0));
+    expect(applied, isFalse);
+    expect(theme.isBrandUnlocked('re0'), isFalse);
+    expect(rewards.coinBalance, 1000);
+    expect(rewards.rewardLedger.where((entry) => entry.coins < 0), isEmpty);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('active_brand'), isNull);
+    expect(
+      (jsonDecode(prefs.getString('duoyi_virtual_rewards')!) as Map)['balance'],
+      1000,
+    );
+  });
+
+  test(
+    'guest purchase rejects unaffordable and unknown items without changes',
+    () async {
+      final theme = ThemeProvider();
+      final rewards = AchievementProvider();
+      addTearDown(theme.dispose);
+      addTearDown(rewards.dispose);
+      expect(await _redeemGuest(theme, rewards), isFalse);
+      await expectLater(
+        _redeemGuest(theme, rewards, itemId: 'unknown'),
+        throwsArgumentError,
+      );
+      expect(rewards.coinBalance, 0);
+      expect(rewards.rewardLedger, isEmpty);
+      expect(theme.isBrandUnlocked('re0'), isFalse);
+    },
+  );
+
   test(
     'old brand write cannot increment the next account switch count',
     () async {
@@ -491,6 +778,39 @@ void main() {
     },
   );
 }
+
+Future<void> _seedGuestRewards(
+  AchievementProvider rewards, {
+  int ledgerSize = 0,
+}) => rewards.applyRewardsSnapshot({
+  'balance': 1000,
+  'lifetime': 1000,
+  'ledger': [
+    for (var i = 0; i < ledgerSize; i++)
+      {
+        'id': 'prior-$i',
+        'title': 'Prior reward',
+        'coins': 1,
+        'reason': 'Synthetic',
+        'awardedAt': '2020-01-01T00:00:00Z',
+      },
+  ],
+  'updatedAt': '2020-01-01T00:00:00Z',
+});
+
+Future<bool> _redeemGuest(
+  ThemeProvider theme,
+  AchievementProvider rewards, {
+  String itemType = 'brand',
+  String itemId = 're0',
+}) => theme.redeemGuestItem(
+  rewards: rewards,
+  itemType: itemType,
+  itemId: itemId,
+  title: 'Synthetic theme',
+  reason: 'Synthetic purchase',
+  isAuthorized: () => true,
+);
 
 class _ThemeStore extends InMemorySharedPreferencesStore {
   _ThemeStore() : super.withData({});

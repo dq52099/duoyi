@@ -6,6 +6,8 @@
 /// - 语言：在中 / 英 之间切换。
 library;
 
+import '../widgets/app_date_format.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -13,14 +15,19 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../core/account_preference_writes.dart';
+import '../core/design_tokens.dart';
+import '../core/export_ui_copy.dart';
 import '../core/i18n.dart';
-import '../core/i18n_date_format.dart';
+import '../core/ics_subscription_storage.dart';
+import '../services/settings_action_origin.dart';
 import '../core/notification_ui_copy.dart';
 import '../models/location_reminder.dart';
 import '../providers/location_reminder_provider.dart';
 import '../providers/notification_service.dart';
 import '../services/calendar_sync_service.dart';
 import '../services/location_geofence_service.dart';
+import '../widgets/app_live_popup_menu_button.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/surface_components.dart';
 import '../widgets/controller_dialog.dart';
@@ -148,10 +155,14 @@ class _IntegrationsScreenBody extends StatelessWidget {
         final routeBackground = Theme.of(context).brightness == Brightness.dark
             ? cs.surface
             : cs.surfaceContainerLowest;
-        return DefaultTabController(
+        final surfaceStyle = appSurfaceStyleOf(context);
+        final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+        final scaffold = DefaultTabController(
           length: 3,
           child: Scaffold(
-            backgroundColor: routeBackground,
+            backgroundColor: isLiquidGlass
+                ? Colors.transparent
+                : routeBackground,
             appBar: AppBar(
               title: Text(NotificationUiCopy.integrationsTitle),
               titleTextStyle: appSecondaryRouteTitleTextStyle(context),
@@ -183,6 +194,21 @@ class _IntegrationsScreenBody extends StatelessWidget {
               ),
             ),
           ),
+        );
+
+        if (!isLiquidGlass) {
+          return scaffold;
+        }
+
+        final hasBrandSurface =
+            context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+            context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+        if (hasBrandSurface) {
+          return scaffold;
+        }
+        return Material(
+          color: routeBackground,
+          child: BrandBackground(child: scaffold),
         );
       },
     );
@@ -268,6 +294,16 @@ TextStyle _integrationErrorTextStyle(BuildContext context) =>
       fontSize: 11,
     ).copyWith(color: Theme.of(context).colorScheme.error);
 
+TextStyle _icsErrorTextStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  final isLight = Theme.of(context).brightness == Brightness.light;
+  final isGlass = appSurfaceStyleOf(context) == AppSurfaceStyle.liquidGlass;
+  final color = isLight && isGlass
+      ? Color.lerp(cs.error, Colors.black, 0.08)!
+      : cs.error;
+  return _integrationErrorTextStyle(context).copyWith(color: color);
+}
+
 // ---------------------------------------------------------------------------
 // 日历订阅
 // ---------------------------------------------------------------------------
@@ -284,6 +320,10 @@ class _CalendarSubscriptionsTab extends StatefulWidget {
 
 class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
   bool _handledInitialOAuthCallback = false;
+  bool _reconciling = false;
+  bool _globalRefreshing = false;
+  int _reconcileOp = 0;
+  int _globalRefreshOp = 0;
 
   @override
   void initState() {
@@ -318,11 +358,82 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
     );
   }
 
+  Future<void> _reconcileStorage(
+    BuildContext context,
+    CalendarSyncProvider provider,
+  ) async {
+    if (_reconciling) return;
+    final origin = SettingsActionOrigin(context);
+    final initialGeneration = provider.icsLifetimeGeneration;
+    final thisOp = ++_reconcileOp;
+    setState(() => _reconciling = true);
+    try {
+      await provider.reconcileIcsStorage(
+        isCurrent: () {
+          if (!origin.isCurrent(checkRoute: true)) return false;
+          if (!mounted) return false;
+          try {
+            if (!identical(context.read<CalendarSyncProvider>(), provider)) {
+              return false;
+            }
+          } catch (_) {
+            return false;
+          }
+          return provider.icsLifetimeGeneration == initialGeneration;
+        },
+      );
+    } on AccountPreferenceWriteCanceled {
+      return;
+    } catch (_) {
+      // Retain actionable recovery UI without exposing internals.
+    } finally {
+      if (mounted && thisOp == _reconcileOp) {
+        setState(() => _reconciling = false);
+      }
+    }
+  }
+
+  Future<void> _handleGlobalRefresh(
+    BuildContext context,
+    CalendarSyncProvider provider,
+  ) async {
+    if (_globalRefreshing || provider.isSyncing) return;
+    final origin = SettingsActionOrigin(context);
+    final initialGeneration = provider.icsLifetimeGeneration;
+    final thisOp = ++_globalRefreshOp;
+    setState(() => _globalRefreshing = true);
+    try {
+      await provider.syncAll(
+        isCurrent: () {
+          if (!origin.isCurrent(checkRoute: true)) return false;
+          if (!mounted || !context.mounted) return false;
+          try {
+            if (!identical(context.read<CalendarSyncProvider>(), provider)) {
+              return false;
+            }
+          } catch (_) {
+            return false;
+          }
+          return provider.icsLifetimeGeneration == initialGeneration;
+        },
+      );
+    } on AccountPreferenceWriteCanceled {
+      return;
+    } catch (_) {
+      // Catch under origin without crashing.
+    } finally {
+      if (mounted && thisOp == _globalRefreshOp) {
+        setState(() => _globalRefreshing = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<CalendarSyncProvider>();
     final subs = provider.subscriptions;
     final oauthAccounts = provider.oauthAccounts;
+    final isEn = NotificationUiCopy.isEn;
     return Stack(
       children: [
         ListView(
@@ -364,6 +475,56 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
                 ),
               ),
             ),
+            if (provider.icsStorageNeedsReconciliation) ...[
+              const SizedBox(height: 12),
+              AppSurfaceCard(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: _icsErrorTextStyle(context).color,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            isEn
+                                ? 'Storage state is uncertain. Please recover storage before continuing.'
+                                : '存储状态异常，请先恢复存储',
+                            style: TextStyle(
+                              color: _icsErrorTextStyle(context).color,
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: _reconciling
+                          ? null
+                          : () => _reconcileStorage(context, provider),
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        children: [
+                          if (_reconciling)
+                            const SizedBox.square(
+                              dimension: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          Text(isEn ? 'Recover Storage' : '恢复存储'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             _OAuthCalendarCard(provider: provider),
             const SizedBox(height: 12),
@@ -372,7 +533,8 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
             if (oauthAccounts.isNotEmpty) const SizedBox(height: 4),
             _CalDavWriteTargetCard(provider: provider),
             const SizedBox(height: 12),
-            for (final s in subs) _SubscriptionTile(sub: s),
+            for (final s in subs)
+              _SubscriptionTile(key: ValueKey(s.id), sub: s),
             if (subs.isEmpty && oauthAccounts.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(32),
@@ -399,10 +561,9 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
                   if (provider.subscriptions.isNotEmpty ||
                       oauthAccounts.isNotEmpty)
                     FilledButton.tonalIcon(
-                      onPressed: provider.isSyncing
+                      onPressed: (provider.isSyncing || _globalRefreshing)
                           ? null
-                          // ignore: discarded_futures
-                          : () => provider.syncAll(),
+                          : () => _handleGlobalRefresh(context, provider),
                       style: _integrationFilledButtonStyle(context),
                       icon: const Icon(Icons.refresh),
                       label: Text(NotificationUiCopy.refreshAction),
@@ -425,48 +586,100 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
     BuildContext context,
     CalendarSyncProvider provider,
   ) async {
+    final origin = SettingsActionOrigin(context);
+    final initialGeneration = provider.icsLifetimeGeneration;
+    BuildContext? modalContext;
+
+    bool isDialogCurrent() {
+      if (!origin.isCurrent(checkRoute: false)) return false;
+      if (!context.mounted) return false;
+      try {
+        if (!identical(context.read<CalendarSyncProvider>(), provider)) {
+          return false;
+        }
+      } catch (_) {
+        return false;
+      }
+      if (provider.icsLifetimeGeneration != initialGeneration) return false;
+      final mCtx = modalContext;
+      if (mCtx == null || !mCtx.mounted) return false;
+      final modalRoute = ModalRoute.of(mCtx);
+      if (modalRoute == null || !modalRoute.isActive || !modalRoute.isCurrent) {
+        return false;
+      }
+      return true;
+    }
+
     final nameCtrl = TextEditingController();
     final urlCtrl = TextEditingController();
-    String? nameError;
-    String? urlError;
-    final ok = await showControllerDialog<bool>(
+
+    var nameInvalid = false;
+    var urlInvalid = false;
+    var urlEmpty = false;
+
+    var saving = false;
+    var reconciling = false;
+    var hasSaveError = false;
+    var hadRejectedAttempt = false;
+    var saveOp = 0;
+    var reconcileOp = 0;
+
+    String? submissionId;
+    String? savedSubscriptionId;
+    var dialogPopped = false;
+
+    await showControllerDialog<void>(
       context: context,
       controllers: [nameCtrl, urlCtrl],
-      builder: (ctx) => ValueListenableBuilder<AppLocale>(
-        valueListenable: I18n.localeListenable,
-        builder: (ctx, _, _) => StatefulBuilder(
-          builder: (ctx, setState) => AppDialog(
-            title: Text(NotificationUiCopy.addSubscriptionDialogTitle),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: InputDecoration(
-                    labelText: NotificationUiCopy.subscriptionNameLabel,
-                    errorText: nameError,
-                  ),
-                  autofocus: true,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: urlCtrl,
-                  decoration: InputDecoration(
-                    labelText: NotificationUiCopy.icsUrlLabel,
-                    hintText: 'https://...',
-                    errorText: urlError,
-                  ),
-                  keyboardType: TextInputType.url,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(I18n.tr('action.cancel')),
-              ),
-              FilledButton(
-                onPressed: () {
+      builder: (dialogCtx) {
+        modalContext = dialogCtx;
+        return ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, _, _) => ListenableBuilder(
+            listenable: provider,
+            builder: (ctx, _) => StatefulBuilder(
+              builder: (ctx, setSt) {
+                modalContext = ctx;
+
+                final isEn = NotificationUiCopy.isEn;
+                final nameError = nameInvalid
+                    ? (isEn ? 'Please enter a subscription name' : '请填写订阅名称')
+                    : null;
+                final urlError = urlInvalid
+                    ? (urlEmpty
+                          ? (isEn ? 'Please enter an ICS URL' : '请填写 ICS URL')
+                          : (isEn
+                                ? 'Please enter a valid http/https address'
+                                : '请输入有效的 http/https 地址'))
+                    : null;
+
+                Future<void> doReconcile() async {
+                  if (saving || reconciling) return;
+                  if (!isDialogCurrent()) return;
+                  final thisOp = ++reconcileOp;
+                  setSt(() => reconciling = true);
+                  try {
+                    await provider.reconcileIcsStorage(
+                      isCurrent: isDialogCurrent,
+                    );
+                  } on AccountPreferenceWriteCanceled {
+                    return;
+                  } catch (_) {
+                    // Retain actionable recovery UI without exposing internals.
+                  } finally {
+                    if (thisOp == reconcileOp &&
+                        modalContext != null &&
+                        modalContext!.mounted) {
+                      setSt(() => reconciling = false);
+                    }
+                  }
+                }
+
+                Future<void> doSave() async {
+                  if (saving || reconciling) return;
+                  if (!isDialogCurrent()) return;
+                  if (provider.icsStorageNeedsReconciliation) return;
+
                   final name = nameCtrl.text.trim();
                   final url = urlCtrl.text.trim();
                   final uri = Uri.tryParse(url);
@@ -474,44 +687,336 @@ class _CalendarSubscriptionsTabState extends State<_CalendarSubscriptionsTab> {
                       uri != null &&
                       uri.host.isNotEmpty &&
                       (uri.scheme == 'http' || uri.scheme == 'https');
-                  setState(() {
-                    nameError = name.isEmpty
-                        ? (NotificationUiCopy.isEn
-                              ? 'Please enter a subscription name'
-                              : '请填写订阅名称')
-                        : null;
-                    urlError = url.isEmpty
-                        ? (NotificationUiCopy.isEn
-                              ? 'Please enter an ICS URL'
-                              : '请填写 ICS URL')
-                        : (!validUrl
-                              ? (NotificationUiCopy.isEn
-                                    ? 'Please enter a valid http/https address'
-                                    : '请输入有效的 http/https 地址')
-                              : null);
-                  });
-                  if (nameError == null && urlError == null) {
-                    Navigator.pop(ctx, true);
+
+                  final hasNameError = name.isEmpty;
+                  final hasUrlError = url.isEmpty || !validUrl;
+
+                  nameInvalid = hasNameError;
+                  urlInvalid = hasUrlError;
+                  urlEmpty = url.isEmpty;
+
+                  if (hasNameError || hasUrlError) {
+                    setSt(() {});
+                    return;
                   }
-                },
-                child: Text(I18n.tr('action.add')),
-              ),
-            ],
+
+                  final thisOp = ++saveOp;
+                  saving = true;
+                  hasSaveError = false;
+                  setSt(() {});
+
+                  submissionId ??= DateTime.now().millisecondsSinceEpoch
+                      .toString();
+
+                  final subscriptionToSave = IcsSubscription(
+                    id: submissionId!,
+                    name: name,
+                    url: url,
+                  );
+
+                  try {
+                    await provider.addSubscription(
+                      subscriptionToSave,
+                      isCurrent: isDialogCurrent,
+                    );
+                    if (!context.mounted ||
+                        !origin.isCurrent(checkRoute: false) ||
+                        !isDialogCurrent()) {
+                      hadRejectedAttempt = true;
+                    } else {
+                      final mCtx = modalContext;
+                      if (mCtx != null && mCtx.mounted) {
+                        if (!dialogPopped) {
+                          dialogPopped = true;
+                          savedSubscriptionId = submissionId;
+                          Navigator.of(mCtx).pop();
+                        }
+                      } else {
+                        hadRejectedAttempt = true;
+                      }
+                    }
+                  } on AccountPreferenceWriteCanceled {
+                    hadRejectedAttempt = true;
+                  } catch (_) {
+                    hadRejectedAttempt = true;
+                    if (isDialogCurrent()) {
+                      hasSaveError = true;
+                    }
+                  } finally {
+                    if (thisOp == saveOp &&
+                        modalContext != null &&
+                        modalContext!.mounted) {
+                      setSt(() {
+                        saving = false;
+                      });
+                    }
+                  }
+                }
+
+                final media = MediaQuery.of(ctx);
+                final cs = Theme.of(ctx).colorScheme;
+                final isRetry = hasSaveError || hadRejectedAttempt;
+                final disabledActionForeground = cs.onSurface.withValues(
+                  alpha: 0.38,
+                );
+                final horizontalInset = media.size.width < 360 ? 12.0 : 20.0;
+                final availableWidth = media.size.width - horizontalInset * 2;
+                final effectiveMaxWidth = availableWidth.isFinite
+                    ? availableWidth.clamp(0.0, 420.0).toDouble()
+                    : 420.0;
+                final dialogContentWidth = effectiveMaxWidth - 48.0;
+
+                return Padding(
+                  padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+                  child: AppDialog(
+                    shiftForKeyboard: false,
+                    title: Text(NotificationUiCopy.addSubscriptionDialogTitle),
+                    content: SizedBox(
+                      width: dialogContentWidth,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: nameCtrl,
+                            decoration: InputDecoration(
+                              labelText:
+                                  NotificationUiCopy.subscriptionNameLabel,
+                              errorText: nameError,
+                              errorMaxLines: 3,
+                            ),
+                            autofocus: true,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: urlCtrl,
+                            decoration: InputDecoration(
+                              labelText: NotificationUiCopy.icsUrlLabel,
+                              hintText: 'https://...',
+                              errorText: urlError,
+                              errorMaxLines: 3,
+                            ),
+                            keyboardType: TextInputType.url,
+                          ),
+                          if (provider.icsStorageNeedsReconciliation) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              isEn
+                                  ? 'Storage state is uncertain. Please recover storage before retrying.'
+                                  : '存储状态异常，重试前请先恢复存储',
+                              style: TextStyle(
+                                color: _icsErrorTextStyle(ctx).color,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Semantics(
+                                button: true,
+                                enabled: !(reconciling || saving),
+                                label: reconciling
+                                    ? (isEn ? 'Recovering storage…' : '正在恢复存储…')
+                                    : null,
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    disabledForegroundColor:
+                                        disabledActionForeground,
+                                    side: BorderSide(
+                                      color: (reconciling || saving)
+                                          ? cs.outlineVariant.withValues(
+                                              alpha: 0.16,
+                                            )
+                                          : cs.outlineVariant.withValues(
+                                              alpha: 0.35,
+                                            ),
+                                      width: 0.4,
+                                    ),
+                                  ),
+                                  onPressed: (reconciling || saving)
+                                      ? null
+                                      : () => doReconcile(),
+                                  child: Wrap(
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    spacing: 8,
+                                    runSpacing: 4,
+                                    children: [
+                                      if (reconciling) ...[
+                                        SizedBox.square(
+                                          dimension: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: cs.primary,
+                                            semanticsLabel: isEn
+                                                ? 'Recovering storage…'
+                                                : '正在恢复存储…',
+                                          ),
+                                        ),
+                                      ],
+                                      Text(isEn ? 'Recover Storage' : '恢复存储'),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ] else if (hasSaveError) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              isEn
+                                  ? 'Failed to save subscription. Please retry.'
+                                  : '保存订阅失败，请重试',
+                              style: TextStyle(
+                                color: _icsErrorTextStyle(ctx).color,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    actions: [
+                      Semantics(
+                        button: true,
+                        enabled: !(saving || reconciling),
+                        label: (saving || reconciling)
+                            ? (isEn ? 'Waiting…' : '请稍候…')
+                            : null,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            disabledForegroundColor: disabledActionForeground,
+                          ),
+                          onPressed: (saving || reconciling)
+                              ? null
+                              : () {
+                                  if (!isDialogCurrent()) return;
+                                  Navigator.of(modalContext!).pop();
+                                },
+                          child: Text(I18n.tr('action.cancel')),
+                        ),
+                      ),
+                      Semantics(
+                        button: true,
+                        enabled:
+                            !(saving ||
+                                reconciling ||
+                                provider.icsStorageNeedsReconciliation),
+                        label: saving
+                            ? (isRetry
+                                  ? (isEn ? 'Retrying…' : '正在重试…')
+                                  : (isEn ? 'Saving…' : '正在保存…'))
+                            : null,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            disabledForegroundColor: disabledActionForeground,
+                          ),
+                          onPressed:
+                              (saving ||
+                                  reconciling ||
+                                  provider.icsStorageNeedsReconciliation)
+                              ? null
+                              : () => doSave(),
+                          child: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              if (saving) ...[
+                                SizedBox.square(
+                                  dimension: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: cs.primary,
+                                    semanticsLabel: isRetry
+                                        ? (isEn ? 'Retrying…' : '正在重试…')
+                                        : (isEn ? 'Saving…' : '正在保存…'),
+                                  ),
+                                ),
+                              ],
+                              Text(
+                                isRetry
+                                    ? I18n.tr('action.retry')
+                                    : I18n.tr('action.add'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
-    if (ok != true) return;
-    final name = nameCtrl.text.trim();
-    final url = urlCtrl.text.trim();
-    if (name.isEmpty || url.isEmpty) return;
-    final id = DateTime.now().millisecondsSinceEpoch.toString();
-    await provider.addSubscription(
-      IcsSubscription(id: id, name: name, url: url),
-    );
-    // ignore: discarded_futures
-    provider.syncAll();
+
+    if (savedSubscriptionId == null) return;
+
+    if (!origin.isCurrent(checkRoute: true)) return;
+    if (!context.mounted) return;
+    try {
+      if (!identical(context.read<CalendarSyncProvider>(), provider)) return;
+    } catch (_) {
+      return;
+    }
+    if (provider.icsLifetimeGeneration != initialGeneration) return;
+
+    try {
+      await provider.syncSubscription(
+        savedSubscriptionId!,
+        isCurrent: () {
+          if (!origin.isCurrent(checkRoute: true)) return false;
+          if (!context.mounted) return false;
+          try {
+            if (!identical(context.read<CalendarSyncProvider>(), provider)) {
+              return false;
+            }
+          } catch (_) {
+            return false;
+          }
+          return provider.icsLifetimeGeneration == initialGeneration;
+        },
+      );
+    } catch (_) {
+      // A failed refresh retains the saved row and offers Refresh retry, never another Save retry.
+    }
   }
+}
+
+double _measureOAuthFeedbackReservedHeight(BuildContext context) {
+  final media = MediaQuery.of(context);
+  final theme = Theme.of(context);
+  final textScaler = media.textScaler;
+  final style = theme.snackBarTheme.contentTextStyle ??
+      theme.textTheme.bodyMedium?.copyWith(
+        color: theme.colorScheme.onInverseSurface,
+      ) ??
+      const TextStyle(fontSize: 14);
+
+  final copies = [
+    NotificationUiCopy.authUrlCopied,
+    NotificationUiCopy.openAuthFailed,
+  ];
+
+  final double horizontalPadding = 32.0 + 30.0;
+  final double maxTextWidth =
+      (media.size.width - horizontalPadding).clamp(80.0, double.infinity);
+
+  double maxTextHeight = 0.0;
+  for (final copy in copies) {
+    final painter = TextPainter(
+      text: TextSpan(text: copy, style: style),
+      textDirection: Directionality.maybeOf(context) ?? TextDirection.ltr,
+      textScaler: textScaler,
+    )..layout(maxWidth: maxTextWidth);
+    if (painter.height > maxTextHeight) {
+      maxTextHeight = painter.height;
+    }
+    painter.dispose();
+  }
+
+  const double verticalOverhead = 28.0 + 15.0 + 8.0;
+  return maxTextHeight + verticalOverhead;
 }
 
 class _OAuthCalendarCard extends StatelessWidget {
@@ -608,7 +1113,11 @@ class _OAuthCalendarCard extends StatelessWidget {
         if (pendingState.isNotEmpty && callbackState != pendingState) {
           disposeControllers();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(NotificationUiCopy.oauthStateMismatch)),
+            SnackBar(
+              content: _RetainedFeedbackText(
+                () => NotificationUiCopy.oauthStateMismatch,
+              ),
+            ),
           );
           return;
         }
@@ -672,14 +1181,35 @@ class _OAuthCalendarCard extends StatelessWidget {
         calendarIdCtrl,
         codeCtrl,
       ],
-      builder: (ctx) => ValueListenableBuilder<AppLocale>(
-        valueListenable: I18n.localeListenable,
-        builder: (ctx, _, _) => StatefulBuilder(
-          builder: (dialogContext, setState) {
-            final authUri = buildAuthUri();
-            return AppDialog(
-              title: Text(NotificationUiCopy.addOauthDialogTitle),
-              maxWidth: 560,
+      builder: (dialogCtx) => ScaffoldMessenger(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          resizeToAvoidBottomInset: false,
+          body: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (ctx, _, _) => StatefulBuilder(
+              builder: (dialogContext, setState) {
+                final authUri = buildAuthUri();
+                final reservedHeight =
+                    _measureOAuthFeedbackReservedHeight(dialogContext);
+                final media = MediaQuery.of(dialogContext);
+                final adjustedMedia = media.copyWith(
+                  size: Size(
+                    media.size.width,
+                    (media.size.height - reservedHeight).clamp(
+                      0.0,
+                      media.size.height,
+                    ),
+                  ),
+                );
+                return Padding(
+                  padding: EdgeInsets.only(bottom: reservedHeight),
+                  child: MediaQuery(
+                    data: adjustedMedia,
+                    child: Center(
+                      child: AppDialog(
+                        title: Text(NotificationUiCopy.addOauthDialogTitle),
+                        maxWidth: 560,
               content: SizedBox(
                 width: double.maxFinite,
                 child: SingleChildScrollView(
@@ -793,8 +1323,8 @@ class _OAuthCalendarCard extends StatelessWidget {
                                               dialogContext,
                                             ).showSnackBar(
                                               SnackBar(
-                                                content: Text(
-                                                  NotificationUiCopy
+                                                content: _RetainedFeedbackText(
+                                                  () => NotificationUiCopy
                                                       .authUrlCopied,
                                                 ),
                                               ),
@@ -824,10 +1354,11 @@ class _OAuthCalendarCard extends StatelessWidget {
                                                 dialogContext,
                                               ).showSnackBar(
                                                 SnackBar(
-                                                  content: Text(
-                                                    NotificationUiCopy
-                                                        .openAuthFailed,
-                                                  ),
+                                                  content:
+                                                      _RetainedFeedbackText(
+                                                        () => NotificationUiCopy
+                                                            .openAuthFailed,
+                                                      ),
                                                 ),
                                               );
                                             }
@@ -871,11 +1402,11 @@ class _OAuthCalendarCard extends StatelessWidget {
                   child: Text(NotificationUiCopy.saveAndSyncAction),
                 ),
               ],
-            );
+            ))));
           },
         ),
       ),
-    );
+    )));
 
     final displayName = nameCtrl.text.trim();
     final clientId = clientIdCtrl.text.trim();
@@ -890,7 +1421,11 @@ class _OAuthCalendarCard extends StatelessWidget {
         authorizationCode.isEmpty) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(NotificationUiCopy.oauthFieldsRequired)),
+        SnackBar(
+          content: _RetainedFeedbackText(
+            () => NotificationUiCopy.oauthFieldsRequired,
+          ),
+        ),
       );
       return;
     }
@@ -908,12 +1443,20 @@ class _OAuthCalendarCard extends StatelessWidget {
       await provider.clearPendingOAuthAuthorization();
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(NotificationUiCopy.oauthConnected)),
+        SnackBar(
+          content: _RetainedFeedbackText(
+            () => NotificationUiCopy.oauthConnected,
+          ),
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(NotificationUiCopy.formatOauthConnectError(e))),
+        SnackBar(
+          content: _RetainedFeedbackText(
+            () => NotificationUiCopy.formatOauthConnectError(e),
+          ),
+        ),
       );
     }
   }
@@ -946,12 +1489,12 @@ class _OAuthCalendarTile extends StatelessWidget {
           '${account.provider.label} · '
           '${account.enabled ? NotificationUiCopy.statusActive : NotificationUiCopy.statusPaused} · '
           '${account.calendarId.isEmpty ? "primary" : account.calendarId}'
-          '${account.lastSyncedAt == null ? "" : " · ${NotificationUiCopy.lastSyncedAt(_formatDateTime(account.lastSyncedAt!))}"}',
+          '${account.lastSyncedAt == null ? "" : " · ${NotificationUiCopy.lastSyncedAt(AppDateFormat.fullDateTime(context, account.lastSyncedAt!))}"}',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 11),
         ),
-        trailing: PopupMenuButton<String>(
+        trailing: AppLivePopupMenuButton<String>(
           onSelected: (value) async {
             if (value == 'toggle') {
               await provider.updateOAuthAccount(
@@ -966,19 +1509,30 @@ class _OAuthCalendarTile extends StatelessWidget {
           itemBuilder: (_) => [
             PopupMenuItem(
               value: 'toggle',
-              child: AppSecondaryMenuText(
-                account.enabled
-                    ? (NotificationUiCopy.isEn ? 'Pause' : '暂停')
-                    : (NotificationUiCopy.isEn ? 'Resume' : '启用'),
+              child: ValueListenableBuilder<AppLocale>(
+                valueListenable: I18n.localeListenable,
+                builder: (_, _, _) => AppSecondaryMenuText(
+                  account.enabled
+                      ? NotificationUiCopy.menuPause
+                      : NotificationUiCopy.menuResume,
+                ),
               ),
             ),
             PopupMenuItem(
               value: 'sync',
-              child: AppSecondaryMenuText(NotificationUiCopy.menuSync),
+              child: ValueListenableBuilder<AppLocale>(
+                valueListenable: I18n.localeListenable,
+                builder: (_, _, _) =>
+                    AppSecondaryMenuText(NotificationUiCopy.menuSync),
+              ),
             ),
             PopupMenuItem(
               value: 'delete',
-              child: AppSecondaryMenuText(NotificationUiCopy.menuDelete),
+              child: ValueListenableBuilder<AppLocale>(
+                valueListenable: I18n.localeListenable,
+                builder: (_, _, _) =>
+                    AppSecondaryMenuText(NotificationUiCopy.menuDelete),
+              ),
             ),
           ],
         ),
@@ -992,8 +1546,35 @@ class _CalDavWriteTargetCard extends StatelessWidget {
 
   const _CalDavWriteTargetCard({required this.provider});
 
+  static TextStyle _calDavWarningStyle(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final isGlass = appSurfaceStyleOf(context) == AppSurfaceStyle.liquidGlass;
+    final color = !isLight
+        ? cs.tertiary
+        : Color.lerp(cs.tertiary, Colors.black, isGlass ? 0.45 : 0.18)!;
+    return _integrationWarningTextStyle(context).copyWith(color: color);
+  }
+
+  static TextStyle _calDavErrorStyle(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final isGlass = appSurfaceStyleOf(context) == AppSurfaceStyle.liquidGlass;
+    final color = isLight && isGlass
+        ? Color.lerp(cs.error, Colors.black, 0.08)!
+        : cs.error;
+    return _integrationErrorTextStyle(context).copyWith(color: color);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final origin = SettingsActionOrigin(context);
+    final revision = provider.writeTargetRevision;
+    bool current() =>
+        origin.isCurrent() &&
+        identical(provider, context.read<CalendarSyncProvider>()) &&
+        revision == provider.writeTargetRevision &&
+        !provider.isUpdatingWriteTarget;
     final target = provider.writeTarget;
     final configured = target?.isConfigured == true;
     return AppSurfaceCard(
@@ -1030,9 +1611,7 @@ class _CalDavWriteTargetCard extends StatelessWidget {
               configured
                   ? '${target!.enabled ? NotificationUiCopy.calDavVerified : NotificationUiCopy.calDavUnverified} · ${_conflictPolicyLabel(target.conflictPolicy)} · ${target.collectionUrl}'
                   : NotificationUiCopy.calDavConfigPrompt,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: _integrationHintTextStyle(context),
+              style: _integrationHintTextStyle(context, alpha: 0.72),
             ),
             if (provider.lastCalDavConflicts.isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -1040,38 +1619,36 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                 NotificationUiCopy.calDavConflictsSkipped(
                   provider.lastCalDavConflicts.length,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: _integrationWarningTextStyle(context),
+                style: _calDavWarningStyle(context),
               ),
             ],
             if (target?.lastTestedAt != null) ...[
               const SizedBox(height: 4),
               Text(
                 NotificationUiCopy.lastTestedAt(
-                  _formatDateTime(target!.lastTestedAt!),
+                  AppDateFormat.fullDateTime(context, target!.lastTestedAt!),
                 ),
                 style: _integrationHintTextStyle(
                   context,
                   fontSize: 11,
-                  alpha: 0.50,
+                  alpha: 0.66,
                 ),
               ),
             ],
-            if (provider.lastError != null) ...[
+            if (provider.lastCalDavError != null) ...[
               const SizedBox(height: 6),
               Text(
-                NotificationUiCopy.formatCalDavError(provider.lastError!),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: _integrationErrorTextStyle(context),
+                NotificationUiCopy.formatCalDavError(provider.lastCalDavError!),
+                style: _calDavErrorStyle(context),
               ),
             ],
             const SizedBox(height: 10),
             _IntegrationActionStrip(
               children: [
                 OutlinedButton.icon(
-                  onPressed: () => _showCalDavDialog(context, provider),
+                  onPressed: () {
+                    if (current()) _showCalDavDialog(context, provider);
+                  },
                   style: _integrationOutlinedButtonStyle(context),
                   icon: const Icon(Icons.edit_outlined, size: 16),
                   label: Text(
@@ -1084,13 +1661,23 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: provider.isTestingWriteTarget
                         ? null
-                        : provider.clearWriteTarget,
+                        : () {
+                            if (current()) {
+                              _runTargetAction(
+                                context,
+                                provider,
+                                provider.clearWriteTarget,
+                              );
+                            }
+                          },
                     style: _integrationOutlinedButtonStyle(context),
                     icon: const Icon(Icons.delete_outline, size: 16),
                     label: Text(NotificationUiCopy.calDavRemove),
                   ),
                 OutlinedButton.icon(
-                  onPressed: () => _showICloudCalDavDialog(context, provider),
+                  onPressed: () {
+                    if (current()) _showICloudCalDavDialog(context, provider);
+                  },
                   style: _integrationOutlinedButtonStyle(context),
                   icon: const Icon(Icons.apple, size: 16),
                   label: const Text('iCloud'),
@@ -1098,7 +1685,11 @@ class _CalDavWriteTargetCard extends StatelessWidget {
                 FilledButton.tonalIcon(
                   onPressed: !configured || provider.isTestingWriteTarget
                       ? null
-                      : provider.testWriteTarget,
+                      : () {
+                          if (current()) {
+                            provider.testWriteTarget(isCurrent: current);
+                          }
+                        },
                   style: _integrationFilledButtonStyle(context),
                   icon: const Icon(Icons.fact_check_outlined, size: 16),
                   label: Text(NotificationUiCopy.calDavTestWriteback),
@@ -1111,10 +1702,47 @@ class _CalDavWriteTargetCard extends StatelessWidget {
     );
   }
 
+  Future<void> _runTargetAction(
+    BuildContext context,
+    CalendarSyncProvider provider,
+    Future<void> Function() action,
+  ) async {
+    final origin = SettingsActionOrigin(context);
+    if (!origin.isCurrent() ||
+        !identical(provider, context.read<CalendarSyncProvider>())) {
+      return;
+    }
+    final revision = provider.writeTargetRevision + 1;
+    try {
+      await action();
+    } on AccountPreferenceWriteCanceled {
+      // Superseded configuration and account cleanup intentionally cancel.
+    } catch (_) {
+      if (!context.mounted ||
+          !origin.isCurrent() ||
+          !identical(provider, context.read<CalendarSyncProvider>()) ||
+          provider.writeTargetRevision != revision) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, _, _) =>
+                Text(ExportUiCopy.current().configurationFailed),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _showCalDavDialog(
     BuildContext context,
     CalendarSyncProvider provider,
   ) async {
+    final origin = SettingsActionOrigin(context);
+    final revision = provider.writeTargetRevision;
+    if (!origin.isCurrent()) return;
     final current = provider.writeTarget;
     final urlCtrl = TextEditingController(text: current?.collectionUrl ?? '');
     final authCtrl = TextEditingController(
@@ -1195,13 +1823,23 @@ class _CalDavWriteTargetCard extends StatelessWidget {
     final url = urlCtrl.text.trim();
     final auth = authCtrl.text.trim();
     if (ok != true || url.isEmpty || auth.isEmpty) return;
-    await provider.saveWriteTarget(
-      CalDavWriteTarget(
-        collectionUrl: url,
-        authorizationHeader: auth,
-        enabled: current?.enabled == true,
-        conflictPolicy: conflictPolicy,
-        lastTestedAt: current?.lastTestedAt,
+    if (!origin.isCurrent() ||
+        !context.mounted ||
+        !identical(provider, context.read<CalendarSyncProvider>()) ||
+        provider.writeTargetRevision != revision) {
+      return;
+    }
+    await _runTargetAction(
+      context,
+      provider,
+      () => provider.saveWriteTarget(
+        CalDavWriteTarget(
+          collectionUrl: url,
+          authorizationHeader: auth,
+          enabled: current?.enabled == true,
+          conflictPolicy: conflictPolicy,
+          lastTestedAt: current?.lastTestedAt,
+        ),
       ),
     );
   }
@@ -1210,6 +1848,9 @@ class _CalDavWriteTargetCard extends StatelessWidget {
     BuildContext context,
     CalendarSyncProvider provider,
   ) async {
+    final origin = SettingsActionOrigin(context);
+    final revision = provider.writeTargetRevision;
+    if (!origin.isCurrent()) return;
     final current = provider.writeTarget;
     final currentUrl = current?.collectionUrl ?? '';
     final urlCtrl = TextEditingController(
@@ -1307,15 +1948,25 @@ class _CalDavWriteTargetCard extends StatelessWidget {
     if (ok != true || url.isEmpty || appleId.isEmpty || appPassword.isEmpty) {
       return;
     }
-    await provider.saveWriteTarget(
-      CalDavWriteTarget(
-        collectionUrl: url,
-        authorizationHeader: CalDavCredentialHelper.basicAuthorizationHeader(
-          username: appleId,
-          password: appPassword,
+    if (!origin.isCurrent() ||
+        !context.mounted ||
+        !identical(provider, context.read<CalendarSyncProvider>()) ||
+        provider.writeTargetRevision != revision) {
+      return;
+    }
+    await _runTargetAction(
+      context,
+      provider,
+      () => provider.saveWriteTarget(
+        CalDavWriteTarget(
+          collectionUrl: url,
+          authorizationHeader: CalDavCredentialHelper.basicAuthorizationHeader(
+            username: appleId,
+            password: appPassword,
+          ),
+          enabled: false,
+          conflictPolicy: conflictPolicy,
         ),
-        enabled: false,
-        conflictPolicy: conflictPolicy,
       ),
     );
   }
@@ -1330,13 +1981,530 @@ class _CalDavWriteTargetCard extends StatelessWidget {
   }
 }
 
-class _SubscriptionTile extends StatelessWidget {
+enum _TileActionError { pauseFailed, resumeFailed, deleteFailed, storageFailed }
+
+class _OpeningMenuActionRecord {
+  final SettingsActionOrigin origin;
+  final CalendarSyncProvider provider;
+  final int lifetimeGeneration;
+  final int sourceRevision;
+  final IcsSubscription snapshot;
+  final bool intendedPause;
+
+  _OpeningMenuActionRecord({
+    required this.origin,
+    required this.provider,
+    required this.lifetimeGeneration,
+    required this.sourceRevision,
+    required this.snapshot,
+    required this.intendedPause,
+  });
+}
+
+class _MenuRecordHolder {
+  _OpeningMenuActionRecord? _record;
+  bool _consumed = false;
+
+  bool get isConsumed => _consumed;
+  bool get hasRecord => _record != null;
+  _OpeningMenuActionRecord? get record => _record;
+
+  void bindRecord(_OpeningMenuActionRecord rec) {
+    if (_consumed) return;
+    _record = rec;
+  }
+
+  _OpeningMenuActionRecord? consume() {
+    if (_consumed) return null;
+    _consumed = true;
+    return _record;
+  }
+}
+
+class _ActionErrorState {
+  final _TileActionError error;
+  final CalendarSyncProvider provider;
+  final SettingsActionOrigin origin;
+  final int lifetimeGeneration;
+  final int sourceRevision;
+  final IcsSubscription snapshot;
+
+  const _ActionErrorState({
+    required this.error,
+    required this.provider,
+    required this.origin,
+    required this.lifetimeGeneration,
+    required this.sourceRevision,
+    required this.snapshot,
+  });
+}
+
+class _SubscriptionTile extends StatefulWidget {
   final IcsSubscription sub;
-  const _SubscriptionTile({required this.sub});
+  const _SubscriptionTile({super.key, required this.sub});
+
+  @override
+  State<_SubscriptionTile> createState() => _SubscriptionTileState();
+}
+
+class _SubscriptionTileState extends State<_SubscriptionTile> {
+  bool _busy = false;
+  int _actionOp = 0;
+  _ActionErrorState? _actionErrorState;
+  _MenuRecordHolder? _activeMenuHolder;
+
+  @override
+  void dispose() {
+    _activeMenuHolder?.consume();
+    _activeMenuHolder = null;
+    super.dispose();
+  }
+
+  void _recordMenuOpening(
+    BuildContext context,
+    _MenuRecordHolder holder,
+    IcsSubscription sub,
+  ) {
+    if (holder.hasRecord || holder.isConsumed) return;
+    final origin = SettingsActionOrigin(context);
+    final p = context.read<CalendarSyncProvider>();
+    holder.bindRecord(
+      _OpeningMenuActionRecord(
+        origin: origin,
+        provider: p,
+        lifetimeGeneration: p.icsLifetimeGeneration,
+        sourceRevision: IcsSubscriptionStorage.sourceRevision(sub.id),
+        snapshot: sub,
+        intendedPause: sub.enabled,
+      ),
+    );
+  }
+
+  Future<void> _handleDirectRetry(
+    BuildContext context,
+    CalendarSyncProvider provider,
+  ) async {
+    if (_busy || provider.isSyncing) return;
+    final origin = SettingsActionOrigin(context);
+    final initialGeneration = provider.icsLifetimeGeneration;
+    final initialRev = IcsSubscriptionStorage.sourceRevision(widget.sub.id);
+    final snapshot = widget.sub;
+    final thisOp = ++_actionOp;
+    setState(() => _busy = true);
+
+    bool hasFeedbackAuthority() {
+      if (!origin.isCurrent(checkRoute: true)) return false;
+      if (!mounted || !context.mounted) return false;
+      try {
+        if (!identical(context.read<CalendarSyncProvider>(), provider)) {
+          return false;
+        }
+      } catch (_) {
+        return false;
+      }
+      if (provider.icsLifetimeGeneration != initialGeneration) return false;
+      return true;
+    }
+
+    bool isCurrent() {
+      if (!hasFeedbackAuthority()) return false;
+      if (IcsSubscriptionStorage.sourceRevision(snapshot.id) != initialRev) {
+        return false;
+      }
+      return true;
+    }
+
+    try {
+      await provider.syncSubscription(snapshot.id, isCurrent: isCurrent);
+      if (hasFeedbackAuthority()) {
+        setState(() => _actionErrorState = null);
+      }
+    } on AccountPreferenceWriteCanceled {
+      return;
+    } catch (_) {
+      if (hasFeedbackAuthority()) {
+        setState(() {
+          _actionErrorState = _ActionErrorState(
+            error: _TileActionError.storageFailed,
+            provider: provider,
+            origin: origin,
+            lifetimeGeneration: initialGeneration,
+            sourceRevision: IcsSubscriptionStorage.sourceRevision(snapshot.id),
+            snapshot: snapshot,
+          );
+        });
+      }
+    } finally {
+      if (mounted && thisOp == _actionOp) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _retryFailedAction(
+    BuildContext context,
+    CalendarSyncProvider provider,
+    _ActionErrorState errorState,
+  ) async {
+    if (!mounted || !context.mounted) return;
+
+    final CalendarSyncProvider currentProvider;
+    try {
+      currentProvider = context.read<CalendarSyncProvider>();
+    } catch (_) {
+      return;
+    }
+
+    if (!identical(currentProvider, provider) ||
+        !identical(currentProvider, errorState.provider) ||
+        !identical(_actionErrorState, errorState) ||
+        _busy ||
+        currentProvider.isSyncing) {
+      return;
+    }
+
+    if (!errorState.origin.isCurrent(checkRoute: true) ||
+        errorState.lifetimeGeneration !=
+            currentProvider.icsLifetimeGeneration ||
+        errorState.sourceRevision !=
+            IcsSubscriptionStorage.sourceRevision(errorState.snapshot.id)) {
+      return;
+    }
+
+    final origin = SettingsActionOrigin(context);
+    final initialGeneration = currentProvider.icsLifetimeGeneration;
+    final initialRev = IcsSubscriptionStorage.sourceRevision(
+      errorState.snapshot.id,
+    );
+
+    final thisOp = ++_actionOp;
+    setState(() => _busy = true);
+
+    bool hasFeedbackAuthority() {
+      if (!origin.isCurrent(checkRoute: true)) return false;
+      if (!mounted || !context.mounted) return false;
+      try {
+        if (!identical(context.read<CalendarSyncProvider>(), currentProvider)) {
+          return false;
+        }
+      } catch (_) {
+        return false;
+      }
+      if (currentProvider.icsLifetimeGeneration != initialGeneration) {
+        return false;
+      }
+      return true;
+    }
+
+    bool isActionCurrent() {
+      if (!hasFeedbackAuthority()) return false;
+      if (IcsSubscriptionStorage.sourceRevision(errorState.snapshot.id) !=
+          initialRev) {
+        return false;
+      }
+      return true;
+    }
+
+    try {
+      if (currentProvider.icsStorageNeedsReconciliation) {
+        await currentProvider.reconcileIcsStorage(isCurrent: isActionCurrent);
+      } else {
+        switch (errorState.error) {
+          case _TileActionError.pauseFailed:
+            final currentRows = currentProvider.subscriptions;
+            final matchIndex = currentRows.indexWhere(
+              (r) => r.id == errorState.snapshot.id,
+            );
+            if (matchIndex < 0) return;
+            final currentSub = currentRows[matchIndex];
+            if (!currentSub.enabled) return;
+            await currentProvider.updateSubscription(
+              currentSub.copyWith(enabled: false),
+              isCurrent: isActionCurrent,
+            );
+            break;
+          case _TileActionError.resumeFailed:
+            final currentRows = currentProvider.subscriptions;
+            final matchIndex = currentRows.indexWhere(
+              (r) => r.id == errorState.snapshot.id,
+            );
+            if (matchIndex < 0) return;
+            final currentSub = currentRows[matchIndex];
+            if (currentSub.enabled) return;
+            await currentProvider.updateSubscription(
+              currentSub.copyWith(enabled: true),
+              isCurrent: isActionCurrent,
+            );
+            break;
+          case _TileActionError.deleteFailed:
+            await currentProvider.removeSubscription(
+              errorState.snapshot.id,
+              isCurrent: isActionCurrent,
+            );
+            break;
+          case _TileActionError.storageFailed:
+            final currentRows = currentProvider.subscriptions;
+            final matchIndex = currentRows.indexWhere(
+              (r) => r.id == errorState.snapshot.id,
+            );
+            if (matchIndex < 0) return;
+            await currentProvider.updateSubscription(
+              currentRows[matchIndex],
+              isCurrent: isActionCurrent,
+            );
+            break;
+        }
+      }
+      if (hasFeedbackAuthority()) {
+        setState(() => _actionErrorState = null);
+      }
+    } on AccountPreferenceWriteCanceled {
+      return;
+    } catch (_) {
+      if (hasFeedbackAuthority()) {
+        setState(() {
+          _actionErrorState = _ActionErrorState(
+            error: currentProvider.icsStorageNeedsReconciliation
+                ? _TileActionError.storageFailed
+                : errorState.error,
+            provider: currentProvider,
+            origin: origin,
+            lifetimeGeneration: initialGeneration,
+            sourceRevision: IcsSubscriptionStorage.sourceRevision(
+              errorState.snapshot.id,
+            ),
+            snapshot: errorState.snapshot,
+          );
+        });
+      }
+    } finally {
+      if (mounted && thisOp == _actionOp) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _executeMenuAction(
+    String value,
+    _OpeningMenuActionRecord record,
+  ) async {
+    if (!record.origin.isCurrent(checkRoute: true)) return;
+    if (!mounted || !context.mounted) return;
+    try {
+      if (!identical(context.read<CalendarSyncProvider>(), record.provider)) {
+        return;
+      }
+    } catch (_) {
+      return;
+    }
+    if (record.provider.icsLifetimeGeneration != record.lifetimeGeneration) {
+      return;
+    }
+    if (IcsSubscriptionStorage.sourceRevision(record.snapshot.id) !=
+        record.sourceRevision) {
+      return;
+    }
+
+    String action = value;
+    if (action == 'toggle') {
+      action = record.intendedPause ? 'pause' : 'resume';
+    }
+
+    final currentRows = record.provider.subscriptions;
+    final matchIndex = currentRows.indexWhere(
+      (r) => r.id == record.snapshot.id,
+    );
+    if (matchIndex < 0) return;
+    final currentSub = currentRows[matchIndex];
+    if (action == 'pause') {
+      if (!currentSub.enabled || !record.intendedPause) {
+        return;
+      }
+    } else if (action == 'resume') {
+      if (currentSub.enabled || record.intendedPause) {
+        return;
+      }
+    }
+
+    if (_busy || record.provider.isSyncing) return;
+    final thisOp = ++_actionOp;
+    setState(() => _busy = true);
+
+    bool hasFeedbackAuthority() {
+      if (!record.origin.isCurrent(checkRoute: true)) return false;
+      if (!mounted || !context.mounted) return false;
+      try {
+        if (!identical(context.read<CalendarSyncProvider>(), record.provider)) {
+          return false;
+        }
+      } catch (_) {
+        return false;
+      }
+      if (record.provider.icsLifetimeGeneration != record.lifetimeGeneration) {
+        return false;
+      }
+      return true;
+    }
+
+    bool isActionCurrent() {
+      if (!hasFeedbackAuthority()) return false;
+      if (IcsSubscriptionStorage.sourceRevision(record.snapshot.id) !=
+          record.sourceRevision) {
+        return false;
+      }
+      return true;
+    }
+
+    try {
+      if (action == 'pause') {
+        await record.provider.updateSubscription(
+          currentSub.copyWith(enabled: false),
+          isCurrent: isActionCurrent,
+        );
+      } else if (action == 'resume') {
+        await record.provider.updateSubscription(
+          currentSub.copyWith(enabled: true),
+          isCurrent: isActionCurrent,
+        );
+      } else if (action == 'delete') {
+        await record.provider.removeSubscription(
+          record.snapshot.id,
+          isCurrent: isActionCurrent,
+        );
+      } else if (action == 'sync') {
+        await record.provider.syncSubscription(
+          record.snapshot.id,
+          isCurrent: isActionCurrent,
+        );
+      }
+      if (hasFeedbackAuthority()) {
+        setState(() => _actionErrorState = null);
+      }
+    } on AccountPreferenceWriteCanceled {
+      return;
+    } catch (_) {
+      if (hasFeedbackAuthority()) {
+        final _TileActionError err;
+        if (action == 'pause') {
+          err = _TileActionError.pauseFailed;
+        } else if (action == 'resume') {
+          err = _TileActionError.resumeFailed;
+        } else if (action == 'delete') {
+          err = _TileActionError.deleteFailed;
+        } else {
+          err = _TileActionError.storageFailed;
+        }
+        setState(() {
+          _actionErrorState = _ActionErrorState(
+            error: err,
+            provider: record.provider,
+            origin: record.origin,
+            lifetimeGeneration: record.lifetimeGeneration,
+            sourceRevision: IcsSubscriptionStorage.sourceRevision(
+              record.snapshot.id,
+            ),
+            snapshot: record.snapshot,
+          );
+        });
+      }
+    } finally {
+      if (mounted && thisOp == _actionOp) {
+        setState(() => _busy = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.read<CalendarSyncProvider>();
+    final provider = context.watch<CalendarSyncProvider>();
+    final sub = widget.sub;
+    final isEn = NotificationUiCopy.isEn;
+    final result = provider.icsRefreshResults[sub.id];
+
+    final hasFailure =
+        result != null &&
+        !result.isSuccess &&
+        result.status != IcsRefreshStatus.canceled;
+
+    final actionError = _actionErrorState;
+    final isActionErrorValid =
+        actionError != null &&
+        identical(actionError.provider, provider) &&
+        actionError.origin.isCurrent(checkRoute: false) &&
+        actionError.lifetimeGeneration == provider.icsLifetimeGeneration &&
+        actionError.sourceRevision ==
+            IcsSubscriptionStorage.sourceRevision(sub.id);
+    final activeActionError = isActionErrorValid ? actionError.error : null;
+
+    String? resultText;
+    TextStyle? resultStyle;
+
+    if (activeActionError != null) {
+      switch (activeActionError) {
+        case _TileActionError.pauseFailed:
+          resultText = isEn
+              ? 'Failed to pause subscription. Please retry.'
+              : '暂停订阅失败，请重试';
+          resultStyle = _icsErrorTextStyle(context);
+          break;
+        case _TileActionError.resumeFailed:
+          resultText = isEn
+              ? 'Failed to resume subscription. Please retry.'
+              : '启用订阅失败，请重试';
+          resultStyle = _icsErrorTextStyle(context);
+          break;
+        case _TileActionError.deleteFailed:
+          resultText = isEn
+              ? 'Failed to delete subscription. Please retry.'
+              : '删除订阅失败，请重试';
+          resultStyle = _icsErrorTextStyle(context);
+          break;
+        case _TileActionError.storageFailed:
+          resultText = isEn
+              ? 'Failed to update subscription. Please retry.'
+              : '更新订阅失败，请重试';
+          resultStyle = _icsErrorTextStyle(context);
+          break;
+      }
+    } else if (result != null) {
+      switch (result.status) {
+        case IcsRefreshStatus.refreshed:
+          final count = result.eventCount;
+          resultText = isEn
+              ? 'Refreshed ($count ${count == 1 ? "event" : "events"})'
+              : '已刷新（$count 个日程）';
+          resultStyle = _integrationHintTextStyle(context, fontSize: 11);
+          break;
+        case IcsRefreshStatus.httpFailure:
+          resultText = isEn
+              ? 'Network request failed. Check URL or connection.'
+              : '网络请求失败，请检查链接或网络';
+          resultStyle = _icsErrorTextStyle(context);
+          break;
+        case IcsRefreshStatus.invalidCalendar:
+          resultText = isEn
+              ? 'Invalid calendar format or unsupported calendar data.'
+              : '日历格式无效或包含不支持的日历数据';
+          resultStyle = _icsErrorTextStyle(context);
+          break;
+        case IcsRefreshStatus.storageFailure:
+          resultText = isEn
+              ? 'Failed to save calendar data locally.'
+              : '本地存储写入失败，请重试';
+          resultStyle = _icsErrorTextStyle(context);
+          break;
+        case IcsRefreshStatus.canceled:
+          resultText = isEn ? 'Refresh canceled.' : '刷新已取消';
+          resultStyle = _integrationHintTextStyle(context, fontSize: 11);
+          break;
+      }
+    }
+
+    _MenuRecordHolder holder = _activeMenuHolder ??= _MenuRecordHolder();
+    if (holder.isConsumed) {
+      holder = _activeMenuHolder = _MenuRecordHolder();
+    }
+
     return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -1349,34 +2517,140 @@ class _SubscriptionTile extends StatelessWidget {
           ),
         ),
         title: Text(sub.name),
-        subtitle: Text(
-          sub.url,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 11),
-        ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) async {
-            if (value == 'toggle') {
-              await provider.updateSubscription(
-                sub.copyWith(enabled: !sub.enabled),
-              );
-            } else if (value == 'delete') {
-              await provider.removeSubscription(sub.id);
-            }
-          },
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              value: 'toggle',
-              child: AppSecondaryMenuText(
-                sub.enabled
-                    ? (NotificationUiCopy.isEn ? 'Pause' : '暂停')
-                    : (NotificationUiCopy.isEn ? 'Resume' : '启用'),
-              ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              sub.url,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11),
             ),
-            PopupMenuItem(
-              value: 'delete',
-              child: AppSecondaryMenuText(NotificationUiCopy.menuDelete),
+            const SizedBox(height: 2),
+            Text(
+              '${sub.enabled ? (isEn ? "Active" : "已启用") : (isEn ? "Paused" : "已暂停")}'
+              '${sub.lastSyncedAt == null ? "" : " · ${NotificationUiCopy.lastSyncedAt(AppDateFormat.fullDateTime(context, sub.lastSyncedAt!))}"}',
+              style: _integrationHintTextStyle(context, fontSize: 11),
+            ),
+            if (resultText != null) ...[
+              const SizedBox(height: 2),
+              Text(resultText, style: resultStyle),
+            ],
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_busy)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: SizedBox.square(
+                  dimension: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else if (activeActionError != null)
+              IconButton(
+                tooltip: switch (activeActionError) {
+                  _TileActionError.pauseFailed => isEn ? 'Retry pause' : '重试暂停',
+                  _TileActionError.resumeFailed =>
+                    isEn ? 'Retry resume' : '重试启用',
+                  _TileActionError.deleteFailed =>
+                    isEn ? 'Retry delete' : '重试删除',
+                  _TileActionError.storageFailed =>
+                    provider.icsStorageNeedsReconciliation
+                        ? (isEn ? 'Recover storage' : '恢复存储')
+                        : (isEn ? 'Retry update' : '重试更新'),
+                },
+                icon: Icon(
+                  Icons.refresh,
+                  size: 20,
+                  color: _icsErrorTextStyle(context).color,
+                ),
+                onPressed: provider.isSyncing
+                    ? null
+                    : () => _retryFailedAction(context, provider, actionError!),
+              )
+            else if (hasFailure && sub.enabled)
+              IconButton(
+                tooltip: isEn ? 'Retry refresh' : '重试刷新',
+                icon: Icon(
+                  Icons.refresh,
+                  size: 20,
+                  color: _icsErrorTextStyle(context).color,
+                ),
+                onPressed: provider.isSyncing
+                    ? null
+                    : () => _handleDirectRetry(context, provider),
+              ),
+            AppLivePopupMenuButton<String>(
+              enabled: !_busy && !provider.isSyncing,
+              onOpened: () {
+                _recordMenuOpening(context, holder, sub);
+              },
+              onSelected: (value) async {
+                final record = holder.consume();
+                if (identical(_activeMenuHolder, holder)) {
+                  _activeMenuHolder = null;
+                  if (mounted) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() {});
+                    });
+                  }
+                }
+                if (record != null) {
+                  await _executeMenuAction(value, record);
+                }
+              },
+              onCanceled: () {
+                holder.consume();
+                if (identical(_activeMenuHolder, holder)) {
+                  _activeMenuHolder = null;
+                  if (mounted) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() {});
+                    });
+                  }
+                }
+              },
+              itemBuilder: (ctx) {
+                _recordMenuOpening(context, holder, sub);
+                return [
+                  PopupMenuItem(
+                    value: sub.enabled ? 'pause' : 'resume',
+                    child: ValueListenableBuilder<AppLocale>(
+                      valueListenable: I18n.localeListenable,
+                      builder: (_, _, _) => AppSecondaryMenuText(
+                        sub.enabled
+                            ? NotificationUiCopy.menuPause
+                            : NotificationUiCopy.menuResume,
+                      ),
+                    ),
+                  ),
+                  if (sub.enabled)
+                    PopupMenuItem(
+                      value: 'sync',
+                      child: ValueListenableBuilder<AppLocale>(
+                        valueListenable: I18n.localeListenable,
+                        builder: (_, _, _) => AppSecondaryMenuText(
+                          hasFailure
+                              ? (NotificationUiCopy.isEn
+                                    ? 'Retry Refresh'
+                                    : '重试刷新')
+                              : NotificationUiCopy.refreshAction,
+                        ),
+                      ),
+                    ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: ValueListenableBuilder<AppLocale>(
+                      valueListenable: I18n.localeListenable,
+                      builder: (_, _, _) =>
+                          AppSecondaryMenuText(NotificationUiCopy.menuDelete),
+                    ),
+                  ),
+                ];
+              },
             ),
           ],
         ),
@@ -1384,8 +2658,6 @@ class _SubscriptionTile extends StatelessWidget {
     );
   }
 }
-
-String _formatDateTime(DateTime d) => I18nDateFormat.fullDateTime(d);
 
 // ---------------------------------------------------------------------------
 // 位置提醒
@@ -1492,6 +2764,30 @@ class _LocationRemindersTab extends StatelessWidget {
     BuildContext context,
     LocationReminderProvider provider,
   ) async {
+    final origin = SettingsActionOrigin(context);
+    final initialGeneration = provider.storageGeneration;
+    BuildContext? modalContext;
+
+    bool isCurrent() {
+      if (!origin.isCurrent(checkRoute: false)) return false;
+      if (!context.mounted) return false;
+      try {
+        if (!identical(context.read<LocationReminderProvider>(), provider)) {
+          return false;
+        }
+      } catch (_) {
+        return false;
+      }
+      if (provider.storageGeneration != initialGeneration) return false;
+      final mCtx = modalContext;
+      if (mCtx == null || !mCtx.mounted) return false;
+      final modalRoute = ModalRoute.of(mCtx);
+      if (modalRoute == null || !modalRoute.isActive || !modalRoute.isCurrent) {
+        return false;
+      }
+      return true;
+    }
+
     final titleCtrl = TextEditingController();
     final latCtrl = TextEditingController();
     final lngCtrl = TextEditingController(text: '');
@@ -1501,149 +2797,432 @@ class _LocationRemindersTab extends StatelessWidget {
     String? latError;
     String? lngError;
     String? radiusError;
-    final ok = await showControllerDialog<bool>(
+
+    var titleInvalid = false;
+    var latInvalid = false;
+    var lngInvalid = false;
+    var radiusInvalid = false;
+
+    var saving = false;
+    var reconciling = false;
+    var hasSaveError = false;
+    var hadAttempt = false;
+
+    LocationReminder? draftSnapshot;
+
+    await showControllerDialog<void>(
       context: context,
       controllers: [titleCtrl, latCtrl, lngCtrl, radiusCtrl],
-      builder: (ctx) => ValueListenableBuilder<AppLocale>(
-        valueListenable: I18n.localeListenable,
-        builder: (ctx, _, _) => StatefulBuilder(
-          builder: (ctx, setSt) => AppDialog(
-            title: Text(NotificationUiCopy.newLocationReminderTitle),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleCtrl,
-                  decoration: InputDecoration(
-                    labelText: NotificationUiCopy.reminderTitleLabel,
-                    errorText: titleError,
-                  ),
-                  autofocus: true,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: latCtrl,
-                        decoration: InputDecoration(
-                          labelText: NotificationUiCopy.latitudeLabel,
-                          errorText: latError,
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          signed: true,
-                          decimal: true,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: lngCtrl,
-                        decoration: InputDecoration(
-                          labelText: NotificationUiCopy.longitudeLabel,
-                          errorText: lngError,
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          signed: true,
-                          decimal: true,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: radiusCtrl,
-                  decoration: InputDecoration(
-                    labelText: NotificationUiCopy.radiusMetersLabel,
-                    errorText: radiusError,
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(NotificationUiCopy.triggerDirectionLabel),
-                    const Spacer(),
-                    ChoiceChip(
-                      label: Text(NotificationUiCopy.triggerEnter),
-                      selected: trigger == LocationTrigger.enter,
-                      onSelected: (_) =>
-                          setSt(() => trigger = LocationTrigger.enter),
-                    ),
-                    const SizedBox(width: 4),
-                    ChoiceChip(
-                      label: Text(NotificationUiCopy.triggerLeave),
-                      selected: trigger == LocationTrigger.leave,
-                      onSelected: (_) =>
-                          setSt(() => trigger = LocationTrigger.leave),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(I18n.tr('action.cancel')),
-              ),
-              FilledButton(
-                onPressed: () {
+      builder: (dialogCtx) {
+        modalContext = dialogCtx;
+        return ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, _, _) => ListenableBuilder(
+            listenable: provider,
+            builder: (ctx, _) => StatefulBuilder(
+              builder: (ctx, setSt) {
+                modalContext = ctx;
+
+                titleError = titleInvalid
+                    ? (NotificationUiCopy.isEn
+                          ? 'Please enter a reminder title'
+                          : '请填写提醒标题')
+                    : null;
+                latError = latInvalid
+                    ? (NotificationUiCopy.isEn
+                          ? 'Please enter a valid latitude'
+                          : '请输入有效纬度')
+                    : null;
+                lngError = lngInvalid
+                    ? (NotificationUiCopy.isEn
+                          ? 'Please enter a valid longitude'
+                          : '请输入有效经度')
+                    : null;
+                radiusError = radiusInvalid
+                    ? (NotificationUiCopy.isEn
+                          ? 'Please enter a valid radius'
+                          : '请输入有效半径')
+                    : null;
+
+                Future<void> doReconcile() async {
+                  if (saving || reconciling) return;
+                  if (!isCurrent()) return;
+                  setSt(() {
+                    reconciling = true;
+                  });
+                  try {
+                    await provider.reconcileStorage();
+                  } on AccountPreferenceWriteCanceled {
+                    return;
+                  } catch (_) {
+                    // Recovery failures retain actionable UI; do not expose internals.
+                  } finally {
+                    if (isCurrent()) {
+                      setSt(() {
+                        reconciling = false;
+                      });
+                    }
+                  }
+                }
+
+                Future<void> doSave() async {
+                  if (saving || reconciling) return;
+                  if (!isCurrent()) return;
+                  if (provider.storageNeedsReconciliation) return;
+
                   final title = titleCtrl.text.trim();
                   final lat = double.tryParse(latCtrl.text.trim());
                   final lng = double.tryParse(lngCtrl.text.trim());
                   final radius = double.tryParse(radiusCtrl.text.trim());
-                  setSt(() {
-                    titleError = title.isEmpty
-                        ? (NotificationUiCopy.isEn
-                              ? 'Please enter a reminder title'
-                              : '请填写提醒标题')
-                        : null;
-                    latError = lat == null
-                        ? (NotificationUiCopy.isEn
-                              ? 'Please enter a valid latitude'
-                              : '请输入有效纬度')
-                        : null;
-                    lngError = lng == null
-                        ? (NotificationUiCopy.isEn
-                              ? 'Please enter a valid longitude'
-                              : '请输入有效经度')
-                        : null;
-                    radiusError = radius == null || radius <= 0
-                        ? (NotificationUiCopy.isEn
-                              ? 'Please enter a valid radius'
-                              : '请输入有效半径')
-                        : null;
-                  });
-                  if (titleError == null &&
-                      latError == null &&
-                      lngError == null &&
-                      radiusError == null) {
-                    Navigator.pop(ctx, true);
+
+                  final hasTitleError = title.isEmpty;
+                  final hasLatError =
+                      lat == null || !lat.isFinite || lat < -90.0 || lat > 90.0;
+                  final hasLngError =
+                      lng == null ||
+                      !lng.isFinite ||
+                      lng < -180.0 ||
+                      lng > 180.0;
+                  final hasRadiusError =
+                      radius == null || !radius.isFinite || radius <= 0;
+
+                  titleInvalid = hasTitleError;
+                  latInvalid = hasLatError;
+                  lngInvalid = hasLngError;
+                  radiusInvalid = hasRadiusError;
+
+                  if (hasTitleError ||
+                      hasLatError ||
+                      hasLngError ||
+                      hasRadiusError) {
+                    setSt(() {});
+                    return;
                   }
-                },
-                child: Text(I18n.tr('action.save')),
-              ),
-            ],
+
+                  saving = true;
+                  hasSaveError = false;
+                  hadAttempt = true;
+                  setSt(() {});
+
+                  if (draftSnapshot == null) {
+                    draftSnapshot = LocationReminder(
+                      title: title,
+                      latitude: lat,
+                      longitude: lng,
+                      radiusMeters: radius,
+                      trigger: trigger,
+                    );
+                  } else {
+                    draftSnapshot = LocationReminder(
+                      id: draftSnapshot!.id,
+                      title: title,
+                      latitude: lat,
+                      longitude: lng,
+                      radiusMeters: radius,
+                      trigger: trigger,
+                      createdAt: draftSnapshot!.createdAt,
+                      updatedAt: draftSnapshot!.updatedAt,
+                    );
+                  }
+
+                  final reminderToSave = draftSnapshot!;
+
+                  try {
+                    await provider.add(reminderToSave, isCurrent: isCurrent);
+                    if (!isCurrent()) return;
+                    final mCtx = modalContext;
+                    if (mCtx == null || !mCtx.mounted) return;
+                    Navigator.of(mCtx).pop();
+                  } on AccountPreferenceWriteCanceled {
+                    return;
+                  } catch (_) {
+                    if (!isCurrent()) return;
+                    setSt(() {
+                      saving = false;
+                      hasSaveError = true;
+                    });
+                  }
+                }
+
+                final media = MediaQuery.of(ctx);
+                final theme = Theme.of(ctx);
+                final cs = theme.colorScheme;
+                final isEn = NotificationUiCopy.isEn;
+                final isRetry = hasSaveError || hadAttempt;
+                final disabledActionForeground = cs.onSurface.withValues(
+                  alpha: 0.38,
+                );
+                final textScale = media.textScaler.scale(1.0);
+                final horizontalInset = media.size.width < 360 ? 12.0 : 20.0;
+                final availableWidth = media.size.width - horizontalInset * 2;
+                final effectiveMaxWidth = availableWidth.isFinite
+                    ? availableWidth.clamp(0.0, 420.0).toDouble()
+                    : 420.0;
+                final dialogContentWidth = effectiveMaxWidth - 48.0;
+                final isNarrowOrLargeText =
+                    media.size.width < 360 || textScale > 1.15;
+
+                final latField = TextField(
+                  controller: latCtrl,
+                  decoration: InputDecoration(
+                    labelText: NotificationUiCopy.latitudeLabel,
+                    errorText: latError,
+                    errorMaxLines: 3,
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    signed: true,
+                    decimal: true,
+                  ),
+                );
+
+                final lngField = TextField(
+                  controller: lngCtrl,
+                  decoration: InputDecoration(
+                    labelText: NotificationUiCopy.longitudeLabel,
+                    errorText: lngError,
+                    errorMaxLines: 3,
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    signed: true,
+                    decimal: true,
+                  ),
+                );
+
+                // Reserve the complete keyboard area for this retained form;
+                // AppDialog's presentation lift alone leaves short layouts'
+                // actions partially behind the keyboard.
+                return Padding(
+                  padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+                  child: AppDialog(
+                    shiftForKeyboard: false,
+                    title: Text(NotificationUiCopy.newLocationReminderTitle),
+                    content: SizedBox(
+                      width: dialogContentWidth,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: titleCtrl,
+                            decoration: InputDecoration(
+                              labelText: NotificationUiCopy.reminderTitleLabel,
+                              errorText: titleError,
+                              errorMaxLines: 3,
+                            ),
+                            autofocus: true,
+                          ),
+                          const SizedBox(height: 8),
+                          if (isNarrowOrLargeText) ...[
+                            latField,
+                            const SizedBox(height: 8),
+                            lngField,
+                          ] else ...[
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: latField),
+                                const SizedBox(width: 8),
+                                Expanded(child: lngField),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: radiusCtrl,
+                            decoration: InputDecoration(
+                              labelText: NotificationUiCopy.radiusMetersLabel,
+                              errorText: radiusError,
+                              errorMaxLines: 3,
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            alignment: WrapAlignment.spaceBetween,
+                            children: [
+                              Text(NotificationUiCopy.triggerDirectionLabel),
+                              Wrap(
+                                spacing: 8,
+                                children: [
+                                  ChoiceChip(
+                                    label: Text(
+                                      NotificationUiCopy.triggerEnter,
+                                    ),
+                                    selected: trigger == LocationTrigger.enter,
+                                    onSelected: saving || reconciling
+                                        ? null
+                                        : (_) => setSt(
+                                            () =>
+                                                trigger = LocationTrigger.enter,
+                                          ),
+                                  ),
+                                  ChoiceChip(
+                                    label: Text(
+                                      NotificationUiCopy.triggerLeave,
+                                    ),
+                                    selected: trigger == LocationTrigger.leave,
+                                    onSelected: saving || reconciling
+                                        ? null
+                                        : (_) => setSt(
+                                            () =>
+                                                trigger = LocationTrigger.leave,
+                                          ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          if (provider.storageNeedsReconciliation) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              NotificationUiCopy.isEn
+                                  ? 'Storage state is uncertain. Please recover storage before retrying.'
+                                  : '存储状态异常，重试前请先恢复存储',
+                              style: TextStyle(
+                                color: Theme.of(ctx).colorScheme.error,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Semantics(
+                                button: true,
+                                enabled: !(reconciling || saving),
+                                label: reconciling
+                                    ? (isEn ? 'Recovering storage…' : '正在恢复存储…')
+                                    : null,
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    disabledForegroundColor:
+                                        disabledActionForeground,
+                                    side: BorderSide(
+                                      color: (reconciling || saving)
+                                          ? cs.outlineVariant.withValues(
+                                              alpha: 0.16,
+                                            )
+                                          : cs.outlineVariant.withValues(
+                                              alpha: 0.35,
+                                            ),
+                                      width: 0.4,
+                                    ),
+                                  ),
+                                  onPressed: (reconciling || saving)
+                                      ? null
+                                      : () => doReconcile(),
+                                  child: Wrap(
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    spacing: 8,
+                                    runSpacing: 4,
+                                    children: [
+                                      if (reconciling) ...[
+                                        SizedBox.square(
+                                          dimension: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: cs.primary,
+                                            semanticsLabel: isEn
+                                                ? 'Recovering storage…'
+                                                : '正在恢复存储…',
+                                          ),
+                                        ),
+                                      ],
+                                      Text(isEn ? 'Recover Storage' : '恢复存储'),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ] else if (hasSaveError) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              isEn
+                                  ? 'Failed to save reminder. Please retry.'
+                                  : '保存提醒失败，请重试',
+                              style: TextStyle(color: cs.error),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    actions: [
+                      Semantics(
+                        button: true,
+                        enabled: !(saving || reconciling),
+                        label: (saving || reconciling)
+                            ? (isEn ? 'Waiting…' : '请稍候…')
+                            : null,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            disabledForegroundColor: disabledActionForeground,
+                          ),
+                          onPressed: saving || reconciling
+                              ? null
+                              : () {
+                                  if (!isCurrent()) return;
+                                  Navigator.of(modalContext!).pop();
+                                },
+                          child: Text(I18n.tr('action.cancel')),
+                        ),
+                      ),
+                      Semantics(
+                        button: true,
+                        enabled:
+                            !(saving ||
+                                reconciling ||
+                                provider.storageNeedsReconciliation),
+                        label: saving
+                            ? (isRetry
+                                  ? (isEn ? 'Retrying…' : '正在重试…')
+                                  : (isEn ? 'Saving…' : '正在保存…'))
+                            : null,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            disabledForegroundColor: disabledActionForeground,
+                          ),
+                          onPressed:
+                              (saving ||
+                                  reconciling ||
+                                  provider.storageNeedsReconciliation)
+                              ? null
+                              : () => doSave(),
+                          child: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              if (saving) ...[
+                                SizedBox.square(
+                                  dimension: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: cs.primary,
+                                    semanticsLabel: isRetry
+                                        ? (isEn ? 'Retrying…' : '正在重试…')
+                                        : (isEn ? 'Saving…' : '正在保存…'),
+                                  ),
+                                ),
+                              ],
+                              Text(
+                                isRetry
+                                    ? I18n.tr('action.retry')
+                                    : I18n.tr('action.save'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
-        ),
-      ),
-    );
-    final title = titleCtrl.text.trim();
-    final lat = double.tryParse(latCtrl.text.trim());
-    final lng = double.tryParse(lngCtrl.text.trim());
-    final radius = double.tryParse(radiusCtrl.text.trim()) ?? 200;
-    if (ok != true) return;
-    if (title.isEmpty || lat == null || lng == null) return;
-    await provider.add(
-      LocationReminder(
-        title: title,
-        latitude: lat,
-        longitude: lng,
-        radiusMeters: radius,
-        trigger: trigger,
-      ),
+        );
+      },
     );
   }
 
@@ -1656,23 +3235,49 @@ class _LocationRemindersTab extends StatelessWidget {
         ? await LocationGeofenceService.syncReminders(provider.reminders)
         : null;
     if (!context.mounted) return;
+    final media = MediaQuery.maybeOf(context);
+    final isNarrowHighText =
+        permission.shouldOpenSettings &&
+        media != null &&
+        media.size.width < 360 &&
+        media.textScaler.scale(14) >= 21;
+    final feedbackText = _RetainedFeedbackText(
+      () => sync == null
+          ? NotificationUiCopy.formatLocationPermissionMessage(
+              permission.message,
+            )
+          : NotificationUiCopy.locationSynced(sync.scheduledCount),
+    );
+    final settingsAction = permission.shouldOpenSettings
+        ? _RetainedLocaleSnackBarAction(
+            labelBuilder: () => NotificationUiCopy.toSettingsAction,
+            onPressed: LocationGeofenceService.openLocationSettings,
+          )
+        : null;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          sync == null
-              ? NotificationUiCopy.formatLocationPermissionMessage(
-                  permission.message,
-                )
-              : NotificationUiCopy.locationSynced(sync.scheduledCount),
-        ),
-        behavior: SnackBarBehavior.floating,
-        action: permission.shouldOpenSettings
-            ? SnackBarAction(
-                label: NotificationUiCopy.toSettingsAction,
-                onPressed: LocationGeofenceService.openLocationSettings,
-              )
-            : null,
-      ),
+      isNarrowHighText
+          ? SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  feedbackText,
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: settingsAction!,
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              behavior: SnackBarBehavior.floating,
+              persist: true,
+            )
+          : SnackBar(
+              content: feedbackText,
+              behavior: SnackBarBehavior.floating,
+              action: settingsAction,
+            ),
     );
   }
 
@@ -1680,6 +3285,12 @@ class _LocationRemindersTab extends StatelessWidget {
     BuildContext context,
     LocationReminderProvider provider,
   ) async {
+    final origin = SettingsActionOrigin(context);
+    final generation = provider.storageGeneration;
+    bool isCurrent() =>
+        origin.isCurrent() &&
+        provider.storageGeneration == generation &&
+        identical(context.read<LocationReminderProvider>(), provider);
     final latCtrl = TextEditingController();
     final lngCtrl = TextEditingController();
     final ok = await showControllerDialog<bool>(
@@ -1748,28 +3359,35 @@ class _LocationRemindersTab extends StatelessWidget {
     if (lat == null || lng == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(NotificationUiCopy.validCoordinatesRequired),
+          content: _RetainedFeedbackText(
+            () => NotificationUiCopy.validCoordinatesRequired,
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
       return;
     }
 
-    final hits = provider.ingestFix(
+    if (!isCurrent()) return;
+    final hits = await provider.ingestFix(
       LocationFix(latitude: lat, longitude: lng, at: DateTime.now()),
+      isCurrent: isCurrent,
     );
+    if (!isCurrent()) return;
+    if (!context.mounted) return;
     final notificationService = context.read<NotificationService>();
     for (final hit in hits) {
       notificationService.notifyLocationReminderHit(hit);
     }
 
     if (!context.mounted) return;
+    final hitCount = hits.length;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          hits.isEmpty
+        content: _RetainedFeedbackText(
+          () => hitCount == 0
               ? NotificationUiCopy.locationNoHits
-              : NotificationUiCopy.locationTriggeredHits(hits.length),
+              : NotificationUiCopy.locationTriggeredHits(hitCount),
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -1823,12 +3441,51 @@ class _LocaleTab extends StatelessWidget {
       await provider.setLocale(selection);
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      var executed = false;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
         SnackBar(
-          content: Text(NotificationUiCopy.localeSaveFailed),
-          action: SnackBarAction(
-            label: I18n.tr('action.retry'),
-            onPressed: () => _selectLocale(context, provider, selection),
+          persist: true,
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (contentContext, _, _) {
+              final theme = Theme.of(contentContext);
+              final cs = theme.colorScheme;
+              final snackBarBackground =
+                  theme.snackBarTheme.backgroundColor ??
+                  cs.surfaceContainerHighest;
+              final renderedFill = Color.alphaBlend(
+                snackBarBackground,
+                Colors.white,
+              );
+              final foreground = appReadableForeground(
+                renderedFill,
+                theme.snackBarTheme.actionTextColor ?? cs.primary,
+              );
+              return Row(
+                children: [
+                  Expanded(child: Text(NotificationUiCopy.localeSaveFailed)),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: foreground,
+                      minimumSize: const Size(48, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () {
+                      if (executed) return;
+                      executed = true;
+                      messenger.hideCurrentSnackBar(
+                        reason: SnackBarClosedReason.action,
+                      );
+                      _selectLocale(context, provider, selection);
+                    },
+                    child: Text(I18n.tr('action.retry')),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       );
@@ -1865,6 +3522,54 @@ class _LocaleTab extends StatelessWidget {
           style: _integrationHintTextStyle(context),
         ),
       ],
+    );
+  }
+}
+
+class _RetainedFeedbackText extends StatelessWidget {
+  const _RetainedFeedbackText(this.message);
+
+  final String Function() message;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) => Text(message()),
+    );
+  }
+}
+
+/// Preserves [SnackBar.action] non-null persistence and [onPressed] identity
+/// while rebuilding the rendered [SnackBarAction] label on locale changes.
+class _RetainedLocaleSnackBarAction extends SnackBarAction {
+  const _RetainedLocaleSnackBarAction({
+    required this.labelBuilder,
+    required super.onPressed,
+  }) : super(label: '');
+
+  final String Function() labelBuilder;
+
+  @override
+  String get label => labelBuilder();
+
+  @override
+  State<SnackBarAction> createState() => _RetainedLocaleSnackBarActionState();
+}
+
+class _RetainedLocaleSnackBarActionState extends State<SnackBarAction> {
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) => SnackBarAction(
+        textColor: widget.textColor,
+        disabledTextColor: widget.disabledTextColor,
+        backgroundColor: widget.backgroundColor,
+        disabledBackgroundColor: widget.disabledBackgroundColor,
+        label: widget.label,
+        onPressed: widget.onPressed,
+      ),
     );
   }
 }

@@ -64,6 +64,8 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
                         R.id.widget_anniversary_nav_habit,
                         R.id.widget_anniversary_nav_focus,
                     ),
+                    context = context,
+                    appWidgetId = id,
                 )
 
                 val isZh = DuoyiWidgetCopy.isZh(prefs)
@@ -92,6 +94,51 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
                 val item2 = selectedItems.getOrNull(1)
                 val item3 = selectedItems.getOrNull(2)
 
+                val measure = DuoyiWidgetTextMetrics(context.resources.displayMetrics)
+                val contentWidth = ((frame.core.options.minWidth.takeIf { it > 0 } ?: 140) - 16)
+                    .coerceAtLeast(1)
+                val title = DuoyiWidgetCopy.appTitle(prefs, isZh)
+                val refreshWidth = maxOf(36, measure.width("↻", 14f))
+                val showRefresh = measure.width(title, 14f) + refreshWidth + 2 <= contentWidth
+                val navigationLabels = listOf(
+                    DuoyiWidgetCopy.navTodo(prefs, isZh), DuoyiWidgetCopy.navHabit(prefs, isZh),
+                    DuoyiWidgetCopy.navCalendar(prefs, isZh), DuoyiWidgetCopy.navFocus(prefs, isZh),
+                )
+                val plan = DuoyiWidgetLayoutPolicy.textList(
+                    mode = frame.core.requestedMode,
+                    width = frame.core.options.minWidth,
+                    height = frame.core.options.minHeight,
+                    secondaryRows = listOf(item2 != null, item3 != null),
+                    titleLineHeight = measure.line(14f),
+                    bodyLineHeight = measure.line(12f),
+                    smallLineHeight = measure.line(11f),
+                    thirdLineIsSmall = false,
+                    headerHeight = maxOf(measure.line(14f), if (showRefresh) maxOf(36, measure.line(14f)) else 0),
+                    navigationHeight = maxOf(30, measure.line(10f)),
+                    navigationFitsWidth = navigationLabels.all {
+                        measure.width(it, 10f) + 2 <= (contentWidth - 8) / 4
+                    },
+                )
+                fun visible(shown: Boolean) = if (shown) View.VISIBLE else View.GONE
+                views.setViewVisibility(R.id.widget_refresh, visible(showRefresh))
+                views.setViewVisibility(R.id.widget_anniversary_subtitle, visible(plan.showSubtitle))
+                views.setViewVisibility(R.id.widget_anniversary_1, visible(plan.rows[0]))
+                views.setViewVisibility(R.id.widget_anniversary_2, visible(plan.rows[1]))
+                views.setViewVisibility(R.id.widget_anniversary_3, visible(plan.rows[2]))
+                views.setViewVisibility(
+                    R.id.widget_anniversary_bottom_nav,
+                    visible(plan.showNavigation),
+                )
+                if (!DuoyiWidgetTheme.isBottomNavEnabled(context, prefs, id)) {
+                    views.setViewVisibility(R.id.widget_anniversary_bottom_nav, View.GONE)
+                }
+                listOf(item1, item2, item3).forEachIndexed { index, item ->
+                    views.setContentDescription(
+                        intArrayOf(R.id.widget_anniversary_1, R.id.widget_anniversary_2, R.id.widget_anniversary_3)[index],
+                        item?.text,
+                    )
+                }
+
                 views.setTextViewText(
                     R.id.widget_anniversary_1,
                     item1?.text.orEmpty()
@@ -104,23 +151,9 @@ open class DuoyiAnniversaryWidgetProvider : DuoyiStyledWidgetProvider() {
                     R.id.widget_anniversary_3,
                     item3?.text.orEmpty()
                 )
-                views.setViewVisibility(
-                    R.id.widget_anniversary_2,
-                    if (item2 != null) DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id) else View.GONE
-                )
-                views.setViewVisibility(
-                    R.id.widget_anniversary_3,
-                    if (item3 != null) DuoyiWidgetDisplayMode.detailedVisibility(prefs, id) else View.GONE
-                )
-                views.setViewVisibility(
-                    R.id.widget_anniversary_bottom_nav,
-                    DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
-                )
-
-                views.setTextViewText(R.id.widget_anniversary_nav_todo, DuoyiWidgetCopy.navTodo(prefs, isZh))
-                views.setTextViewText(R.id.widget_anniversary_nav_habit, DuoyiWidgetCopy.navHabit(prefs, isZh))
-                views.setTextViewText(R.id.widget_anniversary_nav_calendar, DuoyiWidgetCopy.navCalendar(prefs, isZh))
-                views.setTextViewText(R.id.widget_anniversary_nav_focus, DuoyiWidgetCopy.navFocus(prefs, isZh))
+                intArrayOf(R.id.widget_anniversary_nav_todo, R.id.widget_anniversary_nav_habit,
+                    R.id.widget_anniversary_nav_calendar, R.id.widget_anniversary_nav_focus)
+                    .forEachIndexed { index, viewId -> views.setTextViewText(viewId, navigationLabels[index]) }
 
                 val openAnniversary = HomeWidgetLaunchIntent.getActivity(
                     context, MainActivity::class.java, Uri.parse("duoyi://anniversary")

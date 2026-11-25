@@ -30,8 +30,31 @@ class AccountUiCopy {
   static String get feedbackAvatarSaved => isEn ? 'Avatar updated' : '头像已更新';
   static String get feedbackPasswordChanged =>
       isEn ? 'Password changed' : '密码已修改';
+  static String get feedbackPasswordChangedRelogin =>
+      isEn ? 'Password changed. Please log in again.' : '密码已修改，请重新登录';
   static String get feedbackLoggedOut => isEn ? 'Logged out' : '已退出登录';
+  static String get accountChanged => isEn
+      ? 'Account changed. Reopen this page before trying again.'
+      : '账号已切换，请重新打开页面后再操作';
+  static String get feedbackLogoutFailed =>
+      isEn ? 'Could not log out. Please try again.' : '退出登录失败，请稍后重试';
+  static String get archiveSyncPending => isEn
+      ? 'Archived todos are not ready to sync. Retry before changing accounts.'
+      : '归档待办尚未准备好同步，请重试后再切换账号。';
+  static String get imageFileTypeLabel => isEn ? 'Images' : '图片';
   static String get feedbackCodeSent => isEn ? 'Code sent' : '验证码已发送';
+  static String get emailBoundLocalSyncFailed => isEn
+      ? 'Email bound. Local profile not updated on this device; you can retry.'
+      : '邮箱已绑定，此设备资料未更新，可重试';
+  static String get emailBoundLocalSyncRetryable => emailBoundLocalSyncFailed;
+  static String get profileSavedLocalSyncFailed => isEn
+      ? 'Profile saved. Local profile not updated on this device; you can retry.'
+      : '资料已保存，此设备资料未更新，可重试';
+  static String get localProfileSyncPendingTitle =>
+      isEn ? 'Local sync pending' : '本地同步待完成';
+  static String get actionRetry => isEn ? 'Retry' : '重试';
+  static String get feedbackLocalSynced =>
+      isEn ? 'Local profile synced' : '本地资料已同步';
 
   static String get tooltipShowPassword => isEn ? 'Show password' : '显示密码';
   static String get tooltipHidePassword => isEn ? 'Hide password' : '隐藏密码';
@@ -76,12 +99,9 @@ class AccountUiCopy {
     if (lower.contains('账号已发生变化') ||
         lower.contains('account has changed') ||
         lower.contains('account changed')) {
-      return isEn
-          ? 'Account changed. Reopen this page before trying again.'
-          : '账号已切换，请重新打开页面后再操作';
+      return accountChanged;
     }
-    if (lower.contains('账号正在切换') ||
-        lower.contains('account is switching')) {
+    if (lower.contains('账号正在切换') || lower.contains('account is switching')) {
       return isEn
           ? 'Account is switching. Please wait and try again.'
           : '账号正在切换，请稍候再试';

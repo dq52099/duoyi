@@ -1,10 +1,9 @@
 package com.duoyi.duoyi
 
 import android.content.Context
-import android.net.Uri
-import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -13,10 +12,14 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
+import es.antonborri.home_widget.HomeWidgetLaunchIntent
+import es.antonborri.home_widget.HomeWidgetPlugin
+import java.util.WeakHashMap
 import kotlin.math.roundToInt
 
 data class DuoyiWidgetThemePalette(
@@ -37,19 +40,71 @@ data class DuoyiWidgetThemePalette(
     val cornerRadiusDp: Int,
     val controlRadiusDp: Int,
     val borderWidthDp: Int,
-)
+) {
+    val isDark: Boolean
+        get() = dark
+
+    private val usesReadableColors: Boolean
+        get() = cardSkinId in supportedColorSkins &&
+            (brandId == "defaultBrand" || brandId == "liquidGlass") &&
+            backgroundAssetKey.isEmpty() &&
+            listOf(background, surface, navBackground).all { (it ushr 24) == 255 }
+
+    val readablePrimary: Int
+        get() = if (usesReadableColors) DuoyiWidgetReadableColors.foreground(
+            primary, intArrayOf(background, surface, navBackground),
+        ) else primary
+
+    val readableMutedText: Int
+        get() = if (usesReadableColors) DuoyiWidgetReadableColors.foreground(
+            mutedText, intArrayOf(background, surface, navBackground),
+        ) else mutedText
+
+    val readableOnPrimary: Int
+        get() = if (usesReadableColors && (primary ushr 24) == 255) DuoyiWidgetReadableColors.foreground(
+            onPrimary, intArrayOf(primary),
+        ) else onPrimary
+
+    companion object {
+        private val supportedColorSkins = setOf("plain_card", "paper_card", "mint_card", "starlight_card")
+    }
+}
 
 object DuoyiWidgetTheme {
-    private const val defaultPrimary = "#FFC85656"
+    const val THEME_MODE_SYSTEM = "system"
+    const val THEME_MODE_DARK = "dark"
+    const val THEME_MODE_LIGHT = "light"
+
+    private const val defaultPrimary = "#FF0066D6"
     private const val defaultBackground = "#FFF6F7F9"
     private const val defaultSurface = "#FFFFFFFF"
     private const val defaultNavBackground = "#FFF1F3F6"
-    private const val defaultBorder = "#00C85656"
+    private const val defaultBorder = "#000066D6"
     private const val defaultText = "#FF1F2933"
     private const val defaultMutedText = "#FF667085"
     private const val defaultOnPrimary = "#FFFFFFFF"
-    private const val defaultAccentStart = "#FFC85656"
-    private const val defaultAccentEnd = "#FF2F8F83"
+    private const val defaultAccentStart = "#FF0066D6"
+    private const val defaultAccentEnd = "#FF3898FF"
+
+    private const val darkPrimary = "#FF0A84FF"
+    private const val darkBackground = "#FF14171F"
+    private const val darkSurface = "#FF1C212B"
+    private const val darkNavBackground = "#FF242A36"
+    private const val darkBorder = "#FF2F3847"
+    private const val darkText = "#FFF2F5FA"
+    private const val darkMutedText = "#FFA5B0C2"
+    private const val darkOnPrimary = "#FFFFFFFF"
+    private const val darkAccentStart = "#FF0A84FF"
+    private const val darkAccentEnd = "#FF3898FF"
+
+    private val autoDarkBrands = setOf("defaultBrand", "liquidGlass", "default", "liquid_glass")
+    private data class FrameThemeContext(
+        val systemNight: Boolean,
+        val appWidgetId: Int?,
+        val themeModeOverride: String?,
+    )
+    private val frameContextCache = WeakHashMap<SharedPreferences, FrameThemeContext>()
+
     private const val maxBackgroundBitmapCacheEntries = 8
     private val backgroundBitmapCache =
         object : LinkedHashMap<BackgroundBitmapCacheKey, Bitmap>(
@@ -62,8 +117,100 @@ object DuoyiWidgetTheme {
             ): Boolean = size > maxBackgroundBitmapCacheEntries
         }
 
-    fun read(prefs: SharedPreferences): DuoyiWidgetThemePalette {
-        return DuoyiWidgetThemePalette(
+    fun widgetShowBottomNavKey(appWidgetId: Int): String = "widget_show_bottom_nav_$appWidgetId"
+
+    fun widgetThemeModeKey(appWidgetId: Int): String = "widget_theme_mode_$appWidgetId"
+
+    fun isBottomNavEnabled(context: Context, prefs: SharedPreferences, appWidgetId: Int?): Boolean =
+        isBottomNavEnabled(prefs, appWidgetId, context)
+
+    fun isBottomNavEnabled(
+        prefs: SharedPreferences,
+        appWidgetId: Int?,
+        context: Context? = null,
+    ): Boolean {
+        if (appWidgetId == null || appWidgetId <= 0) return true
+        val key = widgetShowBottomNavKey(appWidgetId)
+        val devicePrefs = if (context != null) safeDevicePrefs(context, prefs) else prefs
+        return when {
+            devicePrefs.contains(key) -> readBooleanCompat(devicePrefs, key, true)
+            prefs.contains(key) -> readBooleanCompat(prefs, key, true)
+            else -> true
+        }
+    }
+
+    fun readThemeMode(context: Context?, prefs: SharedPreferences, appWidgetId: Int?): String {
+        if (appWidgetId == null || appWidgetId <= 0) return THEME_MODE_SYSTEM
+        val key = widgetThemeModeKey(appWidgetId)
+        val devicePrefs = if (context != null) safeDevicePrefs(context, prefs) else prefs
+        return normalizeThemeMode(devicePrefs.getString(key, null))
+            ?: normalizeThemeMode(prefs.getString(key, null))
+            ?: THEME_MODE_SYSTEM
+    }
+
+    fun saveWidgetConfigPreferences(
+        context: Context,
+        appWidgetId: Int,
+        displayMode: String,
+        showBottomNav: Boolean,
+        themeMode: String,
+    ) {
+        if (appWidgetId <= 0) return
+        saveWidgetConfigToPrefs(
+            prefs = HomeWidgetPlugin.getData(context),
+            appWidgetId = appWidgetId,
+            displayMode = displayMode,
+            showBottomNav = showBottomNav,
+            themeMode = themeMode,
+        )
+    }
+
+    fun saveWidgetConfigToPrefs(
+        prefs: SharedPreferences,
+        appWidgetId: Int,
+        displayMode: String,
+        showBottomNav: Boolean,
+        themeMode: String,
+    ) {
+        if (appWidgetId <= 0) return
+        DuoyiWidgetDisplayMode.saveForWidget(prefs, appWidgetId, displayMode)
+        prefs.edit()
+            .putBoolean(widgetShowBottomNavKey(appWidgetId), showBottomNav)
+            .putString(widgetThemeModeKey(appWidgetId), normalizeThemeMode(themeMode) ?: THEME_MODE_SYSTEM)
+            .apply()
+    }
+
+    fun isNightUiMode(uiMode: Int): Boolean =
+        (uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
+    fun read(prefs: SharedPreferences): DuoyiWidgetThemePalette = read(prefs, null, null)
+
+    fun read(
+        prefs: SharedPreferences,
+        uiMode: Int,
+        appWidgetId: Int? = null,
+    ): DuoyiWidgetThemePalette = read(prefs, isNightUiMode(uiMode), appWidgetId)
+
+    fun read(
+        prefs: SharedPreferences,
+        systemNight: Boolean,
+        appWidgetId: Int? = null,
+    ): DuoyiWidgetThemePalette {
+        val raw = readRawPalette(prefs)
+        return resolveThemePalette(raw, prefs, context = null, appWidgetId = appWidgetId, systemNightOverride = systemNight)
+    }
+
+    fun read(
+        prefs: SharedPreferences,
+        context: Context?,
+        appWidgetId: Int? = null,
+    ): DuoyiWidgetThemePalette {
+        val raw = readRawPalette(prefs)
+        return resolveThemePalette(raw, prefs, context = context, appWidgetId = appWidgetId)
+    }
+
+    private fun readRawPalette(prefs: SharedPreferences): DuoyiWidgetThemePalette =
+        DuoyiWidgetThemePalette(
             brandId = prefs.getString("widget_theme_brand_id", "defaultBrand") ?: "defaultBrand",
             cardSkinId = prefs.getString("widget_theme_card_skin_id", "plain_card") ?: "plain_card",
             dark = prefs.getBoolean("widget_theme_dark", false),
@@ -82,6 +229,98 @@ object DuoyiWidgetTheme {
             controlRadiusDp = readInt(prefs, "widget_theme_control_radius_dp", 12),
             borderWidthDp = readInt(prefs, "widget_theme_border_width_dp", 0),
         )
+
+    private fun resolveThemePalette(
+        base: DuoyiWidgetThemePalette,
+        prefs: SharedPreferences,
+        context: Context?,
+        appWidgetId: Int?,
+        systemNightOverride: Boolean? = null,
+    ): DuoyiWidgetThemePalette {
+        val cached = synchronized(frameContextCache) { frameContextCache[prefs] }
+        val resolvedWidgetId = appWidgetId ?: cached?.appWidgetId
+        val modeOverride = readThemeMode(context, prefs, resolvedWidgetId)
+            .takeIf { it != THEME_MODE_SYSTEM }
+            ?: cached?.themeModeOverride
+            ?: THEME_MODE_SYSTEM
+        val systemNight = systemNightOverride
+            ?: if (context != null) isSystemDark(context) else (cached?.systemNight ?: false)
+        val isAutoDarkBrand = base.brandId in autoDarkBrands
+
+        if (modeOverride == THEME_MODE_LIGHT) {
+            return if (base.isDark && (isAutoDarkBrand || base.background == parseHexColor(darkBackground))) {
+                base.copy(
+                    dark = false,
+                    primary = parseHexColor(defaultPrimary),
+                    background = parseHexColor(defaultBackground),
+                    surface = parseHexColor(defaultSurface),
+                    navBackground = parseHexColor(defaultNavBackground),
+                    border = parseHexColor(defaultBorder),
+                    text = parseHexColor(defaultText),
+                    mutedText = parseHexColor(defaultMutedText),
+                    onPrimary = parseHexColor(defaultOnPrimary),
+                    accentStart = parseHexColor(defaultAccentStart),
+                    accentEnd = parseHexColor(defaultAccentEnd),
+                )
+            } else {
+                base.copy(dark = false)
+            }
+        }
+
+        val shouldUseDark = modeOverride == THEME_MODE_DARK ||
+            base.isDark ||
+            (systemNight && isAutoDarkBrand)
+        if (!shouldUseDark) return base
+
+        val shouldApplyDefaultDarkPalette = modeOverride == THEME_MODE_DARK ||
+            isAutoDarkBrand ||
+            base.background == parseHexColor(defaultBackground)
+        if (!shouldApplyDefaultDarkPalette) {
+            return base.copy(dark = true)
+        }
+        return base.copy(
+            dark = true,
+            primary = parseHexColor(darkPrimary),
+            background = parseHexColor(darkBackground),
+            surface = parseHexColor(darkSurface),
+            navBackground = parseHexColor(darkNavBackground),
+            border = parseHexColor(darkBorder),
+            text = parseHexColor(darkText),
+            mutedText = parseHexColor(darkMutedText),
+            onPrimary = parseHexColor(darkOnPrimary),
+            accentStart = parseHexColor(darkAccentStart),
+            accentEnd = parseHexColor(darkAccentEnd),
+            borderWidthDp = maxOf(base.borderWidthDp, 1),
+        )
+    }
+
+    private fun isSystemDark(context: Context): Boolean =
+        isNightUiMode(context.resources.configuration.uiMode)
+
+    private fun safeDevicePrefs(context: Context, fallback: SharedPreferences): SharedPreferences =
+        try {
+            HomeWidgetPlugin.getData(context)
+        } catch (_: Throwable) {
+            fallback
+        }
+
+    private fun normalizeThemeMode(raw: String?): String? = when (raw?.trim()?.lowercase()) {
+        THEME_MODE_DARK -> THEME_MODE_DARK
+        THEME_MODE_LIGHT -> THEME_MODE_LIGHT
+        THEME_MODE_SYSTEM -> THEME_MODE_SYSTEM
+        else -> null
+    }
+
+    private fun readBooleanCompat(prefs: SharedPreferences, key: String, fallback: Boolean): Boolean {
+        return try {
+            prefs.getBoolean(key, fallback)
+        } catch (_: ClassCastException) {
+            when (prefs.getString(key, null)?.trim()?.lowercase()) {
+                "true" -> true
+                "false" -> false
+                else -> fallback
+            }
+        }
     }
 
     fun applyContainer(
@@ -92,9 +331,17 @@ object DuoyiWidgetTheme {
         navId: Int = 0,
         appWidgetId: Int? = null,
     ) {
-        val theme = read(prefs)
-        val surfaces = DuoyiWidgetSurfaceResources.forTheme(theme)
-        views.setTextColor(R.id.widget_refresh, theme.mutedText)
+        val themeOverride = readThemeMode(context, prefs, appWidgetId)
+        synchronized(frameContextCache) {
+            frameContextCache[prefs] = FrameThemeContext(
+                systemNight = isSystemDark(context),
+                appWidgetId = appWidgetId,
+                themeModeOverride = themeOverride,
+            )
+        }
+        val theme = read(prefs, context, appWidgetId)
+        val surfaces = if (theme.dark) null else DuoyiWidgetSurfaceResources.forTheme(theme)
+        views.setTextColor(R.id.widget_refresh, theme.readableMutedText)
         views.setOnClickPendingIntent(R.id.widget_refresh, HomeWidgetLaunchIntent.getActivity(
             context, MainActivity::class.java, Uri.parse("duoyi://action/refresh_widgets")))
         val imageResource = backgroundImageResource(theme.backgroundAssetKey)
@@ -190,9 +437,11 @@ object DuoyiWidgetTheme {
         prefs: SharedPreferences,
         primaryIds: IntArray = intArrayOf(),
         secondaryIds: IntArray = intArrayOf(),
+        context: Context? = null,
+        appWidgetId: Int? = null,
     ) {
-        val theme = read(prefs)
-        val surfaces = DuoyiWidgetSurfaceResources.forTheme(theme)
+        val theme = read(prefs, context, appWidgetId)
+        val surfaces = if (theme.dark) null else DuoyiWidgetSurfaceResources.forTheme(theme)
         primaryIds.forEach {
             applyRoundedSurface(
                 views,
@@ -224,12 +473,46 @@ object DuoyiWidgetTheme {
         bodyIds: IntArray = intArrayOf(),
         mutedIds: IntArray = intArrayOf(),
         onPrimaryIds: IntArray = intArrayOf(),
+        context: Context? = null,
+        appWidgetId: Int? = null,
     ) {
-        val theme = read(prefs)
-        primaryIds.forEach { views.setTextColor(it, theme.primary) }
+        val theme = read(prefs, context, appWidgetId)
+        primaryIds.forEach { views.setTextColor(it, theme.readablePrimary) }
         bodyIds.forEach { views.setTextColor(it, theme.text) }
-        mutedIds.forEach { views.setTextColor(it, theme.mutedText) }
-        onPrimaryIds.forEach { views.setTextColor(it, theme.onPrimary) }
+        mutedIds.forEach { views.setTextColor(it, theme.readableMutedText) }
+        onPrimaryIds.forEach { views.setTextColor(it, theme.readableOnPrimary) }
+    }
+
+    fun applyProgressBar(
+        views: RemoteViews,
+        progressBarId: Int,
+        progress: Int,
+        prefs: SharedPreferences,
+        context: Context? = null,
+        appWidgetId: Int? = null,
+        max: Int = 100,
+    ) {
+        val boundedMax = max.coerceAtLeast(1)
+        val boundedProgress = progress.coerceIn(0, boundedMax)
+        views.setProgressBar(progressBarId, boundedMax, boundedProgress, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val theme = read(prefs, context, appWidgetId)
+            views.setColorStateList(
+                progressBarId,
+                "setProgressTintList",
+                ColorStateList.valueOf(theme.primary),
+            )
+            val trackColor = if (theme.dark) {
+                Color.argb(72, 165, 176, 194)
+            } else {
+                Color.argb(36, 100, 116, 139)
+            }
+            views.setColorStateList(
+                progressBarId,
+                "setProgressBackgroundTintList",
+                ColorStateList.valueOf(trackColor),
+            )
+        }
     }
 
     private fun readColor(
@@ -238,10 +521,25 @@ object DuoyiWidgetTheme {
         fallback: String,
     ): Int {
         val raw = prefs.getString(key, null)?.trim()
-        return try {
-            Color.parseColor(if (raw.isNullOrEmpty()) fallback else raw)
-        } catch (_: IllegalArgumentException) {
-            Color.parseColor(fallback)
+        if (raw.isNullOrEmpty()) return parseHexColor(fallback)
+        return tryParseHexColor(raw) ?: try {
+            Color.parseColor(raw)
+        } catch (_: Throwable) {
+            parseHexColor(fallback)
+        }
+    }
+
+    private fun parseHexColor(raw: String): Int =
+        tryParseHexColor(raw) ?: Color.parseColor(raw)
+
+    private fun tryParseHexColor(raw: String): Int? {
+        val clean = raw.trim().removePrefix("#")
+        if (clean.length != 6 && clean.length != 8) return null
+        val parsed = clean.toLongOrNull(16) ?: return null
+        return if (clean.length == 6) {
+            (0xFF000000L or parsed).toInt()
+        } else {
+            parsed.toInt()
         }
     }
 

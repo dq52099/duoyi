@@ -78,6 +78,19 @@ verify_web_build() {
             echo "   ❌ base href is not $BASE_HREF"
             exit 1
         fi
+        for asset_file in favicon.png favicon.ico icons/Icon-192.png icons/apple-touch-icon.png manifest.json web_resume_guard.js; do
+            if [ ! -f "$dir/$asset_file" ]; then
+                echo "   ❌ Missing web shell asset: $asset_file"
+                exit 1
+            fi
+        done
+        for versioned_ref in "favicon.png?v=" "favicon.ico?v=" "icons/Icon-192.png?v=" "icons/apple-touch-icon.png?v=" "manifest.json?v=" "web_resume_guard.js?v=" "flutter_bootstrap.js?v="; do
+            if ! grep -Fq "$versioned_ref" "$dir/index.html"; then
+                echo "   ❌ index.html missing cache-busted reference: $versioned_ref"
+                exit 1
+            fi
+        done
+        echo "   ✓ versioned favicon, manifest, and startup script references present"
     else
         echo "   ❌ index.html missing"
         exit 1
@@ -154,7 +167,7 @@ echo ""
 # 2. 构建 Web
 echo "🔨 Building web (release)..."
 rm -rf "$BUILD_WEB_DIR"
-"$FLUTTER_BIN" build web --release --no-wasm-dry-run --base-href=/duoyi/ --dart-define="DUOYI_SERVER_URL=$DUOYI_SERVER_URL" --dart-define=DUOYI_WEB_TARGET=desktop
+"$FLUTTER_BIN" build web --release --no-wasm-dry-run --base-href=/duoyi/ --no-web-resources-cdn --dart-define="DUOYI_SERVER_URL=$DUOYI_SERVER_URL" --dart-define=DUOYI_WEB_TARGET=desktop
 python3 "$SCRIPT_DIR/version_web_assets.py" "$BUILD_WEB_DIR"
 verify_web_build "$BUILD_WEB_DIR" "fresh build output"
 echo ""

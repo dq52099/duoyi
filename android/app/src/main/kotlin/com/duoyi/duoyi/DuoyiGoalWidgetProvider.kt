@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
@@ -50,6 +51,7 @@ open class DuoyiGoalWidgetProvider : DuoyiStyledWidgetProvider() {
                     prefs,
                     primaryIds = intArrayOf(
                         R.id.widget_goal_title,
+                        R.id.widget_goal_quick_add,
                         R.id.widget_goal_nav_calendar,
                     ),
                     bodyIds = intArrayOf(
@@ -63,6 +65,8 @@ open class DuoyiGoalWidgetProvider : DuoyiStyledWidgetProvider() {
                         R.id.widget_goal_nav_habit,
                         R.id.widget_goal_nav_focus,
                     ),
+                    context = context,
+                    appWidgetId = id,
                 )
 
                 val isZh = DuoyiWidgetCopy.isZh(prefs)
@@ -71,18 +75,39 @@ open class DuoyiGoalWidgetProvider : DuoyiStyledWidgetProvider() {
                     DuoyiWidgetCopy.appTitle(prefs, isZh)
                 )
                 views.setTextViewText(R.id.widget_goal_subtitle, DuoyiWidgetCopy.goalSubtitle(isZh))
+                val goalRaw1 = prefs.getString("goal_highlight_1", null)
+                val goalRaw2 = prefs.getString("goal_highlight_2", null)
+                val goalRaw3 = prefs.getString("goal_highlight_3", null)
                 views.setTextViewText(
                     R.id.widget_goal_1,
-                    DuoyiWidgetCopy.goalHighlight1(prefs.getString("goal_highlight_1", null), isZh)
+                    DuoyiWidgetCopy.goalHighlight1(goalRaw1, isZh)
                 )
                 views.setTextViewText(
                     R.id.widget_goal_2,
-                    DuoyiWidgetCopy.goalHighlight2(prefs.getString("goal_highlight_2", null), isZh)
+                    DuoyiWidgetCopy.goalHighlight2(goalRaw2, isZh)
                 )
                 views.setTextViewText(
                     R.id.widget_goal_3,
-                    DuoyiWidgetCopy.goalHighlight3(prefs.getString("goal_highlight_3", null), isZh)
+                    DuoyiWidgetCopy.goalHighlight3(goalRaw3, isZh)
                 )
+                val goalProgressPercent = DuoyiWidgetContent.resolveGoalProgressPercent(
+                    listOf(goalRaw1, goalRaw2, goalRaw3),
+                    frame.fresh,
+                    frame.core.publicationState,
+                )
+                if (goalProgressPercent != null) {
+                    views.setViewVisibility(R.id.widget_goal_progress_bar, View.VISIBLE)
+                    DuoyiWidgetTheme.applyProgressBar(
+                        views = views,
+                        progressBarId = R.id.widget_goal_progress_bar,
+                        progress = goalProgressPercent,
+                        prefs = prefs,
+                        context = context,
+                        appWidgetId = id,
+                    )
+                } else {
+                    views.setViewVisibility(R.id.widget_goal_progress_bar, View.GONE)
+                }
                 views.setViewVisibility(
                     R.id.widget_goal_2,
                     DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
@@ -121,6 +146,17 @@ open class DuoyiGoalWidgetProvider : DuoyiStyledWidgetProvider() {
                     context, MainActivity::class.java, Uri.parse("duoyi://tab/focus")
                 )
 
+                val showQuickAdd = !DuoyiWidgetDisplayMode.isCompact(prefs, id) && frame.fresh
+                views.setViewVisibility(R.id.widget_goal_quick_add, if (showQuickAdd) View.VISIBLE else View.GONE)
+                views.setContentDescription(R.id.widget_goal_quick_add, DuoyiWidgetCopy.quickAddGoalDescription(isZh))
+                views.setOnClickPendingIntent(
+                    R.id.widget_goal_quick_add,
+                    if (showQuickAdd) HomeWidgetLaunchIntent.getActivity(
+                        context,
+                        MainActivity::class.java,
+                        DuoyiWidgetSnapshot.actionUri(frame, Uri.parse("duoyi://action/quick_goal")),
+                    ) else openGoal,
+                )
                 views.setOnClickPendingIntent(R.id.widget_goal_root, openGoal)
                 views.setOnClickPendingIntent(R.id.widget_goal_title, openGoal)
                 views.setOnClickPendingIntent(R.id.widget_goal_subtitle, openGoal)

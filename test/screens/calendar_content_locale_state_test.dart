@@ -1,3 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:crypto/crypto.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'dart:async';
 
 import 'package:duoyi/core/calendar_ui_copy.dart';
@@ -48,6 +56,7 @@ class _FixtureTodoProvider extends TodoProvider {
     TodoItem todo, {
     bool waitForReminderSync = true,
     bool reportReminderScheduleFailure = false,
+    bool Function()? canWrite,
   }) async {
     addCalls++;
     addedTodos.add(todo);
@@ -122,6 +131,10 @@ Widget _calendarApp({
   required _FixtureTodoProvider todoProvider,
   required Widget home,
   _FixtureTimeAuditProvider? timeAuditProvider,
+  ThemeProvider? themeProvider,
+  TextScaler? visualTextScaler,
+  GlobalKey? captureKey,
+  bool useVisualFonts = false,
   List<Workspace> workspaces = const <Workspace>[],
   GlobalKey<NavigatorState>? navigatorKey,
   List<NavigatorObserver> navigatorObservers = const <NavigatorObserver>[],
@@ -135,7 +148,10 @@ Widget _calendarApp({
       ChangeNotifierProvider<PomodoroProvider>(
         create: (_) => _FixturePomodoroProvider(),
       ),
-      ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
+      if (themeProvider == null)
+        ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider())
+      else
+        ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
       ChangeNotifierProvider<CalendarProvider>(
         create: (_) => CalendarProvider(),
       ),
@@ -155,11 +171,41 @@ Widget _calendarApp({
         create: (_) => timeAuditProvider ?? _FixtureTimeAuditProvider(),
       ),
     ],
-    child: MaterialApp(
-      navigatorKey: navigatorKey,
-      navigatorObservers: navigatorObservers,
-      home: home,
-    ),
+    child: themeProvider == null
+        ? MaterialApp(
+            navigatorKey: navigatorKey,
+            navigatorObservers: navigatorObservers,
+            home: home,
+          )
+        : Consumer<ThemeProvider>(
+            builder: (context, selectedTheme, _) => AnimatedBuilder(
+              animation: I18n.localeListenable,
+              builder: (context, _) => MaterialApp(
+                debugShowCheckedModeBanner: false,
+                navigatorKey: navigatorKey,
+                navigatorObservers: navigatorObservers,
+                locale: Locale(I18n.current.name),
+                supportedLocales: const [Locale('zh'), Locale('en')],
+                localizationsDelegates: const [
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                ],
+                theme: useVisualFonts
+                    ? _staleVisualTheme(selectedTheme.brand.theme)
+                    : selectedTheme.brand.theme,
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(textScaler: visualTextScaler),
+                  child: captureKey == null
+                      ? child!
+                      : RepaintBoundary(key: captureKey, child: child!),
+                ),
+                home: home,
+              ),
+            ),
+          ),
   );
 }
 
@@ -610,8 +656,13 @@ void main() {
       expect(tester.widget<FilterChip>(projectChip).selected, isTrue);
       expect(find.text('Literal raw-id task'), findsOneWidget);
 
-      final projectAction = find.text(CalendarUiCopy.projectDetailAction);
+      final projectAction = find.widgetWithText(
+        ActionChip,
+        CalendarUiCopy.projectDetailAction,
+      );
       await tester.ensureVisible(projectAction);
+      await tester.pumpAndSettle();
+      expect(projectAction.hitTestable(), findsOneWidget);
       await tester.tap(projectAction);
       await tester.pumpAndSettle();
       final projectSheet = _projectDetailSheet();
@@ -1137,6 +1188,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      final calendarRoute = observer.pushed.last;
+      expect(calendarRoute.isActive, isTrue);
+      expect(calendarRoute.isCurrent, isTrue);
       await _openTimeEntryDialog(tester);
 
       final dialogRoute = observer.pushed.last;
@@ -1189,7 +1243,26 @@ void main() {
       await tester.tap(find.text(staleSelection.label));
       await tester.pumpAndSettle();
 
+      expect(categoryMenuRoute, isA<PopupRoute<dynamic>>());
+      expect(categoryMenuRoute.settings.name, 'AppAnchoredDropdownMenu');
+      expect(categoryMenuRoute.isActive, isTrue);
+      expect(categoryMenuRoute.isCurrent, isTrue);
+      expect(observer.popped, isNot(contains(categoryMenuRoute)));
+      expect(observer.removed, isNot(contains(categoryMenuRoute)));
+      expect(categoryFieldState.value, originalCategory);
+      expect(find.byType(AppDialog), findsNothing);
+      expect(timeAuditProvider.addCalls, 0);
+      expect(timeAuditProvider.addedEntries, isEmpty);
+      expect(tester.takeException(), isNull);
+
+      // Rejected taps retain the stale popup; dismiss only this current
+      // captured menu without returning a selected category.
+      categoryMenuRoute.navigator!.pop();
+      await tester.pumpAndSettle();
       expect(categoryMenuRoute.isActive, isFalse);
+      expect(calendarRoute.isActive, isTrue);
+      expect(calendarRoute.isCurrent, isTrue);
+      expect(categoryFieldState.mounted, isFalse);
       expect(categoryFieldState.value, originalCategory);
       expect(find.byType(AppDialog), findsNothing);
       expect(timeAuditProvider.addCalls, 0);
@@ -1340,5 +1413,438 @@ void main() {
       expect(timeAuditProvider.addedEntries, hasLength(1));
       expect(tester.takeException(), isNull);
     },
+  );
+
+  for (final brand in const ['defaultBrand', 'liquidGlass']) {
+    for (final viewport in const [Size(320, 844), Size(568, 320)]) {
+      testWidgets(
+        'stale Calendar popup visual $brand ${viewport.width.toInt()}x${viewport.height.toInt()} linear2',
+        (tester) =>
+            _runStaleVisual(tester, initialBrand: brand, viewport: viewport),
+      );
+    }
+  }
+}
+
+Future<Map<String, Object>>? _staleVisualFonts;
+
+Future<Map<String, Object>> _loadStaleVisualFonts() =>
+    _staleVisualFonts ??= () async {
+      final latinPath =
+          File('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf').existsSync()
+              ? '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+              : 'assets/fonts/DejaVuSans.ttf';
+      final sources = <String, String>{
+        'DuoyiStaleVisualLatin': latinPath,
+        'DuoyiStaleVisualCjk': 'assets/fonts/DroidSansFallbackFull.ttf',
+        'MaterialIcons':
+            'build/unit_test_assets/fonts/MaterialIcons-Regular.otf',
+      };
+      final records = <String, Object>{};
+      for (final entry in sources.entries) {
+        final file = File(entry.value);
+        final bytes = await file.readAsBytes();
+        await (FontLoader(
+          entry.key,
+        )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
+        records[entry.key] = <String, Object>{
+          'path': file.resolveSymbolicLinksSync(),
+          'sha256': sha256.convert(bytes).toString(),
+          'bytes': bytes.length,
+        };
+      }
+      return Map<String, Object>.unmodifiable(records);
+    }();
+
+ThemeData _staleVisualTheme(ThemeData theme) => theme.copyWith(
+  textTheme: theme.textTheme.apply(
+    fontFamily: 'DuoyiStaleVisualLatin',
+    fontFamilyFallback: const ['DuoyiStaleVisualCjk'],
+  ),
+  primaryTextTheme: theme.primaryTextTheme.apply(
+    fontFamily: 'DuoyiStaleVisualLatin',
+    fontFamilyFallback: const ['DuoyiStaleVisualCjk'],
+  ),
+);
+
+Directory? _staleVisualDirectory;
+
+Map<String, Object?> _routeState(Route<dynamic> route) => {
+  'identity': identityHashCode(route),
+  'name': route.settings.name,
+  'active': route.isActive,
+  'current': route.isCurrent,
+};
+
+Map<String, double> _rectState(Rect rect) => {
+  'left': rect.left,
+  'top': rect.top,
+  'width': rect.width,
+  'height': rect.height,
+};
+
+Future<void> _captureStaleVisual(
+  WidgetTester tester, {
+  required String caseName,
+  required String stage,
+  required ThemeProvider theme,
+  required Map<String, Object> fonts,
+  required GlobalKey captureKey,
+  required Route<dynamic> calendarRoute,
+  required Route<dynamic> dialogRoute,
+  required Route<dynamic> menuRoute,
+  required FormFieldState<TimeEntryCategory> fieldState,
+  required _FixtureTimeAuditProvider timeAudit,
+  required SharedPreferences preferences,
+  required bool popupExpected,
+}) async {
+  // State/oracles run with or without opt-in. Only PNG/JSON writes are optional.
+  expect(
+    preferences.getString(AccountLocalDataCleaner.accountDataOwnerKey),
+    'account-B',
+  );
+  expect(fieldState.mounted, isFalse);
+  expect(fieldState.value, TimeEntryCategory.work);
+  expect(dialogRoute.isActive, isFalse);
+  expect(timeAudit.addCalls, 0);
+  expect(timeAudit.addedEntries, isEmpty);
+  expect(menuRoute.isActive, popupExpected);
+  expect(menuRoute.isCurrent, popupExpected);
+  expect(calendarRoute.isCurrent, !popupExpected);
+  final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+  final appTheme = app.theme!;
+  final calendarContext = tester.element(find.byType(CalendarScreen));
+  final actualLocale = Localizations.localeOf(calendarContext);
+  final actualScaler = MediaQuery.textScalerOf(calendarContext);
+  expect(app.locale, Locale(I18n.current.name));
+  expect(actualLocale.languageCode, I18n.current.name);
+  for (final size in [12.0, 14.0, 20.0]) {
+    expect(actualScaler.scale(size), size * 2);
+  }
+  expect(appTheme.colorScheme.primary, theme.brand.theme.colorScheme.primary);
+  final labels = <Map<String, Object?>>[];
+  BuildContext? menuContext;
+  if (popupExpected) {
+    for (final category in TimeEntryCategory.values) {
+      final item = find.byWidgetPredicate(
+        (widget) =>
+            widget is PopupMenuItem<TimeEntryCategory> &&
+            widget.value == category,
+      );
+      expect(item, findsOneWidget);
+      final label = find.descendant(
+        of: item,
+        matching: find.text(category.label),
+      );
+      expect(label, findsOneWidget);
+      final context = tester.element(label);
+      menuContext ??= context;
+      expect(ModalRoute.of(context), same(menuRoute));
+      final style = DefaultTextStyle.of(context).style;
+      labels.add({
+        'value': category.name,
+        'actualText': tester.widget<Text>(label).data,
+        'bounds': _rectState(tester.getRect(label)),
+        'fontFamily': style.fontFamily,
+        'fontFallback': style.fontFamilyFallback,
+        'fontSize': style.fontSize,
+        'foreground': style.color?.toARGB32(),
+      });
+    }
+  }
+  expect(tester.takeException(), isNull);
+  final state = <String, Object?>{
+    'protocol': 'calendar-stale-visual-2723/v1',
+    'case': caseName,
+    'stage': stage,
+    'currentBrand': theme.brand.id,
+    'locale': I18n.current.name,
+    'materialAppLocale': app.locale.toString(),
+    'calendarLocalizationsLocale': actualLocale.toString(),
+    'calendarEffectiveFontSizes': {
+      for (final size in [12.0, 14.0, 20.0]) '$size': actualScaler.scale(size),
+    },
+    'viewport': {
+      'width': tester.view.physicalSize.width / tester.view.devicePixelRatio,
+      'height': tester.view.physicalSize.height / tester.view.devicePixelRatio,
+      'dpr': tester.view.devicePixelRatio,
+    },
+    'requestedTextScale': 2.0,
+    'popupEffectiveTextScale': menuContext == null
+        ? null
+        : MediaQuery.textScalerOf(menuContext).scale(14) / 14,
+    'appPrimary': appTheme.colorScheme.primary.toARGB32(),
+    'appBackground': appTheme.scaffoldBackgroundColor.toARGB32(),
+    'popupMaterialColor': menuContext
+        ?.findAncestorWidgetOfExactType<Material>()
+        ?.color
+        ?.toARGB32(),
+    'popupPrimary': menuContext == null
+        ? null
+        : Theme.of(menuContext).colorScheme.primary.toARGB32(),
+    'popupBarrier': menuRoute is PopupRoute<dynamic>
+        ? menuRoute.barrierColor?.toARGB32()
+        : null,
+    'fonts': fonts,
+    'labelsBuilt': labels,
+    'calendarRoute': _routeState(calendarRoute),
+    'dialogRoute': _routeState(dialogRoute),
+    'menuRoute': _routeState(menuRoute),
+    'fieldMounted': fieldState.mounted,
+    'fieldValue': fieldState.value?.name,
+    'accountOwner': preferences.getString(
+      AccountLocalDataCleaner.accountDataOwnerKey,
+    ),
+    'addCalls': timeAudit.addCalls,
+    'entryCount': timeAudit.addedEntries.length,
+    'visualAccepted': false,
+    'labelsMayExtendOutsideCapturedViewport': true,
+  };
+  final raw = Platform.environment['DUOYI_CALENDAR_STALE_SCREENSHOT_DIR'];
+  if (raw == null) return;
+  await tester.runAsync(() async {
+    final screenshots = Directory('/home/ubuntu/duoyi/evidence/screenshots');
+    expect(raw, isNotEmpty);
+    final requested = Directory(raw);
+    expect(requested.isAbsolute, isTrue);
+    expect(raw.startsWith('${screenshots.path}/'), isTrue);
+    final leaf = raw.substring(screenshots.path.length + 1);
+    expect(leaf.contains('/'), isFalse);
+    expect(leaf, isNot(anyOf('.', '..')));
+    expect(
+      requested.parent.resolveSymbolicLinksSync(),
+      screenshots.resolveSymbolicLinksSync(),
+    );
+    final current = _staleVisualDirectory;
+    if (current == null) {
+      // A private NEW direct child batch; never overwrite an accepted batch.
+      expect(
+        FileSystemEntity.typeSync(raw, followLinks: false),
+        FileSystemEntityType.notFound,
+      );
+      requested.createSync();
+      _staleVisualDirectory = requested;
+    } else {
+      expect(current.path, raw);
+    }
+    final render =
+        captureKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+    final image = await render.toImage(pixelRatio: 1);
+    try {
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      expect(png, isNotNull);
+      final pngFile = File('$raw/$caseName-$stage.png');
+      final jsonFile = File('$raw/$caseName-$stage.json');
+      expect(pngFile.existsSync(), isFalse);
+      expect(jsonFile.existsSync(), isFalse);
+      final bytes = png!.buffer.asUint8List(
+        png.offsetInBytes,
+        png.lengthInBytes,
+      );
+      state['imageWidth'] = image.width;
+      state['imageHeight'] = image.height;
+      state['pngSHA256'] = sha256.convert(bytes).toString();
+      pngFile.writeAsBytesSync(bytes, flush: true);
+      jsonFile.writeAsStringSync(
+        '${const JsonEncoder.withIndent('  ').convert(state)}\n',
+        flush: true,
+      );
+    } finally {
+      image.dispose();
+    }
+  });
+}
+
+Future<void> _runStaleVisual(
+  WidgetTester tester, {
+  required String initialBrand,
+  required Size viewport,
+}) async {
+  final preferences = await SharedPreferences.getInstance();
+  await preferences.setString(
+    AccountLocalDataCleaner.accountDataOwnerKey,
+    'account-A',
+  );
+  final fonts = (await tester.runAsync(_loadStaleVisualFonts))!;
+  final theme = ThemeProvider();
+  final captureKey = GlobalKey();
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = viewport;
+  addTearDown(() async {
+    try {
+      await tester.pumpWidget(const SizedBox.shrink());
+    } finally {
+      theme.dispose();
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    }
+  });
+  await preferences.setString('active_brand', initialBrand);
+  await preferences.setStringList('theme_unlocked_brands', [
+    'defaultBrand',
+    'liquidGlass',
+  ]);
+  await tester.runAsync(theme.loadFromStorage);
+  expect(theme.brand.id, initialBrand);
+  I18n.setLocale(AppLocale.en);
+  final caseName =
+      '$initialBrand-${viewport.width.toInt()}x${viewport.height.toInt()}-linear2';
+  final navigatorKey = GlobalKey<NavigatorState>();
+  final observer = _RecordingNavigatorObserver();
+  final todoProvider = _FixtureTodoProvider();
+  final timeAuditProvider = _FixtureTimeAuditProvider();
+  await tester.pumpWidget(
+    _calendarApp(
+      todoProvider: todoProvider,
+      timeAuditProvider: timeAuditProvider,
+      home: CalendarScreen(initialDate: DateTime(2021, 2, 1)),
+      navigatorKey: navigatorKey,
+      navigatorObservers: [observer],
+      themeProvider: theme,
+      visualTextScaler: TextScaler.linear(2),
+      captureKey: captureKey,
+      useVisualFonts: true,
+    ),
+  );
+  await tester.pumpAndSettle();
+  final calendarRoute = observer.pushed.last;
+  expect(calendarRoute.isActive, isTrue);
+  expect(calendarRoute.isCurrent, isTrue);
+  await _openQuickAddMenu(tester);
+  await tester.ensureVisible(find.text(CalendarUiCopy.quickAddTimeEntryTitle));
+  await tester.tap(find.text(CalendarUiCopy.quickAddTimeEntryTitle));
+  await tester.pumpAndSettle();
+
+  final dialogRoute = observer.pushed.last;
+  expect(dialogRoute.isCurrent, isTrue);
+  final categoryField = _timeEntryCategoryField();
+  final categoryFormField = find.descendant(
+    of: categoryField,
+    matching: find.byType(FormField<TimeEntryCategory>),
+  );
+  expect(categoryFormField, findsOneWidget);
+  final categoryFieldState = tester.state<FormFieldState<TimeEntryCategory>>(
+    categoryFormField,
+  );
+  const originalCategory = TimeEntryCategory.work;
+  expect(categoryFieldState.value, originalCategory);
+
+  final pushesBeforeCategoryMenu = observer.pushed.length;
+  await tester.ensureVisible(categoryField);
+  await tester.tap(categoryField);
+  await tester.pumpAndSettle();
+  expect(observer.pushed.length, pushesBeforeCategoryMenu + 1);
+  final categoryMenuRoute = observer.pushed.last;
+  expect(categoryMenuRoute.isCurrent, isTrue);
+
+  final unrelatedTopRoute = MaterialPageRoute<void>(
+    builder: (_) => const Scaffold(body: Text('Unrelated top route')),
+  );
+  navigatorKey.currentState!.push(unrelatedTopRoute);
+  await tester.pumpAndSettle();
+  expect(unrelatedTopRoute.isCurrent, isTrue);
+
+  final pushesBeforeAccountSwitch = observer.pushed.length;
+  await preferences.setString(
+    AccountLocalDataCleaner.accountDataOwnerKey,
+    'account-B',
+  );
+  AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+  await tester.pumpAndSettle();
+
+  expect(unrelatedTopRoute.isCurrent, isTrue);
+  expect(observer.popped, isNot(contains(unrelatedTopRoute)));
+  expect(observer.removed, isNot(contains(unrelatedTopRoute)));
+  expect(observer.pushed.length, pushesBeforeAccountSwitch);
+  expect(dialogRoute.isActive, isFalse);
+  expect(categoryFieldState.mounted, isFalse);
+  expect(categoryFieldState.value, originalCategory);
+
+  navigatorKey.currentState!.pop();
+  await tester.pumpAndSettle();
+  expect(categoryMenuRoute.isCurrent, isTrue);
+  final staleSelection = TimeEntryCategory.study;
+  await tester.ensureVisible(find.text(staleSelection.label));
+  expect(find.text(staleSelection.label).hitTestable(), findsOneWidget);
+  await tester.tap(find.text(staleSelection.label));
+  await tester.pumpAndSettle();
+
+  expect(categoryMenuRoute, isA<PopupRoute<dynamic>>());
+  expect(categoryMenuRoute.settings.name, 'AppAnchoredDropdownMenu');
+  expect(categoryMenuRoute.isActive, isTrue);
+  expect(categoryMenuRoute.isCurrent, isTrue);
+  expect(observer.popped, isNot(contains(categoryMenuRoute)));
+  expect(observer.removed, isNot(contains(categoryMenuRoute)));
+  expect(categoryFieldState.value, originalCategory);
+  expect(find.byType(AppDialog), findsNothing);
+  expect(timeAuditProvider.addCalls, 0);
+  expect(timeAuditProvider.addedEntries, isEmpty);
+  expect(tester.takeException(), isNull);
+
+  for (var index = 0; index < 3; index++) {
+    final targetBrand = index == 1
+        ? (initialBrand == 'defaultBrand' ? 'liquidGlass' : 'defaultBrand')
+        : initialBrand;
+    if (index != 0) {
+      expect(await tester.runAsync(() => theme.setBrand(targetBrand)), isTrue);
+      I18n.setLocale(index == 1 ? AppLocale.zh : AppLocale.en);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text(TimeEntryCategory.study.label));
+      expect(
+        find.text(TimeEntryCategory.study.label).hitTestable(),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(TimeEntryCategory.study.label));
+      await tester.pumpAndSettle();
+    }
+    expect(theme.brand.id, targetBrand);
+    expect(categoryMenuRoute.isCurrent, isTrue);
+    expect(observer.popped, isNot(contains(categoryMenuRoute)));
+    expect(observer.removed, isNot(contains(categoryMenuRoute)));
+    final stage = '$index-${I18n.current.name}-$targetBrand-stale-popup';
+    await _captureStaleVisual(
+      tester,
+      caseName: caseName,
+      stage: stage,
+      theme: theme,
+      fonts: fonts,
+      captureKey: captureKey,
+      calendarRoute: calendarRoute,
+      dialogRoute: dialogRoute,
+      menuRoute: categoryMenuRoute,
+      fieldState: categoryFieldState,
+      timeAudit: timeAuditProvider,
+      preferences: preferences,
+      popupExpected: true,
+    );
+  }
+
+  // Rejected taps retain the stale popup; dismiss only this current
+  // captured menu without returning a selected category.
+  categoryMenuRoute.navigator!.pop();
+  await tester.pumpAndSettle();
+  expect(categoryMenuRoute.isActive, isFalse);
+  expect(calendarRoute.isActive, isTrue);
+  expect(calendarRoute.isCurrent, isTrue);
+  expect(categoryFieldState.mounted, isFalse);
+  expect(categoryFieldState.value, originalCategory);
+  expect(find.byType(AppDialog), findsNothing);
+  expect(timeAuditProvider.addCalls, 0);
+  expect(timeAuditProvider.addedEntries, isEmpty);
+  expect(tester.takeException(), isNull);
+  await _captureStaleVisual(
+    tester,
+    caseName: caseName,
+    stage: '3-returned-calendar',
+    theme: theme,
+    fonts: fonts,
+    captureKey: captureKey,
+    calendarRoute: calendarRoute,
+    dialogRoute: dialogRoute,
+    menuRoute: categoryMenuRoute,
+    fieldState: categoryFieldState,
+    timeAudit: timeAuditProvider,
+    preferences: preferences,
+    popupExpected: false,
   );
 }

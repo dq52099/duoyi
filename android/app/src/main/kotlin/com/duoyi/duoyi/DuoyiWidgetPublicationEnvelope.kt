@@ -155,7 +155,9 @@ class DuoyiWidgetPublicationEnvelope private constructor(
             } else if (binding != null || lease != null) return null
             val presentation = DuoyiWidgetDesiredPresentation.tryFromMap(raw["desiredPresentation"])
                 ?: return null
-            val document = DuoyiWidgetPublicationDocument.tryFromMap(raw["document"]) ?: return null
+            val document = DuoyiWidgetPublicationDocument.tryFromMap(
+                raw["document"], allowLegacyWeekStart = true,
+            ) ?: return null
             if (document.ownerEpoch != epoch || document.presentationRevision > presentation.revision) return null
             if (document.presentationRevision == presentation.revision && document.locale != presentation.locale) return null
             if (state == "sealed" && document.state == DuoyiWidgetPublicationDocument.State.PUBLISHED) return null

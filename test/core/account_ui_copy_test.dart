@@ -6,6 +6,65 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   tearDown(() => I18n.setLocale(AppLocale.zh));
 
+  test(
+    'confirmed profile and email sync feedback stay distinct across locales',
+    () {
+      for (final locale in [AppLocale.zh, AppLocale.en, AppLocale.zh]) {
+        I18n.setLocale(locale);
+        expect(AccountUiCopy.profileSavedLocalSyncFailed, isNotEmpty);
+        expect(AccountUiCopy.localProfileSyncPendingTitle, isNotEmpty);
+        expect(
+          AccountUiCopy.profileSavedLocalSyncFailed,
+          isNot(AccountUiCopy.emailBoundLocalSyncFailed),
+        );
+        if (locale == AppLocale.en) {
+          expect(
+            AccountUiCopy.profileSavedLocalSyncFailed,
+            startsWith('Profile saved.'),
+          );
+          expect(AccountUiCopy.profileSavedLocalSyncFailed, contains('retry'));
+          expect(
+            AccountUiCopy.localProfileSyncPendingTitle,
+            'Local sync pending',
+          );
+          expect(
+            AccountUiCopy.profileSavedLocalSyncFailed,
+            isNot(matches(RegExp(r'[\u3400-\u9fff]'))),
+          );
+        } else {
+          expect(
+            AccountUiCopy.profileSavedLocalSyncFailed,
+            startsWith('资料已保存'),
+          );
+          expect(AccountUiCopy.profileSavedLocalSyncFailed, contains('重试'));
+          expect(AccountUiCopy.localProfileSyncPendingTitle, '本地同步待完成');
+        }
+      }
+    },
+  );
+
+  test('logout failure and image picker labels follow zh-en-zh', () {
+    for (final locale in [AppLocale.zh, AppLocale.en, AppLocale.zh]) {
+      I18n.setLocale(locale);
+      expect(
+        AccountUiCopy.feedbackLogoutFailed,
+        locale == AppLocale.en
+            ? 'Could not log out. Please try again.'
+            : '退出登录失败，请稍后重试',
+      );
+      expect(
+        AccountUiCopy.imageFileTypeLabel,
+        locale == AppLocale.en ? 'Images' : '图片',
+      );
+      expect(
+        AccountUiCopy.archiveSyncPending,
+        locale == AppLocale.en
+            ? 'Archived todos are not ready to sync. Retry before changing accounts.'
+            : '归档待办尚未准备好同步，请重试后再切换账号。',
+      );
+    }
+  });
+
   for (final scenario in [
     (
       details: [

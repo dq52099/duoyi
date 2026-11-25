@@ -5,6 +5,7 @@ import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/workspace.dart';
 import 'package:duoyi/providers/custom_focus_sound_provider.dart';
 import 'package:duoyi/providers/goal_provider.dart';
+import 'package:duoyi/providers/preferences_provider.dart';
 import 'package:duoyi/providers/share_provider.dart';
 import 'package:duoyi/screens/goal_edit_screen.dart';
 import 'package:duoyi/screens/goal_screen.dart';
@@ -40,7 +41,14 @@ void main() {
       source,
       contains('onChange: (v) => setState(() => _skipHolidays = v)'),
     );
-    expect(source, contains('nextDispatchLabel: _nextDispatchLabel()'));
+    expect(
+      source,
+      matches(
+        RegExp(
+          r'nextDispatchLabel: _nextDispatchLabel\(\s*AppDateFormat.patternOf\(context\),?\s*\)',
+        ),
+      ),
+    );
     expect(source, contains('RecurrenceEngine.nextOccurrence'));
     expect(source, contains('skipHolidays: _skipHolidays'));
     expect(source, contains("import '../models/workspace.dart';"));
@@ -60,8 +68,10 @@ void main() {
     expect(source, contains('_canEditWorkspace('));
     expect(
       source,
-      contains(
-        'onPressed: canEditCurrentWorkspace ? _deleteCurrentGoal : null',
+      matches(
+        RegExp(
+          r'onPressed: canEditCurrentWorkspace && !_persisting\s*\? _deleteCurrentGoal\s*: null',
+        ),
       ),
     );
     expect(source, contains('onPressed: canEditCurrentWorkspace'));
@@ -89,10 +99,10 @@ void main() {
     final source = File('lib/screens/goal_edit_screen.dart').readAsStringSync();
 
     expect(source, contains('class _GoalDateFields'));
-    expect(source, contains("label: '开始日期'"));
-    expect(source, contains("label: '目标日期'"));
-    expect(source, contains("emptyText: '创建即开启'"));
-    expect(source, contains("emptyText: '无期限'"));
+    expect(source, contains("label: _goalText('开始日期', 'Start date')"));
+    expect(source, contains("label: _goalText('目标日期', 'Target date')"));
+    expect(source, contains("emptyText: _goalText('创建即开启', 'On creation')"));
+    expect(source, contains("emptyText: _goalText('无期限', 'No deadline')"));
     expect(source, contains("ValueKey('goal_start_date_field')"));
     expect(source, contains("ValueKey('goal_target_date_field')"));
     expect(source, contains('constraints.maxWidth < 460'));
@@ -113,8 +123,8 @@ void main() {
       'class _GoalIconField',
     );
 
-    expect(workspace, contains("title: '空间归属'"));
-    expect(workspace, contains("labelText: '保存到'"));
+    expect(workspace, contains("title: _goalText('空间归属', 'Workspace')"));
+    expect(workspace, contains("labelText: _goalText('保存到', 'Save to')"));
     expect(
       workspace,
       contains('floatingLabelBehavior: FloatingLabelBehavior.always'),
@@ -140,10 +150,13 @@ void main() {
       'class _DateField',
     );
 
-    expect(basic, contains("labelText: '目标'"));
-    expect(basic, contains("labelText: '描述 (可选)'"));
-    expect(basic, isNot(contains("Text('目标'")));
-    expect(basic, isNot(contains("Text('描述 (可选)'")));
+    expect(basic, contains("labelText: _goalText('目标', 'Goal')"));
+    expect(
+      basic,
+      contains("labelText: _goalText('描述 (可选)', 'Description (optional)')"),
+    );
+    expect(basic, isNot(matches(RegExp(r"\bText\(\s*'目标'"))));
+    expect(basic, isNot(matches(RegExp(r"\bText\(\s*'描述 \(可选\)'"))));
     expect(sectionCard, contains('DesignTokens.spaceSm,'));
   });
 
@@ -233,10 +246,18 @@ void main() {
   testWidgets('目标编辑页选中日期后使用短日期避免移动端截断', (tester) async {
     await tester.binding.setSurfaceSize(const Size(430, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    late PreferencesProvider preferences;
+    await tester.runAsync(() async {
+      preferences = PreferencesProvider();
+      await preferences.loadFromStorage();
+      await preferences.setDateFormat('yyyy-MM-dd');
+    });
+    addTearDown(preferences.dispose);
 
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          ChangeNotifierProvider<PreferencesProvider>.value(value: preferences),
           ChangeNotifierProvider(create: (_) => GoalProvider()),
           ChangeNotifierProvider(create: (_) => CustomFocusSoundProvider()),
         ],
@@ -254,10 +275,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('2026/12/31'), findsOneWidget);
-    expect(find.text('2027/1/1'), findsOneWidget);
-    _expectTextFits(tester, find.text('2026/12/31'));
-    _expectTextFits(tester, find.text('2027/1/1'));
+    expect(find.text('2026-12-31'), findsOneWidget);
+    expect(find.text('2027-01-01'), findsOneWidget);
+    _expectTextFits(tester, find.text('2026-12-31'));
+    _expectTextFits(tester, find.text('2027-01-01'));
     expect(find.text('2026年12月31日'), findsNothing);
     expect(find.text('2027年1月1日'), findsNothing);
     final startClear = find.descendant(
@@ -272,7 +293,7 @@ void main() {
     expect(targetClear, findsOneWidget);
     await tester.tap(startClear);
     await tester.pump();
-    expect(find.text('2026/12/31'), findsNothing);
+    expect(find.text('2026-12-31'), findsNothing);
     expect(find.text('创建即开启'), findsOneWidget);
     expect(targetClear, findsOneWidget);
     final startTop = tester

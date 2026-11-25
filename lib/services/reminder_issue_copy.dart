@@ -1,4 +1,5 @@
 import '../core/i18n.dart';
+import '../models/goal.dart' show ReminderKind;
 import 'todo_reminder_preflight_copy.dart';
 
 enum NotificationIssueTitle {
@@ -23,6 +24,9 @@ enum NotificationIssueTitle {
   popupTestFailed('定时弹出测试注册失败', 'Scheduled pop-up test not registered'),
   alarmTestFailed('定时闹钟测试注册失败', 'Scheduled alarm test not registered'),
   alarmDegraded('闹钟提醒已降级为普通通知', 'Alarm now uses a regular notification'),
+  dailyRegistrationFailed('每日提醒注册失败', 'Daily reminder not scheduled'),
+  dailyFallback('每日提醒已退回普通通知', 'Daily reminder uses a regular notification'),
+  dailyAlarmUnconfirmed('每日闹钟注册状态未确认', 'Daily alarm registration unconfirmed'),
   registrationDegraded('提醒注册降级', 'Reminder fallback'),
   repeatingRegistrationDegraded('重复提醒注册降级', 'Repeating reminder fallback');
 
@@ -83,6 +87,11 @@ enum NotificationIssueNotice {
   popupFallbackFailed,
   alarmUnavailable,
   alarmScheduleFailed,
+  dailyCancellationFailed,
+  dailyScheduleFailed,
+  dailyChannelFallback,
+  dailyAlarmHandoffFailed,
+  dailyAlarmQueueUnconfirmed,
 }
 
 /// Presentation metadata; raw diagnostics, severity and scheduling stay separate.
@@ -93,6 +102,7 @@ final class ReminderIssueCopy {
     this.detail,
     this.label = '',
     this.labelCode,
+    this.requestedKind,
   }) : preflight = null;
 
   const ReminderIssueCopy.preflight(this.preflight)
@@ -100,13 +110,15 @@ final class ReminderIssueCopy {
       titleCode = null,
       detail = null,
       label = '',
-      labelCode = null;
+      labelCode = null,
+      requestedKind = null;
 
   final NotificationIssueNotice? notice;
   final NotificationIssueTitle? titleCode;
   final String? detail;
   final String label;
   final NotificationIssueTitle? labelCode;
+  final ReminderKind? requestedKind;
   final TodoReminderPreflightCopy? preflight;
 
   String renderTitle({required String fallback, AppLocale? locale}) {
@@ -133,7 +145,34 @@ final class ReminderIssueCopy {
     final isZh = selectedLocale == AppLocale.zh;
     String pick(String zh, String en) => isZh ? zh : en;
     final reasonLabel = labelCode?.render(locale: selectedLocale) ?? label;
+    final requestedChannel = switch (requestedKind) {
+      ReminderKind.popup => pick('弹出框', 'pop-up'),
+      ReminderKind.alarm => pick('锁屏闹钟', 'lock-screen alarm'),
+      ReminderKind.push => pick('普通通知', 'regular notification'),
+      ReminderKind.email => pick('邮件', 'email'),
+      _ => pick('所选通道', 'selected channel'),
+    };
     final text = switch (notice) {
+      NotificationIssueNotice.dailyCancellationFailed => pick(
+        '旧提醒取消不完整，已暂停本次重新注册以避免重复提醒。请稍后重试，或重启应用后重新保存提醒。',
+        'Some previous reminders could not be canceled. Rescheduling was paused to avoid duplicates. Retry later, or restart the app and save the reminder again.',
+      ),
+      NotificationIssueNotice.dailyScheduleFailed => pick(
+        '系统调度失败，提醒未确认注册成功。请检查通知、精准闹钟和后台运行权限后重新保存提醒。',
+        'Scheduling failed and reminder registration is unconfirmed. Check notification, exact alarm and background permissions, then save the reminder again.',
+      ),
+      NotificationIssueNotice.dailyChannelFallback => pick(
+        '你选择的是$requestedChannel提醒，但该通道没有确认注册成功，已改用普通通知兜底；到点不会按$requestedChannel形式弹出。请在已注册提醒详情确认状态，检查通知、精准闹钟、全屏提醒和后台限制后重新保存。',
+        'The $requestedChannel reminder was not confirmed, so it now uses a regular notification. It will not appear as a $requestedChannel when due. Review its registration details and notification, exact alarm, full-screen and background permissions, then save it again.',
+      ),
+      NotificationIssueNotice.dailyAlarmHandoffFailed => pick(
+        '闹钟提醒交接失败，已跳过普通通知兜底以避免重复提醒。请在已注册提醒中确认，或重新保存该提醒。',
+        'Alarm handoff failed. The regular notification fallback was skipped to avoid duplicates. Check registered reminders, or save this reminder again.',
+      ),
+      NotificationIssueNotice.dailyAlarmQueueUnconfirmed => pick(
+        '闹钟待触发队列读取失败，无法确认锁屏闹钟是否已注册；为避免重复提醒已跳过普通通知兜底。请在系统权限正常后重新保存提醒。',
+        'The pending alarm queue could not be read, so lock-screen alarm registration is unconfirmed. The regular notification fallback was skipped to avoid duplicates. Check system permissions, then save the reminder again.',
+      ),
       NotificationIssueNotice.initializationFailed => pick(
         '系统通知初始化失败，提醒暂时无法注册。请检查通知权限、通知渠道和系统后台限制后重新保存提醒。',
         'System notifications could not start, so reminders cannot be registered right now. Check notification permission, channels and background restrictions, then save the reminder again.',

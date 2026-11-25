@@ -2,6 +2,9 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import 'package:duoyi/core/data_settings_ui_copy.dart';
+import 'package:duoyi/core/i18n.dart';
+
 void main() {
   test('主题页接入时光币奖励商店和主题解锁', () {
     final themeProvider = File(
@@ -61,9 +64,23 @@ void main() {
     expect(themeScreen, contains('authProvider.applyThemeShopItem('));
     expect(themeScreen, contains('themeProvider.applyShopStateFromServer'));
     expect(themeScreen, contains('achievementProvider.applyRewardsSnapshot'));
-    expect(themeScreen, contains('achievementProvider.spendCoins('));
+    expect(themeScreen, contains('themeProvider.redeemGuestItem('));
+    expect(themeScreen, contains('implements LocaleStatePreservingRoute'));
+    expect(themeScreen, contains('if (_shopBusy'));
+    expect(themeProvider, contains('rewards.runCoinPurchase('));
+    expect(themeProvider, contains('await purchase.debit('));
+    expect(achievementProvider, contains('purchase.committed'));
     expect(themeScreen, contains('DataSettingsUiCopy.coinCount('));
-    expect(copy, contains('时光币'));
+    final previousLocale = I18n.current;
+    try {
+      I18n.setLocale(AppLocale.zh);
+      expect(DataSettingsUiCopy.coinCount(7), '时光币 7');
+      I18n.setLocale(AppLocale.en);
+      expect(DataSettingsUiCopy.coinCount(7), 'Time Coins 7');
+    } finally {
+      I18n.setLocale(previousLocale);
+    }
+    expect(copy, contains('_l10n().dataSettingsCoinCount(count)'));
     expect(themeScreen, contains('Icons.lock_outline'));
     expect(
       themeScreen,

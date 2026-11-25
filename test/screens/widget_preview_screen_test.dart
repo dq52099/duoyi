@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:duoyi/core/i18n.dart';
+import 'package:duoyi/core/widget_ui_copy.dart';
 import 'package:duoyi/screens/widget_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -11,6 +12,38 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../support/widget_polish_screenshot_font.dart';
 
 void main() {
+  testWidgets('iOS captions name styles without Android grid dimensions', (
+    tester,
+  ) async {
+    for (final locale in AppLocale.values) {
+      I18n.setLocale(locale);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: [
+                  for (final mode in WidgetDisplayMode.values)
+                    WidgetPreviewCard.todo(
+                      displayMode: mode,
+                      platformOverride: TargetPlatform.iOS,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final mode in WidgetDisplayMode.values) {
+        expect(find.textContaining(mode.label), findsWidgets);
+        expect(find.textContaining(mode.previewCellLabel), findsNothing);
+      }
+      expect(tester.takeException(), isNull);
+    }
+    I18n.setLocale(AppLocale.zh);
+  });
+
   testWidgets('小组件预览覆盖待办 o、月历和目标三档尺寸', (tester) async {
     if (Platform.environment['DUOYI_CAPTURE_WIDGET_SCREENSHOT'] == '1') {
       await tester.runAsync(loadWidgetPolishScreenshotFonts);
@@ -79,9 +112,30 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('○'), findsWidgets);
-    expect(find.text('今天'), findsWidgets);
+    for (final element
+        in find
+            .byWidgetPredicate(
+              (widget) =>
+                  widget is WidgetPreviewCard &&
+                  widget.kind == WidgetPreviewKind.calendar,
+            )
+            .evaluate()) {
+      expect(
+        find.descendant(
+          of: find.byWidget(element.widget),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Text &&
+                (widget.data == '17' ||
+                    widget.data == WidgetUiCopy.calendarCurrentDate ||
+                    widget.data == WidgetUiCopy.calendarCurrentDay),
+          ),
+        ),
+        findsOneWidget,
+      );
+    }
     expect(find.textContaining('发版准备'), findsWidgets);
-    expect(find.textContaining('4x3'), findsWidgets);
+    expect(find.textContaining(WidgetDisplayMode.detailed.label), findsWidgets);
 
     if (Platform.environment['DUOYI_CAPTURE_WIDGET_SCREENSHOT'] == '1') {
       await tester.runAsync(() async {
@@ -200,7 +254,28 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('○'), findsWidgets);
-    expect(find.text('今天'), findsWidgets);
+    for (final element
+        in find
+            .byWidgetPredicate(
+              (widget) =>
+                  widget is WidgetPreviewCard &&
+                  widget.kind == WidgetPreviewKind.calendar,
+            )
+            .evaluate()) {
+      expect(
+        find.descendant(
+          of: find.byWidget(element.widget),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Text &&
+                (widget.data == '17' ||
+                    widget.data == WidgetUiCopy.calendarCurrentDate ||
+                    widget.data == WidgetUiCopy.calendarCurrentDay),
+          ),
+        ),
+        findsOneWidget,
+      );
+    }
     expect(find.textContaining('发版准备'), findsWidgets);
     expect(find.text('今日习惯'), findsWidgets);
     expect(find.text('80%'), findsWidgets);
@@ -239,7 +314,7 @@ void main() {
             size: Size(320, 2400),
             textScaler: TextScaler.linear(1.6),
           ),
-          child: WidgetScreen(),
+          child: WidgetScreen(hostPlatform: WidgetHostPlatform.android),
         ),
       ),
     );
@@ -321,9 +396,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Android 标准预览几何匹配 18/11 (180x110 dp) 且隐藏页脚，详细档保留页脚', (
-    tester,
-  ) async {
+  testWidgets('Android 标准预览几何匹配 18/11，详细档按内容余量显示页脚', (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 2400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -368,10 +441,8 @@ void main() {
           w is WidgetPreviewCard && w.displayMode == WidgetDisplayMode.detailed,
     );
 
-    final compactRatio = tester.widget<AspectRatio>(
-      find.descendant(of: compactCard, matching: find.byType(AspectRatio)),
-    );
-    expect(compactRatio.aspectRatio, closeTo(1.0, 0.001));
+    final compactSize = tester.getSize(compactCard);
+    expect(compactSize.width / compactSize.height, closeTo(1.0, 0.001));
     expect(
       find.descendant(
         of: compactCard,
@@ -380,10 +451,8 @@ void main() {
       findsNothing,
     );
 
-    final standardRatio = tester.widget<AspectRatio>(
-      find.descendant(of: standardCard, matching: find.byType(AspectRatio)),
-    );
-    expect(standardRatio.aspectRatio, closeTo(18 / 11, 0.001));
+    final standardSize = tester.getSize(standardCard);
+    expect(standardSize.width / standardSize.height, closeTo(18 / 11, 0.001));
     expect(
       find.descendant(
         of: standardCard,
@@ -392,20 +461,21 @@ void main() {
       findsNothing,
     );
 
-    final detailedRatio = tester.widget<AspectRatio>(
-      find.descendant(of: detailedCard, matching: find.byType(AspectRatio)),
-    );
-    expect(detailedRatio.aspectRatio, closeTo(4 / 3, 0.001));
+    final detailedSize = tester.getSize(detailedCard);
+    expect(detailedSize.width / detailedSize.height, closeTo(4 / 3, 0.001));
     expect(
-      find.descendant(
-        of: detailedCard,
-        matching: find.byKey(const ValueKey('widget_preview_navigation')),
-      ),
-      findsOneWidget,
+      find
+          .descendant(
+            of: detailedCard,
+            matching: find.byKey(const ValueKey('widget_preview_navigation')),
+          )
+          .evaluate()
+          .length,
+      lessThanOrEqualTo(1),
     );
   });
 
-  testWidgets('iOS 预览标准 medium 保留页脚且宽高比为 1.5，紧凑档无页脚', (tester) async {
+  testWidgets('iOS 预览标准宽高比为 1.5，详细档按余量显示页脚，紧凑档无页脚', (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 2400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -450,10 +520,8 @@ void main() {
           w is WidgetPreviewCard && w.displayMode == WidgetDisplayMode.detailed,
     );
 
-    final compactRatio = tester.widget<AspectRatio>(
-      find.descendant(of: compactCard, matching: find.byType(AspectRatio)),
-    );
-    expect(compactRatio.aspectRatio, closeTo(1.0, 0.001));
+    final compactSize = tester.getSize(compactCard);
+    expect(compactSize.width / compactSize.height, closeTo(1.0, 0.001));
     expect(
       find.descendant(
         of: compactCard,
@@ -462,10 +530,8 @@ void main() {
       findsNothing,
     );
 
-    final standardRatio = tester.widget<AspectRatio>(
-      find.descendant(of: standardCard, matching: find.byType(AspectRatio)),
-    );
-    expect(standardRatio.aspectRatio, closeTo(1.5, 0.001));
+    final standardSize = tester.getSize(standardCard);
+    expect(standardSize.width / standardSize.height, closeTo(1.5, 0.001));
     expect(
       find.descendant(
         of: standardCard,
@@ -474,16 +540,17 @@ void main() {
       findsOneWidget,
     );
 
-    final detailedRatio = tester.widget<AspectRatio>(
-      find.descendant(of: detailedCard, matching: find.byType(AspectRatio)),
-    );
-    expect(detailedRatio.aspectRatio, closeTo(4 / 3, 0.001));
+    final detailedSize = tester.getSize(detailedCard);
+    expect(detailedSize.width / detailedSize.height, closeTo(4 / 3, 0.001));
     expect(
-      find.descendant(
-        of: detailedCard,
-        matching: find.byKey(const ValueKey('widget_preview_navigation')),
-      ),
-      findsOneWidget,
+      find
+          .descendant(
+            of: detailedCard,
+            matching: find.byKey(const ValueKey('widget_preview_navigation')),
+          )
+          .evaluate()
+          .length,
+      lessThanOrEqualTo(1),
     );
   });
 
@@ -509,10 +576,8 @@ void main() {
     expect(tester.takeException(), isNull);
 
     final standardCard = find.byType(WidgetPreviewCard);
-    final ratio = tester.widget<AspectRatio>(
-      find.descendant(of: standardCard, matching: find.byType(AspectRatio)),
-    );
-    expect(ratio.aspectRatio, closeTo(1.5, 0.001));
+    final size = tester.getSize(standardCard);
+    expect(size.width / size.height, closeTo(1.5, 0.001));
     expect(
       find.descendant(
         of: standardCard,
@@ -599,7 +664,7 @@ void main() {
         expect(tester.takeException(), isNull);
 
         // When Android standard, all 10 cards hide the bottom navigation footer.
-        // When iOS standard, all 10 cards show the bottom navigation footer.
+        // iOS standard permits navigation only after candidate content fits.
         if (platform == TargetPlatform.android) {
           expect(
             find.byKey(const ValueKey('widget_preview_navigation')),
@@ -607,9 +672,19 @@ void main() {
           );
         } else {
           expect(
-            find.byKey(const ValueKey('widget_preview_navigation')),
-            findsNWidgets(10),
+            find
+                .byKey(const ValueKey('widget_preview_navigation'))
+                .evaluate()
+                .length,
+            lessThanOrEqualTo(10),
           );
+          for (final element in find.byType(WidgetPreviewCard).evaluate()) {
+            final card = find.byWidget(element.widget);
+            expect(
+              find.descendant(of: card, matching: find.byType(FittedBox)),
+              findsNothing,
+            );
+          }
         }
       }
     }

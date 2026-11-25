@@ -44,11 +44,12 @@ class FocusReport {
     FocusReportPeriod.all => '全部专注报告',
   };
 
-  String toMarkdown() {
+  String toMarkdown({String Function(DateTime)? formatDate}) {
+    final dateLabel = formatDate ?? _dateLabel;
     final buffer = StringBuffer()
       ..writeln('# $title')
       ..writeln()
-      ..writeln('- 周期：${_dateLabel(start)} - ${_dateLabel(end)}')
+      ..writeln('- 周期：${dateLabel(start)} - ${dateLabel(end)}')
       ..writeln('- 专注总时长：$totalMinutes 分钟')
       ..writeln('- 专注次数：$sessionCount 次')
       ..writeln('- 平均单次：$averageMinutes 分钟')

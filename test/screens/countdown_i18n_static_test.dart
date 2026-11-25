@@ -51,12 +51,14 @@ void main() {
     expect(scheduler, contains("'countdown popup:\$countdownId'"));
     expect(scheduler, contains('() => popup.cancel(id)'));
     expect(scheduler, contains('item.reminderKind.name'));
-    expect(source, contains('bool _saving = false'));
+    expect(source, contains('bool get _saving => dateItemBusy'));
+    expect(source, contains('runDateItemMutation('));
+    expect(source, contains('DateItemUiCopy.saveFailed'));
+    expect(source, isNot(contains('已保存到本机，但提醒未注册：')));
     expect(source, contains('if (_saving) return'));
-    expect(source, contains('setState(() => _saving = true)'));
     expect(source, contains('onPressed: _saving ? null : _save'));
     expect(source, contains('CircularProgressIndicator(strokeWidth: 2)'));
-    expect(source, contains('await provider.updateItem(next)'));
+    expect(source, contains('await origin.countdown.updateItem('));
     expect(source, isNot(contains('await provider.addItem(next)')));
     expect(source, isNot(contains('showCountdownEditor(routeContext')));
     expect(source, isNot(contains('_isNewItem')));
@@ -67,7 +69,7 @@ void main() {
     );
     expect(source, isNot(contains("onAction: () => _showEditor(context)")));
     expect(
-      source.indexOf('await provider.updateItem(next)'),
+      source.indexOf('await origin.countdown.updateItem('),
       lessThan(source.indexOf('Navigator.pop(context)')),
       reason: '倒数日本体应先保存，再关闭弹层或提示提醒降级。',
     );
@@ -98,7 +100,6 @@ void main() {
       'countdown.field.remind_time',
       'countdown.validation.title_required',
       'countdown.saved',
-      'countdown.save_failed_prefix',
       'countdown.reminder.closed',
       'countdown.reminder.before_prefix',
       'countdown.reminder.before_suffix',
@@ -112,7 +113,6 @@ void main() {
       'countdown.reminder.exact_alarm_missing',
       'countdown.reminder.fullscreen_missing',
       'countdown.reminder.email_warning',
-      'countdown.reminder.exception_prefix',
       'countdown.reminder.time_past',
       'reminder.kind.push',
       'reminder.kind.popup',

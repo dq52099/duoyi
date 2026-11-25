@@ -1,3 +1,5 @@
+import 'i18n.dart';
+
 /// 每日一言：按日期切换的简短格言/提醒。
 class DailyQuotes {
   // 保持短句，便于卡片展示。
@@ -34,20 +36,66 @@ class DailyQuotes {
     '愿你今天的烦恼，不过是今天的。',
   ];
 
-  /// 基于日期稳定选择同一条。
-  static String today() {
+  static const List<String> quotesEn = [
+    'Every moment spent intentionally returns compound clarity.',
+    'What you build today is a quiet gift to tomorrow.',
+    'Do slightly less, and finish each piece with care.',
+    'Write tasks down so your mind can stay clear.',
+    'Today’s deep focus creates tomorrow’s calm.',
+    'One small step better than yesterday is plenty.',
+    'Tiny habits quietly reshape everything over time.',
+    'Done beats perfect.',
+    'Not everything has to be finished today.',
+    'Ten minutes of evening reflection outweighs a rushed day.',
+    'Plans will bend, yet planning itself brings clarity.',
+    'Slow down enough for insight to catch up.',
+    'Today may take effort, and still be worth your care.',
+    'Capture what weighs on your mind so you can let it go.',
+    'Starting matters more than getting it flawless.',
+    'Empty your inbox, save your mind for creating.',
+    'Every slow breath resets your attention.',
+    'Rest well when needed; recovery is real productivity.',
+    'Spend your best hours on what matters, not what shouts.',
+    'Break big ambitions into steps you can finish tomorrow.',
+    'Eat well, sleep deeply, and work with presence.',
+    'Treat today as both practice and the real stage.',
+    'Begin this minute instead of waiting for the next.',
+    'A blank page is the steadiest teammate you have.',
+    'Twenty-five focused minutes outlast two distracted hours.',
+    'Tell yourself: just finish this one piece.',
+    'Even a wandering mind is part of learning to focus.',
+    'Stay calm, stay steady, keep moving forward.',
+    'Reviewing your day is the kindest check-in with yourself.',
+    'Let today’s worries stay neatly inside today.',
+  ];
+
+  /// 当日稳定索引。
+  static int todayIndex() {
     final now = DateTime.now();
     final days = DateTime(
       now.year,
       now.month,
       now.day,
     ).difference(DateTime(2000, 1, 1)).inDays;
-    return quotes[days.abs() % quotes.length];
+    return days.abs() % quotes.length;
   }
 
-  /// 随机换一条(不固定到日期)。
-  static String random() {
+  /// 随机索引（不固定到日期）。
+  static int randomIndex() {
     final seed = DateTime.now().millisecondsSinceEpoch;
-    return quotes[seed.abs() % quotes.length];
+    return seed.abs() % quotes.length;
   }
+
+  /// 按索引与语言取对应语录。
+  static String at(int index, {AppLocale? locale}) {
+    final activeLocale = locale ?? I18n.current;
+    final list = activeLocale == AppLocale.en ? quotesEn : quotes;
+    return list[index.abs() % list.length];
+  }
+
+  /// 基于日期稳定选择同一条。
+  static String today({AppLocale? locale}) => at(todayIndex(), locale: locale);
+
+  /// 随机换一条(不固定到日期)。
+  static String random({AppLocale? locale}) => at(randomIndex(), locale: locale);
 }

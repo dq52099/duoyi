@@ -60,6 +60,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -105,4 +106,11 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     testImplementation("junit:junit:4.13.2")
+    // Exercise the canonical stored-row boundary with a real JSON parser on the JVM.
+    testImplementation("org.json:json:20240303")
+    // integration_test exposes an older runner on the target debug classpath.
+    // Align it with androidTest for AGP's consistent dependency resolution.
+    debugImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }

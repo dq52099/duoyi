@@ -14,6 +14,7 @@ import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/screens/diary_screen.dart';
 import 'package:duoyi/screens/search_screen.dart';
 import 'package:duoyi/widgets/surface_components.dart';
+import 'package:duoyi/widgets/brand_background.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -81,7 +82,7 @@ Widget _searchApp(_CountingDiaryProvider diaryProvider) => MultiProvider(
     ),
     ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
   ],
-  child: MaterialApp(home: const SearchScreen()),
+  child: const MaterialApp(home: BrandRouteSurface(child: SearchScreen())),
 );
 
 void main() {
@@ -128,8 +129,23 @@ void main() {
       expect(sourceIds, ['generated-diary', 'authored-diary']);
       expect(sourceDates, [date, date]);
 
+      final screenState = tester.state(find.byType(SearchScreen));
+      final controller = tester
+          .widget<TextField>(find.byType(TextField))
+          .controller!;
+      controller.selection = const TextSelection(
+        baseOffset: 1,
+        extentOffset: 4,
+      );
+      final editingValue = controller.value;
       I18n.setLocale(AppLocale.en);
       await tester.pumpAndSettle();
+      expect(tester.state(find.byType(SearchScreen)), same(screenState));
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller,
+        same(controller),
+      );
+      expect(controller.value, editingValue);
 
       expect(
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
@@ -150,6 +166,8 @@ void main() {
 
       I18n.setLocale(AppLocale.zh);
       await tester.pumpAndSettle();
+      expect(tester.state(find.byType(SearchScreen)), same(screenState));
+      expect(controller.value, editingValue);
 
       expect(find.text(_resultSummary(AppLocale.zh)), findsOneWidget);
       expect(find.text('10月11日的日记'), findsNWidgets(2));

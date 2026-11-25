@@ -15,7 +15,7 @@ object DuoyiWidgetLaunchBridge {
     private var subscribed = false
     private val supportedHosts = setOf(
         "tab", "todo", "habit", "calendar", "focus", "widget", "course", "note",
-        "diary", "goal", "anniversary", "countdown", "time-entry", "report", "action",
+        "diary", "goal", "anniversary", "countdown", "time-entry", "event", "pomodoro", "report", "action",
     )
 
     fun capture(intent: Intent?) {

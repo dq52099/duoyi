@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/models/diary_entry.dart';
 import 'package:duoyi/services/account_local_data_cleaner.dart';
 import 'package:duoyi/services/ai_service.dart';
@@ -199,6 +200,54 @@ Future<Object?> _captureFailure(Future<dynamic> future) async {
 }
 
 void main() {
+  test(
+    'report review keeps its requested language and literal data across locale changes',
+    () async {
+      for (final locale in [AppLocale.en, AppLocale.zh]) {
+        SharedPreferences.setMockInitialValues({});
+        final started = Completer<void>();
+        final response = Completer<void>();
+        Map<String, dynamic>? requestBody;
+        final harness = _ServiceHarness(
+          MockClient((request) async {
+            requestBody = jsonDecode(request.body) as Map<String, dynamic>;
+            started.complete();
+            await response.future;
+            return _successResponse();
+          }),
+        );
+        try {
+          I18n.setLocale(locale);
+          final pending = harness.service.personalizedReportReview(
+            periodLabel: 'period / 原始周期',
+            reportMarkdown: 'literal / 原文数据: 7',
+            locale: locale,
+          );
+          await started.future;
+          I18n.setLocale(locale == AppLocale.en ? AppLocale.zh : AppLocale.en);
+          response.complete();
+          final result = await pending;
+          expect(
+            requestBody!['system'],
+            contains(locale == AppLocale.en ? 'in English' : '中文个性化解读'),
+          );
+          expect(requestBody!['user'], contains('literal / 原文数据: 7'));
+          final entry = harness.service.reviewHistory.single;
+          expect(entry.content, result);
+          expect(
+            entry.summary,
+            locale == AppLocale.en
+                ? 'Report AI review: period / 原始周期'
+                : '统计报告 AI 解读：period / 原始周期',
+          );
+        } finally {
+          harness.dispose();
+          I18n.setLocale(AppLocale.zh);
+        }
+      }
+    },
+  );
+
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
@@ -1119,7 +1168,9 @@ void main() {
           (await preferences.getAll()).containsKey('flutter.ai_review_history'),
           isFalse,
         );
-        expect(preferences.historyOperations, ['set:1', 'remove']);
+        // The rejected setter never reached the platform store; cleanup
+        // reloads authoritative data and skips the absent history key.
+        expect(preferences.historyOperations, ['set:1']);
       } finally {
         if (!preferences.historyWriteGate!.isCompleted) {
           preferences.historyWriteGate!.complete();

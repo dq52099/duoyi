@@ -8,17 +8,26 @@ void main() {
       'lib/providers/cloud_sync_provider.dart',
     ).readAsStringSync();
     final share = File('lib/providers/share_provider.dart').readAsStringSync();
+    final shareCopy = File('lib/core/share_ui_copy.dart').readAsStringSync();
     final apiClient = File('lib/services/api_client.dart').readAsStringSync();
+    final syncNotice = File(
+      'lib/services/cloud_sync_notice.dart',
+    ).readAsStringSync();
 
-    expect(cloud, contains('云同步暂不可用，请稍后重试或联系管理员'));
+    expect(
+      cloud,
+      contains('CloudSyncNotice(CloudSyncNoticeKind.failure, error: error)'),
+    );
     expect(cloud, contains('_userVisibleSyncError'));
-    expect(cloud, contains('userVisibleApiError('));
+    expect(syncNotice, contains('userVisibleApiError('));
+    expect(syncNotice, contains('云同步暂不可用，请稍后重试或联系管理员'));
     expect(cloud, isNot(contains('_lastError = e.toString();')));
     expect(cloud, isNot(contains('_lastError = error.toString();')));
 
-    expect(share, contains('共享空间服务暂不可用，请稍后重试或联系管理员'));
+    expect(shareCopy, contains('共享空间服务暂不可用，请稍后重试或联系管理员'));
     expect(share, contains('_userVisibleWorkspaceError'));
-    expect(share, contains('userVisibleApiError('));
+    expect(share, contains('ShareUiCopy.error(error)'));
+    expect(shareCopy, contains('userVisibleApiError('));
     expect(share, isNot(contains('_lastError = e.toString();')));
 
     expect(apiClient, contains('isBackendCompatibilityDiagnosticMessage'));
@@ -35,14 +44,26 @@ void main() {
       'lib/screens/admin_screen.dart',
     ]) {
       final source = File(path).readAsStringSync();
-      expect(
-        source,
-        anyOf(
-          contains('userVisibleApiError('),
-          contains('AccountUiCopy.formatError('),
-        ),
-        reason: path,
-      );
+      if (path == 'lib/screens/announcements_screen.dart') {
+        expect(source, contains('AnnouncementUiCopy.errorMessage('));
+        final copy = File(
+          'lib/core/announcement_ui_copy.dart',
+        ).readAsStringSync();
+        expect(copy, contains('userVisibleApiError('));
+      } else if (path == 'lib/screens/feedback_screen.dart') {
+        expect(source, contains('FeedbackUiCopy.formatError('));
+        final copy = File('lib/core/feedback_ui_copy.dart').readAsStringSync();
+        expect(copy, contains('isBackendCompatibilityDiagnosticMessage('));
+      } else {
+        expect(
+          source,
+          anyOf(
+            contains('userVisibleApiError('),
+            contains('AccountUiCopy.formatError('),
+          ),
+          reason: path,
+        );
+      }
       expect(source, isNot(contains('e.message')), reason: path);
       expect(
         source,

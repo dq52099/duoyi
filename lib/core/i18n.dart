@@ -6,13 +6,15 @@
 /// - 高频公共词条先入表，调用方按需迁移；未命中的 key 直接返回中文回退。
 /// - `LocaleProvider` 持久化用户偏好（默认 `zh`）。
 ///
-/// 添加新词条：在 `_zh` 与 `_en` 中同步追加同一 key。
+/// 主题文案由 ARB 生成，旧 key 保持兼容；其余文案逐步迁移。
 library;
 
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../l10n/generated/app_localizations.dart';
 
 enum AppLocale { zh, en }
 
@@ -119,6 +121,8 @@ const Map<String, String> _zh = <String, String>{
   'picker.time.preset_evening': '晚上 20:00',
   'picker.time.preset_now': '现在',
   'picker.time.preset_next_slot': '下一提醒点',
+  'picker.empty': '暂无可选项',
+  'picker.not_set': '未设置',
   'calendar_event.event': '日程',
   'calendar_event.todo': '待办',
   'calendar_event.habit': '习惯',
@@ -188,8 +192,9 @@ const Map<String, String> _zh = <String, String>{
   'preferences.notification_status_bar.sync_failed':
       '通知栏同步失败，已恢复原设置。请检查系统通知权限和通知渠道。',
   'preferences.show_completed.title': '待办页显示已完成',
-  'preferences.show_completed.subtitle': '关闭后只看未完成和进行中的事项',
+  'preferences.show_completed.subtitle': '默认列表显示已完成事项；关闭后仍可通过“已完成”或“包含归档”查看',
   'preferences.pomodoro_length.title': '默认番茄钟长度',
+  'preferences.pomodoro_length.subtitle': '选择“默认”时生效，当前计时保持不变',
   'preferences.section.bottom_nav': '底部导航栏',
   'preferences.section.bottom_nav.subtitle': '底部导航最多显示 5 个入口；我的固定显示，小组件可隐藏',
   'preferences.section.interaction': '交互',
@@ -217,6 +222,11 @@ const Map<String, String> _zh = <String, String>{
   'preferences.notify.pending_cleared': '已取消全部待调度提醒',
   'preferences.notify.open_settings_failed': '无法打开系统设置',
   'preferences.ringtone.section': '内置提醒铃声',
+  'preferences.report_reminder.daily.time': '每日复盘推送时间',
+  'preferences.report_reminder.weekly.time': '周报推送时间',
+  'preferences.report_reminder.monthly.time': '月报推送时间',
+  'preferences.report_reminder.yearly.time': '年报推送时间',
+  'preferences.report_reminder.time.subtitle': '修改后会重排下一次报告通知',
   'preferences.ringtone.section.subtitle': '用于 HyperOS 等默认静音通知场景',
   'preferences.ringtone.section.subtitle.android':
       'Android 使用应用内置铃声服务，适配 HyperOS 等默认静音通知场景',
@@ -241,6 +251,9 @@ const Map<String, String> _zh = <String, String>{
   'preferences.daily_reminder.time': '提醒时间',
   'preferences.daily_reminder.time.subtitle': '到点发送带声音和震动的提醒',
   'preferences.daily_reminder.time_suffix': '时间',
+  'preferences.daily_reminder.1.time': '提醒一时间',
+  'preferences.daily_reminder.2.time': '提醒二时间',
+  'preferences.daily_reminder.3.time': '提醒三时间',
   'preferences.daily_reminder.time_picker.subtitle': '设置提醒触发时间',
   'preferences.daily_reminder.kind.title': '提醒方式',
   'preferences.daily_reminder.kind.push.description': '系统通知栏提醒',
@@ -521,6 +534,7 @@ const Map<String, String> _zh = <String, String>{
   'note.unpin': '取消置顶',
   'note.archive': '归档',
   'note.restore': '恢复',
+  'note.action.failed': '操作失败，内容未变更，请重试',
   'note.link.placeholder': '链接文字',
   'note.attachment.pick_file': '从系统文件选择',
   'note.attachment.pick_file.subtitle': '图片、PDF、文档等都会作为附件保存',
@@ -589,27 +603,6 @@ const Map<String, String> _zh = <String, String>{
   'announcement.level.warning': '提醒',
   'announcement.level.critical': '重要',
   // 主题风格
-  'theme.title': '主题风格',
-  'theme.section.styles': '可选风格',
-  'theme.section.styles.subtitle': '切换后会同步全局主题',
-  'theme.style.default.name': '多仪',
-  'theme.style.default.description': '简洁原版 · 暖橙基调',
-  'theme.style.re0.name': '从零开始',
-  'theme.style.re0.description': '银发魔女 · 露格尼卡圣域',
-  'theme.style.genshin.name': '原神',
-  'theme.style.genshin.description': '元素绘卷 · 提瓦特画架',
-  'theme.style.star_rail.name': '星穹铁道',
-  'theme.style.star_rail.description': '星穹列车 · 开拓之旅',
-  'theme.style.wuthering.name': '鸣潮',
-  'theme.style.wuthering.description': '共鸣终端 · 潮声频谱',
-  'theme.style.zzz.name': '绝区零',
-  'theme.style.zzz.description': '委托影像 · 新艾利都',
-  'theme.style.yanyun.name': '燕云十六声',
-  'theme.style.yanyun.description': '江湖画案 · 墨痕回转',
-  'theme.style.botw.name': '希卡之石',
-  'theme.style.botw.description': '希卡之石 · 具现化',
-  'theme.style.liquid_glass.name': '液态玻璃',
-  'theme.style.liquid_glass.description': 'iOS 玻璃拟态 · 半透明白与高光',
   // 目标
   'goal.title': '目标管理',
   'goal.recommended_templates': '推荐模板',
@@ -739,7 +732,10 @@ const Map<String, String> _zh = <String, String>{
   'diary.summary.streak': '连续',
   'diary.recent.title': '最近日记',
   'diary.recent.records_suffix': ' 篇记录',
+  'diary.recent.records_suffix_singular': ' 篇记录',
   'diary.entry.count_suffix': ' 篇',
+  'diary.entry.count_suffix_singular': ' 篇',
+  'diary.streak.day_singular': '天',
   'diary.mood.stats.title': '近 30 天心情分布',
   'diary.no_data': '暂无数据',
   'diary.ai.insights': 'AI 日记洞察',
@@ -1041,6 +1037,7 @@ const Map<String, String> _zh = <String, String>{
   'habit.weekday.5': '五',
   'habit.weekday.6': '六',
   'habit.weekday.7': '日',
+  'habit.group.ungrouped': '未分组',
   'habit.group.today_suffix': ' 今日达标',
   'habit.group.more_habits_prefix': '还有 ',
   'habit.group.more_habits_suffix': ' 个习惯，请进入今日打卡或习惯详情查看',
@@ -1243,6 +1240,8 @@ const Map<String, String> _en = <String, String>{
   'picker.time.preset_evening': '8:00 PM',
   'picker.time.preset_now': 'Now',
   'picker.time.preset_next_slot': 'Next reminder',
+  'picker.empty': 'No options available',
+  'picker.not_set': 'Not set',
   'calendar_event.event': 'Event',
   'calendar_event.todo': 'Task',
   'calendar_event.habit': 'Habit',
@@ -1321,8 +1320,10 @@ const Map<String, String> _en = <String, String>{
       'Notification bar sync failed, so the previous setting was restored. Check notification permission and channels.',
   'preferences.show_completed.title': 'Show completed tasks',
   'preferences.show_completed.subtitle':
-      'Hide completed items to focus on open work',
+      'Show completed tasks in default views; Completed and Include archived remain available when off',
   'preferences.pomodoro_length.title': 'Default Pomodoro length',
+  'preferences.pomodoro_length.subtitle':
+      'Used with “Default”; your current timer is preserved',
   'preferences.section.bottom_nav': 'Bottom navigation',
   'preferences.section.bottom_nav.subtitle':
       'Show up to five bottom tabs; Me stays fixed, Widgets can be hidden',
@@ -1358,6 +1359,13 @@ const Map<String, String> _en = <String, String>{
   'preferences.notify.pending_cleared': 'All scheduled reminders were canceled',
   'preferences.notify.open_settings_failed': 'Unable to open system settings',
   'preferences.ringtone.section': 'Built-in reminder sounds',
+  'preferences.report_reminder.daily.time': 'Daily review notification time',
+  'preferences.report_reminder.weekly.time': 'Weekly report notification time',
+  'preferences.report_reminder.monthly.time':
+      'Monthly report notification time',
+  'preferences.report_reminder.yearly.time': 'Annual report notification time',
+  'preferences.report_reminder.time.subtitle':
+      'Updating will reschedule the next report notification',
   'preferences.ringtone.section.subtitle':
       'For HyperOS and other devices where default notifications are muted',
   'preferences.ringtone.section.subtitle.android':
@@ -1387,6 +1395,9 @@ const Map<String, String> _en = <String, String>{
   'preferences.daily_reminder.time.subtitle':
       'Send a reminder with sound and vibration at the selected time',
   'preferences.daily_reminder.time_suffix': ' time',
+  'preferences.daily_reminder.1.time': 'Reminder 1 time',
+  'preferences.daily_reminder.2.time': 'Reminder 2 time',
+  'preferences.daily_reminder.3.time': 'Reminder 3 time',
   'preferences.daily_reminder.time_picker.subtitle':
       'Set when this reminder fires',
   'preferences.daily_reminder.kind.title': 'Reminder method',
@@ -1687,6 +1698,7 @@ const Map<String, String> _en = <String, String>{
   'note.unpin': 'Unpin',
   'note.archive': 'Archive',
   'note.restore': 'Restore',
+  'note.action.failed': 'Action failed. Nothing changed. Try again.',
   'note.link.placeholder': 'Link text',
   'note.attachment.pick_file': 'Choose from system files',
   'note.attachment.pick_file.subtitle':
@@ -1760,28 +1772,6 @@ const Map<String, String> _en = <String, String>{
   'announcement.level.info': 'Announcement',
   'announcement.level.warning': 'Notice',
   'announcement.level.critical': 'Important',
-  'theme.title': 'Theme style',
-  'theme.section.styles': 'Available styles',
-  'theme.section.styles.subtitle': 'Changes apply to the whole app',
-  'theme.style.default.name': 'Duoyi',
-  'theme.style.default.description': 'Clean original · warm orange base',
-  'theme.style.re0.name': 'Re:Zero',
-  'theme.style.re0.description': 'Silver-haired witch · Lugunica sanctuary',
-  'theme.style.genshin.name': 'Genshin Impact',
-  'theme.style.genshin.description': 'Elemental scroll · Teyvat easel',
-  'theme.style.star_rail.name': 'Honkai: Star Rail',
-  'theme.style.star_rail.description': 'Astral Express · trailblazing journey',
-  'theme.style.wuthering.name': 'Wuthering Waves',
-  'theme.style.wuthering.description': 'Resonance terminal · tidal spectrum',
-  'theme.style.zzz.name': 'Zenless Zone Zero',
-  'theme.style.zzz.description': 'Commission footage · New Eridu',
-  'theme.style.yanyun.name': 'Where Winds Meet',
-  'theme.style.yanyun.description': 'Jianghu sketchbook · ink trails',
-  'theme.style.botw.name': 'Sheikah Slate',
-  'theme.style.botw.description': 'Sheikah Slate · materialized',
-  'theme.style.liquid_glass.name': 'Liquid Glass',
-  'theme.style.liquid_glass.description':
-      'iOS glassmorphism · translucent white and highlights',
   'goal.title': 'Goals',
   'goal.recommended_templates': 'Recommended templates',
   'goal.empty': 'Set a goal and let time compound for you',
@@ -1912,7 +1902,10 @@ const Map<String, String> _en = <String, String>{
   'diary.summary.streak': 'Streak',
   'diary.recent.title': 'Recent diary',
   'diary.recent.records_suffix': ' entries',
+  'diary.recent.records_suffix_singular': ' entry',
   'diary.entry.count_suffix': ' entries',
+  'diary.entry.count_suffix_singular': ' entry',
+  'diary.streak.day_singular': 'day',
   'diary.mood.stats.title': 'Mood distribution, last 30 days',
   'diary.no_data': 'No data yet',
   'diary.ai.insights': 'AI diary insights',
@@ -2248,6 +2241,7 @@ const Map<String, String> _en = <String, String>{
   'habit.weekday.5': 'F',
   'habit.weekday.6': 'S',
   'habit.weekday.7': 'S',
+  'habit.group.ungrouped': 'Ungrouped',
   'habit.group.today_suffix': ' done today',
   'habit.group.more_habits_prefix': '',
   'habit.group.more_habits_suffix':
@@ -2394,8 +2388,78 @@ class I18n {
   }
 
   /// 翻译键。如果当前 locale 字典缺失，先回退到中文，再回退到 key 本身。
-  static String tr(String key) {
-    final dict = _current == AppLocale.en ? _en : _zh;
+  static String tr(String key) => trForLocale(key, _current);
+
+  static String? _themeCopy(String key, AppLocale locale) => switch (key) {
+    'theme.title' => lookupAppLocalizations(locale.flutterLocale).themeTitle,
+    'theme.section.styles' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeSectionStyles,
+    'theme.section.styles.subtitle' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeSectionStylesSubtitle,
+    'theme.style.default.name' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleDefaultName,
+    'theme.style.default.description' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleDefaultDescription,
+    'theme.style.re0.name' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleRe0Name,
+    'theme.style.re0.description' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleRe0Description,
+    'theme.style.genshin.name' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleGenshinName,
+    'theme.style.genshin.description' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleGenshinDescription,
+    'theme.style.star_rail.name' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleStarRailName,
+    'theme.style.star_rail.description' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleStarRailDescription,
+    'theme.style.wuthering.name' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleWutheringName,
+    'theme.style.wuthering.description' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleWutheringDescription,
+    'theme.style.zzz.name' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleZzzName,
+    'theme.style.zzz.description' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleZzzDescription,
+    'theme.style.yanyun.name' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleYanyunName,
+    'theme.style.yanyun.description' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleYanyunDescription,
+    'theme.style.botw.name' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleBotwName,
+    'theme.style.botw.description' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleBotwDescription,
+    'theme.style.liquid_glass.name' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleLiquidGlassName,
+    'theme.style.liquid_glass.description' => lookupAppLocalizations(
+      locale.flutterLocale,
+    ).themeStyleLiquidGlassDescription,
+    _ => null,
+  };
+
+  /// Formats retained/generated copy without changing the selected locale.
+  static String trForLocale(String key, AppLocale locale) {
+    final theme = _themeCopy(key, locale);
+    if (theme != null) return theme;
+    final dict = locale == AppLocale.en ? _en : _zh;
     return dict[key] ?? _zh[key] ?? key;
   }
 }
@@ -2406,6 +2470,7 @@ class LocaleProvider extends ChangeNotifier {
 
   AppLocale _locale = AppLocale.zh;
   int _choiceRevision = 0;
+  bool _disposed = false;
   Future<void> _pendingPersistence = Future<void>.value();
 
   AppLocale get locale => _locale;
@@ -2419,9 +2484,10 @@ class LocaleProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromStorage() async {
+    if (_disposed) return;
     final revision = ++_choiceRevision;
     final prefs = await SharedPreferences.getInstance();
-    if (revision != _choiceRevision) return;
+    if (_disposed || revision != _choiceRevision) return;
     final raw = prefs.getString(_key);
     final next = AppLocaleX.fromStorageValue(raw) ?? defaultLocaleForPlatform();
     final changed = _locale != next;
@@ -2431,11 +2497,12 @@ class LocaleProvider extends ChangeNotifier {
       migration = _persistLocale(next);
     }
     I18n.setLocale(next);
-    if (changed) notifyListeners();
+    if (changed && !_disposed) notifyListeners();
     if (migration != null) await migration;
   }
 
   Future<void> setLocale(AppLocale locale) {
+    if (_disposed) return Future<void>.value();
     // An explicit choice also wins over a pending initial load when the user
     // selects the currently displayed default language.
     _choiceRevision++;
@@ -2443,13 +2510,15 @@ class LocaleProvider extends ChangeNotifier {
     _locale = locale;
     final persistence = _persistLocale(locale);
     I18n.setLocale(locale);
-    if (changed) notifyListeners();
+    if (changed && !_disposed) notifyListeners();
     return persistence;
   }
 
   Future<void> _persistLocale(AppLocale locale) {
     final persistence = _pendingPersistence.then((_) async {
+      if (_disposed) return;
       final prefs = await SharedPreferences.getInstance();
+      if (_disposed) return;
       if (!await prefs.setString(_key, locale.storageValue)) {
         throw StateError('Locale preference was not saved');
       }
@@ -2460,5 +2529,12 @@ class LocaleProvider extends ChangeNotifier {
       onError: (Object _, StackTrace _) {},
     );
     return persistence;
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _choiceRevision++;
+    super.dispose();
   }
 }

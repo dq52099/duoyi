@@ -35,6 +35,7 @@ class CalendarEventDisplayText {
         negative: meta.kind == HabitKind.negative,
         flexible: meta.hasFlexRule,
         authoredUnit: meta.unit,
+        generatedUnitKey: meta.generatedUnitKey,
         flexProgressLabel: meta.flexProgress?.labelFor(I18n.current),
       );
     }

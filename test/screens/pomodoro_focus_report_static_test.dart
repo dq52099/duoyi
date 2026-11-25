@@ -22,7 +22,7 @@ void main() {
     expect(report, contains('class FocusReport'));
     expect(report, contains('FocusTagStats.build(sessions: focusSessions'));
     expect(report, contains('penaltyAffectedSeconds'));
-    expect(report, contains('String toMarkdown()'));
+    expect(report, contains('String toMarkdown('));
     expect(report, contains('## 标签投入'));
   });
 }

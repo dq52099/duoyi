@@ -5,6 +5,7 @@ import '../core/domain_event_bus.dart';
 import '../core/app_brand.dart';
 import '../core/account_preference_writes.dart';
 import '../services/account_local_data_cleaner.dart';
+import 'achievement_provider.dart';
 
 class FocusBackdropReward {
   final String id;
@@ -206,13 +207,15 @@ class ThemeProvider extends ChangeNotifier {
     change, {
     required T Function() canceledResult,
     void Function()? afterCommit,
+    bool Function()? additionalIsCurrent,
   }) {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     return AccountPreferenceWrites.runResult<T>((token) {
       bool isCurrent() =>
           _isCurrentShopOperation(generation, accountGeneration) &&
-          token.isCurrent;
+          token.isCurrent &&
+          (additionalIsCurrent?.call() ?? true);
       final write = _shopWriteTail.then<T>((_) async {
         if (!isCurrent()) return canceledResult();
         final preferences = await SharedPreferences.getInstance();
@@ -241,7 +244,7 @@ class ThemeProvider extends ChangeNotifier {
           if (generation == _storageGeneration) {
             restoreState();
             // Preserve actual disk state if the device cannot restore a key.
-            await loadFromStorage();
+            await _loadFromStorageNow();
           }
           rethrow;
         }
@@ -399,7 +402,12 @@ class ThemeProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> loadFromStorage() async {
+  Future<void> loadFromStorage() => _enqueueShopChange<void>(
+    (_, _) => _loadFromStorageNow(),
+    canceledResult: () {},
+  );
+
+  Future<void> _loadFromStorageNow() async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
@@ -429,6 +437,114 @@ class ThemeProvider extends ChangeNotifier {
       generation == _storageGeneration &&
       AccountLocalDataCleaner.isCurrentAccountDataGeneration(accountGeneration);
 
+  /// Saves a guest debit, unlock and selection in one shared transaction.
+  Future<bool> redeemGuestItem({
+    required AchievementProvider rewards,
+    required String itemType,
+    required String itemId,
+    required String title,
+    required String reason,
+    required bool Function() isAuthorized,
+  }) {
+    // Capture before waiting on the reward queue, never borrow a new account.
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    bool authorized() =>
+        _isCurrentShopOperation(generation, accountGeneration) &&
+        isAuthorized();
+    return rewards.runCoinPurchase((purchase) {
+      var switchedBrand = false;
+      return _enqueueShopChange<bool>(
+        (prefs, transaction) async {
+          if (!authorized()) throw const AccountPreferenceWriteCanceled();
+          purchase.ensureCurrent();
+          final (unlockKey, activeKey, cost, unlocked) = switch (itemType) {
+            'brand' when brands.any((item) => item.id == itemId) => (
+              'unlockedBrandIds',
+              'activeBrand',
+              brandCost(itemId),
+              isBrandUnlocked(itemId),
+            ),
+            'focus_backdrop'
+                when focusBackdrops.any((item) => item.id == itemId) =>
+              (
+                'unlockedFocusBackdropIds',
+                'activeFocusBackdropId',
+                focusBackdropCost(itemId),
+                isFocusBackdropUnlocked(itemId),
+              ),
+            'avatar_frame' when avatarFrames.any((item) => item.id == itemId) =>
+              (
+                'unlockedAvatarFrameIds',
+                'activeAvatarFrameId',
+                avatarFrameCost(itemId),
+                isAvatarFrameUnlocked(itemId),
+              ),
+            'card_skin' when cardSkins.any((item) => item.id == itemId) => (
+              'unlockedCardSkinIds',
+              'activeCardSkinId',
+              cardSkinCost(itemId),
+              isCardSkinUnlocked(itemId),
+            ),
+            _ => throw ArgumentError('Unknown theme shop item'),
+          };
+          // This check runs inside both queues, so repeated requests charge once.
+          if (!unlocked &&
+              !await purchase.debit(
+                transaction,
+                coins: cost,
+                title: title,
+                reason: reason,
+              )) {
+            return false;
+          }
+          purchase.ensureCurrent();
+          if (unlocked && _shopStateJson()[activeKey] == itemId) return true;
+          final next = _shopStateJson();
+          next[unlockKey] = {
+            ...List<String>.from(next[unlockKey] as List),
+            itemId,
+          }.toList();
+          next[activeKey] = itemId;
+          next['updatedAt'] = DateTime.now().toUtc().toIso8601String();
+          if (itemType == 'brand') {
+            switchedBrand = _brand.id != itemId;
+            if (switchedBrand) next['switchCount'] = _switchCount + 1;
+            await transaction.setString(_storageKey, itemId);
+            purchase.ensureCurrent();
+            await transaction.setStringList(
+              _unlockedBrandsKey,
+              List<String>.from(next[unlockKey] as List),
+            );
+            purchase.ensureCurrent();
+            await transaction.setInt(
+              _switchCountKey,
+              next['switchCount'] as int,
+            );
+            purchase.ensureCurrent();
+          }
+          await transaction.setString(_shopStateKey, jsonEncode(next));
+          purchase.ensureCurrent();
+          // Publish the new selection only once all platform writes succeeded.
+          _applyShopStateMap(next, prefs: prefs, includeLegacyFallback: false);
+          return true;
+        },
+        canceledResult: () => false,
+        additionalIsCurrent: purchase.isCurrent,
+        afterCommit: () {
+          if (!switchedBrand) return;
+          DomainEventBus.instance.publish(
+            DomainEvent(
+              type: DomainEventType.themeSwitched,
+              objectId: _brand.id,
+              metadata: {'count': _switchCount},
+            ),
+          );
+        },
+      );
+    }, isAuthorized: authorized);
+  }
+
   Future<void> applyShopStateFromServer(
     Map<dynamic, dynamic> state, {
     bool trusted = false,
@@ -450,21 +566,42 @@ class ThemeProvider extends ChangeNotifier {
         );
         return;
       }
+      final restoreCommittedState = _captureShopState();
       final changed = _applyShopStateMap(
         incoming,
         prefs: preferences,
         includeLegacyFallback: false,
       );
-      if (!changed) return;
-      await transaction.setString(_storageKey, _brand.id);
+      if (!changed) {
+        restoreCommittedState();
+        return;
+      }
+      final candidateState = _shopStateJson();
+      final candidateBrandId = _brand.id;
+      final candidateUnlockedBrandIds = _unlockedBrandIds.toList(
+        growable: false,
+      );
+      restoreCommittedState();
+
+      await transaction.setString(_storageKey, candidateBrandId);
       if (!_isCurrentShopOperation(generation, accountGeneration)) return;
       await transaction.setStringList(
         _unlockedBrandsKey,
-        _unlockedBrandIds.toList(growable: false),
+        candidateUnlockedBrandIds,
       );
       if (!_isCurrentShopOperation(generation, accountGeneration)) return;
-      await _saveShopState(transaction, touch: false);
+      final nextUpdatedAt = await _saveShopState(
+        transaction,
+        candidateState: candidateState,
+        touch: false,
+      );
       if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+      _applyShopStateMap(
+        candidateState,
+        prefs: preferences,
+        includeLegacyFallback: false,
+      );
+      _shopStateUpdatedAt = nextUpdatedAt;
       _serverConfirmedChangePending = true;
     }, canceledResult: () {});
   }
@@ -560,26 +697,24 @@ class ThemeProvider extends ChangeNotifier {
       'widgetBackgroundBrandId',
       'widget_background_brand_id',
     ]);
-    if (activeWidgetBackgroundId != null) {
-      _activeWidgetBackgroundId = _normalizeWidgetBackgroundId(
-        activeWidgetBackgroundId,
-      );
-    } else if (includeLegacyFallback) {
-      _activeWidgetBackgroundId = widgetFollowThemeId;
-    }
+    _activeWidgetBackgroundId = _normalizeWidgetBackgroundId(
+      activeWidgetBackgroundId ??
+          (includeLegacyFallback
+              ? widgetFollowThemeId
+              : _activeWidgetBackgroundId),
+    );
     final activeWidgetCardSkinId = _stringFromAny(shopState, const [
       'activeWidgetCardSkinId',
       'active_widget_card_skin_id',
       'widgetCardSkinId',
       'widget_card_skin_id',
     ]);
-    if (activeWidgetCardSkinId != null) {
-      _activeWidgetCardSkinId = _normalizeWidgetCardSkinId(
-        activeWidgetCardSkinId,
-      );
-    } else if (includeLegacyFallback) {
-      _activeWidgetCardSkinId = widgetFollowCardSkinId;
-    }
+    _activeWidgetCardSkinId = _normalizeWidgetCardSkinId(
+      activeWidgetCardSkinId ??
+          (includeLegacyFallback
+              ? widgetFollowCardSkinId
+              : _activeWidgetCardSkinId),
+    );
     return before != jsonEncode(_shopStateJson());
   }
 
@@ -588,20 +723,24 @@ class ThemeProvider extends ChangeNotifier {
       if (isBrandUnlocked(id)) return;
       final generation = _storageGeneration;
       final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-      _unlockedBrandIds.add(id);
       if (generation != _storageGeneration ||
           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
             accountGeneration,
           )) {
         return;
       }
-      await transaction.setStringList(
-        _unlockedBrandsKey,
-        _unlockedBrandIds.toList(growable: false),
+      final nextUnlockedBrandIds = [..._unlockedBrandIds, id];
+      await transaction.setStringList(_unlockedBrandsKey, nextUnlockedBrandIds);
+      if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+      final candidateState = _shopStateJson()
+        ..['unlockedBrandIds'] = nextUnlockedBrandIds;
+      final nextUpdatedAt = await _saveShopState(
+        transaction,
+        candidateState: candidateState,
       );
       if (!_isCurrentShopOperation(generation, accountGeneration)) return;
-      await _saveShopState(transaction);
-      if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+      _unlockedBrandIds.add(id);
+      _shopStateUpdatedAt = nextUpdatedAt;
     }, canceledResult: () {});
   }
 
@@ -610,15 +749,22 @@ class ThemeProvider extends ChangeNotifier {
       if (isFocusBackdropUnlocked(id)) return;
       final generation = _storageGeneration;
       final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-      _unlockedFocusBackdropIds.add(id);
       if (generation != _storageGeneration ||
           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
             accountGeneration,
           )) {
         return;
       }
-      await _saveShopState(transaction);
+      final nextUnlocked = [..._unlockedFocusBackdropIds, id];
+      final candidateState = _shopStateJson()
+        ..['unlockedFocusBackdropIds'] = nextUnlocked;
+      final nextUpdatedAt = await _saveShopState(
+        transaction,
+        candidateState: candidateState,
+      );
       if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+      _unlockedFocusBackdropIds.add(id);
+      _shopStateUpdatedAt = nextUpdatedAt;
     }, canceledResult: () {});
   }
 
@@ -629,15 +775,21 @@ class ThemeProvider extends ChangeNotifier {
       if (_activeFocusBackdropId == nextId) return true;
       final generation = _storageGeneration;
       final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-      _activeFocusBackdropId = nextId;
       if (generation != _storageGeneration ||
           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
             accountGeneration,
           )) {
         return false;
       }
-      await _saveShopState(transaction);
+      final candidateState = _shopStateJson()
+        ..['activeFocusBackdropId'] = nextId;
+      final nextUpdatedAt = await _saveShopState(
+        transaction,
+        candidateState: candidateState,
+      );
       if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
+      _activeFocusBackdropId = nextId;
+      _shopStateUpdatedAt = nextUpdatedAt;
       return true;
     }, canceledResult: () => false);
   }
@@ -647,15 +799,22 @@ class ThemeProvider extends ChangeNotifier {
       if (isAvatarFrameUnlocked(id)) return;
       final generation = _storageGeneration;
       final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-      _unlockedAvatarFrameIds.add(id);
       if (generation != _storageGeneration ||
           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
             accountGeneration,
           )) {
         return;
       }
-      await _saveShopState(transaction);
+      final nextUnlocked = [..._unlockedAvatarFrameIds, id];
+      final candidateState = _shopStateJson()
+        ..['unlockedAvatarFrameIds'] = nextUnlocked;
+      final nextUpdatedAt = await _saveShopState(
+        transaction,
+        candidateState: candidateState,
+      );
       if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+      _unlockedAvatarFrameIds.add(id);
+      _shopStateUpdatedAt = nextUpdatedAt;
     }, canceledResult: () {});
   }
 
@@ -666,15 +825,20 @@ class ThemeProvider extends ChangeNotifier {
       if (_activeAvatarFrameId == nextId) return true;
       final generation = _storageGeneration;
       final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-      _activeAvatarFrameId = nextId;
       if (generation != _storageGeneration ||
           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
             accountGeneration,
           )) {
         return false;
       }
-      await _saveShopState(transaction);
+      final candidateState = _shopStateJson()..['activeAvatarFrameId'] = nextId;
+      final nextUpdatedAt = await _saveShopState(
+        transaction,
+        candidateState: candidateState,
+      );
       if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
+      _activeAvatarFrameId = nextId;
+      _shopStateUpdatedAt = nextUpdatedAt;
       return true;
     }, canceledResult: () => false);
   }
@@ -684,15 +848,22 @@ class ThemeProvider extends ChangeNotifier {
       if (isCardSkinUnlocked(id)) return;
       final generation = _storageGeneration;
       final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-      _unlockedCardSkinIds.add(id);
       if (generation != _storageGeneration ||
           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
             accountGeneration,
           )) {
         return;
       }
-      await _saveShopState(transaction);
+      final nextUnlocked = [..._unlockedCardSkinIds, id];
+      final candidateState = _shopStateJson()
+        ..['unlockedCardSkinIds'] = nextUnlocked;
+      final nextUpdatedAt = await _saveShopState(
+        transaction,
+        candidateState: candidateState,
+      );
       if (!_isCurrentShopOperation(generation, accountGeneration)) return;
+      _unlockedCardSkinIds.add(id);
+      _shopStateUpdatedAt = nextUpdatedAt;
     }, canceledResult: () {});
   }
 
@@ -703,15 +874,20 @@ class ThemeProvider extends ChangeNotifier {
       if (_activeCardSkinId == nextId) return true;
       final generation = _storageGeneration;
       final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-      _activeCardSkinId = nextId;
       if (generation != _storageGeneration ||
           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
             accountGeneration,
           )) {
         return false;
       }
-      await _saveShopState(transaction);
+      final candidateState = _shopStateJson()..['activeCardSkinId'] = nextId;
+      final nextUpdatedAt = await _saveShopState(
+        transaction,
+        candidateState: candidateState,
+      );
       if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
+      _activeCardSkinId = nextId;
+      _shopStateUpdatedAt = nextUpdatedAt;
       return true;
     }, canceledResult: () => false);
   }
@@ -725,15 +901,21 @@ class ThemeProvider extends ChangeNotifier {
       if (_activeWidgetBackgroundId == nextId) return true;
       final generation = _storageGeneration;
       final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-      _activeWidgetBackgroundId = nextId;
       if (generation != _storageGeneration ||
           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
             accountGeneration,
           )) {
         return false;
       }
-      await _saveShopState(transaction);
+      final candidateState = _shopStateJson()
+        ..['activeWidgetBackgroundId'] = nextId;
+      final nextUpdatedAt = await _saveShopState(
+        transaction,
+        candidateState: candidateState,
+      );
       if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
+      _activeWidgetBackgroundId = nextId;
+      _shopStateUpdatedAt = nextUpdatedAt;
       return true;
     }, canceledResult: () => false);
   }
@@ -747,15 +929,21 @@ class ThemeProvider extends ChangeNotifier {
       if (_activeWidgetCardSkinId == nextId) return true;
       final generation = _storageGeneration;
       final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-      _activeWidgetCardSkinId = nextId;
       if (generation != _storageGeneration ||
           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
             accountGeneration,
           )) {
         return false;
       }
-      await _saveShopState(transaction);
+      final candidateState = _shopStateJson()
+        ..['activeWidgetCardSkinId'] = nextId;
+      final nextUpdatedAt = await _saveShopState(
+        transaction,
+        candidateState: candidateState,
+      );
       if (!_isCurrentShopOperation(generation, accountGeneration)) return false;
+      _activeWidgetCardSkinId = nextId;
+      _shopStateUpdatedAt = nextUpdatedAt;
       return true;
     }, canceledResult: () => false);
   }
@@ -764,9 +952,8 @@ class ThemeProvider extends ChangeNotifier {
     return _enqueueShopChange<bool>(
       (preferences, transaction) async {
         if (!isBrandUnlocked(id)) return false;
-        final prev = _brand.id;
-        _brand = AppBrands.byId(id);
-        if (prev == _brand.id) return true;
+        final nextBrand = AppBrands.byId(id);
+        if (_brand.id == nextBrand.id) return true;
         final generation = _storageGeneration;
         final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
         if (generation != _storageGeneration ||
@@ -775,19 +962,28 @@ class ThemeProvider extends ChangeNotifier {
             )) {
           return false;
         }
-        await transaction.setString(_storageKey, _brand.id);
+        final nextSwitchCount = _switchCount + 1;
+        await transaction.setString(_storageKey, nextBrand.id);
         if (!_isCurrentShopOperation(generation, accountGeneration)) {
           return false;
         }
-        _switchCount++;
-        await transaction.setInt(_switchCountKey, _switchCount);
+        await transaction.setInt(_switchCountKey, nextSwitchCount);
         if (!_isCurrentShopOperation(generation, accountGeneration)) {
           return false;
         }
-        await _saveShopState(transaction);
+        final candidateState = _shopStateJson()
+          ..['activeBrand'] = nextBrand.id
+          ..['switchCount'] = nextSwitchCount;
+        final nextUpdatedAt = await _saveShopState(
+          transaction,
+          candidateState: candidateState,
+        );
         if (!_isCurrentShopOperation(generation, accountGeneration)) {
           return false;
         }
+        _brand = nextBrand;
+        _switchCount = nextSwitchCount;
+        _shopStateUpdatedAt = nextUpdatedAt;
         return true;
       },
       canceledResult: () => false,
@@ -875,24 +1071,36 @@ class ThemeProvider extends ChangeNotifier {
 
   String _normalizeWidgetBackgroundId(String id) {
     if (id == widgetFollowThemeId) return widgetFollowThemeId;
+    if (!brands.any((brand) => brand.id == id)) return widgetFollowThemeId;
     final brand = AppBrands.byId(id);
     return isBrandUnlocked(brand.id) ? brand.id : widgetFollowThemeId;
   }
 
   String _normalizeWidgetCardSkinId(String id) {
     if (id == widgetFollowCardSkinId) return widgetFollowCardSkinId;
+    if (!cardSkins.any((skin) => skin.id == id)) return widgetFollowCardSkinId;
     final skin = cardSkinById(id);
     return isCardSkinUnlocked(skin.id) ? skin.id : widgetFollowCardSkinId;
   }
 
-  Future<void> _saveShopState(
+  Future<String> _saveShopState(
     AccountPreferenceTransaction preferences, {
+    Map<String, dynamic>? candidateState,
     bool touch = true,
   }) async {
-    if (touch || _shopStateUpdatedAt.isEmpty) {
-      _shopStateUpdatedAt = DateTime.now().toUtc().toIso8601String();
+    final state = candidateState ?? _shopStateJson();
+    final candidateUpdatedAt = _shopStateUpdatedAtOf(candidateState);
+    var updatedAt = candidateUpdatedAt.isNotEmpty
+        ? candidateUpdatedAt
+        : _shopStateUpdatedAt;
+    if (touch || updatedAt.isEmpty) {
+      updatedAt = DateTime.now().toUtc().toIso8601String();
+      state['updatedAt'] = updatedAt;
+    } else {
+      state['updatedAt'] = updatedAt;
     }
-    await preferences.setString(_shopStateKey, jsonEncode(_shopStateJson()));
+    await preferences.setString(_shopStateKey, jsonEncode(state));
+    return updatedAt;
   }
 
   Map<String, dynamic> _shopStateJson() => {

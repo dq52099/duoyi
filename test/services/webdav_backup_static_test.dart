@@ -72,7 +72,59 @@ void main() {
       reason: '粘贴导入 / 文件导入 / WebDAV 恢复都应透传 merge: merge',
     );
     expect(screen, contains('backup.overwrite.will_delete_missing'));
-    expect(screen, contains('await _reloadAll()'));
+    expect(
+      screen,
+      contains(
+        'await _reloadAll(accountGeneration: accountGeneration, seq: seq)',
+      ),
+    );
+    expect(
+      screen.split('await todoProvider.runExternalStorageUpdate(').length - 1,
+      5,
+    );
+    // Bind each existing external-storage entry to its own captured generation;
+    // competitor undo uses its separately retained rollback generation.
+    for (final binding in <(String, String, String)>[
+      ('Future<void> _import({', 'Future<void> _importBackupFile(', 'accountGeneration'),
+      ('Future<void> _importBackupFile(', 'Future<void> _importTasksFromOtherApps()', 'accountGeneration'),
+      ('Future<void> _rollbackCompetitorImport(', 'String _competitorSourceLabel(', 'effectiveGeneration'),
+      ('Future<void> _wipe()', 'Future<void> _configureWebDavBackup()', 'accountGeneration'),
+      ('Future<void> _restoreFromWebDav(', 'Future<void> _reloadAll(', 'accountGeneration'),
+    ]) {
+      final start = screen.indexOf(binding.$1);
+      final end = screen.indexOf(binding.$2, start);
+      expect(start, isNonNegative, reason: binding.$1);
+      expect(end, greaterThan(start), reason: binding.$2);
+      final body = screen.substring(start, end);
+      expect(body.split('await todoProvider.runExternalStorageUpdate('), hasLength(2));
+      expect(body.split('expectedAccountDataGeneration: ${binding.$3}'), hasLength(2));
+      if (binding.$3 == 'accountGeneration') {
+        if (binding.$1 == 'Future<void> _restoreFromWebDav(') {
+          expect(body, contains('var accountGeneration = AccountLocalDataCleaner.accountDataGeneration;'));
+          expect(
+            body.split('accountGeneration = AccountLocalDataCleaner.accountDataGeneration;'),
+            hasLength(3),
+            reason: 'WebDAV captures before configuration and again before its action',
+          );
+          expect(
+            body,
+            contains(
+              'final todoProvider = context.read<TodoProvider>();\n'
+              '    accountGeneration = AccountLocalDataCleaner.accountDataGeneration;\n'
+              '    final seq = ++_actionSeq;',
+            ),
+          );
+        } else {
+          expect(body, contains('final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;'));
+        }
+        expect(body, contains('_isCurrentAction(seq, accountGeneration)'));
+      } else {
+        expect(body, contains('accountGeneration ?? _competitorRollbackGeneration'));
+        expect(body, contains('bool canWriteRollback() => mounted && origin.isCurrent();'));
+        expect(body, contains('canWrite: canWriteRollback'));
+        expect(body, contains('AccountLocalDataCleaner.isCurrentAccountDataGeneration('));
+      }
+    }
   });
 
   test('Backup screen can restore and migrate from local files', () {

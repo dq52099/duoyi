@@ -34,170 +34,346 @@
         android:visibility="gone" />
 
     <LinearLayout
+        android:id="@+id/widget_calendar_content"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="12dp">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:padding="8dp">
 
         <TextView
-            android:id="@+id/widget_calendar_title"
-            android:layout_width="0dp"
+            android:id="@+id/widget_calendar_recovery"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#333333"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/widget_calendar_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="24dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_calendar_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:includeFontPadding="false"
+                android:text="多仪"
+                android:textColor="#0066D6"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/widget_calendar_month"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:text="2026年5月"
+                android:textColor="#666666"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/widget_calendar_today_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:background="@drawable/widget_nav_bg"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:minWidth="36dp"
+                android:minHeight="22dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:paddingLeft="6dp"
+                android:paddingRight="6dp"
+                android:text="今天"
+                android:textColor="#0066D6"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/widget_refresh"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="4dp"
+                android:contentDescription="@string/widget_refresh_description"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:minWidth="22dp"
+                android:minHeight="22dp"
+                android:padding="2dp"
+                android:text="↻"
+                android:textColor="#888888"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_calendar_weekday_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="12dp"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_calendar_weekday_0"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="#666666"
+                android:textSize="9.5sp" />
+
+            <TextView
+                android:id="@+id/widget_calendar_weekday_1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="#666666"
+                android:textSize="9.5sp" />
+
+            <TextView
+                android:id="@+id/widget_calendar_weekday_2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="#666666"
+                android:textSize="9.5sp" />
+
+            <TextView
+                android:id="@+id/widget_calendar_weekday_3"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="#666666"
+                android:textSize="9.5sp" />
+
+            <TextView
+                android:id="@+id/widget_calendar_weekday_4"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="#666666"
+                android:textSize="9.5sp" />
+
+            <TextView
+                android:id="@+id/widget_calendar_weekday_5"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="#666666"
+                android:textSize="9.5sp" />
+
+            <TextView
+                android:id="@+id/widget_calendar_weekday_6"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="#666666"
+                android:textSize="9.5sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_calendar_date_fallback"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textSize="11sp"
+            android:textColor="#333333"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/widget_calendar_grid"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="多仪"
-            android:textColor="#FF6B6B"
-            android:textSize="14sp" />
+            android:layout_marginTop="2dp"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/widget_calendar_month"
-            android:layout_width="wrap_content"
+            <LinearLayout
+                android:id="@+id/widget_calendar_row_0"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/widget_calendar_row_1"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/widget_calendar_row_2"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/widget_calendar_row_3"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/widget_calendar_row_4"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/widget_calendar_row_5"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_calendar_info_row"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxWidth="82dp"
-            android:maxLines="1"
-            android:text="2026年5月"
-            android:textColor="#666666"
-            android:textSize="11sp" />
+            android:minHeight="14dp"
+            android:layout_marginTop="2dp"
+            android:orientation="vertical"
+            android:visibility="gone">
 
-        <TextView
-            android:id="@+id/widget_calendar_today_button"
-            android:layout_width="wrap_content"
-            android:layout_height="34dp"
-            android:minWidth="44dp"
-            android:minHeight="34dp"
-            android:layout_marginLeft="6dp"
-            android:paddingLeft="8dp"
-            android:paddingRight="8dp"
+            <TextView
+                android:id="@+id/widget_calendar_summary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:text="@string/widget_calendar_summary_default"
+                android:textColor="#0066D6"
+                android:textSize="10sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/widget_calendar_event_summary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:gravity="center_vertical"
+                android:text="@string/widget_calendar_event_empty"
+                android:textColor="#333333"
+                android:textSize="10sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_calendar_spacer"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/widget_calendar_bottom_nav"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="24dp"
+            android:layout_marginTop="2dp"
             android:background="@drawable/widget_nav_bg"
             android:gravity="center"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="今天"
-            android:textColor="#1E88E5"
-            android:textSize="11sp" />
+            android:orientation="horizontal"
+            android:paddingLeft="4dp"
+            android:paddingRight="4dp"
+            android:weightSum="4"
+            android:visibility="gone">
 
-        <TextView
-            android:id="@+id/widget_refresh"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:minWidth="36dp"
-            android:minHeight="36dp"
-            android:layout_marginLeft="4dp"
-            android:gravity="center"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="↻"
-            android:contentDescription="@string/widget_refresh_description"
-            android:textColor="#888888"
-            android:textSize="14sp" />
-    </LinearLayout>
+            <TextView
+                android:id="@+id/widget_calendar_nav_todo"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_tab_todo"
+                android:textColor="#333333"
+                android:textSize="9.5sp" />
 
-    <TextView
-        android:id="@+id/widget_calendar_grid"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginTop="8dp"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:lineSpacingExtra="1dp"
-        android:text="一 二 三 四 五 六 日&#10;             1  2  3&#10; 4  5  6  7  8  9 10&#10;11 12 13 14 15 16 17&#10;18 19 20 21 22 23 24&#10;25 26 27 28 29 30 31"
-        android:textColor="#333333"
-        android:textSize="11sp"
-        android:typeface="monospace" />
+            <TextView
+                android:id="@+id/widget_calendar_nav_habit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_tab_habit"
+                android:textColor="#333333"
+                android:textSize="9.5sp" />
 
-    <TextView
-        android:id="@+id/widget_calendar_summary"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="@string/widget_calendar_summary_default"
-        android:textColor="#1E88E5"
-        android:textSize="11sp"
-        android:visibility="gone" />
+            <TextView
+                android:id="@+id/widget_calendar_nav_calendar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_tab_calendar"
+                android:textColor="#0066D6"
+                android:textSize="9.5sp" />
 
-    <TextView
-        android:id="@+id/widget_calendar_event_summary"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="@string/widget_calendar_event_empty"
-        android:textColor="#333333"
-        android:textSize="11sp"
-        android:visibility="gone" />
-
-    <LinearLayout
-        android:id="@+id/widget_calendar_bottom_nav"
-        android:layout_width="match_parent"
-        android:layout_height="30dp"
-        android:layout_marginTop="8dp"
-        android:background="@drawable/widget_nav_bg"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:paddingLeft="4dp"
-        android:paddingRight="4dp"
-        android:weightSum="4"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/widget_calendar_nav_todo"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="@string/widget_tab_todo"
-            android:textColor="#333333"
-            android:textSize="10sp" />
-
-        <TextView
-            android:id="@+id/widget_calendar_nav_habit"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="@string/widget_tab_habit"
-            android:textColor="#333333"
-            android:textSize="10sp" />
-
-        <TextView
-            android:id="@+id/widget_calendar_nav_calendar"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="@string/widget_tab_calendar"
-            android:textColor="#1E88E5"
-            android:textSize="10sp" />
-
-        <TextView
-            android:id="@+id/widget_calendar_nav_focus"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="@string/widget_tab_focus"
-            android:textColor="#333333"
-            android:textSize="10sp" />
-    </LinearLayout>
+            <TextView
+                android:id="@+id/widget_calendar_nav_focus"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_tab_focus"
+                android:textColor="#333333"
+                android:textSize="9.5sp" />
+        </LinearLayout>
     </LinearLayout>
 </FrameLayout>

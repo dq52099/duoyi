@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/account_preference_writes.dart';
 import '../models/goal.dart';
 import '../models/habit.dart';
 import '../models/time_entry.dart';
@@ -26,15 +27,19 @@ class TimeAuditProvider extends ChangeNotifier {
 
   List<TimeEntry> _entries = [];
   int _storageGeneration = 0;
-  int _saveRevision = 0;
+  // Keep writes and rollback ordered even when a disposed instance is replaced.
+  static Future<void>? _storageTail;
   bool _disposed = false;
   VoidCallback? onLocalMutationPersisted;
+
+  /// Identifies the data owner captured by an editor before an account reset.
+  int get storageGeneration => _storageGeneration;
+  bool get isDisposed => _disposed;
 
   @override
   void dispose() {
     _disposed = true;
     _storageGeneration++;
-    _saveRevision++;
     onLocalMutationPersisted = null;
     super.dispose();
   }
@@ -45,30 +50,117 @@ class TimeAuditProvider extends ChangeNotifier {
     return List.unmodifiable(sorted);
   }
 
-  Future<void> loadFromStorage() async {
-    if (_disposed) return;
+  /// Capture ownership before queueing so cleanup can drain every issued write.
+  Future<T> _enqueueStorage<T>(
+    Future<T> Function(bool Function() isCurrent) operation, {
+    required T Function() canceledResult,
+  }) {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final prefs = await SharedPreferences.getInstance();
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
-      return;
-    }
-    final raw = prefs.getStringList(storageKey) ?? const <String>[];
-    final loadedEntries = raw
-        .map((e) {
-          try {
-            return TimeEntry.fromJson(jsonDecode(e) as Map<String, dynamic>);
-          } catch (_) {
-            return null;
-          }
-        })
-        .whereType<TimeEntry>()
-        .toList();
-    // An accepted reload supersedes any save snapshots captured before it.
-    _saveRevision++;
-    _entries = loadedEntries;
-    notifyListeners();
+    final preceding = _storageTail;
+    bool ownsData() =>
+        _isCurrentStorageGeneration(generation, accountGeneration);
+    final result = Future<T>.sync(() {
+      return AccountPreferenceWrites.runResult<T>((token) async {
+        if (preceding != null) await preceding;
+        if (!ownsData()) return canceledResult();
+        token.ensureCurrent();
+        try {
+          return await operation(() => ownsData() && token.isCurrent);
+        } on AccountPreferenceWriteCanceled {
+          // A reset/disposed owner must not receive completion effects. A token
+          // invalidated before account cleanup changes its generation is still
+          // a rejected save, never an acknowledged commit for a current editor.
+          if (!ownsData()) return canceledResult();
+          rethrow;
+        }
+      }, canceledResult: () => throw const AccountPreferenceWriteCanceled());
+    });
+    final tail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _storageTail = tail;
+    tail.then<void>((_) {
+      if (identical(_storageTail, tail)) _storageTail = null;
+    });
+    return result;
   }
+
+  void _ensureCurrent(bool Function() isCurrent) {
+    if (!isCurrent()) throw const AccountPreferenceWriteCanceled();
+  }
+
+  Future<void> loadFromStorage() async {
+    if (_disposed) return;
+    await _enqueueStorage<void>((isCurrent) async {
+      final prefs = await SharedPreferences.getInstance();
+      _ensureCurrent(isCurrent);
+      final raw = prefs.getStringList(storageKey) ?? const <String>[];
+      _entries = raw
+          .map((value) {
+            try {
+              return TimeEntry.fromJson(
+                jsonDecode(value) as Map<String, dynamic>,
+              );
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<TimeEntry>()
+          .toList();
+      notifyListeners();
+    }, canceledResult: () {});
+  }
+
+  /// Capture durable identities without treating a reset/unhydrated cache as
+  /// proof that a completion record has already disappeared.
+  Future<List<TimeEntry>> readStoredEntries() =>
+      _enqueueStorage<List<TimeEntry>>((isCurrent) async {
+        final prefs = await SharedPreferences.getInstance();
+        _ensureCurrent(isCurrent);
+        await prefs.reload();
+        _ensureCurrent(isCurrent);
+        return List.unmodifiable(_decodeStoredEntries(prefs));
+      }, canceledResult: () => throw const AccountPreferenceWriteCanceled());
+
+  List<TimeEntry> _decodeStoredEntries(SharedPreferences prefs) =>
+      (prefs.getStringList(storageKey) ?? const <String>[])
+          .map((raw) {
+            try {
+              return TimeEntry.fromJson(
+                jsonDecode(raw) as Map<String, dynamic>,
+              );
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<TimeEntry>()
+          .toList();
+
+  /// Remove only the original, unchanged records. The durable read and removal
+  /// share a queue so a replacement cache cannot consume a pending cleanup.
+  Future<void> deleteStoredEntries(Map<String, String> originalPayloads) =>
+      _enqueueStorage<void>((isCurrent) async {
+        final prefs = await SharedPreferences.getInstance();
+        _ensureCurrent(isCurrent);
+        await prefs.reload();
+        _ensureCurrent(isCurrent);
+        final stored = _decodeStoredEntries(prefs);
+        final removed = stored
+            .where(
+              (entry) =>
+                  originalPayloads[entry.id] == jsonEncode(entry.toJson()),
+            )
+            .map((entry) => entry.id)
+            .toSet();
+        if (removed.isEmpty) return;
+        await _persistSnapshot(
+          stored.where((entry) => !removed.contains(entry.id)).toList(),
+          isCurrent,
+          deletedIds: removed.toList(),
+        );
+      }, canceledResult: () => throw const AccountPreferenceWriteCanceled());
 
   void resetLocalState() {
     if (_disposed) return;
@@ -77,23 +169,51 @@ class TimeAuditProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _save() async {
-    if (_disposed) return;
-    final saveRevision = ++_saveRevision;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final snapshot = List<TimeEntry>.of(_entries);
-    // Large lists can block the UI while JSON is encoded. Use a background
-    // isolate for the captured snapshot and keep small saves synchronous.
+  /// Publish only platform-acknowledged data. Rollback stays in this key's
+  /// queue, and account cleanup drains it before removing the account keys.
+  Future<void> _persistSnapshot(
+    List<TimeEntry> snapshot,
+    bool Function() isCurrent, {
+    List<String> deletedIds = const [],
+  }) async {
+    _ensureCurrent(isCurrent);
     final data = snapshot.length >= _isolateEncodeMinItems
         ? await compute(_encodeTimeAuditPayload, snapshot)
-        : snapshot.map((e) => jsonEncode(e.toJson())).toList();
-    if (!_isCurrentSave(saveRevision, generation, accountGeneration)) return;
+        : snapshot.map((entry) => jsonEncode(entry.toJson())).toList();
+    _ensureCurrent(isCurrent);
     final prefs = await SharedPreferences.getInstance();
-    if (!_isCurrentSave(saveRevision, generation, accountGeneration)) return;
-    await prefs.setStringList(storageKey, data);
-    if (!_isCurrentSave(saveRevision, generation, accountGeneration)) return;
+    _ensureCurrent(isCurrent);
+    Future<void> persist(DeletedItemsWriteLease? lease) async {
+      _ensureCurrent(isCurrent);
+      final transaction = AccountPreferenceTransaction(prefs, isCurrent);
+      try {
+        await transaction.setStringList(storageKey, data);
+        if (deletedIds.isNotEmpty) {
+          await CloudSyncProvider.recordDeletedItems(
+            'time_entries',
+            deletedIds,
+            workspaceId: null,
+            transaction: transaction,
+            lease: lease,
+          );
+        }
+        transaction.commit();
+      } catch (_) {
+        // The tombstone lease must also cover restoration of both keys.
+        await transaction.rollback(canceledBeforeCleanup: true);
+        rethrow;
+      }
+    }
+
+    if (deletedIds.isEmpty) {
+      await persist(null);
+    } else {
+      await CloudSyncProvider.withDeletedItemsLock(persist);
+    }
+    _ensureCurrent(isCurrent);
+    _entries = snapshot;
     _notifyLocalMutationPersisted();
+    if (isCurrent()) notifyListeners();
   }
 
   void _notifyLocalMutationPersisted() {
@@ -116,167 +236,106 @@ class TimeAuditProvider extends ChangeNotifier {
         );
   }
 
-  bool _isCurrentSave(
-    int saveRevision,
-    int storageGeneration,
-    int accountGeneration,
-  ) {
-    return saveRevision == _saveRevision &&
-        _isCurrentStorageGeneration(storageGeneration, accountGeneration);
-  }
-
   Future<void> add(TimeEntry entry) async {
     if (_disposed) return;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    _entries.add(entry);
-    await _save();
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    notifyListeners();
+    await _enqueueStorage<void>((isCurrent) async {
+      if (_entries.any((item) => item.id == entry.id)) {
+        throw StateError('Time entry already exists');
+      }
+      await _persistSnapshot([..._entries, entry], isCurrent);
+    }, canceledResult: () {});
   }
 
   Future<TimeEntryImportSummary> importTimeEntries(
     Iterable<TimeEntry> entries,
   ) async {
-    if (_disposed) {
-      return const TimeEntryImportSummary(inserted: 0, skippedDuplicates: 0);
-    }
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    var inserted = 0;
-    var skippedDuplicates = 0;
-    final seen = _entries.map(_importDuplicateKey).toSet();
-    for (final entry in entries) {
-      final key = _importDuplicateKey(entry);
-      if (seen.contains(key)) {
-        skippedDuplicates++;
-        continue;
+    const empty = TimeEntryImportSummary(inserted: 0, skippedDuplicates: 0);
+    if (_disposed) return empty;
+    final incoming = entries.toList(growable: false);
+    return _enqueueStorage<TimeEntryImportSummary>((isCurrent) async {
+      var inserted = 0;
+      var skippedDuplicates = 0;
+      final snapshot = List<TimeEntry>.of(_entries);
+      final seen = _entries.map(_importDuplicateKey).toSet();
+      final ids = snapshot.map((entry) => entry.id).toSet();
+      for (final entry in incoming) {
+        final key = _importDuplicateKey(entry);
+        if (seen.contains(key) || ids.contains(entry.id)) {
+          skippedDuplicates++;
+          continue;
+        }
+        seen.add(key);
+        ids.add(entry.id);
+        snapshot.add(entry);
+        inserted++;
       }
-      seen.add(key);
-      _entries.add(entry);
-      inserted++;
-    }
-    if (inserted > 0) {
-      await _save();
-      if (_isCurrentStorageGeneration(generation, accountGeneration)) {
-        notifyListeners();
-      }
-    }
-    return TimeEntryImportSummary(
-      inserted: inserted,
-      skippedDuplicates: skippedDuplicates,
-    );
+      if (inserted > 0) await _persistSnapshot(snapshot, isCurrent);
+      return TimeEntryImportSummary(
+        inserted: inserted,
+        skippedDuplicates: skippedDuplicates,
+      );
+    }, canceledResult: () => empty);
   }
 
   Future<void> upsertAuto(TimeEntry entry) async {
     if (_disposed) return;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final key = entry.dedupeKey;
-    if (key != null && key.isNotEmpty) {
-      final idx = _entries.indexWhere((e) => e.dedupeKey == key);
-      if (idx >= 0) {
-        _entries[idx] = entry.copyWith();
-        await _save();
-        if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-        notifyListeners();
-        return;
+    await _enqueueStorage<void>((isCurrent) async {
+      final key = entry.dedupeKey;
+      final snapshot = List<TimeEntry>.of(_entries);
+      final index = snapshot.indexWhere(
+        (item) =>
+            item.id == entry.id ||
+            (key != null && key.isNotEmpty && item.dedupeKey == key),
+      );
+      if (index < 0) {
+        snapshot.add(entry);
+      } else {
+        snapshot[index] = entry.copyWith();
       }
-    }
-    await add(entry);
+      await _persistSnapshot(snapshot, isCurrent);
+    }, canceledResult: () {});
   }
 
-  // TimeEntry serialization has no workspaceId, so these records use the
-  // account-level collection and its private tombstones.
-  Future<void> deleteByDedupeKey(String dedupeKey) async {
-    if (_disposed) return;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final removedIds = _entries
-        .where((e) => e.dedupeKey == dedupeKey)
-        .map((e) => e.id)
-        .toList();
-    if (removedIds.isEmpty) return;
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    _entries.removeWhere((e) => e.dedupeKey == dedupeKey);
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    await CloudSyncProvider.recordDeletedItems(
-      'time_entries',
-      removedIds,
-      workspaceId: null,
-    );
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    await _save();
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    notifyListeners();
-  }
+  // TimeEntry records use account-private deletion markers, with no workspaceId.
+  Future<void> deleteByDedupeKey(String dedupeKey) =>
+      deleteWhere((entry) => entry.dedupeKey == dedupeKey);
 
   Future<void> deleteWhere(bool Function(TimeEntry entry) test) async {
     if (_disposed) return;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final removedIds = _entries.where(test).map((e) => e.id).toList();
-    if (removedIds.isEmpty) return;
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    _entries.removeWhere(test);
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    await CloudSyncProvider.recordDeletedItems(
-      'time_entries',
-      removedIds,
-      workspaceId: null,
-    );
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    await _save();
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    notifyListeners();
+    await _enqueueStorage<void>((isCurrent) async {
+      final removedIds = _entries.where(test).map((entry) => entry.id).toList();
+      if (removedIds.isEmpty) return;
+      final removed = removedIds.toSet();
+      final snapshot = _entries
+          .where((entry) => !removed.contains(entry.id))
+          .toList();
+      await _persistSnapshot(snapshot, isCurrent, deletedIds: removedIds);
+    }, canceledResult: () {});
   }
 
-  Future<void> deleteBySource(TimeEntrySource source, String sourceId) async {
-    await deleteWhere(
-      (entry) => entry.source == source && entry.sourceId == sourceId,
-    );
-  }
+  Future<void> deleteBySource(TimeEntrySource source, String sourceId) =>
+      deleteWhere(
+        (entry) => entry.source == source && entry.sourceId == sourceId,
+      );
 
-  Future<void> deleteGoalEntries(String goalId) async {
-    await deleteWhere((entry) {
-      if (entry.source != TimeEntrySource.goal) return false;
-      final sourceId = entry.sourceId;
-      if (sourceId == null) return false;
-      return sourceId == goalId || sourceId.startsWith('$goalId:');
-    });
-  }
+  Future<void> deleteGoalEntries(String goalId) => deleteWhere((entry) {
+    if (entry.source != TimeEntrySource.goal) return false;
+    final sourceId = entry.sourceId;
+    return sourceId == goalId || sourceId?.startsWith('$goalId:') == true;
+  });
 
   Future<void> update(TimeEntry entry) async {
     if (_disposed) return;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final idx = _entries.indexWhere((e) => e.id == entry.id);
-    if (idx < 0) return;
-    _entries[idx] = entry;
-    await _save();
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    notifyListeners();
+    await _enqueueStorage<void>((isCurrent) async {
+      final snapshot = List<TimeEntry>.of(_entries);
+      final index = snapshot.indexWhere((item) => item.id == entry.id);
+      if (index < 0) throw StateError('Time entry no longer exists');
+      snapshot[index] = entry;
+      await _persistSnapshot(snapshot, isCurrent);
+    }, canceledResult: () {});
   }
 
-  Future<void> delete(String id) async {
-    if (_disposed) return;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final existing = _entries.where((e) => e.id == id).toList(growable: false);
-    if (existing.isEmpty) return;
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    _entries.removeWhere((e) => e.id == id);
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    await CloudSyncProvider.recordDeletedItem(
-      'time_entries',
-      id,
-      workspaceId: null,
-    );
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    await _save();
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    notifyListeners();
-  }
+  Future<void> delete(String id) => deleteWhere((entry) => entry.id == id);
 
   Future<void> recordPomodoroSession({
     required String sessionId,

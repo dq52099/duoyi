@@ -10,6 +10,7 @@ import '../models/anniversary.dart';
 import '../models/goal.dart';
 import '../models/course_schedule.dart';
 import '../models/countdown.dart';
+import '../models/pomodoro.dart';
 import '../models/time_entry.dart';
 import '../models/calendar_event.dart';
 
@@ -24,6 +25,7 @@ enum SearchKind {
   course,
   calendarEvent,
   timeEntry,
+  pomodoro,
 }
 
 /// Runtime provenance for generated search headings; never inferred from text.
@@ -84,6 +86,7 @@ class SearchHit {
     SearchKind.course => Icons.class_outlined,
     SearchKind.calendarEvent => Icons.event_available_outlined,
     SearchKind.timeEntry => Icons.timelapse_outlined,
+    SearchKind.pomodoro => Icons.timer_outlined,
   };
 
   String get kindLabel => switch (kind) {
@@ -97,6 +100,7 @@ class SearchHit {
     SearchKind.course => I18n.tr('search.kind.course'),
     SearchKind.calendarEvent => I18n.tr('search.kind.event'),
     SearchKind.timeEntry => I18n.tr('search.kind.time_entry'),
+    SearchKind.pomodoro => I18n.current == AppLocale.en ? 'Focus' : '专注记录',
   };
 }
 
@@ -114,6 +118,7 @@ class GlobalSearch {
     required List<CourseItem> courses,
     List<CalendarEvent> calendarEvents = const [],
     List<TimeEntry> timeEntries = const [],
+    List<PomodoroSession> pomodoroSessions = const [],
     int maxPerKind = 10,
   }) {
     final q = query.trim().toLowerCase();
@@ -125,13 +130,25 @@ class GlobalSearch {
 
     hits.addAll(
       todos
-          .where((t) => hit(t.title) || hit(t.notes) || hit(t.listGroupName))
+          .where(
+            (t) =>
+                hit(t.title) ||
+                hit(t.notes) ||
+                hit(t.listGroupName) ||
+                t.tags.any(hit),
+          )
           .take(maxPerKind)
           .map(
             (t) => SearchHit(
               kind: SearchKind.todo,
               title: t.title,
-              subtitle: t.listGroupName ?? t.notes,
+              subtitle: (t.listGroupName?.trim().isNotEmpty ?? false)
+                  ? t.listGroupName
+                  : (t.notes.trim().isNotEmpty
+                        ? t.notes
+                        : (t.tags.isEmpty
+                              ? null
+                              : t.tags.map((tag) => '#$tag').join(' '))),
               sourceId: t.id,
               when: t.date,
             ),
@@ -140,13 +157,17 @@ class GlobalSearch {
 
     hits.addAll(
       habits
-          .where((h) => hit(h.name) || hit(h.category))
+          .where((h) => hit(h.name) || hit(h.category) || h.tags.any(hit))
           .take(maxPerKind)
           .map(
             (h) => SearchHit(
               kind: SearchKind.habit,
               title: h.name,
-              subtitle: h.category,
+              subtitle:
+                  h.category ??
+                  (h.tags.isEmpty
+                      ? null
+                      : h.tags.map((tag) => '#$tag').join(' ')),
               sourceId: h.id,
             ),
           ),
@@ -154,20 +175,35 @@ class GlobalSearch {
 
     hits.addAll(
       notes
-          .where((n) => hit(n.content))
+          .where(
+            (n) =>
+                hit(n.content) ||
+                hit(n.folder) ||
+                n.tags.any(hit) ||
+                n.attachments.any((a) => hit(a.name)),
+          )
           .take(maxPerKind)
-          .map(
-            (n) => SearchHit(
+          .map((n) {
+            final fallbackMeta = [
+              if (n.folder != null && n.folder!.trim().isNotEmpty)
+                n.folder!.trim(),
+              if (n.tags.isNotEmpty) n.tags.map((tag) => '#$tag').join(' '),
+              if (n.attachments.isNotEmpty)
+                n.attachments.map((a) => a.name).join(' · '),
+            ].join(' · ');
+            return SearchHit(
               kind: SearchKind.note,
               title: n.title,
               generatedTitle: n.content.trim().isEmpty
                   ? const EmptyNoteSearchTitle()
                   : null,
-              subtitle: n.preview,
+              subtitle: n.preview.isNotEmpty
+                  ? n.preview
+                  : (fallbackMeta.isEmpty ? null : fallbackMeta),
               sourceId: n.id,
               when: n.updatedAt,
-            ),
-          ),
+            );
+          }),
     );
 
     hits.addAll(
@@ -288,6 +324,35 @@ class GlobalSearch {
               when: e.startAt,
             ),
           ),
+    );
+
+    hits.addAll(
+      pomodoroSessions
+          .where((s) => hit(s.taskName) || hit(s.tag))
+          .take(maxPerKind)
+          .map((s) {
+            final mins = (s.durationSeconds / 60).round();
+            final trimmedTask = s.taskName?.trim() ?? '';
+            final trimmedTag = s.tag?.trim() ?? '';
+            final title = trimmedTask.isNotEmpty
+                ? trimmedTask
+                : trimmedTag.isNotEmpty
+                ? '#$trimmedTag'
+                : (I18n.current == AppLocale.en ? 'Focus session' : '专注记录');
+            final durationText = I18n.current == AppLocale.en
+                ? '${mins}m'
+                : '$mins分钟';
+            final subtitle = trimmedTag.isNotEmpty
+                ? '#$trimmedTag · $durationText'
+                : durationText;
+            return SearchHit(
+              kind: SearchKind.pomodoro,
+              title: title,
+              subtitle: subtitle,
+              sourceId: s.id,
+              when: s.startTime,
+            );
+          }),
     );
 
     return hits;

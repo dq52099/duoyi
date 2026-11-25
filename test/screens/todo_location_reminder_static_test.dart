@@ -15,7 +15,10 @@ void main() {
         source,
         contains("import '../providers/location_reminder_provider.dart';"),
       );
-      expect(source, contains('context.watch<LocationReminderProvider?>()'));
+      expect(
+        source,
+        contains(RegExp(r'context\s*\.watch<LocationReminderProvider\?>\(\)')),
+      );
       expect(source, contains('_TodoLocationReminderCard'));
       expect(source, contains('_addLinkedLocationReminder('));
       expect(source, contains("linkedType: 'todo'"));
@@ -24,7 +27,9 @@ void main() {
       expect(source, contains('LocationTrigger.enter'));
       expect(source, contains('LocationTrigger.leave'));
       expect(source, contains('provider.add('));
-      expect(source, contains("content: Text('已添加任务位置提醒')"));
+      expect(source, contains('TodoDetailUiCopy.locationReminderAdded,'));
+      final copy = File('lib/core/todo_detail_ui_copy.dart').readAsStringSync();
+      expect(copy, contains("'Location reminder added' : '已添加任务位置提醒'"));
     },
   );
 

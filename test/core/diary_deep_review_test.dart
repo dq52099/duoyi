@@ -62,9 +62,29 @@ void main() {
         today: today,
         entries: entries,
       );
-      expect(promptWithEnglishLocale.systemPrompt, prompt.systemPrompt);
-      expect(promptWithEnglishLocale.summary, prompt.summary);
-      expect(promptWithEnglishLocale.userPrompt, prompt.userPrompt);
+      expect(
+        promptWithEnglishLocale.systemPrompt,
+        contains('Write in English'),
+      );
+      expect(
+        promptWithEnglishLocale.summary,
+        contains('2 diary entries in the last 30 days'),
+      );
+      expect(promptWithEnglishLocale.summary, contains('Good 1'));
+      expect(promptWithEnglishLocale.userPrompt, contains('Mood=Good'));
+      expect(promptWithEnglishLocale.userPrompt, contains('Weather=Sunny'));
+      expect(promptWithEnglishLocale.userPrompt, contains('Location=上海'));
+      expect(promptWithEnglishLocale.userPrompt, contains('Tags=工作,散步'));
+      expect(promptWithEnglishLocale.userPrompt, contains('今天推进了重要项目'));
+      expect(promptWithEnglishLocale.userPrompt, isNot(contains('很久以前的内容')));
+      final explicitChinese = DiaryDeepReviewBuilder.build(
+        today: today,
+        entries: entries,
+        locale: AppLocale.zh,
+      );
+      expect(explicitChinese.systemPrompt, prompt.systemPrompt);
+      expect(explicitChinese.summary, prompt.summary);
+      expect(explicitChinese.userPrompt, prompt.userPrompt);
     },
   );
 

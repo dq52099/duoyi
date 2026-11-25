@@ -7,6 +7,7 @@ import 'package:duoyi/core/brand_strings.dart';
 import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/core/local_timezone_resolver.dart';
 import 'package:duoyi/providers/notification_service.dart';
+import 'package:duoyi/services/notification_action_envelope.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -38,6 +39,25 @@ int _weekdaySubId(int baseId, int weekday) {
 
 Map<String, Object?> _copyArguments(MethodCall call) =>
     Map<String, Object?>.from((call.arguments as Map).cast<String, Object?>());
+
+bool _hasTarget(Map<String, Object?> args, String target) {
+  final delivered = Uri.tryParse(args['payload'] as String? ?? '');
+  final expected = Uri.parse(target);
+  return delivered?.scheme == expected.scheme &&
+      delivered?.host == expected.host && delivered?.path == expected.path;
+}
+
+Future<String?> _originalPayload(Map<String, Object?> args) async {
+  final response = await NotificationActionEnvelope.verifyResponse(
+    NotificationResponse(
+      id: args['id'] as int,
+      payload: args['payload'] as String?,
+      notificationResponseType: NotificationResponseType.selectedNotification,
+    ),
+  );
+  expect(response, isNotNull, reason: 'Scheduled payload must authenticate its actual notification ID.');
+  return response!.payload;
+}
 
 String _habitBody({required AppLocale locale, required String title}) =>
     switch (locale) {
@@ -190,14 +210,14 @@ void main() {
             );
             final dailyCalls = scheduleCalls
                 .skip(scheduleIndexBeforeDaily)
-                .where((args) => args['payload'] == dailyPayload)
+                .where((args) => _hasTarget(args, dailyPayload))
                 .toList(growable: false);
 
             expect(dailyCalls, hasLength(1));
             final dailySchedule = dailyCalls.single;
             expect(dailySchedule['title'], habitTitle);
             expect(dailySchedule['body'], habitBody);
-            expect(dailySchedule['payload'], dailyPayload);
+            expect(await _originalPayload(dailySchedule), dailyPayload);
             expect(
               dailySchedule['matchDateTimeComponents'],
               DateTimeComponents.time.index,
@@ -230,7 +250,7 @@ void main() {
             );
             final weekdayCalls = scheduleCalls
                 .skip(scheduleIndexBeforeWeekdays)
-                .where((args) => args['payload'] == weekdayPayload)
+                .where((args) => _hasTarget(args, weekdayPayload))
                 .toList(growable: false);
             final weekdayBaseId = int.parse(weekdayHistory.id);
             final expectedWeekdayIds = weekdays
@@ -253,7 +273,7 @@ void main() {
               );
               expect(args['title'], habitTitle);
               expect(args['body'], habitBody);
-              expect(args['payload'], weekdayPayload);
+              expect(await _originalPayload(args), weekdayPayload);
               expect(
                 args['matchDateTimeComponents'],
                 DateTimeComponents.dayOfWeekAndTime.index,
@@ -309,7 +329,7 @@ void main() {
             final args = calls.single;
             expect(args['title'], copy.title);
             expect(args['body'], copy.body);
-            expect(args['payload'], 'duoyi://tab/calendar');
+            expect(await _originalPayload(args), 'duoyi://tab/calendar');
             expect(args['timeZoneName'], 'Asia/Shanghai');
             final scheduledAt = tz.TZDateTime.from(
               remindAt,

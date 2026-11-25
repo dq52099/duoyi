@@ -50,6 +50,7 @@ class CalendarEvent {
   final int conflictCount;
   final String? note;
   final DateTime? updatedAt;
+  final int? reminderMinutes;
   final CalendarEventDisplayMetadata? displayMetadata;
 
   const CalendarEvent({
@@ -70,6 +71,7 @@ class CalendarEvent {
     this.conflictCount = 0,
     this.note,
     this.updatedAt,
+    this.reminderMinutes,
     this.displayMetadata,
   });
 
@@ -102,6 +104,8 @@ class CalendarEvent {
     int? conflictCount,
     String? note,
     DateTime? updatedAt,
+    int? reminderMinutes,
+    bool clearReminderMinutes = false,
     CalendarEventDisplayMetadata? displayMetadata,
   }) {
     return CalendarEvent(
@@ -122,6 +126,9 @@ class CalendarEvent {
       conflictCount: conflictCount ?? this.conflictCount,
       note: note ?? this.note,
       updatedAt: updatedAt ?? this.updatedAt,
+      reminderMinutes: clearReminderMinutes
+          ? null
+          : (reminderMinutes ?? this.reminderMinutes),
       displayMetadata: displayMetadata ?? this.displayMetadata,
     );
   }
@@ -144,6 +151,7 @@ class CalendarEvent {
     'conflictCount': conflictCount,
     'note': note,
     'updatedAt': updatedAt?.toIso8601String(),
+    if (reminderMinutes != null) 'reminderMinutes': reminderMinutes,
   };
 
   factory CalendarEvent.fromJson(Map<String, dynamic> json) {
@@ -162,6 +170,7 @@ class CalendarEvent {
       }
     }
     final rawColor = json['color'];
+    final rawReminder = json['reminderMinutes'];
     return CalendarEvent(
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
@@ -182,6 +191,9 @@ class CalendarEvent {
       conflictCount: (json['conflictCount'] as num?)?.toInt() ?? 0,
       note: json['note']?.toString(),
       updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
+      reminderMinutes: rawReminder is num
+          ? rawReminder.toInt()
+          : int.tryParse(rawReminder?.toString() ?? ''),
     );
   }
 }
@@ -266,6 +278,7 @@ class HabitDisplayMetadata extends CalendarEventDisplayMetadata {
   final int count;
   final int targetCount;
   final String? unit;
+  final String? generatedUnitKey;
   final bool hasFlexRule;
   final HabitFlexProgress? flexProgress;
 
@@ -274,6 +287,7 @@ class HabitDisplayMetadata extends CalendarEventDisplayMetadata {
     required this.count,
     required this.targetCount,
     this.unit,
+    this.generatedUnitKey,
     this.hasFlexRule = false,
     this.flexProgress,
   });

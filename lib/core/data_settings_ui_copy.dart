@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:async';
 import 'i18n.dart';
+import '../l10n/generated/app_localizations.dart';
+import '../providers/theme_provider.dart';
 import '../services/api_client.dart';
 
 /// 数据设置（备份/导入/导出/WebDAV）与主题装扮/奖励设置专用文案字典与异常本地化格式化工具。
@@ -15,6 +17,17 @@ class DataSettingsUiCopy {
   DataSettingsUiCopy._();
 
   static bool get isEn => I18n.current == AppLocale.en;
+
+  static AppLocalizations _l10n() =>
+      lookupAppLocalizations(I18n.current.flutterLocale);
+
+  // Chinese custom fallbacks retain their existing contract. Built-in display
+  // text is localized only when the supplied value is its domain default.
+  static String _builtInDisplay(
+    String fallback,
+    String canonical,
+    String localized,
+  ) => !isEn && fallback != canonical ? fallback : localized;
 
   // --- 通用动作与反馈 ---
   static String get gotIt => isEn ? 'Got it' : '知道了';
@@ -330,7 +343,8 @@ class DataSettingsUiCopy {
       : '我已确认预览和重复项处理策略';
 
   static String get importCompletedTitle => isEn ? 'Import Complete' : '导入完成';
-  static String itemCount(int count) => isEn ? '$count items' : '$count 项';
+  static String itemCount(int count) =>
+      isEn ? (count == 1 ? '1 item' : '$count items') : '$count 项';
   static String skippedSummary(int invalid, int duplicates) => isEn
       ? 'Skipped: $invalid invalid, $duplicates duplicates'
       : '跳过：解析无效 $invalid，重复 $duplicates';
@@ -368,153 +382,171 @@ class DataSettingsUiCopy {
       : '未识别到可导入${tasksOnly ? '待办' : '数据'}$warning';
 
   // --- 主题与奖励商店界面 ---
-  static String get themeSaveFailed =>
-      isEn ? 'Failed to save theme settings' : '主题保存失败';
-  static String get rewardShopReason =>
-      isEn ? 'Reward shop theme decoration' : '奖励商店主题装饰';
+  static String get themeSaveFailed => _l10n().dataSettingsThemeSaveFailed;
+  static String get rewardShopReason => _l10n().dataSettingsRewardShopReason;
   static String redeemThemeTitle(String name) =>
-      isEn ? 'Redeem theme: $name' : '兑换主题：$name';
+      _l10n().dataSettingsRedeemThemeTitle(name);
   static String redeemFocusBackdropTitle(String name) =>
-      isEn ? 'Redeem focus backdrop: $name' : '兑换专注背景：$name';
+      _l10n().dataSettingsRedeemFocusBackdropTitle(name);
   static String redeemAvatarFrameTitle(String name) =>
-      isEn ? 'Redeem avatar frame: $name' : '兑换头像框：$name';
+      _l10n().dataSettingsRedeemAvatarFrameTitle(name);
   static String redeemCardSkinTitle(String name) =>
-      isEn ? 'Redeem card skin: $name' : '兑换卡片皮肤：$name';
+      _l10n().dataSettingsRedeemCardSkinTitle(name);
 
   static String insufficientCoins(int diff) =>
-      isEn ? 'Not enough Time Coins, need $diff more' : '时光币不足，还差 $diff';
+      _l10n().dataSettingsInsufficientCoins(diff);
 
   static String themeApplied(String name) =>
-      isEn ? 'Applied $name' : '已启用 $name';
+      _l10n().dataSettingsThemeApplied(name);
   static String themeRedeemedAndApplied(String name) =>
-      isEn ? 'Redeemed and applied $name' : '已兑换并启用 $name';
+      _l10n().dataSettingsThemeRedeemedAndApplied(name);
 
   static String widgetBackgroundSwitched(String label) =>
-      isEn ? 'Widget background switched to $label' : '小组件背景已切换为 $label';
-  static String get unlockThemeFirst =>
-      isEn ? 'Please unlock this theme first' : '请先解锁该主题';
+      _l10n().dataSettingsWidgetBackgroundSwitched(label);
+  static String get unlockThemeFirst => _l10n().dataSettingsUnlockThemeFirst;
 
   static String widgetCardSkinSwitched(String label) =>
-      isEn ? 'Widget card skin switched to $label' : '小组件卡片皮肤已切换为 $label';
+      _l10n().dataSettingsWidgetCardSkinSwitched(label);
   static String get unlockCardSkinFirst =>
-      isEn ? 'Please unlock this card skin first' : '请先解锁该卡片皮肤';
+      _l10n().dataSettingsUnlockCardSkinFirst;
 
   static String get widgetFollowCurrentTheme =>
-      isEn ? 'Follow Current Theme' : '跟随当前主题';
+      _l10n().dataSettingsWidgetFollowCurrentTheme;
   static String get widgetFollowCardSkin =>
-      isEn ? 'Follow Card Skin' : '跟随卡片皮肤';
+      _l10n().dataSettingsWidgetFollowCardSkin;
 
-  static String get widgetThemeTitle =>
-      isEn ? 'Desktop Widget Theme' : '桌面小组件主题';
-  static String get widgetThemeSubtitle => isEn
-      ? 'Adjust desktop widget background and card skin individually'
-      : '单独调整桌面小组件背景和卡片皮肤';
-  static String get widgetBackgroundLabel => isEn ? 'Background' : '背景图';
-  static String get widgetCardSkinLabel => isEn ? 'Card Skin' : '卡片皮肤';
+  static String get widgetThemeTitle => _l10n().dataSettingsWidgetThemeTitle;
+  static String get widgetThemeSubtitle =>
+      _l10n().dataSettingsWidgetThemeSubtitle;
+  static String get widgetBackgroundLabel =>
+      _l10n().dataSettingsWidgetBackgroundLabel;
+  static String get widgetCardSkinLabel =>
+      _l10n().dataSettingsWidgetCardSkinLabel;
 
-  static String coinCount(int count) =>
-      isEn ? 'Time Coins $count' : '时光币 $count';
-  static String coinCost(int cost) => isEn ? '$cost Coins' : '$cost 币';
+  static String coinCount(int count) => _l10n().dataSettingsCoinCount(count);
+  static String coinCost(int cost) => _l10n().dataSettingsCoinCost(cost);
 
   static String get focusBackdropSectionTitle =>
-      isEn ? 'Focus Backdrops' : '专注背景';
-  static String get focusBackdropSectionSubtitle => isEn
-      ? 'Redeem Pomodoro card decorations with Time Coins'
-      : '用时光币兑换番茄钟卡片装饰';
+      _l10n().dataSettingsFocusBackdropSectionTitle;
+  static String get focusBackdropSectionSubtitle =>
+      _l10n().dataSettingsFocusBackdropSectionSubtitle;
 
-  static String get avatarFrameSectionTitle => isEn ? 'Avatar Frames' : '头像框';
-  static String get avatarFrameSectionSubtitle => isEn
-      ? 'Redeem Profile avatar decorations with Time Coins'
-      : '用时光币兑换我的页头像装饰';
+  static String get avatarFrameSectionTitle =>
+      _l10n().dataSettingsAvatarFrameSectionTitle;
+  static String get avatarFrameSectionSubtitle =>
+      _l10n().dataSettingsAvatarFrameSectionSubtitle;
 
-  static String get cardSkinSectionTitle => isEn ? 'Card Skins' : '卡片皮肤';
+  static String get cardSkinSectionTitle =>
+      _l10n().dataSettingsCardSkinSectionTitle;
   static String get cardSkinSectionSubtitle =>
-      isEn ? 'Redeem information card styles with Time Coins' : '用时光币兑换信息卡片质感';
+      _l10n().dataSettingsCardSkinSectionSubtitle;
 
-  static String get widgetSyncNoticeTitle => isEn ? 'Widget Theme' : '小组件主题';
-  static String get widgetSyncNoticeSubtitle => isEn
-      ? 'Background and card skin sync to device home widgets'
-      : '背景图和卡片皮肤会同步到手机桌面小组件';
+  static String get widgetSyncNoticeTitle =>
+      _l10n().dataSettingsWidgetSyncNoticeTitle;
+  static String get widgetSyncNoticeSubtitle =>
+      _l10n().dataSettingsWidgetSyncNoticeSubtitle;
 
   // --- 内置奖励展示文案（按稳定 ID 匹配，未知时回退原生名称与描述） ---
   static String focusBackdropName(String id, String fallback) {
-    if (isEn) {
-      return switch (id) {
-        'classic_focus' => 'Classic Focus',
-        'morning_focus' => 'Morning Desk',
-        'forest_focus' => 'Forest Breeze',
-        'ocean_focus' => 'Ocean Flow',
-        'night_focus' => 'Night Flight',
-        _ => fallback,
-      };
+    for (final reward in ThemeProvider.focusBackdropRewards) {
+      if (reward.id == id) {
+        final l10n = _l10n();
+        final localized = switch (id) {
+          'classic_focus' => l10n.dataSettingsFocusBackdropClassicName,
+          'morning_focus' => l10n.dataSettingsFocusBackdropMorningName,
+          'forest_focus' => l10n.dataSettingsFocusBackdropForestName,
+          'ocean_focus' => l10n.dataSettingsFocusBackdropOceanName,
+          'night_focus' => l10n.dataSettingsFocusBackdropNightName,
+          _ => fallback,
+        };
+        return _builtInDisplay(fallback, reward.name, localized);
+      }
     }
     return fallback;
   }
 
   static String focusBackdropDescription(String id, String fallback) {
-    if (isEn) {
-      return switch (id) {
-        'classic_focus' => 'Clean gradient Pomodoro background',
-        'morning_focus' =>
-          'Warm background ideal for morning study and reading',
-        'forest_focus' => 'Natural green background for deep, sustained focus',
-        'ocean_focus' =>
-          'Calm cyan background for review and low-pressure focus',
-        'night_focus' => 'Low-brightness dark background for night study',
-        _ => fallback,
-      };
+    for (final reward in ThemeProvider.focusBackdropRewards) {
+      if (reward.id == id) {
+        final l10n = _l10n();
+        final localized = switch (id) {
+          'classic_focus' => l10n.dataSettingsFocusBackdropClassicDescription,
+          'morning_focus' => l10n.dataSettingsFocusBackdropMorningDescription,
+          'forest_focus' => l10n.dataSettingsFocusBackdropForestDescription,
+          'ocean_focus' => l10n.dataSettingsFocusBackdropOceanDescription,
+          'night_focus' => l10n.dataSettingsFocusBackdropNightDescription,
+          _ => fallback,
+        };
+        return _builtInDisplay(fallback, reward.description, localized);
+      }
     }
     return fallback;
   }
 
   static String avatarFrameName(String id, String fallback) {
-    if (isEn) {
-      return switch (id) {
-        'simple_frame' => 'Simple Frame',
-        'golden_frame' => 'Golden Medal Frame',
-        'forest_frame' => 'Green Leaf Frame',
-        'aurora_frame' => 'Aurora Energy Frame',
-        _ => fallback,
-      };
+    for (final reward in ThemeProvider.avatarFrameRewards) {
+      if (reward.id == id) {
+        final l10n = _l10n();
+        final localized = switch (id) {
+          'simple_frame' => l10n.dataSettingsAvatarFrameSimpleName,
+          'golden_frame' => l10n.dataSettingsAvatarFrameGoldenName,
+          'forest_frame' => l10n.dataSettingsAvatarFrameForestName,
+          'aurora_frame' => l10n.dataSettingsAvatarFrameAuroraName,
+          _ => fallback,
+        };
+        return _builtInDisplay(fallback, reward.name, localized);
+      }
     }
     return fallback;
   }
 
   static String avatarFrameDescription(String id, String fallback) {
-    if (isEn) {
-      return switch (id) {
-        'simple_frame' => 'Default avatar frame style',
-        'golden_frame' => 'Golden frame for achievement masters',
-        'forest_frame' => 'Natural leafy frame for consistent habit streaks',
-        'aurora_frame' => 'Glowing aurora frame for productive weeks',
-        _ => fallback,
-      };
+    for (final reward in ThemeProvider.avatarFrameRewards) {
+      if (reward.id == id) {
+        final l10n = _l10n();
+        final localized = switch (id) {
+          'simple_frame' => l10n.dataSettingsAvatarFrameSimpleDescription,
+          'golden_frame' => l10n.dataSettingsAvatarFrameGoldenDescription,
+          'forest_frame' => l10n.dataSettingsAvatarFrameForestDescription,
+          'aurora_frame' => l10n.dataSettingsAvatarFrameAuroraDescription,
+          _ => fallback,
+        };
+        return _builtInDisplay(fallback, reward.description, localized);
+      }
     }
     return fallback;
   }
 
   static String cardSkinName(String id, String fallback) {
-    if (isEn) {
-      return switch (id) {
-        'plain_card' => 'Plain Card',
-        'paper_card' => 'Paper Planner Card',
-        'mint_card' => 'Mint Checklist Card',
-        'starlight_card' => 'Starlight Glass Card',
-        _ => fallback,
-      };
+    for (final reward in ThemeProvider.cardSkinRewards) {
+      if (reward.id == id) {
+        final l10n = _l10n();
+        final localized = switch (id) {
+          'plain_card' => l10n.dataSettingsCardSkinPlainName,
+          'paper_card' => l10n.dataSettingsCardSkinPaperName,
+          'mint_card' => l10n.dataSettingsCardSkinMintName,
+          'starlight_card' => l10n.dataSettingsCardSkinStarlightName,
+          _ => fallback,
+        };
+        return _builtInDisplay(fallback, reward.name, localized);
+      }
     }
     return fallback;
   }
 
   static String cardSkinDescription(String id, String fallback) {
-    if (isEn) {
-      return switch (id) {
-        'plain_card' => 'Default card surface style',
-        'paper_card' => 'Gentle paper texture for schedules and todos',
-        'mint_card' => 'Refreshing card style for habits and focus logs',
-        'starlight_card' => 'Low-light glass texture for evening reviews',
-        _ => fallback,
-      };
+    for (final reward in ThemeProvider.cardSkinRewards) {
+      if (reward.id == id) {
+        final l10n = _l10n();
+        final localized = switch (id) {
+          'plain_card' => l10n.dataSettingsCardSkinPlainDescription,
+          'paper_card' => l10n.dataSettingsCardSkinPaperDescription,
+          'mint_card' => l10n.dataSettingsCardSkinMintDescription,
+          'starlight_card' => l10n.dataSettingsCardSkinStarlightDescription,
+          _ => fallback,
+        };
+        return _builtInDisplay(fallback, reward.description, localized);
+      }
     }
     return fallback;
   }

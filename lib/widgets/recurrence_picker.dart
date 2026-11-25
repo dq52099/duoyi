@@ -1,7 +1,7 @@
+import 'app_date_format.dart';
 import 'package:flutter/material.dart';
 
 import '../core/i18n.dart';
-import '../core/i18n_date_format.dart';
 import '../core/reminder_editor_ui_copy.dart';
 import '../models/recurrence.dart';
 import '../services/account_local_data_cleaner.dart';
@@ -402,7 +402,7 @@ class _RecurrencePickerState extends State<RecurrencePicker> {
                     subtitle: Text(
                       _endDate == null
                           ? ReminderEditorUiCopy.endDateNever
-                          : I18nDateFormat.date(_endDate!),
+                          : AppDateFormat.date(context, _endDate!),
                     ),
                     trailing: _endDate == null
                         ? const Icon(Icons.chevron_right)

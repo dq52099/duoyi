@@ -1,7 +1,10 @@
+import '../widgets/app_date_format.dart';
+import 'dart:async';
 import 'dart:io' show File;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/services.dart';
@@ -11,29 +14,41 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../services/web_file_download.dart';
+import 'package:duoyi/desktop_web/desktop_embedded_scope.dart';
+
+import '../core/design_tokens.dart' show AppSurfaceStyle, DesignTokens;
 import '../core/desktop_tokens.dart';
 import '../core/focus_tag_stats.dart';
 import '../core/heatmap_calendar.dart';
+import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
 import '../core/project_efficiency.dart';
 import '../core/report_cross_analysis.dart';
 import '../core/report_engine.dart';
+import '../core/period_report_presentation.dart';
+import '../core/statistics_ui_copy.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../models/diary_entry.dart';
 import '../models/goal.dart';
 import '../models/habit.dart';
 import '../models/pomodoro.dart';
 import '../models/time_entry.dart';
 import '../models/todo.dart';
+import '../providers/app_lock_provider.dart';
 import '../providers/diary_provider.dart';
 import '../providers/goal_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/pomodoro_provider.dart';
 import '../providers/time_audit_provider.dart';
+import '../providers/theme_provider.dart';
 import '../providers/todo_provider.dart';
 import '../services/ai_service.dart';
+import '../services/app_update_service.dart';
 import '../widgets/activity_heatmap_card.dart';
 import '../widgets/result_states.dart';
 import '../widgets/surface_components.dart';
+import '../widgets/brand_background.dart';
 import 'ai_history_screen.dart';
 import 'time_audit_screen.dart';
 
@@ -41,7 +56,8 @@ enum _Range { week, month, year }
 
 enum _ReportPdfTemplate { visual, archive, briefing, dashboard, timeline }
 
-class StatisticsScreen extends StatefulWidget {
+class StatisticsScreen extends StatefulWidget
+    implements LocaleStatePreservingRoute {
   const StatisticsScreen({super.key});
 
   @override
@@ -53,6 +69,46 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   bool _aiReportBusy = false;
   String? _aiReportReview;
   String? _aiReportError;
+  int _aiReportRequestSeq = 0;
+  int _lastAccountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastAccountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    I18n.localeListenable.addListener(_onLocaleChanged);
+    AccountLocalDataCleaner.accountDataGenerationListenable.addListener(
+      _onAccountGenerationChanged,
+    );
+  }
+
+  void _onAccountGenerationChanged() {
+    final next = AccountLocalDataCleaner.accountDataGeneration;
+    if (_lastAccountGeneration != next) {
+      _lastAccountGeneration = next;
+      _aiReportRequestSeq++;
+      if (mounted) {
+        setState(() {
+          _aiReportBusy = false;
+          _aiReportReview = null;
+          _aiReportError = null;
+        });
+      }
+    }
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
+      _onAccountGenerationChanged,
+    );
+    super.dispose();
+  }
 
   (DateTime, DateTime) get _rangeBounds {
     final now = DateTime.now();
@@ -84,6 +140,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final timeAuditProv = context.watch<TimeAuditProvider>();
     final ai = context.watch<AiService>();
     final cs = Theme.of(context).colorScheme;
+    final copy = StatisticsUiCopy.current(
+      datePattern: AppDateFormat.patternOf(context),
+    );
 
     final (start, end) = _rangeBounds;
     final (previousStart, previousEnd) = _previousRangeBounds(start, end);
@@ -125,6 +184,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       habits: habitProv.habits,
       sessions: pomoProv.sessions,
       timeEntries: timeAuditProv.entries,
+      copy: copy,
     );
     final activityHeatmap = _buildActivityHeatmap(
       todos: todoProv.todos,
@@ -201,6 +261,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       goals: goalProv.goals,
       timeEntries: auditEntries,
       todos: todoProv.todos,
+      copy: copy,
     );
 
     final diaryInRange = diaryProv.entries.where((d) => inRange(d.date)).length;
@@ -208,10 +269,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final habitDoneInRange = habitCompletionDates.length;
 
     final now = DateTime.now();
-    final quadrantStats = _buildQuadrantStats({
-      for (final quadrant in EisenhowerQuadrant.values)
-        quadrant: todoProv.getQuadrantTodos(quadrant),
-    }, now: now);
+    final quadrantStats = _buildQuadrantStats(
+      {
+        for (final quadrant in EisenhowerQuadrant.values)
+          quadrant: todoProv.getQuadrantTodos(quadrant),
+      },
+      now: now,
+      cs: cs,
+      copy: copy,
+    );
 
     // Weekly time audit data (always computed, independent of selected range)
     final weekMonday = DateTime(
@@ -230,56 +296,155 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     );
     final weekDaySeconds = timeAuditProv.secondsByDay(weekMonday, weekEnd);
 
-    return Scaffold(
+    final buildAccountGeneration =
+        AccountLocalDataCleaner.accountDataGeneration;
+    final buildRoute = ModalRoute.of(context);
+    bool isBuildOriginValid() {
+      if (!mounted) return false;
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        buildAccountGeneration,
+      )) {
+        return false;
+      }
+      final route = buildRoute ?? (mounted ? ModalRoute.of(context) : null);
+      if (route != null && !route.isCurrent) {
+        return false;
+      }
+      final currentRoute = ModalRoute.of(context);
+      if (currentRoute != null && !currentRoute.isCurrent) {
+        return false;
+      }
+      return true;
+    }
+
+    final textScaler = MediaQuery.textScalerOf(context);
+    final selectorPreferredHeight = math.max(
+      48.0,
+      2 * textScaler.scale(16.0) + 24.0,
+    );
+
+    final titleStyle =
+        Theme.of(context).appBarTheme.titleTextStyle ??
+        Theme.of(context).textTheme.titleLarge ??
+        const TextStyle(fontSize: 16.0);
+    final availableTitleWidth = math.max(
+      0.0,
+      MediaQuery.sizeOf(context).width - 184.0,
+    );
+    final titlePainter = TextPainter(
+      text: TextSpan(text: copy.pageTitle, style: titleStyle),
+      textDirection: Directionality.of(context),
+      textScaler: textScaler.clamp(maxScaleFactor: 1.34),
+    )..layout(maxWidth: availableTitleWidth);
+    final titleLineCount = titlePainter.computeLineMetrics().length;
+    final titleHeight = titlePainter.height;
+    titlePainter.dispose();
+
+    final baseToolbarHeight = math.max(56.0, textScaler.scale(22.0) + 16.0);
+    final effectiveToolbarHeight = titleLineCount > 1
+        ? math.max(baseToolbarHeight, titleHeight + 16.0)
+        : baseToolbarHeight;
+
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+    final scaffold = Scaffold(
+      backgroundColor: isLiquidGlass ? Colors.transparent : null,
       appBar: AppBar(
-        title: const Text('时光足迹'),
+        title: Text(
+          copy.pageTitle,
+          softWrap: true,
+          overflow: TextOverflow.visible,
+          textAlign: TextAlign.center,
+        ),
+        toolbarHeight: effectiveToolbarHeight,
         actions: [
           IconButton(
-            tooltip: '复制报告',
+            tooltip: copy.copyReportTooltip,
             icon: const Icon(Icons.ios_share_outlined),
-            onPressed: () => _copyReport(
-              context,
-              start: start,
-              end: end,
-              completedTodos: completedTodos,
-              focusMinutes: focusMinutes,
-              habitDoneInRange: habitDoneInRange,
-              diaryInRange: diaryInRange,
-              auditTotalMinutes: auditTotalMinutes,
-              auditCategorySeconds: auditCategorySeconds,
-              auditEntries: auditEntries,
-            ),
+            onPressed: () {
+              if (!isBuildOriginValid()) return;
+              _copyReport(
+                context,
+                start: start,
+                end: end,
+                completedTodos: completedTodos,
+                focusMinutes: focusMinutes,
+                habitDoneInRange: habitDoneInRange,
+                diaryInRange: diaryInRange,
+                auditTotalMinutes: auditTotalMinutes,
+                auditCategorySeconds: auditCategorySeconds,
+                auditEntries: auditEntries,
+                originAccountGeneration: buildAccountGeneration,
+                originRoute: buildRoute,
+              );
+            },
           ),
           IconButton(
-            tooltip: '报告分享图',
+            tooltip: copy.reportShareImageTooltip,
             icon: const Icon(Icons.image_outlined),
-            onPressed: () => _showReportShareCard(
-              context,
-              start: start,
-              end: end,
-              completedTodos: completedTodos,
-              focusMinutes: focusMinutes,
-              habitDoneInRange: habitDoneInRange,
-              diaryInRange: diaryInRange,
-              auditTotalMinutes: auditTotalMinutes,
-              auditCategorySeconds: auditCategorySeconds,
-              auditEntries: auditEntries,
-            ),
+            onPressed: () {
+              if (!isBuildOriginValid()) return;
+              _showReportShareCard(
+                context,
+                start: start,
+                end: end,
+                completedTodos: completedTodos,
+                focusMinutes: focusMinutes,
+                habitDoneInRange: habitDoneInRange,
+                diaryInRange: diaryInRange,
+                auditTotalMinutes: auditTotalMinutes,
+                auditCategorySeconds: auditCategorySeconds,
+                auditEntries: auditEntries,
+                originAccountGeneration: buildAccountGeneration,
+                originRoute: buildRoute,
+              );
+            },
           ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
+          preferredSize: Size.fromHeight(selectorPreferredHeight),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
             child: SegmentedButton<_Range>(
-              segments: const [
-                ButtonSegment(value: _Range.week, label: Text('本周')),
-                ButtonSegment(value: _Range.month, label: Text('本月')),
-                ButtonSegment(value: _Range.year, label: Text('本年')),
+              showSelectedIcon: false,
+              style: SegmentedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                visualDensity: VisualDensity.compact,
+              ),
+              segments: [
+                ButtonSegment(
+                  value: _Range.week,
+                  label: Text(
+                    copy.rangeWeek,
+                    textAlign: TextAlign.center,
+                    softWrap: true,
+                  ),
+                ),
+                ButtonSegment(
+                  value: _Range.month,
+                  label: Text(
+                    copy.rangeMonth,
+                    textAlign: TextAlign.center,
+                    softWrap: true,
+                  ),
+                ),
+                ButtonSegment(
+                  value: _Range.year,
+                  label: Text(
+                    copy.rangeYear,
+                    textAlign: TextAlign.center,
+                    softWrap: true,
+                  ),
+                ),
               ],
               selected: {_range},
               onSelectionChanged: (s) => setState(() {
                 _range = s.first;
+                _aiReportRequestSeq++;
+                _aiReportBusy = false;
                 _aiReportReview = null;
                 _aiReportError = null;
               }),
@@ -306,34 +471,127 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     : width >= 720
                     ? 2.8
                     : 2.5;
-                // 系统大字号（如 font_scale 2.0）下，按固定 childAspectRatio
-                // 折算的瓦片高度装不下“标题+数值”两行文本，实测出现
-                // BOTTOM OVERFLOWED（1/2/3 列断点全部中招）。照搬
-                // today_screen 的兜底模式：按当前系统字号换算内容所需的
-                // 最小高度，通过 mainAxisExtent 取两者较大者。_Kpi 竖向
-                // 内容为标题 11×1.45 + 数值 16×1.45（各平台默认字体行高
-                // 系数实测 1.17～1.43 不等，取上限留裕度），与不随字号
-                // 缩放的图标盒 34 取大，外加卡内边距 20、描边 1、余量 6；
-                // 1.0 缩放下折算高度（68.15）低于最小断点的宽高比高度
-                // （320 宽单列 70.5），视觉完全不变；三个断点任意字号下
-                // 都不溢出。
-                final textScaler = MediaQuery.textScalerOf(context);
-                final minTileExtent =
-                    math.max(
-                      34.0,
-                      textScaler.scale(11 * 1.45) +
-                          textScaler.scale(16 * 1.45) +
-                          6,
-                    ) +
-                    23;
-                // GridView 撑满 LayoutBuilder 宽度，与框架内部折算公式
-                // （crossAxisExtent / aspectRatio）保持一致，1.0 缩放下
-                // 视觉不变。
                 final tileWidth =
                     (width - (crossAxisCount - 1) * 8) / crossAxisCount;
+                final textScaler = MediaQuery.textScalerOf(context);
+                final textDirection = Directionality.of(context);
+
+                final surfaceStyle = appSurfaceStyleOf(context);
+                final borderDimensions =
+                    surfaceStyle?.cardBorder?.dimensions ??
+                    (surfaceStyle == null
+                        ? const EdgeInsets.all(0.55)
+                        : EdgeInsets.zero);
+                final cardBorderInsets = borderDimensions.resolve(
+                  textDirection,
+                );
+                final cardHorizontalInsets = 20.0 + cardBorderInsets.horizontal;
+                final cardVerticalInsets = 20.0 + cardBorderInsets.vertical;
+
+                final bodyMedium =
+                    Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
+                final titleStyle = bodyMedium.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.normal,
+                );
+                final valueStyle = bodyMedium.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.normal,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                );
+
+                final kpiItems = [
+                  (
+                    icon: Icons.check_circle,
+                    color: cs.primary,
+                    title: copy.kpiCompletedTodos,
+                    value: '${completedTodos.length}',
+                  ),
+                  (
+                    icon: Icons.timer,
+                    color: DesignTokens.defaultError,
+                    title: copy.kpiDeepFocus,
+                    value: copy.minutesCount(focusMinutes),
+                  ),
+                  (
+                    icon: Icons.repeat,
+                    color: DesignTokens.defaultSuccess,
+                    title: copy.kpiHabitCheckIns,
+                    value: copy.timesCount(habitDoneInRange),
+                  ),
+                  (
+                    icon: Icons.book_outlined,
+                    color: DesignTokens.defaultAccent,
+                    title: copy.kpiDiary,
+                    value: copy.diaryEntriesCount(diaryInRange),
+                  ),
+                  (
+                    icon: Icons.timelapse_outlined,
+                    color: cs.onSurfaceVariant,
+                    title: copy.kpiTimeFootprint,
+                    value: copy.minutesCount(auditTotalMinutes),
+                  ),
+                ];
+
+                final sideTextWidth = math.max(
+                  0.0,
+                  tileWidth - cardHorizontalInsets - 44.0,
+                );
+                final reflowTextWidth = math.max(
+                  0.0,
+                  tileWidth - cardHorizontalInsets,
+                );
+                final reflowFlags = <bool>[];
+                var maxMeasuredExtent = 0.0;
+
+                for (final item in kpiItems) {
+                  final titleToken = _Kpi.maxTokenWidth(
+                    item.title,
+                    titleStyle,
+                    textScaler,
+                    textDirection,
+                  );
+                  final valueToken = _Kpi.maxTokenWidth(
+                    item.value,
+                    valueStyle,
+                    textScaler,
+                    textDirection,
+                  );
+                  final needsReflow =
+                      crossAxisCount == 2 &&
+                      (titleToken > sideTextWidth ||
+                          valueToken > sideTextWidth);
+                  reflowFlags.add(needsReflow);
+
+                  final textWidth = needsReflow
+                      ? reflowTextWidth
+                      : sideTextWidth;
+                  final tpTitle = TextPainter(
+                    text: TextSpan(text: item.title, style: titleStyle),
+                    textScaler: textScaler,
+                    textDirection: textDirection,
+                  )..layout(maxWidth: textWidth);
+                  final tpValue = TextPainter(
+                    text: TextSpan(text: item.value, style: valueStyle),
+                    textScaler: textScaler,
+                    textDirection: textDirection,
+                  )..layout(maxWidth: textWidth);
+
+                  final contentHeight = needsReflow
+                      ? 34.0 + 6.0 + tpTitle.height + 2.0 + tpValue.height
+                      : math.max(34.0, tpTitle.height + 2.0 + tpValue.height);
+                  final itemHeight = contentHeight + cardVerticalInsets;
+                  tpTitle.dispose();
+                  tpValue.dispose();
+
+                  if (itemHeight > maxMeasuredExtent) {
+                    maxMeasuredExtent = itemHeight;
+                  }
+                }
+
                 final tileExtent = math.max(
                   tileWidth / childAspectRatio,
-                  minTileExtent,
+                  maxMeasuredExtent,
                 );
                 return GridView.count(
                   key: const ValueKey('statistics_kpi_grid'),
@@ -348,32 +606,37 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     _Kpi(
                       icon: Icons.check_circle,
                       color: cs.primary,
-                      title: '待办完成',
+                      title: copy.kpiCompletedTodos,
                       value: '${completedTodos.length}',
+                      reflow: reflowFlags[0],
                     ),
                     _Kpi(
                       icon: Icons.timer,
-                      color: Colors.redAccent,
-                      title: '深度专注',
-                      value: '$focusMinutes 分',
+                      color: DesignTokens.defaultError,
+                      title: copy.kpiDeepFocus,
+                      value: copy.minutesCount(focusMinutes),
+                      reflow: reflowFlags[1],
                     ),
                     _Kpi(
                       icon: Icons.repeat,
-                      color: const Color(0xFF66BB6A),
-                      title: '习惯打卡',
-                      value: '$habitDoneInRange 次',
+                      color: DesignTokens.defaultSuccess,
+                      title: copy.kpiHabitCheckIns,
+                      value: copy.timesCount(habitDoneInRange),
+                      reflow: reflowFlags[2],
                     ),
                     _Kpi(
                       icon: Icons.book_outlined,
-                      color: const Color(0xFF26A69A),
-                      title: '日记',
-                      value: '$diaryInRange 篇',
+                      color: DesignTokens.defaultAccent,
+                      title: copy.kpiDiary,
+                      value: copy.diaryEntriesCount(diaryInRange),
+                      reflow: reflowFlags[3],
                     ),
                     _Kpi(
                       icon: Icons.timelapse_outlined,
-                      color: const Color(0xFF78909C),
-                      title: '时间足迹',
-                      value: '$auditTotalMinutes 分',
+                      color: cs.onSurfaceVariant,
+                      title: copy.kpiTimeFootprint,
+                      value: copy.minutesCount(auditTotalMinutes),
+                      reflow: reflowFlags[4],
                     ),
                   ],
                 );
@@ -383,64 +646,115 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             _PeriodReportDigestCard(
               digest: digest,
               cs: cs,
-              onCopy: () => _copyDigest(context, digest),
+              onCopy: () {
+                if (!isBuildOriginValid()) return;
+                _copyDigest(
+                  context,
+                  digest,
+                  originAccountGeneration: buildAccountGeneration,
+                  originRoute: buildRoute,
+                );
+              },
               aiEnabled: ai.enabled,
               aiBusy: _aiReportBusy,
               aiReview: _aiReportReview,
               aiError: _aiReportError,
-              onAiReview: () => _runDigestAiReview(context, digest),
-              onOpenAiHistory: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AiHistoryScreen()),
-              ),
-              onShareImage: () => _showReportShareCard(
-                context,
-                start: start,
-                end: end,
-                completedTodos: completedTodos,
-                focusMinutes: focusMinutes,
-                habitDoneInRange: habitDoneInRange,
-                diaryInRange: diaryInRange,
-                auditTotalMinutes: auditTotalMinutes,
-                auditCategorySeconds: auditCategorySeconds,
-                auditEntries: auditEntries,
-              ),
+              onAiReview: () {
+                if (!isBuildOriginValid() || _aiReportBusy) return;
+                _runDigestAiReview(
+                  context,
+                  digest,
+                  originAccountGeneration: buildAccountGeneration,
+                  originRoute: buildRoute,
+                );
+              },
+              onOpenAiHistory: () {
+                if (!isBuildOriginValid()) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AiHistoryScreen()),
+                );
+              },
+              onShareImage: () {
+                if (!isBuildOriginValid()) return;
+                _showReportShareCard(
+                  context,
+                  start: start,
+                  end: end,
+                  completedTodos: completedTodos,
+                  focusMinutes: focusMinutes,
+                  habitDoneInRange: habitDoneInRange,
+                  diaryInRange: diaryInRange,
+                  auditTotalMinutes: auditTotalMinutes,
+                  auditCategorySeconds: auditCategorySeconds,
+                  auditEntries: auditEntries,
+                  originAccountGeneration: buildAccountGeneration,
+                  originRoute: buildRoute,
+                );
+              },
+              copy: copy,
             ),
             const SizedBox(height: 10),
             _ProductivityComparisonCard(
               comparison: comparison,
               range: _range,
               cs: cs,
+              copy: copy,
             ),
             const SizedBox(height: 10),
-            _ProductivityTrendCard(points: productivityTrend, range: _range),
+            _ProductivityTrendCard(
+              points: productivityTrend,
+              range: _range,
+              copy: copy,
+              onOpenDetail: () {
+                if (!isBuildOriginValid()) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => _ProductivityTrendDetailScreen(
+                      points: productivityTrend,
+                      range: _range,
+                    ),
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 10),
             _buildFocusTodoCorrelationCard(
               correlation: crossAnalysis.focusTodo,
               cs: cs,
+              copy: copy,
             ),
             const SizedBox(height: 10),
             _buildHabitTodoCorrelationCard(
               correlation: crossAnalysis.habitTodo,
               cs: cs,
+              copy: copy,
             ),
             const SizedBox(height: 10),
             _buildDiaryFocusCorrelationCard(
               correlation: crossAnalysis.diaryFocus,
               cs: cs,
+              copy: copy,
             ),
             const SizedBox(height: 10),
             _buildTimeCategoryShareTrendCard(
               trend: crossAnalysis.timeCategoryTrend,
               cs: cs,
+              copy: copy,
             ),
             const SizedBox(height: 10),
             _buildTimeOutputEfficiencyCard(
               trend: crossAnalysis.timeOutputEfficiency,
               cs: cs,
+              copy: copy,
             ),
             const SizedBox(height: 10),
-            _buildProjectEfficiencyCard(breakdown: projectEfficiency, cs: cs),
+            _buildProjectEfficiencyCard(
+              breakdown: projectEfficiency,
+              cs: cs,
+              copy: copy,
+            ),
             const SizedBox(height: 10),
             ActivityHeatmapCard(heatmapData: activityHeatmap),
             const SizedBox(height: 10),
@@ -450,23 +764,41 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               daySeconds: weekDaySeconds,
               weekMonday: weekMonday,
               cs: cs,
+              copy: copy,
             ),
             const SizedBox(height: 10),
             _chartCard(
-              '时间投入分布',
+              copy.timeDistribution,
               SizedBox(
                 height: 180,
                 child: _buildAuditPie(
                   secondsByCategory: auditCategorySeconds,
                   cs: cs,
+                  copy: copy,
                 ),
               ),
             ),
             const SizedBox(height: 10),
-            _chartCard('时间线', _buildAuditTimeline(auditEntries, cs)),
+            _chartCard(
+              copy.timeline,
+              _buildAuditTimeline(
+                auditEntries,
+                cs,
+                copy: copy,
+                onViewAll: () {
+                  if (!isBuildOriginValid()) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const TimeAuditScreen()),
+                  );
+                },
+              ),
+            ),
             const SizedBox(height: 10),
             _chartCard(
-              _range == _Range.year ? '每月专注分钟数' : '每日专注分钟数',
+              _range == _Range.year
+                  ? copy.monthlyFocusMinutes
+                  : copy.dailyFocusMinutes,
               SizedBox(
                 height: 180,
                 child: _buildFocusSeries(
@@ -475,22 +807,40 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   start: start,
                   end: end,
                   cs: cs,
+                  copy: copy,
                 ),
               ),
             ),
             const SizedBox(height: 10),
-            _buildFocusTagRankingCard(stats: focusTagStats, cs: cs),
+            _buildFocusTagRankingCard(stats: focusTagStats, cs: cs, copy: copy),
             const SizedBox(height: 10),
             _buildFocusTagTrendCard(
               series: focusTagTrend,
               range: _range,
               cs: cs,
+              copy: copy,
             ),
             const SizedBox(height: 10),
-            _QuadrantDistributionCard(stats: quadrantStats, cs: cs),
+            _QuadrantDistributionCard(stats: quadrantStats, cs: cs, copy: copy),
           ],
         ),
       ),
+    );
+
+    if (!isLiquidGlass) {
+      return scaffold;
+    }
+
+    final hasBrandSurface =
+        DesktopEmbeddedHostScope.isHosted(context) ||
+        context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+        context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+    if (hasBrandSurface) {
+      return scaffold;
+    }
+    return Material(
+      color: routeBackground,
+      child: BrandBackground(child: scaffold),
     );
   }
 
@@ -528,7 +878,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     required List<Habit> habits,
     required List<PomodoroSession> sessions,
     required List<TimeEntry> timeEntries,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final startDate = DateTime(start.year, start.month, start.day);
     final endDate = DateTime(end.year, end.month, end.day);
     final currentSpanDays = endDate.difference(startDate).inDays;
@@ -538,7 +890,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         for (int offset = 5; offset >= 0; offset--)
           _productivityTrendPoint(
             label: offset == 0
-                ? '本周'
+                ? effectiveCopy.rangeWeek
                 : '${startDate.subtract(Duration(days: offset * 7)).month}/'
                       '${startDate.subtract(Duration(days: offset * 7)).day}',
             start: startDate.subtract(Duration(days: offset * 7)),
@@ -549,6 +901,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             habits: habits,
             sessions: sessions,
             timeEntries: timeEntries,
+            range: _Range.week,
+            isCurrentPeriod: offset == 0,
           ),
       ],
       _Range.month => [
@@ -560,6 +914,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             habits: habits,
             sessions: sessions,
             timeEntries: timeEntries,
+            copy: effectiveCopy,
           ),
       ],
       _Range.year => [
@@ -571,6 +926,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             habits: habits,
             sessions: sessions,
             timeEntries: timeEntries,
+            copy: effectiveCopy,
           ),
       ],
     };
@@ -583,7 +939,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     required List<Habit> habits,
     required List<PomodoroSession> sessions,
     required List<TimeEntry> timeEntries,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final periodStart = DateTime(end.year, end.month - offset, 1);
     final periodLastDay = DateTime(periodStart.year, periodStart.month + 1, 0);
     final periodEnd = DateTime(
@@ -592,13 +950,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       end.day.clamp(1, periodLastDay.day),
     );
     return _productivityTrendPoint(
-      label: offset == 0 ? '本月' : '${periodStart.month}月',
+      label: offset == 0
+          ? effectiveCopy.rangeMonth
+          : effectiveCopy.monthNumberLabel(periodStart.month),
       start: periodStart,
       end: periodEnd,
       todos: todos,
       habits: habits,
       sessions: sessions,
       timeEntries: timeEntries,
+      range: _Range.month,
+      isCurrentPeriod: offset == 0,
     );
   }
 
@@ -609,7 +971,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     required List<Habit> habits,
     required List<PomodoroSession> sessions,
     required List<TimeEntry> timeEntries,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final year = end.year - offset;
     final periodStart = DateTime(year, 1, 1);
     final targetMonthLastDay = DateTime(year, end.month + 1, 0).day;
@@ -619,13 +983,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       end.day.clamp(1, targetMonthLastDay),
     );
     return _productivityTrendPoint(
-      label: offset == 0 ? '今年' : '$year',
+      label: offset == 0 ? effectiveCopy.thisYear : '$year',
       start: periodStart,
       end: periodEnd,
       todos: todos,
       habits: habits,
       sessions: sessions,
       timeEntries: timeEntries,
+      range: _Range.year,
+      isCurrentPeriod: offset == 0,
     );
   }
 
@@ -637,6 +1003,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     required List<Habit> habits,
     required List<PomodoroSession> sessions,
     required List<TimeEntry> timeEntries,
+    _Range? range,
+    bool isCurrentPeriod = false,
   }) {
     final report = ReportEngine.buildReport(
       start: start,
@@ -651,6 +1019,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       start: start,
       end: end,
       report: report,
+      range: range,
+      isCurrentPeriod: isCurrentPeriod,
     );
   }
 
@@ -703,7 +1073,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _chartCard(String title, Widget child) {
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-      borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -721,7 +1090,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   List<_QuadrantStat> _buildQuadrantStats(
     Map<EisenhowerQuadrant, List<TodoItem>> groups, {
     required DateTime now,
+    required ColorScheme cs,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final today = DateTime(now.year, now.month, now.day);
 
     _QuadrantStat stat(
@@ -764,34 +1136,34 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return [
       stat(
         EisenhowerQuadrant.urgentImportant,
-        label: '重要紧急',
-        action: '立即处理',
-        guidance: '优先清空逾期和今天到期事项。',
-        color: const Color(0xFFE53935),
+        label: effectiveCopy.quadrantUrgentImportantLabel,
+        action: effectiveCopy.quadrantUrgentImportantAction,
+        guidance: effectiveCopy.quadrantUrgentImportantGuidance,
+        color: DesignTokens.defaultError,
         icon: Icons.priority_high_rounded,
       ),
       stat(
         EisenhowerQuadrant.notUrgentImportant,
-        label: '重要不紧急',
-        action: '安排计划',
-        guidance: '保持推进节奏，避免滚入紧急区。',
-        color: const Color(0xFFF6A339),
+        label: effectiveCopy.quadrantNotUrgentImportantLabel,
+        action: effectiveCopy.quadrantNotUrgentImportantAction,
+        guidance: effectiveCopy.quadrantNotUrgentImportantGuidance,
+        color: DesignTokens.defaultWarning,
         icon: Icons.event_available_outlined,
       ),
       stat(
         EisenhowerQuadrant.urgentNotImportant,
-        label: '紧急不重要',
-        action: '委派或限时',
-        guidance: '用批量处理减少被打断时间。',
-        color: const Color(0xFF42A5F5),
+        label: effectiveCopy.quadrantUrgentNotImportantLabel,
+        action: effectiveCopy.quadrantUrgentNotImportantAction,
+        guidance: effectiveCopy.quadrantUrgentNotImportantGuidance,
+        color: DesignTokens.defaultInfo,
         icon: Icons.swap_horiz_rounded,
       ),
       stat(
         EisenhowerQuadrant.notUrgentNotImportant,
-        label: '不重要不紧急',
-        action: '清理剔除',
-        guidance: '定期归档，避免待办池膨胀。',
-        color: const Color(0xFF8E8E8E),
+        label: effectiveCopy.quadrantNotUrgentNotImportantLabel,
+        action: effectiveCopy.quadrantNotUrgentNotImportantAction,
+        guidance: effectiveCopy.quadrantNotUrgentNotImportantGuidance,
+        color: cs.onSurfaceVariant,
         icon: Icons.filter_alt_off_outlined,
       ),
     ];
@@ -800,20 +1172,24 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildFocusTagRankingCard({
     required List<FocusTagStat> stats,
     required ColorScheme cs,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-      borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '专注标签排行',
-            style: TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+          Text(
+            effectiveCopy.focusTagRanking,
+            style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
           ),
           const SizedBox(height: 8),
           if (stats.isEmpty)
-            const EmptyHint(icon: Icons.timer_outlined, message: '暂无专注标签数据')
+            EmptyHint(
+              icon: Icons.timer_outlined,
+              message: effectiveCopy.noFocusTagData,
+            )
           else
             for (final (index, stat) in stats.indexed)
               Padding(
@@ -827,6 +1203,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                         style: TextStyle(
                           color: cs.primary,
                           fontWeight: FontWeight.normal,
+                          fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),
                     ),
@@ -844,8 +1221,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                 ),
                               ),
                               Text(
-                                '${stat.totalMinutes} 分',
-                                style: const TextStyle(fontSize: 12),
+                                effectiveCopy.minutesCount(stat.totalMinutes),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontFeatures: [FontFeature.tabularFigures()],
+                                ),
                               ),
                             ],
                           ),
@@ -853,10 +1233,16 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                           _buildFocusTagShare(stat.share, cs),
                           const SizedBox(height: 4),
                           Text(
-                            '${stat.sessionCount} 次 · 平均 ${stat.averageMinutes} 分',
+                            effectiveCopy.focusTagSessionSummary(
+                              stat.sessionCount,
+                              stat.averageMinutes,
+                            ),
                             style: TextStyle(
                               fontSize: 11,
                               color: cs.onSurfaceVariant,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
                             ),
                           ),
                         ],
@@ -886,37 +1272,50 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     required List<FocusTagTrendSeries> series,
     required _Range range,
     required ColorScheme cs,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final activeSeries = series
         .where((item) => item.points.any((point) => point.minutes > 0))
         .toList();
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '专注标签趋势',
-                  style: TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+                  effectiveCopy.focusTagTrend,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.normal,
+                    fontSize: 13,
+                  ),
                 ),
               ),
               Text(
-                range == _Range.year ? '按月' : '按日',
+                range == _Range.year
+                    ? effectiveCopy.byMonth
+                    : effectiveCopy.byDay,
                 style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
             ],
           ),
           const SizedBox(height: 8),
           if (activeSeries.isEmpty)
-            const EmptyHint(icon: Icons.trending_up, message: '暂无专注标签趋势')
+            EmptyHint(
+              icon: Icons.trending_up,
+              message: effectiveCopy.noFocusTagTrend,
+            )
           else ...[
             SizedBox(
               height: 190,
-              child: _buildFocusTagTrendChart(activeSeries, cs),
+              child: _buildFocusTagTrendChart(
+                activeSeries,
+                cs,
+                copy: effectiveCopy,
+              ),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -935,8 +1334,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Widget _buildFocusTagTrendChart(
     List<FocusTagTrendSeries> series,
-    ColorScheme cs,
-  ) {
+    ColorScheme cs, {
+    StatisticsUiCopy? copy,
+  }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final points = series.first.points;
     final maxMinutes = series.fold<int>(
       0,
@@ -1012,7 +1413,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               for (final item in items)
                 LineTooltipItem(
                   '${series[item.barIndex].tag}\n'
-                  '${points[item.x.toInt()].label} · ${item.y.toInt()} 分',
+                  '${points[item.x.toInt()].label} · ${effectiveCopy.minutesCount(item.y.toInt())}',
                   TextStyle(color: cs.onInverseSurface, fontSize: 11),
                 ),
             ],
@@ -1046,8 +1447,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Color _focusTagTrendColor(int index, ColorScheme cs) {
     final colors = [
       cs.primary,
-      const Color(0xFF26A69A),
-      const Color(0xFFFF9800),
+      DesignTokens.defaultAccent,
+      DesignTokens.defaultWarning,
     ];
     return colors[index % colors.length];
   }
@@ -1055,30 +1456,30 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildFocusTodoCorrelationCard({
     required FocusTodoCorrelation correlation,
     required ColorScheme cs,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final activePoints = correlation.activePoints;
     final r = correlation.pearson;
-    final rText = r == null ? '样本不足' : r.toStringAsFixed(2);
-    final insight = r == null
-        ? '需要至少两个有变化的周期点，才能判断专注投入与待办完成的关系。'
-        : r >= 0.45
-        ? '专注分钟数越高，待办完成数通常同步提升。'
-        : r <= -0.45
-        ? '专注投入和待办完成出现反向变化，适合检查任务粒度或专注目标。'
-        : '两者关系较弱，当前周期的完成数可能更多受任务数量、难度或日程影响。';
+    final rText = r == null
+        ? effectiveCopy.insufficientSamples
+        : r.toStringAsFixed(2);
+    final insight = effectiveCopy.focusTodoInsight(r);
 
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '专注 × 待办相关性',
-                  style: TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+                  effectiveCopy.focusTodoCorrelation,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.normal,
+                    fontSize: 13,
+                  ),
                 ),
               ),
               _CrossMetricBadge(label: 'r', value: rText, cs: cs),
@@ -1086,15 +1487,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           ),
           const SizedBox(height: 2),
           Text(
-            '横轴为专注分钟数，纵轴为待办完成数',
+            effectiveCopy.focusTodoAxisLabel,
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
           SizedBox(
             height: 190,
             child: activePoints.isEmpty
-                ? const EmptyHint(icon: Icons.donut_small, message: '暂无交叉分析数据')
-                : _buildFocusTodoScatter(correlation, cs),
+                ? EmptyHint(
+                    icon: Icons.donut_small,
+                    message: effectiveCopy.noCrossAnalysisData,
+                  )
+                : _buildFocusTodoScatter(correlation, cs, copy: effectiveCopy),
           ),
           const SizedBox(height: 10),
           Text(
@@ -1112,8 +1516,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Widget _buildFocusTodoScatter(
     FocusTodoCorrelation correlation,
-    ColorScheme cs,
-  ) {
+    ColorScheme cs, {
+    StatisticsUiCopy? copy,
+  }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final activePoints = correlation.activePoints;
     final maxX = (correlation.maxFocusMinutes * 1.2)
         .clamp(10, 100000)
@@ -1159,8 +1565,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               final point = pointFor(spot);
               return ScatterTooltipItem(
                 point == null
-                    ? '${spot.x.toInt()} 分 / ${spot.y.toInt()} 项'
-                    : '${point.label}\n${point.focusMinutes} 分 / ${point.completedTodos} 项',
+                    ? effectiveCopy.minutesAndItems(
+                        spot.x.toInt(),
+                        spot.y.toInt(),
+                      )
+                    : '${point.label}\n${effectiveCopy.minutesAndItems(point.focusMinutes, point.completedTodos)}',
                 textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 11),
               );
             },
@@ -1223,30 +1632,30 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildHabitTodoCorrelationCard({
     required HabitTodoCorrelation correlation,
     required ColorScheme cs,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final activePoints = correlation.activePoints;
     final r = correlation.pearson;
-    final rText = r == null ? '样本不足' : r.toStringAsFixed(2);
-    final insight = r == null
-        ? '需要至少两个有变化的周期点，才能判断习惯达标与待办完成的关系。'
-        : r >= 0.45
-        ? '习惯达标越稳定，待办完成数通常也更高。'
-        : r <= -0.45
-        ? '习惯达标和待办完成出现反向变化，适合检查当天计划是否过载。'
-        : '两者关系较弱，当前周期的待办完成可能更多受任务难度或外部日程影响。';
+    final rText = r == null
+        ? effectiveCopy.insufficientSamples
+        : r.toStringAsFixed(2);
+    final insight = effectiveCopy.habitTodoInsight(r);
 
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '习惯 × 待办相关性',
-                  style: TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+                  effectiveCopy.habitTodoCorrelation,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.normal,
+                    fontSize: 13,
+                  ),
                 ),
               ),
               _CrossMetricBadge(label: 'r', value: rText, cs: cs),
@@ -1254,15 +1663,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           ),
           const SizedBox(height: 2),
           Text(
-            '横轴为习惯达标次数，纵轴为待办完成数',
+            effectiveCopy.habitTodoAxisLabel,
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
           SizedBox(
             height: 190,
             child: activePoints.isEmpty
-                ? const EmptyHint(icon: Icons.repeat, message: '暂无习惯交叉数据')
-                : _buildHabitTodoScatter(correlation, cs),
+                ? EmptyHint(
+                    icon: Icons.repeat,
+                    message: effectiveCopy.noHabitCrossData,
+                  )
+                : _buildHabitTodoScatter(correlation, cs, copy: effectiveCopy),
           ),
           const SizedBox(height: 10),
           Text(
@@ -1280,8 +1692,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Widget _buildHabitTodoScatter(
     HabitTodoCorrelation correlation,
-    ColorScheme cs,
-  ) {
+    ColorScheme cs, {
+    StatisticsUiCopy? copy,
+  }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final activePoints = correlation.activePoints;
     final maxX = (correlation.maxHabitCheckIns * 1.2)
         .clamp(3, 100000)
@@ -1327,8 +1741,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               final point = pointFor(spot);
               return ScatterTooltipItem(
                 point == null
-                    ? '${spot.x.toInt()} 次 / ${spot.y.toInt()} 项'
-                    : '${point.label}\n${point.habitCheckIns} 次 / ${point.completedTodos} 项',
+                    ? effectiveCopy.timesAndItems(
+                        spot.x.toInt(),
+                        spot.y.toInt(),
+                      )
+                    : '${point.label}\n${effectiveCopy.timesAndItems(point.habitCheckIns, point.completedTodos)}',
                 textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 11),
               );
             },
@@ -1391,30 +1808,30 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildDiaryFocusCorrelationCard({
     required DiaryFocusCorrelation correlation,
     required ColorScheme cs,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final activePoints = correlation.activePoints;
     final r = correlation.pearson;
-    final rText = r == null ? '样本不足' : r.toStringAsFixed(2);
-    final insight = r == null
-        ? '需要至少两个有变化的周期点，才能判断记录日记与专注投入的关系。'
-        : r >= 0.45
-        ? '日记记录越稳定，专注分钟数通常也更高。'
-        : r <= -0.45
-        ? '日记记录和专注投入出现反向变化，适合检查复盘是否集中在低专注日。'
-        : '两者关系较弱，当前周期的专注投入可能更多受任务安排或外部日程影响。';
+    final rText = r == null
+        ? effectiveCopy.insufficientSamples
+        : r.toStringAsFixed(2);
+    final insight = effectiveCopy.diaryFocusInsight(r);
 
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '日记 × 专注相关性',
-                  style: TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+                  effectiveCopy.diaryFocusCorrelation,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.normal,
+                    fontSize: 13,
+                  ),
                 ),
               ),
               _CrossMetricBadge(label: 'r', value: rText, cs: cs),
@@ -1422,15 +1839,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           ),
           const SizedBox(height: 2),
           Text(
-            '横轴为日记篇数，纵轴为专注分钟数',
+            effectiveCopy.diaryFocusAxisLabel,
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
           SizedBox(
             height: 190,
             child: activePoints.isEmpty
-                ? const EmptyHint(icon: Icons.menu_book, message: '暂无日记专注交叉数据')
-                : _buildDiaryFocusScatter(correlation, cs),
+                ? EmptyHint(
+                    icon: Icons.menu_book,
+                    message: effectiveCopy.noDiaryFocusCrossData,
+                  )
+                : _buildDiaryFocusScatter(correlation, cs, copy: effectiveCopy),
           ),
           const SizedBox(height: 10),
           Text(
@@ -1448,8 +1868,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Widget _buildDiaryFocusScatter(
     DiaryFocusCorrelation correlation,
-    ColorScheme cs,
-  ) {
+    ColorScheme cs, {
+    StatisticsUiCopy? copy,
+  }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final activePoints = correlation.activePoints;
     final maxX = (correlation.maxDiaryEntries * 1.2)
         .clamp(3, 100000)
@@ -1495,8 +1917,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               final point = pointFor(spot);
               return ScatterTooltipItem(
                 point == null
-                    ? '${spot.x.toInt()} 篇 / ${spot.y.toInt()} 分'
-                    : '${point.label}\n${point.diaryEntries} 篇 / ${point.focusMinutes} 分',
+                    ? effectiveCopy.diaryAndMinutes(
+                        spot.x.toInt(),
+                        spot.y.toInt(),
+                      )
+                    : '${point.label}\n${effectiveCopy.diaryAndMinutes(point.diaryEntries, point.focusMinutes)}',
                 textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 11),
               );
             },
@@ -1546,7 +1971,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               point.focusMinutes.toDouble(),
               dotPainter: FlDotCirclePainter(
                 radius: 5,
-                color: const Color(0xFF8E7CC3),
+                color: cs.tertiary,
                 strokeWidth: 2,
                 strokeColor: cs.surface,
               ),
@@ -1559,30 +1984,31 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildTimeCategoryShareTrendCard({
     required TimeCategoryShareTrend trend,
     required ColorScheme cs,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '时间分类占比趋势',
-            style: TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+          Text(
+            effectiveCopy.timeCategoryShareTrend,
+            style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
           ),
           const SizedBox(height: 2),
           Text(
-            '按当前周期展示各类时间投入结构变化',
+            effectiveCopy.timeCategoryShareTrendSubtitle,
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
           SizedBox(
             height: 200,
             child: trend.hasData
-                ? _buildTimeCategoryShareChart(trend, cs)
-                : const EmptyHint(
+                ? _buildTimeCategoryShareChart(trend, cs, copy: effectiveCopy)
+                : EmptyHint(
                     icon: Icons.pie_chart_outline,
-                    message: '暂无时间分类趋势',
+                    message: effectiveCopy.noTimeCategoryTrend,
                   ),
           ),
           if (trend.hasData) ...[
@@ -1594,7 +2020,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 for (final key in trend.categoryKeys)
                   _legend(
                     _crossCategoryColor(key, cs),
-                    _crossCategoryLabel(key),
+                    _crossCategoryLabel(key, effectiveCopy),
                   ),
               ],
             ),
@@ -1606,8 +2032,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Widget _buildTimeCategoryShareChart(
     TimeCategoryShareTrend trend,
-    ColorScheme cs,
-  ) {
+    ColorScheme cs, {
+    StatisticsUiCopy? copy,
+  }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final buckets = trend.buckets;
     return BarChart(
       BarChartData(
@@ -1632,7 +2060,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 bucket.label,
                 for (final key in trend.categoryKeys)
                   if ((bucket.secondsByCategory[key] ?? 0) > 0)
-                    '${_crossCategoryLabel(key)} '
+                    '${_crossCategoryLabel(key, effectiveCopy)} '
                         '${((bucket.shareByCategory[key] ?? 0) * 100).round()}%',
               ];
               return BarTooltipItem(
@@ -1713,43 +2141,56 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildTimeOutputEfficiencyCard({
     required TimeOutputEfficiencyTrend trend,
     required ColorScheme cs,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final points = trend.points;
     final hasData = points.any((point) => point.hasActivity);
     final average = _averageCompletedTodosPerHour(points);
 
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '时间投入 × 待办产出效率',
-                  style: TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+                  effectiveCopy.timeOutputEfficiencyTitle,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.normal,
+                    fontSize: 13,
+                  ),
                 ),
               ),
               _CrossMetricBadge(
-                label: '每小时完成',
-                value: average <= 0 ? '0 项' : '${average.toStringAsFixed(1)} 项',
+                label: effectiveCopy.completedPerHour,
+                value: average <= 0
+                    ? effectiveCopy.itemsCount(0)
+                    : effectiveCopy.itemsCountDouble(average),
                 cs: cs,
               ),
             ],
           ),
           const SizedBox(height: 2),
           Text(
-            '按当前周期展示每小时完成项',
+            effectiveCopy.timeOutputEfficiencySubtitle,
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
           SizedBox(
             height: 180,
             child: hasData
-                ? _buildTimeOutputEfficiencyChart(trend, cs)
-                : const EmptyHint(icon: Icons.swap_vert, message: '暂无时间投入产出数据'),
+                ? _buildTimeOutputEfficiencyChart(
+                    trend,
+                    cs,
+                    copy: effectiveCopy,
+                  )
+                : EmptyHint(
+                    icon: Icons.swap_vert,
+                    message: effectiveCopy.noTimeOutputData,
+                  ),
           ),
         ],
       ),
@@ -1758,8 +2199,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Widget _buildTimeOutputEfficiencyChart(
     TimeOutputEfficiencyTrend trend,
-    ColorScheme cs,
-  ) {
+    ColorScheme cs, {
+    StatisticsUiCopy? copy,
+  }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final points = trend.points;
     final peak = points.fold<double>(
       0,
@@ -1790,8 +2233,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               final point = points[groupIndex];
               return BarTooltipItem(
                 '${_timeOutputPeriodLabel(point)}\n'
-                '每小时完成 ${point.completedTodosPerHour.toStringAsFixed(1)} 项\n'
-                '${point.timeMinutes} 分 / ${point.completedTodos} 项',
+                '${effectiveCopy.completedPerHour}: ${point.completedTodosPerHour.toStringAsFixed(1)}\n'
+                '${effectiveCopy.minutesAndItems(point.timeMinutes, point.completedTodos)}',
                 TextStyle(color: cs.onInverseSurface, fontSize: 11),
               );
             },
@@ -1860,7 +2303,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 BarChartRodData(
                   toY: point.completedTodosPerHour,
                   width: points.length > 14 ? 7 : 12,
-                  color: const Color(0xFF26A69A),
+                  color: DesignTokens.defaultAccent,
                   borderRadius: BorderRadius.circular(4),
                   backDrawRodData: BackgroundBarChartRodData(
                     show: true,
@@ -1882,7 +2325,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     required List<GoalItem> goals,
     required List<TimeEntry> timeEntries,
     required List<TodoItem> todos,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final todoById = {for (final todo in todos) todo.id: todo};
     final goalById = {for (final goal in goals) goal.id: goal};
 
@@ -1891,7 +2336,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         (todo) => ProjectEfficiencyTodoCompletion(
           completedAt: todo.completedAt ?? todo.updatedAt,
           projectKey: _todoProjectKey(todo),
-          projectLabel: _todoProjectLabel(todo),
+          projectLabel: _todoProjectLabel(todo, effectiveCopy),
         ),
       ),
       goalCompletions: [
@@ -1903,7 +2348,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               ProjectEfficiencyGoalCompletion(
                 completedAt: milestone.completedAt!,
                 projectKey: _goalProjectKey(goal),
-                projectLabel: _goalProjectLabel(goal),
+                projectLabel: _goalProjectLabel(goal, effectiveCopy),
               ),
       ],
       timeAllocations: [
@@ -1919,6 +2364,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 entry,
                 todoById: todoById,
                 goalById: goalById,
+                copy: effectiveCopy,
               ),
               durationSeconds: entry.durationSeconds,
             ),
@@ -1929,45 +2375,56 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildProjectEfficiencyCard({
     required ProjectEfficiencyBreakdown breakdown,
     required ColorScheme cs,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final items = breakdown.rankedItems.take(6).toList(growable: false);
     final top = breakdown.topItem;
 
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '项目效率拆解',
-                  style: TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+                  effectiveCopy.projectEfficiencyTitle,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.normal,
+                    fontSize: 13,
+                  ),
                 ),
               ),
               _CrossMetricBadge(
-                label: '最高',
+                label: effectiveCopy.highest,
                 value: top == null
-                    ? '暂无'
-                    : '${top.outputPerHour.toStringAsFixed(1)} 项/时',
+                    ? effectiveCopy.noData
+                    : effectiveCopy.itemsPerHour(top.outputPerHour),
                 cs: cs,
               ),
             ],
           ),
           const SizedBox(height: 2),
           Text(
-            '按清单/目标汇总完成项、目标里程碑和时间投入',
+            effectiveCopy.projectEfficiencySubtitle,
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
           if (items.isEmpty)
-            const EmptyHint(icon: Icons.speed, message: '暂无项目效率数据')
+            EmptyHint(
+              icon: Icons.speed,
+              message: effectiveCopy.noProjectEfficiencyData,
+            )
           else ...[
             SizedBox(
               height: 190,
-              child: _buildProjectEfficiencyChart(items, cs),
+              child: _buildProjectEfficiencyChart(
+                items,
+                cs,
+                copy: effectiveCopy,
+              ),
             ),
             const SizedBox(height: 10),
             for (final item in items.take(4))
@@ -1975,6 +2432,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 item: item,
                 maxOutputPerHour: breakdown.maxOutputPerHour,
                 cs: cs,
+                copy: effectiveCopy,
               ),
           ],
         ],
@@ -1984,8 +2442,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Widget _buildProjectEfficiencyChart(
     List<ProjectEfficiencyItem> items,
-    ColorScheme cs,
-  ) {
+    ColorScheme cs, {
+    StatisticsUiCopy? copy,
+  }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final maxY =
         (items.fold<double>(
                   0,
@@ -2018,8 +2478,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               final item = items[groupIndex];
               return BarTooltipItem(
                 '${item.projectLabel}\n'
-                '${item.outputCount} 项输出 / ${item.timeMinutes} 分\n'
-                '${item.outputPerHour.toStringAsFixed(1)} 项/时',
+                '${effectiveCopy.projectEfficiencyTooltipOutput(outputCount: item.outputCount, timeMinutes: item.timeMinutes)}\n'
+                '${effectiveCopy.itemsPerHour(item.outputPerHour)}',
                 TextStyle(color: cs.onInverseSurface, fontSize: 11),
               );
             },
@@ -2108,15 +2568,19 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return 'todo:inbox';
   }
 
-  String _todoProjectLabel(TodoItem todo) {
+  String _todoProjectLabel(TodoItem todo, [StatisticsUiCopy? copy]) {
     final name = todo.listGroupName?.trim();
-    return name == null || name.isEmpty ? '收件箱' : name;
+    return name == null || name.isEmpty
+        ? (copy ?? StatisticsUiCopy.current()).inbox
+        : name;
   }
 
   String _goalProjectKey(GoalItem goal) => 'goal:${goal.id}';
 
-  String _goalProjectLabel(GoalItem goal) =>
-      goal.title.trim().isEmpty ? '未命名目标' : goal.title.trim();
+  String _goalProjectLabel(GoalItem goal, [StatisticsUiCopy? copy]) =>
+      goal.title.trim().isEmpty
+      ? (copy ?? StatisticsUiCopy.current()).untitledGoal
+      : goal.title.trim();
 
   String _timeEntryProjectKey(
     TimeEntry entry, {
@@ -2139,15 +2603,16 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     TimeEntry entry, {
     required Map<String, TodoItem> todoById,
     required Map<String, GoalItem> goalById,
+    StatisticsUiCopy? copy,
   }) {
     if (entry.source == TimeEntrySource.todo && entry.sourceId != null) {
       final todo = todoById[entry.sourceId!];
-      if (todo != null) return _todoProjectLabel(todo);
+      if (todo != null) return _todoProjectLabel(todo, copy);
     }
     if (entry.source == TimeEntrySource.goal && entry.sourceId != null) {
       final goalId = entry.sourceId!.split(':').first;
       final goal = goalById[goalId];
-      if (goal != null) return _goalProjectLabel(goal);
+      if (goal != null) return _goalProjectLabel(goal, copy);
     }
     return entry.category.label;
   }
@@ -2161,11 +2626,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Color _projectEfficiencyColor(int index, ColorScheme cs) {
     final colors = [
       cs.primary,
-      const Color(0xFF26A69A),
-      const Color(0xFFFF9800),
-      const Color(0xFFAB47BC),
-      const Color(0xFF78909C),
+      DesignTokens.defaultAccent,
+      DesignTokens.defaultWarning,
+      DesignTokens.defaultInfo,
       cs.tertiary,
+      cs.onSurfaceVariant,
     ];
     return colors[index % colors.length];
   }
@@ -2224,15 +2689,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return items;
   }
 
-  String _crossCategoryLabel(String key) {
-    if (key == ReportCrossAnalysis.otherCategoryKey) return '其他';
+  String _crossCategoryLabel(String key, StatisticsUiCopy copy) {
+    if (key == ReportCrossAnalysis.otherCategoryKey) return copy.otherCategory;
     final category = _timeEntryCategoryFromKey(key);
-    return category?.label ?? key;
+    return category != null ? copy.categoryLabel(category) : key;
   }
 
   Color _crossCategoryColor(String key, ColorScheme cs) {
     if (key == ReportCrossAnalysis.otherCategoryKey) {
-      return const Color(0xFF90A4AE);
+      return cs.onSurfaceVariant;
     }
     final category = _timeEntryCategoryFromKey(key);
     return category == null ? cs.secondary : _auditColor(category, cs);
@@ -2240,7 +2705,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   TimeEntryCategory? _timeEntryCategoryFromKey(String key) {
     for (final category in TimeEntryCategory.values) {
-      if (category.name == key) return category;
+      if (category.name == key ||
+          category.label == key ||
+          StatisticsUiCopy(AppLocale.zh).categoryLabel(category) == key ||
+          StatisticsUiCopy(AppLocale.en).categoryLabel(category) == key) {
+        return category;
+      }
     }
     return null;
   }
@@ -2248,13 +2718,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildAuditPie({
     required Map<TimeEntryCategory, int> secondsByCategory,
     required ColorScheme cs,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final values = secondsByCategory.entries
         .where((entry) => entry.value > 0)
         .toList();
     final total = values.fold<int>(0, (sum, entry) => sum + entry.value);
     if (total == 0) {
-      return const EmptyHint(icon: Icons.schedule, message: '暂无时间足迹');
+      return EmptyHint(
+        icon: Icons.schedule,
+        message: effectiveCopy.noTimeFootprint,
+      );
     }
     PieChartSectionData sec(int v, Color c) => PieChartSectionData(
       value: v.toDouble(),
@@ -2340,9 +2815,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     ),
   );
 
-  Widget _buildAuditTimeline(List<TimeEntry> entries, ColorScheme cs) {
+  Widget _buildAuditTimeline(
+    List<TimeEntry> entries,
+    ColorScheme cs, {
+    StatisticsUiCopy? copy,
+    VoidCallback? onViewAll,
+  }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     if (entries.isEmpty) {
-      return const EmptyHint(icon: Icons.schedule, message: '暂无时间记录');
+      return EmptyHint(
+        icon: Icons.schedule,
+        message: effectiveCopy.noTimeEntries,
+      );
     }
     final sorted = [...entries]..sort((a, b) => b.startAt.compareTo(a.startAt));
     return Column(
@@ -2370,18 +2854,30 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             ),
             subtitle: Text(
               '${entry.category.label} · ${_formatDateTime(entry.startAt)} · '
-              '${_formatDuration(entry.durationSeconds)}',
+              '${_formatDuration(entry.durationSeconds, effectiveCopy)}',
             ),
           ),
         Align(
           alignment: Alignment.centerRight,
           child: TextButton.icon(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const TimeAuditScreen()),
-            ),
+            onPressed:
+                onViewAll ??
+                () {
+                  if (!mounted) return;
+                  final route = ModalRoute.of(context);
+                  if (route != null && !route.isCurrent) return;
+                  if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                    AccountLocalDataCleaner.accountDataGeneration,
+                  )) {
+                    return;
+                  }
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const TimeAuditScreen()),
+                  );
+                },
             icon: const Icon(Icons.open_in_new, size: 16),
-            label: const Text('查看全部'),
+            label: Text(effectiveCopy.viewAll),
           ),
         ),
       ],
@@ -2390,14 +2886,14 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Color _auditColor(TimeEntryCategory category, ColorScheme cs) =>
       switch (category) {
-        TimeEntryCategory.focus => Colors.redAccent,
+        TimeEntryCategory.focus => DesignTokens.defaultError,
         TimeEntryCategory.todo => cs.primary,
-        TimeEntryCategory.habit => const Color(0xFF66BB6A),
-        TimeEntryCategory.goal => const Color(0xFFAB47BC),
-        TimeEntryCategory.study => const Color(0xFF26A69A),
-        TimeEntryCategory.work => const Color(0xFFFF9800),
-        TimeEntryCategory.life => const Color(0xFF8D6E63),
-        TimeEntryCategory.other => const Color(0xFF78909C),
+        TimeEntryCategory.habit => DesignTokens.defaultSuccess,
+        TimeEntryCategory.goal => cs.tertiary,
+        TimeEntryCategory.study => DesignTokens.defaultAccent,
+        TimeEntryCategory.work => DesignTokens.defaultWarning,
+        TimeEntryCategory.life => cs.secondary,
+        TimeEntryCategory.other => cs.onSurfaceVariant,
       };
 
   IconData _auditIcon(TimeEntryCategory category) => switch (category) {
@@ -2413,11 +2909,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   String _formatDateTime(DateTime d) => I18nDateFormat.shortDateTime(d);
 
-  String _formatDuration(int seconds) {
-    if (seconds >= 3600) {
-      return '${(seconds / 3600).toStringAsFixed(seconds % 3600 == 0 ? 0 : 1)} 小时';
-    }
-    return '${(seconds / 60).toStringAsFixed(seconds % 60 == 0 ? 0 : 1)} 分钟';
+  String _formatDuration(int seconds, [StatisticsUiCopy? copy]) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
+    return effectiveCopy.formatDuration(seconds);
   }
 
   Future<void> _copyReport(
@@ -2431,7 +2925,27 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     required int auditTotalMinutes,
     required Map<TimeEntryCategory, int> auditCategorySeconds,
     required List<TimeEntry> auditEntries,
+    int? originAccountGeneration,
+    ModalRoute<dynamic>? originRoute,
   }) async {
+    if (!mounted || !context.mounted) return;
+    final originalRoute = originRoute ?? ModalRoute.of(context);
+    if (originalRoute != null && !originalRoute.isCurrent) return;
+    final currentRoute = ModalRoute.of(context);
+    if (currentRoute != null && !currentRoute.isCurrent) return;
+    final capturedAccountGeneration =
+        originAccountGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      capturedAccountGeneration,
+    )) {
+      return;
+    }
+    final exportLocale = I18n.current;
+    final exportCopy = StatisticsUiCopy(
+      exportLocale,
+      datePattern: AppDateFormat.readPattern(context),
+    );
     final text = _buildReportMarkdown(
       start: start,
       end: end,
@@ -2442,12 +2956,27 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       auditTotalMinutes: auditTotalMinutes,
       auditCategorySeconds: auditCategorySeconds,
       auditEntries: auditEntries,
+      copy: exportCopy,
     );
     await Clipboard.setData(ClipboardData(text: text));
-    if (!context.mounted) return;
+    if (!mounted || !context.mounted) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      capturedAccountGeneration,
+    )) {
+      return;
+    }
+    if (originalRoute != null && !originalRoute.isCurrent) return;
+    final postRoute = ModalRoute.of(context);
+    if (postRoute != null && !postRoute.isCurrent) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('报告已复制，可粘贴到笔记、聊天或文档'),
+      SnackBar(
+        content: ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (context, locale, _) {
+            final copy = StatisticsUiCopy(locale);
+            return Text(copy.reportCopiedNotice);
+          },
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -2464,33 +2993,57 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     required int auditTotalMinutes,
     required Map<TimeEntryCategory, int> auditCategorySeconds,
     required List<TimeEntry> auditEntries,
+    int? originAccountGeneration,
+    ModalRoute<dynamic>? originRoute,
   }) async {
-    final markdown = _buildReportMarkdown(
-      start: start,
-      end: end,
-      completedTodos: completedTodos,
-      focusMinutes: focusMinutes,
-      habitDoneInRange: habitDoneInRange,
-      diaryInRange: diaryInRange,
-      auditTotalMinutes: auditTotalMinutes,
-      auditCategorySeconds: auditCategorySeconds,
-      auditEntries: auditEntries,
-    );
+    if (!mounted || !context.mounted) return;
+    final originalRoute = originRoute ?? ModalRoute.of(context);
+    if (originalRoute != null && !originalRoute.isCurrent) return;
+    final currentRoute = ModalRoute.of(context);
+    if (currentRoute != null && !currentRoute.isCurrent) return;
+    final capturedAccountGeneration =
+        originAccountGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      capturedAccountGeneration,
+    )) {
+      return;
+    }
     final topCategories =
         auditCategorySeconds.entries.where((entry) => entry.value > 0).toList()
           ..sort((a, b) => b.value.compareTo(a.value));
+    final themeProvider = context.read<ThemeProvider>();
     await showDialog<void>(
       context: context,
-      builder: (_) => _ReportShareDialog(
-        markdown: markdown,
-        child: _ReportShareCard(
-          range: '${_formatDate(start)} - ${_formatDate(end)}',
-          completedTodos: completedTodos.length,
-          focusMinutes: focusMinutes,
-          habitDoneInRange: habitDoneInRange,
-          diaryInRange: diaryInRange,
-          auditTotalMinutes: auditTotalMinutes,
-          topCategories: topCategories.take(4).toList(),
+      builder: (_) => ListenableBuilder(
+        listenable: themeProvider,
+        builder: (context, _) => Theme(
+          data: themeProvider.brand.theme,
+          child: _ReportShareDialog(
+            markdownBuilder: (copy) => _buildReportMarkdown(
+              start: start,
+              end: end,
+              completedTodos: completedTodos,
+              focusMinutes: focusMinutes,
+              habitDoneInRange: habitDoneInRange,
+              diaryInRange: diaryInRange,
+              auditTotalMinutes: auditTotalMinutes,
+              auditCategorySeconds: auditCategorySeconds,
+              auditEntries: auditEntries,
+              copy: copy,
+            ),
+            cardBuilder: (copy) => _ReportShareCard(
+              start: start,
+              end: end,
+              completedTodos: completedTodos.length,
+              focusMinutes: focusMinutes,
+              habitDoneInRange: habitDoneInRange,
+              diaryInRange: diaryInRange,
+              auditTotalMinutes: auditTotalMinutes,
+              topCategories: topCategories.take(4).toList(),
+              copy: copy,
+            ),
+          ),
         ),
       ),
     );
@@ -2498,14 +3051,52 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Future<void> _copyDigest(
     BuildContext context,
-    PeriodReportDigest digest,
-  ) async {
-    final text = _digestMarkdown(digest);
+    PeriodReportDigest digest, {
+    int? originAccountGeneration,
+    ModalRoute<dynamic>? originRoute,
+  }) async {
+    if (!mounted || !context.mounted) return;
+    final originalRoute = originRoute ?? ModalRoute.of(context);
+    if (originalRoute != null && !originalRoute.isCurrent) return;
+    final currentRoute = ModalRoute.of(context);
+    if (currentRoute != null && !currentRoute.isCurrent) return;
+    final capturedAccountGeneration =
+        originAccountGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      capturedAccountGeneration,
+    )) {
+      return;
+    }
+    final exportLocale = I18n.current;
+    final exportCopy = StatisticsUiCopy(
+      exportLocale,
+      datePattern: AppDateFormat.readPattern(context),
+    );
+    final text = _digestMarkdown(digest, exportCopy);
     await Clipboard.setData(ClipboardData(text: text));
-    if (!context.mounted) return;
+    if (!mounted || !context.mounted) return;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      capturedAccountGeneration,
+    )) {
+      return;
+    }
+    if (originalRoute != null && !originalRoute.isCurrent) return;
+    final postRoute = ModalRoute.of(context);
+    if (postRoute != null && !postRoute.isCurrent) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${digest.title}已复制'),
+        content: ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (context, locale, _) {
+            final copy = StatisticsUiCopy(locale);
+            final presentation = PeriodReportPresentation(
+              digest,
+              isEnglish: copy.isEn,
+            );
+            return Text(copy.digestCopiedNotice(presentation.title));
+          },
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -2513,33 +3104,116 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Future<void> _runDigestAiReview(
     BuildContext context,
-    PeriodReportDigest digest,
-  ) async {
+    PeriodReportDigest digest, {
+    int? originAccountGeneration,
+    ModalRoute<dynamic>? originRoute,
+  }) async {
+    if (!mounted || _aiReportBusy) return;
+    final originalRoute = originRoute ?? ModalRoute.of(context);
+    if (originalRoute != null && !originalRoute.isCurrent) return;
+    final currentRoute = ModalRoute.of(context);
+    if (currentRoute != null && !currentRoute.isCurrent) return;
+    final capturedAccountGeneration =
+        originAccountGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      capturedAccountGeneration,
+    )) {
+      return;
+    }
+    final capturedLocale = I18n.current;
+    final capturedCopy = StatisticsUiCopy(
+      capturedLocale,
+      datePattern: AppDateFormat.readPattern(context),
+    );
+    final capturedRange = _range;
+    final capturedSeq = ++_aiReportRequestSeq;
+    final aiService = context.read<AiService>();
+
     setState(() {
       _aiReportBusy = true;
       _aiReportError = null;
     });
+
+    final presentation = PeriodReportPresentation(
+      digest,
+      isEnglish: capturedCopy.isEn,
+    );
+    final reportMarkdown = _digestMarkdown(digest, capturedCopy);
+
+    bool isCurrentOwnership() {
+      if (!mounted) return false;
+      if (_aiReportRequestSeq != capturedSeq) return false;
+      if (_range != capturedRange) return false;
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        capturedAccountGeneration,
+      )) {
+        return false;
+      }
+      return true;
+    }
+
+    bool isCurrentPeriodValid() {
+      if (!isCurrentOwnership()) return false;
+      if (originalRoute != null && !originalRoute.isCurrent) return false;
+      if (mounted) {
+        final curRoute = ModalRoute.of(context);
+        if (curRoute != null && !curRoute.isCurrent) return false;
+      }
+      final now = DateTime.now();
+      final (curStart, curEnd) = switch (_range) {
+        _Range.week => (
+          DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(Duration(days: now.weekday - 1)),
+          now,
+        ),
+        _Range.month => (DateTime(now.year, now.month, 1), now),
+        _Range.year => (DateTime(now.year, 1, 1), now),
+      };
+      final sameStart =
+          digest.report.start.year == curStart.year &&
+          digest.report.start.month == curStart.month &&
+          digest.report.start.day == curStart.day;
+      final sameEnd =
+          digest.report.end.year == curEnd.year &&
+          digest.report.end.month == curEnd.month &&
+          digest.report.end.day == curEnd.day;
+      return sameStart && sameEnd;
+    }
+
     try {
-      final review = await context.read<AiService>().personalizedReportReview(
-        periodLabel: digest.title,
-        reportMarkdown: _digestMarkdown(digest),
+      final review = await aiService.personalizedReportReview(
+        periodLabel: presentation.title,
+        reportMarkdown: reportMarkdown,
+        locale: capturedLocale,
       );
-      if (!mounted) return;
+      if (!isCurrentPeriodValid()) return;
       setState(() => _aiReportReview = review);
     } on AiException catch (e) {
-      if (mounted) setState(() => _aiReportError = e.message);
+      if (!isCurrentPeriodValid()) return;
+      setState(() => _aiReportError = e.message);
     } catch (e) {
-      if (mounted) setState(() => _aiReportError = e.toString());
+      if (!isCurrentPeriodValid()) return;
+      setState(() => _aiReportError = e.toString());
     } finally {
-      if (mounted) setState(() => _aiReportBusy = false);
+      if (isCurrentOwnership()) {
+        setState(() => _aiReportBusy = false);
+      }
     }
   }
 
-  String _digestMarkdown(PeriodReportDigest digest) {
-    return digest.toMarkdown(
-      formatDate: _formatDate,
-      formatCategory: (category) =>
-          category is TimeEntryCategory ? category.label : category.toString(),
+  String _digestMarkdown(PeriodReportDigest digest, [StatisticsUiCopy? copy]) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
+    final presentation = PeriodReportPresentation(
+      digest,
+      isEnglish: effectiveCopy.isEn,
+    );
+    return presentation.toMarkdown(
+      formatDate: (dt) => effectiveCopy.formatDate(dt),
+      formatCategory: (category) => effectiveCopy.formatCategory(category),
     );
   }
 
@@ -2553,43 +3227,60 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     required int auditTotalMinutes,
     required Map<TimeEntryCategory, int> auditCategorySeconds,
     required List<TimeEntry> auditEntries,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final categories =
         auditCategorySeconds.entries.where((entry) => entry.value > 0).toList()
           ..sort((a, b) => b.value.compareTo(a.value));
     final entries = [...auditEntries]
       ..sort((a, b) => b.startAt.compareTo(a.startAt));
     final sb = StringBuffer()
-      ..writeln('# 多仪时光报告')
+      ..writeln(effectiveCopy.markdownReportTitle)
       ..writeln()
-      ..writeln('范围：${_formatDate(start)} - ${_formatDate(end)}')
+      ..writeln(
+        '${effectiveCopy.markdownRangePrefix}${effectiveCopy.formatDate(start)} - ${effectiveCopy.formatDate(end)}',
+      )
       ..writeln()
-      ..writeln('## 概览')
-      ..writeln('- 待办完成：${completedTodos.length} 项')
-      ..writeln('- 深度专注：$focusMinutes 分钟')
-      ..writeln('- 习惯打卡：$habitDoneInRange 次')
-      ..writeln('- 日记：$diaryInRange 篇')
-      ..writeln('- 时间足迹：$auditTotalMinutes 分钟')
+      ..writeln(effectiveCopy.markdownOverview)
+      ..writeln(
+        '- ${effectiveCopy.kpiCompletedTodos}：${effectiveCopy.itemsCount(completedTodos.length)}',
+      )
+      ..writeln(
+        '- ${effectiveCopy.kpiDeepFocus}：${effectiveCopy.minutesCount(focusMinutes)}',
+      )
+      ..writeln(
+        '- ${effectiveCopy.kpiHabitCheckIns}：${effectiveCopy.timesCount(habitDoneInRange)}',
+      )
+      ..writeln(
+        '- ${effectiveCopy.kpiDiary}：${effectiveCopy.diaryEntriesCount(diaryInRange)}',
+      )
+      ..writeln(
+        '- ${effectiveCopy.kpiTimeFootprint}：${effectiveCopy.minutesCount(auditTotalMinutes)}',
+      )
       ..writeln();
 
     if (categories.isNotEmpty) {
       sb
-        ..writeln('## 时间投入分布')
+        ..writeln(effectiveCopy.markdownTimeDistribution)
         ..writeln();
+      final colon = effectiveCopy.markdownColon;
       for (final entry in categories) {
-        sb.writeln('- ${entry.key.label}：${_formatDuration(entry.value)}');
+        sb.writeln(
+          '- ${effectiveCopy.categoryLabel(entry.key)}$colon${effectiveCopy.formatDuration(entry.value)}',
+        );
       }
       sb.writeln();
     }
 
     if (entries.isNotEmpty) {
       sb
-        ..writeln('## 最近时间记录')
+        ..writeln(effectiveCopy.markdownRecentRecords)
         ..writeln();
       for (final entry in entries.take(8)) {
         sb.writeln(
-          '- ${_formatDateTime(entry.startAt)} ${entry.title} · '
-          '${entry.category.label} · ${_formatDuration(entry.durationSeconds)}',
+          '- ${effectiveCopy.formatShortDateTime(entry.startAt)} ${entry.title} · '
+          '${effectiveCopy.categoryLabel(entry.category)} · ${effectiveCopy.formatDuration(entry.durationSeconds)}',
         );
       }
       sb.writeln();
@@ -2597,7 +3288,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
     if (completedTodos.isNotEmpty) {
       sb
-        ..writeln('## 已完成待办')
+        ..writeln(effectiveCopy.markdownCompletedTodos)
         ..writeln();
       for (final todo in completedTodos.take(12)) {
         sb.writeln('- [x] ${todo.title}');
@@ -2608,22 +3299,22 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return sb.toString();
   }
 
-  String _formatDate(DateTime d) => I18nDateFormat.date(d);
-
   Widget _buildFocusSeries({
     required List<PomodoroSession> sessions,
     required _Range range,
     required DateTime start,
     required DateTime end,
     required ColorScheme cs,
+    StatisticsUiCopy? copy,
   }) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final buckets = <String, int>{};
     DateTime cursor = DateTime(start.year, start.month, start.day);
     final endNorm = DateTime(end.year, end.month, end.day);
 
     if (range == _Range.year) {
       for (int m = 1; m <= DateTime.now().month; m++) {
-        buckets['$m月'] = 0;
+        buckets[effectiveCopy.monthNumberLabel(m)] = 0;
       }
     } else {
       while (!cursor.isAfter(endNorm)) {
@@ -2635,13 +3326,16 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
     for (final s in sessions) {
       final k = range == _Range.year
-          ? '${s.startTime.month}月'
+          ? effectiveCopy.monthNumberLabel(s.startTime.month)
           : '${s.startTime.month}/${s.startTime.day}';
       buckets[k] = (buckets[k] ?? 0) + (s.durationSeconds ~/ 60);
     }
 
     if (buckets.values.every((v) => v == 0)) {
-      return const EmptyHint(icon: Icons.timer_outlined, message: '暂无专注数据');
+      return EmptyHint(
+        icon: Icons.timer_outlined,
+        message: effectiveCopy.noFocusData,
+      );
     }
 
     final entries = buckets.entries.toList();
@@ -2661,7 +3355,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               reservedSize: 30,
               getTitlesWidget: (v, _) => Text(
                 v.toInt().toString(),
-                style: const TextStyle(fontSize: 9),
+                style: const TextStyle(
+                  fontSize: 9,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
               ),
             ),
           ),
@@ -2712,10 +3409,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 }
 
 class _ReportShareDialog extends StatefulWidget {
-  final String markdown;
-  final Widget child;
+  final String Function(StatisticsUiCopy copy)? markdownBuilder;
+  final Widget? child;
+  final Widget Function(StatisticsUiCopy copy)? cardBuilder;
 
-  const _ReportShareDialog({required this.markdown, required this.child});
+  const _ReportShareDialog({this.markdownBuilder, this.child, this.cardBuilder})
+    : assert(
+        child != null || cardBuilder != null,
+        'Either child or cardBuilder must be provided',
+      );
 
   @override
   State<_ReportShareDialog> createState() => _ReportShareDialogState();
@@ -2725,57 +3427,139 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
   final GlobalKey _cardKey = GlobalKey();
   _ReportPdfTemplate _pdfTemplate = _ReportPdfTemplate.visual;
   bool _saving = false;
+  late final int _originAccountGeneration;
+  ModalRoute<dynamic>? _dialogRoute;
+  StatisticsUiCopy? _frozenExportCopy;
+  AppLockProvider? _appLock;
+  AppUpdateService? _appUpdate;
+
+  @override
+  void initState() {
+    super.initState();
+    _originAccountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _dialogRoute ??= ModalRoute.of(context);
+    try {
+      _appLock ??= context.read<AppLockProvider?>();
+    } catch (_) {}
+    try {
+      _appUpdate ??= context.read<AppUpdateService?>();
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _isAppAccessAllowed {
+    if (_appLock?.isLocked == true) return false;
+    if (_appUpdate?.mustUpdate == true) return false;
+    return true;
+  }
+
+  bool _isOriginValid() {
+    if (!mounted) return false;
+    if (!_isAppAccessAllowed) return false;
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      _originAccountGeneration,
+    )) {
+      return false;
+    }
+    final route = _dialogRoute ?? (mounted ? ModalRoute.of(context) : null);
+    if (route != null && !route.isCurrent) {
+      return false;
+    }
+    return true;
+  }
+
+  void _onClose() {
+    if (_saving || !_isOriginValid()) return;
+    final route = _dialogRoute ?? (mounted ? ModalRoute.of(context) : null);
+    if (route != null && route.isCurrent) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  String _resolvedMarkdown([StatisticsUiCopy? copy]) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
+    return widget.markdownBuilder?.call(effectiveCopy) ?? '';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final liveCopy = StatisticsUiCopy.current(
+      datePattern: AppDateFormat.patternOf(context),
+    );
+    final cardCopy = _frozenExportCopy ?? liveCopy;
     return AppDialog(
-      title: const Text('报告分享图'),
+      title: Text(liveCopy.shareDialogTitle),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            RepaintBoundary(key: _cardKey, child: widget.child),
+            RepaintBoundary(
+              key: _cardKey,
+              child: widget.cardBuilder?.call(cardCopy) ?? widget.child!,
+            ),
             const SizedBox(height: 14),
-            const Text(
-              'PDF 模板',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+            Text(
+              liveCopy.pdfTemplate,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
+              ),
             ),
             const SizedBox(height: 8),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: SegmentedButton<_ReportPdfTemplate>(
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: _ReportPdfTemplate.visual,
-                    icon: Icon(Icons.image_outlined, size: 16),
-                    label: Text('视觉版'),
+                    icon: const Icon(Icons.image_outlined, size: 16),
+                    label: Text(liveCopy.pdfTemplateVisual),
                   ),
                   ButtonSegment(
                     value: _ReportPdfTemplate.archive,
-                    icon: Icon(Icons.text_snippet_outlined, size: 16),
-                    label: Text('归档版'),
+                    icon: const Icon(Icons.text_snippet_outlined, size: 16),
+                    label: Text(liveCopy.pdfTemplateArchive),
                   ),
                   ButtonSegment(
                     value: _ReportPdfTemplate.briefing,
-                    icon: Icon(Icons.dashboard_customize_outlined, size: 16),
-                    label: Text('简报版'),
+                    icon: const Icon(
+                      Icons.dashboard_customize_outlined,
+                      size: 16,
+                    ),
+                    label: Text(liveCopy.pdfTemplateBriefing),
                   ),
                   ButtonSegment(
                     value: _ReportPdfTemplate.dashboard,
-                    icon: Icon(Icons.space_dashboard_outlined, size: 16),
-                    label: Text('仪表版'),
+                    icon: const Icon(Icons.space_dashboard_outlined, size: 16),
+                    label: Text(liveCopy.pdfTemplateDashboard),
                   ),
                   ButtonSegment(
                     value: _ReportPdfTemplate.timeline,
-                    icon: Icon(Icons.timeline_outlined, size: 16),
-                    label: Text('时间线版'),
+                    icon: const Icon(Icons.timeline_outlined, size: 16),
+                    label: Text(liveCopy.pdfTemplateTimeline),
                   ),
                 ],
                 selected: {_pdfTemplate},
                 onSelectionChanged: _saving
                     ? null
                     : (selected) {
+                        if (!mounted || _saving || !_isOriginValid()) return;
                         setState(() => _pdfTemplate = selected.single);
                       },
               ),
@@ -2785,18 +3569,21 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _saving ? null : () => Navigator.pop(context),
-          child: const Text('关闭'),
+          onPressed: _saving ? null : _onClose,
+          child: Text(
+            liveCopy.close,
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+          ),
         ),
         TextButton.icon(
           onPressed: _saving ? null : _copyMarkdown,
           icon: const Icon(Icons.copy, size: 16),
-          label: const Text('复制文案'),
+          label: Text(liveCopy.copyMarkdownAction),
         ),
         OutlinedButton.icon(
           onPressed: _saving ? null : _savePdf,
           icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
-          label: const Text('保存 PDF'),
+          label: Text(liveCopy.savePdfAction),
         ),
         FilledButton.icon(
           onPressed: _saving ? null : _savePng,
@@ -2807,109 +3594,294 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.image_outlined, size: 16),
-          label: const Text('保存 PNG'),
+          label: Text(liveCopy.savePngAction),
         ),
       ],
     );
   }
 
   Future<void> _copyMarkdown() async {
-    await Clipboard.setData(ClipboardData(text: widget.markdown));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('报告文案已复制'),
-        behavior: SnackBarBehavior.floating,
-      ),
+    if (_saving || !_isOriginValid()) return;
+    final exportCopy = StatisticsUiCopy(
+      I18n.current,
+      datePattern: AppDateFormat.readPattern(context),
     );
+    final text = _resolvedMarkdown(exportCopy);
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (!mounted || !_isOriginValid()) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: ValueListenableBuilder<AppLocale>(
+              valueListenable: I18n.localeListenable,
+              builder: (context, locale, _) {
+                final copy = StatisticsUiCopy(locale);
+                return Text(copy.markdownCopiedNotice);
+              },
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } catch (_) {
+      if (!mounted || !_isOriginValid()) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: ValueListenableBuilder<AppLocale>(
+              valueListenable: I18n.localeListenable,
+              builder: (context, locale, _) {
+                final copy = StatisticsUiCopy(locale);
+                return Text(copy.exportFailedRetry);
+              },
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
   }
 
   Future<void> _savePng() async {
-    setState(() => _saving = true);
+    if (_saving || !_isOriginValid()) return;
+    final exportCopy = StatisticsUiCopy(
+      I18n.current,
+      datePattern: AppDateFormat.readPattern(context),
+    );
+    setState(() {
+      _saving = true;
+      _frozenExportCopy = exportCopy;
+    });
     try {
+      final completer = Completer<void>();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!completer.isCompleted) completer.complete();
+      });
+      await Future.any([completer.future, WidgetsBinding.instance.endOfFrame]);
+      if (!mounted || !_isOriginValid()) return;
+
       final bytes = await _captureCardPngBytes();
-      if (bytes == null) return;
+      if (bytes == null || !_isOriginValid()) return;
+
+      final fileName =
+          'duoyi_report_${DateTime.now().millisecondsSinceEpoch}.png';
+      if (kIsWeb) {
+        final result = await WebFileDownload.saveBytes(
+          bytes: bytes,
+          fileName: fileName,
+          mimeType: 'image/png',
+          shareText: _resolvedMarkdown(exportCopy),
+          shareSubject: exportCopy.shareSubject,
+          canProceed: () => mounted && _isOriginValid(),
+        );
+        if (!mounted || !_isOriginValid() || !result.saved) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(exportCopy.shareImageSaved(fileName))),
+        );
+        return;
+      }
+
       final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/duoyi_report_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
+      if (!mounted || !_isOriginValid()) return;
+
+      final file = File('${dir.path}/$fileName');
       await file.writeAsBytes(bytes, flush: true);
-      await Clipboard.setData(ClipboardData(text: file.path));
+      if (!mounted || !_isOriginValid()) return;
+
+      final filePath = file.path;
+      await Clipboard.setData(ClipboardData(text: filePath));
+      if (!mounted || !_isOriginValid()) return;
+
       await SharePlus.instance.share(
         ShareParams(
-          files: [XFile(file.path)],
-          text: widget.markdown,
-          subject: '多仪时光报告',
+          files: [XFile(filePath)],
+          text: _resolvedMarkdown(exportCopy),
+          subject: exportCopy.shareSubject,
         ),
       );
-      if (!mounted) return;
+      if (!mounted || !_isOriginValid()) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('分享图已保存并打开系统分享面板，路径已复制：${file.path}'),
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, locale, _) {
+              final copy = StatisticsUiCopy(locale);
+              return Text(copy.shareImageSaved(filePath));
+            },
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      if (!mounted || !_isOriginValid()) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, locale, _) {
+              final copy = StatisticsUiCopy(locale);
+              return Text(copy.exportFailedRetry);
+            },
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _frozenExportCopy = null;
+        });
+      }
     }
   }
 
   Future<void> _savePdf() async {
-    setState(() => _saving = true);
+    if (_saving || !_isOriginValid()) return;
+    final exportTemplate = _pdfTemplate;
+    final exportCopy = StatisticsUiCopy(
+      I18n.current,
+      datePattern: AppDateFormat.readPattern(context),
+    );
+    setState(() {
+      _saving = true;
+      _frozenExportCopy = exportCopy;
+    });
     try {
-      final imageBytes = _pdfTemplate == _ReportPdfTemplate.visual
-          ? await _captureCardPngBytes()
-          : null;
-      if (_pdfTemplate == _ReportPdfTemplate.visual && imageBytes == null) {
+      Uint8List? imageBytes;
+      if (exportTemplate == _ReportPdfTemplate.visual) {
+        final completer = Completer<void>();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!completer.isCompleted) completer.complete();
+        });
+        await Future.any([
+          completer.future,
+          WidgetsBinding.instance.endOfFrame,
+        ]);
+        if (!mounted || !_isOriginValid()) return;
+
+        imageBytes = await _captureCardPngBytes();
+        if (imageBytes == null || !_isOriginValid()) return;
+      }
+
+      if (!mounted || !_isOriginValid()) return;
+
+      final doc = await _buildPdfDocument(
+        template: exportTemplate,
+        imageBytes: imageBytes,
+        copy: exportCopy,
+      );
+      if (!mounted || !_isOriginValid()) return;
+
+      final pdfBytes = await doc.save();
+      if (!mounted || !_isOriginValid()) return;
+
+      final fileName =
+          'duoyi_report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      if (kIsWeb) {
+        final result = await WebFileDownload.saveBytes(
+          bytes: pdfBytes,
+          fileName: fileName,
+          mimeType: 'application/pdf',
+          shareText: _resolvedMarkdown(exportCopy),
+          shareSubject: exportCopy.sharePdfSubject,
+          canProceed: () => mounted && _isOriginValid(),
+        );
+        if (!mounted || !_isOriginValid() || !result.saved) return;
+        final templateLabel = _reportPdfTemplateLabel(
+          exportTemplate,
+          exportCopy,
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(exportCopy.sharePdfSaved(templateLabel, fileName)),
+          ),
+        );
         return;
       }
-      final doc = await _buildPdfDocument(
-        template: _pdfTemplate,
-        imageBytes: imageBytes,
-      );
+
       final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/duoyi_report_${DateTime.now().millisecondsSinceEpoch}.pdf',
-      );
-      await file.writeAsBytes(await doc.save(), flush: true);
-      await Clipboard.setData(ClipboardData(text: file.path));
+      if (!mounted || !_isOriginValid()) return;
+
+      final file = File('${dir.path}/$fileName');
+      await file.writeAsBytes(pdfBytes, flush: true);
+      if (!mounted || !_isOriginValid()) return;
+
+      final filePath = file.path;
+      await Clipboard.setData(ClipboardData(text: filePath));
+      if (!mounted || !_isOriginValid()) return;
+
       await SharePlus.instance.share(
         ShareParams(
-          files: [XFile(file.path)],
-          text: widget.markdown,
-          subject: '多仪时光报告 PDF',
+          files: [XFile(filePath)],
+          text: _resolvedMarkdown(exportCopy),
+          subject: exportCopy.sharePdfSubject,
         ),
       );
-      if (!mounted) return;
-      final templateLabel = _reportPdfTemplateLabel(_pdfTemplate);
+      if (!mounted || !_isOriginValid()) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$templateLabel PDF 报告已保存并打开系统分享面板，路径已复制：${file.path}'),
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, locale, _) {
+              final copy = StatisticsUiCopy(locale);
+              final templateLabel = _reportPdfTemplateLabel(
+                exportTemplate,
+                copy,
+              );
+              return Text(copy.sharePdfSaved(templateLabel, filePath));
+            },
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      if (!mounted || !_isOriginValid()) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, locale, _) {
+              final copy = StatisticsUiCopy(locale);
+              return Text(copy.exportFailedRetry);
+            },
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _frozenExportCopy = null;
+        });
+      }
     }
   }
 
   Future<pw.Document> _buildPdfDocument({
     required _ReportPdfTemplate template,
     Uint8List? imageBytes,
+    required StatisticsUiCopy copy,
   }) async {
-    final fontData = await rootBundle.load(
+    final latinFontData = await rootBundle.load('assets/fonts/DejaVuSans.ttf');
+    final cjkFontData = await rootBundle.load(
       'assets/fonts/DroidSansFallbackFull.ttf',
     );
-    final cjkFont = pw.Font.ttf(fontData);
+    final latinFont = pw.Font.ttf(latinFontData);
+    final cjkFont = pw.Font.ttf(cjkFontData);
     final doc = pw.Document(
-      title: '多仪时光报告',
-      author: '多仪',
+      title: copy.shareReportTitle,
+      author: copy.isEn ? 'Duoyi' : '多仪',
       creator: 'Duoyi',
-      subject: '${_reportPdfTemplateLabel(template)} PDF',
+      subject: '${_reportPdfTemplateLabel(template, copy)} PDF',
       keywords: 'duoyi, productivity, report, markdown, searchable',
       theme: pw.ThemeData.withFont(
-        base: cjkFont,
-        bold: cjkFont,
+        base: latinFont,
+        bold: latinFont,
         fontFallback: [cjkFont],
       ),
     );
@@ -2926,6 +3898,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
       );
     }
 
+    final brandName = copy.isEn ? 'Duoyi' : '多仪';
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
@@ -2933,28 +3906,52 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
         footer: (context) => pw.Align(
           alignment: pw.Alignment.centerRight,
           child: pw.Text(
-            '多仪 · ${_reportPdfTemplateLabel(template)} · ${context.pageNumber}/${context.pagesCount}',
+            '$brandName · ${_reportPdfTemplateLabel(template, copy)} · ${context.pageNumber}/${context.pagesCount}',
             style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
           ),
         ),
         build: (_) => switch (template) {
-          _ReportPdfTemplate.briefing => _buildBriefingPdfContent(),
-          _ReportPdfTemplate.dashboard => _buildDashboardPdfContent(),
-          _ReportPdfTemplate.timeline => _buildTimelinePdfContent(),
-          _ => _buildSearchablePdfContent(template),
+          _ReportPdfTemplate.briefing => _buildBriefingPdfContent(copy),
+          _ReportPdfTemplate.dashboard => _buildDashboardPdfContent(copy),
+          _ReportPdfTemplate.timeline => _buildTimelinePdfContent(copy),
+          _ => _buildSearchablePdfContent(template, copy),
         },
       ),
     );
     return doc;
   }
 
-  List<pw.Widget> _buildBriefingPdfContent() {
-    final title = _markdownTitle();
-    final range = _markdownLineStartsWith('范围：') ?? '范围：未指定';
-    final overview = _markdownSectionItems('概览');
-    final categories = _markdownSectionItems('时间投入分布').take(4).toList();
-    final records = _markdownSectionItems('最近时间记录').take(5).toList();
-    final todos = _markdownSectionItems('已完成待办').take(6).toList();
+  List<pw.Widget> _buildBriefingPdfContent(StatisticsUiCopy copy) {
+    final markdown = _resolvedMarkdown(copy);
+    final title = _markdownTitle(markdown, copy);
+    final range =
+        _markdownLineStartsWith(markdown, [
+          copy.markdownRangePrefix,
+          '范围：',
+          'Range:',
+        ]) ??
+        '${copy.markdownRangePrefix} ${copy.unspecifiedRange}';
+    final overview = _markdownSectionItems(markdown, [
+      copy.markdownOverviewTitle,
+      '概览',
+      'Overview',
+    ]);
+    final categories = _markdownSectionItems(markdown, [
+      copy.markdownTimeDistributionTitle,
+      '时间投入分布',
+      'Time Distribution',
+    ]).take(4).toList();
+    final records = _markdownSectionItems(markdown, [
+      copy.markdownRecentRecordsTitle,
+      '最近时间记录',
+      'Recent Time Entries',
+      'Recent Records',
+    ]).take(5).toList();
+    final todos = _markdownSectionItems(markdown, [
+      copy.markdownCompletedTodosTitle,
+      '已完成待办',
+      'Completed Todos',
+    ]).take(6).toList();
 
     return [
       pw.Container(
@@ -2968,7 +3965,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              '简报版',
+              copy.pdfTemplateBriefing,
               style: const pw.TextStyle(
                 fontSize: 11,
                 color: PdfColors.blueGrey100,
@@ -3013,11 +4010,11 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
         ],
       ),
       pw.SizedBox(height: 18),
-      _buildBriefingSection('时间投入重点', categories),
+      _buildBriefingSection(copy.pdfBriefingTimeFocus, categories, copy),
       pw.SizedBox(height: 12),
-      _buildBriefingSection('最近记录', records),
+      _buildBriefingSection(copy.pdfBriefingRecentRecords, records, copy),
       pw.SizedBox(height: 12),
-      _buildBriefingSection('完成事项', todos),
+      _buildBriefingSection(copy.pdfBriefingCompletedItems, todos, copy),
       pw.SizedBox(height: 18),
       pw.Container(
         padding: const pw.EdgeInsets.all(12),
@@ -3027,14 +4024,18 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
           border: pw.Border.all(color: PdfColors.amber200),
         ),
         child: pw.Text(
-          '这份简报保留可检索文字层，适合快速复盘、转发和归档。',
+          copy.pdfBriefingNotice,
           style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
         ),
       ),
     ];
   }
 
-  pw.Widget _buildBriefingSection(String title, List<String> items) {
+  pw.Widget _buildBriefingSection(
+    String title,
+    List<String> items,
+    StatisticsUiCopy copy,
+  ) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -3045,7 +4046,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
         pw.SizedBox(height: 7),
         if (items.isEmpty)
           pw.Text(
-            '暂无数据',
+            copy.noData,
             style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
           )
         else
@@ -3069,13 +4070,37 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
     );
   }
 
-  List<pw.Widget> _buildDashboardPdfContent() {
-    final title = _markdownTitle();
-    final range = _markdownLineStartsWith('范围：') ?? '范围：未指定';
-    final overview = _markdownSectionItems('概览');
-    final categories = _markdownSectionItems('时间投入分布').take(5).toList();
-    final records = _markdownSectionItems('最近时间记录').take(3).toList();
-    final todos = _markdownSectionItems('已完成待办').take(4).toList();
+  List<pw.Widget> _buildDashboardPdfContent(StatisticsUiCopy copy) {
+    final markdown = _resolvedMarkdown(copy);
+    final title = _markdownTitle(markdown, copy);
+    final range =
+        _markdownLineStartsWith(markdown, [
+          copy.markdownRangePrefix,
+          '范围：',
+          'Range:',
+        ]) ??
+        '${copy.markdownRangePrefix} ${copy.unspecifiedRange}';
+    final overview = _markdownSectionItems(markdown, [
+      copy.markdownOverviewTitle,
+      '概览',
+      'Overview',
+    ]);
+    final categories = _markdownSectionItems(markdown, [
+      copy.markdownTimeDistributionTitle,
+      '时间投入分布',
+      'Time Distribution',
+    ]).take(5).toList();
+    final records = _markdownSectionItems(markdown, [
+      copy.markdownRecentRecordsTitle,
+      '最近时间记录',
+      'Recent Time Entries',
+      'Recent Records',
+    ]).take(3).toList();
+    final todos = _markdownSectionItems(markdown, [
+      copy.markdownCompletedTodosTitle,
+      '已完成待办',
+      'Completed Todos',
+    ]).take(4).toList();
 
     return [
       pw.Container(
@@ -3089,7 +4114,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              '仪表版',
+              copy.pdfTemplateDashboard,
               style: const pw.TextStyle(
                 fontSize: 11,
                 color: PdfColors.indigo50,
@@ -3114,7 +4139,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
       ),
       pw.SizedBox(height: 18),
       pw.Text(
-        '核心指标',
+        copy.pdfDashboardCoreMetrics,
         style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.normal),
       ),
       pw.SizedBox(height: 8),
@@ -3132,9 +4157,9 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
         children: [
           pw.Expanded(
             child: _buildDashboardPanel(
-              '时间投入排行',
+              copy.pdfDashboardRanking,
               categories.isEmpty
-                  ? [_buildPdfMutedText('暂无时间投入数据')]
+                  ? [_buildPdfMutedText(copy.noTimeInvestmentData)]
                   : [
                       for (var i = 0; i < categories.length; i++)
                         _buildDashboardRankItem(categories[i], i),
@@ -3143,12 +4168,12 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
           ),
           pw.SizedBox(width: 12),
           pw.Expanded(
-            child: _buildDashboardPanel('近期推进', [
+            child: _buildDashboardPanel(copy.pdfDashboardRecentProgress, [
               ...records.map((item) => _buildPdfBullet(item)),
-              if (records.isEmpty) _buildPdfMutedText('暂无最近时间记录'),
+              if (records.isEmpty) _buildPdfMutedText(copy.noTimeEntries),
               pw.SizedBox(height: 8),
               pw.Text(
-                '完成事项',
+                copy.pdfBriefingCompletedItems,
                 style: pw.TextStyle(
                   fontSize: 11,
                   fontWeight: pw.FontWeight.normal,
@@ -3156,7 +4181,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
               ),
               pw.SizedBox(height: 4),
               ...todos.map((item) => _buildPdfBullet(item)),
-              if (todos.isEmpty) _buildPdfMutedText('暂无完成待办'),
+              if (todos.isEmpty) _buildPdfMutedText(copy.noCompletedTodos),
             ]),
           ),
         ],
@@ -3170,7 +4195,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
           border: pw.Border.all(color: PdfColors.indigo100),
         ),
         child: pw.Text(
-          '仪表版适合复盘关键指标和投入结构，保留可检索中文文字层。',
+          copy.pdfDashboardNotice,
           style: const pw.TextStyle(fontSize: 10, color: PdfColors.indigo900),
         ),
       ),
@@ -3178,9 +4203,12 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
   }
 
   pw.Widget _buildDashboardMetricCard(String item, int index) {
-    final parts = item.split('：');
+    final delimiter = item.contains('：') ? '：' : ':';
+    final parts = item.split(delimiter);
     final title = parts.first.trim();
-    final value = parts.length > 1 ? parts.sublist(1).join('：').trim() : item;
+    final value = parts.length > 1
+        ? parts.sublist(1).join(delimiter).trim()
+        : item;
     final colors = [
       PdfColors.indigo50,
       PdfColors.green50,
@@ -3273,13 +4301,37 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
     );
   }
 
-  List<pw.Widget> _buildTimelinePdfContent() {
-    final title = _markdownTitle();
-    final range = _markdownLineStartsWith('范围：') ?? '范围：未指定';
-    final overview = _markdownSectionItems('概览');
-    final records = _markdownSectionItems('最近时间记录').take(8).toList();
-    final todos = _markdownSectionItems('已完成待办').take(10).toList();
-    final categories = _markdownSectionItems('时间投入分布').take(4).toList();
+  List<pw.Widget> _buildTimelinePdfContent(StatisticsUiCopy copy) {
+    final markdown = _resolvedMarkdown(copy);
+    final title = _markdownTitle(markdown, copy);
+    final range =
+        _markdownLineStartsWith(markdown, [
+          copy.markdownRangePrefix,
+          '范围：',
+          'Range:',
+        ]) ??
+        '${copy.markdownRangePrefix} ${copy.unspecifiedRange}';
+    final overview = _markdownSectionItems(markdown, [
+      copy.markdownOverviewTitle,
+      '概览',
+      'Overview',
+    ]);
+    final records = _markdownSectionItems(markdown, [
+      copy.markdownRecentRecordsTitle,
+      '最近时间记录',
+      'Recent Time Entries',
+      'Recent Records',
+    ]).take(8).toList();
+    final todos = _markdownSectionItems(markdown, [
+      copy.markdownCompletedTodosTitle,
+      '已完成待办',
+      'Completed Todos',
+    ]).take(10).toList();
+    final categories = _markdownSectionItems(markdown, [
+      copy.markdownTimeDistributionTitle,
+      '时间投入分布',
+      'Time Distribution',
+    ]).take(4).toList();
 
     return [
       pw.Row(
@@ -3292,7 +4344,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  '时间线版',
+                  copy.pdfTemplateTimeline,
                   style: const pw.TextStyle(
                     fontSize: 11,
                     color: PdfColors.teal700,
@@ -3335,21 +4387,33 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
       ),
       pw.SizedBox(height: 18),
       pw.Text(
-        '最近时间记录',
+        copy.pdfTimelineRecentRecords,
         style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.normal),
       ),
       pw.SizedBox(height: 9),
       if (records.isEmpty)
-        _buildPdfMutedText('暂无最近时间记录')
+        _buildPdfMutedText(copy.noTimeEntries)
       else
         for (final item in records) _buildTimelineItem(item),
       pw.SizedBox(height: 14),
       pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Expanded(child: _buildTimelineSideSection('完成事项', todos)),
+          pw.Expanded(
+            child: _buildTimelineSideSection(
+              copy.pdfBriefingCompletedItems,
+              todos,
+              copy,
+            ),
+          ),
           pw.SizedBox(width: 12),
-          pw.Expanded(child: _buildTimelineSideSection('时间投入', categories)),
+          pw.Expanded(
+            child: _buildTimelineSideSection(
+              copy.timeInvestment,
+              categories,
+              copy,
+            ),
+          ),
         ],
       ),
       pw.SizedBox(height: 16),
@@ -3361,7 +4425,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
           border: pw.Border.all(color: PdfColors.teal100),
         ),
         child: pw.Text(
-          '时间线版适合按行动顺序复盘过程，兼顾记录流、完成事项和投入结构。',
+          copy.pdfTimelineNotice,
           style: const pw.TextStyle(fontSize: 10, color: PdfColors.teal900),
         ),
       ),
@@ -3407,7 +4471,11 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
     );
   }
 
-  pw.Widget _buildTimelineSideSection(String title, List<String> items) {
+  pw.Widget _buildTimelineSideSection(
+    String title,
+    List<String> items,
+    StatisticsUiCopy copy,
+  ) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(11),
       decoration: pw.BoxDecoration(
@@ -3424,7 +4492,7 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
           ),
           pw.SizedBox(height: 7),
           if (items.isEmpty)
-            _buildPdfMutedText('暂无数据')
+            _buildPdfMutedText(copy.noData)
           else
             ...items.map((item) => _buildPdfBullet(item)),
         ],
@@ -3457,16 +4525,23 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
     );
   }
 
-  List<pw.Widget> _buildSearchablePdfContent(_ReportPdfTemplate template) {
-    final lines = widget.markdown.split('\n');
+  List<pw.Widget> _buildSearchablePdfContent(
+    _ReportPdfTemplate template,
+    StatisticsUiCopy copy,
+  ) {
+    final lines = _resolvedMarkdown(copy).split('\n');
     final widgets = <pw.Widget>[
       pw.Text(
-        template == _ReportPdfTemplate.visual ? '可检索文字层' : '多仪时光报告',
+        template == _ReportPdfTemplate.visual
+            ? copy.pdfSearchableLayerTitle
+            : copy.shareReportTitle,
         style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.normal),
       ),
       pw.SizedBox(height: 6),
       pw.Text(
-        '模板：${_reportPdfTemplateLabel(template)}',
+        copy.pdfSearchableTemplateLabel(
+          _reportPdfTemplateLabel(template, copy),
+        ),
         style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
       ),
       pw.SizedBox(height: 14),
@@ -3534,29 +4609,32 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
     return widgets;
   }
 
-  String _markdownTitle() {
-    for (final raw in widget.markdown.split('\n')) {
+  String _markdownTitle(String markdown, StatisticsUiCopy copy) {
+    for (final raw in markdown.split('\n')) {
       final line = raw.trim();
       if (line.startsWith('# ')) return line.substring(2).trim();
     }
-    return '多仪时光报告';
+    return copy.shareReportTitle;
   }
 
-  String? _markdownLineStartsWith(String prefix) {
-    for (final raw in widget.markdown.split('\n')) {
+  String? _markdownLineStartsWith(String markdown, List<String> prefixes) {
+    for (final raw in markdown.split('\n')) {
       final line = raw.trim();
-      if (line.startsWith(prefix)) return line;
+      for (final prefix in prefixes) {
+        if (line.startsWith(prefix)) return line;
+      }
     }
     return null;
   }
 
-  List<String> _markdownSectionItems(String heading) {
+  List<String> _markdownSectionItems(String markdown, List<String> headings) {
     final result = <String>[];
     var inSection = false;
-    for (final raw in widget.markdown.split('\n')) {
+    for (final raw in markdown.split('\n')) {
       final line = raw.trim();
       if (line.startsWith('## ')) {
-        inSection = line.substring(3).trim() == heading;
+        final headingText = line.substring(3).trim();
+        inSection = headings.contains(headingText);
         continue;
       }
       if (!inSection) continue;
@@ -3569,14 +4647,19 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
     return result;
   }
 
-  String _reportPdfTemplateLabel(_ReportPdfTemplate template) =>
-      switch (template) {
-        _ReportPdfTemplate.visual => '视觉版',
-        _ReportPdfTemplate.archive => '归档版',
-        _ReportPdfTemplate.briefing => '简报版',
-        _ReportPdfTemplate.dashboard => '仪表版',
-        _ReportPdfTemplate.timeline => '时间线版',
-      };
+  String _reportPdfTemplateLabel(
+    _ReportPdfTemplate template, [
+    StatisticsUiCopy? copy,
+  ]) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
+    return switch (template) {
+      _ReportPdfTemplate.visual => effectiveCopy.pdfTemplateVisual,
+      _ReportPdfTemplate.archive => effectiveCopy.pdfTemplateArchive,
+      _ReportPdfTemplate.briefing => effectiveCopy.pdfTemplateBriefing,
+      _ReportPdfTemplate.dashboard => effectiveCopy.pdfTemplateDashboard,
+      _ReportPdfTemplate.timeline => effectiveCopy.pdfTemplateTimeline,
+    };
+  }
 
   Future<Uint8List?> _captureCardPngBytes() async {
     final boundary =
@@ -3589,27 +4672,37 @@ class _ReportShareDialogState extends State<_ReportShareDialog> {
 }
 
 class _ReportShareCard extends StatelessWidget {
-  final String range;
+  final DateTime? start;
+  final DateTime? end;
   final int completedTodos;
   final int focusMinutes;
   final int habitDoneInRange;
   final int diaryInRange;
   final int auditTotalMinutes;
   final List<MapEntry<TimeEntryCategory, int>> topCategories;
+  final StatisticsUiCopy? copy;
 
   const _ReportShareCard({
-    required this.range,
+    this.start,
+    this.end,
     required this.completedTodos,
     required this.focusMinutes,
     required this.habitDoneInRange,
     required this.diaryInRange,
     required this.auditTotalMinutes,
     required this.topCategories,
+    this.copy,
   });
 
   @override
   Widget build(BuildContext context) {
+    final pattern = AppDateFormat.patternOf(context);
+    final effectiveCopy =
+        copy ?? StatisticsUiCopy.current(datePattern: pattern);
     final cs = Theme.of(context).colorScheme;
+    final rangeText = (start != null && end != null)
+        ? '${effectiveCopy.formatDate(start!)} - ${effectiveCopy.formatDate(end!)}'
+        : effectiveCopy.unspecifiedRange;
     return Container(
       width: 360,
       padding: const EdgeInsets.all(22),
@@ -3626,7 +4719,7 @@ class _ReportShareCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '多仪时光报告',
+            effectiveCopy.shareReportTitle,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.normal,
               color: cs.onSurface,
@@ -3634,7 +4727,7 @@ class _ReportShareCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            range,
+            rangeText,
             style: TextStyle(
               fontSize: 12,
               color: cs.onSurface.withValues(alpha: 0.58),
@@ -3645,17 +4738,32 @@ class _ReportShareCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _ShareMetric(label: '待办', value: '$completedTodos 项'),
-              _ShareMetric(label: '专注', value: '$focusMinutes 分'),
-              _ShareMetric(label: '习惯', value: '$habitDoneInRange 次'),
-              _ShareMetric(label: '日记', value: '$diaryInRange 篇'),
-              _ShareMetric(label: '足迹', value: '$auditTotalMinutes 分'),
+              _ShareMetric(
+                label: effectiveCopy.todos,
+                value: effectiveCopy.itemsCount(completedTodos),
+              ),
+              _ShareMetric(
+                label: effectiveCopy.focus,
+                value: effectiveCopy.minutesCount(focusMinutes),
+              ),
+              _ShareMetric(
+                label: effectiveCopy.habits,
+                value: effectiveCopy.timesCount(habitDoneInRange),
+              ),
+              _ShareMetric(
+                label: effectiveCopy.kpiDiary,
+                value: effectiveCopy.diaryEntriesCount(diaryInRange),
+              ),
+              _ShareMetric(
+                label: effectiveCopy.footprint,
+                value: effectiveCopy.minutesCount(auditTotalMinutes),
+              ),
             ],
           ),
           if (topCategories.isNotEmpty) ...[
             const SizedBox(height: 18),
             Text(
-              '时间投入',
+              effectiveCopy.timeInvestment,
               style: TextStyle(
                 fontSize: 12,
                 color: cs.onSurface.withValues(alpha: 0.62),
@@ -3669,19 +4777,19 @@ class _ReportShareCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        entry.key.label,
+                        effectiveCopy.categoryLabel(entry.key),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Text(_formatShareDuration(entry.value)),
+                    Text(effectiveCopy.formatDuration(entry.value)),
                   ],
                 ),
               ),
           ],
           const SizedBox(height: 14),
           Text(
-            '由多仪生成',
+            effectiveCopy.generatedByDuoyi,
             style: TextStyle(
               fontSize: 11,
               color: cs.onSurface.withValues(alpha: 0.44),
@@ -3690,13 +4798,6 @@ class _ReportShareCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatShareDuration(int seconds) {
-    if (seconds >= 3600) {
-      return '${(seconds / 3600).toStringAsFixed(seconds % 3600 == 0 ? 0 : 1)} 小时';
-    }
-    return '${(seconds / 60).toStringAsFixed(seconds % 60 == 0 ? 0 : 1)} 分钟';
   }
 }
 
@@ -3770,11 +4871,17 @@ class _QuadrantStat {
 class _QuadrantDistributionCard extends StatelessWidget {
   final List<_QuadrantStat> stats;
   final ColorScheme cs;
+  final StatisticsUiCopy? copy;
 
-  const _QuadrantDistributionCard({required this.stats, required this.cs});
+  const _QuadrantDistributionCard({
+    required this.stats,
+    required this.cs,
+    this.copy,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final total = stats.fold<int>(0, (sum, stat) => sum + stat.totalCount);
     final activeTotal = stats.fold<int>(
       0,
@@ -3797,14 +4904,17 @@ class _QuadrantDistributionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '四象限执行分布',
-                  style: TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+                  effectiveCopy.quadrantTitle,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.normal,
+                    fontSize: 13,
+                  ),
                 ),
               ),
               Text(
-                '当前待办池',
+                effectiveCopy.quadrantSubtitle,
                 style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.56),
                   fontSize: 11,
@@ -3814,7 +4924,7 @@ class _QuadrantDistributionCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '按重要/紧急象限拆解未完成压力、今日到期和已完成沉淀。',
+            effectiveCopy.quadrantDescription,
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
@@ -3822,23 +4932,44 @@ class _QuadrantDistributionCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _QuadrantMetric(label: '任务总数', value: '$total', cs: cs),
-              _QuadrantMetric(label: '未完成', value: '$activeTotal', cs: cs),
-              _QuadrantMetric(label: '逾期', value: '$overdueTotal', cs: cs),
-              _QuadrantMetric(label: '今日到期', value: '$dueTodayTotal', cs: cs),
+              _QuadrantMetric(
+                label: effectiveCopy.quadrantTotalTasks,
+                value: '$total',
+                cs: cs,
+              ),
+              _QuadrantMetric(
+                label: effectiveCopy.quadrantActive,
+                value: '$activeTotal',
+                cs: cs,
+              ),
+              _QuadrantMetric(
+                label: effectiveCopy.quadrantOverdue,
+                value: '$overdueTotal',
+                cs: cs,
+              ),
+              _QuadrantMetric(
+                label: effectiveCopy.quadrantDueToday,
+                value: '$dueTodayTotal',
+                cs: cs,
+              ),
             ],
           ),
           const SizedBox(height: 12),
           if (total == 0)
             Text(
-              '当前没有可统计的待办。新增任务并设置象限后，这里会显示优先级结构。',
+              effectiveCopy.quadrantEmpty,
               style: TextStyle(color: cs.onSurface.withValues(alpha: 0.58)),
             )
           else
             Column(
               children: [
                 for (final stat in stats)
-                  _QuadrantDistributionRow(stat: stat, total: total, cs: cs),
+                  _QuadrantDistributionRow(
+                    stat: stat,
+                    total: total,
+                    cs: cs,
+                    copy: effectiveCopy,
+                  ),
               ],
             ),
         ],
@@ -3893,15 +5024,18 @@ class _QuadrantDistributionRow extends StatelessWidget {
   final _QuadrantStat stat;
   final int total;
   final ColorScheme cs;
+  final StatisticsUiCopy? copy;
 
   const _QuadrantDistributionRow({
     required this.stat,
     required this.total,
     required this.cs,
+    this.copy,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final ratio = stat.shareOf(total).clamp(0.0, 1.0);
     final percent = (ratio * 100).round();
     return Padding(
@@ -3969,7 +5103,13 @@ class _QuadrantDistributionRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${stat.guidance} 未完成 ${stat.activeCount} 项，逾期 ${stat.overdueCount} 项，今日到期 ${stat.dueTodayCount} 项，完成 ${stat.completedCount} 项。',
+                  effectiveCopy.quadrantRowSummary(
+                    guidance: stat.guidance,
+                    active: stat.activeCount,
+                    overdue: stat.overdueCount,
+                    dueToday: stat.dueTodayCount,
+                    completed: stat.completedCount,
+                  ),
                   style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.62),
                     fontSize: 11,
@@ -4002,58 +5142,97 @@ class _Kpi extends StatelessWidget {
   final Color color;
   final String title;
   final String value;
+  final bool reflow;
+
   const _Kpi({
     required this.icon,
     required this.color,
     required this.title,
     required this.value,
+    this.reflow = false,
   });
+
+  static double maxTokenWidth(
+    String text,
+    TextStyle style,
+    TextScaler textScaler,
+    TextDirection textDirection,
+  ) {
+    var maxW = 0.0;
+    final tokens = RegExp(
+      r'[A-Za-z0-9%+.,−-]+|[^\x00-\x7F]',
+    ).allMatches(text).map((m) => m.group(0)!);
+    for (final token in tokens) {
+      final painter = TextPainter(
+        text: TextSpan(text: token, style: style),
+        textScaler: textScaler,
+        textDirection: textDirection,
+      )..layout();
+      if (painter.width > maxW) maxW = painter.width;
+      painter.dispose();
+    }
+    return maxW;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final style = appSurfaceStyleOf(context);
+    final titleColor = appSecondaryDescriptionColor(context);
+    final bodyMedium =
+        Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
+    final effectiveTitleStyle = bodyMedium.copyWith(
+      fontSize: 11,
+      color: titleColor,
+      fontWeight: FontWeight.normal,
+    );
+    final effectiveValueStyle = bodyMedium.copyWith(
+      fontSize: 16,
+      fontWeight: FontWeight.normal,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    final iconBox = Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(icon, color: color, size: 18),
+    );
+
     return AppSurfaceCard(
       padding: const EdgeInsets.all(10),
-      borderRadius: BorderRadius.circular(12),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
+      borderRadius: BorderRadius.circular(
+        style?.smallTileRadius ?? DesignTokens.radiusCard,
+      ),
+      child: reflow
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.normal,
+                iconBox,
+                const SizedBox(height: 6),
+                Text(title, style: effectiveTitleStyle),
+                const SizedBox(height: 2),
+                Text(value, style: effectiveValueStyle),
+              ],
+            )
+          : Row(
+              children: [
+                iconBox,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(title, style: effectiveTitleStyle),
+                      const SizedBox(height: 2),
+                      Text(value, style: effectiveValueStyle),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -4069,6 +5248,7 @@ class _PeriodReportDigestCard extends StatelessWidget {
   final VoidCallback onAiReview;
   final VoidCallback onOpenAiHistory;
   final VoidCallback onShareImage;
+  final StatisticsUiCopy? copy;
 
   const _PeriodReportDigestCard({
     required this.digest,
@@ -4081,13 +5261,18 @@ class _PeriodReportDigestCard extends StatelessWidget {
     required this.onAiReview,
     required this.onOpenAiHistory,
     required this.onShareImage,
+    this.copy,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
+    final presentation = PeriodReportPresentation(
+      digest,
+      isEnglish: effectiveCopy.isEn,
+    );
     return AppSurfaceCard(
       padding: const EdgeInsets.all(14),
-      borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -4109,14 +5294,14 @@ class _PeriodReportDigestCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      digest.title,
+                      presentation.title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.normal,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      digest.subtitle,
+                      presentation.subtitle,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
@@ -4128,7 +5313,7 @@ class _PeriodReportDigestCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          for (final line in digest.highlights.take(4))
+          for (final line in presentation.highlights.take(4))
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
@@ -4148,7 +5333,7 @@ class _PeriodReportDigestCard extends StatelessWidget {
               TextButton.icon(
                 onPressed: onCopy,
                 icon: const Icon(Icons.copy, size: 16),
-                label: const Text('复制报告'),
+                label: Text(effectiveCopy.copyReport),
               ),
               TextButton.icon(
                 onPressed: aiEnabled && !aiBusy ? onAiReview : null,
@@ -4159,25 +5344,25 @@ class _PeriodReportDigestCard extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.auto_awesome, size: 16),
-                label: const Text('AI 解读'),
+                label: Text(effectiveCopy.aiReview),
               ),
               TextButton.icon(
                 onPressed: onShareImage,
                 icon: const Icon(Icons.image_outlined, size: 16),
-                label: const Text('分享图'),
+                label: Text(effectiveCopy.shareImage),
               ),
               if (aiReview != null)
                 TextButton.icon(
                   onPressed: onOpenAiHistory,
                   icon: const Icon(Icons.history, size: 16),
-                  label: const Text('AI 历史'),
+                  label: Text(effectiveCopy.aiHistory),
                 ),
             ],
           ),
           if (!aiEnabled) ...[
             const SizedBox(height: 4),
             Text(
-              '管理员启用 AI 后可生成云端个性化解读',
+              effectiveCopy.aiDisabledMessage,
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
@@ -4210,7 +5395,7 @@ class _PeriodReportDigestCard extends StatelessWidget {
                       Icon(Icons.auto_awesome, size: 16, color: cs.primary),
                       const SizedBox(width: 6),
                       Text(
-                        '云端个性化解读',
+                        effectiveCopy.aiReviewHeading,
                         style: Theme.of(
                           context,
                         ).textTheme.labelLarge?.copyWith(color: cs.primary),
@@ -4298,15 +5483,18 @@ class _ProjectEfficiencyRow extends StatelessWidget {
   final ProjectEfficiencyItem item;
   final double maxOutputPerHour;
   final ColorScheme cs;
+  final StatisticsUiCopy? copy;
 
   const _ProjectEfficiencyRow({
     required this.item,
     required this.maxOutputPerHour,
     required this.cs,
+    this.copy,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final ratio = maxOutputPerHour <= 0
         ? 0.0
         : (item.outputPerHour / maxOutputPerHour).clamp(0.0, 1.0).toDouble();
@@ -4330,7 +5518,7 @@ class _ProjectEfficiencyRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                '${item.outputPerHour.toStringAsFixed(1)} 项/时',
+                effectiveCopy.itemsPerHour(item.outputPerHour),
                 style: TextStyle(
                   fontSize: 11,
                   color: cs.primary,
@@ -4341,7 +5529,12 @@ class _ProjectEfficiencyRow extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Text(
-            '输出 ${item.outputCount} 项 · 待办 ${item.completedTodos} · 目标 ${item.completedGoalSteps} · ${item.timeMinutes} 分',
+            effectiveCopy.projectEfficiencyItemSummary(
+              outputCount: item.outputCount,
+              completedTodos: item.completedTodos,
+              completedGoalSteps: item.completedGoalSteps,
+              timeMinutes: item.timeMinutes,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
@@ -4369,12 +5562,16 @@ class _ProductivityTrendPoint {
   final DateTime start;
   final DateTime end;
   final PeriodReport report;
+  final _Range? range;
+  final bool isCurrentPeriod;
 
   const _ProductivityTrendPoint({
     required this.label,
     required this.start,
     required this.end,
     required this.report,
+    this.range,
+    this.isCurrentPeriod = false,
   });
 
   int get score => report.productivityScore;
@@ -4383,22 +5580,45 @@ class _ProductivityTrendPoint {
   int get habitCheckIns => report.habitCheckIns;
   int get timeEntryMinutes => report.timeEntryMinutes;
 
-  String get dateRangeLabel {
+  String displayLabel([StatisticsUiCopy? copy]) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
+    if (isCurrentPeriod && range != null) {
+      return switch (range!) {
+        _Range.week => effectiveCopy.rangeWeek,
+        _Range.month => effectiveCopy.rangeMonth,
+        _Range.year => effectiveCopy.thisYear,
+      };
+    }
+    if (range == _Range.month) {
+      return effectiveCopy.monthNumberLabel(start.month);
+    }
+    return label;
+  }
+
+  String dateRangeLabel(StatisticsUiCopy copy) {
     final startText = '${start.month}/${start.day}';
     final endText = '${end.month}/${end.day}';
     if (start.year == end.year) return '$startText-$endText';
-    return '${start.year}/$startText-${end.year}/$endText';
+    return '${copy.formatDate(start)}-${copy.formatDate(end)}';
   }
 }
 
 class _ProductivityTrendCard extends StatelessWidget {
   final List<_ProductivityTrendPoint> points;
   final _Range range;
+  final StatisticsUiCopy? copy;
+  final VoidCallback? onOpenDetail;
 
-  const _ProductivityTrendCard({required this.points, required this.range});
+  const _ProductivityTrendCard({
+    required this.points,
+    required this.range,
+    this.copy,
+    this.onOpenDetail,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final cs = Theme.of(context).colorScheme;
     final latest = points.isEmpty ? null : points.last;
     final first = points.isEmpty ? null : points.first;
@@ -4407,129 +5627,272 @@ class _ProductivityTrendCard extends StatelessWidget {
     final delta = latest == null || first == null
         ? 0
         : latest.score - first.score;
+    final secondaryTextColor = appSecondaryDescriptionColor(context);
+
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      borderRadius: BorderRadius.circular(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 420;
+          final titleColumn = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Text(
+                effectiveCopy.productivityTrend,
+                style:
+                    (Theme.of(context).textTheme.bodyMedium ??
+                            const TextStyle())
+                        .copyWith(fontSize: 13, fontWeight: FontWeight.normal),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _trendSubtitle(effectiveCopy),
+                style:
+                    (Theme.of(context).textTheme.bodyMedium ??
+                            const TextStyle())
+                        .copyWith(fontSize: 11, color: secondaryTextColor),
+              ),
+            ],
+          );
+
+          final detailIconButton = IconButton(
+            tooltip: effectiveCopy.viewTrendDetail,
+            icon: const Icon(Icons.open_in_new, size: 18),
+            onPressed: points.isEmpty
+                ? null
+                : () {
+                    if (onOpenDetail != null) {
+                      onOpenDetail!();
+                      return;
+                    }
+                    if (!context.mounted) return;
+                    final route = ModalRoute.of(context);
+                    if (route != null && !route.isCurrent) return;
+                    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                      AccountLocalDataCleaner.accountDataGeneration,
+                    )) {
+                      return;
+                    }
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => _ProductivityTrendDetailScreen(
+                          points: points,
+                          range: range,
+                        ),
+                      ),
+                    );
+                  },
+          );
+
+          final textScaler = MediaQuery.textScalerOf(context);
+          final textDirection = Directionality.of(context);
+          final locale = Localizations.maybeLocaleOf(context);
+          final axisStyle =
+              (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+                  .copyWith(
+                    fontSize: 10,
+                    height: 1.2,
+                    fontWeight: FontWeight.normal,
+                    color: secondaryTextColor,
+                  );
+
+          double maxYLabelWidth = 0;
+          double maxYLabelHeight = 0;
+          for (final val in ['0', '25', '50', '75', '100']) {
+            final tp = TextPainter(
+              text: TextSpan(text: val, style: axisStyle),
+              textDirection: textDirection,
+              locale: locale,
+              textScaler: textScaler,
+            )..layout();
+            if (tp.width > maxYLabelWidth) maxYLabelWidth = tp.width;
+            if (tp.height > maxYLabelHeight) maxYLabelHeight = tp.height;
+            tp.dispose();
+          }
+
+          double maxBottomWidth = 0;
+          double maxBottomHeight = 0;
+          for (final point in points) {
+            final label = point.displayLabel(effectiveCopy);
+            final tp = TextPainter(
+              text: TextSpan(text: label, style: axisStyle),
+              textDirection: textDirection,
+              locale: locale,
+              textScaler: textScaler,
+            )..layout();
+            if (tp.width > maxBottomWidth) maxBottomWidth = tp.width;
+            if (tp.height > maxBottomHeight) maxBottomHeight = tp.height;
+            tp.dispose();
+          }
+
+          final leftReservedSize = math.max(38.0, maxYLabelWidth + 12.0);
+          final bottomReservedSize = math.max(32.0, maxBottomHeight + 12.0);
+          final minPlotHeight = math.max(140.0, maxYLabelHeight * 7.0 + 32.0);
+          final chartHeight = math.max(180.0, minPlotHeight + bottomReservedSize);
+          final pointCount = points.isEmpty ? 1 : points.length;
+          final minInterval = math.max(72.0, maxBottomWidth * 1.6 + 32.0);
+          final minPlotWidth = (pointCount - 1) * minInterval + 32.0;
+          final totalChartWidth = leftReservedSize + minPlotWidth + 24.0;
+          final chartWidth = math.max(constraints.maxWidth, totalChartWidth);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isNarrow) ...[
+                titleColumn,
+                const SizedBox(height: 6),
+                Row(
                   children: [
-                    const Text(
-                      '效率趋势',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.normal,
+                    if (latest != null)
+                      _TrendSummaryBadge(
+                        score: latest.score,
+                        delta: delta,
+                        copy: effectiveCopy,
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _trendSubtitle,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: cs.onSurface.withValues(alpha: 0.58),
-                      ),
-                    ),
+                    const Spacer(),
+                    detailIconButton,
                   ],
                 ),
-              ),
-              if (latest != null)
-                _TrendSummaryBadge(score: latest.score, delta: delta),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: '查看趋势详情',
-                icon: const Icon(Icons.open_in_new, size: 18),
-                onPressed: points.isEmpty
-                    ? null
-                    : () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => _ProductivityTrendDetailScreen(
-                            points: points,
-                            range: range,
+              ] else
+                Row(
+                  children: [
+                    Expanded(child: titleColumn),
+                    if (latest != null)
+                      _TrendSummaryBadge(
+                        score: latest.score,
+                        delta: delta,
+                        copy: effectiveCopy,
+                      ),
+                    const SizedBox(width: 8),
+                    detailIconButton,
+                  ],
+                ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: chartHeight,
+                child: points.isEmpty
+                    ? EmptyHint(
+                        icon: Icons.trending_up,
+                        message: effectiveCopy.noTrendData,
+                      )
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const ClampingScrollPhysics(),
+                        child: SizedBox(
+                          width: chartWidth,
+                          height: chartHeight,
+                          child: _buildChart(
+                            context,
+                            cs,
+                            effectiveCopy,
+                            leftReservedSize: leftReservedSize,
+                            bottomReservedSize: bottomReservedSize,
+                            axisStyle: axisStyle,
                           ),
                         ),
                       ),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 180,
-            child: points.isEmpty
-                ? const EmptyHint(icon: Icons.trending_up, message: '暂无趋势数据')
-                : _buildChart(context, cs),
-          ),
-          if (latest != null && best != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              '趋势洞察',
-              style: TextStyle(
-                fontSize: 12,
-                color: cs.onSurface.withValues(alpha: 0.72),
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _insightText,
-              style: TextStyle(
-                fontSize: 11,
-                height: 1.45,
-                color: cs.onSurface.withValues(alpha: 0.64),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _TrendHistoryMetric(
-                  label: '历史最佳',
-                  value: '${best.label} · ${best.score} 分',
+              if (latest != null && best != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  effectiveCopy.trendInsights,
+                  style:
+                      (Theme.of(context).textTheme.bodyMedium ??
+                              const TextStyle())
+                          .copyWith(
+                            fontSize: 12,
+                            color: secondaryTextColor,
+                            fontWeight: FontWeight.normal,
+                          ),
                 ),
-                _TrendHistoryMetric(label: '平均分', value: '$averageScore 分'),
-                _TrendHistoryMetric(label: '当前排名', value: _rankText),
+                const SizedBox(height: 6),
+                Text(
+                  _insightText(effectiveCopy),
+                  style:
+                      (Theme.of(context).textTheme.bodyMedium ??
+                              const TextStyle())
+                          .copyWith(
+                            fontSize: 11,
+                            height: 1.45,
+                            color: secondaryTextColor,
+                          ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _TrendHistoryMetric(
+                      label: effectiveCopy.historicalBest,
+                      value:
+                          '${best.displayLabel(effectiveCopy)} · ${effectiveCopy.pointsCount(best.score)}',
+                    ),
+                    _TrendHistoryMetric(
+                      label: effectiveCopy.averageScore,
+                      value: effectiveCopy.pointsCount(averageScore),
+                    ),
+                    _TrendHistoryMetric(
+                      label: effectiveCopy.currentRank,
+                      value: _rankText(effectiveCopy),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  effectiveCopy.cycleBreakdown,
+                  style:
+                      (Theme.of(context).textTheme.bodyMedium ??
+                              const TextStyle())
+                          .copyWith(
+                            fontSize: 12,
+                            color: secondaryTextColor,
+                            fontWeight: FontWeight.normal,
+                          ),
+                ),
+                const SizedBox(height: 6),
+                ...points.reversed.map((point) {
+                  final index = points.indexOf(point);
+                  final previous = index <= 0 ? null : points[index - 1];
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: _TrendDetailTile(
+                      point: point,
+                      previous: previous,
+                      isLatest: point == latest,
+                      isBest: point == best,
+                      copy: effectiveCopy,
+                    ),
+                  );
+                }),
               ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '周期明细',
-              style: TextStyle(
-                fontSize: 12,
-                color: cs.onSurface.withValues(alpha: 0.72),
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-            const SizedBox(height: 6),
-            ...points.reversed.map((point) {
-              final index = points.indexOf(point);
-              final previous = index <= 0 ? null : points[index - 1];
-              return Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: _TrendDetailTile(
-                  point: point,
-                  previous: previous,
-                  isLatest: point == latest,
-                  isBest: point == best,
-                ),
-              );
-            }),
-          ],
-        ],
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildChart(BuildContext context, ColorScheme cs) {
+  Widget _buildChart(
+    BuildContext context,
+    ColorScheme cs,
+    StatisticsUiCopy copy, {
+    double leftReservedSize = 38.0,
+    double bottomReservedSize = 32.0,
+    TextStyle? axisStyle,
+  }) {
     final spots = [
       for (int i = 0; i < points.length; i++)
         FlSpot(i.toDouble(), points[i].score.toDouble()),
     ];
+    final effectiveAxisStyle =
+        axisStyle ??
+        (Theme.of(context).textTheme.bodyMedium ?? const TextStyle()).copyWith(
+          fontSize: 10,
+          height: 1.2,
+          fontWeight: FontWeight.normal,
+          color: appSecondaryDescriptionColor(context),
+        );
     return LineChart(
       LineChartData(
         minY: 0,
@@ -4548,12 +5911,17 @@ class _ProductivityTrendCard extends StatelessWidget {
             sideTitles: SideTitles(
               showTitles: true,
               interval: 25,
-              reservedSize: 32,
-              getTitlesWidget: (value, _) => Text(
-                value.toInt().toString(),
-                style: TextStyle(
-                  fontSize: 9,
-                  color: cs.onSurface.withValues(alpha: 0.56),
+              reservedSize: leftReservedSize,
+              getTitlesWidget: (value, meta) => SideTitleWidget(
+                meta: meta,
+                space: 4,
+                fitInside: SideTitleFitInsideData.fromTitleMeta(
+                  meta,
+                  distanceFromEdge: 0,
+                ),
+                child: Text(
+                  value.toInt().toString(),
+                  style: effectiveAxisStyle,
                 ),
               ),
             ),
@@ -4561,21 +5929,23 @@ class _ProductivityTrendCard extends StatelessWidget {
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 24,
+              reservedSize: bottomReservedSize,
               interval: 1,
-              getTitlesWidget: (value, _) {
+              getTitlesWidget: (value, meta) {
                 final index = value.toInt();
                 if (index < 0 || index >= points.length) {
                   return const SizedBox();
                 }
-                return Padding(
-                  padding: const EdgeInsets.only(top: 5),
+                return SideTitleWidget(
+                  meta: meta,
+                  space: 4,
+                  fitInside: SideTitleFitInsideData.fromTitleMeta(
+                    meta,
+                    distanceFromEdge: 0,
+                  ),
                   child: Text(
-                    points[index].label,
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: cs.onSurface.withValues(alpha: 0.62),
-                    ),
+                    points[index].displayLabel(copy),
+                    style: effectiveAxisStyle,
                   ),
                 );
               },
@@ -4595,7 +5965,7 @@ class _ProductivityTrendCard extends StatelessWidget {
             getTooltipItems: (items) => [
               for (final item in items)
                 LineTooltipItem(
-                  '${points[item.x.toInt()].label}\n${item.y.toInt()} 分',
+                  '${points[item.x.toInt()].displayLabel(copy)}\n${copy.pointsCount(item.y.toInt())}',
                   TextStyle(color: cs.onInverseSurface, fontSize: 11),
                 ),
             ],
@@ -4628,10 +5998,10 @@ class _ProductivityTrendCard extends StatelessWidget {
     );
   }
 
-  String get _trendSubtitle => switch (range) {
-    _Range.week => '近 6 周同段效率分',
-    _Range.month => '近 6 个月同段效率分',
-    _Range.year => '近 5 年同段效率分',
+  String _trendSubtitle(StatisticsUiCopy copy) => switch (range) {
+    _Range.week => copy.trendSubtitleWeek,
+    _Range.month => copy.trendSubtitleMonth,
+    _Range.year => copy.trendSubtitleYear,
   };
 
   _ProductivityTrendPoint? get _bestPoint {
@@ -4649,38 +6019,33 @@ class _ProductivityTrendCard extends StatelessWidget {
     return (total / points.length).round();
   }
 
-  String get _rankText {
-    if (points.isEmpty) return '暂无';
+  String _rankText(StatisticsUiCopy copy) {
+    if (points.isEmpty) return copy.noData;
     final latest = points.last;
     final higherCount = points
         .where((point) => point.score > latest.score)
         .length;
-    return '第 ${higherCount + 1}/${points.length}';
+    return copy.rank(higherCount + 1, points.length);
   }
 
-  String get _insightText {
-    if (points.length < 2) return '趋势样本不足，继续记录后会生成更稳定的解读。';
+  String _insightText(StatisticsUiCopy copy) {
+    if (points.length < 2) return copy.trendInsightInsufficient;
     final latest = points.last;
     final previous = points[points.length - 2];
     final best = _bestPoint;
     final delta = latest.score - previous.score;
     final average = _averageScore;
-    final direction = delta > 0
-        ? '提升了 $delta 分'
-        : delta < 0
-        ? '回落了 ${delta.abs()} 分'
-        : '保持稳定';
-    final bestText = best == null
-        ? ''
-        : '历史最佳是 ${best.label} 的 ${best.score} 分，';
-    final averageText = latest.score >= average
-        ? '当前高于最近平均 $average 分。'
-        : '当前低于最近平均 $average 分。';
-    return '较上一周期$direction，$bestText$averageText';
+    return copy.trendInsightText(
+      delta: delta,
+      bestLabel: best?.displayLabel(copy),
+      bestScore: best?.score,
+      average: average,
+      latestScore: latest.score,
+    );
   }
 }
 
-class _ProductivityTrendDetailScreen extends StatelessWidget {
+class _ProductivityTrendDetailScreen extends StatefulWidget {
   final List<_ProductivityTrendPoint> points;
   final _Range range;
 
@@ -4690,96 +6055,174 @@ class _ProductivityTrendDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<_ProductivityTrendDetailScreen> createState() =>
+      _ProductivityTrendDetailScreenState();
+}
+
+class _ProductivityTrendDetailScreenState
+    extends State<_ProductivityTrendDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final copy = StatisticsUiCopy.current(
+      datePattern: AppDateFormat.patternOf(context),
+    );
     final cs = Theme.of(context).colorScheme;
+    final points = widget.points;
     final latest = points.isEmpty ? null : points.last;
     final best = _bestPoint;
-    return Scaffold(
+    final textScaler = MediaQuery.textScalerOf(context);
+    final secondaryTextColor = appSecondaryDescriptionColor(context);
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+
+    final scaffold = Scaffold(
+      backgroundColor: isLiquidGlass ? Colors.transparent : null,
       appBar: AppBar(
-        title: const Text('趋势详情'),
+        title: Text(copy.trendDetailTitle),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
+        toolbarHeight: math.max(56.0, textScaler.scale(22.0) + 16.0),
       ),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
           AppSurfaceCard(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            borderRadius: BorderRadius.circular(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 420;
+                final titleColumn = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.insights_outlined, color: cs.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    Text(
+                      copy.trendOverview,
+                      style:
+                          (Theme.of(context).textTheme.bodyMedium ??
+                                  const TextStyle())
+                              .copyWith(
+                                fontSize: 15,
+                                fontWeight: FontWeight.normal,
+                              ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _rangeSubtitle(copy),
+                      style:
+                          (Theme.of(context).textTheme.bodyMedium ??
+                                  const TextStyle())
+                              .copyWith(
+                                fontSize: 11,
+                                color: secondaryTextColor,
+                              ),
+                    ),
+                  ],
+                );
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isNarrow) ...[
+                      Row(
                         children: [
-                          const Text(
-                            '趋势概览',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.normal,
-                            ),
-                          ),
-                          Text(
-                            _rangeSubtitle,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: cs.onSurface.withValues(alpha: 0.58),
-                            ),
-                          ),
+                          Icon(Icons.insights_outlined, color: cs.primary),
+                          const SizedBox(width: 8),
+                          Expanded(child: titleColumn),
                         ],
                       ),
-                    ),
-                    if (latest != null)
-                      _TrendSummaryBadge(
-                        score: latest.score,
-                        delta: points.length < 2
-                            ? 0
-                            : latest.score - points.first.score,
+                      if (latest != null) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: _TrendSummaryBadge(
+                            score: latest.score,
+                            delta: points.length < 2
+                                ? 0
+                                : latest.score - points.first.score,
+                            copy: copy,
+                          ),
+                        ),
+                      ],
+                    ] else
+                      Row(
+                        children: [
+                          Icon(Icons.insights_outlined, color: cs.primary),
+                          const SizedBox(width: 8),
+                          Expanded(child: titleColumn),
+                          if (latest != null)
+                            _TrendSummaryBadge(
+                              score: latest.score,
+                              delta: points.length < 2
+                                  ? 0
+                                  : latest.score - points.first.score,
+                              copy: copy,
+                            ),
+                        ],
                       ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _insightText,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.45,
-                    color: cs.onSurface.withValues(alpha: 0.7),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _TrendHistoryMetric(
-                      label: '历史最佳',
-                      value: best == null
-                          ? '暂无'
-                          : '${best.label} · ${best.score} 分',
+                    const SizedBox(height: 12),
+                    Text(
+                      _insightText(copy),
+                      style:
+                          (Theme.of(context).textTheme.bodyMedium ??
+                                  const TextStyle())
+                              .copyWith(
+                                fontSize: 12,
+                                height: 1.45,
+                                color: secondaryTextColor,
+                              ),
                     ),
-                    _TrendHistoryMetric(
-                      label: '平均分',
-                      value: '$_averageScore 分',
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _TrendHistoryMetric(
+                          label: copy.historicalBest,
+                          value: best == null
+                              ? copy.noData
+                              : '${best.displayLabel(copy)} · ${copy.pointsCount(best.score)}',
+                        ),
+                        _TrendHistoryMetric(
+                          label: copy.averageScore,
+                          value: copy.pointsCount(_averageScore),
+                        ),
+                        _TrendHistoryMetric(
+                          label: copy.currentRank,
+                          value: _rankText(copy),
+                        ),
+                      ],
                     ),
-                    _TrendHistoryMetric(label: '当前排名', value: _rankText),
                   ],
-                ),
-              ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            '逐周期明细',
-            style: TextStyle(
-              fontSize: 13,
-              color: cs.onSurface.withValues(alpha: 0.72),
-              fontWeight: FontWeight.normal,
-            ),
+            copy.periodByPeriodBreakdown,
+            style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+                .copyWith(
+                  fontSize: 13,
+                  color: secondaryTextColor,
+                  fontWeight: FontWeight.normal,
+                ),
           ),
           const SizedBox(height: 8),
           for (final point in points.reversed)
@@ -4790,20 +6233,38 @@ class _ProductivityTrendDetailScreen extends StatelessWidget {
                 previous: _previousPoint(point),
                 isLatest: point == latest,
                 isBest: point == best,
+                copy: copy,
               ),
             ),
         ],
       ),
     );
+
+    if (!isLiquidGlass) {
+      return scaffold;
+    }
+
+    final hasBrandSurface =
+        DesktopEmbeddedHostScope.isHosted(context) ||
+        context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+        context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+    if (hasBrandSurface) {
+      return scaffold;
+    }
+    return Material(
+      color: routeBackground,
+      child: BrandBackground(child: scaffold),
+    );
   }
 
-  String get _rangeSubtitle => switch (range) {
-    _Range.week => '近 6 周同段效率分',
-    _Range.month => '近 6 个月同段效率分',
-    _Range.year => '近 5 年同段效率分',
+  String _rangeSubtitle(StatisticsUiCopy copy) => switch (widget.range) {
+    _Range.week => copy.trendSubtitleWeek,
+    _Range.month => copy.trendSubtitleMonth,
+    _Range.year => copy.trendSubtitleYear,
   };
 
   _ProductivityTrendPoint? get _bestPoint {
+    final points = widget.points;
     if (points.isEmpty) return null;
     var best = points.first;
     for (final point in points.skip(1)) {
@@ -4813,42 +6274,41 @@ class _ProductivityTrendDetailScreen extends StatelessWidget {
   }
 
   int get _averageScore {
+    final points = widget.points;
     if (points.isEmpty) return 0;
     final total = points.fold<int>(0, (sum, point) => sum + point.score);
     return (total / points.length).round();
   }
 
-  String get _rankText {
-    if (points.isEmpty) return '暂无';
+  String _rankText(StatisticsUiCopy copy) {
+    final points = widget.points;
+    if (points.isEmpty) return copy.noData;
     final latest = points.last;
     final higherCount = points
         .where((point) => point.score > latest.score)
         .length;
-    return '第 ${higherCount + 1}/${points.length}';
+    return copy.rank(higherCount + 1, points.length);
   }
 
-  String get _insightText {
-    if (points.length < 2) return '趋势样本不足，继续记录后会生成更稳定的解读。';
+  String _insightText(StatisticsUiCopy copy) {
+    final points = widget.points;
+    if (points.length < 2) return copy.trendInsightInsufficient;
     final latest = points.last;
     final previous = points[points.length - 2];
     final best = _bestPoint;
     final delta = latest.score - previous.score;
     final average = _averageScore;
-    final direction = delta > 0
-        ? '提升了 $delta 分'
-        : delta < 0
-        ? '回落了 ${delta.abs()} 分'
-        : '保持稳定';
-    final bestText = best == null
-        ? ''
-        : '历史最佳是 ${best.label} 的 ${best.score} 分，';
-    final averageText = latest.score >= average
-        ? '当前高于最近平均 $average 分。'
-        : '当前低于最近平均 $average 分。';
-    return '较上一周期$direction，$bestText$averageText';
+    return copy.trendInsightText(
+      delta: delta,
+      bestLabel: best?.displayLabel(copy),
+      bestScore: best?.score,
+      average: average,
+      latestScore: latest.score,
+    );
   }
 
   _ProductivityTrendPoint? _previousPoint(_ProductivityTrendPoint point) {
+    final points = widget.points;
     final index = points.indexOf(point);
     if (index <= 0) return null;
     return points[index - 1];
@@ -4860,30 +6320,32 @@ class _TrendDetailTile extends StatelessWidget {
   final _ProductivityTrendPoint? previous;
   final bool isLatest;
   final bool isBest;
+  final StatisticsUiCopy? copy;
 
   const _TrendDetailTile({
     required this.point,
     required this.previous,
     required this.isLatest,
     required this.isBest,
+    this.copy,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final cs = Theme.of(context).colorScheme;
+    final secondaryTextColor = appSecondaryDescriptionColor(context);
     final delta = previous == null ? null : point.score - previous!.score;
     final deltaColor = delta == null
-        ? cs.onSurface.withValues(alpha: 0.56)
-        : delta > 0
-        ? const Color(0xFF2E7D32)
-        : delta < 0
-        ? const Color(0xFFC62828)
-        : cs.onSurface.withValues(alpha: 0.62);
+        ? secondaryTextColor
+        : _trendDeltaColor(context, delta);
     final deltaText = delta == null
-        ? '基准'
+        ? effectiveCopy.baseline
         : delta == 0
-        ? '持平'
+        ? effectiveCopy.flat
         : '${delta > 0 ? '+' : ''}$delta';
+    final scoreColor = isLatest ? _latestScoreColor(context, cs) : cs.onSurface;
+
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -4893,69 +6355,127 @@ class _TrendDetailTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isBest
-              ? Colors.amber.withValues(alpha: 0.46)
+              ? DesignTokens.defaultWarning.withValues(alpha: 0.46)
               : cs.outlineVariant.withValues(alpha: 0.38),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 420;
+          final titleWidget = Text(
+            '${point.displayLabel(effectiveCopy)} · ${point.dateRangeLabel(effectiveCopy)}',
+            style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+                .copyWith(fontSize: 12, fontWeight: FontWeight.normal),
+          );
+
+          final trailingRow = Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: Text(
-                  '${point.label} · ${point.dateRangeLabel}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-              ),
               if (isBest)
-                const AppStatusBadge(label: '最佳', color: Colors.amber)
+                AppStatusBadge(
+                  label: effectiveCopy.best,
+                  color: DesignTokens.defaultWarning,
+                )
               else if (isLatest)
-                AppStatusBadge(label: '当前', color: cs.primary),
-              const SizedBox(width: 8),
+                AppStatusBadge(label: effectiveCopy.current, color: cs.primary),
+              if (isBest || isLatest) const SizedBox(width: 8),
               Text(
-                '${point.score} 分',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isLatest ? cs.primary : cs.onSurface,
-                  fontWeight: FontWeight.normal,
-                ),
+                effectiveCopy.pointsCount(point.score),
+                style:
+                    (Theme.of(context).textTheme.bodyMedium ??
+                            const TextStyle())
+                        .copyWith(
+                          fontSize: 12,
+                          color: scoreColor,
+                          fontWeight: FontWeight.normal,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
               ),
               const SizedBox(width: 6),
               Text(
                 deltaText,
-                style: TextStyle(fontSize: 11, color: deltaColor),
+                style:
+                    (Theme.of(context).textTheme.bodyMedium ??
+                            const TextStyle())
+                        .copyWith(
+                          fontSize: 11,
+                          color: deltaColor,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
               ),
             ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _TrendDetailMetric(
-                label: '待办',
-                value: '${point.completedTodos} 项',
-              ),
-              _TrendDetailMetric(label: '专注', value: '${point.focusMinutes} 分'),
-              _TrendDetailMetric(
-                label: '习惯',
-                value: '${point.habitCheckIns} 次',
-              ),
-              _TrendDetailMetric(
-                label: '足迹',
-                value: '${point.timeEntryMinutes} 分',
+              if (isNarrow) ...[
+                titleWidget,
+                const SizedBox(height: 6),
+                trailingRow,
+              ] else
+                Row(
+                  children: [
+                    Expanded(child: titleWidget),
+                    const SizedBox(width: 8),
+                    trailingRow,
+                  ],
+                ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _TrendDetailMetric(
+                    label: effectiveCopy.todos,
+                    value: effectiveCopy.itemsCount(point.completedTodos),
+                  ),
+                  _TrendDetailMetric(
+                    label: effectiveCopy.focus,
+                    value: effectiveCopy.minutesCount(point.focusMinutes),
+                  ),
+                  _TrendDetailMetric(
+                    label: effectiveCopy.habits,
+                    value: effectiveCopy.timesCount(point.habitCheckIns),
+                  ),
+                  _TrendDetailMetric(
+                    label: effectiveCopy.footprint,
+                    value: effectiveCopy.minutesCount(point.timeEntryMinutes),
+                  ),
+                ],
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
+  }
+
+  Color _latestScoreColor(BuildContext context, ColorScheme cs) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isLiquidGlass =
+        surfaceStyle != null && (surfaceStyle.cardFillColor?.a ?? 1.0) < 0.8;
+
+    final tileBg = cs.primary.withValues(alpha: 0.08);
+    final baseSurface = isLiquidGlass
+        ? Color.alphaBlend(tileBg, theme.scaffoldBackgroundColor)
+        : Color.alphaBlend(tileBg, cs.surface);
+
+    final preferred = cs.primary;
+    final targetContrast = isDark ? 4.5 : 5.2;
+    if (appContrastRatio(baseSurface, preferred) >= targetContrast) {
+      return preferred;
+    }
+    final target = isDark ? Colors.white : const Color(0xFF111827);
+    for (var t = 0.05; t <= 0.60; t += 0.05) {
+      final candidate = Color.lerp(preferred, target, t)!;
+      if (appContrastRatio(baseSurface, candidate) >= targetContrast) {
+        return candidate;
+      }
+    }
+    return appReadableForeground(baseSurface, preferred);
   }
 }
 
@@ -4968,6 +6488,7 @@ class _TrendDetailMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final secondaryTextColor = appSecondaryDescriptionColor(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
@@ -4979,13 +6500,19 @@ class _TrendDetailMetric extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(
-              fontSize: 10,
-              color: cs.onSurface.withValues(alpha: 0.56),
-            ),
+            style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+                .copyWith(fontSize: 10, color: secondaryTextColor),
           ),
           const SizedBox(width: 4),
-          Text(value, style: const TextStyle(fontSize: 11)),
+          Text(
+            value,
+            style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+                .copyWith(
+                  fontSize: 11,
+                  color: cs.onSurface,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+          ),
         ],
       ),
     );
@@ -4995,18 +6522,21 @@ class _TrendDetailMetric extends StatelessWidget {
 class _TrendSummaryBadge extends StatelessWidget {
   final int score;
   final int delta;
+  final StatisticsUiCopy? copy;
 
-  const _TrendSummaryBadge({required this.score, required this.delta});
+  const _TrendSummaryBadge({
+    required this.score,
+    required this.delta,
+    this.copy,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final color = delta > 0
-        ? const Color(0xFF2E7D32)
-        : delta < 0
-        ? const Color(0xFFC62828)
-        : cs.onSurface.withValues(alpha: 0.62);
-    final label = delta == 0 ? '持平' : '${delta > 0 ? '+' : ''}$delta';
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
+    final color = _trendDeltaColor(context, delta);
+    final label = delta == 0
+        ? effectiveCopy.flat
+        : '${delta > 0 ? '+' : ''}$delta';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
@@ -5017,15 +6547,25 @@ class _TrendSummaryBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            '$score 分',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.normal,
-              color: color,
-            ),
+            effectiveCopy.pointsCount(score),
+            style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+                .copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.normal,
+                  color: color,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
           ),
           const SizedBox(width: 6),
-          Text(label, style: TextStyle(fontSize: 11, color: color)),
+          Text(
+            label,
+            style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+                .copyWith(
+                  fontSize: 11,
+                  color: color,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+          ),
         ],
       ),
     );
@@ -5041,6 +6581,7 @@ class _TrendHistoryMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final secondaryTextColor = appSecondaryDescriptionColor(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
@@ -5053,15 +6594,19 @@ class _TrendHistoryMetric extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(
-              fontSize: 10,
-              color: cs.onSurface.withValues(alpha: 0.56),
-            ),
+            style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+                .copyWith(fontSize: 10, color: secondaryTextColor),
           ),
           const SizedBox(height: 2),
           Text(
             value,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+            style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+                .copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.normal,
+                  color: cs.onSurface,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
           ),
         ],
       ),
@@ -5073,180 +6618,328 @@ class _ProductivityComparisonCard extends StatelessWidget {
   final ReportComparison comparison;
   final _Range range;
   final ColorScheme cs;
+  final StatisticsUiCopy? copy;
 
   const _ProductivityComparisonCard({
     required this.comparison,
     required this.range,
     required this.cs,
+    this.copy,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     final score = comparison.productivityScore;
-    final trendColor = _trendColor(score.direction);
+    final trendColor = _trendColor(context, score.direction);
     final trendIcon = _trendIcon(score.direction);
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      borderRadius: BorderRadius.circular(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final textScaler = MediaQuery.textScalerOf(context);
+          final textDirection = Directionality.of(context);
+
+          final bodyMedium =
+              Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
+          final scoreStyle = bodyMedium.copyWith(
+            fontSize: 24,
+            fontWeight: FontWeight.normal,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          );
+          final effStyle = bodyMedium.copyWith(
+            fontSize: 10,
+            fontWeight: FontWeight.normal,
+          );
+          final valueStyle = bodyMedium.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.normal,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          );
+          final smallStyle = bodyMedium.copyWith(
+            fontSize: 10,
+            fontWeight: FontWeight.normal,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          );
+          final badgeStyle = bodyMedium.copyWith(
+            fontSize: 12,
+            fontWeight: FontWeight.normal,
+            color: trendColor,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          );
+          final titleStyle = bodyMedium.copyWith(
+            fontSize: 13,
+            fontWeight: FontWeight.normal,
+          );
+          final subTitleStyle = bodyMedium.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.normal,
+            color: appSecondaryDescriptionColor(context),
+          );
+
+          final scorePainter = TextPainter(
+            text: TextSpan(
+              text: comparison.current.productivityScore.toString(),
+              style: scoreStyle,
+            ),
+            textScaler: textScaler,
+            textDirection: textDirection,
+          )..layout();
+
+          final effPainter = TextPainter(
+            text: TextSpan(
+              text: effectiveCopy.efficiencyScore,
+              style: effStyle,
+            ),
+            textScaler: textScaler,
+            textDirection: textDirection,
+          )..layout();
+
+          final effTokenWidth = _Kpi.maxTokenWidth(
+            effectiveCopy.efficiencyScore,
+            effStyle,
+            textScaler,
+            textDirection,
+          );
+
+          final actualScoreWidth = math.max(
+            76.0,
+            math.max(
+                  scorePainter.width,
+                  math.max(effPainter.width, effTokenWidth),
+                ) +
+                24.0,
+          );
+          final actualScoreHeight = math.max(
+            76.0,
+            scorePainter.height + effPainter.height + 20.0,
+          );
+          final actualScoreSize = math.max(actualScoreWidth, actualScoreHeight);
+          scorePainter.dispose();
+          effPainter.dispose();
+
+          final metricItems = [
+            (
+              label: effectiveCopy.completionRate,
+              value: _percent(comparison.current.todoCompletionRate),
+              delta: _percentagePointDelta(
+                comparison.todoCompletionRate,
+                effectiveCopy,
+              ),
+              direction: comparison.todoCompletionRate.direction,
+            ),
+            (
+              label: effectiveCopy.focus,
+              value: effectiveCopy.minutesCount(
+                comparison.current.focusMinutes,
+              ),
+              delta: _signedNumber(
+                comparison.focusMinutes.difference,
+                suffix: effectiveCopy.minutesSuffix,
+                copy: effectiveCopy,
+              ),
+              direction: comparison.focusMinutes.direction,
+            ),
+            (
+              label: effectiveCopy.habits,
+              value: effectiveCopy.timesCount(comparison.current.habitCheckIns),
+              delta: _signedNumber(
+                comparison.habitCheckIns.difference,
+                suffix: effectiveCopy.timesSuffix,
+                copy: effectiveCopy,
+              ),
+              direction: comparison.habitCheckIns.direction,
+            ),
+            (
+              label: effectiveCopy.footprint,
+              value: effectiveCopy.minutesCount(
+                comparison.current.timeEntryMinutes,
+              ),
+              delta: _signedNumber(
+                comparison.timeEntryMinutes.difference,
+                suffix: effectiveCopy.minutesSuffix,
+                copy: effectiveCopy,
+              ),
+              direction: comparison.timeEntryMinutes.direction,
+            ),
+          ];
+
+          var maxMetricToken = 0.0;
+          for (final m in metricItems) {
+            final wVal = _Kpi.maxTokenWidth(
+              m.value,
+              valueStyle,
+              textScaler,
+              textDirection,
+            );
+            final wLab = _Kpi.maxTokenWidth(
+              m.label,
+              smallStyle,
+              textScaler,
+              textDirection,
+            );
+            final wDel = _Kpi.maxTokenWidth(
+              m.delta,
+              smallStyle,
+              textScaler,
+              textDirection,
+            );
+            final mMax = math.max(wVal, math.max(wLab, wDel));
+            if (mMax > maxMetricToken) maxMetricToken = mMax;
+          }
+
+          final minTileWidth = maxMetricToken + 20.0;
+          final sideBySideNeeded =
+              actualScoreSize + 12.0 + 2 * minTileWidth + 8.0;
+          final isSideBySide = width >= sideBySideNeeded;
+          final reflow = !isSideBySide;
+
+          final scoreWidget = Container(
+            width: isSideBySide ? actualScoreSize : actualScoreWidth,
+            height: isSideBySide ? actualScoreSize : actualScoreHeight,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: isSideBySide ? BoxShape.circle : BoxShape.rectangle,
+              borderRadius: isSideBySide ? null : BorderRadius.circular(16),
+              color: cs.primary.withValues(alpha: 0.1),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.28)),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  comparison.current.productivityScore.toString(),
+                  style: scoreStyle.copyWith(color: cs.primary),
+                ),
+                Text(
+                  effectiveCopy.efficiencyScore,
+                  style: effStyle.copyWith(
+                    color: appSecondaryDescriptionColor(context),
+                  ),
+                ),
+              ],
+            ),
+          );
+
+          final tileAreaWidth = isSideBySide
+              ? width - actualScoreSize - 12.0
+              : width;
+          final tileColumns = isSideBySide
+              ? (tileAreaWidth >= 4 * minTileWidth + 24.0 ? 4 : 2)
+              : (tileAreaWidth >= 2 * minTileWidth + 8.0 ? 2 : 1);
+          final tileWidth =
+              (tileAreaWidth - (tileColumns - 1) * 8.0) / tileColumns;
+
+          final metricsList = [
+            for (final m in metricItems)
+              _ComparisonMetric(
+                label: m.label,
+                value: m.value,
+                delta: m.delta,
+                direction: m.direction,
+                width: tileWidth,
+              ),
+          ];
+
+          final badgeWidget = Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: trendColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(trendIcon, size: 16, color: trendColor),
+                const SizedBox(width: 4),
+                Text(
+                  _signedNumber(
+                    score.difference,
+                    suffix: effectiveCopy.pointsSuffix,
+                    copy: effectiveCopy,
+                  ),
+                  style: badgeStyle,
+                ),
+              ],
+            ),
+          );
+
+          final titleColumn = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
+              Text(effectiveCopy.productivityComparison, style: titleStyle),
+              const SizedBox(height: 2),
+              Text(_rangeCompareLabel(effectiveCopy), style: subTitleStyle),
+            ],
+          );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (reflow) ...[
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '效率对比',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _rangeCompareLabel,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: cs.onSurface.withValues(alpha: 0.58),
-                      ),
-                    ),
+                    titleColumn,
+                    const SizedBox(height: 8),
+                    badgeWidget,
                   ],
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: trendColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+              ] else ...[
+                Row(
                   children: [
-                    Icon(trendIcon, size: 16, color: trendColor),
-                    const SizedBox(width: 4),
-                    Text(
-                      _signedNumber(score.difference, suffix: ' 分'),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.normal,
-                        color: trendColor,
+                    Expanded(child: titleColumn),
+                    badgeWidget,
+                  ],
+                ),
+              ],
+              const SizedBox(height: 14),
+              if (isSideBySide)
+                Row(
+                  children: [
+                    scoreWidget,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: metricsList,
                       ),
                     ),
                   ],
+                )
+              else ...[
+                Center(child: scoreWidget),
+                const SizedBox(height: 12),
+                Wrap(spacing: 8, runSpacing: 8, children: metricsList),
+              ],
+              if (score.hasBaseline) ...[
+                const SizedBox(height: 10),
+                Text(
+                  '${effectiveCopy.vsPreviousPeriod} ${_signedPercent(score.percentChangeRounded ?? 0, copy: effectiveCopy)}',
+                  style: subTitleStyle,
                 ),
-              ),
+              ],
             ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Container(
-                width: 76,
-                height: 76,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: cs.primary.withValues(alpha: 0.1),
-                  border: Border.all(color: cs.primary.withValues(alpha: 0.28)),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      comparison.current.productivityScore.toString(),
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.normal,
-                        color: cs.primary,
-                      ),
-                    ),
-                    Text(
-                      '效率分',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: cs.onSurface.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _ComparisonMetric(
-                      label: '完成率',
-                      value: _percent(comparison.current.todoCompletionRate),
-                      delta: _percentagePointDelta(
-                        comparison.todoCompletionRate,
-                      ),
-                      direction: comparison.todoCompletionRate.direction,
-                    ),
-                    _ComparisonMetric(
-                      label: '专注',
-                      value: '${comparison.current.focusMinutes} 分',
-                      delta: _signedNumber(
-                        comparison.focusMinutes.difference,
-                        suffix: ' 分',
-                      ),
-                      direction: comparison.focusMinutes.direction,
-                    ),
-                    _ComparisonMetric(
-                      label: '习惯',
-                      value: '${comparison.current.habitCheckIns} 次',
-                      delta: _signedNumber(
-                        comparison.habitCheckIns.difference,
-                        suffix: ' 次',
-                      ),
-                      direction: comparison.habitCheckIns.direction,
-                    ),
-                    _ComparisonMetric(
-                      label: '足迹',
-                      value: '${comparison.current.timeEntryMinutes} 分',
-                      delta: _signedNumber(
-                        comparison.timeEntryMinutes.difference,
-                        suffix: ' 分',
-                      ),
-                      direction: comparison.timeEntryMinutes.direction,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (score.hasBaseline) ...[
-            const SizedBox(height: 10),
-            Text(
-              '较上期 ${_signedPercent(score.percentChangeRounded ?? 0)}',
-              style: TextStyle(
-                fontSize: 11,
-                color: cs.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-          ],
-        ],
+          );
+        },
       ),
     );
   }
 
-  String get _rangeCompareLabel => switch (range) {
-    _Range.week => '与上周同段对比',
-    _Range.month => '与上一同长度周期对比',
-    _Range.year => '与上一同长度周期对比',
+  String _rangeCompareLabel(StatisticsUiCopy copy) => switch (range) {
+    _Range.week => copy.rangeCompareLabelWeek,
+    _Range.month => copy.rangeCompareLabelCycle,
+    _Range.year => copy.rangeCompareLabelCycle,
   };
 
-  Color _trendColor(ReportTrendDirection direction) => switch (direction) {
-    ReportTrendDirection.up => const Color(0xFF2E7D32),
-    ReportTrendDirection.down => const Color(0xFFC62828),
-    ReportTrendDirection.flat => cs.onSurface.withValues(alpha: 0.62),
-  };
+  Color _trendColor(BuildContext context, ReportTrendDirection direction) =>
+      switch (direction) {
+        ReportTrendDirection.up => _trendDeltaColor(context, 1),
+        ReportTrendDirection.down => _trendDeltaColor(context, -1),
+        ReportTrendDirection.flat => appSecondaryDescriptionColor(context),
+      };
 
   IconData _trendIcon(ReportTrendDirection direction) => switch (direction) {
     ReportTrendDirection.up => Icons.trending_up,
@@ -5256,20 +6949,29 @@ class _ProductivityComparisonCard extends StatelessWidget {
 
   String _percent(double value) => '${(value * 100).round()}%';
 
-  String _percentagePointDelta(ReportMetricDelta delta) {
+  String _percentagePointDelta(ReportMetricDelta delta, StatisticsUiCopy copy) {
     final points = (delta.difference * 100).round();
-    return _signedInt(points, suffix: ' 个点');
+    return _signedInt(points, suffix: copy.percentagePointsSuffix, copy: copy);
   }
 
-  String _signedNumber(double value, {required String suffix}) {
-    if (value == 0) return '持平';
-    return _signedInt(value.round(), suffix: suffix);
+  String _signedNumber(
+    double value, {
+    required String suffix,
+    required StatisticsUiCopy copy,
+  }) {
+    if (value == 0) return copy.flat;
+    return _signedInt(value.round(), suffix: suffix, copy: copy);
   }
 
-  String _signedPercent(int value) => _signedInt(value, suffix: '%');
+  String _signedPercent(int value, {required StatisticsUiCopy copy}) =>
+      _signedInt(value, suffix: '%', copy: copy);
 
-  String _signedInt(int value, {required String suffix}) {
-    if (value == 0) return '持平';
+  String _signedInt(
+    int value, {
+    required String suffix,
+    required StatisticsUiCopy copy,
+  }) {
+    if (value == 0) return copy.flat;
     return '${value > 0 ? '+' : ''}$value$suffix';
   }
 }
@@ -5279,61 +6981,63 @@ class _ComparisonMetric extends StatelessWidget {
   final String value;
   final String delta;
   final ReportTrendDirection direction;
+  final double? width;
 
   const _ComparisonMetric({
     required this.label,
     required this.value,
     required this.delta,
     required this.direction,
+    this.width,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final color = switch (direction) {
-      ReportTrendDirection.up => const Color(0xFF2E7D32),
-      ReportTrendDirection.down => const Color(0xFFC62828),
-      ReportTrendDirection.flat => cs.onSurface.withValues(alpha: 0.58),
+      ReportTrendDirection.up => _trendDeltaColor(context, 1),
+      ReportTrendDirection.down => _trendDeltaColor(context, -1),
+      ReportTrendDirection.flat => appSecondaryDescriptionColor(context),
     };
-    return SizedBox(
-      width: 96,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest.withValues(alpha: 0.46),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.normal,
-              ),
+    final bodyMedium =
+        Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
+    final valueStyle = bodyMedium.copyWith(
+      fontSize: 14,
+      fontWeight: FontWeight.normal,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    final smallStyle = bodyMedium.copyWith(
+      fontSize: 10,
+      fontWeight: FontWeight.normal,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    final content = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.46),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(value, style: valueStyle),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: smallStyle.copyWith(
+              color: appSecondaryDescriptionColor(context),
             ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: cs.onSurface.withValues(alpha: 0.56),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              delta,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 10, color: color),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 4),
+          Text(delta, style: smallStyle.copyWith(color: color)),
+        ],
       ),
     );
+    if (width != null) {
+      return SizedBox(width: width, child: content);
+    }
+    return SizedBox(width: 96, child: content);
   }
 }
 
@@ -5347,6 +7051,7 @@ class _WeeklyTimeOverview extends StatelessWidget {
   final Map<String, int> daySeconds;
   final DateTime weekMonday;
   final ColorScheme cs;
+  final StatisticsUiCopy? copy;
 
   const _WeeklyTimeOverview({
     required this.weekTotalSeconds,
@@ -5354,19 +7059,20 @@ class _WeeklyTimeOverview extends StatelessWidget {
     required this.daySeconds,
     required this.weekMonday,
     required this.cs,
+    this.copy,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveCopy = copy ?? StatisticsUiCopy.current();
     return AppSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-      borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '本周时间概览',
-            style: TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+          Text(
+            effectiveCopy.weeklyTimeOverview,
+            style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
           ),
           const SizedBox(height: 10),
           // Headline total
@@ -5389,15 +7095,19 @@ class _WeeklyTimeOverview extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _formatDuration(weekTotalSeconds),
+                    effectiveCopy.formatDuration(weekTotalSeconds),
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.normal,
+                      fontFeatures: [FontFeature.tabularFigures()],
                     ),
                   ),
                   Text(
-                    '本周累计投入',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    effectiveCopy.weeklyTotalInvested,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: appSecondaryDescriptionColor(context),
+                    ),
                   ),
                 ],
               ),
@@ -5406,21 +7116,24 @@ class _WeeklyTimeOverview extends StatelessWidget {
           const SizedBox(height: 14),
           // Source breakdown pie
           if (weekTotalSeconds > 0) ...[
-            SizedBox(height: 160, child: _buildSourcePie(context)),
+            SizedBox(
+              height: 160,
+              child: _buildSourcePie(context, effectiveCopy),
+            ),
             const SizedBox(height: 10),
           ],
           // Daily bar trend
-          SizedBox(height: 120, child: _buildDailyBars(context)),
+          SizedBox(height: 120, child: _buildDailyBars(context, effectiveCopy)),
         ],
       ),
     );
   }
 
-  Widget _buildSourcePie(BuildContext context) {
+  Widget _buildSourcePie(BuildContext context, StatisticsUiCopy copy) {
     final nonZero = sourceSeconds.entries.where((e) => e.value > 0).toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     if (nonZero.isEmpty) {
-      return const EmptyHint(icon: Icons.inbox_outlined, message: '暂无数据');
+      return EmptyHint(icon: Icons.inbox_outlined, message: copy.noData);
     }
     final total = nonZero.fold<int>(0, (s, e) => s + e.value);
 
@@ -5435,7 +7148,7 @@ class _WeeklyTimeOverview extends StatelessWidget {
                 for (final entry in nonZero)
                   PieChartSectionData(
                     value: entry.value.toDouble(),
-                    color: _sourceColor(entry.key),
+                    color: _sourceColor(entry.key, cs),
                     radius: 40,
                     title: total == 0
                         ? ''
@@ -5444,6 +7157,7 @@ class _WeeklyTimeOverview extends StatelessWidget {
                       color: Colors.white,
                       fontWeight: FontWeight.normal,
                       fontSize: 11,
+                      fontFeatures: [FontFeature.tabularFigures()],
                     ),
                   ),
               ],
@@ -5465,14 +7179,14 @@ class _WeeklyTimeOverview extends StatelessWidget {
                         width: 10,
                         height: 10,
                         decoration: BoxDecoration(
-                          color: _sourceColor(entry.key),
+                          color: _sourceColor(entry.key, cs),
                           shape: BoxShape.circle,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          entry.key,
+                          copy.sourceLabel(entry.key),
                           style: const TextStyle(fontSize: 12),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -5488,8 +7202,8 @@ class _WeeklyTimeOverview extends StatelessWidget {
     );
   }
 
-  Widget _buildDailyBars(BuildContext context) {
-    const dayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  Widget _buildDailyBars(BuildContext context, StatisticsUiCopy copy) {
+    final dayLabels = copy.weekdayLabels;
     final buckets = <String, int>{};
     for (int i = 0; i < 7; i++) {
       final d = weekMonday.add(Duration(days: i));
@@ -5500,7 +7214,7 @@ class _WeeklyTimeOverview extends StatelessWidget {
 
     final maxV = buckets.values.fold<int>(0, (a, b) => a > b ? a : b);
     if (maxV == 0) {
-      return const EmptyHint(icon: Icons.date_range, message: '暂无本周数据');
+      return EmptyHint(icon: Icons.date_range, message: copy.noWeeklyData);
     }
 
     final entries = buckets.entries.toList();
@@ -5516,7 +7230,10 @@ class _WeeklyTimeOverview extends StatelessWidget {
               reservedSize: 30,
               getTitlesWidget: (v, _) => Text(
                 v.toInt().toString(),
-                style: const TextStyle(fontSize: 9),
+                style: const TextStyle(
+                  fontSize: 9,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
               ),
             ),
           ),
@@ -5564,21 +7281,22 @@ class _WeeklyTimeOverview extends StatelessWidget {
     );
   }
 
-  static String _formatDuration(int seconds) {
-    if (seconds >= 3600) {
-      final h = seconds / 3600;
-      return '${h.toStringAsFixed(seconds % 3600 == 0 ? 0 : 1)} 小时';
-    }
-    final m = seconds / 60;
-    return '${m.toStringAsFixed(seconds % 60 == 0 ? 0 : 1)} 分钟';
-  }
-
-  static Color _sourceColor(String label) => switch (label) {
-    '番茄钟' => Colors.redAccent,
-    '待办' => const Color(0xFF42A5F5),
-    '习惯' => const Color(0xFF66BB6A),
-    '目标' => const Color(0xFFAB47BC),
-    '手动' => const Color(0xFF78909C),
-    _ => const Color(0xFF78909C),
+  static Color _sourceColor(String label, ColorScheme cs) => switch (label) {
+    '番茄钟' || 'Pomodoro' => DesignTokens.defaultError,
+    '待办' || 'Task' => cs.primary,
+    '习惯' || 'Habit' => DesignTokens.defaultSuccess,
+    '目标' || 'Goal' => cs.tertiary,
+    '手动' || 'Manual' => cs.onSurfaceVariant,
+    _ => cs.onSurfaceVariant,
   };
+}
+
+Color _trendDeltaColor(BuildContext context, int delta) {
+  if (delta == 0) return appSecondaryDescriptionColor(context);
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final base =
+      delta > 0 ? DesignTokens.defaultSuccess : DesignTokens.defaultError;
+  return isDark
+      ? Color.lerp(base, Colors.white, 0.35)!
+      : Color.lerp(base, const Color(0xFF111827), 0.25)!;
 }

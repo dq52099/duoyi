@@ -1,27 +1,47 @@
+import '../widgets/app_date_format.dart';
 import 'dart:async';
 import 'dart:io' show File;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../core/admin_announcement_ui_copy.dart';
+import '../core/admin_audit_ui_copy.dart';
+import '../core/admin_feedback_ui_copy.dart';
+import '../core/admin_invite_ui_copy.dart';
+import '../core/admin_ui_copy.dart';
 import '../core/app_version.dart';
 import '../core/app_config.dart';
 import '../core/design_tokens.dart';
+import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
 import '../providers/auth_provider.dart';
+import '../providers/app_lock_provider.dart';
 import '../services/admin_api.dart';
+import '../services/admin_action_origin.dart';
+import '../services/admin_feedback_export.dart';
+import '../services/app_access_route_gate.dart';
+import '../services/app_update_service.dart';
 import '../services/ai_service.dart';
 import '../services/api_client.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
+import '../widgets/brand_background.dart'
+    show BrandBackground, BrandRouteSurface, LocaleStatePreservingRoute;
 
 /// 管理员后台 — 仅当 AuthProvider.state.isAdmin == true 时可进入。
-class AdminScreen extends StatefulWidget {
+class AdminScreen extends StatefulWidget implements LocaleStatePreservingRoute {
   final int initialTabIndex;
+  final AdminFeedbackExportEffects feedbackExportEffects;
 
-  const AdminScreen({super.key, this.initialTabIndex = 0});
+  const AdminScreen({
+    super.key,
+    this.initialTabIndex = 0,
+    this.feedbackExportEffects = const PlatformAdminFeedbackExportEffects(),
+  });
 
   @override
   State<AdminScreen> createState() => _AdminScreenState();
@@ -33,6 +53,11 @@ class _AdminScreenState extends State<AdminScreen>
   late TabController _tabs;
   late final List<int> _tabRefreshSerials;
   late int _activeTabIndex;
+  final _announcementsViewRevision = ValueNotifier<int>(0);
+  final _invitesViewRevision = ValueNotifier<int>(0);
+  final _usersViewRevision = ValueNotifier<int>(0);
+  final _auditViewRevision = ValueNotifier<int>(0);
+  final _feedbackViewRevision = ValueNotifier<int>(0);
 
   @override
   void initState() {
@@ -45,18 +70,44 @@ class _AdminScreenState extends State<AdminScreen>
     );
     _tabs.addListener(_handleTabChanged);
     _tabRefreshSerials = List<int>.filled(_adminTabCount, 0);
+    I18n.localeListenable.addListener(_handleLocaleChanged);
   }
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_handleLocaleChanged);
     _tabs.removeListener(_handleTabChanged);
     _tabs.dispose();
+    _announcementsViewRevision.dispose();
+    _invitesViewRevision.dispose();
+    _usersViewRevision.dispose();
+    _auditViewRevision.dispose();
+    _feedbackViewRevision.dispose();
     super.dispose();
+  }
+
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   void _handleTabChanged() {
     final nextIndex = _tabs.index.clamp(0, _adminTabCount - 1);
     if (nextIndex == _activeTabIndex) return;
+    if (_activeTabIndex == 6 || nextIndex == 6) {
+      _announcementsViewRevision.value++;
+    }
+    if (_activeTabIndex == 8 || nextIndex == 8) {
+      _invitesViewRevision.value++;
+    }
+    if (_activeTabIndex == 4 || nextIndex == 4) {
+      _usersViewRevision.value++;
+    }
+    if (_activeTabIndex == 7 || nextIndex == 7) {
+      _feedbackViewRevision.value++;
+    }
+    if (_activeTabIndex == 9 || nextIndex == 9) {
+      _auditViewRevision.value++;
+    }
     setState(() => _activeTabIndex = nextIndex);
   }
 
@@ -70,18 +121,40 @@ class _AdminScreenState extends State<AdminScreen>
     final routeBackground = theme.brightness == Brightness.dark
         ? cs.surface
         : cs.surfaceContainerLowest;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+
+    Widget wrapWithSurface(Widget scaffold) {
+      final themed = Theme(data: theme, child: scaffold);
+      if (!isLiquidGlass) {
+        return themed;
+      }
+      final hasBrandSurface =
+          context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+          context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+      if (hasBrandSurface) {
+        return themed;
+      }
+      return Material(
+        color: routeBackground,
+        child: BrandBackground(child: themed),
+      );
+    }
+
     if (!auth.state.isAdmin) {
-      return Theme(
-        data: theme,
-        child: Scaffold(
-          backgroundColor: routeBackground,
+      return wrapWithSurface(
+        Scaffold(
+          backgroundColor: isLiquidGlass ? Colors.transparent : routeBackground,
           appBar: AppBar(
-            title: const Text('管理员后台'),
+            title: Text(AdminUiCopy.adminScreenTitle),
             titleTextStyle: appSecondaryRouteTitleTextStyle(context),
             backgroundColor: routeBackground.withValues(alpha: 0.96),
             surfaceTintColor: Colors.transparent,
           ),
-          body: const EmptyState(icon: Icons.lock, message: '仅管理员可访问'),
+          body: EmptyState(
+            icon: Icons.lock,
+            message: AdminUiCopy.adminAccessOnly,
+          ),
         ),
       );
     }
@@ -95,18 +168,17 @@ class _AdminScreenState extends State<AdminScreen>
             (permissions.contains(_adminAllPermission) ||
                 permissions.contains(permission)));
 
-    return Theme(
-      data: theme,
-      child: Scaffold(
-        backgroundColor: routeBackground,
+    return wrapWithSurface(
+      Scaffold(
+        backgroundColor: isLiquidGlass ? Colors.transparent : routeBackground,
         appBar: AppBar(
-          title: const Text('管理员后台'),
+          title: Text(AdminUiCopy.adminScreenTitle),
           titleTextStyle: appSecondaryRouteTitleTextStyle(context),
           backgroundColor: routeBackground.withValues(alpha: 0.96),
           surfaceTintColor: Colors.transparent,
           actions: [
             PopupMenuButton<int>(
-              tooltip: '选择管理模块',
+              tooltip: AdminUiCopy.selectModuleTooltip,
               icon: const Icon(Icons.grid_view_outlined),
               initialValue: _activeTabIndex,
               onSelected: (index) {
@@ -115,18 +187,7 @@ class _AdminScreenState extends State<AdminScreen>
                 }
               },
               itemBuilder: (context) {
-                const tabsMeta = [
-                  (Icons.dashboard_outlined, '概览'),
-                  (Icons.tune, '全站设置'),
-                  (Icons.auto_awesome, 'AI 配置'),
-                  (Icons.cloud_outlined, '云端备份'),
-                  (Icons.people_outline, '用户'),
-                  (Icons.groups_2_outlined, '用户组'),
-                  (Icons.campaign_outlined, '公告'),
-                  (Icons.feedback_outlined, '许愿与反馈'),
-                  (Icons.vpn_key_outlined, '邀请码'),
-                  (Icons.receipt_long_outlined, '日志'),
-                ];
+                final tabsMeta = AdminUiCopy.moduleTabsMeta;
                 return [
                   for (var i = 0; i < tabsMeta.length; i++)
                     PopupMenuItem<int>(
@@ -143,13 +204,18 @@ class _AdminScreenState extends State<AdminScreen>
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Text(
-                              tabsMeta[i].$2,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: _activeTabIndex == i
-                                    ? cs.primary
-                                    : cs.onSurface,
-                              ),
+                            child: ValueListenableBuilder<AppLocale>(
+                              valueListenable: I18n.localeListenable,
+                              builder: (context, locale, _) {
+                                return Text(
+                                  AdminUiCopy.tabTitleForIndex(i, locale),
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: _activeTabIndex == i
+                                        ? cs.primary
+                                        : cs.onSurface,
+                                  ),
+                                );
+                              },
                             ),
                           ),
                           if (_activeTabIndex == i)
@@ -161,7 +227,7 @@ class _AdminScreenState extends State<AdminScreen>
               },
             ),
             IconButton(
-              tooltip: '刷新当前页',
+              tooltip: AdminUiCopy.refreshCurrentPageTooltip,
               onPressed: () {
                 final index = _tabs.index.clamp(
                   0,
@@ -290,12 +356,20 @@ class _AdminScreenState extends State<AdminScreen>
               ),
             ),
             _AdminTabContent(
+              allowed: const [
+                'users',
+                'coins',
+                'groups',
+                'roles',
+                'permissions',
+              ].any(canAccess),
               child: _UsersTab(
                 key: ValueKey('admin-users-${_tabRefreshSerials[4]}'),
                 api: api,
                 selfId: auth.state.userId,
                 selfAdminPermissions: auth.state.adminPermissions,
                 isActive: _activeTabIndex == 4,
+                activationRevision: _usersViewRevision,
               ),
             ),
             _AdminTabContent(
@@ -306,27 +380,40 @@ class _AdminScreenState extends State<AdminScreen>
               ),
             ),
             _AdminTabContent(
+              allowed: canAccess('announcements'),
               child: _AnnouncementsTab(
                 key: ValueKey('admin-announcements-${_tabRefreshSerials[6]}'),
                 api: api,
+                isActive: _activeTabIndex == 6,
+                activationRevision: _announcementsViewRevision,
               ),
             ),
             _AdminTabContent(
+              allowed: canAccess('feedback'),
               child: _FeedbackTab(
                 key: ValueKey('admin-feedback-${_tabRefreshSerials[7]}'),
                 api: api,
+                exportEffects: widget.feedbackExportEffects,
+                isActiveNow: () => _tabs.index == 7,
+                activationRevision: _feedbackViewRevision,
               ),
             ),
             _AdminTabContent(
+              allowed: canAccess('invites'),
               child: _InvitesTab(
                 key: ValueKey('admin-invites-${_tabRefreshSerials[8]}'),
                 api: api,
+                isActive: _activeTabIndex == 8,
+                activationRevision: _invitesViewRevision,
               ),
             ),
             _AdminTabContent(
+              allowed: canAccess('audit'),
               child: _AuditLogTab(
                 key: ValueKey('admin-audit-${_tabRefreshSerials[9]}'),
                 api: api,
+                isActiveNow: () => _tabs.index == 9,
+                activationRevision: _auditViewRevision,
               ),
             ),
           ],
@@ -561,7 +648,15 @@ class _AdminTabContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!allowed) {
-      return const EmptyState(icon: Icons.lock_outline, message: '暂无此模块的管理权限');
+      return ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (context, locale, _) {
+          return EmptyState(
+            icon: Icons.lock_outline,
+            message: AdminUiCopy.noModulePermissionFor(locale),
+          );
+        },
+      );
     }
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -610,15 +705,32 @@ class _AdminGlassControlTheme extends StatelessWidget {
     final glassFill = isDark
         ? cs.surfaceContainerHighest.withValues(alpha: 0.28)
         : cs.surfaceContainerHighest.withValues(alpha: 0.36);
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final cardFill = surfaceStyle?.cardFillColor ?? cs.surface;
+    final cardBackground = Color.alphaBlend(
+      cardFill,
+      theme.scaffoldBackgroundColor,
+    );
+    final textButtonForeground = surfaceStyle != null
+        ? appReadableForeground(cardBackground, cs.primary)
+        : cs.primary;
+    final buttonShape = surfaceStyle == null
+        ? null
+        : RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(surfaceStyle.smallTileRadius),
+          );
 
     ButtonStyle adminTextButtonStyle() {
       return TextButton.styleFrom(
-        foregroundColor: cs.primary,
-        textStyle: controlText,
-        minimumSize: const Size(0, 44),
+        foregroundColor: textButtonForeground,
+        textStyle: controlText.copyWith(color: textButtonForeground),
+        minimumSize: surfaceStyle != null
+            ? const Size(44, 44)
+            : const Size(0, 44),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         visualDensity: VisualDensity.standard,
         tapTargetSize: MaterialTapTargetSize.padded,
+        shape: buttonShape,
       );
     }
 
@@ -628,10 +740,13 @@ class _AdminGlassControlTheme extends StatelessWidget {
         disabledForegroundColor: cs.onSurface.withValues(alpha: 0.36),
         side: BorderSide(color: defaultBorder, width: 0.45),
         textStyle: controlText,
-        minimumSize: const Size(0, 44),
+        minimumSize: surfaceStyle != null
+            ? const Size(44, 44)
+            : const Size(0, 44),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         visualDensity: VisualDensity.standard,
         tapTargetSize: MaterialTapTargetSize.padded,
+        shape: buttonShape,
       );
     }
 
@@ -643,10 +758,13 @@ class _AdminGlassControlTheme extends StatelessWidget {
         disabledForegroundColor: cs.onSurface.withValues(alpha: 0.34),
         side: BorderSide(color: defaultBorder, width: 0.45),
         textStyle: controlText,
-        minimumSize: const Size(0, 44),
+        minimumSize: surfaceStyle != null
+            ? const Size(44, 44)
+            : const Size(0, 44),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         visualDensity: VisualDensity.standard,
         tapTargetSize: MaterialTapTargetSize.padded,
+        shape: buttonShape,
       );
     }
 
@@ -689,22 +807,93 @@ class _AdminTabLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textWidth = text.length * 12.0 + 28.0;
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        minWidth: textWidth.clamp(72.0, 118.0),
-        maxWidth: 140,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final displayText = AdminUiCopy.tabTitle(text, locale);
+        return ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 72),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16),
+              const SizedBox(width: 5),
+              Text(displayText),
+            ],
           ),
-        ],
-      ),
+        );
+      },
+    );
+  }
+}
+
+/// Settings fields keep the input in one slot while long labels reflow.
+class _AdminSettingsTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final InputDecoration decoration;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool enabled;
+  final bool obscureText;
+  final VoidCallback? onEditingComplete;
+
+  const _AdminSettingsTextField({
+    required this.controller,
+    required this.label,
+    required this.decoration,
+    this.keyboardType,
+    this.inputFormatters,
+    this.enabled = true,
+    this.obscureText = false,
+    this.onEditingComplete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final media = MediaQuery.of(context);
+    final external =
+        media.size.width < 360 || media.textScaler.scale(1.0) > 1.25;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (external)
+          ExcludeSemantics(
+            child: Text(
+              label,
+              style:
+                  (theme.inputDecorationTheme.labelStyle ??
+                          theme.textTheme.bodyMedium ??
+                          const TextStyle())
+                      .copyWith(
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.normal,
+                      ),
+            ),
+          )
+        else
+          const SizedBox.shrink(),
+        SizedBox(height: external ? 6 : 0),
+        Semantics(
+          label: external ? label : null,
+          child: TextField(
+            controller: controller,
+            enabled: enabled,
+            obscureText: obscureText,
+            keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
+            onEditingComplete: onEditingComplete,
+            decoration: decoration.copyWith(
+              labelText: external ? null : label,
+              constraints:
+                  decoration.constraints ?? const BoxConstraints(minHeight: 44),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -781,7 +970,6 @@ class _AdminListTileCard extends StatelessWidget {
   final Widget? trailing;
   final EdgeInsetsGeometry margin;
   final bool dense;
-  final bool isThreeLine;
 
   const _AdminListTileCard({
     required this.title,
@@ -790,7 +978,6 @@ class _AdminListTileCard extends StatelessWidget {
     this.trailing,
     this.margin = EdgeInsets.zero,
     this.dense = false,
-    this.isThreeLine = false,
   });
 
   @override
@@ -803,7 +990,6 @@ class _AdminListTileCard extends StatelessWidget {
       margin: margin,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       dense: dense,
-      isThreeLine: isThreeLine,
       border: _adminSubtleListBorder(context),
       elevation: 0,
     );
@@ -837,17 +1023,20 @@ class _AdminPermissionGroupPanel extends StatelessWidget {
   final _AdminPermissionGroup group;
   final Set<String> selected;
   final ValueChanged<Set<String>> onChanged;
+  final AppLocale? locale;
 
   const _AdminPermissionGroupPanel({
     required this.group,
     required this.selected,
     required this.onChanged,
+    this.locale,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final l = locale ?? I18n.current;
     final visiblePermissions = group.permissions
         .where(_adminPermissionLabels.containsKey)
         .toList(growable: false);
@@ -872,7 +1061,7 @@ class _AdminPermissionGroupPanel extends StatelessWidget {
                 Icon(group.icon, size: 16, color: cs.onSurfaceVariant),
                 const SizedBox(width: 6),
                 Text(
-                  group.title,
+                  AdminUiCopy.permissionGroupTitle(group.title, l),
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: cs.onSurface,
                     fontWeight: FontWeight.normal,
@@ -887,7 +1076,7 @@ class _AdminPermissionGroupPanel extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 contentPadding: EdgeInsets.zero,
                 value: selected.contains(permission),
-                title: Text(_adminPermissionLabels[permission] ?? permission),
+                title: Text(AdminUiCopy.permissionLabel(permission, l)),
                 onChanged: (value) {
                   final next = selected.toSet();
                   if (value == true) {
@@ -960,7 +1149,7 @@ class _AdminGroupSummaryCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name.isEmpty ? '未命名用户组' : name,
+                  name.isEmpty ? AdminUiCopy.unnamedGroup : name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleSmall?.copyWith(
@@ -981,7 +1170,7 @@ class _AdminGroupSummaryCard extends StatelessWidget {
                 ],
                 const SizedBox(height: 8),
                 Text(
-                  '默认时光币\n$coins',
+                  AdminUiCopy.groupCardCoinsLabel(coins),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: cs.onSurface.withValues(alpha: 0.72),
                     height: 1.25,
@@ -993,7 +1182,7 @@ class _AdminGroupSummaryCard extends StatelessWidget {
                   runSpacing: 6,
                   children: [
                     AppStatusBadge(
-                      label: '$userCount 人',
+                      label: AdminUiCopy.userCountLabel(userCount),
                       color: cs.primary,
                       icon: Icons.people_outline,
                       padding: const EdgeInsets.symmetric(
@@ -1002,7 +1191,9 @@ class _AdminGroupSummaryCard extends StatelessWidget {
                       ),
                     ),
                     AppStatusBadge(
-                      label: active ? '启用' : '停用',
+                      label: active
+                          ? AdminUiCopy.enabled
+                          : AdminUiCopy.disabled,
                       color: statusColor,
                       icon: active
                           ? Icons.check_circle_outline
@@ -1025,14 +1216,14 @@ class _AdminGroupSummaryCard extends StatelessWidget {
                 spacing: 2,
                 children: [
                   IconButton(
-                    tooltip: '编辑用户组',
+                    tooltip: AdminUiCopy.editGroupTooltip,
                     onPressed: onEdit,
                     icon: const Icon(Icons.edit_outlined),
                   ),
                   if (showDelete && id != 'group_default')
                     IconButton(
                       key: ValueKey('admin_group_delete_$id'),
-                      tooltip: '删除用户组',
+                      tooltip: AdminUiCopy.deleteGroupTooltip,
                       onPressed: onDelete,
                       icon: const Icon(Icons.delete_outline),
                     ),
@@ -1170,40 +1361,60 @@ class _DashboardTab extends StatefulWidget {
 
 class _DashboardTabState extends State<_DashboardTab> {
   Map<String, dynamic>? _stats;
-  String? _error;
+  Object? _errorObject;
   bool _loading = true;
   int _loadSerial = 0;
 
   @override
   void initState() {
     super.initState();
+    I18n.localeListenable.addListener(_handleLocaleChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_handleLocaleChanged);
+    super.dispose();
+  }
+
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _load() async {
     final serial = ++_loadSerial;
     setState(() {
       _loading = true;
-      _error = null;
+      _errorObject = null;
     });
     try {
       final res = await widget.api.stats();
       if (!mounted || serial != _loadSerial) return;
       setState(() {
         _stats = res;
-        _error = null;
+        _errorObject = null;
       });
     } on ApiException catch (e) {
       if (!mounted || serial != _loadSerial) return;
-      setState(() => _error = userVisibleApiError(e));
+      setState(() => _errorObject = e);
     } catch (e) {
       if (!mounted || serial != _loadSerial) return;
-      setState(() => _error = _adminErrorMessage(e, '概览数据'));
+      setState(() => _errorObject = e);
     } finally {
       if (mounted && serial == _loadSerial) {
         setState(() => _loading = false);
       }
     }
+  }
+
+  String? get _error {
+    final err = _errorObject;
+    if (err == null) return null;
+    if (err is ApiException) {
+      return userVisibleApiError(err);
+    }
+    return _adminErrorMessage(err, AdminUiCopy.dashboardData);
   }
 
   @override
@@ -1212,7 +1423,10 @@ class _DashboardTabState extends State<_DashboardTab> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_stats == null) {
-      return _AdminErrorState(message: _error ?? '概览加载失败，请重试', onRetry: _load);
+      return _AdminErrorState(
+        message: _error ?? AdminUiCopy.dashboardLoadFailed,
+        onRetry: _load,
+      );
     }
     final users = _stats!['users'] as Map? ?? {};
     final fb = _stats!['feedback'] as Map? ?? {};
@@ -1242,7 +1456,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '概览刷新失败：$_error',
+                      AdminUiCopy.dashboardRefreshFailedWith(_error!),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: cs.error,
                       ),
@@ -1250,57 +1464,57 @@ class _DashboardTabState extends State<_DashboardTab> {
                   ),
                   TextButton(
                     onPressed: _loading ? null : _load,
-                    child: const Text('重试'),
+                    child: Text(AdminUiCopy.retry),
                   ),
                 ],
               ),
             ),
           _AdminInlineLoadingIndicator(
             visible: _loading && _stats != null,
-            label: '正在更新概览数据',
+            label: AdminUiCopy.updatingDashboardData,
           ),
           AppInfoBanner(
             icon: Icons.verified_outlined,
             color: Colors.indigo,
-            title: '客户端连接',
+            title: AdminUiCopy.clientConnection,
             message: AppConfig.bakedServerUrl.isEmpty
-                ? '相对路径 (同域反代)'
+                ? AdminUiCopy.relativeSameOriginProxy
                 : AppConfig.bakedServerUrl,
             margin: const EdgeInsets.only(bottom: 12),
           ),
           _GridCards([
             _Kpi(
-              '总用户',
+              AdminUiCopy.kpiTotalUsers,
               users['total'] == null ? '-' : '${users['total']}',
               Icons.people,
               Colors.blue,
             ),
             _Kpi(
-              '管理员',
+              AdminUiCopy.kpiAdmins,
               users['admin'] == null ? '-' : '${users['admin']}',
               Icons.shield,
               Colors.deepOrange,
             ),
             _Kpi(
-              '已禁用',
+              AdminUiCopy.kpiDisabled,
               users['disabled'] == null ? '-' : '${users['disabled']}',
               Icons.block,
               cs.error,
             ),
             _Kpi(
-              '今日新增',
+              AdminUiCopy.kpiNewToday,
               users['new_today'] == null ? '-' : '${users['new_today']}',
               Icons.person_add_alt,
               Colors.green,
             ),
             _Kpi(
-              '7 日活跃',
+              AdminUiCopy.kpiActive7d,
               users['active_7d'] == null ? '-' : '${users['active_7d']}',
               Icons.trending_up,
               Colors.teal,
             ),
             _Kpi(
-              '在线',
+              AdminUiCopy.kpiOnline,
               (users['online'] ?? _stats!['tokens_online']) == null
                   ? '-'
                   : '${users['online'] ?? _stats!['tokens_online']}',
@@ -1308,7 +1522,7 @@ class _DashboardTabState extends State<_DashboardTab> {
               Colors.cyan,
             ),
             _Kpi(
-              '邮箱未验证',
+              AdminUiCopy.kpiUnverifiedEmail,
               users['unverified_email'] == null
                   ? '-'
                   : '${users['unverified_email']}',
@@ -1316,31 +1530,31 @@ class _DashboardTabState extends State<_DashboardTab> {
               Colors.amber,
             ),
             _Kpi(
-              '待处理反馈',
+              AdminUiCopy.kpiOpenFeedback,
               fb['open'] == null ? '-' : '${fb['open']}',
               Icons.chat_bubble_outline,
               Colors.orange,
             ),
             _Kpi(
-              '处理中反馈',
+              AdminUiCopy.kpiInProgressFeedback,
               fb['in_progress'] == null ? '-' : '${fb['in_progress']}',
               Icons.pending_actions_outlined,
               Colors.deepPurple,
             ),
             _Kpi(
-              '反馈总数',
+              AdminUiCopy.kpiTotalFeedback,
               fb['total'] == null ? '-' : '${fb['total']}',
               Icons.forum_outlined,
               Colors.grey,
             ),
             _Kpi(
-              '公告(已发)',
+              AdminUiCopy.kpiPublishedAnnouncements,
               ann['published'] == null ? '-' : '${ann['published']}',
               Icons.campaign,
               Colors.indigo,
             ),
             _Kpi(
-              '邀请码已用',
+              AdminUiCopy.kpiInvitesUsed,
               inv['used'] == null && inv['total'] == null
                   ? '-'
                   : '${inv['used'] ?? '-'} / ${inv['total'] ?? '-'}',
@@ -1357,7 +1571,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '近 7 天注册',
+                    AdminUiCopy.recentRegistrations7d,
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: cs.onSurface,
                       fontWeight: FontWeight.normal,
@@ -1366,7 +1580,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                   const SizedBox(height: 10),
                   if (series.isEmpty)
                     Text(
-                      '暂无注册',
+                      AdminUiCopy.noRegistrations,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.58),
                       ),
@@ -1462,8 +1676,9 @@ class _GridCards extends StatelessWidget {
                 children: [
                   Text(
                     k.title,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                    softWrap: true,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.62),
                       fontWeight: FontWeight.normal,
@@ -1522,7 +1737,8 @@ class _GridCards extends StatelessWidget {
         final titleMedium = theme.textTheme.titleMedium;
         final titleHeight =
             textScaler.scale(bodySmall?.fontSize ?? 12.5) *
-            (bodySmall?.height ?? 1.5);
+            (bodySmall?.height ?? 1.5) *
+            2;
         final valueHeight =
             textScaler.scale(titleMedium?.fontSize ?? 14.0) *
             (titleMedium?.height ?? 1.28);
@@ -1617,53 +1833,8 @@ bool _adminHasAllPermissions(Set<String> selected) {
   return _adminPermissionLabels.keys.every(selected.contains);
 }
 
-String _adminStatusLabel(String value) {
-  switch (value) {
-    case 'open':
-      return '待处理';
-    case 'in_progress':
-      return '处理中';
-    case 'resolved':
-      return '已解决';
-    case 'closed':
-      return '已关闭';
-    case 'published':
-      return '已发布';
-    case 'draft':
-      return '草稿';
-    case 'used':
-      return '已使用';
-    case 'unused':
-      return '未使用';
-    case 'admin':
-      return '管理员';
-    case 'disabled':
-      return '已禁用';
-    case 'active':
-      return '可登录';
-    case 'normal':
-      return '普通用户';
-    case 'online':
-      return '在线';
-    case 'offline':
-      return '离线';
-    case 'unverified_email':
-      return '邮箱未验证';
-    case 'verified_email':
-      return '邮箱已验证';
-    case 'no_email':
-      return '未绑定邮箱';
-    case 'has_feedback':
-      return '有反馈';
-    case 'info':
-      return '普通';
-    case 'warning':
-      return '重要';
-    case 'critical':
-      return '紧急';
-    default:
-      return value.isEmpty ? '全部' : value;
-  }
+String _adminStatusLabel(String value, [AppLocale? locale]) {
+  return AdminUiCopy.statusLabel(value, locale);
 }
 
 class _AdminUpdateVersionOption {
@@ -1680,26 +1851,19 @@ class _AdminUpdateVersionOption {
   });
 }
 
-String _adminUserSortLabel(String value) {
-  switch (value) {
-    case 'last_active_desc':
-      return '最近活跃优先';
-    case 'last_login_desc':
-      return '最近登录优先';
-    case 'feedback_desc':
-      return '反馈较多优先';
-    case 'username_asc':
-      return '用户名 A-Z';
-    case 'email_asc':
-      return '邮箱 A-Z';
-    default:
-      return '最新注册优先';
-  }
-}
+String _adminUserSortLabel(String sort) => switch (sort) {
+  'last_active_desc' => _userText('最近活跃优先', 'Recently active'),
+  'last_login_desc' => _userText('最近登录优先', 'Recent sign in'),
+  'feedback_desc' => _userText('反馈较多优先', 'Most feedback'),
+  'username_asc' => _userText('用户名 A-Z', 'Username A–Z'),
+  'email_asc' => _userText('邮箱 A-Z', 'Email A–Z'),
+  _ => _userText('最新注册优先', 'Newest accounts'),
+};
 
 List<String> _adminUserPermissions(dynamic raw, {required bool isAdmin}) {
   if (raw is List) {
     final values = raw.map((e) => e.toString()).where((e) => e.isNotEmpty);
+    if (values.contains(_adminNoPermission)) return const [];
     final normalized = <String>[];
     for (final value in values) {
       if (value == _adminNoPermission) return const [];
@@ -1717,11 +1881,19 @@ List<String> _adminUserPermissions(dynamic raw, {required bool isAdmin}) {
 String _adminPermissionsLabel(
   List<String> permissions, {
   required bool isAdmin,
+  AppLocale? locale,
 }) {
-  if (!isAdmin) return '无管理权限';
-  if (permissions.contains(_adminAllPermission)) return '全部权限';
-  if (permissions.isEmpty) return '无管理权限';
-  return permissions.map((key) => _adminPermissionLabels[key] ?? key).join('、');
+  final l = locale ?? I18n.current;
+  final zh = l == AppLocale.zh;
+  if (!isAdmin) return AdminUiCopy.noAdminPermissionsFor(l);
+  if (permissions.contains(_adminAllPermission)) {
+    return AdminUiCopy.allPermissionsFor(l);
+  }
+  if (permissions.isEmpty) return AdminUiCopy.noAdminPermissionsFor(l);
+  final separator = zh ? '、' : ', ';
+  return permissions
+      .map((key) => AdminUiCopy.permissionLabel(key, l))
+      .join(separator);
 }
 
 int _adminIntValue(dynamic raw) {
@@ -1741,149 +1913,60 @@ String _adminIntValueOrDash(dynamic raw) {
   return _adminIntValue(raw).toString();
 }
 
-String _adminAnnouncementSortLabel(String value) {
-  switch (value) {
-    case 'updated_desc':
-      return '最近更新优先';
-    case 'title_asc':
-      return '标题 A-Z';
-    case 'level_desc':
-      return '紧急程度优先';
-    default:
-      return '最新创建优先';
-  }
+String _adminAnnouncementSortLabel(String value, [AppLocale? locale]) {
+  return AdminAnnouncementUiCopy.sortLabel(value, locale);
 }
 
-String _adminFeedbackSortLabel(String value) {
-  switch (value) {
-    case 'updated_desc':
-      return '最近处理优先';
-    case 'status_asc':
-      return '待处理优先';
-    case 'user_asc':
-      return '用户 A-Z';
-    default:
-      return '最新反馈优先';
-  }
+String _adminFeedbackSortLabel(String value, [AppLocale? locale]) =>
+    AdminFeedbackUiCopy.sortLabel(value, locale);
+
+String _adminInviteSortLabel(String value, [AppLocale? locale]) =>
+    AdminInviteUiCopy.sortLabel(value, locale);
+
+String _adminAuditSortLabel(String value, [AppLocale? locale]) =>
+    AdminAuditUiCopy.sortLabel(value, locale);
+
+String _adminBackupSortLabel(String value, [AppLocale? locale]) {
+  return AdminUiCopy.backupSortLabel(value, locale);
 }
 
-String _adminInviteSortLabel(String value) {
-  switch (value) {
-    case 'used_desc':
-      return '最近使用优先';
-    case 'code_asc':
-      return '邀请码 A-Z';
-    case 'note_asc':
-      return '备注 A-Z';
-    default:
-      return '最新生成优先';
-  }
+String _adminServerBackupSortLabel(String value, [AppLocale? locale]) {
+  return AdminUiCopy.serverBackupSortOptionLabel(value, locale);
 }
 
-String _adminAuditSortLabel(String value) {
-  switch (value) {
-    case 'actor_asc':
-      return '管理员 A-Z';
-    case 'action_asc':
-      return '操作类型 A-Z';
-    case 'target_asc':
-      return '对象 A-Z';
-    default:
-      return '最新操作优先';
-  }
-}
+String _auditActionLabel(String value, [AppLocale? locale]) =>
+    AdminAuditUiCopy.actionLabel(value, locale);
 
-String _adminBackupSortLabel(String value) {
-  switch (value) {
-    case 'username_asc':
-      return '用户名 A-Z';
-    case 'size_desc':
-      return '备份体积从大到小';
-    case 'size_asc':
-      return '备份体积从小到大';
-    case 'version_desc':
-      return '同步版本较高优先';
-    default:
-      return '最近同步优先';
-  }
-}
+String _feedbackCategoryLabel(String value, [AppLocale? locale]) =>
+    AdminFeedbackUiCopy.categoryLabel(value, locale);
 
-String _adminServerBackupSortLabel(String value) {
-  switch (value) {
-    case 'size_desc':
-      return '文件从大到小';
-    case 'size_asc':
-      return '文件从小到大';
-    case 'status_asc':
-      return '状态 A-Z';
-    case 'filename_asc':
-      return '文件名 A-Z';
-    default:
-      return '最新生成优先';
-  }
-}
-
-String _auditActionLabel(String value) {
-  switch (value) {
-    case 'user.update':
-      return '更新用户';
-    case 'user.delete':
-      return '删除用户';
-    case 'announcement.create':
-      return '创建公告';
-    case 'announcement.update':
-      return '更新公告';
-    case 'announcement.delete':
-      return '删除公告';
-    case 'feedback.reply':
-      return '回复反馈';
-    case 'feedback.delete':
-      return '删除反馈';
-    case 'invite.create':
-      return '生成邀请码';
-    case 'invite.delete':
-      return '删除邀请码';
-    default:
-      return value.isEmpty ? '全部操作' : value;
-  }
-}
-
-String _feedbackCategoryLabel(String value) {
-  switch (value) {
-    case 'feature':
-      return '功能建议';
-    case 'bug':
-      return '问题反馈';
-    case 'wish':
-      return '愿望清单';
-    case 'other':
-      return '其他';
-    default:
-      return value.isEmpty ? '全部分类' : value;
-  }
-}
-
-String _adminPageSummary(AdminPage? page) {
-  if (page == null) return '正在加载本页数据';
-  if (page.total <= 0) return '0 条';
+String _adminPageSummary(AdminPage? page, [AppLocale? locale]) {
+  final effectiveLocale = locale ?? I18n.current;
+  final zh = effectiveLocale == AppLocale.zh;
+  if (page == null) return zh ? '正在加载本页数据' : 'Loading page data...';
+  if (page.total <= 0) return zh ? '0 条' : '0 items';
   final safeLimit = page.limit <= 0 ? _adminPageSize : page.limit;
   final maxOffset = ((page.total - 1) ~/ safeLimit) * safeLimit;
   final safeOffset = page.offset.clamp(0, maxOffset).toInt();
   final start = safeOffset + 1;
   final end = (safeOffset + page.items.length).clamp(start, page.total).toInt();
-  return '第 $start-$end 条 / 共 ${page.total} 条';
+  return zh
+      ? '第 $start-$end 条 / 共 ${page.total} 条'
+      : '$start-$end of ${page.total}';
 }
 
-String _adminPageNumber(AdminPage? page) {
-  if (page == null) return '第 -/- 页';
-  if (page.total <= 0) return '第 0/0 页';
+String _adminPageNumber(AdminPage? page, [AppLocale? locale]) {
+  final effectiveLocale = locale ?? I18n.current;
+  final zh = effectiveLocale == AppLocale.zh;
+  if (page == null) return zh ? '第 -/- 页' : 'Page -/-';
+  if (page.total <= 0) return zh ? '第 0/0 页' : 'Page 0/0';
   final safeLimit = page.limit <= 0 ? _adminPageSize : page.limit;
   final totalPages = ((page.total + safeLimit - 1) ~/ safeLimit).clamp(
     1,
     999999,
   );
   final current = ((page.offset ~/ safeLimit) + 1).clamp(1, totalPages).toInt();
-  return '第 $current/$totalPages 页';
+  return zh ? '第 $current/$totalPages 页' : 'Page $current/$totalPages';
 }
 
 int _adminTotalPages(AdminPage? page, int pageSize) {
@@ -1913,14 +1996,59 @@ int _lastAdminOffset({required int total, required int pageSize}) {
   return ((total - 1) ~/ safeLimit) * safeLimit;
 }
 
-String _adminErrorMessage(Object error, String target) {
-  final text = userVisibleApiError(error);
-  return '无法加载$target：$text';
+String _adminErrorMessage(Object error, String target, [AppLocale? locale]) {
+  return AdminUiCopy.formatLoadError(error, target, locale: locale);
 }
 
-String _adminActionErrorMessage(Object error, String action) {
-  final text = userVisibleApiError(error);
-  return '$action失败：$text';
+String _adminActionErrorMessage(
+  Object error,
+  String action, [
+  AppLocale? locale,
+]) {
+  return AdminUiCopy.formatActionError(error, action, locale: locale);
+}
+
+class _AdminFeedbackText extends StatelessWidget {
+  const _AdminFeedbackText(this.message);
+
+  final String Function(AppLocale locale) message;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<AppLocale>(
+    valueListenable: I18n.localeListenable,
+    builder: (context, locale, _) => Text(message(locale)),
+  );
+}
+
+Widget _adminResponsiveTwoColumn({
+  required BuildContext context,
+  required Widget first,
+  required Widget second,
+  double breakpoint = 460,
+  double gap = 10,
+}) {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      if (constraints.maxWidth < breakpoint) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            first,
+            SizedBox(height: gap),
+            second,
+          ],
+        );
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: first),
+          SizedBox(width: gap),
+          Expanded(child: second),
+        ],
+      );
+    },
+  );
 }
 
 List<Widget> _adminDialogChildren(List<Widget> children, {double gap = 10}) {
@@ -1957,16 +2085,18 @@ Widget _adminDialogForm({
 
 List<Widget> _adminDialogActions(
   BuildContext context, {
-  String saveLabel = '保存',
+  String? saveLabel,
+  AppLocale? locale,
 }) {
+  final l = locale ?? I18n.current;
   return [
     TextButton(
       onPressed: () => Navigator.pop(context, false),
-      child: const Text('取消'),
+      child: Text(AdminUiCopy.cancelFor(l)),
     ),
     FilledButton(
       onPressed: () => Navigator.pop(context, true),
-      child: Text(saveLabel),
+      child: Text(saveLabel ?? AdminUiCopy.saveFor(l)),
     ),
   ];
 }
@@ -1974,8 +2104,10 @@ List<Widget> _adminDialogActions(
 Widget _adminPermissionChecklist({
   required Set<String> selected,
   required ValueChanged<Set<String>> onChanged,
+  AppLocale? locale,
 }) {
   final allSelected = _adminHasAllPermissions(selected);
+  final l = locale ?? I18n.current;
   return Column(
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1983,7 +2115,7 @@ Widget _adminPermissionChecklist({
       CheckboxListTile(
         contentPadding: EdgeInsets.zero,
         value: allSelected,
-        title: const Text('全部权限'),
+        title: Text(AdminUiCopy.allPermissionsFor(l)),
         onChanged: (value) =>
             onChanged(value == true ? _adminAllPermissionKeys() : <String>{}),
       ),
@@ -1993,46 +2125,12 @@ Widget _adminPermissionChecklist({
           group: group,
           selected: selected,
           onChanged: onChanged,
+          locale: l,
         ),
         const SizedBox(height: 8),
       ],
     ],
   );
-}
-
-Future<bool> _confirmAdminDangerAction({
-  required BuildContext context,
-  required String title,
-  required String message,
-  String confirmLabel = '删除',
-}) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AppDialog(
-      title: Text(title),
-      icon: const Icon(Icons.warning_amber_outlined),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(ctx).colorScheme.error,
-            foregroundColor: Theme.of(ctx).colorScheme.onError,
-            minimumSize: const Size(0, 34),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          onPressed: () => Navigator.pop(ctx, true),
-          child: Text(confirmLabel),
-        ),
-      ],
-    ),
-  );
-  return confirmed == true;
 }
 
 class _AdminErrorState extends StatelessWidget {
@@ -2061,7 +2159,7 @@ class _AdminErrorState extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh),
-                label: const Text('重新加载'),
+                label: Text(AdminUiCopy.reload),
               ),
             ],
           ),
@@ -2131,6 +2229,7 @@ class _AdminPaginationBar extends StatelessWidget {
   final VoidCallback onNext;
   final ValueChanged<int>? onJumpToPage;
   final ValueChanged<int>? onPageSizeChanged;
+  final AppLocale? locale;
 
   const _AdminPaginationBar({
     this.barKey,
@@ -2141,6 +2240,7 @@ class _AdminPaginationBar extends StatelessWidget {
     required this.onNext,
     this.onJumpToPage,
     this.onPageSizeChanged,
+    this.locale,
   });
 
   @override
@@ -2174,207 +2274,229 @@ class _AdminPaginationBar extends StatelessWidget {
         color: cs.surface.withValues(alpha: 0.92),
         border: Border(top: BorderSide(color: topBorderColor, width: 0.55)),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final summary = Text(
-            '${_adminPageSummary(page)} · ${_adminPageNumber(page)}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: summaryTextStyle,
-          );
-          final pageSizePicker = onPageSizeChanged == null
-              ? null
-              : _AdminPaginationLabeledControl(
-                  label: '每页',
-                  child: AppCompactDropdown<int>(
-                    width: 54,
-                    value: pageSize,
-                    items: _adminPageSizeOptions
-                        .map(
-                          (v) => DropdownMenuItem(value: v, child: Text('$v')),
-                        )
-                        .toList(),
-                    onChanged: loading || onPageSizeChanged == null
-                        ? null
-                        : (v) {
-                            if (v != null) onPageSizeChanged!(v);
-                          },
-                  ),
-                );
-          final pageJump = !canPickPage
-              ? null
-              : _AdminPaginationLabeledControl(
-                  label: '页码',
-                  child: AppCompactDropdown<int>(
-                    width: 76,
-                    value: currentPage.clamp(1, totalPages).toInt(),
-                    items: List.generate(totalPages > 200 ? 200 : totalPages, (
-                      index,
-                    ) {
-                      final pageNo = index + 1;
-                      return DropdownMenuItem(
-                        value: pageNo,
-                        child: Text('$pageNo/$totalPages'),
-                      );
-                    }),
-                    onChanged: loading
-                        ? null
-                        : (value) {
-                            if (value != null) onJumpToPage!(value);
-                          },
-                  ),
-                );
-          Widget navigation() {
-            Widget navButton({
-              required String message,
-              required IconData icon,
-              required VoidCallback? onPressed,
-            }) {
-              return Tooltip(
-                message: message,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 1),
-                  child: SizedBox.square(
-                    dimension: 32,
-                    child: IconButton(
-                      constraints: const BoxConstraints.tightFor(
-                        width: 32,
-                        height: 32,
-                      ),
-                      padding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 16,
-                      style: IconButton.styleFrom(
-                        backgroundColor: onPressed == null
-                            ? Colors.transparent
-                            : glassControlFill,
-                        disabledBackgroundColor: Colors.transparent,
-                        side: BorderSide(
-                          color: onPressed == null
-                              ? glassControlBorder.withValues(alpha: 0.50)
-                              : glassControlBorder,
-                          width: 0.45,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            DesignTokens.radiusControl,
-                          ),
-                        ),
-                      ),
-                      onPressed: onPressed,
-                      icon: Icon(icon),
-                    ),
-                  ),
-                ),
+      child: ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (context, activeLocale, _) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final locale = this.locale ?? activeLocale;
+              final isVeryCompact = constraints.maxWidth < 420;
+              final summary = Text(
+                '${_adminPageSummary(page, locale)} · ${_adminPageNumber(page, locale)}',
+                maxLines: isVeryCompact ? null : 1,
+                overflow: isVeryCompact ? null : TextOverflow.ellipsis,
+                style: summaryTextStyle,
               );
-            }
+              final pageSizePicker = onPageSizeChanged == null
+                  ? null
+                  : _AdminPaginationLabeledControl(
+                      label: AdminUiCopy.perPageFor(locale),
+                      child: AppCompactDropdown<int>(
+                        width: 54,
+                        value: pageSize,
+                        items: _adminPageSizeOptions
+                            .map(
+                              (v) =>
+                                  DropdownMenuItem(value: v, child: Text('$v')),
+                            )
+                            .toList(),
+                        onChanged: loading || onPageSizeChanged == null
+                            ? null
+                            : (v) {
+                                if (v != null) onPageSizeChanged!(v);
+                              },
+                      ),
+                    );
+              final pageJump = !canPickPage
+                  ? null
+                  : _AdminPaginationLabeledControl(
+                      label: AdminUiCopy.pageNumberFor(locale),
+                      child: AppCompactDropdown<int>(
+                        width: 76,
+                        value: currentPage.clamp(1, totalPages).toInt(),
+                        items: List.generate(
+                          totalPages > 200 ? 200 : totalPages,
+                          (index) {
+                            final pageNo = index + 1;
+                            return DropdownMenuItem(
+                              value: pageNo,
+                              child: Text('$pageNo/$totalPages'),
+                            );
+                          },
+                        ),
+                        onChanged: loading
+                            ? null
+                            : (value) {
+                                if (value != null) onJumpToPage!(value);
+                              },
+                      ),
+                    );
+              Widget navigation() {
+                Widget navButton({
+                  required String message,
+                  required IconData icon,
+                  required VoidCallback? onPressed,
+                }) {
+                  return Tooltip(
+                    message: message,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 1),
+                      child: SizedBox.square(
+                        dimension: 32,
+                        child: IconButton(
+                          constraints: const BoxConstraints.tightFor(
+                            width: 32,
+                            height: 32,
+                          ),
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          iconSize: 16,
+                          style: IconButton.styleFrom(
+                            backgroundColor: onPressed == null
+                                ? Colors.transparent
+                                : glassControlFill,
+                            disabledBackgroundColor: Colors.transparent,
+                            side: BorderSide(
+                              color: onPressed == null
+                                  ? glassControlBorder.withValues(alpha: 0.50)
+                                  : glassControlBorder,
+                              width: 0.45,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                DesignTokens.radiusControl,
+                              ),
+                            ),
+                          ),
+                          onPressed: onPressed,
+                          icon: Icon(icon),
+                        ),
+                      ),
+                    ),
+                  );
+                }
 
-            final hasPageShortcuts = onJumpToPage != null && totalPages > 1;
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (hasPageShortcuts)
-                  navButton(
-                    message: '跳到第一页',
-                    icon: Icons.first_page,
-                    onPressed: canPrevious ? () => onJumpToPage!(1) : null,
-                  ),
-                navButton(
-                  message: '上一页',
-                  icon: Icons.chevron_left,
-                  onPressed: canPrevious ? onPrevious : null,
-                ),
-                navButton(
-                  message: '下一页',
-                  icon: Icons.chevron_right,
-                  onPressed: canNext ? onNext : null,
-                ),
-                if (hasPageShortcuts)
-                  navButton(
-                    message: '跳到最后一页',
-                    icon: Icons.last_page,
-                    onPressed: canNext ? () => onJumpToPage!(totalPages) : null,
-                  ),
-              ],
-            );
-          }
+                final hasPageShortcuts = onJumpToPage != null && totalPages > 1;
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasPageShortcuts)
+                      navButton(
+                        message: AdminUiCopy.jumpToFirstPageFor(locale),
+                        icon: Icons.first_page,
+                        onPressed: canPrevious ? () => onJumpToPage!(1) : null,
+                      ),
+                    navButton(
+                      message: AdminUiCopy.previousPageFor(locale),
+                      icon: Icons.chevron_left,
+                      onPressed: canPrevious ? onPrevious : null,
+                    ),
+                    navButton(
+                      message: AdminUiCopy.nextPageFor(locale),
+                      icon: Icons.chevron_right,
+                      onPressed: canNext ? onNext : null,
+                    ),
+                    if (hasPageShortcuts)
+                      navButton(
+                        message: AdminUiCopy.jumpToLastPageFor(locale),
+                        icon: Icons.last_page,
+                        onPressed: canNext
+                            ? () => onJumpToPage!(totalPages)
+                            : null,
+                      ),
+                  ],
+                );
+              }
 
-          final isCompact = constraints.maxWidth < 720;
-          final fullControls = Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (pageJump != null) ...[pageJump, const SizedBox(width: 6)],
-              if (pageSizePicker != null) ...[
-                pageSizePicker,
-                const SizedBox(width: 6),
-              ],
-              Tooltip(message: '分页导航', child: navigation()),
-            ],
-          );
-          final compactControls = Wrap(
-            key: const ValueKey('admin_compact_pagination_controls'),
-            alignment: WrapAlignment.end,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              ?pageJump,
-              ?pageSizePicker,
-              Tooltip(message: '分页导航', child: navigation()),
-            ],
-          );
-          final isVeryCompact = constraints.maxWidth < 420;
-          if (isCompact) {
-            if (isVeryCompact) {
+              final isCompact = constraints.maxWidth < 720;
+              final fullControls = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (pageJump != null) ...[pageJump, const SizedBox(width: 6)],
+                  if (pageSizePicker != null) ...[
+                    pageSizePicker,
+                    const SizedBox(width: 6),
+                  ],
+                  Tooltip(
+                    message: AdminUiCopy.paginationNavigationFor(locale),
+                    child: navigation(),
+                  ),
+                ],
+              );
+              final compactControls = Wrap(
+                key: const ValueKey('admin_compact_pagination_controls'),
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  ?pageJump,
+                  ?pageSizePicker,
+                  Tooltip(
+                    message: AdminUiCopy.paginationNavigationFor(locale),
+                    child: navigation(),
+                  ),
+                ],
+              );
+              if (isCompact) {
+                if (isVeryCompact) {
+                  return SizedBox(
+                    width: double.infinity,
+                    key: const ValueKey('admin_compact_pagination_full_width'),
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        summary,
+                        Tooltip(
+                          message: AdminUiCopy.paginationNavigationFor(locale),
+                          child: navigation(),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return SizedBox(
+                  width: double.infinity,
+                  key: const ValueKey('admin_compact_pagination_full_width'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        runSpacing: 4,
+                        spacing: 8,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 300),
+                            child: summary,
+                          ),
+                          compactControls,
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }
               return SizedBox(
                 width: double.infinity,
-                key: const ValueKey('admin_compact_pagination_full_width'),
                 child: Row(
                   children: [
-                    Expanded(child: summary),
-                    const SizedBox(width: 6),
-                    Tooltip(message: '分页导航', child: navigation()),
+                    Expanded(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 360),
+                        child: summary,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    fullControls,
                   ],
                 ),
               );
-            }
-            return SizedBox(
-              width: double.infinity,
-              key: const ValueKey('admin_compact_pagination_full_width'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    runSpacing: 4,
-                    spacing: 8,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 300),
-                        child: summary,
-                      ),
-                      compactControls,
-                    ],
-                  ),
-                ],
-              ),
-            );
-          }
-          return SizedBox(
-            width: double.infinity,
-            child: Row(
-              children: [
-                Expanded(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 360),
-                    child: summary,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                fullControls,
-              ],
-            ),
+            },
           );
         },
       ),
@@ -2447,30 +2569,67 @@ class _GroupsTab extends StatefulWidget {
 
 class _GroupsTabState extends State<_GroupsTab> {
   final List<Map<String, dynamic>> _groups = [];
+  final _actionHost = AdminActionHost();
   AdminPage? _page;
   bool _loading = true;
-  String? _error;
+  bool _mutationPending = false;
+  Object? _error;
   int _offset = 0;
   int _pageSize = _adminPageSize;
   int _loadSerial = 0;
+  int? _authorityRevision;
   Future<void> Function()? _failedLoad;
 
-  bool _canUseAdminPermission(String permission) {
+  bool get _canManageGroups {
     final permissions = widget.selfAdminPermissions;
-    if (permissions == null) return true;
-    return permissions.contains(_adminAllPermission) ||
-        permissions.contains(permission);
+    return permissions == null ||
+        (!permissions.contains(_adminNoPermission) &&
+            (permissions.contains(_adminAllPermission) ||
+                permissions.contains('groups')));
   }
 
-  bool get _canManageGroups => _canUseAdminPermission('groups');
+  AdminActionOrigin _captureRead() => _actionHost.capture(
+    client: widget.api.client,
+    anyOfPermissions: const {'groups', 'users', 'coins'},
+  );
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _actionHost.bind(context);
+    final revision = _actionHost.revision;
+    if (_authorityRevision != revision) {
+      _authorityRevision = revision;
+      _loadSerial++;
+      _groups.clear();
+      _page = null;
+      _failedLoad = null;
+      _error = null;
+      final origin = _captureRead();
+      if (origin.isCurrent()) {
+        _load(origin: origin, offset: 0);
+      } else {
+        _loading = false;
+      }
+    }
   }
 
-  Future<void> _load({int? pageSize, int? offset}) async {
+  @override
+  void dispose() {
+    _loadSerial++;
+    _actionHost.dispose();
+    super.dispose();
+  }
+
+  Future<bool> _load({
+    required AdminActionOrigin origin,
+    AdminActionOrigin? mutationOrigin,
+    int? pageSize,
+    int? offset,
+  }) async {
+    bool current() =>
+        mounted && origin.isCurrent() && (mutationOrigin?.isCurrent() ?? true);
+    if (!current()) return false;
     final serial = ++_loadSerial;
     final nextPageSize = pageSize ?? _pageSize;
     final nextOffset = offset ?? _offset;
@@ -2479,11 +2638,12 @@ class _GroupsTabState extends State<_GroupsTab> {
       _error = null;
     });
     try {
-      final page = await widget.api.listGroupsPage(
+      final page = await AdminApi(origin.client).listGroupsPage(
         limit: nextPageSize,
         offset: nextOffset,
+        isCurrent: current,
       );
-      if (!mounted || serial != _loadSerial) return;
+      if (!current() || serial != _loadSerial) return false;
       _page = page;
       _pageSize = nextPageSize;
       _offset = nextOffset;
@@ -2491,33 +2651,61 @@ class _GroupsTabState extends State<_GroupsTab> {
       _groups
         ..clear()
         ..addAll(page.items);
-    } on ApiException catch (e) {
-      if (!mounted || serial != _loadSerial) return;
-      _error = userVisibleApiError(e);
-      _failedLoad = () => _load(pageSize: nextPageSize, offset: nextOffset);
-    } catch (e) {
-      if (!mounted || serial != _loadSerial) return;
-      _error = _adminErrorMessage(e, '用户组');
-      _failedLoad = () => _load(pageSize: nextPageSize, offset: nextOffset);
+      return true;
+    } catch (error) {
+      if (!current() || serial != _loadSerial) return false;
+      _error = error;
+      _failedLoad = () async {
+        await _load(
+          origin: origin,
+          mutationOrigin: mutationOrigin,
+          pageSize: nextPageSize,
+          offset: nextOffset,
+        );
+      };
+      return false;
     } finally {
       if (mounted && serial == _loadSerial) setState(() => _loading = false);
     }
   }
 
-  Future<void> _retryLoad() => (_failedLoad ?? _load)();
-
-  void _showSnack(String message) {
-    if (!mounted) return;
+  void _showSnack(
+    AdminActionOrigin origin,
+    String Function(AppLocale) message,
+  ) {
+    if (!mounted || !origin.isCurrent()) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ).showSnackBar(SnackBar(content: _AdminFeedbackText(message)));
   }
 
-  Future<void> _editGroup([Map<String, dynamic>? group]) async {
+  // A retained callback may only close the dialog route that rendered it.
+  bool _closeDialog(
+    BuildContext dialogContext,
+    ModalRoute<dynamic> route,
+    AdminActionOrigin origin,
+    bool confirmed,
+  ) {
+    if (!dialogContext.mounted ||
+        !route.isActive ||
+        !route.isCurrent ||
+        (confirmed && !origin.isCurrent(checkRoute: false))) {
+      return false;
+    }
+    Navigator.of(dialogContext).pop(confirmed);
+    return true;
+  }
+
+  Future<void> _editGroup(
+    AdminActionOrigin origin, [
+    Map<String, dynamic>? group,
+  ]) async {
+    if (_mutationPending || !origin.isCurrent()) return;
     if (!_canManageGroups) {
-      _showSnack('缺少用户组管理权限');
+      _showSnack(origin, AdminUiCopy.missingGroupsPermissionFor);
       return;
     }
+    setState(() => _mutationPending = true);
     final nameCtrl = TextEditingController(
       text: (group?['name'] ?? '').toString(),
     );
@@ -2531,144 +2719,246 @@ class _GroupsTabState extends State<_GroupsTab> {
       ).toString(),
     );
     var isActive = group?['is_active'] != false;
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: Text(group == null ? '新增用户组' : '编辑用户组'),
-          icon: const Icon(Icons.groups_2_outlined),
-          content: _adminDialogForm(
-            maxWidth: 430,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: '用户组名称'),
-                textInputAction: TextInputAction.next,
-              ),
-              TextField(
-                controller: descCtrl,
-                decoration: const InputDecoration(
-                  labelText: '说明',
-                  helperText: '用于管理员识别该组适用的人群或规则',
-                ),
-                maxLines: 2,
-              ),
-              TextField(
-                controller: coinsCtrl,
-                decoration: const InputDecoration(
-                  labelText: '默认时光币',
-                  helperText: '新注册或分配到该组时使用的默认额度',
-                  prefixIcon: Icon(Icons.toll_outlined),
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: isActive,
-                title: const Text('启用用户组'),
-                subtitle: const Text('停用后不再作为可分配用户组'),
-                onChanged: (value) => setSt(() => isActive = value),
-              ),
-            ],
-          ),
-          actions: _adminDialogActions(ctx),
-        ),
-      ),
-    );
-    final coinsText = coinsCtrl.text.trim();
-    final name = nameCtrl.text.trim();
-    final description = descCtrl.text.trim();
-    if (saved != true) return;
-    if (name.isEmpty) {
-      _showSnack('请填写用户组名称');
-      return;
-    }
+    DialogRoute<bool>? dialogRoute;
     try {
-      await widget.api.saveGroup(
-        id: group?['id']?.toString(),
-        name: name,
-        description: description,
-        defaultTimeCoins: (int.tryParse(coinsText) ?? 100).clamp(0, 1000000),
-        isActive: isActive,
+      dialogRoute = DialogRoute<bool>(
+        context: context,
+        builder: (ctx) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => StatefulBuilder(
+            builder: (ctx, setSt) => AppDialog(
+              title: Text(
+                group == null
+                    ? AdminUiCopy.addGroupTitleFor(locale)
+                    : AdminUiCopy.editGroupTitleFor(locale),
+              ),
+              icon: const Icon(Icons.groups_2_outlined),
+              content: _adminDialogForm(
+                maxWidth: 430,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: AdminUiCopy.groupNameLabelFor(locale),
+                    ),
+                    textInputAction: TextInputAction.next,
+                  ),
+                  TextField(
+                    controller: descCtrl,
+                    decoration: InputDecoration(
+                      labelText: AdminUiCopy.groupDescriptionLabelFor(locale),
+                      helperText: AdminUiCopy.groupDescriptionHelperFor(locale),
+                      helperMaxLines: 4,
+                    ),
+                    maxLines: 2,
+                  ),
+                  TextField(
+                    controller: coinsCtrl,
+                    decoration: InputDecoration(
+                      labelText: AdminUiCopy.groupDefaultCoinsLabelFor(locale),
+                      helperText: AdminUiCopy.groupDefaultCoinsHelperFor(
+                        locale,
+                      ),
+                      helperMaxLines: 4,
+                      prefixIcon: const Icon(Icons.toll_outlined),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: isActive,
+                    title: Text(AdminUiCopy.groupEnableLabelFor(locale)),
+                    subtitle: Text(AdminUiCopy.groupEnableSubtitleFor(locale)),
+                    onChanged: (value) {
+                      if (origin.isCurrent(checkRoute: false) &&
+                          dialogRoute!.isCurrent &&
+                          dialogRoute.isActive) {
+                        setSt(() => isActive = value);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      _closeDialog(ctx, dialogRoute!, origin, false),
+                  child: Text(AdminUiCopy.cancelFor(locale)),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (!origin.isCurrent(checkRoute: false) ||
+                        !dialogRoute!.isActive ||
+                        !dialogRoute.isCurrent) {
+                      return;
+                    }
+                    if (nameCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: _AdminFeedbackText(
+                            AdminUiCopy.pleaseEnterGroupNameFor,
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+                    _closeDialog(ctx, dialogRoute, origin, true);
+                  },
+                  child: Text(AdminUiCopy.saveFor(locale)),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
-      if (!mounted) return;
-      await _load(offset: _offset);
-      _showSnack('用户组已保存');
-    } on ApiException catch (e) {
-      _showSnack(userVisibleApiError(e));
-    } catch (e) {
-      _showSnack(_adminActionErrorMessage(e, '保存用户组'));
+      final saved = await Navigator.of(context).push(dialogRoute);
+      await dialogRoute.completed;
+      if (saved != true || !origin.isCurrent()) return;
+      await AdminApi(origin.client).saveGroup(
+        id: group?['id']?.toString(),
+        name: nameCtrl.text.trim(),
+        description: descCtrl.text.trim(),
+        defaultTimeCoins: (int.tryParse(coinsCtrl.text.trim()) ?? 100).clamp(
+          0,
+          1000000,
+        ),
+        isActive: isActive,
+        isCurrent: origin.isCurrent,
+      );
+      if (!origin.isCurrent()) return;
+      final reloaded = await _load(
+        origin: _captureRead(),
+        mutationOrigin: origin,
+        offset: _offset,
+      );
+      if (origin.isCurrent()) {
+        _showSnack(
+          origin,
+          (locale) => reloaded
+              ? AdminUiCopy.groupSavedFor(locale)
+              : AdminUiCopy.groupSavedRefreshFailedFor(locale),
+        );
+      }
+    } catch (error) {
+      _showSnack(
+        origin,
+        (locale) => _adminActionErrorMessage(
+          error,
+          AdminUiCopy.actionSaveGroupFor(locale),
+          locale,
+        ),
+      );
+    } finally {
+      if (dialogRoute != null) await dialogRoute.completed;
+      nameCtrl.dispose();
+      descCtrl.dispose();
+      coinsCtrl.dispose();
+      if (mounted) setState(() => _mutationPending = false);
     }
   }
 
-  Future<void> _deleteGroup(Map<String, dynamic> group) async {
-    if (!_canManageGroups) {
-      _showSnack('缺少用户组管理权限');
-      return;
-    }
+  Future<void> _deleteGroup(
+    AdminActionOrigin origin,
+    Map<String, dynamic> group,
+  ) async {
+    if (_mutationPending || !origin.isCurrent()) return;
     final id = (group['id'] ?? '').toString();
     if (id.isEmpty) return;
     if (id == 'group_default') {
-      _showSnack('默认用户组不能删除');
+      _showSnack(origin, AdminUiCopy.defaultGroupCannotDeleteFor);
       return;
     }
     final name = (group['name'] ?? id).toString();
     final userCount = _adminIntValue(group['user_count']);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AppDialog(
-        title: Text('删除用户组 $name'),
-        icon: const Icon(Icons.delete_outline),
-        content: Text(
-          userCount > 0
-              ? '该组内 $userCount 个用户会回退到默认用户组，已有时光币记录保留。'
-              : '删除后不会影响已有用户数据。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    setState(() => _mutationPending = true);
+    DialogRoute<bool>? dialogRoute;
     try {
-      final result = await widget.api.deleteGroup(id);
-      if (!mounted) return;
-      await _load(
+      dialogRoute = DialogRoute<bool>(
+        context: context,
+        builder: (ctx) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => AppDialog(
+            title: Text(AdminUiCopy.deleteGroupTitle(name, locale)),
+            icon: const Icon(Icons.delete_outline),
+            content: Text(AdminUiCopy.deleteGroupBody(userCount, locale)),
+            actions: [
+              TextButton(
+                onPressed: () => _closeDialog(ctx, dialogRoute!, origin, false),
+                child: Text(AdminUiCopy.cancelFor(locale)),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.error,
+                  foregroundColor: Theme.of(ctx).colorScheme.onError,
+                ),
+                onPressed: () => _closeDialog(ctx, dialogRoute!, origin, true),
+                child: Text(AdminUiCopy.deleteFor(locale)),
+              ),
+            ],
+          ),
+        ),
+      );
+      final confirmed = await Navigator.of(context).push(dialogRoute);
+      await dialogRoute.completed;
+      if (confirmed != true || !origin.isCurrent()) return;
+      final result = await AdminApi(
+        origin.client,
+      ).deleteGroup(id, isCurrent: origin.isCurrent);
+      if (!origin.isCurrent()) return;
+      final reloaded = await _load(
+        origin: _captureRead(),
+        mutationOrigin: origin,
         offset: _offsetAfterAdminDelete(
           offset: _offset,
           itemCount: _groups.length,
           pageSize: _pageSize,
         ),
       );
-      if (!mounted) return;
       final reassigned = _adminIntValue(result['reassigned_users']);
-      _showSnack(reassigned > 0 ? '用户组已删除，$reassigned 个用户已回退到默认组' : '用户组已删除');
-    } on ApiException catch (e) {
-      _showSnack(userVisibleApiError(e));
-    } catch (e) {
-      _showSnack(_adminActionErrorMessage(e, '删除用户组'));
+      _showSnack(
+        origin,
+        (locale) => reloaded
+            ? AdminUiCopy.groupDeleted(reassigned, locale)
+            : AdminUiCopy.groupDeletedRefreshFailedFor(locale),
+      );
+    } catch (error) {
+      _showSnack(
+        origin,
+        (locale) => _adminActionErrorMessage(
+          error,
+          AdminUiCopy.actionDeleteGroupFor(locale),
+          locale,
+        ),
+      );
+    } finally {
+      if (dialogRoute != null) await dialogRoute.completed;
+      if (mounted) setState(() => _mutationPending = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final readOrigin = _captureRead();
+    final writeOrigin = _actionHost.capture(client: widget.api.client);
+    final failedLoad = _failedLoad;
+    Future<void> retry() async {
+      if (!readOrigin.isCurrent()) return;
+      if (failedLoad != null) {
+        await failedLoad();
+      } else {
+        await _load(origin: readOrigin);
+      }
+    }
+
+    final error = _error == null
+        ? null
+        : _adminErrorMessage(_error!, AdminUiCopy.groupsTarget);
     if (_loading && _groups.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_error != null && _groups.isEmpty) {
-      return _AdminErrorState(message: _error!, onRetry: _retryLoad);
+    if (error != null && _groups.isEmpty) {
+      return _AdminErrorState(message: error, onRetry: retry);
     }
     final cs = Theme.of(context).colorScheme;
     final canManageGroups = _canManageGroups;
@@ -2679,72 +2969,46 @@ class _GroupsTabState extends State<_GroupsTab> {
       children: [
         Expanded(
           child: RefreshIndicator(
-            onRefresh: () => _load(offset: _offset),
+            onRefresh: () async {
+              await _load(origin: readOrigin, offset: _offset);
+            },
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               children: [
-                if (_error != null)
-                  _AdminErrorState(message: _error!, onRetry: _retryLoad),
+                if (error != null)
+                  _AdminErrorState(message: error, onRetry: retry),
                 if (_loading) const LinearProgressIndicator(),
                 _AdminSettingsSection(
-                  title: '用户组管理',
-                  subtitle: '默认普通用户 100 时光币；管理员可调整各组额度和启用状态',
+                  title: AdminUiCopy.groupManagementTitle,
+                  subtitle: AdminUiCopy.groupManagementSubtitle,
                   children: [
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final banner = AppInfoBanner(
-                          icon: Icons.toll_outlined,
-                          title: '默认额度',
-                          message: '新用户注册后按所属用户组发放时光币，默认组为 100。',
-                          color: cs.primary,
-                          margin: EdgeInsets.zero,
-                        );
-                        final addButton = FilledButton.icon(
-                          onPressed: () => _editGroup(),
-                          icon: const Icon(Icons.add),
-                          label: const Text('新增用户组'),
-                        );
-                        if (constraints.maxWidth < 420) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              banner,
-                              if (canManageGroups) ...[
-                                const SizedBox(height: 8),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: addButton,
-                                ),
-                              ],
-                            ],
-                          );
-                        }
-                        return Row(
-                          children: [
-                            Expanded(child: banner),
-                            if (canManageGroups) ...[
-                              const SizedBox(width: 10),
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 150,
-                                ),
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: addButton,
-                                ),
-                              ),
-                            ],
-                          ],
-                        );
-                      },
+                    AppInfoBanner(
+                      icon: Icons.toll_outlined,
+                      title: AdminUiCopy.groupDefaultQuotaTitle,
+                      message: AdminUiCopy.groupDefaultQuotaMessage,
+                      color: cs.primary,
+                      margin: EdgeInsets.zero,
                     ),
+                    if (canManageGroups) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: FilledButton.icon(
+                          onPressed: _mutationPending
+                              ? null
+                              : () => _editGroup(writeOrigin),
+                          icon: const Icon(Icons.add),
+                          label: Text(AdminUiCopy.addGroupTitle),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 12),
                 if (page.items.isEmpty)
-                  const EmptyState(
+                  EmptyState(
                     icon: Icons.groups_2_outlined,
-                    message: '暂无用户组',
+                    message: AdminUiCopy.noGroups,
                   )
                 else
                   for (final group in page.items)
@@ -2752,10 +3016,10 @@ class _GroupsTabState extends State<_GroupsTab> {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: _AdminGroupSummaryCard(
                         group: group,
-                        canManage: canManageGroups,
+                        canManage: canManageGroups && !_mutationPending,
                         showDelete: true,
-                        onEdit: () => _editGroup(group),
-                        onDelete: () => _deleteGroup(group),
+                        onEdit: () => _editGroup(writeOrigin, group),
+                        onDelete: () => _deleteGroup(writeOrigin, group),
                       ),
                     ),
               ],
@@ -2767,12 +3031,17 @@ class _GroupsTabState extends State<_GroupsTab> {
           page: page,
           loading: _loading,
           pageSize: _pageSize,
-          onPrevious: () =>
-              _load(offset: _previousAdminOffset(_offset, _pageSize)),
-          onNext: () => _load(offset: _offset + _pageSize),
-          onJumpToPage: (pageNo) =>
-              _load(offset: ((pageNo - 1) * _pageSize).clamp(0, page.total)),
-          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
+          onPrevious: () => _load(
+            origin: readOrigin,
+            offset: _previousAdminOffset(_offset, _pageSize),
+          ),
+          onNext: () => _load(origin: readOrigin, offset: _offset + _pageSize),
+          onJumpToPage: (pageNo) => _load(
+            origin: readOrigin,
+            offset: ((pageNo - 1) * _pageSize).clamp(0, page.total),
+          ),
+          onPageSizeChanged: (value) =>
+              _load(origin: readOrigin, pageSize: value, offset: 0),
         ),
       ],
     );
@@ -2802,8 +3071,9 @@ class _SettingsTabState extends State<_SettingsTab> {
   List<Map<String, dynamic>> _roles = [];
   bool _loading = true;
   final Set<String> _savingKeys = <String>{};
-  String? _error;
-  String? _groupsRolesError;
+  Object? _errorObject;
+  Object? _groupsErrorObject;
+  Object? _rolesErrorObject;
   final _msgCtrl = TextEditingController();
   final _latestVersionCtrl = TextEditingController();
   final _minimumVersionCtrl = TextEditingController();
@@ -2820,14 +3090,32 @@ class _SettingsTabState extends State<_SettingsTab> {
   bool get _canManageGroups => _canUseAdminPermission('groups');
   bool get _canManageRoles => _canUseAdminPermission('roles');
 
+  String? get _error {
+    final err = _errorObject;
+    if (err == null) return null;
+    return _adminErrorMessage(err, AdminUiCopy.settingsTarget);
+  }
+
+  String? get _groupsRolesError {
+    final ge = _groupsErrorObject;
+    final re = _rolesErrorObject;
+    if (ge == null && re == null) return null;
+    final parts = <String>[];
+    if (ge != null) parts.add(_adminErrorMessage(ge, AdminUiCopy.groupsTarget));
+    if (re != null) parts.add(_adminErrorMessage(re, AdminUiCopy.rolesTarget));
+    return parts.join('\n');
+  }
+
   @override
   void initState() {
     super.initState();
+    I18n.localeListenable.addListener(_handleLocaleChanged);
     _load();
   }
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_handleLocaleChanged);
     _msgCtrl.dispose();
     _latestVersionCtrl.dispose();
     _minimumVersionCtrl.dispose();
@@ -2835,11 +3123,16 @@ class _SettingsTabState extends State<_SettingsTab> {
     super.dispose();
   }
 
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
-      _error = null;
-      _groupsRolesError = null;
+      _errorObject = null;
+      _groupsErrorObject = null;
+      _rolesErrorObject = null;
     });
     try {
       final results = await Future.wait<dynamic>([
@@ -2871,7 +3164,7 @@ class _SettingsTabState extends State<_SettingsTab> {
       );
     } catch (e) {
       if (!mounted) return;
-      _error = _adminErrorMessage(e, '全站设置');
+      _errorObject = e;
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -2906,14 +3199,16 @@ class _SettingsTabState extends State<_SettingsTab> {
       );
       if (!mounted) return;
       _data[key] = value;
-      _showSettingsSnack('设置已更新');
+      _showSettingsSnack(() => AdminUiCopy.settingsUpdated);
     } on ApiException catch (e) {
       if (mounted) {
-        _showSettingsSnack(userVisibleApiError(e));
+        _showSettingsSnack(() => userVisibleApiError(e));
       }
     } catch (e) {
       if (mounted) {
-        _showSettingsSnack(_adminActionErrorMessage(e, '更新设置'));
+        _showSettingsSnack(
+          () => _adminActionErrorMessage(e, AdminUiCopy.actionUpdateSettings),
+        );
       }
     } finally {
       if (mounted) setState(() => _savingKeys.remove(key));
@@ -2923,7 +3218,8 @@ class _SettingsTabState extends State<_SettingsTab> {
   bool _saving(String key) => _savingKeys.contains(key);
 
   Future<void> _reloadGroupsRoles() async {
-    _groupsRolesError = null;
+    _groupsErrorObject = null;
+    _rolesErrorObject = null;
     final results = await Future.wait<dynamic>([
       _loadGroupsForSettings(),
       _loadRolesForSettings(),
@@ -2939,7 +3235,7 @@ class _SettingsTabState extends State<_SettingsTab> {
     try {
       return await widget.api.listGroups();
     } catch (error) {
-      _groupsRolesError = _adminErrorMessage(error, '用户组');
+      _groupsErrorObject = error;
       return const <Map<String, dynamic>>[];
     }
   }
@@ -2948,17 +3244,14 @@ class _SettingsTabState extends State<_SettingsTab> {
     try {
       return await widget.api.listRoles();
     } catch (error) {
-      final message = _adminErrorMessage(error, '角色');
-      _groupsRolesError = _groupsRolesError == null
-          ? message
-          : '$_groupsRolesError\n$message';
+      _rolesErrorObject = error;
       return const <Map<String, dynamic>>[];
     }
   }
 
   Future<void> _editGroup([Map<String, dynamic>? group]) async {
     if (!_canManageGroups) {
-      _showSettingsSnack('缺少用户组管理权限');
+      _showSettingsSnack(() => AdminUiCopy.missingGroupsPermission);
       return;
     }
     final nameCtrl = TextEditingController(
@@ -2977,52 +3270,61 @@ class _SettingsTabState extends State<_SettingsTab> {
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: Text(group == null ? '新增用户组' : '编辑用户组'),
-          icon: const Icon(Icons.groups_2_outlined),
-          content: _adminDialogForm(
-            maxWidth: 430,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: '用户组名称'),
-                textInputAction: TextInputAction.next,
-              ),
-              TextField(
-                controller: descCtrl,
-                decoration: const InputDecoration(
-                  labelText: '说明',
-                  helperText: '用于管理员识别该组适用的人群或规则',
+        builder: (ctx, setSt) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => AppDialog(
+            title: Text(
+              group == null
+                  ? AdminUiCopy.addGroupTitleFor(locale)
+                  : AdminUiCopy.editGroupTitleFor(locale),
+            ),
+            icon: const Icon(Icons.groups_2_outlined),
+            content: _adminDialogForm(
+              maxWidth: 430,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: AdminUiCopy.groupNameLabelFor(locale),
+                  ),
+                  textInputAction: TextInputAction.next,
                 ),
-                maxLines: 2,
-              ),
-              TextField(
-                controller: coinsCtrl,
-                decoration: const InputDecoration(
-                  labelText: '默认时光币',
-                  helperText: '新注册或分配到该组时使用的默认额度',
-                  prefixIcon: Icon(Icons.toll_outlined),
+                TextField(
+                  controller: descCtrl,
+                  decoration: InputDecoration(
+                    labelText: AdminUiCopy.groupDescriptionLabelFor(locale),
+                    helperText: AdminUiCopy.groupDescriptionHelperFor(locale),
+                  ),
+                  maxLines: 2,
                 ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: isActive,
-                title: const Text('启用用户组'),
-                subtitle: const Text('停用后不再作为可分配用户组'),
-                onChanged: (value) => setSt(() => isActive = value),
-              ),
-            ],
+                TextField(
+                  controller: coinsCtrl,
+                  decoration: InputDecoration(
+                    labelText: AdminUiCopy.groupDefaultCoinsLabelFor(locale),
+                    helperText: AdminUiCopy.groupDefaultCoinsHelperFor(locale),
+                    prefixIcon: const Icon(Icons.toll_outlined),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: isActive,
+                  title: Text(AdminUiCopy.groupEnableLabelFor(locale)),
+                  subtitle: Text(AdminUiCopy.groupEnableSubtitleFor(locale)),
+                  onChanged: (value) => setSt(() => isActive = value),
+                ),
+              ],
+            ),
+            actions: _adminDialogActions(ctx, locale: locale),
           ),
-          actions: _adminDialogActions(ctx),
         ),
       ),
     );
     if (saved != true) return;
     final name = nameCtrl.text.trim();
     if (name.isEmpty) {
-      _showSettingsSnack('请填写用户组名称');
+      _showSettingsSnack(() => AdminUiCopy.pleaseEnterGroupName);
       return;
     }
     try {
@@ -3038,17 +3340,19 @@ class _SettingsTabState extends State<_SettingsTab> {
       );
       if (!mounted) return;
       await _reloadGroupsRoles();
-      _showSettingsSnack('用户组已保存');
+      _showSettingsSnack(() => AdminUiCopy.groupSaved);
     } on ApiException catch (e) {
-      _showSettingsSnack(userVisibleApiError(e));
+      _showSettingsSnack(() => userVisibleApiError(e));
     } catch (e) {
-      _showSettingsSnack(_adminActionErrorMessage(e, '保存用户组'));
+      _showSettingsSnack(
+        () => _adminActionErrorMessage(e, AdminUiCopy.actionSaveGroup),
+      );
     }
   }
 
   Future<void> _editRole([Map<String, dynamic>? role]) async {
     if (!_canManageRoles) {
-      _showSettingsSnack('缺少角色管理权限');
+      _showSettingsSnack(() => AdminUiCopy.missingRolesPermission);
       return;
     }
     final nameCtrl = TextEditingController(
@@ -3066,46 +3370,56 @@ class _SettingsTabState extends State<_SettingsTab> {
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: Text(role == null ? '新增角色' : '编辑角色'),
-          icon: const Icon(Icons.admin_panel_settings_outlined),
-          content: _adminDialogForm(
-            maxWidth: 520,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: '角色名称'),
-                textInputAction: TextInputAction.next,
-              ),
-              TextField(
-                controller: descCtrl,
-                decoration: const InputDecoration(
-                  labelText: '说明',
-                  helperText: '说明该角色的适用对象或权限边界',
+        builder: (ctx, setSt) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => AppDialog(
+            title: Text(
+              role == null
+                  ? AdminUiCopy.addRoleTitleFor(locale)
+                  : AdminUiCopy.editRoleTitleFor(locale),
+            ),
+            icon: const Icon(Icons.admin_panel_settings_outlined),
+            content: _adminDialogForm(
+              maxWidth: 520,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: AdminUiCopy.roleNameLabelFor(locale),
+                  ),
+                  textInputAction: TextInputAction.next,
                 ),
-                maxLines: 2,
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: isActive,
-                title: const Text('启用角色'),
-                subtitle: const Text('停用后不再作为可分配角色'),
-                onChanged: (value) => setSt(() => isActive = value),
-              ),
-              _adminPermissionChecklist(
-                selected: selected,
-                onChanged: (next) => setSt(() => selected = next),
-              ),
-            ],
+                TextField(
+                  controller: descCtrl,
+                  decoration: InputDecoration(
+                    labelText: AdminUiCopy.roleDescriptionLabelFor(locale),
+                    helperText: AdminUiCopy.roleDescriptionHelperFor(locale),
+                  ),
+                  maxLines: 2,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: isActive,
+                  title: Text(AdminUiCopy.roleEnableLabelFor(locale)),
+                  subtitle: Text(AdminUiCopy.roleEnableSubtitleFor(locale)),
+                  onChanged: (value) => setSt(() => isActive = value),
+                ),
+                _adminPermissionChecklist(
+                  selected: selected,
+                  onChanged: (next) => setSt(() => selected = next),
+                  locale: locale,
+                ),
+              ],
+            ),
+            actions: _adminDialogActions(ctx, locale: locale),
           ),
-          actions: _adminDialogActions(ctx),
         ),
       ),
     );
     if (saved != true) return;
     final name = nameCtrl.text.trim();
     if (name.isEmpty) {
-      _showSettingsSnack('请填写角色名称');
+      _showSettingsSnack(() => AdminUiCopy.pleaseEnterRoleName);
       return;
     }
     try {
@@ -3118,11 +3432,13 @@ class _SettingsTabState extends State<_SettingsTab> {
       );
       if (!mounted) return;
       await _reloadGroupsRoles();
-      _showSettingsSnack('角色已保存');
+      _showSettingsSnack(() => AdminUiCopy.roleSaved);
     } on ApiException catch (e) {
-      _showSettingsSnack(userVisibleApiError(e));
+      _showSettingsSnack(() => userVisibleApiError(e));
     } catch (e) {
-      _showSettingsSnack(_adminActionErrorMessage(e, '保存角色'));
+      _showSettingsSnack(
+        () => _adminActionErrorMessage(e, AdminUiCopy.actionSaveRole),
+      );
     }
   }
 
@@ -3135,11 +3451,11 @@ class _SettingsTabState extends State<_SettingsTab> {
     }.contains,
   );
 
-  void _showSettingsSnack(String message) {
+  void _showSettingsSnack(ValueGetter<String> message) {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ).showSnackBar(SnackBar(content: _AdminFeedbackText((_) => message())));
   }
 
   String get _serverCurrentVersion {
@@ -3189,25 +3505,25 @@ class _SettingsTabState extends State<_SettingsTab> {
     final fallbackOptions = [
       _AdminUpdateVersionOption(
         key: _adminUpdatePresetCurrent,
-        label: '当前版本',
+        label: AdminUiCopy.versionPresetCurrent,
         latestVersion: _serverCurrentVersion,
         minimumSupportedVersion: _serverCurrentVersion,
       ),
       _AdminUpdateVersionOption(
         key: _adminUpdatePresetNextPatch,
-        label: '下一补丁',
+        label: AdminUiCopy.versionPresetNextPatch,
         latestVersion: _nextPatchVersion,
         minimumSupportedVersion: _serverCurrentVersion,
       ),
       _AdminUpdateVersionOption(
         key: _adminUpdatePresetNextMinor,
-        label: '下一小版本',
+        label: AdminUiCopy.versionPresetNextMinor,
         latestVersion: _nextMinorVersion,
         minimumSupportedVersion: _serverCurrentVersion,
       ),
       _AdminUpdateVersionOption(
         key: _adminUpdatePresetMinimumNextPatch,
-        label: '强制低于下一补丁',
+        label: AdminUiCopy.versionPresetMinimumNextPatch,
         latestVersion: _nextPatchVersion,
         minimumSupportedVersion: _nextPatchMinimumVersion,
       ),
@@ -3251,7 +3567,10 @@ class _SettingsTabState extends State<_SettingsTab> {
     return (
       latestVersion: latest,
       minimumSupportedVersion: minimum,
-      updateNotes: _defaultUpdateNotesFor(latestVersion: latest),
+      updateNotes: _defaultUpdateNotesFor(
+        latestVersion: latest,
+        locale: I18n.current,
+      ),
     );
   }
 
@@ -3326,14 +3645,18 @@ class _SettingsTabState extends State<_SettingsTab> {
   }
 
   String _updateVersionOptionLabel(_AdminUpdateVersionOption option) {
-    final label = option.label.trim();
+    final label = AdminUiCopy.versionOptionLabel(
+      option.key,
+      fallback: option.label.trim(),
+    );
     final latest = option.latestVersion.trim();
     final minimum = option.minimumSupportedVersion.trim();
     if (latest.isEmpty || minimum.isEmpty) {
       return label.isEmpty ? option.key : label;
     }
     if (latest == minimum) return '$label $latest';
-    return '$label $latest / 最低 $minimum';
+    final minPrefix = AdminUiCopy.minimumVersionPrefix;
+    return '$label $latest / $minPrefix $minimum';
   }
 
   Future<void> _saveUpdateConfig() async {
@@ -3352,7 +3675,15 @@ class _SettingsTabState extends State<_SettingsTab> {
       minimumSupportedVersion: minimumSupportedVersion,
     );
     if (message != null) {
-      _showSettingsSnack(message);
+      _showSettingsSnack(
+        () =>
+            _validateUpdatePolicy(
+              forceUpdateRequired: forceUpdateRequired,
+              latestVersion: latestVersion,
+              minimumSupportedVersion: minimumSupportedVersion,
+            ) ??
+            message,
+      );
       return;
     }
 
@@ -3376,11 +3707,13 @@ class _SettingsTabState extends State<_SettingsTab> {
       _data['update_notes'] = versions.updateNotes;
       _data['update_download_url'] = '';
       _syncUpdateVersionPreset();
-      _showSettingsSnack('更新配置已保存');
+      _showSettingsSnack(() => AdminUiCopy.updateConfigSaved);
     } on ApiException catch (e) {
-      _showSettingsSnack(userVisibleApiError(e));
+      _showSettingsSnack(() => userVisibleApiError(e));
     } catch (e) {
-      _showSettingsSnack(_adminActionErrorMessage(e, '保存更新配置'));
+      _showSettingsSnack(
+        () => _adminActionErrorMessage(e, AdminUiCopy.actionSaveUpdateConfig),
+      );
     } finally {
       if (mounted) setState(() => _savingKeys.removeAll(keys));
     }
@@ -3401,7 +3734,15 @@ class _SettingsTabState extends State<_SettingsTab> {
       minimumSupportedVersion: minimumSupportedVersion,
     );
     if (message != null) {
-      _showSettingsSnack(message);
+      _showSettingsSnack(
+        () =>
+            _validateUpdatePolicy(
+              forceUpdateRequired: value,
+              latestVersion: latestVersion,
+              minimumSupportedVersion: minimumSupportedVersion,
+            ) ??
+            message,
+      );
       return;
     }
 
@@ -3428,11 +3769,13 @@ class _SettingsTabState extends State<_SettingsTab> {
       _data['update_notes'] = versions.updateNotes;
       _data['update_download_url'] = '';
       _syncUpdateVersionPreset();
-      _showSettingsSnack('设置已更新');
+      _showSettingsSnack(() => AdminUiCopy.settingsUpdated);
     } on ApiException catch (e) {
-      _showSettingsSnack(userVisibleApiError(e));
+      _showSettingsSnack(() => userVisibleApiError(e));
     } catch (e) {
-      _showSettingsSnack(_adminActionErrorMessage(e, '更新强制升级设置'));
+      _showSettingsSnack(
+        () => _adminActionErrorMessage(e, AdminUiCopy.actionUpdateForceUpdate),
+      );
     } finally {
       if (mounted) setState(() => _savingKeys.removeAll(keys));
     }
@@ -3448,37 +3791,46 @@ class _SettingsTabState extends State<_SettingsTab> {
         _compareAppVersions(latestVersion, _serverCurrentVersion) > 0 ||
         _compareAppVersions(minimumSupportedVersion, _serverCurrentVersion) > 0;
     if (!hasAnyUpdatePolicy) return null;
-    // 当前版本也允许保存强制更新开关。真正是否遮挡客户端由后端发布通道
-    // 结合可安装包、版本号和下载地址判定，避免管理员必须手填 URL 或内容。
     return null;
   }
 
-  String _defaultUpdateNotesFor({required String latestVersion}) {
+  String _defaultUpdateNotesFor({
+    required String latestVersion,
+    AppLocale? locale,
+  }) {
     final target = latestVersion.trim().isEmpty
         ? _serverCurrentVersion
         : latestVersion;
-    return [
-      '本次更新摘要：',
-      '- 版本 $target 包含近期问题修复与稳定性优化。',
-      '- 安装包与完整发布说明由后端发布通道自动读取。',
-      '- 若管理员开启强制更新，客户端会遮挡当前页面直到完成更新。',
-    ].join('\n');
+    return AdminUiCopy.defaultUpdateNotes(target, locale: locale);
   }
 
-  String _updateNotesPreview() {
+  String _updateNotesPreview([AppLocale? locale]) {
     final existing = (_data['update_notes'] ?? '').toString().trim();
     if (_updateVersionPreset == _adminUpdatePresetCurrent &&
         existing.isNotEmpty) {
       return existing;
     }
-    return _defaultUpdateNotesFor(latestVersion: _latestVersionForSave());
+    return _defaultUpdateNotesFor(
+      latestVersion: _latestVersionForSave(),
+      locale: locale,
+    );
   }
 
   Widget _groupRoleManagementSection(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final locale = I18n.current;
     final canManageGroups = _canManageGroups;
     final canManageRoles = _canManageRoles;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final cardFill = surfaceStyle?.cardFillColor ?? cs.surface;
+    final cardBackground = Color.alphaBlend(
+      cardFill,
+      theme.scaffoldBackgroundColor,
+    );
+    final textButtonForeground = surfaceStyle != null
+        ? appReadableForeground(cardBackground, cs.primary)
+        : cs.primary;
     final groupCards = _groups.take(6).map((group) {
       return _AdminGroupSummaryCard(
         group: group,
@@ -3500,15 +3852,15 @@ class _SettingsTabState extends State<_SettingsTab> {
           Icons.admin_panel_settings_outlined,
           color: active ? Colors.indigo : cs.onSurfaceVariant,
         ),
-        title: Text(name.isEmpty ? '未命名角色' : name),
+        title: Text(name.isEmpty ? AdminUiCopy.unnamedRoleFor(locale) : name),
         subtitle: Text(
-          '${_adminPermissionsLabel(permissions, isAdmin: true)} · $userCount 人 · ${active ? '启用' : '停用'}',
+          '${_adminPermissionsLabel(permissions, isAdmin: true, locale: locale)} · ${AdminUiCopy.userCountLabel(userCount, locale)} · ${active ? AdminUiCopy.enabledFor(locale) : AdminUiCopy.disabledFor(locale)}',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
         trailing: canManageRoles
             ? IconButton(
-                tooltip: '编辑角色',
+                tooltip: AdminUiCopy.editRoleTooltipFor(locale),
                 onPressed: () => _editRole(role),
                 icon: const Icon(Icons.edit_outlined),
               )
@@ -3517,13 +3869,33 @@ class _SettingsTabState extends State<_SettingsTab> {
     }).toList();
 
     return _AdminSettingsSection(
-      title: '用户组与角色',
-      subtitle: '管理默认时光币、成员分组和管理员权限模板',
+      title: AdminUiCopy.groupsAndRolesTitleFor(locale),
+      subtitle: AdminUiCopy.groupsAndRolesSubtitleFor(locale),
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
+            final inheritedStyle = Theme.of(context).textButtonTheme.style;
+            final actionButtonStyle = surfaceStyle != null
+                ? (inheritedStyle ?? const ButtonStyle()).copyWith(
+                    foregroundColor: WidgetStatePropertyAll(
+                      textButtonForeground,
+                    ),
+                    iconColor: WidgetStatePropertyAll(textButtonForeground),
+                    textStyle: WidgetStatePropertyAll(
+                      appSecondaryControlTextStyle(context).copyWith(
+                        color: textButtonForeground,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                    minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
+                  )
+                : null;
             final summary = Text(
-              '用户组 ${_groups.length} 个 · 角色 ${_roles.length} 个',
+              AdminUiCopy.groupsRolesSummary(
+                _groups.length,
+                _roles.length,
+                locale,
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(
@@ -3533,15 +3905,17 @@ class _SettingsTabState extends State<_SettingsTab> {
             final actions = <Widget>[
               if (canManageGroups)
                 TextButton.icon(
+                  style: actionButtonStyle,
                   onPressed: () => _editGroup(),
                   icon: const Icon(Icons.add),
-                  label: const Text('用户组'),
+                  label: Text(AdminUiCopy.addGroupBtnFor(locale)),
                 ),
               if (canManageRoles)
                 TextButton.icon(
+                  style: actionButtonStyle,
                   onPressed: () => _editRole(),
                   icon: const Icon(Icons.add),
-                  label: const Text('角色'),
+                  label: Text(AdminUiCopy.addRoleBtnFor(locale)),
                 ),
             ];
             final actionWrap = Wrap(
@@ -3574,7 +3948,7 @@ class _SettingsTabState extends State<_SettingsTab> {
         if (_groupsRolesError != null) ...[
           AppInfoBanner(
             icon: Icons.lock_outline,
-            title: '用户组或角色加载失败',
+            title: AdminUiCopy.groupsRolesLoadFailedFor(locale),
             message: _groupsRolesError!,
             color: cs.error,
             margin: EdgeInsets.zero,
@@ -3584,10 +3958,10 @@ class _SettingsTabState extends State<_SettingsTab> {
         if (_groups.isEmpty)
           AppInfoBanner(
             icon: Icons.groups_2_outlined,
-            title: '暂无可管理用户组',
+            title: AdminUiCopy.noManageableGroupsFor(locale),
             message: _groupsRolesError == null
-                ? '后端返回为空。'
-                : '上方错误说明了用户组未能加载的原因。',
+                ? AdminUiCopy.emptyBackendReturnFor(locale)
+                : AdminUiCopy.errorAboveExplainsWhyFor(locale),
             color: Colors.blueGrey,
             margin: EdgeInsets.zero,
           )
@@ -3597,10 +3971,10 @@ class _SettingsTabState extends State<_SettingsTab> {
         if (_roles.isEmpty)
           AppInfoBanner(
             icon: Icons.admin_panel_settings_outlined,
-            title: '暂无可管理角色',
+            title: AdminUiCopy.noManageableRolesFor(locale),
             message: _groupsRolesError == null
-                ? '后端返回为空。'
-                : '上方错误说明了角色未能加载的原因。',
+                ? AdminUiCopy.emptyBackendReturnFor(locale)
+                : AdminUiCopy.errorAboveExplainsWhyFor(locale),
             color: Colors.blueGrey,
             margin: EdgeInsets.zero,
           )
@@ -3641,21 +4015,24 @@ class _SettingsTabState extends State<_SettingsTab> {
       return _AdminErrorState(message: _error!, onRetry: _load);
     }
     final cs = Theme.of(context).colorScheme;
+    final locale = I18n.current;
 
     return AppSecondaryControlTheme(
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _AdminSettingsSection(
-            title: '账户、注册与用户组',
-            subtitle: '控制新用户入口、邀请码、邮箱验证和默认用户组额度',
+            title: AdminUiCopy.accountsRegistrationSectionTitleFor(locale),
+            subtitle: AdminUiCopy.accountsRegistrationSectionSubtitleFor(
+              locale,
+            ),
             children: [
               AppSwitchTile(
                 icon: Icons.person_add_alt_1_outlined,
                 color: Colors.green,
                 value: _data['registration_enabled'] == true,
-                title: '允许注册',
-                subtitle: '关闭后仅允许已有账号登录',
+                title: AdminUiCopy.registrationEnabledTitleFor(locale),
+                subtitle: AdminUiCopy.registrationEnabledSubtitleFor(locale),
                 onChanged: _saving('registration_enabled')
                     ? null
                     : (v) => _set('registration_enabled', v),
@@ -3664,8 +4041,8 @@ class _SettingsTabState extends State<_SettingsTab> {
                 icon: Icons.vpn_key_outlined,
                 color: Colors.purple,
                 value: _data['invite_code_required'] == true,
-                title: '注册需要邀请码',
-                subtitle: '只有带邀请码才能注册',
+                title: AdminUiCopy.inviteCodeRequiredTitleFor(locale),
+                subtitle: AdminUiCopy.inviteCodeRequiredSubtitleFor(locale),
                 onChanged: _saving('invite_code_required')
                     ? null
                     : (v) => _set('invite_code_required', v),
@@ -3674,20 +4051,22 @@ class _SettingsTabState extends State<_SettingsTab> {
                 icon: Icons.mark_email_read_outlined,
                 color: Colors.teal,
                 value: _data['registration_email_required'] == true,
-                title: '注册邮箱验证',
-                subtitle: '新账号必须填写邮箱并通过验证码后才能创建',
+                title: AdminUiCopy.registrationEmailRequiredTitleFor(locale),
+                subtitle: AdminUiCopy.registrationEmailRequiredSubtitleFor(
+                  locale,
+                ),
                 onChanged: _saving('registration_email_required')
                     ? null
                     : (v) => _set('registration_email_required', v),
               ),
               const SizedBox(height: 10),
-              TextField(
+              _AdminSettingsTextField(
                 controller: _defaultCoinsCtrl,
+                label: AdminUiCopy.defaultCoinsLabelFor(locale),
                 enabled: !_saving('default_registration_coins'),
-                decoration: const InputDecoration(
-                  labelText: '默认用户组时光币',
-                  helperText: '新注册普通用户默认获得的额度，管理员可继续在用户列表单独调整',
-                  prefixIcon: Icon(Icons.toll_outlined),
+                decoration: InputDecoration(
+                  helperText: AdminUiCopy.defaultCoinsHelperFor(locale),
+                  prefixIcon: const Icon(Icons.toll_outlined),
                 ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -3703,27 +4082,27 @@ class _SettingsTabState extends State<_SettingsTab> {
           _groupRoleManagementSection(context),
           const SizedBox(height: 12),
           _AdminSettingsSection(
-            title: '维护模式',
-            subtitle: '控制同步服务与客户端提示',
+            title: AdminUiCopy.maintenanceSectionTitleFor(locale),
+            subtitle: AdminUiCopy.maintenanceSectionSubtitleFor(locale),
             children: [
               AppSwitchTile(
                 icon: Icons.construction_outlined,
                 color: Colors.orange,
                 value: _data['maintenance_mode'] == true,
-                title: '启用维护模式',
-                subtitle: '开启后暂停云同步，并在登录页展示维护公告',
+                title: AdminUiCopy.maintenanceModeTitleFor(locale),
+                subtitle: AdminUiCopy.maintenanceModeSubtitleFor(locale),
                 onChanged: _saving('maintenance_mode')
                     ? null
                     : (v) => _set('maintenance_mode', v),
               ),
               const SizedBox(height: 10),
-              TextField(
+              _AdminSettingsTextField(
                 controller: _msgCtrl,
+                label: AdminUiCopy.maintenanceMessageLabelFor(locale),
                 enabled: !_saving('maintenance_message'),
-                decoration: const InputDecoration(
-                  labelText: '维护公告文字',
-                  hintText: '将在客户端登录/同步报错时展示',
-                  prefixIcon: Icon(Icons.campaign_outlined),
+                decoration: InputDecoration(
+                  hintText: AdminUiCopy.maintenanceMessageHintFor(locale),
+                  prefixIcon: const Icon(Icons.campaign_outlined),
                 ),
                 onEditingComplete: () =>
                     _set('maintenance_message', _msgCtrl.text.trim()),
@@ -3732,15 +4111,15 @@ class _SettingsTabState extends State<_SettingsTab> {
           ),
           const SizedBox(height: 12),
           _AdminSettingsSection(
-            title: '应用更新',
-            subtitle: '设置更新提示、最低支持版本与强制更新策略',
+            title: AdminUiCopy.appUpdateSectionTitleFor(locale),
+            subtitle: AdminUiCopy.appUpdateSectionSubtitleFor(locale),
             children: [
               AppSwitchTile(
                 icon: Icons.system_update_alt_outlined,
                 color: cs.error,
                 value: _data['force_update_required'] == true,
-                title: '强制更新',
-                subtitle: '有可安装的新版本时，用户需完成更新后继续使用',
+                title: AdminUiCopy.forceUpdateTitleFor(locale),
+                subtitle: AdminUiCopy.forceUpdateSubtitleFor(locale),
                 onChanged: _savingUpdateConfig
                     ? null
                     : (v) => _set('force_update_required', v),
@@ -3748,9 +4127,11 @@ class _SettingsTabState extends State<_SettingsTab> {
               const SizedBox(height: 10),
               AppInfoBanner(
                 icon: Icons.info_outline,
-                title: '当前客户端版本 ${AppVersion.name}',
-                message:
-                    '普通更新会在“检查更新”和底部“我的”入口显示红点；强制更新会锁定客户端，直到用户安装新版本。安装包与发布说明由后端发布通道自动读取。',
+                title: AdminUiCopy.currentClientVersionTitle(
+                  AppVersion.name,
+                  locale,
+                ),
+                message: AdminUiCopy.currentClientVersionMessageFor(locale),
                 color: Theme.of(context).colorScheme.primary,
                 margin: EdgeInsets.zero,
               ),
@@ -3759,7 +4140,7 @@ class _SettingsTabState extends State<_SettingsTab> {
                 key: ValueKey(_updateVersionPreset),
                 enabled: !_savingUpdateConfig,
                 initialValue: _updateVersionPreset,
-                labelText: '版本策略',
+                labelText: AdminUiCopy.versionPolicyLabelFor(locale),
                 prefixIcon: const Icon(Icons.rule_folder_outlined),
                 items: [
                   for (final option in _updateVersionOptions)
@@ -3776,23 +4157,26 @@ class _SettingsTabState extends State<_SettingsTab> {
               const SizedBox(height: 10),
               AppInfoBanner(
                 icon: Icons.new_releases_outlined,
-                title: '版本选择',
-                message:
-                    '最新版本：${_latestVersionForSave()}；最低支持版本：${_minimumSupportedVersionForSave()}。管理员只需选择上方策略，无需手动输入版本、安装包地址或更新内容。',
+                title: AdminUiCopy.versionSelectionTitleFor(locale),
+                message: AdminUiCopy.versionSelectionMessage(
+                  _latestVersionForSave(),
+                  _minimumSupportedVersionForSave(),
+                  locale,
+                ),
                 color: Colors.teal,
                 margin: EdgeInsets.zero,
               ),
               const SizedBox(height: 10),
               AppInfoBanner(
                 icon: Icons.notes_outlined,
-                title: '更新内容预览',
-                message: _updateNotesPreview(),
+                title: AdminUiCopy.updateNotesPreviewTitleFor(locale),
+                message: _updateNotesPreview(locale),
                 color: Colors.blueGrey,
                 margin: EdgeInsets.zero,
               ),
               const SizedBox(height: 6),
               Text(
-                '保存时会自动写入以上摘要；安装包地址和完整发布说明由后端发布通道自动读取。',
+                AdminUiCopy.updateNotesSaveHintFor(locale),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: cs.onSurface.withValues(alpha: 0.62),
                 ),
@@ -3803,7 +4187,7 @@ class _SettingsTabState extends State<_SettingsTab> {
                 child: FilledButton.icon(
                   onPressed: _savingUpdateConfig ? null : _saveUpdateConfig,
                   icon: const Icon(Icons.save_outlined),
-                  label: const Text('保存更新配置'),
+                  label: Text(AdminUiCopy.saveUpdateConfigBtnFor(locale)),
                 ),
               ),
             ],
@@ -3812,8 +4196,8 @@ class _SettingsTabState extends State<_SettingsTab> {
           AppInfoBanner(
             icon: Icons.info_outline,
             color: cs.primary,
-            title: '服务器地址',
-            message: '服务器地址在 APK / Web 构建时就已锁定，运行期不可修改。如需切换后端，请重新构建并分发新版本。',
+            title: AdminUiCopy.serverAddressTitleFor(locale),
+            message: AdminUiCopy.serverAddressMessageFor(locale),
           ),
         ],
       ),
@@ -3832,15 +4216,49 @@ class _AiSettingsTab extends StatefulWidget {
   State<_AiSettingsTab> createState() => _AiSettingsTabState();
 }
 
+class _AiTestResultData {
+  final bool skipped;
+  final bool enabled;
+  final String model;
+  final String sample;
+  final String message;
+  final Object? error;
+
+  const _AiTestResultData({
+    this.skipped = false,
+    this.enabled = true,
+    this.model = '',
+    this.sample = '',
+    this.message = '',
+    this.error,
+  });
+
+  String format(AppLocale locale) {
+    if (error != null) {
+      return _adminAiFailureReason(error!, locale);
+    }
+    if (skipped) {
+      return message.isNotEmpty
+          ? message
+          : AdminUiCopy.aiTestSkippedMessage(model, locale: locale);
+    }
+    if (enabled) {
+      return AdminUiCopy.aiTestSuccessMessage(model, sample, locale: locale);
+    }
+    return AdminUiCopy.aiTestDisabledMessage(model, locale: locale);
+  }
+}
+
 class _AiSettingsTabState extends State<_AiSettingsTab> {
   bool _loading = true;
   bool _saving = false;
   bool _testing = false;
-  String? _testResult;
+  _AiTestResultData? _testResultData;
   Color _testColor = Colors.grey;
-  String? _error;
+  Object? _errorObject;
   bool _enabled = false;
   final _baseCtrl = TextEditingController();
+  final _baseFocusNode = FocusNode();
   final _keyCtrl = TextEditingController();
   final _modelCtrl = TextEditingController();
   final _quotaCtrl = TextEditingController(text: '0');
@@ -3849,12 +4267,19 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
   @override
   void initState() {
     super.initState();
+    I18n.localeListenable.addListener(_onLocaleChanged);
     _load();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     _baseCtrl.dispose();
+    _baseFocusNode.dispose();
     _keyCtrl.dispose();
     _modelCtrl.dispose();
     _quotaCtrl.dispose();
@@ -3864,7 +4289,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
   Future<void> _load() async {
     setState(() {
       _loading = true;
-      _error = null;
+      _errorObject = null;
     });
     try {
       final data = await widget.api.getSettings(scope: 'ai');
@@ -3879,7 +4304,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       context.read<AiService>().updateFromServerConfig(data);
     } catch (e) {
       if (!mounted) return;
-      _error = _adminErrorMessage(e, 'AI 配置');
+      _errorObject = e;
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -3902,14 +4327,26 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       }
       await widget.api.client.patch('/api/admin/settings', payload);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('AI 配置已保存')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: _AdminFeedbackText(
+            (locale) => AdminUiCopy.aiConfigSavedFor(locale),
+          ),
+        ),
+      );
       await _load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '保存 AI 配置'))),
+          SnackBar(
+            content: _AdminFeedbackText(
+              (locale) => _adminActionErrorMessage(
+                e,
+                AdminUiCopy.actionSaveAiConfigFor(locale),
+                locale,
+              ),
+            ),
+          ),
         );
       }
     } finally {
@@ -3921,7 +4358,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
     if (_testing) return;
     setState(() {
       _testing = true;
-      _testResult = null;
+      _testResultData = null;
     });
     try {
       final newKey = _keyCtrl.text.trim();
@@ -3939,24 +4376,25 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
       final skipped = res['skipped'] == true;
       final message = (res['message'] ?? '').toString().trim();
       setState(() {
-        final modelLabel = model.isEmpty ? '未命名模型' : model;
-        _testResult = skipped
-            ? (message.isEmpty ? 'AI 功能开关未启用，未测试上游连接。模型：$modelLabel' : message)
-            : enabled
-            ? '当前表单配置可达，模型 $modelLabel 回复: ${sample.isEmpty ? '空回复' : sample}'
-            : '当前表单配置完整，AI 功能开关未启用，未发起上游请求。模型：$modelLabel';
+        _testResultData = _AiTestResultData(
+          skipped: skipped,
+          enabled: enabled,
+          model: model,
+          sample: sample,
+          message: message,
+        );
         _testColor = skipped ? Colors.orange : Colors.green;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _testResult = _adminAiFailureReason(userVisibleApiError(e));
+        _testResultData = _AiTestResultData(error: e);
         _testColor = Theme.of(context).colorScheme.error;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _testResult = _adminAiFailureReason(e.toString());
+        _testResultData = _AiTestResultData(error: e);
         _testColor = Theme.of(context).colorScheme.error;
       });
     } finally {
@@ -3966,62 +4404,102 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = I18n.current;
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
-      return _AdminErrorState(message: _error!, onRetry: _load);
+    if (_errorObject != null) {
+      return _AdminErrorState(
+        message: _adminErrorMessage(
+          _errorObject!,
+          AdminUiCopy.aiSettingsTabTitleFor(locale),
+          locale,
+        ),
+        onRetry: _load,
+      );
     }
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final media = MediaQuery.of(context);
+    final isCompactOrScaled =
+        media.size.width < 360 || media.textScaler.scale(1.0) > 1.25;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _AdminSettingsSection(
-          title: 'AI 功能',
-          subtitle: '所有请求经后端代理，前端不暴露密钥',
+          title: AdminUiCopy.aiSectionTitleFor(locale),
+          subtitle: AdminUiCopy.aiSectionSubtitleFor(locale),
           children: [
             AppSwitchTile(
               icon: Icons.auto_awesome,
               color: cs.primary,
               value: _enabled,
-              title: '启用 AI 功能',
-              subtitle: '关闭后所有用户都无法使用 AI 拆解/回顾',
+              title: AdminUiCopy.aiEnableTitleFor(locale),
+              subtitle: AdminUiCopy.aiEnableSubtitleFor(locale),
               onChanged: (v) => setState(() => _enabled = v),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _baseCtrl,
-              decoration: const InputDecoration(
-                labelText: '服务地址 (Base URL)',
-                hintText: 'https://api.openai.com',
-                helperText: '路径后自动加 /v1/chat/completions',
-                prefixIcon: Icon(Icons.link_outlined),
+            if (isCompactOrScaled) ...[
+              const SizedBox(height: 10),
+              ExcludeSemantics(
+                child: Text(
+                  AdminUiCopy.aiBaseUrlLabelFor(locale),
+                  style:
+                      (theme.inputDecorationTheme.labelStyle ??
+                              theme.textTheme.bodyMedium ??
+                              const TextStyle())
+                          .copyWith(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.normal,
+                          ),
+                ),
+              ),
+              const SizedBox(height: 6),
+            ] else
+              const SizedBox(height: 10),
+            Semantics(
+              label: isCompactOrScaled
+                  ? AdminUiCopy.aiBaseUrlLabelFor(locale)
+                  : null,
+              child: TextField(
+                key: const ValueKey('admin_ai_base_url_field'),
+                controller: _baseCtrl,
+                focusNode: _baseFocusNode,
+                decoration: InputDecoration(
+                  labelText: isCompactOrScaled
+                      ? null
+                      : AdminUiCopy.aiBaseUrlLabelFor(locale),
+                  hintText: 'https://api.openai.com',
+                  helperText: AdminUiCopy.aiBaseUrlHelperFor(locale),
+                  prefixIcon: const Icon(Icons.link_outlined),
+                ),
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
+            _AdminSettingsTextField(
               controller: _keyCtrl,
+              label: 'API Key',
               decoration: InputDecoration(
-                labelText: 'API Key',
-                helperText: _keyMasked ? '已配置（显示为掩码，保持不动即不修改）' : '尚未配置',
+                helperText: _keyMasked
+                    ? AdminUiCopy.aiApiKeyConfiguredHelperFor(locale)
+                    : AdminUiCopy.aiApiKeyNotConfiguredHelperFor(locale),
                 prefixIcon: const Icon(Icons.key_outlined),
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
+            _AdminSettingsTextField(
               controller: _modelCtrl,
-              decoration: const InputDecoration(
-                labelText: '模型名称',
+              label: AdminUiCopy.aiModelLabelFor(locale),
+              decoration: InputDecoration(
                 hintText: 'gpt-4o-mini / claude-3-haiku-20240307',
-                prefixIcon: Icon(Icons.memory_outlined),
+                prefixIcon: const Icon(Icons.memory_outlined),
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
+            _AdminSettingsTextField(
               controller: _quotaCtrl,
+              label: AdminUiCopy.aiDailyQuotaLabelFor(locale),
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: '每用户每日调用上限',
-                helperText: '0 = 不限',
-                prefixIcon: Icon(Icons.speed_outlined),
+              decoration: InputDecoration(
+                helperText: AdminUiCopy.aiDailyQuotaHelperFor(locale),
+                prefixIcon: const Icon(Icons.speed_outlined),
               ),
             ),
             const SizedBox(height: 14),
@@ -4032,7 +4510,11 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
                 FilledButton.icon(
                   onPressed: _saving ? null : _save,
                   icon: const Icon(Icons.save_outlined),
-                  label: Text(_saving ? '保存中…' : '保存'),
+                  label: Text(
+                    _saving
+                        ? AdminUiCopy.savingEllipsis(locale)
+                        : AdminUiCopy.saveBtnFor(locale),
+                  ),
                 ),
                 OutlinedButton.icon(
                   icon: _testing
@@ -4042,12 +4524,12 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.network_check),
-                  label: const Text('测试当前表单'),
+                  label: Text(AdminUiCopy.aiTestCurrentFormFor(locale)),
                   onPressed: _testing ? null : _test,
                 ),
               ],
             ),
-            if (_testResult != null) ...[
+            if (_testResultData != null) ...[
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -4072,7 +4554,7 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _testResult!,
+                        _testResultData!.format(locale),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.74),
                           fontWeight: FontWeight.normal,
@@ -4089,31 +4571,16 @@ class _AiSettingsTabState extends State<_AiSettingsTab> {
         AppInfoBanner(
           icon: Icons.security_outlined,
           color: Colors.teal,
-          title: '安全代理',
-          message: '所有用户的 AI 请求都通过后端 /api/ai/chat 代理，前端永远拿不到 API Key。',
+          title: AdminUiCopy.aiSecurityProxyTitleFor(locale),
+          message: AdminUiCopy.aiSecurityProxyMessageFor(locale),
         ),
       ],
     );
   }
 }
 
-String _adminAiFailureReason(String raw) {
-  final text = raw.trim();
-  if (text.isEmpty) return '测试失败：AI 服务没有返回错误详情';
-  if (text.contains('AI 功能未启用')) return '测试失败：AI 功能未启用，请先保存并开启 AI 功能';
-  if (text.contains('API Key')) return '测试失败：管理员尚未配置 AI API Key';
-  if (text.contains('401') || text.contains('403')) {
-    return '测试失败：AI 密钥无效或没有模型权限';
-  }
-  if (text.contains('429') || text.contains('额度')) return '测试失败：今日 AI 额度已用尽';
-  if (text.contains('404') || text.toLowerCase().contains('not found')) {
-    return '测试失败：AI 代理或上游模型不可用，请检查 Base URL、模型名称和后端 /api/admin/ai/test 路由';
-  }
-  if (text.contains('上游不可达') || text.contains('不可达') || text.contains('502')) {
-    return '测试失败：AI 上游服务不可达，请检查 Base URL、网络或模型配置';
-  }
-  if (text.contains('超时')) return '测试失败：AI 服务响应超时，请稍后重试';
-  return '测试失败：$text';
+String _adminAiFailureReason(Object raw, [AppLocale? locale]) {
+  return AdminUiCopy.aiFailureReason(raw, locale);
 }
 
 // ====================================================================
@@ -4135,7 +4602,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   bool _testingAccountEmail = false;
   bool _exportingBackups = false;
   bool _exportingServerBackups = false;
-  String? _error;
+  Object? _errorObject;
 
   bool _backupEnabled = true;
   bool _serverBackupEnabled = true;
@@ -4175,6 +4642,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   final _openclawMailUserCtrl = TextEditingController();
   final _openclawMailKeyCtrl = TextEditingController();
   final _resendBaseUrlCtrl = TextEditingController();
+  final _resendBaseUrlFocusNode = FocusNode();
   final _resendApiKeyCtrl = TextEditingController();
   final _resendFromCtrl = TextEditingController();
   final _systemNoticeEmailCtrl = TextEditingController();
@@ -4212,11 +4680,17 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   @override
   void initState() {
     super.initState();
+    I18n.localeListenable.addListener(_onLocaleChanged);
     _load();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     _maxSizeCtrl.dispose();
     _intervalCtrl.dispose();
     _retainCtrl.dispose();
@@ -4244,6 +4718,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     _openclawMailUserCtrl.dispose();
     _openclawMailKeyCtrl.dispose();
     _resendBaseUrlCtrl.dispose();
+    _resendBaseUrlFocusNode.dispose();
     _resendApiKeyCtrl.dispose();
     _resendFromCtrl.dispose();
     _systemNoticeEmailCtrl.dispose();
@@ -4283,7 +4758,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     final serial = ++_loadSerial;
     setState(() {
       _loading = true;
-      _error = null;
+      _errorObject = null;
     });
     try {
       final data = await widget.api.getSettings(scope: 'backup');
@@ -4411,7 +4886,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       _failedLoad = null;
     } catch (e) {
       if (!mounted || serial != _loadSerial) return;
-      _error = _adminErrorMessage(e, '备份配置与备份记录');
+      _errorObject = e;
       _failedLoad = () => _load(
         backupOffset: nextBackupOffset,
         serverBackupOffset: nextServerBackupOffset,
@@ -4514,14 +4989,26 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       }
       await widget.api.client.patch('/api/admin/settings', payload);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('云端备份配置已保存')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: _AdminFeedbackText(
+            (locale) => AdminUiCopy.backupConfigSavedFor(locale),
+          ),
+        ),
+      );
       await _load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '保存备份配置'))),
+          SnackBar(
+            content: _AdminFeedbackText(
+              (locale) => _adminActionErrorMessage(
+                e,
+                AdminUiCopy.actionSaveBackupConfigFor(locale),
+                locale,
+              ),
+            ),
+          ),
         );
       }
     } finally {
@@ -4535,14 +5022,26 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       await widget.api.runServerBackup();
       await _load();
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('服务器备份已执行')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: _AdminFeedbackText(
+              (locale) => AdminUiCopy.serverBackupExecutedFor(locale),
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '执行服务器备份'))),
+          SnackBar(
+            content: _AdminFeedbackText(
+              (locale) => _adminActionErrorMessage(
+                e,
+                AdminUiCopy.actionRunServerBackupFor(locale),
+                locale,
+              ),
+            ),
+          ),
         );
       }
     } finally {
@@ -4558,8 +5057,10 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         final recipient = (res['recipient'] ?? '').toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              recipient.isEmpty ? '测试邮件已发送' : '测试邮件已发送到 $recipient',
+            content: _AdminFeedbackText(
+              (locale) => recipient.isEmpty
+                  ? AdminUiCopy.testEmailSentFor(locale)
+                  : AdminUiCopy.testEmailSentTo(recipient, locale),
             ),
           ),
         );
@@ -4567,7 +5068,15 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '发送提醒测试邮件'))),
+          SnackBar(
+            content: _AdminFeedbackText(
+              (locale) => _adminActionErrorMessage(
+                e,
+                AdminUiCopy.actionSendReminderTestEmailFor(locale),
+                locale,
+              ),
+            ),
+          ),
         );
       }
     } finally {
@@ -4585,10 +5094,14 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         final channel = provider.isEmpty ? '' : ' · $provider';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              recipient.isEmpty
-                  ? '账号测试邮件已发送$channel'
-                  : '账号测试邮件已发送到 $recipient$channel',
+            content: _AdminFeedbackText(
+              (locale) => recipient.isEmpty
+                  ? AdminUiCopy.accountTestEmailSent(channel, locale)
+                  : AdminUiCopy.accountTestEmailSentTo(
+                      recipient,
+                      channel,
+                      locale,
+                    ),
             ),
           ),
         );
@@ -4596,7 +5109,15 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '发送账号测试邮件'))),
+          SnackBar(
+            content: _AdminFeedbackText(
+              (locale) => _adminActionErrorMessage(
+                e,
+                AdminUiCopy.actionSendAccountTestEmailFor(locale),
+                locale,
+              ),
+            ),
+          ),
         );
       }
     } finally {
@@ -4615,34 +5136,139 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         : fallback;
   }
 
-  List<DropdownMenuItem<String>> _mailProviderItems() => const [
-    DropdownMenuItem(value: 'claw163', child: Text('Claw163')),
-    DropdownMenuItem(value: 'resend', child: Text('Resend')),
-    DropdownMenuItem(value: 'smtp', child: Text('SMTP')),
-    DropdownMenuItem(value: 'none', child: Text('关闭')),
+  /// 邮件配置字段：窄屏/放大时长标签外置换行（与 Resend 服务地址一致），
+  /// 字段始终位于同一槽位，切换布局时保留 focus/selection。
+  Widget _mailLabeled(
+    BuildContext context, {
+    required bool external,
+    required String label,
+    required Widget field,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (external)
+          ExcludeSemantics(
+            child: Text(
+              label,
+              style:
+                  (theme.inputDecorationTheme.labelStyle ??
+                          theme.textTheme.bodyMedium ??
+                          const TextStyle())
+                      .copyWith(
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.normal,
+                      ),
+            ),
+          )
+        else
+          const SizedBox.shrink(),
+        SizedBox(height: external ? 6 : 0),
+        Semantics(label: external ? label : null, child: field),
+      ],
+    );
+  }
+
+  InputDecoration _mailDecoration({
+    required bool external,
+    required String label,
+    required IconData icon,
+    String? helperText,
+  }) => InputDecoration(
+    constraints: const BoxConstraints(minHeight: 44),
+    labelText: external ? null : label,
+    helperText: helperText,
+    prefixIcon: Icon(icon),
+  );
+
+  Widget _mailTextField(
+    BuildContext context, {
+    required bool external,
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool obscureText = false,
+    TextInputType? keyboardType,
+    String? helperText,
+  }) => _mailLabeled(
+    context,
+    external: external,
+    label: label,
+    field: TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      decoration: _mailDecoration(
+        external: external,
+        label: label,
+        icon: icon,
+        helperText: helperText,
+      ),
+    ),
+  );
+
+  Widget _mailDropdown(
+    BuildContext context, {
+    required bool external,
+    required String initialValue,
+    required String label,
+    required IconData icon,
+    required List<DropdownMenuItem<String>> items,
+    required ValueChanged<String?> onChanged,
+  }) => _mailLabeled(
+    context,
+    external: external,
+    label: label,
+    field: AppDropdownField<String>(
+      initialValue: initialValue,
+      wrapSelectedText: true,
+      decoration: _mailDecoration(external: external, label: label, icon: icon),
+      items: items,
+      onChanged: onChanged,
+    ),
+  );
+
+  List<DropdownMenuItem<String>> _mailProviderItems([AppLocale? locale]) => [
+    const DropdownMenuItem(value: 'claw163', child: Text('Claw163')),
+    const DropdownMenuItem(value: 'resend', child: Text('Resend')),
+    const DropdownMenuItem(value: 'smtp', child: Text('SMTP')),
+    DropdownMenuItem(
+      value: 'none',
+      child: Text(AdminUiCopy.mailProviderDisabledFor(locale)),
+    ),
   ];
 
   Future<void> _wipe(Map<String, dynamic> row) async {
+    final username = (row['username'] ?? '').toString();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: Text('清空 ${row['username']} 的云端备份?'),
-        icon: const Icon(Icons.cloud_off_outlined),
-        content: const Text('账号保留，但服务器上的同步数据会清零，用户下次同步后本地数据将被覆盖。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (context, locale, _) {
+          return AppDialog(
+            title: Text(AdminUiCopy.wipeBackupDialogTitle(username, locale)),
+            icon: const Icon(Icons.cloud_off_outlined),
+            content: _AdminFeedbackText(
+              (locale) => AdminUiCopy.wipeBackupDialogContentFor(locale),
             ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('清空'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(AdminUiCopy.cancelBtnFor(locale)),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.error,
+                  foregroundColor: Theme.of(ctx).colorScheme.onError,
+                ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(AdminUiCopy.wipeFor(locale)),
+              ),
+            ],
+          );
+        },
       ),
     );
     if (ok != true) return;
@@ -4656,7 +5282,15 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '清空云端备份'))),
+          SnackBar(
+            content: _AdminFeedbackText(
+              (locale) => _adminActionErrorMessage(
+                e,
+                AdminUiCopy.actionWipeBackupFor(locale),
+                locale,
+              ),
+            ),
+          ),
         );
       }
     }
@@ -4664,6 +5298,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
 
   Future<void> _exportBackupsCsv() async {
     setState(() => _exportingBackups = true);
+    final locale = I18n.current;
     try {
       final csv = await widget.api.exportBackupsCsv(
         query: _backupQuery.isEmpty ? null : _backupQuery,
@@ -4673,15 +5308,19 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       await _shareAdminCsv(
         csv,
         prefix: 'duoyi_backups',
-        text: '多仪用户备份导出',
-        subject: '多仪用户备份 CSV',
-        successLabel: '用户备份 CSV 已导出',
+        text: AdminUiCopy.exportUserBackupsTextFor(locale),
+        subject: AdminUiCopy.exportUserBackupsSubjectFor(locale),
+        successLabel: AdminUiCopy.exportUserBackupsSuccessFor,
       );
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: _AdminFeedbackText(
+              (locale) => userVisibleApiError(e, locale: locale),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _exportingBackups = false);
@@ -4690,6 +5329,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
 
   Future<void> _exportServerBackupsCsv() async {
     setState(() => _exportingServerBackups = true);
+    final locale = I18n.current;
     try {
       final csv = await widget.api.exportServerBackupsCsv(
         query: _serverBackupQuery.isEmpty ? null : _serverBackupQuery,
@@ -4699,15 +5339,19 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       await _shareAdminCsv(
         csv,
         prefix: 'duoyi_server_backups',
-        text: '多仪服务器备份导出',
-        subject: '多仪服务器备份 CSV',
-        successLabel: '服务器备份 CSV 已导出',
+        text: AdminUiCopy.exportServerBackupsTextFor(locale),
+        subject: AdminUiCopy.exportServerBackupsSubjectFor(locale),
+        successLabel: AdminUiCopy.exportServerBackupsSuccessFor,
       );
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: _AdminFeedbackText(
+              (locale) => userVisibleApiError(e, locale: locale),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _exportingServerBackups = false);
@@ -4719,7 +5363,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     required String prefix,
     required String text,
     required String subject,
-    required String successLabel,
+    required String Function(AppLocale) successLabel,
   }) async {
     final dir = await getTemporaryDirectory();
     final file = File(
@@ -4731,9 +5375,17 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       ShareParams(files: [XFile(file.path)], text: text, subject: subject),
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$successLabel，路径已复制：${file.path}')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: _AdminFeedbackText(
+          (locale) => AdminUiCopy.shareAdminCsvSuccess(
+            successLabel(locale),
+            file.path,
+            locale,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _backupStatusChip(String label, String value) {
@@ -4761,11 +5413,28 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     );
   }
 
+  Widget _backupRecordViewport(BuildContext context, Widget child) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScale = (MediaQuery.textScalerOf(context).scale(12) / 12)
+            .clamp(1.0, double.infinity);
+        return SingleChildScrollView(
+          child: SizedBox(
+            width: constraints.maxWidth,
+            height: constraints.maxHeight * textScale,
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildBackupRecordTabs(
     BuildContext context, {
     required ThemeData theme,
     required ColorScheme cs,
     required int totalKb,
+    required AppLocale locale,
   }) {
     return DecoratedBox(
       key: const ValueKey('admin_backup_record_tabs'),
@@ -4784,21 +5453,34 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         child: Column(
           children: [
             TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               labelStyle: appSecondaryMenuItemTextStyle(context),
               unselectedLabelStyle: appSecondaryMenuItemTextStyle(context),
-              tabs: const [
-                Tab(text: '服务器备份记录'),
-                Tab(text: '所有用户备份'),
+              tabs: [
+                Tab(text: AdminUiCopy.serverBackupRecordsTabFor(locale)),
+                Tab(text: AdminUiCopy.allUserBackupsTabFor(locale)),
               ],
             ),
             Expanded(
               child: TabBarView(
                 children: [
-                  _buildServerBackupRecords(theme: theme, cs: cs),
-                  _buildUserBackupRecords(
-                    theme: theme,
-                    cs: cs,
-                    totalKb: totalKb,
+                  _backupRecordViewport(
+                    context,
+                    _buildServerBackupRecords(
+                      theme: theme,
+                      cs: cs,
+                      locale: locale,
+                    ),
+                  ),
+                  _backupRecordViewport(
+                    context,
+                    _buildUserBackupRecords(
+                      theme: theme,
+                      cs: cs,
+                      totalKb: totalKb,
+                      locale: locale,
+                    ),
                   ),
                 ],
               ),
@@ -4812,6 +5494,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
   Widget _buildServerBackupRecords({
     required ThemeData theme,
     required ColorScheme cs,
+    required AppLocale locale,
   }) {
     return Column(
       key: const ValueKey('admin_backup_server_panel'),
@@ -4820,9 +5503,11 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
           child: AppSectionHeader(
-            title: '服务器备份记录',
-            subtitle: _adminPageSummary(_serverBackupPage),
-            actionLabel: _exportingServerBackups ? '导出中…' : '导出筛选结果',
+            title: AdminUiCopy.serverBackupRecordsTabFor(locale),
+            subtitle: _adminPageSummary(_serverBackupPage, locale),
+            actionLabel: _exportingServerBackups
+                ? AdminUiCopy.exportingEllipsis(locale)
+                : AdminUiCopy.exportFilteredResultsFor(locale),
             actionIcon: Icons.ios_share_outlined,
             onAction: _exportingServerBackups ? null : _exportServerBackupsCsv,
           ),
@@ -4832,12 +5517,14 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           child: TextField(
             controller: _serverBackupSearchCtrl,
             decoration: InputDecoration(
-              hintText: '搜索文件名、状态、路径或详情',
+              hintText: AdminUiCopy.searchServerBackupsHintFor(locale),
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _serverBackupQuery.isEmpty
                   ? null
                   : IconButton(
-                      tooltip: '清空服务器备份搜索',
+                      tooltip: AdminUiCopy.clearServerBackupSearchTooltipFor(
+                        locale,
+                      ),
                       icon: const Icon(Icons.close),
                       onPressed: () {
                         _serverBackupSearchCtrl.clear();
@@ -4858,11 +5545,26 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           child: _AdminChipWrap(
             padding: EdgeInsets.zero,
             children: [
-              _serverBackupStatusChip('全部备份', ''),
-              _serverBackupStatusChip('已上传', 'uploaded'),
-              _serverBackupStatusChip('仅本地', 'local_only'),
-              _serverBackupStatusChip('远端失败', 'local_created_remote_failed'),
-              _serverBackupStatusChip('已创建', 'created'),
+              _serverBackupStatusChip(
+                AdminUiCopy.allBackupsChipFor(locale),
+                '',
+              ),
+              _serverBackupStatusChip(
+                AdminUiCopy.uploadedChipFor(locale),
+                'uploaded',
+              ),
+              _serverBackupStatusChip(
+                AdminUiCopy.localOnlyChipFor(locale),
+                'local_only',
+              ),
+              _serverBackupStatusChip(
+                AdminUiCopy.remoteFailedChipFor(locale),
+                'local_created_remote_failed',
+              ),
+              _serverBackupStatusChip(
+                AdminUiCopy.createdChipFor(locale),
+                'created',
+              ),
             ],
           ),
         ),
@@ -4873,27 +5575,37 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
               Expanded(
                 child: AppDropdownField<String>(
                   initialValue: _serverBackupSort,
-                  labelText: '服务器备份排序',
+                  labelText: AdminUiCopy.serverBackupSortLabelFor(locale),
                   items: [
                     DropdownMenuItem(
                       value: 'created_desc',
-                      child: Text(_adminServerBackupSortLabel('created_desc')),
+                      child: Text(
+                        _adminServerBackupSortLabel('created_desc', locale),
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'size_desc',
-                      child: Text(_adminServerBackupSortLabel('size_desc')),
+                      child: Text(
+                        _adminServerBackupSortLabel('size_desc', locale),
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'size_asc',
-                      child: Text(_adminServerBackupSortLabel('size_asc')),
+                      child: Text(
+                        _adminServerBackupSortLabel('size_asc', locale),
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'status_asc',
-                      child: Text(_adminServerBackupSortLabel('status_asc')),
+                      child: Text(
+                        _adminServerBackupSortLabel('status_asc', locale),
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'filename_asc',
-                      child: Text(_adminServerBackupSortLabel('filename_asc')),
+                      child: Text(
+                        _adminServerBackupSortLabel('filename_asc', locale),
+                      ),
                     ),
                   ],
                   onChanged: (value) => _load(
@@ -4908,7 +5620,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                     ? null
                     : () => _load(serverBackupOffset: _serverBackupOffset),
                 icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('刷新'),
+                label: Text(AdminUiCopy.refreshBtnFor(locale)),
               ),
             ],
           ),
@@ -4917,7 +5629,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           child: _serverBackups.isEmpty
               ? Center(
                   child: Text(
-                    '当前筛选下没有服务器备份记录。可搜索文件名、状态、路径或详情，也可以切换状态后再看。',
+                    AdminUiCopy.emptyServerBackupsMessageFor(locale),
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.58),
@@ -4937,7 +5649,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                       leading: Icon(Icons.backup_outlined, color: cs.primary),
                       title: Text((b['filename'] ?? '-').toString()),
                       subtitle: Text(
-                        '${b['created_at'] ?? '-'} · ${_adminStatusLabel(status)} · ${b['size_bytes'] ?? 0} 字节',
+                        '${b['created_at'] ?? '-'} · ${_adminStatusLabel(status, locale)} · ${b['size_bytes'] ?? 0} ${AdminUiCopy.bytesUnit(locale)}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.62),
                         ),
@@ -4951,6 +5663,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           page: _serverBackupPage,
           loading: _loading,
           pageSize: _serverBackupPageSize,
+          locale: locale,
           onPageSizeChanged: (value) =>
               _load(serverBackupPageSize: value, serverBackupOffset: 0),
           onPrevious: () => _load(
@@ -4971,6 +5684,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
     required ThemeData theme,
     required ColorScheme cs,
     required int totalKb,
+    required AppLocale locale,
   }) {
     return Column(
       key: const ValueKey('admin_backup_user_panel'),
@@ -4979,10 +5693,12 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
           child: AppSectionHeader(
-            title: '所有用户备份',
+            title: AdminUiCopy.allUserBackupsTabFor(locale),
             subtitle:
-                '${_adminPageSummary(_backupPage)} · 本页 ${(totalKb / 1024).toStringAsFixed(1)} MB',
-            actionLabel: _exportingBackups ? '导出中…' : '导出筛选结果',
+                '${_adminPageSummary(_backupPage, locale)} · ${AdminUiCopy.pageTotalMbLabel((totalKb / 1024).toStringAsFixed(1), locale)}',
+            actionLabel: _exportingBackups
+                ? AdminUiCopy.exportingEllipsis(locale)
+                : AdminUiCopy.exportFilteredResultsFor(locale),
             actionIcon: Icons.ios_share_outlined,
             onAction: _exportingBackups ? null : _exportBackupsCsv,
           ),
@@ -4992,12 +5708,14 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           child: TextField(
             controller: _backupSearchCtrl,
             decoration: InputDecoration(
-              hintText: '搜索用户名、邮箱、昵称或用户 ID',
+              hintText: AdminUiCopy.searchUserBackupsHintFor(locale),
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _backupQuery.isEmpty
                   ? null
                   : IconButton(
-                      tooltip: '清空用户备份搜索',
+                      tooltip: AdminUiCopy.clearUserBackupSearchTooltipFor(
+                        locale,
+                      ),
                       icon: const Icon(Icons.close),
                       onPressed: () {
                         _backupSearchCtrl.clear();
@@ -5018,9 +5736,12 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           child: _AdminChipWrap(
             padding: EdgeInsets.zero,
             children: [
-              _backupStatusChip('全部用户', ''),
-              _backupStatusChip('已有快照', 'synced'),
-              _backupStatusChip('无快照', 'empty'),
+              _backupStatusChip(AdminUiCopy.allUsersChipFor(locale), ''),
+              _backupStatusChip(
+                AdminUiCopy.hasSnapshotChipFor(locale),
+                'synced',
+              ),
+              _backupStatusChip(AdminUiCopy.noSnapshotChipFor(locale), 'empty'),
             ],
           ),
         ),
@@ -5031,27 +5752,33 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
               Expanded(
                 child: AppDropdownField<String>(
                   initialValue: _backupSort,
-                  labelText: '用户备份排序',
+                  labelText: AdminUiCopy.userBackupSortLabelFor(locale),
                   items: [
                     DropdownMenuItem(
                       value: 'updated_desc',
-                      child: Text(_adminBackupSortLabel('updated_desc')),
+                      child: Text(
+                        _adminBackupSortLabel('updated_desc', locale),
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'username_asc',
-                      child: Text(_adminBackupSortLabel('username_asc')),
+                      child: Text(
+                        _adminBackupSortLabel('username_asc', locale),
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'size_desc',
-                      child: Text(_adminBackupSortLabel('size_desc')),
+                      child: Text(_adminBackupSortLabel('size_desc', locale)),
                     ),
                     DropdownMenuItem(
                       value: 'size_asc',
-                      child: Text(_adminBackupSortLabel('size_asc')),
+                      child: Text(_adminBackupSortLabel('size_asc', locale)),
                     ),
                     DropdownMenuItem(
                       value: 'version_desc',
-                      child: Text(_adminBackupSortLabel('version_desc')),
+                      child: Text(
+                        _adminBackupSortLabel('version_desc', locale),
+                      ),
                     ),
                   ],
                   onChanged: (value) => _load(
@@ -5066,7 +5793,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                     ? null
                     : () => _load(backupOffset: _backupOffset),
                 icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('刷新'),
+                label: Text(AdminUiCopy.refreshBtnFor(locale)),
               ),
             ],
           ),
@@ -5075,7 +5802,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           child: _backups.isEmpty
               ? Center(
                   child: Text(
-                    '当前筛选下没有用户备份。可搜索用户名、邮箱、昵称或用户 ID，也可以切换“已有快照/无快照”。',
+                    AdminUiCopy.emptyUserBackupsMessageFor(locale),
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.58),
@@ -5092,8 +5819,9 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                     final displayName = (b['display_name'] ?? '').toString();
                     final hasSnapshot = b['has_snapshot'] == true;
                     final updated = hasSnapshot
-                        ? (b['updated_at'] ?? '尚无同步时间').toString()
-                        : '尚无同步快照';
+                        ? (b['updated_at'] ?? AdminUiCopy.noSyncTime(locale))
+                              .toString()
+                        : AdminUiCopy.noSyncSnapshot(locale);
                     return _AdminListTileCard(
                       margin: const EdgeInsets.only(bottom: 8),
                       dense: true,
@@ -5104,10 +5832,12 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                       title: Text(b['username'].toString()),
                       subtitle: Text(
                         [
-                          if (displayName.isNotEmpty) '昵称: $displayName',
-                          if (email.isNotEmpty) '邮箱: $email',
+                          if (displayName.isNotEmpty)
+                            '${AdminUiCopy.nicknamePrefix(locale)}: $displayName',
+                          if (email.isNotEmpty)
+                            '${AdminUiCopy.emailPrefix(locale)}: $email',
                           updated,
-                          '版本 ${b['sync_version'] ?? 0}',
+                          '${AdminUiCopy.syncVersionPrefix(locale)} ${b['sync_version'] ?? 0}',
                           '${b['size_kb']} KB',
                         ].join(' · '),
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -5115,7 +5845,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                         ),
                       ),
                       trailing: IconButton(
-                        tooltip: '清空备份',
+                        tooltip: AdminUiCopy.wipeBackupTooltipFor(locale),
                         icon: const Icon(Icons.delete_outline),
                         onPressed: () => _wipe(b),
                       ),
@@ -5128,6 +5858,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
           page: _backupPage,
           loading: _loading,
           pageSize: _backupPageSize,
+          locale: locale,
           onPageSizeChanged: (value) =>
               _load(backupPageSize: value, backupOffset: 0),
           onPrevious: () => _load(
@@ -5146,12 +5877,23 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = I18n.current;
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
-      return _AdminErrorState(message: _error!, onRetry: _retryLoad);
+    if (_errorObject != null) {
+      return _AdminErrorState(
+        message: _adminErrorMessage(
+          _errorObject!,
+          AdminUiCopy.backupSettingsTabTitleFor(locale),
+          locale,
+        ),
+        onRetry: _retryLoad,
+      );
     }
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final media = MediaQuery.of(context);
+    final isCompactOrScaled =
+        media.size.width < 360 || media.textScaler.scale(1.0) > 1.25;
 
     final totalKb = _backups.fold<int>(
       0,
@@ -5162,45 +5904,45 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
       padding: const EdgeInsets.all(16),
       children: [
         _AdminSettingsSection(
-          title: '云端备份',
-          subtitle: '限制同步体积、频率与服务开关',
+          title: AdminUiCopy.cloudBackupSectionTitleFor(locale),
+          subtitle: AdminUiCopy.cloudBackupSectionSubtitleFor(locale),
           children: [
             AppSwitchTile(
               icon: Icons.cloud_sync_outlined,
               color: cs.primary,
               value: _backupEnabled,
-              title: '启用云端备份',
-              subtitle: '关闭后暂停所有账号的云同步',
+              title: AdminUiCopy.cloudBackupEnableTitleFor(locale),
+              subtitle: AdminUiCopy.cloudBackupEnableSubtitleFor(locale),
               onChanged: (v) => setState(() => _backupEnabled = v),
             ),
             const SizedBox(height: 10),
-            TextField(
+            _AdminSettingsTextField(
               controller: _maxSizeCtrl,
+              label: AdminUiCopy.backupMaxSizeLabelFor(locale),
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: '单用户同步大小上限 (KB)',
-                helperText: '0 = 不限，默认 2048',
-                prefixIcon: Icon(Icons.storage_outlined),
+              decoration: InputDecoration(
+                helperText: AdminUiCopy.backupMaxSizeHelperFor(locale),
+                prefixIcon: const Icon(Icons.storage_outlined),
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
+            _AdminSettingsTextField(
               controller: _intervalCtrl,
+              label: AdminUiCopy.backupIntervalLabelFor(locale),
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: '客户端最小自动同步间隔 (分钟)',
-                helperText: '用于客户端回退策略参考',
-                prefixIcon: Icon(Icons.update_outlined),
+              decoration: InputDecoration(
+                helperText: AdminUiCopy.backupIntervalHelperFor(locale),
+                prefixIcon: const Icon(Icons.update_outlined),
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
+            _AdminSettingsTextField(
               controller: _retainCtrl,
+              label: AdminUiCopy.backupRetainLabelFor(locale),
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: '备份历史保留天数',
-                helperText: '0 = 永久保留 (当前后端仅保留最新快照)',
-                prefixIcon: Icon(Icons.history_outlined),
+              decoration: InputDecoration(
+                helperText: AdminUiCopy.backupRetainHelperFor(locale),
+                prefixIcon: const Icon(Icons.history_outlined),
               ),
             ),
             const SizedBox(height: 14),
@@ -5209,111 +5951,103 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
               child: FilledButton.icon(
                 onPressed: _saving ? null : _save,
                 icon: const Icon(Icons.save_outlined),
-                label: Text(_saving ? '保存中…' : '保存'),
+                label: Text(
+                  _saving
+                      ? AdminUiCopy.savingEllipsis(locale)
+                      : AdminUiCopy.saveBtnFor(locale),
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
         _AdminSettingsSection(
-          title: '服务器备份',
-          subtitle: '定期打包后台数据库，上传到 OpenList，并可邮件通知',
+          title: AdminUiCopy.serverBackupSectionTitleFor(locale),
+          subtitle: AdminUiCopy.serverBackupSectionSubtitleFor(locale),
           children: [
             AppSwitchTile(
               icon: Icons.dns_outlined,
               color: Colors.indigo,
               value: _serverBackupEnabled,
-              title: '启用服务器定期备份',
-              subtitle: '后台进程按间隔生成数据库 ZIP 快照',
+              title: AdminUiCopy.serverBackupEnableTitleFor(locale),
+              subtitle: AdminUiCopy.serverBackupEnableSubtitleFor(locale),
               onChanged: (v) => setState(() => _serverBackupEnabled = v),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _serverIntervalCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '服务器备份间隔 (分钟)',
-                      prefixIcon: Icon(Icons.schedule_outlined),
-                    ),
-                  ),
+            _adminResponsiveTwoColumn(
+              context: context,
+              first: _AdminSettingsTextField(
+                controller: _serverIntervalCtrl,
+                label: AdminUiCopy.serverBackupIntervalLabelFor(locale),
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.schedule_outlined),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _serverRetainCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '本地保留天数',
-                      prefixIcon: Icon(Icons.history_toggle_off_outlined),
-                    ),
-                  ),
+              ),
+              second: _AdminSettingsTextField(
+                controller: _serverRetainCtrl,
+                label: AdminUiCopy.serverBackupRetainLabelFor(locale),
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.history_toggle_off_outlined),
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 12),
             AppSwitchTile(
               icon: Icons.cloud_upload_outlined,
               color: Colors.blue,
               value: _openlistEnabled,
-              title: '上传到 OpenList',
-              subtitle: '使用 OpenList WebDAV 保存服务器备份包',
+              title: AdminUiCopy.openlistEnableTitleFor(locale),
+              subtitle: AdminUiCopy.openlistEnableSubtitleFor(locale),
               onChanged: (v) => setState(() => _openlistEnabled = v),
             ),
             const SizedBox(height: 10),
-            TextField(
+            _AdminSettingsTextField(
               controller: _openlistUrlCtrl,
+              label: 'OpenList WebDAV URL',
               decoration: const InputDecoration(
-                labelText: 'OpenList WebDAV URL',
                 hintText: 'http://127.0.0.1:5244/dav',
                 prefixIcon: Icon(Icons.link_outlined),
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
+            _AdminSettingsTextField(
               controller: _openlistPublicUrlCtrl,
-              decoration: const InputDecoration(
-                labelText: 'OpenList 公开 URL (可选)',
-                prefixIcon: Icon(Icons.public_outlined),
+              label: AdminUiCopy.openlistPublicUrlLabelFor(locale),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.public_outlined),
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _openlistUserCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'OpenList 用户名',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                  ),
+            _adminResponsiveTwoColumn(
+              context: context,
+              first: _AdminSettingsTextField(
+                controller: _openlistUserCtrl,
+                label: AdminUiCopy.openlistUserLabelFor(locale),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.person_outline),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _openlistPasswordCtrl,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: 'OpenList 密码',
-                      helperText: _openlistPasswordMasked
-                          ? '已配置，保持不动即不修改'
-                          : null,
-                      prefixIcon: const Icon(Icons.password_outlined),
-                    ),
-                  ),
+              ),
+              second: _AdminSettingsTextField(
+                controller: _openlistPasswordCtrl,
+                label: AdminUiCopy.openlistPasswordLabelFor(locale),
+                obscureText: true,
+                decoration: InputDecoration(
+                  helperText: _openlistPasswordMasked
+                      ? AdminUiCopy.configuredLeaveUnchanged(locale)
+                      : null,
+                  prefixIcon: const Icon(Icons.password_outlined),
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 10),
-            TextField(
+            _AdminSettingsTextField(
               controller: _openlistPathCtrl,
-              decoration: const InputDecoration(
-                labelText: 'OpenList 备份目录',
+              label: AdminUiCopy.openlistPathLabelFor(locale),
+              decoration: InputDecoration(
                 hintText: '/duoyi-backups',
-                prefixIcon: Icon(Icons.folder_outlined),
+                prefixIcon: const Icon(Icons.folder_outlined),
               ),
             ),
             const SizedBox(height: 12),
@@ -5321,290 +6055,286 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
               icon: Icons.mark_email_read_outlined,
               color: Colors.teal,
               value: _backupEmailEnabled,
-              title: '备份完成后发送邮件',
-              subtitle: '支持 SMTP，失败会写入备份记录',
+              title: AdminUiCopy.backupEmailEnableTitleFor(locale),
+              subtitle: AdminUiCopy.backupEmailEnableSubtitleFor(locale),
               onChanged: (v) => setState(() => _backupEmailEnabled = v),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _emailToCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '通知收件人',
-                      prefixIcon: Icon(Icons.alternate_email),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _emailFromCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '发件人',
-                      prefixIcon: Icon(Icons.outgoing_mail),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _smtpHostCtrl,
-              decoration: const InputDecoration(
-                labelText: 'SMTP Host',
-                prefixIcon: Icon(Icons.dns_outlined),
+            _adminResponsiveTwoColumn(
+              context: context,
+              first: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _emailToCtrl,
+                label: AdminUiCopy.noticeRecipientLabelFor(locale),
+                icon: Icons.alternate_email,
+              ),
+              second: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _emailFromCtrl,
+                label: AdminUiCopy.senderLabelFor(locale),
+                icon: Icons.outgoing_mail,
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _smtpPortCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'SMTP 端口',
-                      prefixIcon: Icon(Icons.numbers_outlined),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _smtpUserCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'SMTP 用户名',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                  ),
-                ),
-              ],
+            _mailTextField(
+              context,
+              external: isCompactOrScaled,
+              controller: _smtpHostCtrl,
+              label: 'SMTP Host',
+              icon: Icons.dns_outlined,
             ),
             const SizedBox(height: 10),
-            TextField(
+            _adminResponsiveTwoColumn(
+              context: context,
+              first: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _smtpPortCtrl,
+                keyboardType: TextInputType.number,
+                label: AdminUiCopy.smtpPortLabelFor(locale),
+                icon: Icons.numbers_outlined,
+              ),
+              second: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _smtpUserCtrl,
+                label: AdminUiCopy.smtpUsernameLabelFor(locale),
+                icon: Icons.person_outline,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _mailTextField(
+              context,
+              external: isCompactOrScaled,
               controller: _smtpPasswordCtrl,
               obscureText: true,
-              decoration: InputDecoration(
-                labelText: 'SMTP 密码',
-                helperText: _smtpPasswordMasked ? '已配置，保持不动即不修改' : null,
-                prefixIcon: const Icon(Icons.key_outlined),
-              ),
+              label: AdminUiCopy.smtpPasswordLabelFor(locale),
+              helperText: _smtpPasswordMasked
+                  ? AdminUiCopy.configuredLeaveUnchanged(locale)
+                  : null,
+              icon: Icons.key_outlined,
             ),
             const SizedBox(height: 16),
             AppSwitchTile(
               icon: Icons.mark_email_read_outlined,
               color: Colors.indigo,
               value: _accountEmailEnabled,
-              title: '账号验证码邮件',
-              subtitle: '注册验证、邮箱登录和找回密码共用主备通道',
+              title: AdminUiCopy.accountEmailEnableTitleFor(locale),
+              subtitle: AdminUiCopy.accountEmailEnableSubtitleFor(locale),
               onChanged: (v) => setState(() => _accountEmailEnabled = v),
             ),
             const SizedBox(height: 10),
-            TextField(
+            _mailTextField(
+              context,
+              external: isCompactOrScaled,
               controller: _emailTitleCtrl,
-              decoration: const InputDecoration(
-                labelText: '账号邮件标题',
-                helperText: '兼容 RE0 的 TITLE，默认使用多仪',
-                prefixIcon: Icon(Icons.title_outlined),
-              ),
+              label: AdminUiCopy.emailTitleLabelFor(locale),
+              helperText: AdminUiCopy.emailTitleHelperFor(locale),
+              icon: Icons.title_outlined,
             ),
             const SizedBox(height: 10),
-            TextField(
+            _mailTextField(
+              context,
+              external: isCompactOrScaled,
               controller: _emailSenderNameCtrl,
-              decoration: const InputDecoration(
-                labelText: '账号邮件发件人显示名',
-                prefixIcon: Icon(Icons.badge_outlined),
+              label: AdminUiCopy.emailSenderNameLabelFor(locale),
+              icon: Icons.badge_outlined,
+            ),
+            const SizedBox(height: 10),
+            _adminResponsiveTwoColumn(
+              context: context,
+              first: _mailDropdown(
+                context,
+                external: isCompactOrScaled,
+                initialValue: _emailPrimaryProvider,
+                label: AdminUiCopy.primaryChannelLabelFor(locale),
+                icon: Icons.route_outlined,
+                items: _mailProviderItems(locale),
+                onChanged: (v) =>
+                    setState(() => _emailPrimaryProvider = v ?? 'claw163'),
+              ),
+              second: _mailDropdown(
+                context,
+                external: isCompactOrScaled,
+                initialValue: _emailBackupProvider,
+                label: AdminUiCopy.backupChannelLabelFor(locale),
+                icon: Icons.alt_route_outlined,
+                items: _mailProviderItems(locale),
+                onChanged: (v) =>
+                    setState(() => _emailBackupProvider = v ?? 'resend'),
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: AppDropdownField<String>(
-                    initialValue: _emailPrimaryProvider,
-                    decoration: const InputDecoration(
-                      labelText: '主通道',
-                      prefixIcon: Icon(Icons.route_outlined),
-                    ),
-                    items: _mailProviderItems(),
-                    onChanged: (v) =>
-                        setState(() => _emailPrimaryProvider = v ?? 'claw163'),
+            _adminResponsiveTwoColumn(
+              context: context,
+              first: _mailDropdown(
+                context,
+                external: isCompactOrScaled,
+                initialValue: _emailActiveSlot,
+                label: AdminUiCopy.activePriorityChannelLabelFor(locale),
+                icon: Icons.swap_horiz_outlined,
+                items: [
+                  DropdownMenuItem(
+                    value: 'primary',
+                    child: Text(AdminUiCopy.primaryChannelItemFor(locale)),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: AppDropdownField<String>(
-                    initialValue: _emailBackupProvider,
-                    decoration: const InputDecoration(
-                      labelText: '备用通道',
-                      prefixIcon: Icon(Icons.alt_route_outlined),
-                    ),
-                    items: _mailProviderItems(),
-                    onChanged: (v) =>
-                        setState(() => _emailBackupProvider = v ?? 'resend'),
+                  DropdownMenuItem(
+                    value: 'backup',
+                    child: Text(AdminUiCopy.backupChannelItemFor(locale)),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: AppDropdownField<String>(
-                    initialValue: _emailActiveSlot,
-                    decoration: const InputDecoration(
-                      labelText: '当前优先线路',
-                      prefixIcon: Icon(Icons.swap_horiz_outlined),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'primary', child: Text('主通道')),
-                      DropdownMenuItem(value: 'backup', child: Text('备用通道')),
-                    ],
-                    onChanged: (v) =>
-                        setState(() => _emailActiveSlot = v ?? 'primary'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('备用成功后自动切换'),
-                    value: _emailAutoSwitchEnabled,
-                    onChanged: (v) =>
-                        setState(() => _emailAutoSwitchEnabled = v),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _openclawMailUserCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Claw163 发件邮箱',
-                      prefixIcon: Icon(Icons.alternate_email),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _openclawMailKeyCtrl,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: 'Claw163 API Key',
-                      helperText: _openclawMailKeyMasked
-                          ? '已配置，保持不动即不修改'
-                          : null,
-                      prefixIcon: const Icon(Icons.key_outlined),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _resendBaseUrlCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Resend Base URL',
-                hintText: 'https://api.resend.com',
-                prefixIcon: Icon(Icons.link_outlined),
+                ],
+                onChanged: (v) =>
+                    setState(() => _emailActiveSlot = v ?? 'primary'),
+              ),
+              second: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(AdminUiCopy.autoSwitchOnSuccessTitleFor(locale)),
+                value: _emailAutoSwitchEnabled,
+                onChanged: (v) => setState(() => _emailAutoSwitchEnabled = v),
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _resendApiKeyCtrl,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: 'Resend API Key',
-                      helperText: _resendApiKeyMasked ? '已配置，保持不动即不修改' : null,
-                      prefixIcon: const Icon(Icons.key_outlined),
-                    ),
-                  ),
+            _adminResponsiveTwoColumn(
+              context: context,
+              first: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _openclawMailUserCtrl,
+                label: AdminUiCopy.claw163EmailLabelFor(locale),
+                icon: Icons.alternate_email,
+              ),
+              second: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _openclawMailKeyCtrl,
+                obscureText: true,
+                label: 'Claw163 API Key',
+                helperText: _openclawMailKeyMasked
+                    ? AdminUiCopy.configuredLeaveUnchanged(locale)
+                    : null,
+                icon: Icons.key_outlined,
+              ),
+            ),
+            if (isCompactOrScaled) ...[
+              const SizedBox(height: 10),
+              ExcludeSemantics(
+                child: Text(
+                  AdminUiCopy.resendBaseUrlLabelFor(locale),
+                  style:
+                      (theme.inputDecorationTheme.labelStyle ??
+                              theme.textTheme.bodyMedium ??
+                              const TextStyle())
+                          .copyWith(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.normal,
+                          ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _resendFromCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Resend 发件人',
-                      prefixIcon: Icon(Icons.outgoing_mail),
-                    ),
-                  ),
+              ),
+              const SizedBox(height: 6),
+            ] else
+              const SizedBox(height: 10),
+            Semantics(
+              label: isCompactOrScaled
+                  ? AdminUiCopy.resendBaseUrlLabelFor(locale)
+                  : null,
+              child: TextField(
+                key: const ValueKey('admin_resend_base_url_field'),
+                controller: _resendBaseUrlCtrl,
+                focusNode: _resendBaseUrlFocusNode,
+                decoration: InputDecoration(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  labelText: isCompactOrScaled
+                      ? null
+                      : AdminUiCopy.resendBaseUrlLabelFor(locale),
+                  hintText: 'https://api.resend.com',
+                  prefixIcon: const Icon(Icons.link_outlined),
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 10),
-            TextField(
+            _adminResponsiveTwoColumn(
+              context: context,
+              first: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _resendApiKeyCtrl,
+                obscureText: true,
+                label: 'Resend API Key',
+                helperText: _resendApiKeyMasked
+                    ? AdminUiCopy.configuredLeaveUnchanged(locale)
+                    : null,
+                icon: Icons.key_outlined,
+              ),
+              second: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _resendFromCtrl,
+                label: AdminUiCopy.resendSenderLabelFor(locale),
+                icon: Icons.outgoing_mail,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _mailTextField(
+              context,
+              external: isCompactOrScaled,
               controller: _systemNoticeEmailCtrl,
-              decoration: const InputDecoration(
-                labelText: '系统通知收件人',
-                helperText: '多个邮箱用逗号分隔',
-                prefixIcon: Icon(Icons.notifications_active_outlined),
-              ),
+              label: AdminUiCopy.systemNoticeRecipientLabelFor(locale),
+              helperText: AdminUiCopy.systemNoticeRecipientHelperFor(locale),
+              icon: Icons.notifications_active_outlined,
             ),
             const SizedBox(height: 10),
-            TextField(
+            _mailTextField(
+              context,
+              external: isCompactOrScaled,
               controller: _accountSmtpHostCtrl,
-              decoration: const InputDecoration(
-                labelText: '账号 SMTP Host',
-                prefixIcon: Icon(Icons.dns_outlined),
+              label: AdminUiCopy.accountSmtpHostLabelFor(locale),
+              icon: Icons.dns_outlined,
+            ),
+            const SizedBox(height: 10),
+            _adminResponsiveTwoColumn(
+              context: context,
+              first: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _accountSmtpPortCtrl,
+                keyboardType: TextInputType.number,
+                label: AdminUiCopy.accountSmtpPortLabelFor(locale),
+                icon: Icons.numbers_outlined,
+              ),
+              second: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _accountSmtpUserCtrl,
+                label: AdminUiCopy.accountSmtpUserLabelFor(locale),
+                icon: Icons.person_outline,
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _accountSmtpPortCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '账号 SMTP 端口',
-                      prefixIcon: Icon(Icons.numbers_outlined),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _accountSmtpUserCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '账号 SMTP 用户名',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            TextField(
+            _mailTextField(
+              context,
+              external: isCompactOrScaled,
               controller: _accountSmtpFromCtrl,
-              decoration: const InputDecoration(
-                labelText: '账号 SMTP 发件地址',
-                helperText: '留空时使用账号 SMTP 用户名',
-                prefixIcon: Icon(Icons.outgoing_mail),
-              ),
+              label: AdminUiCopy.accountSmtpFromLabelFor(locale),
+              helperText: AdminUiCopy.accountSmtpFromHelperFor(locale),
+              icon: Icons.outgoing_mail,
             ),
             const SizedBox(height: 10),
-            TextField(
+            _mailTextField(
+              context,
+              external: isCompactOrScaled,
               controller: _accountSmtpPasswordCtrl,
               obscureText: true,
-              decoration: InputDecoration(
-                labelText: '账号 SMTP 密码',
-                helperText: _accountSmtpPasswordMasked ? '已配置，保持不动即不修改' : null,
-                prefixIcon: const Icon(Icons.key_outlined),
-              ),
+              label: AdminUiCopy.accountSmtpPasswordLabelFor(locale),
+              helperText: _accountSmtpPasswordMasked
+                  ? AdminUiCopy.configuredLeaveUnchanged(locale)
+                  : null,
+              icon: Icons.key_outlined,
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('账号 SMTP 使用 SSL'),
+              title: Text(AdminUiCopy.accountSmtpUseSslTitleFor(locale)),
               value: _accountSmtpUseSsl,
               onChanged: (v) => setState(() => _accountSmtpUseSsl = v),
             ),
@@ -5613,77 +6343,69 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
               icon: Icons.alternate_email_outlined,
               color: Colors.deepPurple,
               value: _reminderEmailEnabled,
-              title: '邮件提醒投递',
-              subtitle: '待办/目标的“邮件”提醒会按计划写入后端 SMTP 队列',
+              title: AdminUiCopy.reminderEmailEnableTitleFor(locale),
+              subtitle: AdminUiCopy.reminderEmailEnableSubtitleFor(locale),
               onChanged: (v) => setState(() => _reminderEmailEnabled = v),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _reminderEmailToCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '默认提醒收件人',
-                      helperText: '用户登录名是邮箱时优先投递给该用户',
-                      prefixIcon: Icon(Icons.alternate_email),
-                    ),
-                  ),
+            _adminResponsiveTwoColumn(
+              context: context,
+              first: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _reminderEmailToCtrl,
+                label: AdminUiCopy.reminderDefaultRecipientLabelFor(locale),
+                helperText: AdminUiCopy.reminderDefaultRecipientHelperFor(
+                  locale,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _reminderEmailFromCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '提醒发件人',
-                      prefixIcon: Icon(Icons.outgoing_mail),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _reminderSmtpHostCtrl,
-              decoration: const InputDecoration(
-                labelText: '提醒 SMTP Host',
-                prefixIcon: Icon(Icons.dns_outlined),
+                icon: Icons.alternate_email,
+              ),
+              second: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _reminderEmailFromCtrl,
+                label: AdminUiCopy.reminderSenderLabelFor(locale),
+                icon: Icons.outgoing_mail,
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _reminderSmtpPortCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '提醒 SMTP 端口',
-                      prefixIcon: Icon(Icons.numbers_outlined),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _reminderSmtpUserCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '提醒 SMTP 用户名',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                  ),
-                ),
-              ],
+            _mailTextField(
+              context,
+              external: isCompactOrScaled,
+              controller: _reminderSmtpHostCtrl,
+              label: AdminUiCopy.reminderSmtpHostLabelFor(locale),
+              icon: Icons.dns_outlined,
             ),
             const SizedBox(height: 10),
-            TextField(
+            _adminResponsiveTwoColumn(
+              context: context,
+              first: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _reminderSmtpPortCtrl,
+                keyboardType: TextInputType.number,
+                label: AdminUiCopy.reminderSmtpPortLabelFor(locale),
+                icon: Icons.numbers_outlined,
+              ),
+              second: _mailTextField(
+                context,
+                external: isCompactOrScaled,
+                controller: _reminderSmtpUserCtrl,
+                label: AdminUiCopy.reminderSmtpUserLabelFor(locale),
+                icon: Icons.person_outline,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _mailTextField(
+              context,
+              external: isCompactOrScaled,
               controller: _reminderSmtpPasswordCtrl,
               obscureText: true,
-              decoration: InputDecoration(
-                labelText: '提醒 SMTP 密码',
-                helperText: _reminderSmtpPasswordMasked ? '已配置，保持不动即不修改' : null,
-                prefixIcon: const Icon(Icons.key_outlined),
-              ),
+              label: AdminUiCopy.reminderSmtpPasswordLabelFor(locale),
+              helperText: _reminderSmtpPasswordMasked
+                  ? AdminUiCopy.configuredLeaveUnchanged(locale)
+                  : null,
+              icon: Icons.key_outlined,
             ),
             const SizedBox(height: 14),
             Wrap(
@@ -5693,7 +6415,11 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                 FilledButton.icon(
                   onPressed: _saving ? null : _save,
                   icon: const Icon(Icons.save_outlined),
-                  label: Text(_saving ? '保存中…' : '保存配置'),
+                  label: Text(
+                    _saving
+                        ? AdminUiCopy.savingEllipsis(locale)
+                        : AdminUiCopy.saveConfigBtnFor(locale),
+                  ),
                 ),
                 OutlinedButton.icon(
                   onPressed: _runningServerBackup ? null : _runServerBackup,
@@ -5704,7 +6430,11 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.backup_outlined),
-                  label: Text(_runningServerBackup ? '备份中…' : '立即备份'),
+                  label: Text(
+                    _runningServerBackup
+                        ? AdminUiCopy.backingUpEllipsis(locale)
+                        : AdminUiCopy.runBackupNowBtnFor(locale),
+                  ),
                 ),
                 OutlinedButton.icon(
                   onPressed: _testingReminderEmail ? null : _testReminderEmail,
@@ -5715,7 +6445,11 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.mark_email_read_outlined),
-                  label: Text(_testingReminderEmail ? '发送中…' : '测试提醒邮件'),
+                  label: Text(
+                    _testingReminderEmail
+                        ? AdminUiCopy.sendingEllipsis(locale)
+                        : AdminUiCopy.testReminderEmailBtnFor(locale),
+                  ),
                 ),
                 OutlinedButton.icon(
                   onPressed: _testingAccountEmail ? null : _testAccountEmail,
@@ -5726,7 +6460,11 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.alternate_email_outlined),
-                  label: Text(_testingAccountEmail ? '发送中…' : '测试账号邮件'),
+                  label: Text(
+                    _testingAccountEmail
+                        ? AdminUiCopy.sendingEllipsis(locale)
+                        : AdminUiCopy.testAccountEmailBtnFor(locale),
+                  ),
                 ),
               ],
             ),
@@ -5740,6 +6478,7 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
             theme: theme,
             cs: cs,
             totalKb: totalKb,
+            locale: locale,
           ),
         ),
       ],
@@ -5751,17 +6490,48 @@ class _BackupSettingsTabState extends State<_BackupSettingsTab> {
 // 用户
 // ====================================================================
 
+class _UserAction {
+  _UserAction(this.authority, this.view, this.allowed) : revision = view.value;
+  final AdminActionOrigin authority;
+  final ValueListenable<int> view;
+  final int revision;
+  final bool Function() allowed;
+  bool _invalid = false;
+  ApiClient get client => authority.client;
+  bool isCurrent({bool checkRoute = true}) {
+    if (_invalid) return false;
+    if (view.value != revision ||
+        !allowed() ||
+        !authority.isCurrent(checkRoute: checkRoute)) {
+      _invalid = true;
+      return false;
+    }
+    return true;
+  }
+}
+
+class _UserOperation {
+  _UserOperation(this.origin);
+  final _UserAction origin;
+  DialogRoute<bool>? dialog;
+}
+
+String _userText(String zh, String en, [AppLocale? locale]) =>
+    (locale ?? I18n.current) == AppLocale.zh ? zh : en;
+
 class _UsersTab extends StatefulWidget {
   final AdminApi api;
   final String? selfId;
   final List<String>? selfAdminPermissions;
   final bool isActive;
+  final ValueListenable<int> activationRevision;
   const _UsersTab({
     super.key,
     required this.api,
     required this.selfId,
     required this.selfAdminPermissions,
     required this.isActive,
+    required this.activationRevision,
   });
   @override
   State<_UsersTab> createState() => _UsersTabState();
@@ -5769,14 +6539,18 @@ class _UsersTab extends StatefulWidget {
 
 class _UsersTabState extends State<_UsersTab> {
   static const _onlineRefreshInterval = Duration(seconds: 60);
+  final _actionHost = AdminActionHost();
 
   List<Map<String, dynamic>> _users = [];
   List<Map<String, dynamic>> _groups = [];
   List<Map<String, dynamic>> _roles = [];
   AdminPage? _page;
   bool _loading = true;
-  String? _error;
-  String? _groupsRolesError;
+  Object? _error;
+  Object? _refreshError;
+  _UserAction? _listOrigin;
+  Future<void> Function()? _failedLoad;
+  List<(Object, String)> _auxiliaryErrors = [];
   String _query = '';
   String _status = '';
   String _sort = 'created_desc';
@@ -5785,14 +6559,21 @@ class _UsersTabState extends State<_UsersTab> {
   int _loadSerial = 0;
   final Set<String> _selectedUserIds = <String>{};
   Timer? _onlineRefreshTimer;
-  bool _backgroundRefreshInFlight = false;
+  Object? _backgroundOperation;
+  _UserOperation? _writeOperation;
+  int? _authorityRevision;
+  int? _viewRevision;
+  bool _deferredRead = false;
+  bool get _backgroundRefreshInFlight => _backgroundOperation != null;
+  bool get _busy => _loading || _writeOperation != null;
   final _searchCtrl = TextEditingController();
 
   bool _canUseAdminPermission(String permission) {
     final permissions = widget.selfAdminPermissions;
     if (permissions == null) return true;
-    return permissions.contains(_adminAllPermission) ||
-        permissions.contains(permission);
+    return !permissions.contains(_adminNoPermission) &&
+        (permissions.contains(_adminAllPermission) ||
+            permissions.contains(permission));
   }
 
   bool get _canManageCoins => _canUseAdminPermission('coins');
@@ -5800,13 +6581,19 @@ class _UsersTabState extends State<_UsersTab> {
   bool get _canManageGroups => _canUseAdminPermission('groups');
   bool get _canManageRoles => _canUseAdminPermission('roles');
   bool get _canManagePermissions => _canUseAdminPermission('permissions');
-  bool get _canAssignGroups => _canManageGroups || _canManageCoins;
+  bool get _canReadUsers => _canManageUsers || _canManageCoins;
+  bool get _canReadGroupNames => _canManageGroups || _canManageCoins;
+  bool get _canReadRoleNames => _canManageRoles;
+  bool get _canAssignGroups =>
+      _canManageUsers && (_canManageGroups || _canManageCoins);
   bool get _canManageAdminAccess => _canManageRoles || _canManagePermissions;
   bool get _canManageUserAdminAccess =>
       _canManageUsers && _canManageAdminAccess;
   bool get _hasAllAdminPermission {
     final permissions = widget.selfAdminPermissions;
-    return permissions == null || permissions.contains(_adminAllPermission);
+    return permissions == null ||
+        (!permissions.contains(_adminNoPermission) &&
+            permissions.contains(_adminAllPermission));
   }
 
   bool _canToggleAdminFor(bool currentAdmin) {
@@ -5814,21 +6601,124 @@ class _UsersTabState extends State<_UsersTab> {
     return currentAdmin ? _canManageAdminAccess : _hasAllAdminPermission;
   }
 
+  _UserAction _capture({
+    Set<String> permissions = const {'users', 'coins'},
+    bool Function()? allowed,
+  }) {
+    _syncAuthority();
+    return _UserAction(
+      _actionHost.capture(
+        client: widget.api.client,
+        anyOfPermissions: permissions,
+      ),
+      widget.activationRevision,
+      allowed ?? () => true,
+    );
+  }
+
+  // Mutable client fields may change without a provider notification. Clear
+  // older data before issuing any receipt for the new server/token snapshot.
+  void _syncAuthority() {
+    final revision = _actionHost.revision;
+    if (_authorityRevision == revision) return;
+    _authorityRevision = revision;
+    _invalidate(clearPrivateData: true);
+    _deferLoad();
+  }
+
+  bool _current(_UserAction origin, {bool checkRoute = true}) {
+    if (!mounted) return false;
+    _syncAuthority();
+    return widget.isActive && origin.isCurrent(checkRoute: checkRoute);
+  }
+
+  bool _operationCurrent(_UserOperation operation) {
+    final dialog = operation.dialog;
+    return identical(_writeOperation, operation) &&
+        _current(operation.origin, checkRoute: dialog == null) &&
+        (dialog == null || (dialog.isActive && dialog.isCurrent));
+  }
+
   @override
-  void initState() {
-    super.initState();
-    _load();
-    if (widget.isActive) {
-      _startOnlineRefreshTimer();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _actionHost.bind(context);
+    _viewRevision ??= widget.activationRevision.value;
+    final revision = _actionHost.revision;
+    if (_authorityRevision == revision) {
+      if (_deferredRead) _deferLoad();
+      return;
     }
+    _authorityRevision = revision;
+    _invalidate(clearPrivateData: true);
+    _deferLoad();
+  }
+
+  void _invalidate({bool clearPrivateData = false}) {
+    _loadSerial++;
+    _failedLoad = null;
+    _backgroundOperation = null;
+    _writeOperation = null;
+    _loading = false;
+    _deferredRead = widget.isActive;
+    if (!clearPrivateData) return;
+    _users = [];
+    _groups = [];
+    _roles = [];
+    _page = null;
+    _listOrigin = null;
+    _error = null;
+    _refreshError = null;
+    _auxiliaryErrors = [];
+    _selectedUserIds.clear();
+    _query = '';
+    _status = '';
+    _sort = 'created_desc';
+    _offset = 0;
+    _pageSize = _adminPageSize;
+    _searchCtrl.clear();
+  }
+
+  void _deferLoad() {
+    if (!widget.isActive) return;
+    _startOnlineRefreshTimer();
+    final serial = _loadSerial;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || serial != _loadSerial || !_deferredRead) return;
+      setState(() {});
+      // Do not latch a receipt while an unrelated route covers this page.
+      final route = ModalRoute.of(context);
+      if ((route != null && !route.isCurrent) ||
+          _busy ||
+          _backgroundRefreshInFlight) {
+        return;
+      }
+      final origin = _capture();
+      if (_current(origin)) {
+        _deferredRead = false;
+        _load(origin: origin);
+      }
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   @override
   void didUpdateWidget(covariant _UsersTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.isActive == widget.isActive) return;
+    if (!identical(oldWidget.api.client, widget.api.client) ||
+        oldWidget.selfId != widget.selfId) {
+      _invalidate(clearPrivateData: true);
+      _deferLoad();
+      return;
+    }
+    if (oldWidget.isActive == widget.isActive &&
+        _viewRevision == widget.activationRevision.value) {
+      return;
+    }
+    _viewRevision = widget.activationRevision.value;
+    _invalidate();
     if (widget.isActive) {
-      _startOnlineRefreshTimer();
+      _deferLoad();
     } else {
       _stopOnlineRefreshTimer();
     }
@@ -5837,13 +6727,16 @@ class _UsersTabState extends State<_UsersTab> {
   void _startOnlineRefreshTimer() {
     if (_onlineRefreshTimer != null) return;
     _onlineRefreshTimer = Timer.periodic(_onlineRefreshInterval, (_) {
-      if (!mounted ||
-          !widget.isActive ||
-          _loading ||
-          _backgroundRefreshInFlight) {
+      if (!mounted || !widget.isActive || _busy || _backgroundRefreshInFlight) {
         return;
       }
-      _load(quiet: true, background: true);
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isCurrent) return;
+      final origin = _capture();
+      if (!_current(origin)) return;
+      final deferred = _deferredRead;
+      _deferredRead = false;
+      _load(origin: origin, quiet: !deferred, background: !deferred);
     });
   }
 
@@ -5854,12 +6747,18 @@ class _UsersTabState extends State<_UsersTab> {
 
   @override
   void dispose() {
+    _loadSerial++;
+    _writeOperation = null;
+    _backgroundOperation = null;
     _stopOnlineRefreshTimer();
+    _actionHost.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _load({
+  Future<bool> _load({
+    _UserAction? origin,
+    _UserOperation? operation,
     String? query,
     String? status,
     String? sort,
@@ -5868,51 +6767,78 @@ class _UsersTabState extends State<_UsersTab> {
     bool quiet = false,
     bool background = false,
   }) async {
-    if (background && (_backgroundRefreshInFlight || _loading)) return;
-    if (background) _backgroundRefreshInFlight = true;
+    final source = origin ?? _capture();
+    bool valid() =>
+        _current(source) &&
+        (operation == null
+            ? _writeOperation == null
+            : _operationCurrent(operation));
+    if (!valid() || (background && (_backgroundRefreshInFlight || _loading))) {
+      return false;
+    }
+    final marker = Object();
+    if (background) _backgroundOperation = marker;
     final loadSerial = ++_loadSerial;
+    bool current() => valid() && loadSerial == _loadSerial;
     final nextQuery = query ?? _query;
     final nextStatus = status ?? _status;
     final nextSort = sort ?? _sort;
     final nextPageSize = pageSize ?? _pageSize;
     final nextOffset = offset ?? _offset;
-    _query = nextQuery;
-    _status = nextStatus;
-    _sort = nextSort;
-    _pageSize = nextPageSize;
-    _offset = nextOffset;
-    if (!quiet) {
-      setState(() {
-        _loading = true;
-        _error = null;
-        _groupsRolesError = null;
-      });
-    }
+    setState(() {
+      _query = nextQuery;
+      _status = nextStatus;
+      _sort = nextSort;
+      _pageSize = nextPageSize;
+      _offset = nextOffset;
+      if (!quiet) _loading = true;
+      _error = null;
+      _refreshError = null;
+    });
     try {
-      final groupsRolesErrors = <String>[];
-      final pageFuture = widget.api.listUsersPage(
+      final errors = <(Object, String)>[];
+      final api = AdminApi(source.client);
+      final pageFuture = api.listUsersPage(
         query: nextQuery.isEmpty ? null : nextQuery,
         status: _backendStatusFilter(nextStatus),
         online: _onlineFilter(nextStatus),
         sort: nextSort,
         limit: nextPageSize,
         offset: nextOffset,
+        isCurrent: current,
       );
-      final groupsFuture = _groups.isEmpty && _canAssignGroups
-          ? _loadUserGroupsForUsers(groupsRolesErrors)
-          : Future<List<Map<String, dynamic>>>.value(_groups);
-      final rolesFuture = _roles.isEmpty && _canManageRoles
-          ? _loadUserRolesForUsers(groupsRolesErrors)
-          : Future<List<Map<String, dynamic>>>.value(_roles);
+      final groupsOrigin = _capture(
+        permissions: const {'users', 'groups', 'coins'},
+      );
+      final rolesOrigin = _capture(permissions: const {'users', 'roles'});
+      Future<List<Map<String, dynamic>>> auxiliary(String target) async {
+        final receipt = target == 'groups' ? groupsOrigin : rolesOrigin;
+        bool allowed() => current() && _current(receipt);
+        if (!allowed()) return [];
+        try {
+          return target == 'groups'
+              ? await api.listGroups(isCurrent: allowed)
+              : await api.listRoles(isCurrent: allowed);
+        } catch (error) {
+          if (allowed()) errors.add((error, target));
+          return [];
+        }
+      }
+
       final results = await Future.wait<dynamic>([
         pageFuture,
-        groupsFuture,
-        rolesFuture,
+        _groups.isEmpty && _canReadGroupNames
+            ? auxiliary('groups')
+            : Future.value(_groups),
+        _roles.isEmpty && _canReadRoleNames
+            ? auxiliary('roles')
+            : Future.value(_roles),
       ]);
+      if (!current()) return false;
       final page = results[0] as AdminPage;
-      if (!mounted || loadSerial != _loadSerial) return;
       setState(() {
         _page = page;
+        _listOrigin = source;
         _users = page.items;
         _groups = List<Map<String, dynamic>>.from(results[1] as List);
         _roles = List<Map<String, dynamic>>.from(results[2] as List);
@@ -5920,43 +6846,209 @@ class _UsersTabState extends State<_UsersTab> {
           (id) => !_users.any((u) => u['user_id'].toString() == id),
         );
         _error = null;
-        _groupsRolesError = groupsRolesErrors.isEmpty
-            ? null
-            : groupsRolesErrors.join('\n');
+        _failedLoad = null;
+        _auxiliaryErrors = errors;
       });
-    } catch (e) {
-      if (!mounted || loadSerial != _loadSerial) return;
-      if (!quiet) {
-        setState(() => _error = _adminErrorMessage(e, '用户列表'));
+      return true;
+    } catch (error) {
+      if (current()) {
+        setState(() {
+          if (quiet && _page != null) {
+            _refreshError = error;
+          } else {
+            _error = error;
+            _failedLoad = () async {
+              if (loadSerial != _loadSerial || !_current(source) || _busy) {
+                return;
+              }
+              await _load(
+                origin: source,
+                query: nextQuery,
+                status: nextStatus,
+                sort: nextSort,
+                pageSize: nextPageSize,
+                offset: nextOffset,
+              );
+            };
+          }
+        });
       }
+      return false;
     } finally {
-      if (background) _backgroundRefreshInFlight = false;
-      if (mounted && !quiet && loadSerial == _loadSerial) {
+      if (mounted && identical(_backgroundOperation, marker)) {
+        _backgroundOperation = null;
+      }
+      if (mounted && loadSerial == _loadSerial) {
+        if (!current() && widget.isActive) {
+          _deferredRead = true;
+          _deferLoad();
+        }
         setState(() => _loading = false);
       }
     }
   }
 
-  Future<List<Map<String, dynamic>>> _loadUserGroupsForUsers(
-    List<String> errors,
+  void _snack(_UserAction origin, String Function(AppLocale) copy) {
+    if (!_current(origin)) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: _AdminFeedbackText(copy)));
+  }
+
+  Future<void> _mutate(
+    _UserAction rendered,
+    Set<String> permissions,
+    bool Function() allowed,
+    Future<void> Function(_UserOperation) body,
   ) async {
+    if (_loading ||
+        _writeOperation != null ||
+        !_current(rendered) ||
+        !allowed()) {
+      return;
+    }
+    final origin = _capture(permissions: permissions, allowed: allowed);
+    if (!_current(origin)) return;
+    final operation = _UserOperation(origin);
+    setState(() => _writeOperation = operation);
     try {
-      return await widget.api.listGroups();
+      await body(operation);
     } catch (error) {
-      errors.add(_adminErrorMessage(error, '用户组'));
-      return const <Map<String, dynamic>>[];
+      if (_operationCurrent(operation)) {
+        _snack(
+          origin,
+          (locale) => _adminActionErrorMessage(
+            error,
+            _userText('更新用户', 'Update user', locale),
+            locale,
+          ),
+        );
+      }
+    } finally {
+      if (mounted && identical(_writeOperation, operation)) {
+        setState(() => _writeOperation = null);
+        if (_deferredRead) _deferLoad();
+      }
     }
   }
 
-  Future<List<Map<String, dynamic>>> _loadUserRolesForUsers(
-    List<String> errors,
-  ) async {
+  Future<bool> _dialog(
+    _UserOperation operation,
+    Widget Function(BuildContext, StateSetter, bool) builder, {
+    List<TextEditingController> controllers = const [],
+  }) async {
+    if (!_operationCurrent(operation)) return false;
+    final route = DialogRoute<bool>(
+      context: context,
+      builder: (ctx) => ValueListenableBuilder<int>(
+        valueListenable: widget.activationRevision,
+        builder: (ctx, _, _) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, _, _) {
+            ModalRoute.isCurrentOf(ctx);
+            ctx.watch<AuthProvider?>();
+            ctx.watch<AppLockProvider?>();
+            ctx.watch<AppUpdateService?>();
+            return StatefulBuilder(
+              builder: (ctx, setSt) {
+                if (!_operationCurrent(operation)) {
+                  return AppDialog(
+                    title: Text(_userText('操作已失效', 'Action expired')),
+                    content: Text(
+                      _userText(
+                        '账号、权限或页面已变更。请关闭后重新操作。',
+                        'Your account, access or page changed. Close and try again.',
+                      ),
+                    ),
+                    actions: [_actions(ctx, operation, '').first],
+                  );
+                }
+                return builder(ctx, setSt, true);
+              },
+            );
+          },
+        ),
+      ),
+    );
+    operation.dialog = route;
     try {
-      return await widget.api.listRoles();
-    } catch (error) {
-      errors.add(_adminErrorMessage(error, '角色'));
-      return const <Map<String, dynamic>>[];
+      final saved = await Navigator.of(context).push(route);
+      operation.dialog = null;
+      return saved == true && _operationCurrent(operation);
+    } finally {
+      if (identical(operation.dialog, route)) operation.dialog = null;
+      await route.completed;
+      for (final controller in controllers) {
+        controller.dispose();
+      }
     }
+  }
+
+  List<Widget> _actions(
+    BuildContext ctx,
+    _UserOperation operation,
+    String save,
+  ) => [
+    TextButton(
+      onPressed: () {
+        final route = operation.dialog;
+        if (ctx.mounted &&
+            route?.isActive == true &&
+            route?.isCurrent == true) {
+          Navigator.of(ctx).pop(false);
+        }
+      },
+      child: Text(AdminUiCopy.cancelFor(I18n.current)),
+    ),
+    FilledButton(
+      onPressed: _operationCurrent(operation)
+          ? () {
+              if (ctx.mounted && _operationCurrent(operation)) {
+                Navigator.of(ctx).pop(true);
+              }
+            }
+          : null,
+      child: Text(save),
+    ),
+  ];
+
+  Future<bool> _confirm(
+    _UserOperation operation,
+    String Function() title,
+    String Function() message,
+    String Function() save,
+  ) => _dialog(
+    operation,
+    (ctx, _, _) => AppDialog(
+      title: Text(title()),
+      icon: const Icon(Icons.info_outline),
+      content: Text(message()),
+      actions: _actions(ctx, operation, save()),
+    ),
+  );
+
+  Future<void> _refreshWritten(
+    _UserOperation operation,
+    String Function(AppLocale) success, {
+    int? offset,
+  }) async {
+    if (!_operationCurrent(operation)) return;
+    final refreshed = await _load(
+      origin: _capture(),
+      operation: operation,
+      offset: offset,
+      quiet: true,
+    );
+    _snack(
+      operation.origin,
+      (locale) => refreshed
+          ? success(locale)
+          : _userText(
+              '${success(locale)}，但列表刷新失败。请手动刷新。',
+              '${success(locale)} List refresh failed. Refresh manually.',
+              locale,
+            ),
+    );
   }
 
   String _adminEntityName(
@@ -5993,7 +7085,7 @@ class _UsersTabState extends State<_UsersTab> {
         DropdownMenuItem(
           value: currentId,
           child: Text(
-            '${_adminEntityName(items, currentId, currentFallback)}${isInactive ? ' · 停用' : ''}',
+            '${_adminEntityName(items, currentId, currentFallback)}${isInactive ? _userText(' · 停用', ' · Inactive') : ''}',
           ),
         ),
       );
@@ -6008,7 +7100,12 @@ class _UsersTabState extends State<_UsersTab> {
       result.add(
         DropdownMenuItem(
           value: id,
-          child: Text('${name.isEmpty ? id : name} · $count 人'),
+          child: Text(
+            _userText(
+              '${name.isEmpty ? id : name} · $count 人',
+              '${name.isEmpty ? id : name} · $count users',
+            ),
+          ),
         ),
       );
     }
@@ -6033,22 +7130,25 @@ class _UsersTabState extends State<_UsersTab> {
     );
   }
 
-  void _applySearch() {
-    _load(query: _searchCtrl.text.trim(), offset: 0);
+  void _applySearch(_UserAction origin) {
+    if (!_current(origin) || _busy) return;
+    _load(origin: origin, query: _searchCtrl.text.trim(), offset: 0);
   }
 
-  void _applyStatus(String status) {
-    setState(() => _status = status);
-    _load(status: status, offset: 0);
+  void _applyStatus(_UserAction origin, String status) {
+    if (!_current(origin) || _busy) return;
+    _load(origin: origin, status: status, offset: 0);
   }
 
-  void _applySort(String sort) {
-    _load(sort: sort, offset: 0);
+  void _applySort(_UserAction origin, String sort) {
+    if (!_current(origin) || _busy) return;
+    _load(origin: origin, sort: sort, offset: 0);
   }
 
-  void _jumpToPage(int pageNumber) {
+  void _jumpToPage(_UserAction origin, int pageNumber) {
+    if (!_current(origin) || _busy) return;
     final page = pageNumber < 1 ? 1 : pageNumber;
-    _load(offset: (page - 1) * _pageSize);
+    _load(origin: origin, offset: (page - 1) * _pageSize);
   }
 
   bool? _onlineFilter(String status) {
@@ -6064,277 +7164,279 @@ class _UsersTabState extends State<_UsersTab> {
     return status;
   }
 
-  Future<void> _createUser() async {
-    if (!_canManageUsers) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('缺少用户管理权限')));
-      return;
-    }
-    if (_canAssignGroups && _groups.isEmpty ||
-        _canManageRoles && _roles.isEmpty) {
-      await _load(quiet: true);
-    }
-    if (!mounted) return;
-
-    final usernameCtrl = TextEditingController();
-    final passwordCtrl = TextEditingController();
-    final displayNameCtrl = TextEditingController();
-    final emailCtrl = TextEditingController();
-    final assignableRoles = _hasAllAdminPermission
-        ? _roles
-        : _roles
-              .where((role) => (role['id'] ?? '').toString() != 'role_admin')
-              .toList(growable: false);
-    var selectedGroupId = _groups.any((g) => g['id'] == 'group_default')
-        ? 'group_default'
-        : (_groups.isNotEmpty ? _groups.first['id'].toString() : '');
-    var selectedRoleId = assignableRoles.any((r) => r['id'] == 'role_user')
-        ? 'role_user'
-        : (assignableRoles.isNotEmpty
-              ? assignableRoles.first['id'].toString()
-              : '');
-    var isAdmin = false;
-    var isDisabled = false;
-
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: const Text('新增用户'),
+  Future<void> _createUser(_UserAction rendered) => _mutate(
+    rendered,
+    const {'users'},
+    () => _canManageUsers,
+    (operation) async {
+      if ((_canAssignGroups && _groups.isEmpty) ||
+          (_canManageRoles && _roles.isEmpty)) {
+        await _load(operation: operation, quiet: true);
+      }
+      if (!_operationCurrent(operation)) return;
+      final usernameCtrl = TextEditingController();
+      final passwordCtrl = TextEditingController();
+      final displayNameCtrl = TextEditingController();
+      final emailCtrl = TextEditingController();
+      var username = '', password = '', displayName = '', email = '';
+      final roles = _hasAllAdminPermission
+          ? _roles
+          : _roles.where((r) => r['id'] != 'role_admin').toList();
+      var groupId = _groups.any((g) => g['id'] == 'group_default')
+          ? 'group_default'
+          : (_groups.isEmpty ? '' : _groups.first['id'].toString());
+      var roleId = roles.any((r) => r['id'] == 'role_user')
+          ? 'role_user'
+          : (roles.isEmpty ? '' : roles.first['id'].toString());
+      var admin = false, disabled = false;
+      final saved = await _dialog(
+        operation,
+        (ctx, setSt, canEdit) => AppDialog(
+          title: Text(_userText('新增用户', 'Create user')),
           icon: const Icon(Icons.person_add_alt_1_outlined),
           content: _adminDialogForm(
-            maxWidth: 460,
             children: [
               TextField(
                 controller: usernameCtrl,
-                decoration: const InputDecoration(labelText: '用户名'),
+                enabled: canEdit,
+                decoration: InputDecoration(
+                  labelText: _userText('用户名', 'Username'),
+                ),
                 textInputAction: TextInputAction.next,
+                onChanged: (v) => username = v,
               ),
               TextField(
                 controller: passwordCtrl,
-                decoration: const InputDecoration(
-                  labelText: '初始密码',
-                  helperText: '留空时由服务器生成随机密码',
-                ),
+                enabled: canEdit,
                 obscureText: true,
+                decoration: InputDecoration(
+                  labelText: _userText('初始密码', 'Initial password'),
+                  helperText: _userText(
+                    '留空时由服务器生成随机密码',
+                    'Leave blank to generate a password',
+                  ),
+                ),
                 textInputAction: TextInputAction.next,
+                onChanged: (v) => password = v,
               ),
               TextField(
                 controller: displayNameCtrl,
-                decoration: const InputDecoration(labelText: '昵称 (可选)'),
+                enabled: canEdit,
+                decoration: InputDecoration(
+                  labelText: _userText('昵称 (可选)', 'Display name (optional)'),
+                ),
                 textInputAction: TextInputAction.next,
+                onChanged: (v) => displayName = v,
               ),
               TextField(
                 controller: emailCtrl,
-                decoration: const InputDecoration(labelText: '邮箱 (可选)'),
+                enabled: canEdit,
+                decoration: InputDecoration(
+                  labelText: _userText('邮箱 (可选)', 'Email (optional)'),
+                ),
                 keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
+                onChanged: (v) => email = v,
               ),
               if (_canAssignGroups && _groups.isNotEmpty)
                 AppDropdownField<String>(
-                  initialValue: selectedGroupId,
-                  labelText: '用户组',
-                  prefixIcon: const Icon(Icons.groups_2_outlined),
+                  initialValue: groupId,
+                  labelText: _userText('用户组', 'Group'),
                   items: _adminEntityItems(
                     _groups,
-                    selectedGroupId,
-                    '默认组',
+                    groupId,
+                    _userText('默认组', 'Default group'),
                     activeOnly: true,
                   ),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setSt(() => selectedGroupId = value);
+                  onChanged: (v) {
+                    if (v != null && _operationCurrent(operation)) {
+                      setSt(() => groupId = v);
                     }
                   },
                 ),
-              if (_canManageRoles && assignableRoles.isNotEmpty)
+              if (_canManageRoles && roles.isNotEmpty)
                 AppDropdownField<String>(
-                  initialValue: selectedRoleId,
-                  labelText: '角色',
-                  prefixIcon: const Icon(Icons.admin_panel_settings_outlined),
+                  initialValue: roleId,
+                  labelText: _userText('角色', 'Role'),
                   items: _adminEntityItems(
-                    assignableRoles,
-                    selectedRoleId,
-                    '普通角色',
+                    roles,
+                    roleId,
+                    _userText('普通角色', 'Standard role'),
                     activeOnly: true,
                   ),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setSt(() => selectedRoleId = value);
+                  onChanged: (v) {
+                    if (v != null && _operationCurrent(operation)) {
+                      setSt(() => roleId = v);
                     }
                   },
                 ),
               if (_hasAllAdminPermission)
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  value: isAdmin,
-                  title: const Text('管理员账号'),
-                  onChanged: (value) => setSt(() {
-                    isAdmin = value;
-                    if (value && selectedRoleId == 'role_user') {
-                      selectedRoleId =
-                          _roles.any((r) => r['id'] == 'role_admin')
-                          ? 'role_admin'
-                          : selectedRoleId;
-                    } else if (!value && selectedRoleId == 'role_admin') {
-                      selectedRoleId = _roles.any((r) => r['id'] == 'role_user')
-                          ? 'role_user'
-                          : selectedRoleId;
-                    }
-                  }),
+                  value: admin,
+                  title: Text(_userText('管理员账号', 'Administrator account')),
+                  onChanged: canEdit
+                      ? (v) => setSt(() {
+                          admin = v;
+                          if (v &&
+                              roleId == 'role_user' &&
+                              _roles.any((r) => r['id'] == 'role_admin')) {
+                            roleId = 'role_admin';
+                          }
+                          if (!v && roleId == 'role_admin') {
+                            roleId = 'role_user';
+                          }
+                        })
+                      : null,
                 ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                dense: true,
-                value: isDisabled,
-                title: const Text('创建后先禁用'),
-                onChanged: (value) => setSt(() => isDisabled = value),
+                value: disabled,
+                title: Text(_userText('创建后先禁用', 'Create as disabled')),
+                onChanged: canEdit ? (v) => setSt(() => disabled = v) : null,
               ),
             ],
           ),
-          actions: _adminDialogActions(ctx, saveLabel: '创建'),
+          actions: _actions(ctx, operation, _userText('创建', 'Create')),
         ),
-      ),
-    );
-    if (saved != true) return;
-    final username = usernameCtrl.text.trim();
-    if (username.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请填写用户名')));
-      return;
-    }
-    try {
-      await widget.api.createUser(
-        username: username,
-        password: passwordCtrl.text,
-        displayName: displayNameCtrl.text,
-        email: emailCtrl.text,
-        groupId: _canAssignGroups ? selectedGroupId : null,
-        roleId: _canManageRoles ? selectedRoleId : null,
-        isAdmin: _hasAllAdminPermission ? isAdmin : false,
-        isDisabled: isDisabled,
+        controllers: [usernameCtrl, passwordCtrl, displayNameCtrl, emailCtrl],
       );
-      await _load(offset: 0);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('用户已创建')));
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-    }
-  }
-
-  Future<void> _toggleAdmin(Map<String, dynamic> u) async {
-    final becomeAdmin = !(u['is_admin'] == true);
-    if (!becomeAdmin && u['user_id'].toString() == widget.selfId) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('不能撤销当前登录账号的管理员权限')));
-      return;
-    }
-    if (becomeAdmin && !_hasAllAdminPermission) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('缺少超级管理员权限')));
-      return;
-    }
-    try {
-      await widget.api.updateUser(u['user_id'], isAdmin: becomeAdmin);
-      if (!mounted) return;
-      u['is_admin'] = becomeAdmin;
-      await _load(quiet: true);
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '更新管理员权限'))),
+      if (!saved) return;
+      if (username.trim().isEmpty) {
+        _snack(
+          operation.origin,
+          (l) => _userText('请填写用户名', 'Enter a username', l),
         );
+        return;
       }
-    }
-  }
-
-  Future<void> _toggleDisable(Map<String, dynamic> u) async {
-    if (u['user_id'].toString() == widget.selfId) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('不能禁用当前登录账号')));
-      return;
-    }
-    final disable = !(u['is_disabled'] == true);
-    try {
-      await widget.api.updateUser(u['user_id'], isDisabled: disable);
-      if (!mounted) return;
-      u['is_disabled'] = disable;
-      await _load(quiet: true);
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '更新用户状态'))),
-        );
-      }
-    }
-  }
-
-  Future<void> _exportUsersCsv() async {
-    try {
-      final csv = await widget.api.exportUsersCsv(
-        query: _query.isEmpty ? null : _query,
-        status: _backendStatusFilter(_status),
-        online: _onlineFilter(_status),
-        sort: _sort,
+      await AdminApi(operation.origin.client).createUser(
+        username: username.trim(),
+        password: password,
+        displayName: displayName,
+        email: email,
+        groupId: _canAssignGroups ? groupId : null,
+        roleId: _canManageRoles ? roleId : null,
+        isAdmin: _hasAllAdminPermission && admin,
+        isDisabled: disabled,
+        isCurrent: () => _operationCurrent(operation),
       );
+      await _refreshWritten(
+        operation,
+        (l) => _userText('用户已创建', 'User created.', l),
+        offset: 0,
+      );
+    },
+  );
+
+  Future<void> _toggleAdmin(_UserAction rendered, Map<String, dynamic> u) =>
+      _mutate(
+        rendered,
+        const {'users'},
+        () => _canToggleAdminFor(u['is_admin'] == true),
+        (operation) async {
+          final becomeAdmin = u['is_admin'] != true;
+          if (!becomeAdmin && u['user_id'].toString() == widget.selfId) return;
+          final saved = await _confirm(
+            operation,
+            () => _userText(
+              becomeAdmin ? '授予管理员身份？' : '撤销管理员身份？',
+              becomeAdmin
+                  ? 'Grant administrator access?'
+                  : 'Revoke administrator access?',
+            ),
+            () => _userText(
+              '将更新 ${u['username']} 的管理员身份。',
+              'This updates administrator access for ${u['username']}.',
+            ),
+            () => _userText('确认', 'Confirm'),
+          );
+          if (!saved) return;
+          await AdminApi(operation.origin.client).updateUser(
+            u['user_id'].toString(),
+            isAdmin: becomeAdmin,
+            isCurrent: () => _operationCurrent(operation),
+          );
+          await _refreshWritten(
+            operation,
+            (l) => _userText('管理员身份已更新', 'Administrator access updated.', l),
+          );
+        },
+      );
+
+  Future<void> _toggleDisable(_UserAction rendered, Map<String, dynamic> u) =>
+      _mutate(rendered, const {'users'}, () => _canManageUsers, (
+        operation,
+      ) async {
+        if (u['user_id'].toString() == widget.selfId) return;
+        final disable = u['is_disabled'] != true;
+        if (!await _confirm(
+          operation,
+          () => _userText(
+            disable ? '禁用账号？' : '恢复账号？',
+            disable ? 'Disable account?' : 'Restore account?',
+          ),
+          () => _userText(
+            disable ? '禁用后该账号需要重新登录。' : '恢复后该账号可以登录。',
+            disable
+                ? 'The account will need to sign in again.'
+                : 'The account will be able to sign in.',
+          ),
+          () =>
+              _userText(disable ? '禁用' : '恢复', disable ? 'Disable' : 'Restore'),
+        )) {
+          return;
+        }
+        await AdminApi(operation.origin.client).updateUser(
+          u['user_id'].toString(),
+          isDisabled: disable,
+          isCurrent: () => _operationCurrent(operation),
+        );
+        await _refreshWritten(
+          operation,
+          (l) => _userText('账号状态已更新', 'Account status updated.', l),
+        );
+      });
+
+  Future<void> _exportUsersCsv(_UserAction rendered) => _mutate(
+    rendered,
+    const {'users'},
+    () => _canManageUsers,
+    (operation) async {
+      final query = _query, status = _status, sort = _sort;
+      final csv = await AdminApi(operation.origin.client).exportUsersCsv(
+        query: query.isEmpty ? null : query,
+        status: _backendStatusFilter(status),
+        online: _onlineFilter(status),
+        sort: sort,
+        isCurrent: () => _operationCurrent(operation),
+      );
+      if (!_operationCurrent(operation)) return;
       final dir = await getTemporaryDirectory();
+      if (!_operationCurrent(operation)) return;
       final file = File(
         '${dir.path}/duoyi_users_${DateTime.now().millisecondsSinceEpoch}.csv',
       );
       await file.writeAsString(csv, flush: true);
+      if (!_operationCurrent(operation)) return;
       await Clipboard.setData(ClipboardData(text: file.path));
+      if (!_operationCurrent(operation)) return;
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(file.path)],
-          text: '多仪管理员用户导出',
-          subject: '多仪用户 CSV',
+          text: _userText('多仪管理员用户导出', 'Duoyi administrator user export'),
+          subject: _userText('多仪用户 CSV', 'Duoyi users CSV'),
         ),
       );
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('用户 CSV 已导出，路径已复制：${file.path}')));
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '导出用户 CSV'))),
-        );
-      }
-    }
-  }
+      if (!_operationCurrent(operation)) return;
+      _snack(
+        operation.origin,
+        (l) => _userText(
+          '用户 CSV 已导出，路径已复制：${file.path}',
+          'Users exported. File path copied: ${file.path}',
+          l,
+        ),
+      );
+    },
+  );
 
   List<String> get _selectableCurrentPageUserIds {
     if (!_canManageUsers) return const [];
@@ -6347,7 +7449,13 @@ class _UsersTabState extends State<_UsersTab> {
   List<String> get _selectedCurrentPageUserIds =>
       _selectableCurrentPageUserIds.where(_selectedUserIds.contains).toList();
 
-  void _toggleUserSelection(String userId, bool selected) {
+  void _toggleUserSelection(_UserAction origin, String userId, bool selected) {
+    if (!_current(origin) ||
+        _busy ||
+        !_canManageUsers ||
+        !_selectableCurrentPageUserIds.contains(userId)) {
+      return;
+    }
     setState(() {
       if (selected) {
         _selectedUserIds.add(userId);
@@ -6357,125 +7465,137 @@ class _UsersTabState extends State<_UsersTab> {
     });
   }
 
-  void _toggleCurrentPageSelection(bool selected) {
+  void _toggleCurrentPageSelection(_UserAction origin, bool selected) {
+    if (!_current(origin) || _busy || !_canManageUsers) return;
     setState(() {
-      final ids = _selectableCurrentPageUserIds;
       if (selected) {
-        _selectedUserIds.addAll(ids);
+        _selectedUserIds.addAll(_selectableCurrentPageUserIds);
       } else {
-        _selectedUserIds.removeAll(ids);
+        _selectedUserIds.removeAll(_selectableCurrentPageUserIds);
       }
     });
   }
 
-  Future<void> _bulkSetDisabled(bool disabled) async {
-    final ids = _selectedCurrentPageUserIds;
+  Future<void> _bulkSetDisabled(
+    _UserAction rendered,
+    bool disabled,
+  ) => _mutate(rendered, const {'users'}, () => _canManageUsers, (
+    operation,
+  ) async {
+    final ids = List<String>.unmodifiable(_selectedCurrentPageUserIds);
     if (ids.isEmpty) return;
-    final ok = await _confirmAdminDangerAction(
-      context: context,
-      title: disabled ? '批量禁用账号？' : '批量恢复账号？',
-      message: disabled
-          ? '将禁用当前页已选的 ${ids.length} 个账号，并使这些账号需要重新登录。'
-          : '将恢复当前页已选的 ${ids.length} 个账号登录权限。',
-      confirmLabel: disabled ? '禁用' : '恢复',
-    );
-    if (!ok) return;
-    try {
-      await widget.api.bulkUpdateUserStatus(userIds: ids, isDisabled: disabled);
-      _selectedUserIds.removeAll(ids);
-      await _load(offset: _offset);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            disabled ? '已批量禁用 ${ids.length} 个账号' : '已批量恢复 ${ids.length} 个账号',
-          ),
-        ),
-      );
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _adminActionErrorMessage(e, disabled ? '批量禁用账号' : '批量恢复账号'),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _resetPassword(Map<String, dynamic> u) async {
-    final ctrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AppDialog(
-        title: Text('重置 ${u['username']} 的密码'),
-        icon: const Icon(Icons.lock_reset_outlined),
-        content: _adminDialogForm(
-          maxWidth: 420,
-          children: [
-            TextField(
-              controller: ctrl,
-              decoration: const InputDecoration(
-                labelText: '新密码',
-                helperText: '提交后该用户需要使用新密码重新登录',
-              ),
-              obscureText: true,
-            ),
-          ],
-        ),
-        actions: _adminDialogActions(ctx, saveLabel: '提交'),
+    if (!await _confirm(
+      operation,
+      () => _userText(
+        disabled ? '批量禁用账号？' : '批量恢复账号？',
+        disabled ? 'Disable selected accounts?' : 'Restore selected accounts?',
       ),
-    );
-    if (ok != true || ctrl.text.trim().isEmpty) return;
-    try {
-      await widget.api.updateUser(u['user_id'], newPassword: ctrl.text.trim());
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('密码已重置，该用户需重新登录')));
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '重置密码'))),
-        );
-      }
-    }
-  }
-
-  Future<void> _editAdminPermissions(Map<String, dynamic> u) async {
-    if (!_canManageUserAdminAccess) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('缺少权限管理权限')));
+      () => _userText(
+        '将${disabled ? '禁用' : '恢复'}当前页已选的 ${ids.length} 个账号。',
+        '${disabled ? 'Disable' : 'Restore'} ${ids.length} selected accounts on this page.',
+      ),
+      () => _userText(disabled ? '禁用' : '恢复', disabled ? 'Disable' : 'Restore'),
+    )) {
       return;
     }
-    final userId = u['user_id'].toString();
-    final username = u['username'].toString();
+    await AdminApi(operation.origin.client).bulkUpdateUserStatus(
+      userIds: ids,
+      isDisabled: disabled,
+      isCurrent: () => _operationCurrent(operation),
+    );
+    if (!_operationCurrent(operation)) return;
+    _selectedUserIds.removeAll(ids);
+    await _refreshWritten(
+      operation,
+      (l) => _userText(
+        '已${disabled ? '禁用' : '恢复'} ${ids.length} 个账号',
+        '${ids.length} accounts ${disabled ? 'disabled' : 'restored'}.',
+        l,
+      ),
+    );
+  });
+
+  Future<void> _resetPassword(_UserAction rendered, Map<String, dynamic> u) =>
+      _mutate(rendered, const {'users'}, () => _canManageUsers, (
+        operation,
+      ) async {
+        final ctrl = TextEditingController();
+        var password = '';
+        if (!await _dialog(
+          operation,
+          (ctx, _, canEdit) => AppDialog(
+            title: Text(
+              _userText(
+                '重置 ${u['username']} 的密码',
+                'Reset password for ${u['username']}',
+              ),
+            ),
+            icon: const Icon(Icons.lock_reset_outlined),
+            content: _adminDialogForm(
+              maxWidth: 420,
+              children: [
+                TextField(
+                  controller: ctrl,
+                  enabled: canEdit,
+                  obscureText: true,
+                  onChanged: (v) => password = v,
+                  decoration: InputDecoration(
+                    labelText: _userText('新密码', 'New password'),
+                    helperText: _userText(
+                      '提交后该用户需要使用新密码重新登录',
+                      'The user must sign in again with the new password',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: _actions(ctx, operation, _userText('提交', 'Submit')),
+          ),
+          controllers: [ctrl],
+        )) {
+          return;
+        }
+        if (password.trim().isEmpty) {
+          _snack(
+            operation.origin,
+            (l) => _userText('请填写新密码', 'Enter a new password', l),
+          );
+          return;
+        }
+        await AdminApi(operation.origin.client).updateUser(
+          u['user_id'].toString(),
+          newPassword: password.trim(),
+          isCurrent: () => _operationCurrent(operation),
+        );
+        _snack(
+          operation.origin,
+          (l) => _userText(
+            '密码已重置，该用户需重新登录',
+            'Password reset. The user must sign in again.',
+            l,
+          ),
+        );
+      });
+
+  Future<void> _editAdminPermissions(
+    _UserAction rendered,
+    Map<String, dynamic> u,
+  ) => _mutate(rendered, const {'users'}, () => _canManageUserAdminAccess, (
+    operation,
+  ) async {
+    final userId = u['user_id'].toString(), username = u['username'].toString();
     final isAdmin = u['is_admin'] == true;
-    if (!isAdmin) {
-      final ok = await _confirmAdminDangerAction(
-        context: context,
-        title: '授予管理员身份？',
-        message: '设置管理权限前需要先将“$username”设为管理员。',
-        confirmLabel: '授予',
-      );
-      if (!ok) return;
-      if (!mounted) return;
+    if (!isAdmin &&
+        !await _confirm(
+          operation,
+          () => _userText('授予管理员身份？', 'Grant administrator access?'),
+          () => _userText(
+            '设置管理权限前需要先将“$username”设为管理员。',
+            'To set permissions, first grant administrator access to $username.',
+          ),
+          () => _userText('授予', 'Grant'),
+        )) {
+      return;
     }
     var selected = _adminUserPermissions(
       u['admin_permissions'],
@@ -6484,198 +7604,187 @@ class _UsersTabState extends State<_UsersTab> {
     if (selected.contains(_adminAllPermission)) {
       selected = _adminAllPermissionKeys();
     }
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: Text('设置 $username 的管理权限'),
-          icon: const Icon(Icons.admin_panel_settings_outlined),
-          content: _adminDialogForm(
-            maxWidth: 520,
-            children: [
-              _adminPermissionChecklist(
+    if (!await _dialog(
+      operation,
+      (ctx, setSt, canEdit) => AppDialog(
+        title: Text(
+          _userText('设置 $username 的管理权限', 'Set permissions for $username'),
+        ),
+        icon: const Icon(Icons.admin_panel_settings_outlined),
+        content: _adminDialogForm(
+          maxWidth: 520,
+          children: [
+            IgnorePointer(
+              ignoring: !canEdit,
+              child: _adminPermissionChecklist(
                 selected: selected,
-                onChanged: (next) => setSt(() => selected = next),
+                onChanged: (next) {
+                  if (_operationCurrent(operation)) {
+                    setSt(() => selected = next);
+                  }
+                },
+                locale: I18n.current,
               ),
-            ],
-          ),
-          actions: _adminDialogActions(ctx, saveLabel: '保存权限'),
+            ),
+          ],
+        ),
+        actions: _actions(
+          ctx,
+          operation,
+          _userText('保存权限', 'Save permissions'),
         ),
       ),
-    );
-    if (saved != true) return;
-    final selectedAllPermissions = _adminHasAllPermissions(selected);
+    )) {
+      return;
+    }
     final permissions = selected.isEmpty
         ? const [_adminNoPermission]
-        : (selectedAllPermissions && _hasAllAdminPermission
+        : (_adminHasAllPermissions(selected) && _hasAllAdminPermission
               ? const [_adminAllPermission]
               : selected.toList());
-    try {
-      final existingRoleId = (u['role_id'] ?? '').toString();
-      final roleIdForPromotion =
-          existingRoleId.isNotEmpty &&
-              (existingRoleId != 'role_admin' || _hasAllAdminPermission)
-          ? existingRoleId
-          : 'role_user';
-      await widget.api.updateUser(
-        userId,
-        isAdmin: isAdmin ? null : true,
-        roleId: isAdmin ? null : roleIdForPromotion,
-        adminPermissions: permissions,
-      );
-      if (!mounted) return;
-      await _load(quiet: true);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('管理权限已更新')));
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '设置管理权限'))),
-        );
-      }
-    }
-  }
+    final existingRoleId = (u['role_id'] ?? '').toString();
+    final roleIdForPromotion =
+        existingRoleId.isNotEmpty &&
+            (existingRoleId != 'role_admin' || _hasAllAdminPermission)
+        ? existingRoleId
+        : 'role_user';
+    await AdminApi(operation.origin.client).updateUser(
+      userId,
+      isAdmin: isAdmin ? null : true,
+      roleId: isAdmin ? null : roleIdForPromotion,
+      adminPermissions: permissions,
+      isCurrent: () => _operationCurrent(operation),
+    );
+    await _refreshWritten(
+      operation,
+      (l) => _userText('管理权限已更新', 'Permissions updated.', l),
+    );
+  });
 
-  Future<void> _editUserGroupRole(Map<String, dynamic> u) async {
-    if (!_canManageUsers) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('缺少用户管理权限')));
-      return;
-    }
-    if (!_canAssignGroups && !_canManageRoles) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('缺少用户组或角色管理权限')));
-      return;
-    }
-    if ((_canAssignGroups && _groups.isEmpty) ||
-        (_canManageRoles && _roles.isEmpty)) {
-      await _load(quiet: true);
-    }
-    if (!mounted) return;
-    final username = u['username'].toString();
-    var selectedGroupId = (u['group_id'] ?? 'group_default').toString();
-    var selectedRoleId =
-        (u['role_id'] ?? (u['is_admin'] == true ? 'role_admin' : 'role_user'))
-            .toString();
-    final canEditRoleForTarget =
-        _canManageRoles &&
-        (_hasAllAdminPermission || selectedRoleId != 'role_admin');
-    if (!_canAssignGroups && !canEditRoleForTarget) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('缺少可用的角色管理权限')));
-      return;
-    }
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: Text('调整 $username 的用户组与角色'),
+  Future<void> _editUserGroupRole(
+    _UserAction rendered,
+    Map<String, dynamic> u,
+  ) => _mutate(
+    rendered,
+    const {'users'},
+    () => _canManageUsers && (_canAssignGroups || _canManageRoles),
+    (operation) async {
+      if ((_canAssignGroups && _groups.isEmpty) ||
+          (_canManageRoles && _roles.isEmpty)) {
+        await _load(operation: operation, quiet: true);
+      }
+      if (!_operationCurrent(operation)) return;
+      var groupId = (u['group_id'] ?? 'group_default').toString();
+      var roleId =
+          (u['role_id'] ?? (u['is_admin'] == true ? 'role_admin' : 'role_user'))
+              .toString();
+      final canEditRole =
+          _canManageRoles && (_hasAllAdminPermission || roleId != 'role_admin');
+      if (!_canAssignGroups && !canEditRole) return;
+      if (!await _dialog(
+        operation,
+        (ctx, setSt, canEdit) => AppDialog(
+          title: Text(
+            _userText(
+              '调整 ${u['username']} 的用户组与角色',
+              'Set group and role for ${u['username']}',
+            ),
+          ),
           icon: const Icon(Icons.manage_accounts_outlined),
           content: _adminDialogForm(
             maxWidth: 430,
             children: [
               if (_canAssignGroups)
                 AppDropdownField<String>(
-                  initialValue: selectedGroupId,
-                  labelText: '用户组',
-                  prefixIcon: const Icon(Icons.groups_2_outlined),
+                  initialValue: groupId,
+                  labelText: _userText('用户组', 'Group'),
                   items: _adminEntityItems(
                     _groups,
-                    selectedGroupId,
-                    '当前用户组',
+                    groupId,
+                    _userText('当前用户组', 'Current group'),
                     activeOnly: true,
                   ),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setSt(() => selectedGroupId = value);
+                  onChanged: (v) {
+                    if (v != null && _operationCurrent(operation)) {
+                      setSt(() => groupId = v);
                     }
                   },
                 ),
-              if (canEditRoleForTarget)
+              if (canEditRole)
                 AppDropdownField<String>(
-                  initialValue: selectedRoleId,
-                  labelText: '管理员角色',
-                  prefixIcon: const Icon(Icons.admin_panel_settings_outlined),
+                  initialValue: roleId,
+                  labelText: _userText('管理员角色', 'Administrator role'),
                   items: _roleEntityItems(
-                    selectedRoleId,
-                    '当前角色',
+                    roleId,
+                    _userText('当前角色', 'Current role'),
                     activeOnly: true,
                   ),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setSt(() => selectedRoleId = value);
+                  onChanged: (v) {
+                    if (v != null && _operationCurrent(operation)) {
+                      setSt(() => roleId = v);
                     }
                   },
                 ),
             ],
           ),
-          actions: _adminDialogActions(ctx),
+          actions: _actions(ctx, operation, _userText('保存', 'Save')),
         ),
-      ),
-    );
-    if (saved != true) return;
-    try {
-      await widget.api.updateUser(
+      )) {
+        return;
+      }
+      await AdminApi(operation.origin.client).updateUser(
         u['user_id'].toString(),
-        groupId: _canAssignGroups ? selectedGroupId : null,
-        roleId: canEditRoleForTarget ? selectedRoleId : null,
+        groupId: _canAssignGroups ? groupId : null,
+        roleId: canEditRole ? roleId : null,
+        isCurrent: () => _operationCurrent(operation),
       );
-      if (!mounted) return;
-      await _load(quiet: true);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('用户组与角色已更新')));
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '设置用户组与角色'))),
-        );
-      }
-    }
-  }
+      await _refreshWritten(
+        operation,
+        (l) => _userText('用户组与角色已更新', 'Group and role updated.', l),
+      );
+    },
+  );
 
-  Future<void> _adjustCoins(Map<String, dynamic> u) async {
-    final deltaCtrl = TextEditingController();
-    final reasonCtrl = TextEditingController();
-    final username = u['username'].toString();
-    final balance = _adminIntValue(u['coin_balance']);
-    final lifetime = _adminIntValue(u['lifetime_coins']);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AppDialog(
-        title: Text('调整 $username 的时光币'),
+  Future<void> _adjustCoins(
+    _UserAction rendered,
+    Map<String, dynamic> u,
+  ) => _mutate(rendered, const {'coins'}, () => _canManageCoins, (
+    operation,
+  ) async {
+    final deltaCtrl = TextEditingController(),
+        reasonCtrl = TextEditingController();
+    var deltaText = '', reason = '';
+    final balance = _adminIntValue(u['coin_balance']),
+        lifetime = _adminIntValue(u['lifetime_coins']);
+    if (!await _dialog(
+      operation,
+      (ctx, _, canEdit) => AppDialog(
+        title: Text(
+          _userText(
+            '调整 ${u['username']} 的时光币',
+            'Adjust coins for ${u['username']}',
+          ),
+        ),
         icon: const Icon(Icons.toll_outlined),
         content: _adminDialogForm(
           maxWidth: 430,
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('当前 $balance · 累计 $lifetime'),
+            Text(
+              _userText(
+                '当前 $balance · 累计 $lifetime',
+                'Balance $balance · Lifetime $lifetime',
+              ),
             ),
             TextField(
               controller: deltaCtrl,
-              decoration: const InputDecoration(
-                labelText: '调整数量',
-                helperText: '正数增加，负数扣减',
-                prefixIcon: Icon(Icons.toll_outlined),
+              enabled: canEdit,
+              onChanged: (v) => deltaText = v,
+              decoration: InputDecoration(
+                labelText: _userText('调整数量', 'Adjustment'),
+                helperText: _userText(
+                  '正数增加，负数扣减',
+                  'Positive to add, negative to subtract',
+                ),
               ),
               keyboardType: const TextInputType.numberWithOptions(signed: true),
               inputFormatters: [
@@ -6684,114 +7793,91 @@ class _UsersTabState extends State<_UsersTab> {
             ),
             TextField(
               controller: reasonCtrl,
-              decoration: const InputDecoration(
-                labelText: '原因 (可选)',
-                helperText: '会写入管理员操作记录',
-              ),
+              enabled: canEdit,
               maxLines: 2,
+              onChanged: (v) => reason = v,
+              decoration: InputDecoration(
+                labelText: _userText('原因 (可选)', 'Reason (optional)'),
+                helperText: _userText(
+                  '会写入管理员操作记录',
+                  'Recorded in the administrator audit log',
+                ),
+              ),
             ),
           ],
         ),
-        actions: _adminDialogActions(ctx, saveLabel: '提交调整'),
-      ),
-    );
-    if (ok != true) return;
-    final delta = int.tryParse(deltaCtrl.text.trim()) ?? 0;
-    if (delta == 0) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('调整数量不能为 0')));
-      }
-      return;
-    }
-    try {
-      final adjusted = await widget.api.adjustUserCoins(
-        u['user_id'].toString(),
-        delta: delta,
-        reason: reasonCtrl.text,
-      );
-      if (!mounted) return;
-      u['coin_balance'] = adjusted['balance'];
-      u['lifetime_coins'] = adjusted['lifetime'];
-      await _load(quiet: true);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('时光币已调整')));
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '调整时光币'))),
-        );
-      }
-    }
-  }
-
-  Future<void> _delete(Map<String, dynamic> u) async {
-    if (u['user_id'].toString() == widget.selfId) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('不能删除当前登录账号')));
-      }
-      return;
-    }
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AppDialog(
-        title: Text('删除 ${u['username']} ?'),
-        icon: const Icon(Icons.delete_outline),
-        content: const Text('会同时删除其所有同步数据与反馈，不可恢复'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    try {
-      await widget.api.deleteUser(u['user_id']);
-      if (!mounted) return;
-      await _load(
-        offset: _offsetAfterAdminDelete(
-          offset: _offset,
-          itemCount: _users.length,
-          pageSize: _pageSize,
+        actions: _actions(
+          ctx,
+          operation,
+          _userText('提交调整', 'Apply adjustment'),
         ),
+      ),
+      controllers: [deltaCtrl, reasonCtrl],
+    )) {
+      return;
+    }
+    final delta = int.tryParse(deltaText.trim()) ?? 0;
+    if (delta == 0) {
+      _snack(
+        operation.origin,
+        (l) => _userText('调整数量不能为 0', 'Adjustment must be nonzero', l),
       );
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '删除用户'))),
-        );
+      return;
+    }
+    final adjusted = await AdminApi(operation.origin.client).adjustUserCoins(
+      u['user_id'].toString(),
+      delta: delta,
+      reason: reason,
+      isCurrent: () => _operationCurrent(operation),
+    );
+    if (!_operationCurrent(operation)) return;
+    for (final item in _users) {
+      if (item['user_id'] == u['user_id']) {
+        item['coin_balance'] = adjusted['balance'];
+        item['lifetime_coins'] = adjusted['lifetime'];
       }
     }
-  }
+    await _refreshWritten(
+      operation,
+      (l) => _userText('时光币已调整', 'Coins adjusted.', l),
+    );
+  });
 
-  String _formatServerTime(dynamic raw) {
+  Future<void> _delete(
+    _UserAction rendered,
+    Map<String, dynamic> u,
+  ) => _mutate(rendered, const {'users'}, () => _canManageUsers, (
+    operation,
+  ) async {
+    if (u['user_id'].toString() == widget.selfId) return;
+    final offset = _offsetAfterAdminDelete(
+      offset: _offset,
+      itemCount: _users.length,
+      pageSize: _pageSize,
+    );
+    if (!await _confirm(
+      operation,
+      () => _userText('删除 ${u['username']} ?', 'Delete ${u['username']}?'),
+      () => _userText(
+        '会同时删除其所有同步数据与反馈，不可恢复',
+        'All synced data and feedback will also be deleted. This cannot be undone.',
+      ),
+      () => _userText('删除', 'Delete'),
+    )) {
+      return;
+    }
+    await AdminApi(operation.origin.client).deleteUser(
+      u['user_id'].toString(),
+      isCurrent: () => _operationCurrent(operation),
+    );
+    await _refreshWritten(
+      operation,
+      (l) => _userText('用户已删除', 'User deleted.', l),
+      offset: offset,
+    );
+  });
+
+  String _formatServerTime(dynamic raw, String? pattern) {
     final text = raw?.toString() ?? '';
     if (text.isEmpty || text == 'null') return '-';
     var normalized = text.contains('T') ? text : text.replaceFirst(' ', 'T');
@@ -6800,26 +7886,30 @@ class _UsersTabState extends State<_UsersTab> {
     final parsed = DateTime.tryParse(normalized);
     if (parsed == null) return text;
     final local = parsed.toLocal();
-    return I18nDateFormat.fullDateTime(local);
+    return I18nDateFormat.fullDateTime(local, pattern: pattern);
   }
 
-  String _formatLastLogin(dynamic raw) {
-    final formatted = _formatServerTime(raw);
-    return formatted == '-' ? '从未登录' : formatted;
+  String _formatLastLogin(dynamic raw, String? pattern) {
+    final formatted = _formatServerTime(raw, pattern);
+    return formatted == '-' ? _userText('从未登录', 'Never signed in') : formatted;
   }
 
-  String _formatLastActive(dynamic raw) {
-    final formatted = _formatServerTime(raw);
-    return formatted == '-' ? '从未活跃' : formatted;
+  String _formatLastActive(dynamic raw, String? pattern) {
+    final formatted = _formatServerTime(raw, pattern);
+    return formatted == '-' ? _userText('从未活跃', 'Never active') : formatted;
   }
 
-  Future<void> _showUserDetails(Map<String, dynamic> u) async {
+  Future<void> _showUserDetails(
+    _UserAction rendered,
+    Map<String, dynamic> u,
+  ) => _mutate(rendered, const {'users', 'coins'}, () => _canReadUsers, (
+    operation,
+  ) async {
     final userId = u['user_id'].toString();
-    final admin = u['is_admin'] == true;
-    final disabled = u['is_disabled'] == true;
-    final online = u['online'] == true;
+    final admin = u['is_admin'] == true, disabled = u['is_disabled'] == true;
+    final online = u['online'] == true,
+        emailVerified = u['email_verified'] == true;
     final email = (u['email'] ?? '').toString();
-    final emailVerified = u['email_verified'] == true;
     final displayName = (u['display_name'] ?? '').toString();
     final username = (u['username'] ?? '').toString();
     final groupId = (u['group_id'] ?? 'group_default').toString();
@@ -6829,180 +7919,160 @@ class _UsersTabState extends State<_UsersTab> {
       u['admin_permissions'],
       isAdmin: admin,
     );
-    final detailLines = [
-      '用户名: ${username.isEmpty ? '-' : username}',
-      '用户 ID: $userId',
-      '昵称: ${displayName.isEmpty ? '-' : displayName}',
-      '邮箱: ${email.isEmpty ? '未绑定邮箱' : '$email${emailVerified ? ' (已验证)' : ' (未验证)'}'}',
-      '账号状态: ${disabled ? '已禁用' : '可登录'} · ${online ? '在线' : '离线'}',
-      '管理员: ${admin ? '是' : '否'}',
-      '管理权限: ${_adminPermissionsLabel(permissions, isAdmin: admin)}',
-      '用户组: ${_adminEntityName(_groups, groupId, '默认组')}',
-      '角色: ${_adminEntityName(_roles, roleId, '普通角色')}',
-      '注册时间: ${_formatServerTime(u['created_at'])}',
-      '最近登录: ${_formatLastLogin(u['last_login_at'])}',
-      '最近活跃: ${_formatLastActive(u['last_active_at'])}',
-      '反馈数: ${u['feedback_count'] ?? '-'}',
-      '当前排序: ${_adminUserSortLabel(_sort)}',
-      '时光币: ${_adminIntValueOrDash(u['coin_balance'])}',
-      '累计时光币: ${_adminIntValueOrDash(u['lifetime_coins'])}',
-    ];
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AppDialog(
-        title: const Text('用户详情'),
+    await _dialog(operation, (ctx, _, _) {
+      final pattern = AppDateFormat.patternOf(ctx);
+      final lines = [
+        '${_userText('用户名', 'Username')}: ${username.isEmpty ? '-' : username}',
+        '${_userText('用户 ID', 'User ID')}: $userId',
+        '${_userText('昵称', 'Display name')}: ${displayName.isEmpty ? '-' : displayName}',
+        '${_userText('邮箱', 'Email')}: ${email.isEmpty ? _userText('未绑定邮箱', 'No email') : '$email (${emailVerified ? _userText('已验证', 'Verified') : _userText('未验证', 'Unverified')})'}',
+        '${_userText('账号状态', 'Account status')}: ${disabled ? _userText('已禁用', 'Disabled') : _userText('可登录', 'Enabled')} · ${online ? _userText('在线', 'Online') : _userText('离线', 'Offline')}',
+        '${_userText('管理员', 'Administrator')}: ${admin ? _userText('是', 'Yes') : _userText('否', 'No')}',
+        '${_userText('管理权限', 'Admin permissions')}: ${_adminPermissionsLabel(permissions, isAdmin: admin, locale: I18n.current)}',
+        '${_userText('用户组', 'Group')}: ${_adminEntityName(_groups, groupId, _userText('默认组', 'Default group'))}',
+        '${_userText('角色', 'Role')}: ${_adminEntityName(_roles, roleId, _userText('普通角色', 'Standard role'))}',
+        '${_userText('注册时间', 'Registered')}: ${_formatServerTime(u['created_at'], pattern)}',
+        '${_userText('最近登录', 'Last sign in')}: ${_formatLastLogin(u['last_login_at'], pattern)}',
+        '${_userText('最近活跃', 'Last active')}: ${_formatLastActive(u['last_active_at'], pattern)}',
+        '${_userText('反馈数', 'Feedback count')}: ${u['feedback_count'] ?? '-'}',
+        '${_userText('当前排序', 'Sort order')}: ${_adminUserSortLabel(_sort)}',
+        '${_userText('时光币', 'Coins')}: ${_adminIntValueOrDash(u['coin_balance'])}',
+        '${_userText('累计时光币', 'Lifetime coins')}: ${_adminIntValueOrDash(u['lifetime_coins'])}',
+      ];
+      return AppDialog(
+        title: Text(_userText('用户详情', 'User details')),
         icon: const Icon(Icons.person_search_outlined),
-        content: SingleChildScrollView(
-          child: SelectableText(detailLines.join('\n')),
-        ),
+        content: SingleChildScrollView(child: SelectableText(lines.join('\n'))),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
+            onPressed: () {
+              final route = operation.dialog;
+              if (ctx.mounted &&
+                  route?.isActive == true &&
+                  route?.isCurrent == true) {
+                Navigator.of(ctx).pop(false);
+              }
+            },
+            child: Text(_userText('关闭', 'Close')),
           ),
         ],
-      ),
-    );
-  }
+      );
+    });
+  });
 
   PopupMenuButton<String> _userActionMenu(
     BuildContext context,
-    Map<String, dynamic> u, {
+    Map<String, dynamic> user, {
+    required _UserAction origin,
     required bool admin,
     required bool disabled,
     required bool isSelf,
   }) {
+    final u = Map<String, dynamic>.unmodifiable(user);
+    PopupMenuItem<String> item(
+      String key,
+      String zh,
+      String en, {
+      bool enabled = true,
+      Color? color,
+    }) => PopupMenuItem(
+      value: key,
+      enabled: enabled,
+      child: ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) =>
+            AppSecondaryMenuText(_userText(zh, en, locale), color: color),
+      ),
+    );
     return PopupMenuButton<String>(
-      tooltip: '账号操作',
+      tooltip: _userText('账号操作', 'Account actions'),
+      enabled: !_busy,
       onSelected: (action) async {
+        if (!_current(origin)) return;
         switch (action) {
           case 'details':
-            await _showUserDetails(u);
-            break;
+            await _showUserDetails(origin, u);
           case 'admin':
-            if (_canToggleAdminFor(admin)) {
-              await _toggleAdmin(u);
-            } else if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('缺少超级管理员权限')));
-            }
-            break;
+            await _toggleAdmin(origin, u);
           case 'permissions':
-            if (_canManageUserAdminAccess) {
-              await _editAdminPermissions(u);
-            } else if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('缺少权限管理权限')));
-            }
-            break;
+            await _editAdminPermissions(origin, u);
           case 'group_role':
-            if (_canManageUsers) {
-              await _editUserGroupRole(u);
-            } else if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('缺少用户管理权限')));
-            }
-            break;
+            await _editUserGroupRole(origin, u);
           case 'coins':
-            if (_canManageCoins) {
-              await _adjustCoins(u);
-            } else if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('缺少时光币管理权限')));
-            }
-            break;
+            await _adjustCoins(origin, u);
           case 'disable':
-            if (_canManageUsers) {
-              await _toggleDisable(u);
-            }
-            break;
+            await _toggleDisable(origin, u);
           case 'reset':
-            if (_canManageUsers) {
-              await _resetPassword(u);
-            }
-            break;
+            await _resetPassword(origin, u);
           case 'delete':
-            if (_canManageUsers) {
-              await _delete(u);
-            }
-            break;
+            await _delete(origin, u);
           case 'copy_id':
-            await Clipboard.setData(
-              ClipboardData(text: u['user_id'].toString()),
+            await _mutate(
+              origin,
+              const {'users', 'coins'},
+              () => _canReadUsers,
+              (operation) async {
+                if (!_operationCurrent(operation)) return;
+                await Clipboard.setData(
+                  ClipboardData(text: u['user_id'].toString()),
+                );
+                if (_operationCurrent(operation)) {
+                  _snack(
+                    operation.origin,
+                    (l) => _userText('用户 ID 已复制', 'User ID copied', l),
+                  );
+                }
+              },
             );
-            if (!context.mounted) return;
-            if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('用户 ID 已复制')));
-            }
-            break;
         }
       },
-      itemBuilder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        return [
-          const PopupMenuItem(
-            value: 'details',
-            child: AppSecondaryMenuText('查看详情'),
+      itemBuilder: (ctx) => [
+        item('details', '查看详情', 'View details'),
+        if (_canToggleAdminFor(admin) && !(admin && isSelf))
+          item(
+            'admin',
+            admin ? '撤销管理员权限' : '授予管理员权限',
+            admin
+                ? 'Revoke administrator access'
+                : 'Grant administrator access',
           ),
-          if (_canToggleAdminFor(admin))
-            PopupMenuItem(
-              value: 'admin',
-              child: AppSecondaryMenuText(admin ? '撤销管理员权限' : '授予管理员权限'),
-            ),
-          PopupMenuItem(
-            value: 'permissions',
-            enabled: _canManageUserAdminAccess,
-            child: AppSecondaryMenuText(
-              _canManageUserAdminAccess ? '设置管理权限' : '设置管理权限（无权限）',
-            ),
+        item(
+          'permissions',
+          '设置管理权限',
+          'Set admin permissions',
+          enabled: _canManageUserAdminAccess,
+        ),
+        item(
+          'group_role',
+          '设置用户组/角色',
+          'Set group / role',
+          enabled: _canManageUsers && (_canAssignGroups || _canManageRoles),
+        ),
+        item('coins', '调整时光币', 'Adjust coins', enabled: _canManageCoins),
+        if (_canManageUsers && !isSelf)
+          item(
+            'disable',
+            disabled ? '恢复账号登录' : '禁用账号登录',
+            disabled ? 'Restore account' : 'Disable account',
           ),
-          PopupMenuItem(
-            value: 'group_role',
-            enabled: _canManageUsers && (_canAssignGroups || _canManageRoles),
-            child: AppSecondaryMenuText(
-              _canManageUsers && (_canAssignGroups || _canManageRoles)
-                  ? '设置用户组/角色'
-                  : '设置用户组/角色（无权限）',
-            ),
+        if (_canManageUsers) item('reset', '重置登录密码', 'Reset password'),
+        item('copy_id', '复制用户 ID', 'Copy user ID'),
+        if (_canManageUsers && !isSelf)
+          item(
+            'delete',
+            '删除账号与数据',
+            'Delete account and data',
+            color: Theme.of(ctx).colorScheme.error,
           ),
-          PopupMenuItem(
-            value: 'coins',
-            enabled: _canManageCoins,
-            child: AppSecondaryMenuText(
-              _canManageCoins ? '调整时光币' : '调整时光币（无权限）',
-            ),
-          ),
-          if (_canManageUsers && !isSelf)
-            PopupMenuItem(
-              value: 'disable',
-              child: AppSecondaryMenuText(disabled ? '恢复账号登录' : '禁用账号登录'),
-            ),
-          if (_canManageUsers)
-            const PopupMenuItem(
-              value: 'reset',
-              child: AppSecondaryMenuText('重置登录密码'),
-            ),
-          const PopupMenuItem(
-            value: 'copy_id',
-            child: AppSecondaryMenuText('复制用户 ID'),
-          ),
-          if (_canManageUsers && !isSelf)
-            PopupMenuItem(
-              value: 'delete',
-              child: AppSecondaryMenuText('删除账号与数据', color: cs.error),
-            ),
-        ];
-      },
+      ],
     );
   }
 
-  Widget _buildUserListItem(Map<String, dynamic> u) {
+  Widget _buildUserListItem(BuildContext itemContext, Map<String, dynamic> u) {
+    final origin = _listOrigin;
+    if (origin == null) return const SizedBox.shrink();
+    final snapshot = Map<String, dynamic>.unmodifiable(u);
+    final pattern = AppDateFormat.patternOf(itemContext);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final userId = u['user_id'].toString();
@@ -7020,9 +8090,9 @@ class _UsersTabState extends State<_UsersTab> {
     final lifetimeCoins = _adminIntValue(rawLifetimeCoins);
     final canSelectForBulk = _canManageUsers;
     final selected = canSelectForBulk && _selectedUserIds.contains(userId);
-    final registeredAt = _formatServerTime(u['created_at']);
-    final lastLoginAt = _formatLastLogin(u['last_login_at']);
-    final lastActiveAt = _formatLastActive(u['last_active_at']);
+    final registeredAt = _formatServerTime(u['created_at'], pattern);
+    final lastLoginAt = _formatLastLogin(u['last_login_at'], pattern);
+    final lastActiveAt = _formatLastActive(u['last_active_at'], pattern);
     final email = (u['email'] ?? '').toString();
     final emailVerified = u['email_verified'] == true;
     final displayName = (u['display_name'] ?? '').toString();
@@ -7030,28 +8100,44 @@ class _UsersTabState extends State<_UsersTab> {
     final groupId = (u['group_id'] ?? 'group_default').toString();
     final roleId = (u['role_id'] ?? (admin ? 'role_admin' : 'role_user'))
         .toString();
-    final groupName = _adminEntityName(_groups, groupId, '默认组');
-    final roleName = _adminEntityName(_roles, roleId, '普通角色');
+    final groupName = _adminEntityName(
+      _groups,
+      groupId,
+      _userText('默认组', 'Default group'),
+    );
+    final roleName = _adminEntityName(
+      _roles,
+      roleId,
+      _userText('普通角色', 'Standard role'),
+    );
     final actionMenu = _userActionMenu(
       context,
       u,
+      origin: origin,
       admin: admin,
       disabled: disabled,
       isSelf: isSelf,
     );
     final statusBadges = <Widget>[
       AppStatusBadge(
-        label: online ? '在线' : '离线',
+        label: online ? _userText('在线', 'Online') : _userText('离线', 'Offline'),
         color: online ? Colors.green : Colors.grey,
         icon: online ? Icons.circle : Icons.radio_button_unchecked,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       ),
-      if (admin) const AppStatusBadge(label: '管理员', color: Colors.deepOrange),
+      if (admin)
+        AppStatusBadge(
+          label: _userText('管理员', 'Administrator'),
+          color: Colors.deepOrange,
+        ),
       if (admin && !permissions.contains(_adminAllPermission))
-        const AppStatusBadge(label: '细分权限', color: Colors.indigo),
+        AppStatusBadge(
+          label: _userText('细分权限', 'Limited permissions'),
+          color: Colors.indigo,
+        ),
       if (disabled)
         AppStatusBadge(
-          label: '已禁用',
+          label: _userText('已禁用', 'Disabled'),
           color: Theme.of(context).colorScheme.error,
         ),
     ];
@@ -7066,10 +8152,10 @@ class _UsersTabState extends State<_UsersTab> {
             decoration: disabled ? TextDecoration.lineThrough : null,
           );
           return AppSurfaceCard(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             borderRadius: BorderRadius.circular(9),
             border: _adminSubtleListBorder(context),
-            onTap: () => _showUserDetails(u),
+            onTap: () => _showUserDetails(origin, snapshot),
             child: Row(
               children: [
                 if (canSelectForBulk)
@@ -7077,10 +8163,13 @@ class _UsersTabState extends State<_UsersTab> {
                     width: 34,
                     child: Checkbox(
                       value: selected,
-                      onChanged: isSelf
+                      onChanged: isSelf || _busy
                           ? null
-                          : (value) =>
-                                _toggleUserSelection(userId, value == true),
+                          : (value) => _toggleUserSelection(
+                              origin,
+                              userId,
+                              value == true,
+                            ),
                     ),
                   ),
                 SizedBox(
@@ -7098,7 +8187,7 @@ class _UsersTabState extends State<_UsersTab> {
                           style: appSecondaryControlLabelStyle(context),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -7125,8 +8214,8 @@ class _UsersTabState extends State<_UsersTab> {
                   flex: 2,
                   child: Text(
                     email.isEmpty
-                        ? '未绑定邮箱'
-                        : '$email${emailVerified ? ' · 已验证' : ' · 未验证'}',
+                        ? _userText('未绑定邮箱', 'No email')
+                        : '$email${emailVerified ? _userText(' · 已验证', ' · Verified') : _userText(' · 未验证', ' · Unverified')}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: subtleText,
@@ -7159,11 +8248,14 @@ class _UsersTabState extends State<_UsersTab> {
                     style: mainText,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   flex: 2,
                   child: Text(
-                    '最近登录: $lastLoginAt\n最近活跃: $lastActiveAt',
+                    _userText(
+                      '最近登录: $lastLoginAt\n最近活跃: $lastActiveAt',
+                      'Last sign in: $lastLoginAt\nLast active: $lastActiveAt',
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: subtleText,
@@ -7176,20 +8268,22 @@ class _UsersTabState extends State<_UsersTab> {
         }
         final roleBadgeColor = admin ? Colors.deepOrange : Colors.indigo;
         final emailText = email.isEmpty
-            ? '未绑定邮箱'
-            : '$email${emailVerified ? ' · 已验证' : ' · 未验证'}';
+            ? _userText('未绑定邮箱', 'No email')
+            : '$email${emailVerified ? _userText(' · 已验证', ' · Verified') : _userText(' · 未验证', ' · Unverified')}';
         final mobileStatusBadges = <Widget>[
           AppStatusBadge(
-            label: online ? '在线' : '离线',
+            label: online
+                ? _userText('在线', 'Online')
+                : _userText('离线', 'Offline'),
             color: online ? Colors.green : Colors.grey,
             icon: online ? Icons.circle : Icons.radio_button_unchecked,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
           ),
           if (disabled)
             AppStatusBadge(
-              label: '已禁用',
+              label: _userText('已禁用', 'Disabled'),
               color: cs.error,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             ),
         ];
         final identityBadges = <Widget>[
@@ -7197,25 +8291,31 @@ class _UsersTabState extends State<_UsersTab> {
             label: roleName,
             color: roleBadgeColor,
             icon: Icons.badge_outlined,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
           ),
           AppStatusBadge(
             label: groupName,
             color: cs.primary,
             icon: Icons.groups_2_outlined,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
           ),
           if (admin)
-            const AppStatusBadge(label: '管理员', color: Colors.deepOrange),
+            AppStatusBadge(
+              label: _userText('管理员', 'Administrator'),
+              color: Colors.deepOrange,
+            ),
           if (admin && !permissions.contains(_adminAllPermission))
-            const AppStatusBadge(label: '细分权限', color: Colors.indigo),
+            AppStatusBadge(
+              label: _userText('细分权限', 'Limited permissions'),
+              color: Colors.indigo,
+            ),
         ];
         return AppSurfaceCard(
           key: ValueKey('admin_user_mobile_card_$userId'),
-          padding: const EdgeInsets.fromLTRB(10, 9, 4, 10),
+          padding: EdgeInsets.fromLTRB(10, 9, 4, 10),
           borderRadius: BorderRadius.circular(9),
           border: _adminSubtleListBorder(context),
-          onTap: () => _showUserDetails(u),
+          onTap: () => _showUserDetails(origin, snapshot),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -7224,10 +8324,13 @@ class _UsersTabState extends State<_UsersTab> {
                   width: 32,
                   child: Checkbox(
                     value: selected,
-                    onChanged: isSelf
+                    onChanged: isSelf || _busy
                         ? null
-                        : (value) =>
-                              _toggleUserSelection(userId, value == true),
+                        : (value) => _toggleUserSelection(
+                            origin,
+                            userId,
+                            value == true,
+                          ),
                   ),
                 ),
               Expanded(
@@ -7248,7 +8351,7 @@ class _UsersTabState extends State<_UsersTab> {
                             username.isEmpty ? '?' : username.substring(0, 1),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             username,
@@ -7263,9 +8366,9 @@ class _UsersTabState extends State<_UsersTab> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        SizedBox(width: 6),
                         ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 92),
+                          constraints: BoxConstraints(maxWidth: 92),
                           child: Wrap(
                             alignment: WrapAlignment.end,
                             spacing: 4,
@@ -7275,14 +8378,14 @@ class _UsersTabState extends State<_UsersTab> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Wrap(
                       key: ValueKey('admin_user_identity_badges_$userId'),
                       spacing: 6,
                       runSpacing: 6,
                       children: identityBadges,
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Wrap(
                       spacing: 10,
                       runSpacing: 6,
@@ -7293,22 +8396,22 @@ class _UsersTabState extends State<_UsersTab> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Row(
                       children: [
                         Expanded(
                           child: _AdminMobileMetric(
-                            label: '当前时光币',
+                            label: _userText('当前时光币', 'Coin balance'),
                             value: rawCoinBalance == null
                                 ? '-'
                                 : '$coinBalance',
                             icon: Icons.toll_outlined,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: 8),
                         Expanded(
                           child: _AdminMobileMetric(
-                            label: '累计时光币',
+                            label: _userText('累计时光币', 'Lifetime coins'),
                             value: rawLifetimeCoins == null
                                 ? '-'
                                 : '$lifetimeCoins',
@@ -7317,32 +8420,41 @@ class _UsersTabState extends State<_UsersTab> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Wrap(
                       spacing: 10,
                       runSpacing: 6,
                       children: [
                         _AdminMobileMetaItem(
                           icon: Icons.how_to_reg_outlined,
-                          text: '注册 $registeredAt',
+                          text: _userText(
+                            '注册 $registeredAt',
+                            'Registered $registeredAt',
+                          ),
                         ),
                         _AdminMobileMetaItem(
                           icon: Icons.login_outlined,
-                          text: '最近登录: $lastLoginAt',
+                          text: _userText(
+                            '最近登录: $lastLoginAt',
+                            'Last sign in: $lastLoginAt',
+                          ),
                         ),
                         _AdminMobileMetaItem(
                           icon: Icons.schedule_outlined,
-                          text: '最近活跃: $lastActiveAt',
+                          text: _userText(
+                            '最近活跃: $lastActiveAt',
+                            'Last active: $lastActiveAt',
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(
-                        onPressed: () => _showUserDetails(u),
-                        icon: const Icon(Icons.more_horiz),
-                        label: const Text('更多详情'),
+                        onPressed: () => _showUserDetails(origin, snapshot),
+                        icon: Icon(Icons.more_horiz),
+                        label: Text(_userText('更多详情', 'More details')),
                       ),
                     ),
                   ],
@@ -7361,8 +8473,19 @@ class _UsersTabState extends State<_UsersTab> {
 
   @override
   Widget build(BuildContext context) {
+    final origin = _capture();
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    if (!_canReadUsers) {
+      return EmptyState(
+        icon: Icons.lock_outline,
+        message: _userText(
+          '缺少用户列表权限。需要用户管理或时光币管理权限。',
+          'User list access requires users or coins permission.',
+        ),
+      );
+    }
+    final users = List<Map<String, dynamic>>.of(_users);
     final loadingFirstPage = _loading && _page == null;
     final selectableIds = _selectableCurrentPageUserIds;
     final selectedIds = _selectedCurrentPageUserIds;
@@ -7380,273 +8503,399 @@ class _UsersTabState extends State<_UsersTab> {
       builder: (context, constraints) {
         final compactAdminFilters = constraints.maxWidth < 720;
         final userFilterChips = [
-          _userFilterChip('全部账号', ''),
-          _userFilterChip('可登录', 'active'),
-          _userFilterChip('在线', 'online'),
-          _userFilterChip('离线', 'offline'),
-          _userFilterChip('管理员', 'admin'),
-          _userFilterChip('已禁用', 'disabled'),
-          _userFilterChip('普通用户', 'normal'),
-          _userFilterChip('有反馈', 'has_feedback'),
-          _userFilterChip('邮箱未验证', 'unverified_email'),
-          _userFilterChip('邮箱已验证', 'verified_email'),
-          _userFilterChip('未绑定邮箱', 'no_email'),
+          _userFilterChip(origin, _userText('全部账号', 'All accounts'), ''),
+          _userFilterChip(origin, _userText('可登录', 'Enabled'), 'active'),
+          _userFilterChip(origin, _userText('在线', 'Online'), 'online'),
+          _userFilterChip(origin, _userText('离线', 'Offline'), 'offline'),
+          _userFilterChip(origin, _userText('管理员', 'Administrator'), 'admin'),
+          _userFilterChip(origin, _userText('已禁用', 'Disabled'), 'disabled'),
+          _userFilterChip(
+            origin,
+            _userText('普通用户', 'Standard users'),
+            'normal',
+          ),
+          _userFilterChip(
+            origin,
+            _userText('有反馈', 'Has feedback'),
+            'has_feedback',
+          ),
+          _userFilterChip(
+            origin,
+            _userText('邮箱未验证', 'Unverified email'),
+            'unverified_email',
+          ),
+          _userFilterChip(
+            origin,
+            _userText('邮箱已验证', 'Verified email'),
+            'verified_email',
+          ),
+          _userFilterChip(origin, _userText('未绑定邮箱', 'No email'), 'no_email'),
         ];
-        const sortItems = [
-          DropdownMenuItem(value: 'created_desc', child: Text('最新注册优先')),
-          DropdownMenuItem(value: 'last_active_desc', child: Text('最近活跃优先')),
-          DropdownMenuItem(value: 'last_login_desc', child: Text('最近登录优先')),
-          DropdownMenuItem(value: 'feedback_desc', child: Text('反馈较多优先')),
-          DropdownMenuItem(value: 'username_asc', child: Text('用户名 A-Z')),
-          DropdownMenuItem(value: 'email_asc', child: Text('邮箱 A-Z')),
+        final sortItems = [
+          DropdownMenuItem(
+            value: 'created_desc',
+            child: Text(_userText('最新注册优先', 'Newest accounts')),
+          ),
+          DropdownMenuItem(
+            value: 'last_active_desc',
+            child: Text(_userText('最近活跃优先', 'Recently active')),
+          ),
+          DropdownMenuItem(
+            value: 'last_login_desc',
+            child: Text(_userText('最近登录优先', 'Recent sign in')),
+          ),
+          DropdownMenuItem(
+            value: 'feedback_desc',
+            child: Text(_userText('反馈较多优先', 'Most feedback')),
+          ),
+          DropdownMenuItem(
+            value: 'username_asc',
+            child: Text(_userText('用户名 A-Z', 'Username A–Z')),
+          ),
+          DropdownMenuItem(
+            value: 'email_asc',
+            child: Text(_userText('邮箱 A-Z', 'Email A–Z')),
+          ),
         ];
         return Column(
           children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                12,
-                compactAdminFilters ? 8 : 12,
-                12,
-                6,
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: constraints.maxHeight * 0.55,
               ),
-              child: Column(
-                children: [
-                  LayoutBuilder(
-                    builder: (context, toolbarConstraints) {
-                      Widget searchField() => TextField(
-                        controller: _searchCtrl,
-                        decoration: InputDecoration(
-                          hintText: '搜索用户名、邮箱、昵称或用户 ID',
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: _query.isEmpty
-                              ? null
-                              : IconButton(
-                                  tooltip: '清空搜索',
-                                  icon: const Icon(Icons.close),
-                                  onPressed: () {
-                                    _searchCtrl.clear();
-                                    _load(query: '', offset: 0);
-                                  },
-                                ),
-                          isDense: true,
-                        ),
-                        textInputAction: TextInputAction.search,
-                        onSubmitted: (_) => _applySearch(),
-                      );
-
-                      List<Widget> toolbarButtons() => [
-                        IconButton(
-                          tooltip: '搜索用户',
-                          onPressed: _applySearch,
-                          icon: const Icon(Icons.manage_search),
-                        ),
-                        if (_canManageUsers)
-                          IconButton(
-                            key: const ValueKey('admin_create_user_button'),
-                            tooltip: '新增用户',
-                            onPressed: _loading ? null : _createUser,
-                            icon: const Icon(Icons.person_add_alt_1_outlined),
-                          ),
-                        if (_canManageUsers)
-                          IconButton(
-                            tooltip: '导出用户筛选结果',
-                            onPressed: _loading ? null : _exportUsersCsv,
-                            icon: const Icon(Icons.download_outlined),
-                          ),
-                        IconButton(
-                          tooltip: '刷新用户列表',
-                          onPressed: _loading
-                              ? null
-                              : () => _load(offset: _offset),
-                          icon: _loading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.refresh),
-                        ),
-                      ];
-
-                      final buttons = toolbarButtons();
-                      final actionWrap = Wrap(
-                        key: const ValueKey('admin_users_toolbar_actions'),
-                        spacing: 2,
-                        runSpacing: 2,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: buttons,
-                      );
-                      if (compactAdminFilters ||
-                          toolbarConstraints.maxWidth < 380) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            searchField(),
-                            const SizedBox(height: 6),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: actionWrap,
-                            ),
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(child: searchField()),
-                          const SizedBox(width: 4),
-                          actionWrap,
-                        ],
-                      );
-                    },
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    12,
+                    compactAdminFilters ? 8 : 12,
+                    12,
+                    6,
                   ),
-                  const SizedBox(height: 8),
-                  compactAdminFilters
-                      ? _AdminCompactChipStrip(
-                          padding: EdgeInsets.zero,
-                          children: userFilterChips,
-                        )
-                      : _AdminChipWrap(
-                          padding: EdgeInsets.zero,
-                          children: userFilterChips,
-                        ),
-                  SizedBox(height: compactAdminFilters ? 4 : 8),
-                  if (compactAdminFilters)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: _AdminPaginationLabeledControl(
-                        label: '排序',
-                        child: AppCompactDropdown<String>(
-                          width: 142,
-                          value: _sort,
-                          items: sortItems,
-                          onChanged: (value) =>
-                              _applySort(value ?? 'created_desc'),
-                        ),
-                      ),
-                    )
-                  else
-                    AppDropdownField<String>(
-                      initialValue: _sort,
-                      labelText: '排序',
-                      items: sortItems,
-                      onChanged: (value) => _applySort(value ?? 'created_desc'),
-                    ),
-                  if (!loadingFirstPage &&
-                      _error == null &&
-                      _users.isNotEmpty) ...[
-                    SizedBox(height: compactAdminFilters ? 6 : 8),
-                    AppSurfaceCard(
-                      padding: EdgeInsets.fromLTRB(
-                        compactAdminFilters ? 8 : 10,
-                        compactAdminFilters ? 5 : 8,
-                        compactAdminFilters ? 8 : 10,
-                        compactAdminFilters ? 5 : 8,
-                      ),
-                      color: cs.secondaryContainer.withValues(alpha: 0.22),
-                      border: Border.all(
-                        color: cs.secondary.withValues(alpha: 0.14),
-                        width: 0.45,
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final summaryText = !_canManageUsers
-                              ? '本页 ${_users.length} 个 · 时光币 $pageCoinBalance / 累计 $pageLifetimeCoins'
-                              : (selectedIds.isEmpty
-                                    ? '本页 ${_users.length} 个 · 时光币 $pageCoinBalance / 累计 $pageLifetimeCoins'
-                                    : '已选 ${selectedIds.length} 个 · 当前页批量操作');
-                          final summary = Text(
-                            summaryText,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: cs.onSurface.withValues(alpha: 0.68),
+                  child: Column(
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, toolbarConstraints) {
+                          Widget searchField() => TextField(
+                            controller: _searchCtrl,
+                            enabled: !_busy,
+                            decoration: InputDecoration(
+                              hintText: _userText(
+                                '搜索用户名、邮箱、昵称或用户 ID',
+                                'Search username, email, name or user ID',
+                              ),
+                              prefixIcon: Icon(Icons.search),
+                              suffixIcon: _query.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: _userText(
+                                        '清空搜索',
+                                        'Clear search',
+                                      ),
+                                      icon: Icon(Icons.close),
+                                      onPressed: () {
+                                        if (!_current(origin) || _busy) return;
+                                        _searchCtrl.clear();
+                                        _load(
+                                          origin: origin,
+                                          query: '',
+                                          offset: 0,
+                                        );
+                                      },
+                                    ),
+                              isDense: true,
                             ),
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) => _applySearch(origin),
                           );
-                          final actions = Wrap(
-                            spacing: 8,
-                            runSpacing: compactAdminFilters ? 2 : 4,
+
+                          List<Widget> toolbarButtons() => [
+                            IconButton(
+                              tooltip: _userText('搜索用户', 'Search users'),
+                              onPressed: _busy
+                                  ? null
+                                  : () => _applySearch(origin),
+                              icon: Icon(Icons.manage_search),
+                            ),
+                            if (_canManageUsers)
+                              IconButton(
+                                key: ValueKey('admin_create_user_button'),
+                                tooltip: _userText('新增用户', 'Create user'),
+                                onPressed: _busy
+                                    ? null
+                                    : () => _createUser(origin),
+                                icon: Icon(Icons.person_add_alt_1_outlined),
+                              ),
+                            if (_canManageUsers)
+                              IconButton(
+                                tooltip: _userText(
+                                  '导出用户筛选结果',
+                                  'Export filtered users',
+                                ),
+                                onPressed: _busy
+                                    ? null
+                                    : () => _exportUsersCsv(origin),
+                                icon: Icon(Icons.download_outlined),
+                              ),
+                            IconButton(
+                              tooltip: _userText('刷新用户列表', 'Refresh users'),
+                              onPressed: _busy
+                                  ? null
+                                  : () =>
+                                        _load(origin: origin, offset: _offset),
+                              icon: _loading
+                                  ? SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Icon(Icons.refresh),
+                            ),
+                          ];
+
+                          final buttons = toolbarButtons();
+                          final actionWrap = Wrap(
+                            key: ValueKey('admin_users_toolbar_actions'),
+                            spacing: 2,
+                            runSpacing: 2,
                             crossAxisAlignment: WrapCrossAlignment.center,
-                            children: _canManageUsers
-                                ? [
-                                    FilterChip(
-                                      label: Text(
-                                        allCurrentPageSelected
-                                            ? '取消全选本页'
-                                            : '全选本页',
-                                      ),
-                                      selected: allCurrentPageSelected,
-                                      onSelected: selectableIds.isEmpty
-                                          ? null
-                                          : (_) => _toggleCurrentPageSelection(
-                                              !allCurrentPageSelected,
-                                            ),
-                                    ),
-                                    TextButton.icon(
-                                      onPressed: selectedIds.isEmpty || _loading
-                                          ? null
-                                          : () => _bulkSetDisabled(true),
-                                      icon: const Icon(Icons.block_outlined),
-                                      label: const Text('批量禁用'),
-                                    ),
-                                    TextButton.icon(
-                                      onPressed: selectedIds.isEmpty || _loading
-                                          ? null
-                                          : () => _bulkSetDisabled(false),
-                                      icon: const Icon(
-                                        Icons.lock_open_outlined,
-                                      ),
-                                      label: const Text('批量恢复'),
-                                    ),
-                                  ]
-                                : const [],
+                            children: buttons,
                           );
                           if (compactAdminFilters ||
-                              constraints.maxWidth < 560) {
+                              toolbarConstraints.maxWidth < 380) {
                             return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                summary,
-                                const SizedBox(height: 6),
-                                actions,
+                                searchField(),
+                                SizedBox(height: 6),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: actionWrap,
+                                ),
                               ],
                             );
                           }
                           return Row(
                             children: [
-                              Expanded(child: summary),
-                              actions,
+                              Expanded(child: searchField()),
+                              SizedBox(width: 4),
+                              actionWrap,
                             ],
                           );
                         },
                       ),
-                    ),
-                  ],
-                  _AdminInlineLoadingIndicator(
-                    visible: _loading && _page != null,
-                    label: '正在更新当前页',
+                      SizedBox(height: 8),
+                      compactAdminFilters
+                          ? _AdminCompactChipStrip(
+                              padding: EdgeInsets.zero,
+                              children: userFilterChips,
+                            )
+                          : _AdminChipWrap(
+                              padding: EdgeInsets.zero,
+                              children: userFilterChips,
+                            ),
+                      SizedBox(height: compactAdminFilters ? 4 : 8),
+                      if (compactAdminFilters)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: _AdminPaginationLabeledControl(
+                            label: _userText('排序', 'Sort'),
+                            child: AppCompactDropdown<String>(
+                              width: 142,
+                              value: _sort,
+                              items: sortItems,
+                              onChanged: (value) =>
+                                  _applySort(origin, value ?? 'created_desc'),
+                            ),
+                          ),
+                        )
+                      else
+                        AppDropdownField<String>(
+                          initialValue: _sort,
+                          labelText: _userText('排序', 'Sort'),
+                          items: sortItems,
+                          onChanged: (value) =>
+                              _applySort(origin, value ?? 'created_desc'),
+                        ),
+                      if (!loadingFirstPage &&
+                          _error == null &&
+                          _users.isNotEmpty) ...[
+                        SizedBox(height: compactAdminFilters ? 6 : 8),
+                        AppSurfaceCard(
+                          padding: EdgeInsets.fromLTRB(
+                            compactAdminFilters ? 8 : 10,
+                            compactAdminFilters ? 5 : 8,
+                            compactAdminFilters ? 8 : 10,
+                            compactAdminFilters ? 5 : 8,
+                          ),
+                          color: cs.secondaryContainer.withValues(alpha: 0.22),
+                          border: Border.all(
+                            color: cs.secondary.withValues(alpha: 0.14),
+                            width: 0.45,
+                          ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final summaryText = !_canManageUsers
+                                  ? _userText(
+                                      '本页 ${_users.length} 个 · 时光币 $pageCoinBalance / 累计 $pageLifetimeCoins',
+                                      '${_users.length} on this page · Coins $pageCoinBalance / Lifetime $pageLifetimeCoins',
+                                    )
+                                  : (selectedIds.isEmpty
+                                        ? _userText(
+                                            '本页 ${_users.length} 个 · 时光币 $pageCoinBalance / 累计 $pageLifetimeCoins',
+                                            '${_users.length} on this page · Coins $pageCoinBalance / Lifetime $pageLifetimeCoins',
+                                          )
+                                        : _userText(
+                                            '已选 ${selectedIds.length} 个 · 当前页批量操作',
+                                            '${selectedIds.length} selected · Actions apply to this page',
+                                          ));
+                              final summary = Text(
+                                summaryText,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.68),
+                                ),
+                              );
+                              final actions = Wrap(
+                                spacing: 8,
+                                runSpacing: compactAdminFilters ? 2 : 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: _canManageUsers
+                                    ? [
+                                        FilterChip(
+                                          label: Text(
+                                            allCurrentPageSelected
+                                                ? _userText(
+                                                    '取消全选本页',
+                                                    'Deselect page',
+                                                  )
+                                                : _userText(
+                                                    '全选本页',
+                                                    'Select page',
+                                                  ),
+                                          ),
+                                          selected: allCurrentPageSelected,
+                                          onSelected:
+                                              selectableIds.isEmpty || _busy
+                                              ? null
+                                              : (_) =>
+                                                    _toggleCurrentPageSelection(
+                                                      origin,
+                                                      !allCurrentPageSelected,
+                                                    ),
+                                        ),
+                                        TextButton.icon(
+                                          onPressed:
+                                              selectedIds.isEmpty || _busy
+                                              ? null
+                                              : () => _bulkSetDisabled(
+                                                  origin,
+                                                  true,
+                                                ),
+                                          icon: Icon(Icons.block_outlined),
+                                          label: Text(
+                                            _userText(
+                                              '批量禁用',
+                                              'Disable selected',
+                                            ),
+                                          ),
+                                        ),
+                                        TextButton.icon(
+                                          onPressed:
+                                              selectedIds.isEmpty || _busy
+                                              ? null
+                                              : () => _bulkSetDisabled(
+                                                  origin,
+                                                  false,
+                                                ),
+                                          icon: Icon(Icons.lock_open_outlined),
+                                          label: Text(
+                                            _userText(
+                                              '批量恢复',
+                                              'Restore selected',
+                                            ),
+                                          ),
+                                        ),
+                                      ]
+                                    : [],
+                              );
+                              if (compactAdminFilters ||
+                                  constraints.maxWidth < 560) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    summary,
+                                    SizedBox(height: 6),
+                                    actions,
+                                  ],
+                                );
+                              }
+                              return Row(
+                                children: [
+                                  Expanded(child: summary),
+                                  actions,
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                      _AdminInlineLoadingIndicator(
+                        visible: _loading && _page != null,
+                        label: _userText('正在更新当前页', 'Updating this page'),
+                      ),
+                      if (_refreshError != null) ...[
+                        SizedBox(height: 8),
+                        AppInfoBanner(
+                          icon: Icons.refresh,
+                          title: _userText(
+                            '刷新失败，仍显示上次结果',
+                            'Refresh failed. Showing previous results.',
+                          ),
+                          message: _adminErrorMessage(
+                            _refreshError!,
+                            _userText('用户列表', 'Users'),
+                          ),
+                          color: cs.error,
+                          margin: EdgeInsets.zero,
+                        ),
+                      ],
+                      if (_auxiliaryErrors.isNotEmpty) ...[
+                        SizedBox(height: 8),
+                        AppInfoBanner(
+                          icon: Icons.lock_outline,
+                          title: _userText(
+                            '用户组或角色加载失败',
+                            'Could not load groups or roles',
+                          ),
+                          message: _auxiliaryErrors
+                              .map(
+                                (entry) => _adminErrorMessage(
+                                  entry.$1,
+                                  entry.$2 == 'groups'
+                                      ? _userText('用户组', 'Groups')
+                                      : _userText('角色', 'Roles'),
+                                ),
+                              )
+                              .join('\n'),
+                          color: cs.error,
+                          margin: EdgeInsets.zero,
+                        ),
+                      ],
+                    ],
                   ),
-                  if (_groupsRolesError != null) ...[
-                    const SizedBox(height: 8),
-                    AppInfoBanner(
-                      icon: Icons.lock_outline,
-                      title: '用户组或角色加载失败',
-                      message: _groupsRolesError!,
-                      color: cs.error,
-                      margin: EdgeInsets.zero,
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
             if (loadingFirstPage)
-              const Expanded(
+              Expanded(
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       CircularProgressIndicator(),
                       SizedBox(height: 12),
-                      Text('正在加载用户列表…'),
+                      Text(_userText('正在加载用户列表…', 'Loading users…')),
                     ],
                   ),
                 ),
@@ -7654,8 +8903,11 @@ class _UsersTabState extends State<_UsersTab> {
             else if (_error != null)
               Expanded(
                 child: _AdminErrorState(
-                  message: _error!,
-                  onRetry: () => _load(offset: _offset),
+                  message: _adminErrorMessage(
+                    _error!,
+                    _userText('用户列表', 'Users'),
+                  ),
+                  onRetry: _failedLoad ?? () async {},
                 ),
               )
             else if (_users.isEmpty)
@@ -7663,34 +8915,40 @@ class _UsersTabState extends State<_UsersTab> {
                 child: EmptyState(
                   icon: Icons.people_outline,
                   message: _query.isEmpty && _status.isEmpty
-                      ? '暂无用户记录'
-                      : '没有匹配的用户。请调整搜索关键词或账号状态筛选。',
+                      ? _userText('暂无用户记录', 'No users yet')
+                      : _userText(
+                          '没有匹配的用户。请调整搜索关键词或账号状态筛选。',
+                          'No matching users. Adjust your search or account filters.',
+                        ),
                 ),
               )
             else
               Expanded(
                 child: RefreshIndicator(
-                  onRefresh: () => _load(offset: _offset),
+                  onRefresh: () => _load(origin: origin, offset: _offset),
                   child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 8,
+                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                    itemCount: users.length,
+                    separatorBuilder: (context, _) => SizedBox(height: 8),
+                    itemBuilder: (_, i) => Builder(
+                      builder: (itemContext) =>
+                          _buildUserListItem(itemContext, users[i]),
                     ),
-                    itemCount: _users.length,
-                    separatorBuilder: (context, _) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _buildUserListItem(_users[i]),
                   ),
                 ),
               ),
             _AdminPaginationBar(
               page: _page,
-              loading: _loading,
+              loading: _busy,
               pageSize: _pageSize,
-              onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
-              onPrevious: () =>
-                  _load(offset: _previousAdminOffset(_offset, _pageSize)),
-              onNext: () => _load(offset: _offset + _pageSize),
-              onJumpToPage: _jumpToPage,
+              onPageSizeChanged: (value) =>
+                  _load(origin: origin, pageSize: value, offset: 0),
+              onPrevious: () => _load(
+                origin: origin,
+                offset: _previousAdminOffset(_offset, _pageSize),
+              ),
+              onNext: () => _load(origin: origin, offset: _offset + _pageSize),
+              onJumpToPage: (page) => _jumpToPage(origin, page),
             ),
           ],
         );
@@ -7698,14 +8956,14 @@ class _UsersTabState extends State<_UsersTab> {
     );
   }
 
-  Widget _userFilterChip(String label, String value) {
+  Widget _userFilterChip(_UserAction origin, String label, String value) {
     final selected = _status == value;
     return Padding(
-      padding: const EdgeInsets.only(right: 6),
+      padding: EdgeInsets.only(right: 6),
       child: ChoiceChip(
         label: Text(label),
         selected: selected,
-        onSelected: (_) => _applyStatus(value),
+        onSelected: _busy ? null : (_) => _applyStatus(origin, value),
       ),
     );
   }
@@ -7715,18 +8973,46 @@ class _UsersTabState extends State<_UsersTab> {
 // 公告
 // ====================================================================
 
+/// The view generation is separate from account authority, and changes at the
+/// TabController event itself so a same-frame leave/return revokes old controls.
+class _AnnouncementAction {
+  _AnnouncementAction(this.authority, this.view) : _viewRevision = view.value;
+
+  final AdminActionOrigin authority;
+  final ValueListenable<int> view;
+  final int _viewRevision;
+
+  ApiClient get client => authority.client;
+
+  bool isCurrent({bool checkRoute = true}) =>
+      view.value == _viewRevision &&
+      authority.isCurrent(checkRoute: checkRoute);
+}
+
 class _AnnouncementsTab extends StatefulWidget {
   final AdminApi api;
-  const _AnnouncementsTab({super.key, required this.api});
+  final bool isActive;
+  final ValueListenable<int> activationRevision;
+
+  const _AnnouncementsTab({
+    super.key,
+    required this.api,
+    required this.isActive,
+    required this.activationRevision,
+  });
+
   @override
   State<_AnnouncementsTab> createState() => _AnnouncementsTabState();
 }
 
 class _AnnouncementsTabState extends State<_AnnouncementsTab> {
+  final _actionHost = AdminActionHost();
+  final _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _items = [];
   AdminPage? _page;
   bool _loading = true;
-  String? _error;
+  bool _mutationPending = false;
+  Object? _error;
   String _query = '';
   String _status = '';
   String _level = '';
@@ -7734,21 +9020,85 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
   int _pageSize = _adminPageSize;
   int _offset = 0;
   int _loadSerial = 0;
-  final _searchCtrl = TextEditingController();
+  int? _authorityRevision;
+  int? _viewRevision;
+  Future<void> Function()? _failedLoad;
+  Route<dynamic>? _sortMenuRoute;
+  int? _sortMenuAuthorityRevision;
+  int? _sortMenuViewRevision;
+
+  _AnnouncementAction _capture() => _AnnouncementAction(
+    _actionHost.capture(
+      client: widget.api.client,
+      anyOfPermissions: const {'announcements'},
+    ),
+    widget.activationRevision,
+  );
+
+  bool _isCurrent(_AnnouncementAction origin, {bool checkRoute = true}) =>
+      mounted && widget.isActive && origin.isCurrent(checkRoute: checkRoute);
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _actionHost.bind(context);
+    _viewRevision ??= widget.activationRevision.value;
+    final revision = _actionHost.revision;
+    if (_authorityRevision == revision) return;
+    _authorityRevision = revision;
+    _loadSerial++;
+    _items = [];
+    _page = null;
+    _failedLoad = null;
+    _error = null;
+    _query = '';
+    _status = '';
+    _level = '';
+    _sort = 'created_desc';
+    _offset = 0;
+    _searchCtrl.clear();
+    final origin = _capture();
+    if (_isCurrent(origin)) {
+      _load(origin: origin);
+    } else {
+      _loading = false;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnnouncementsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final viewRevision = widget.activationRevision.value;
+    if (oldWidget.isActive == widget.isActive &&
+        _viewRevision == viewRevision) {
+      return;
+    }
+    _viewRevision = viewRevision;
+    final serial = ++_loadSerial;
+    _failedLoad = null;
+    _loading = false;
+    if (widget.isActive) {
+      final origin = _capture();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // A dependency change may have already cleared and reloaded this view.
+        if (serial == _loadSerial && _isCurrent(origin)) {
+          _load(origin: origin);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    _loadSerial++;
+    _actionHost.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _load({
+  Future<bool> _load({
+    required _AnnouncementAction origin,
+    _AnnouncementAction? mutationOrigin,
     int? offset,
     String? query,
     String? status,
@@ -7756,425 +9106,748 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
     String? sort,
     int? pageSize,
   }) async {
-    final loadSerial = ++_loadSerial;
+    bool current() =>
+        _isCurrent(origin) &&
+        (mutationOrigin == null || _isCurrent(mutationOrigin));
+    if (!current()) return false;
+    final serial = ++_loadSerial;
     final nextOffset = offset ?? _offset;
     final nextQuery = query ?? _query;
     final nextStatus = status ?? _status;
     final nextLevel = level ?? _level;
     final nextSort = sort ?? _sort;
     final nextPageSize = pageSize ?? _pageSize;
-    _offset = nextOffset;
-    _query = nextQuery;
-    _status = nextStatus;
-    _level = nextLevel;
-    _sort = nextSort;
-    _pageSize = nextPageSize;
     setState(() {
+      _offset = nextOffset;
+      _query = nextQuery;
+      _status = nextStatus;
+      _level = nextLevel;
+      _sort = nextSort;
+      _pageSize = nextPageSize;
       _loading = true;
       _error = null;
     });
     try {
-      final page = await widget.api.listAnnouncementsPage(
+      final page = await AdminApi(origin.client).listAnnouncementsPage(
         query: nextQuery.isEmpty ? null : nextQuery,
         status: nextStatus.isEmpty ? null : nextStatus,
         level: nextLevel.isEmpty ? null : nextLevel,
         sort: nextSort,
         limit: nextPageSize,
         offset: nextOffset,
+        isCurrent: current,
       );
-      if (!mounted || loadSerial != _loadSerial) return;
-      setState(() {
-        _page = page;
-        _items = page.items;
-      });
-    } catch (e) {
-      if (!mounted || loadSerial != _loadSerial) return;
-      if (mounted) {
-        setState(() => _error = _adminErrorMessage(e, '公告列表'));
-      }
+      if (!current() || serial != _loadSerial) return false;
+      _page = page;
+      _items = page.items;
+      _failedLoad = null;
+      return true;
+    } catch (error) {
+      if (!current() || serial != _loadSerial) return false;
+      _error = error;
+      _failedLoad = () async {
+        await _load(
+          origin: origin,
+          mutationOrigin: mutationOrigin,
+          offset: nextOffset,
+          query: nextQuery,
+          status: nextStatus,
+          level: nextLevel,
+          sort: nextSort,
+          pageSize: nextPageSize,
+        );
+      };
+      return false;
+    } finally {
+      if (mounted && serial == _loadSerial) setState(() => _loading = false);
     }
-    if (mounted && loadSerial == _loadSerial) setState(() => _loading = false);
   }
 
-  void _applySearch() {
-    _load(query: _searchCtrl.text.trim(), offset: 0);
+  void _showSnack(_AnnouncementAction origin, String Function(AppLocale) copy) {
+    if (!_isCurrent(origin)) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: _AdminFeedbackText(copy)));
   }
 
-  Future<void> _openEdit({Map<String, dynamic>? item}) async {
+  bool _closeDialog(
+    BuildContext ctx,
+    ModalRoute<dynamic> route,
+    _AnnouncementAction origin,
+    bool confirmed,
+  ) {
+    if (!ctx.mounted ||
+        !route.isActive ||
+        !route.isCurrent ||
+        (confirmed && !_isCurrent(origin, checkRoute: false))) {
+      return false;
+    }
+    Navigator.of(ctx).pop(confirmed);
+    return true;
+  }
+
+  Future<void> _refreshAfterMutation(
+    _AnnouncementAction origin,
+    String Function(AppLocale) success, {
+    int? offset,
+  }) async {
+    if (!_isCurrent(origin)) return;
+    final reloaded = await _load(
+      origin: _capture(),
+      mutationOrigin: origin,
+      offset: offset ?? _offset,
+    );
+    _showSnack(
+      origin,
+      (locale) => reloaded
+          ? success(locale)
+          : AdminAnnouncementUiCopy.refreshFailed(success(locale), locale),
+    );
+  }
+
+  Future<void> _openEdit(
+    _AnnouncementAction origin, {
+    Map<String, dynamic>? item,
+  }) async {
+    if (_mutationPending || !_isCurrent(origin)) return;
+    setState(() => _mutationPending = true);
     final titleCtrl = TextEditingController(
       text: (item?['title'] ?? '').toString(),
     );
     final bodyCtrl = TextEditingController(
       text: (item?['body'] ?? '').toString(),
     );
-    String level = (item?['level'] ?? 'info').toString();
-    bool published =
-        (item?['published'] ?? 1) == 1 || item?['published'] == true;
-
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: Text(item == null ? '新增公告' : '编辑公告'),
-          icon: const Icon(Icons.campaign_outlined),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleCtrl,
-                  decoration: const InputDecoration(labelText: '标题'),
+    var level = (item?['level'] ?? 'info').toString();
+    var published =
+        item == null || item['published'] == 1 || item['published'] == true;
+    var showErrors = false;
+    DialogRoute<bool>? dialogRoute;
+    Route<dynamic>? levelMenuRoute;
+    var pushed = false;
+    bool canEdit() =>
+        _isCurrent(origin, checkRoute: false) &&
+        dialogRoute?.isActive == true &&
+        dialogRoute?.isCurrent == true;
+    bool canSelectLevel() =>
+        _isCurrent(origin, checkRoute: false) &&
+        dialogRoute?.isActive == true &&
+        ((levelMenuRoute?.isActive == true &&
+                levelMenuRoute?.isCurrent == true) ||
+            dialogRoute?.isCurrent == true);
+    try {
+      dialogRoute = DialogRoute<bool>(
+        context: context,
+        builder: (ctx) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => StatefulBuilder(
+            builder: (ctx, setSt) => AppDialog(
+              title: Text(
+                item == null
+                    ? AdminAnnouncementUiCopy.newTitleFor(locale)
+                    : AdminAnnouncementUiCopy.editTitleFor(locale),
+              ),
+              icon: _dialogIcon(ctx, Icons.campaign_outlined),
+              content: _adminDialogForm(
+                maxWidth: 430,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: AdminAnnouncementUiCopy.titleLabelFor(locale),
+                      errorText: showErrors && titleCtrl.text.trim().isEmpty
+                          ? AdminAnnouncementUiCopy.titleRequiredFor(locale)
+                          : null,
+                      errorMaxLines: 3,
+                    ),
+                    onChanged: (_) {
+                      if (showErrors && canEdit()) {
+                        setSt(() {});
+                      }
+                    },
+                  ),
+                  TextField(
+                    controller: bodyCtrl,
+                    minLines: 3,
+                    maxLines: 6,
+                    decoration: InputDecoration(
+                      labelText: AdminAnnouncementUiCopy.bodyLabelFor(locale),
+                      errorText: showErrors && bodyCtrl.text.trim().isEmpty
+                          ? AdminAnnouncementUiCopy.bodyRequiredFor(locale)
+                          : null,
+                      errorMaxLines: 3,
+                    ),
+                    onChanged: (_) {
+                      if (showErrors && canEdit()) {
+                        setSt(() {});
+                      }
+                    },
+                  ),
+                  AppDropdownField<String>(
+                    initialValue: level,
+                    isInteractionAllowed: canEdit,
+                    isSelectionAllowed: canSelectLevel,
+                    onMenuRouteCreated: (route) {
+                      if (_isCurrent(origin, checkRoute: false) &&
+                          dialogRoute?.isActive == true) {
+                        levelMenuRoute = route;
+                      }
+                    },
+                    labelText: AdminAnnouncementUiCopy.levelLabelFor(locale),
+                    items: [
+                      for (final value in {
+                        'info',
+                        'warning',
+                        'critical',
+                        level,
+                      })
+                        DropdownMenuItem(
+                          value: value,
+                          child: _AdminFeedbackText(
+                            (locale) => AdminAnnouncementUiCopy.levelLabel(
+                              value,
+                              locale,
+                            ),
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (canEdit() && value != null) {
+                        setSt(() => level = value);
+                      }
+                    },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: published,
+                    title: Text(AdminAnnouncementUiCopy.publishNowFor(locale)),
+                    subtitle: Text(
+                      AdminAnnouncementUiCopy.publishHelperFor(locale),
+                    ),
+                    onChanged: (value) {
+                      if (canEdit()) setSt(() => published = value);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      _closeDialog(ctx, dialogRoute!, origin, false),
+                  child: Text(AdminUiCopy.cancelFor(locale)),
                 ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: bodyCtrl,
-                  maxLines: 6,
-                  decoration: const InputDecoration(labelText: '内容'),
-                ),
-                const SizedBox(height: 8),
-                AppDropdownField<String>(
-                  initialValue: level,
-                  labelText: '级别',
-                  items: const [
-                    DropdownMenuItem(value: 'info', child: Text('普通')),
-                    DropdownMenuItem(value: 'warning', child: Text('警告')),
-                    DropdownMenuItem(value: 'critical', child: Text('紧急')),
-                  ],
-                  onChanged: (v) => setSt(() => level = v ?? 'info'),
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: published,
-                  title: const Text('立即发布'),
-                  onChanged: (v) => setSt(() => published = v),
+                FilledButton(
+                  onPressed: () {
+                    if (!canEdit()) return;
+                    if (titleCtrl.text.trim().isEmpty ||
+                        bodyCtrl.text.trim().isEmpty) {
+                      setSt(() => showErrors = true);
+                      return;
+                    }
+                    _closeDialog(ctx, dialogRoute!, origin, true);
+                  },
+                  child: Text(AdminUiCopy.saveFor(locale)),
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('保存'),
-            ),
-          ],
         ),
-      ),
-    );
-    if (saved != true) return;
-    try {
+      );
+      final result = Navigator.of(context).push(dialogRoute);
+      pushed = true;
+      final saved = await result;
+      await dialogRoute.completed;
+      if (saved != true || !_isCurrent(origin)) return;
+      bool current() => _isCurrent(origin);
+      final api = AdminApi(origin.client);
       if (item == null) {
-        await widget.api.createAnnouncement(
+        await api.createAnnouncement(
           title: titleCtrl.text.trim(),
           body: bodyCtrl.text.trim(),
           level: level,
           published: published,
+          isCurrent: current,
         );
       } else {
-        await widget.api.updateAnnouncement(
+        await api.updateAnnouncement(
           (item['id'] as num).toInt(),
           title: titleCtrl.text.trim(),
           body: bodyCtrl.text.trim(),
           level: level,
           published: published,
+          isCurrent: current,
         );
       }
-      if (!mounted) return;
-      await _load();
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _adminActionErrorMessage(e, item == null ? '发布公告' : '更新公告'),
-            ),
-          ),
-        );
-      }
+      await _refreshAfterMutation(origin, AdminAnnouncementUiCopy.savedFor);
+    } catch (error) {
+      _showSnack(
+        origin,
+        (locale) => _adminActionErrorMessage(
+          error,
+          AdminAnnouncementUiCopy.saveActionFor(locale),
+          locale,
+        ),
+      );
+    } finally {
+      if (pushed) await dialogRoute!.completed;
+      titleCtrl.dispose();
+      bodyCtrl.dispose();
+      if (mounted) setState(() => _mutationPending = false);
     }
+  }
+
+  Future<void> _toggle(
+    _AnnouncementAction origin,
+    Map<String, dynamic> item,
+  ) async {
+    if (_mutationPending || !_isCurrent(origin)) return;
+    setState(() => _mutationPending = true);
+    final published = item['published'] == 1 || item['published'] == true;
+    try {
+      await AdminApi(origin.client).updateAnnouncement(
+        (item['id'] as num).toInt(),
+        published: !published,
+        isCurrent: () => _isCurrent(origin),
+      );
+      await _refreshAfterMutation(
+        origin,
+        published
+            ? AdminAnnouncementUiCopy.unpublishedSuccessFor
+            : AdminAnnouncementUiCopy.publishedSuccessFor,
+      );
+    } catch (error) {
+      _showSnack(
+        origin,
+        (locale) => _adminActionErrorMessage(
+          error,
+          published
+              ? AdminAnnouncementUiCopy.unpublishActionFor(locale)
+              : AdminAnnouncementUiCopy.publishActionFor(locale),
+          locale,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _mutationPending = false);
+    }
+  }
+
+  Future<void> _delete(
+    _AnnouncementAction origin,
+    Map<String, dynamic> item,
+  ) async {
+    if (_mutationPending || !_isCurrent(origin)) return;
+    setState(() => _mutationPending = true);
+    DialogRoute<bool>? dialogRoute;
+    var pushed = false;
+    try {
+      final title = (item['title'] ?? '').toString();
+      dialogRoute = DialogRoute<bool>(
+        context: context,
+        builder: (ctx) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => AppDialog(
+            title: Text(AdminAnnouncementUiCopy.deleteTitleFor(locale)),
+            icon: _dialogIcon(ctx, Icons.delete_outline),
+            content: Text(AdminAnnouncementUiCopy.deleteBody(title, locale)),
+            actions: [
+              TextButton(
+                onPressed: () => _closeDialog(ctx, dialogRoute!, origin, false),
+                child: Text(AdminUiCopy.cancelFor(locale)),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.error,
+                  foregroundColor: Theme.of(ctx).colorScheme.onError,
+                ),
+                onPressed: () => _closeDialog(ctx, dialogRoute!, origin, true),
+                child: Text(AdminUiCopy.deleteFor(locale)),
+              ),
+            ],
+          ),
+        ),
+      );
+      final result = Navigator.of(context).push(dialogRoute);
+      pushed = true;
+      final confirmed = await result;
+      await dialogRoute.completed;
+      if (confirmed != true || !_isCurrent(origin)) return;
+      await AdminApi(origin.client).deleteAnnouncement(
+        (item['id'] as num).toInt(),
+        isCurrent: () => _isCurrent(origin),
+      );
+      await _refreshAfterMutation(
+        origin,
+        AdminAnnouncementUiCopy.deletedFor,
+        offset: _offsetAfterAdminDelete(
+          offset: _offset,
+          itemCount: _items.length,
+          pageSize: _pageSize,
+        ),
+      );
+    } catch (error) {
+      _showSnack(
+        origin,
+        (locale) => _adminActionErrorMessage(
+          error,
+          AdminAnnouncementUiCopy.deleteActionFor(locale),
+          locale,
+        ),
+      );
+    } finally {
+      if (pushed) await dialogRoute!.completed;
+      if (mounted) setState(() => _mutationPending = false);
+    }
+  }
+
+  Widget? _dialogIcon(BuildContext context, IconData icon) {
+    final media = MediaQuery.of(context);
+    // Give large-text titles the full row on narrow screens.
+    if (media.size.width < 360 && media.textScaler.scale(16) >= 30) {
+      return null;
+    }
+    return Icon(icon);
   }
 
   @override
   Widget build(BuildContext context) {
+    final origin = _capture();
+    final authorityRevision = _actionHost.revision;
+    final viewRevision = widget.activationRevision.value;
+    bool canSelectSort() =>
+        _isCurrent(origin, checkRoute: false) &&
+        ((_sortMenuRoute?.isActive == true &&
+                _sortMenuRoute?.isCurrent == true &&
+                _sortMenuAuthorityRevision == authorityRevision &&
+                _sortMenuViewRevision == viewRevision &&
+                _actionHost.revision == authorityRevision &&
+                widget.activationRevision.value == viewRevision) ||
+            _isCurrent(origin));
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final loadingFirstPage = _loading && _page == null;
+    final failedLoad = _failedLoad;
+    Future<void> retry() async {
+      if (!_isCurrent(origin)) return;
+      if (failedLoad != null) {
+        await failedLoad();
+      } else {
+        await _load(origin: origin);
+      }
+    }
+
+    final error = _error == null
+        ? null
+        : _adminErrorMessage(_error!, AdminAnnouncementUiCopy.listTargetFor());
     return Column(
       children: [
-        AppSectionHeader(
-          title: '公告列表',
-          subtitle: _adminPageSummary(_page),
-          actionLabel: '刷新',
-          actionIcon: Icons.refresh,
-          onAction: _loading ? null : () => _load(offset: _offset),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              onPressed: () => _openEdit(),
-              icon: const Icon(Icons.add),
-              label: const Text('发布公告'),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: TextField(
-            controller: _searchCtrl,
-            decoration: InputDecoration(
-              hintText: '搜索公告标题或正文',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _query.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: '清空公告搜索',
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        _load(query: '', offset: 0);
-                      },
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              await _load(origin: origin);
+            },
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              children: [
+                Text(
+                  AdminAnnouncementUiCopy.listTitleFor(),
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _adminPageSummary(_page),
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _mutationPending
+                          ? null
+                          : () => _openEdit(origin),
+                      icon: const Icon(Icons.add),
+                      label: Text(AdminAnnouncementUiCopy.newTitleFor()),
                     ),
-              isDense: true,
-            ),
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _applySearch(),
-          ),
-        ),
-        _AdminChipWrap(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-          children: [
-            _announcementStatusChip('全部状态', ''),
-            _announcementStatusChip('已发布', 'published'),
-            _announcementStatusChip('草稿', 'draft'),
-          ],
-        ),
-        _AdminChipWrap(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          children: [
-            _announcementLevelChip('全部级别', ''),
-            _announcementLevelChip('普通', 'info'),
-            _announcementLevelChip('重要', 'warning'),
-            _announcementLevelChip('紧急', 'critical'),
-          ],
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: AppDropdownField<String>(
-            initialValue: _sort,
-            labelText: '公告排序',
-            items: [
-              DropdownMenuItem(
-                value: 'created_desc',
-                child: Text(_adminAnnouncementSortLabel('created_desc')),
-              ),
-              DropdownMenuItem(
-                value: 'updated_desc',
-                child: Text(_adminAnnouncementSortLabel('updated_desc')),
-              ),
-              DropdownMenuItem(
-                value: 'level_desc',
-                child: Text(_adminAnnouncementSortLabel('level_desc')),
-              ),
-              DropdownMenuItem(
-                value: 'title_asc',
-                child: Text(_adminAnnouncementSortLabel('title_asc')),
-              ),
-            ],
-            onChanged: (value) =>
-                _load(sort: value ?? 'created_desc', offset: 0),
-          ),
-        ),
-        _AdminInlineLoadingIndicator(
-          visible: _loading && _page != null,
-          label: '正在更新公告列表',
-        ),
-        if (loadingFirstPage)
-          const Expanded(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text('正在加载公告列表…'),
-                ],
-              ),
-            ),
-          )
-        else if (_error != null)
-          Expanded(
-            child: _AdminErrorState(
-              message: _error!,
-              onRetry: () => _load(offset: _offset),
-            ),
-          )
-        else if (_items.isEmpty)
-          Expanded(
-            child: EmptyState(
-              icon: Icons.campaign_outlined,
-              message: _query.isEmpty && _status.isEmpty && _level.isEmpty
-                  ? '暂无公告，点击“发布公告”创建'
-                  : '没有匹配的公告，请调整筛选条件',
-            ),
-          )
-        else
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => _load(offset: _offset),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: _items.length,
-                itemBuilder: (_, i) {
-                  final a = _items[i];
-                  final published =
-                      a['published'] == 1 || a['published'] == true;
-                  final level = (a['level'] ?? 'info').toString();
-                  final levelColor = switch (level) {
-                    'critical' => cs.error,
-                    'warning' => Colors.orange,
-                    _ => cs.primary,
-                  };
-                  return _AdminListTileCard(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    isThreeLine: true,
-                    title: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            (a['title'] ?? '').toString(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.normal,
-                              color: cs.onSurface,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        AppStatusBadge(
-                          label: _adminStatusLabel(level),
-                          color: levelColor,
-                        ),
-                        if (!published) ...[
-                          const SizedBox(width: 6),
-                          AppStatusBadge(
-                            label: '草稿',
-                            color: cs.onSurface.withValues(alpha: 0.58),
-                          ),
-                        ],
-                      ],
+                    TextButton.icon(
+                      onPressed: _loading ? null : () => _load(origin: origin),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(AdminUiCopy.refreshFor()),
                     ),
-                    subtitle: Text(
-                      '创建: ${a['created_at']}${a['updated_at'] != null ? ' · 更新: ${a['updated_at']}' : ''}\n${(a['body'] ?? '').toString()}',
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.64),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: AdminAnnouncementUiCopy.searchHintFor(),
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: AdminAnnouncementUiCopy.clearSearchFor(),
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              if (!_isCurrent(origin)) return;
+                              _searchCtrl.clear();
+                              _load(origin: origin, query: '', offset: 0);
+                            },
+                          ),
+                    isDense: true,
+                  ),
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) {
+                    if (_isCurrent(origin)) {
+                      _load(
+                        origin: origin,
+                        query: _searchCtrl.text.trim(),
+                        offset: 0,
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final value in ['', 'published', 'draft'])
+                      ChoiceChip(
+                        label: Text(switch (value) {
+                          'published' => AdminAnnouncementUiCopy.publishedFor(),
+                          'draft' => AdminAnnouncementUiCopy.draftFor(),
+                          _ => AdminAnnouncementUiCopy.allStatusesFor(),
+                        }),
+                        selected: _status == value,
+                        onSelected: (_) =>
+                            _load(origin: origin, status: value, offset: 0),
                       ),
-                    ),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (action) async {
-                        switch (action) {
-                          case 'edit':
-                            await _openEdit(item: a);
-                            return;
-                          case 'toggle':
-                            await widget.api.updateAnnouncement(
-                              (a['id'] as num).toInt(),
-                              published: !published,
-                            );
-                            await _load(offset: _offset);
-                            return;
-                          case 'delete':
-                            final confirmed = await _confirmAdminDangerAction(
-                              context: context,
-                              title: '删除公告？',
-                              message:
-                                  '将删除“${(a['title'] ?? '').toString()}”，已发布用户也将不再看到这条公告。',
-                            );
-                            if (!confirmed) return;
-                            await widget.api.deleteAnnouncement(
-                              (a['id'] as num).toInt(),
-                            );
-                            await _load(
-                              offset: _offsetAfterAdminDelete(
-                                offset: _offset,
-                                itemCount: _items.length,
-                                pageSize: _pageSize,
-                              ),
-                            );
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('公告已删除')),
-                            );
-                            return;
-                        }
-                      },
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: AppSecondaryMenuText('编辑'),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final value in ['', 'info', 'warning', 'critical'])
+                      ChoiceChip(
+                        label: Text(
+                          value.isEmpty
+                              ? AdminAnnouncementUiCopy.allLevelsFor()
+                              : AdminAnnouncementUiCopy.levelLabel(value),
                         ),
-                        PopupMenuItem(
-                          value: 'toggle',
-                          child: AppSecondaryMenuText(published ? '下架' : '发布'),
+                        selected: _level == value,
+                        onSelected: (_) =>
+                            _load(origin: origin, level: value, offset: 0),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                AppDropdownField<String>(
+                  key: ValueKey((
+                    'admin-announcements-sort',
+                    _authorityRevision,
+                  )),
+                  initialValue: _sort,
+                  isInteractionAllowed: () => _isCurrent(origin),
+                  isSelectionAllowed: canSelectSort,
+                  onMenuRouteCreated: (route) {
+                    if (!_isCurrent(origin, checkRoute: false)) return;
+                    _sortMenuRoute = route;
+                    _sortMenuAuthorityRevision = authorityRevision;
+                    _sortMenuViewRevision = viewRevision;
+                  },
+                  labelText: AdminAnnouncementUiCopy.sortTitleFor(),
+                  items: [
+                    for (final value in [
+                      'created_desc',
+                      'updated_desc',
+                      'level_desc',
+                      'title_asc',
+                    ])
+                      DropdownMenuItem(
+                        value: value,
+                        child: _AdminFeedbackText(
+                          (locale) =>
+                              _adminAnnouncementSortLabel(value, locale),
                         ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: AppSecondaryMenuText('删除'),
-                        ),
+                      ),
+                  ],
+                  onChanged: (value) => _load(
+                    origin: origin,
+                    sort: value ?? 'created_desc',
+                    offset: 0,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _AdminInlineLoadingIndicator(
+                  visible: _loading && _page != null,
+                  label: AdminAnnouncementUiCopy.updatingFor(),
+                ),
+                if (_loading && _page == null)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 12),
+                        Text(AdminAnnouncementUiCopy.loadingFor()),
                       ],
                     ),
-                  );
-                },
-              ),
+                  )
+                else if (error != null)
+                  _AdminErrorState(message: error, onRetry: retry)
+                else if (_items.isEmpty)
+                  EmptyState(
+                    icon: Icons.campaign_outlined,
+                    message: _query.isEmpty && _status.isEmpty && _level.isEmpty
+                        ? AdminAnnouncementUiCopy.emptyFor()
+                        : AdminAnnouncementUiCopy.noMatchesFor(),
+                  )
+                else
+                  for (final item in _items)
+                    _announcementCard(context, origin, item),
+              ],
             ),
           ),
+        ),
         _AdminPaginationBar(
+          barKey: const ValueKey('admin_announcements_pagination_bar'),
           page: _page,
           loading: _loading,
           pageSize: _pageSize,
-          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
-          onPrevious: () =>
-              _load(offset: _previousAdminOffset(_offset, _pageSize)),
-          onNext: () => _load(offset: _offset + _pageSize),
-          onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
+          onPageSizeChanged: (value) =>
+              _load(origin: origin, pageSize: value, offset: 0),
+          onPrevious: () => _load(
+            origin: origin,
+            offset: _previousAdminOffset(_offset, _pageSize),
+          ),
+          onNext: () => _load(origin: origin, offset: _offset + _pageSize),
+          onJumpToPage: (page) =>
+              _load(origin: origin, offset: (page - 1) * _pageSize),
         ),
       ],
     );
   }
 
-  Widget _announcementStatusChip(String label, String value) {
-    final selected = _status == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => _load(status: value, offset: 0),
-      ),
-    );
-  }
+  Widget _announcementCard(
+    BuildContext context,
+    _AnnouncementAction origin,
+    Map<String, dynamic> item,
+  ) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final published = item['published'] == 1 || item['published'] == true;
+    final level = (item['level'] ?? 'info').toString();
+    final levelColor = switch (level) {
+      'critical' => cs.error,
+      'warning' => Colors.orange,
+      _ => cs.primary,
+    };
+    String timestamp(Object? value) {
+      final text = (value ?? '').toString();
+      final date = DateTime.tryParse(text);
+      return date == null ? text : I18nDateFormat.shortDateTime(date);
+    }
 
-  Widget _announcementLevelChip(String label, String value) {
-    final selected = _level == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => _load(level: value, offset: 0),
+    return AppSurfaceCard(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      border: _adminSubtleListBorder(context),
+      elevation: 0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  (item['title'] ?? '').toString(),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.normal,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ),
+              PopupMenuButton<String>(
+                enabled: !_mutationPending,
+                tooltip: AdminAnnouncementUiCopy.menuTooltipFor(),
+                onSelected: (action) async {
+                  if (!_isCurrent(origin)) return;
+                  switch (action) {
+                    case 'edit':
+                      await _openEdit(origin, item: item);
+                      return;
+                    case 'toggle':
+                      await _toggle(origin, item);
+                      return;
+                    case 'delete':
+                      await _delete(origin, item);
+                      return;
+                  }
+                },
+                itemBuilder: (_) => [
+                  for (final action in ['edit', 'toggle', 'delete'])
+                    PopupMenuItem(
+                      value: action,
+                      child: ValueListenableBuilder<AppLocale>(
+                        valueListenable: I18n.localeListenable,
+                        builder: (_, locale, _) => AppSecondaryMenuText(
+                          switch (action) {
+                            'edit' => AdminAnnouncementUiCopy.editFor(locale),
+                            'toggle' =>
+                              published
+                                  ? AdminAnnouncementUiCopy.unpublishFor(locale)
+                                  : AdminAnnouncementUiCopy.publishFor(locale),
+                            _ => AdminUiCopy.deleteFor(locale),
+                          },
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              AppStatusBadge(
+                label: AdminAnnouncementUiCopy.levelLabel(level),
+                color: levelColor,
+              ),
+              AppStatusBadge(
+                label: published
+                    ? AdminAnnouncementUiCopy.publishedFor()
+                    : AdminAnnouncementUiCopy.draftFor(),
+                color: published ? cs.primary : cs.onSurfaceVariant,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            (item['body'] ?? '').toString(),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            AdminAnnouncementUiCopy.createdAt(timestamp(item['created_at'])),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          if (item['updated_at'] != null)
+            Text(
+              AdminAnnouncementUiCopy.updatedAt(timestamp(item['updated_at'])),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -8184,337 +9857,864 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
 // 反馈
 // ====================================================================
 
+class _FeedbackAction {
+  _FeedbackAction(this.authority, this.view, this.foreground)
+    : _viewRevision = view.value,
+      _foregroundRevision = foreground();
+  final AdminActionOrigin authority;
+  final ValueListenable<int> view;
+  final int _viewRevision;
+  final int Function() foreground;
+  final int _foregroundRevision;
+  ApiClient get client => authority.client;
+  bool isCurrent({bool checkRoute = true}) =>
+      view.value == _viewRevision &&
+      foreground() == _foregroundRevision &&
+      authority.isCurrent(checkRoute: checkRoute);
+}
+
+class _FeedbackOperation {
+  _FeedbackOperation(this.origin);
+  final _FeedbackAction origin;
+  DialogRoute<dynamic>? dialog;
+  DialogRoute<dynamic>? selector;
+}
+
+class _FeedbackModalGuard extends StatefulWidget {
+  const _FeedbackModalGuard({required this.onCovered, required this.child});
+  final VoidCallback onCovered;
+  final Widget child;
+  @override
+  State<_FeedbackModalGuard> createState() => _FeedbackModalGuardState();
+}
+
+class _FeedbackModalGuardState extends State<_FeedbackModalGuard> {
+  bool? _wasCurrent;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    final current = route?.isCurrent ?? true;
+    if (_wasCurrent == true && !current && route?.isActive == true) {
+      widget.onCovered();
+    }
+    _wasCurrent = current;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class _FeedbackTab extends StatefulWidget {
   final AdminApi api;
-  const _FeedbackTab({super.key, required this.api});
+  final AdminFeedbackExportEffects exportEffects;
+  final bool Function() isActiveNow;
+  final ValueListenable<int> activationRevision;
+
+  const _FeedbackTab({
+    super.key,
+    required this.api,
+    required this.exportEffects,
+    required this.isActiveNow,
+    required this.activationRevision,
+  });
+
   @override
   State<_FeedbackTab> createState() => _FeedbackTabState();
 }
 
 class _FeedbackTabState extends State<_FeedbackTab> {
+  final _actionHost = AdminActionHost();
+  final _searchCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _items = [];
   AdminPage? _page;
-  bool _loading = true;
-  bool _exporting = false;
-  String? _error;
+  Object? _error;
+  Future<void> Function()? _failedLoad;
+  bool _loading = false;
+  bool _readNeedsReload = false;
+  bool _loadScheduled = false;
+  bool _rebuildScheduled = false;
+  bool? _wasForeground;
+  int _foregroundRevision = 0;
+  _FeedbackOperation? _operation;
+  AppAccessRouteGate? _routeEvents;
+  ModalRoute<dynamic>? _pageRoute;
+  Route<dynamic>? _lastTopRoute;
   String _filter = '';
   String _categoryFilter = '';
+  final _uiRevision = ValueNotifier<int>(0);
   String _query = '';
   String _sort = 'created_desc';
   int _pageSize = _adminPageSize;
   int _offset = 0;
   int _loadSerial = 0;
-  final _searchCtrl = TextEditingController();
+  int? _authorityRevision;
+  int? _viewRevision;
+
+  bool get _readBusy => _loading || _readNeedsReload;
+  bool get _isActive => widget.isActiveNow();
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _viewRevision = widget.activationRevision.value;
+    widget.activationRevision.addListener(_onViewEvent);
+  }
+
+  // A tab can leave and return before TabBarView updates this child. Suspend
+  // its read immediately and arrange recovery from a fresh receipt next frame.
+  void _onViewEvent() {
+    if (!mounted) return;
+    final revision = widget.activationRevision.value;
+    if (_viewRevision == revision) return;
+    _viewRevision = revision;
+    _invalidate();
+    _scheduleRebuild();
+    _deferLoad();
+  }
+
+  void _bindRouteEvents() {
+    _pageRoute = ModalRoute.of(context);
+    final observers = Navigator.of(context).widget.observers;
+    AppAccessRouteGate? source;
+    for (final observer in observers) {
+      if (observer is AppAccessRouteGate) {
+        source = observer;
+        break;
+      }
+    }
+    if (identical(source, _routeEvents)) return;
+    _routeEvents?.routeRevision.removeListener(_onRouteEvent);
+    _routeEvents = source;
+    _lastTopRoute = source?.currentRoute;
+    source?.routeRevision.addListener(_onRouteEvent);
+  }
+
+  void _onRouteEvent() {
+    if (!mounted) return;
+    final top = _routeEvents?.currentRoute;
+    if (identical(top, _lastTopRoute)) return;
+    _lastTopRoute = top;
+    final foreground = identical(top, _pageRoute);
+    _wasForeground = foreground;
+    if (!foreground) {
+      if (_operation != null &&
+          (top != null &&
+              (identical(top, _operation!.dialog) ||
+                  identical(top, _operation!.selector)))) {
+        final needsReload = _loading || _readNeedsReload;
+        _loadSerial++;
+        _loading = false;
+        _readNeedsReload = needsReload;
+      } else {
+        _foregroundRevision++;
+        _invalidate();
+      }
+      _scheduleRebuild();
+    } else if (_readNeedsReload) {
+      _deferLoad();
+    }
+  }
+
+  _FeedbackAction _capture() {
+    _syncAuthority();
+    return _FeedbackAction(
+      _actionHost.capture(
+        client: widget.api.client,
+        anyOfPermissions: const {'feedback'},
+      ),
+      widget.activationRevision,
+      () => _foregroundRevision,
+    );
+  }
+
+  bool _isCurrent(_FeedbackAction origin, {bool checkRoute = true}) {
+    if (!mounted) return false;
+    _syncAuthority();
+    return _isActive && origin.isCurrent(checkRoute: checkRoute);
+  }
+
+  // A client token/base URL can change without a provider notification. Never
+  // give the previous server's displayed data a receipt for the new authority.
+  void _syncAuthority() {
+    final revision = _actionHost.revision;
+    if (_authorityRevision == revision) return;
+    _authorityRevision = revision;
+    _invalidate(clearPrivateData: true);
+    _deferLoad();
+  }
+
+  void _invalidate({bool clearPrivateData = false}) {
+    _loadSerial++;
+    _loading = false;
+    _readNeedsReload = _isActive;
+    _failedLoad = null;
+    _operation = null;
+    if (!clearPrivateData) return;
+    _items = [];
+    _page = null;
+    _error = null;
+    _filter = '';
+    _categoryFilter = '';
+    _query = '';
+    _sort = 'created_desc';
+    _pageSize = _adminPageSize;
+    _offset = 0;
+    _searchCtrl.clear();
+    _scheduleRebuild();
+  }
+
+  void _scheduleRebuild() {
+    if (!mounted || _rebuildScheduled) return;
+    _rebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _rebuildScheduled = false;
+      if (mounted) {
+        _uiRevision.value++;
+        setState(() {});
+      }
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  // Route dependencies schedule this again when a covering route is removed.
+  // Do not hold a receipt captured while the Admin page is underneath a route.
+  void _deferLoad() {
+    if (!mounted || !_isActive || _loadScheduled || _operation != null) {
+      return;
+    }
+    _loadScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadScheduled = false;
+      if (!mounted ||
+          !_isActive ||
+          !_readNeedsReload ||
+          _loading ||
+          _operation != null) {
+        return;
+      }
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isCurrent) return;
+      final origin = _capture();
+      if (_isCurrent(origin)) {
+        unawaited(_load(origin: origin));
+      }
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _actionHost.bind(context);
+    _bindRouteEvents();
+    _viewRevision ??= widget.activationRevision.value;
+    _syncAuthority();
+    final foreground = ModalRoute.of(context)?.isCurrent ?? true;
+    if (_wasForeground == true && !foreground) {
+      if (_operation == null) {
+        _foregroundRevision++;
+        _invalidate();
+      } else {
+        // Suspend an in-flight read without revoking our own picker. Opening
+        // and canceling a picker on settled data does not issue another GET.
+        final needsReload = _loading || _readNeedsReload;
+        _loadSerial++;
+        _loading = false;
+        _readNeedsReload = needsReload;
+      }
+    }
+    _wasForeground = foreground;
+    if (_readNeedsReload) _deferLoad();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FeedbackTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.activationRevision, widget.activationRevision)) {
+      oldWidget.activationRevision.removeListener(_onViewEvent);
+      widget.activationRevision.addListener(_onViewEvent);
+      _viewRevision = null;
+    }
+    _syncAuthority();
+    final revision = widget.activationRevision.value;
+    // A revision already handled by the synchronous listener must not start
+    // another read when TabBarView eventually updates its cached child.
+    if (_viewRevision == revision) return;
+    _viewRevision = revision;
+    _invalidate();
+    if (_isActive) _deferLoad();
   }
 
   @override
   void dispose() {
+    _loadSerial++;
+    widget.activationRevision.removeListener(_onViewEvent);
+    _operation = null;
+    _uiRevision.dispose();
+    _actionHost.dispose();
+    _routeEvents?.routeRevision.removeListener(_onRouteEvent);
     _searchCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _load({
+  Future<bool> _load({
+    required _FeedbackAction origin,
     int? offset,
+    String? status,
+    String? category,
+    _FeedbackOperation? operation,
     String? query,
     String? sort,
     int? pageSize,
   }) async {
-    if (!mounted) return;
-    final loadSerial = ++_loadSerial;
+    bool valid() =>
+        _isCurrent(origin) &&
+        (operation == null ? _operation == null : _operationCurrent(operation));
+    if (!valid()) return false;
+    final serial = ++_loadSerial;
+    bool current() => serial == _loadSerial && valid();
     final nextOffset = offset ?? _offset;
+    final nextStatus = status ?? _filter;
+    final nextCategory = category ?? _categoryFilter;
     final nextQuery = query ?? _query;
     final nextSort = sort ?? _sort;
     final nextPageSize = pageSize ?? _pageSize;
-    _offset = nextOffset;
-    _query = nextQuery;
-    _sort = nextSort;
-    _pageSize = nextPageSize;
     setState(() {
+      _offset = nextOffset;
+      _filter = nextStatus;
+      _categoryFilter = nextCategory;
+      _query = nextQuery;
+      _sort = nextSort;
+      _pageSize = nextPageSize;
       _loading = true;
+      _readNeedsReload = false;
       _error = null;
     });
+    var settled = false;
     try {
-      final page = await widget.api.listFeedbackPage(
-        status: _filter.isEmpty ? null : _filter,
+      final page = await AdminApi(origin.client).listFeedbackPage(
+        status: nextStatus.isEmpty ? null : nextStatus,
+        category: nextCategory.isEmpty ? null : nextCategory,
         query: nextQuery.isEmpty ? null : nextQuery,
-        category: _categoryFilter.isEmpty ? null : _categoryFilter,
         sort: nextSort,
         limit: nextPageSize,
         offset: nextOffset,
+        isCurrent: current,
       );
-      if (!mounted || loadSerial != _loadSerial) return;
-      if (page.items.isEmpty && page.total > 0 && nextOffset > 0) {
-        final lastOffset = _lastAdminOffset(
-          total: page.total,
+      if (!current()) return false;
+      final lastOffset = _lastAdminOffset(
+        total: page.total,
+        pageSize: nextPageSize,
+      );
+      if (page.items.isEmpty && nextOffset > 0 && lastOffset < nextOffset) {
+        return await _load(
+          origin: origin,
+          offset: lastOffset,
+          status: nextStatus,
+          category: nextCategory,
+          operation: operation,
+          query: nextQuery,
+          sort: nextSort,
           pageSize: nextPageSize,
         );
-        if (lastOffset != nextOffset) {
-          await _load(offset: lastOffset);
-          return;
-        }
       }
       setState(() {
         _page = page;
         _items = page.items;
+        _failedLoad = null;
       });
-    } catch (e) {
-      if (!mounted || loadSerial != _loadSerial) return;
-      if (mounted) {
-        setState(() => _error = _adminErrorMessage(e, '反馈列表'));
-      }
-    }
-    if (mounted && loadSerial == _loadSerial) setState(() => _loading = false);
-  }
-
-  void _applySearch() {
-    _load(query: _searchCtrl.text.trim(), offset: 0);
-  }
-
-  List<int> get _currentPageOpenIds => _items
-      .where((f) => (f['status'] ?? 'open').toString() == 'open')
-      .map((f) => (f['id'] as num).toInt())
-      .toList();
-
-  List<int> _currentPageIdsWithStatus(String status) => _items
-      .where((f) => (f['status'] ?? 'open').toString() == status)
-      .map((f) => (f['id'] as num).toInt())
-      .toList();
-
-  Map<String, int> get _currentPageStatusCounts {
-    final counts = <String, int>{
-      'open': 0,
-      'in_progress': 0,
-      'resolved': 0,
-      'closed': 0,
-    };
-    for (final f in _items) {
-      final status = (f['status'] ?? 'open').toString();
-      counts[status] = (counts[status] ?? 0) + 1;
-    }
-    return counts;
-  }
-
-  Future<void> _markCurrentPageOpenInProgress() async {
-    await _bulkUpdateCurrentPageStatus(
-      fromStatus: 'open',
-      toStatus: 'in_progress',
-      reply: '已收到，进入处理中。',
-      successMessage: '已将当前页 {count} 条待处理反馈标记为处理中',
-    );
-  }
-
-  Future<void> _bulkUpdateCurrentPageStatus({
-    required String fromStatus,
-    required String toStatus,
-    required String reply,
-    required String successMessage,
-  }) async {
-    final ids = _currentPageIdsWithStatus(fromStatus);
-    if (ids.isEmpty) return;
-    try {
-      await widget.api.bulkUpdateFeedbackStatus(
-        feedbackIds: ids,
-        reply: reply,
-        status: toStatus,
-      );
-      if (!mounted) return;
-      await _load(offset: _offset);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(successMessage.replaceAll('{count}', '${ids.length}')),
-        ),
-      );
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '批量处理反馈'))),
-        );
-      }
-    }
-  }
-
-  Future<void> _exportFilteredCsv() async {
-    setState(() => _exporting = true);
-    try {
-      final csv = await widget.api.exportFeedbackCsv(
-        status: _filter.isEmpty ? null : _filter,
-        query: _query.isEmpty ? null : _query,
-        category: _categoryFilter.isEmpty ? null : _categoryFilter,
-        sort: _sort,
-      );
-      final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/duoyi_feedback_${DateTime.now().millisecondsSinceEpoch}.csv',
-      );
-      await file.writeAsString(csv, flush: true);
-      await Clipboard.setData(ClipboardData(text: file.path));
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          text: '多仪管理员反馈导出',
-          subject: '多仪反馈 CSV',
-        ),
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('反馈 CSV 已导出，路径已复制：${file.path}')));
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '导出反馈 CSV'))),
-        );
-      }
+      settled = true;
+      return true;
+    } catch (error) {
+      if (!current()) return false;
+      setState(() {
+        _error = error;
+        _failedLoad = () async {
+          await _load(
+            origin: origin,
+            offset: nextOffset,
+            status: nextStatus,
+            category: nextCategory,
+            operation: null,
+            query: nextQuery,
+            sort: nextSort,
+            pageSize: nextPageSize,
+          );
+        };
+      });
+      settled = true;
+      return false;
     } finally {
-      if (mounted) setState(() => _exporting = false);
+      if (mounted && serial == _loadSerial) {
+        setState(() {
+          _loading = false;
+          _readNeedsReload = !settled && _isActive;
+        });
+        if (_readNeedsReload) _deferLoad();
+      }
     }
   }
 
-  Future<void> _reply(Map<String, dynamic> f) async {
-    var replyText = (f['admin_reply'] ?? '').toString();
-    String status = (f['status'] ?? 'resolved').toString();
-    final saved = await showDialog<bool>(
+  Widget _selector({
+    Key? key,
+    required String label,
+    required String value,
+    VoidCallback? onTap,
+  }) => InkWell(
+    key: key,
+    borderRadius: BorderRadius.circular(16),
+    onTap: onTap,
+    child: InputDecorator(
+      decoration: InputDecoration(
+        labelText: label,
+        enabled: onTap != null,
+        suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded),
+        isDense: true,
+      ),
+      child: Text(value),
+    ),
+  );
+
+  bool _operationValid(_FeedbackOperation operation) =>
+      identical(_operation, operation) &&
+      _isCurrent(operation.origin, checkRoute: false);
+
+  bool _operationCurrent(_FeedbackOperation operation) {
+    if (!_operationValid(operation)) return false;
+    final route = operation.selector ?? operation.dialog;
+    return route == null
+        ? _isCurrent(operation.origin)
+        : route.isActive && route.isCurrent;
+  }
+
+  bool _modalCanEdit(_FeedbackOperation operation, Route<dynamic> route) =>
+      route.isActive && route.isCurrent && _operationCurrent(operation);
+
+  void _modalCovered(_FeedbackOperation operation, Route<dynamic> route) {
+    if (!mounted || !identical(_operation, operation)) return;
+    if (identical(route, operation.dialog) &&
+        operation.selector?.isCurrent == true) {
+      return;
+    }
+    _foregroundRevision++;
+    _invalidate();
+    _scheduleRebuild();
+  }
+
+  void _cancelDialog(BuildContext ctx, Route<dynamic> route) {
+    if (ctx.mounted && route.isActive && route.isCurrent) {
+      Navigator.of(ctx).pop();
+    }
+  }
+
+  Future<T?> _dialog<T>(
+    _FeedbackOperation operation,
+    Widget Function(BuildContext, DialogRoute<T>) builder, {
+    bool selector = false,
+  }) async {
+    if (!_operationCurrent(operation)) return null;
+    late final DialogRoute<T> route;
+    route = DialogRoute<T>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: const Text('回复反馈'),
-          icon: const Icon(Icons.reply_outlined),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    (f['content'] ?? '').toString(),
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+      builder: (ctx) => AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+        child: MediaQuery.removeViewInsets(
+          context: ctx,
+          removeBottom: true,
+          child: _FeedbackModalGuard(
+            onCovered: () => _modalCovered(operation, route),
+            child: ValueListenableBuilder<int>(
+              valueListenable: _uiRevision,
+              builder: (ctx, _, _) => ValueListenableBuilder<int>(
+                valueListenable: widget.activationRevision,
+                builder: (ctx, _, _) => ValueListenableBuilder<AppLocale>(
+                  valueListenable: I18n.localeListenable,
+                  builder: (ctx, _, _) {
+                    ModalRoute.isCurrentOf(ctx);
+                    ctx.watch<AuthProvider?>();
+                    ctx.watch<AppLockProvider?>();
+                    ctx.watch<AppUpdateService?>();
+                    if (!_operationValid(operation)) {
+                      return AppDialog(
+                        title: Text(AdminFeedbackUiCopy.expiredTitleFor()),
+                        content: Text(AdminFeedbackUiCopy.expiredBodyFor()),
+                        actions: [
+                          TextButton(
+                            onPressed: () => _cancelDialog(ctx, route),
+                            child: Text(AdminUiCopy.closeFor()),
+                          ),
+                        ],
+                      );
+                    }
+                    return builder(ctx, route);
+                  },
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  initialValue: replyText,
-                  maxLines: 4,
-                  decoration: const InputDecoration(labelText: '回复内容'),
-                  onChanged: (value) => replyText = value,
-                ),
-                const SizedBox(height: 8),
-                AppDropdownField<String>(
-                  initialValue: status,
-                  labelText: '处理状态',
-                  items: const [
-                    DropdownMenuItem(value: 'open', child: Text('待处理')),
-                    DropdownMenuItem(value: 'in_progress', child: Text('处理中')),
-                    DropdownMenuItem(value: 'resolved', child: Text('已解决')),
-                    DropdownMenuItem(value: 'closed', child: Text('已关闭')),
-                  ],
-                  onChanged: (v) => setSt(() => status = v ?? status),
-                ),
-              ],
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('提交'),
-            ),
-          ],
         ),
       ),
     );
-    if (saved != true) return;
+    if (selector) {
+      operation.selector = route;
+    } else {
+      operation.dialog = route;
+    }
+    var pushed = false;
     try {
-      await widget.api.replyFeedback(
-        feedbackId: (f['id'] as num).toInt(),
-        reply: replyText.trim(),
-        status: status,
-      );
-      if (!mounted) return;
-      await _load(offset: _offset);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('反馈已回复')));
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
+      pushed = true;
+      final result = await Navigator.of(context).push(route);
+      await route.completed;
+      if (selector && identical(operation.selector, route)) {
+        operation.selector = null;
+        if (mounted) _uiRevision.value++;
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '回复反馈'))),
+      if (!selector && identical(operation.dialog, route)) {
+        operation.dialog = null;
+      }
+      return _operationCurrent(operation) ? result : null;
+    } finally {
+      if (pushed) await route.completed;
+      if (identical(operation.selector, route)) operation.selector = null;
+      if (identical(operation.dialog, route)) operation.dialog = null;
+    }
+  }
+
+  Future<void> _withOperation(
+    _FeedbackAction origin,
+    String Function([AppLocale?]) action,
+    Future<void> Function(_FeedbackOperation) body,
+  ) async {
+    if (_readBusy || _operation != null || !_isCurrent(origin)) return;
+    final operation = _FeedbackOperation(origin);
+    setState(() => _operation = operation);
+    try {
+      await body(operation);
+    } on AdminActionExpired {
+      // The original operation has no authority over the current page.
+    } catch (error) {
+      if (_operationCurrent(operation)) {
+        _notice(
+          origin,
+          (locale) => AdminUiCopy.formatActionError(
+            error,
+            action(locale),
+            locale: locale,
+          ),
         );
+      }
+    } finally {
+      if (mounted && identical(_operation, operation)) {
+        setState(() => _operation = null);
+        _deferLoad();
       }
     }
   }
 
-  Future<void> _showFeedbackDetail(Map<String, dynamic> feedback) async {
-    if (!mounted) return;
+  void _notice(_FeedbackAction origin, String Function(AppLocale) text) {
+    if (!_isCurrent(origin)) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: ValueListenableBuilder<int>(
+          valueListenable: _uiRevision,
+          builder: (ctx, _, _) => ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (ctx, locale, _) {
+              ctx.watch<AuthProvider?>();
+              ctx.watch<AppLockProvider?>();
+              ctx.watch<AppUpdateService?>();
+              return _isCurrent(origin)
+                  ? Text(text(locale))
+                  : const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _mutate(
+    _FeedbackOperation operation,
+    Future<void> Function(AdminApi, bool Function()) send,
+    String Function(AppLocale) success, {
+    int? offset,
+  }) async {
+    bool current() => _operationCurrent(operation);
+    if (!current()) return;
+    await send(AdminApi(operation.origin.client), current);
+    if (!current()) return;
+    final refreshed = await _load(
+      origin: operation.origin,
+      operation: operation,
+      offset: offset ?? _offset,
+    );
+    if (!current()) return;
+    _notice(
+      operation.origin,
+      (locale) => refreshed
+          ? success(locale)
+          : AdminFeedbackUiCopy.refreshFailed(success(locale), locale),
+    );
+  }
+
+  Future<T?> _select<T>(
+    _FeedbackOperation operation, {
+    required String Function([AppLocale?]) title,
+    required T selected,
+    required List<T> options,
+    required String Function(T, AppLocale?) label,
+    bool nested = false,
+  }) => _dialog<T>(
+    operation,
+    (ctx, route) => AppDialog(
+      key: const ValueKey('admin_feedback_picker'),
+      title: Text(title()),
+      content: _adminDialogForm(
+        maxWidth: 420,
+        children: [
+          for (final value in options)
+            Semantics(
+              selected: value == selected,
+              button: true,
+              child: ListTile(
+                leading: Icon(
+                  value == selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                ),
+                title: Text(label(value, I18n.current)),
+                onTap: () {
+                  if (_modalCanEdit(operation, route)) {
+                    Navigator.of(ctx).pop(value);
+                  }
+                },
+              ),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => _cancelDialog(ctx, route),
+          child: Text(AdminUiCopy.cancelFor()),
+        ),
+      ],
+    ),
+    selector: nested,
+  );
+
+  Future<void> _pick<T>(
+    _FeedbackAction origin, {
+    required String Function([AppLocale?]) title,
+    required T selected,
+    required List<T> options,
+    required String Function(T, AppLocale?) label,
+    required Future<bool> Function(_FeedbackOperation, T) apply,
+  }) => _withOperation(origin, title, (operation) async {
+    final result = await _select<T>(
+      operation,
+      title: title,
+      selected: selected,
+      options: options,
+      label: label,
+    );
+    if (result != null && _operationCurrent(operation)) {
+      await apply(operation, result);
+    }
+  });
+
+  Future<bool> _confirm(
+    _FeedbackOperation operation, {
+    required String Function([AppLocale?]) title,
+    required String Function(AppLocale) message,
+    required String Function([AppLocale?]) confirm,
+  }) async =>
+      await _dialog<bool>(
+        operation,
+        (ctx, route) => AppDialog(
+          title: Text(title()),
+          content: SingleChildScrollView(child: Text(message(I18n.current))),
+          actions: [
+            TextButton(
+              onPressed: () => _cancelDialog(ctx, route),
+              child: Text(AdminUiCopy.cancelFor()),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (_modalCanEdit(operation, route)) {
+                  Navigator.of(ctx).pop(true);
+                }
+              },
+              child: Text(confirm()),
+            ),
+          ],
+        ),
+      ) ==
+      true;
+
+  Future<void> _reply(_FeedbackAction origin, Map<String, dynamic> item) =>
+      _withOperation(
+        origin,
+        AdminFeedbackUiCopy.replyTitleFor,
+        (operation) => _editReply(operation, Map.of(item)),
+      );
+
+  Future<void> _editReply(
+    _FeedbackOperation operation,
+    Map<String, dynamic> item,
+  ) async {
+    final controller = TextEditingController(
+      text: (item['admin_reply'] ?? '').toString(),
+    );
+    var status = (item['status'] ?? 'resolved').toString();
+    try {
+      final saved = await _dialog<bool>(
+        operation,
+        (ctx, route) => StatefulBuilder(
+          builder: (ctx, setFormState) => AppDialog(
+            key: const ValueKey('admin_feedback_reply_dialog'),
+            title: Text(AdminFeedbackUiCopy.replyTitleFor()),
+            icon: const Icon(Icons.reply_outlined),
+            content: _adminDialogForm(
+              maxWidth: 560,
+              children: [
+                Text(
+                  (item['content'] ?? '').toString(),
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const ValueKey('admin_feedback_reply_field'),
+                  enabled: _modalCanEdit(operation, route),
+                  controller: controller,
+                  maxLines: 4,
+                  maxLength: 2000,
+                  decoration: InputDecoration(
+                    labelText: AdminFeedbackUiCopy.replyFieldFor(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _selector(
+                  key: const ValueKey('admin_feedback_reply_status'),
+
+                  label: AdminFeedbackUiCopy.statusFieldFor(),
+                  value: AdminFeedbackUiCopy.statusLabel(status),
+                  onTap: () async {
+                    if (!_modalCanEdit(operation, route)) return;
+                    final picked = await _select<String>(
+                      operation,
+                      title: AdminFeedbackUiCopy.statusFieldFor,
+                      selected: status,
+                      options: [
+                        if (!const [
+                          'open',
+                          'in_progress',
+                          'resolved',
+                          'closed',
+                        ].contains(status))
+                          status,
+                        'open',
+                        'in_progress',
+                        'resolved',
+                        'closed',
+                      ],
+                      label: AdminFeedbackUiCopy.statusLabel,
+                      nested: true,
+                    );
+                    if (picked != null &&
+                        ctx.mounted &&
+                        _modalCanEdit(operation, route)) {
+                      setFormState(() => status = picked);
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => _cancelDialog(ctx, route),
+                child: Text(AdminUiCopy.cancelFor()),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (_modalCanEdit(operation, route)) {
+                    Navigator.of(ctx).pop(true);
+                  }
+                },
+                child: Text(AdminFeedbackUiCopy.submitFor()),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (saved != true || !_operationCurrent(operation)) return;
+      final id = (item['id'] as num).toInt();
+      final reply = controller.text.trim();
+      final submittedStatus = status;
+      await _mutate(
+        operation,
+        (api, current) => api.replyFeedback(
+          feedbackId: id,
+          reply: reply,
+          status: submittedStatus,
+          isCurrent: current,
+        ),
+        (locale) => AdminFeedbackUiCopy.repliedFor(locale),
+      );
+    } finally {
+      // _dialog has already waited for this exact route's exit animation.
+      controller.dispose();
+    }
+  }
+
+  Future<void> _showFeedbackDetail(
+    _FeedbackAction origin,
+    Map<String, dynamic> feedback,
+  ) => _withOperation(origin, AdminFeedbackUiCopy.detailTitleFor, (
+    operation,
+  ) async {
     final summary = Map<String, dynamic>.from(feedback);
-    final id = (feedback['id'] as num?)?.toInt();
-    final detailFuture = id == null
-        ? Future<Map<String, dynamic>>.value(summary)
-        : widget.api
-              .getFeedbackDetail(id)
-              .then((remote) => <String, dynamic>{...summary, ...remote});
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => FutureBuilder<Map<String, dynamic>>(
+    final id = (summary['id'] as num?)?.toInt();
+    Future<Map<String, dynamic>>? detailFuture;
+    final reply = await _dialog<Map<String, dynamic>>(operation, (ctx, route) {
+      detailFuture ??= id == null
+          ? Future.value(summary)
+          : AdminApi(origin.client)
+                .getFeedbackDetail(
+                  id,
+                  isCurrent: () => _modalCanEdit(operation, route),
+                )
+                .then((remote) => <String, dynamic>{...summary, ...remote});
+      return FutureBuilder<Map<String, dynamic>>(
         future: detailFuture,
         initialData: summary,
         builder: (ctx, snapshot) {
+          if (!_modalCanEdit(operation, route)) return const SizedBox.shrink();
           final detail = snapshot.data ?? summary;
-          final loading = snapshot.connectionState != ConnectionState.done;
-          final loadError = snapshot.hasError
-              ? _adminActionErrorMessage(snapshot.error!, '加载反馈详情')
-              : null;
-          final status = (detail['status'] ?? 'open').toString();
-          final category = (detail['category'] ?? '').toString();
           final username = (detail['username'] ?? '').toString();
           final displayName = (detail['display_name'] ?? '').toString();
           final email = (detail['email'] ?? '').toString();
-          final emailVerified = detail['email_verified'] == true;
-          final userLabel = displayName.trim().isNotEmpty
-              ? displayName.trim()
-              : username;
+          final user = displayName.trim().isNotEmpty ? displayName : username;
           final identity = [
-            if (username.trim().isNotEmpty && username.trim() != userLabel)
-              '@${username.trim()}',
-            if (email.trim().isNotEmpty)
-              '${email.trim()}${emailVerified ? ' (已验证)' : ' (未验证)'}',
+            if (username.isNotEmpty && username != user) '@$username',
+            if (email.isNotEmpty)
+              AdminFeedbackUiCopy.email(
+                email,
+                AdminFeedbackUiCopy.isEmailVerified(detail['email_verified']),
+              ),
           ].join(' · ');
-          final createdAt = (detail['created_at'] ?? '').toString();
-          final updatedAt = (detail['updated_at'] ?? '').toString();
-          final content = (detail['content'] ?? '').toString();
+          final loading = snapshot.connectionState != ConnectionState.done;
           final adminReply = (detail['admin_reply'] ?? '').toString();
           return AppDialog(
+            key: const ValueKey('admin_feedback_detail_dialog'),
             maxWidth: 720,
             icon: const Icon(Icons.feedback_outlined),
-            title: const Text('反馈详情'),
+            title: Text(AdminFeedbackUiCopy.detailTitleFor()),
             content: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 640, maxHeight: 520),
               child: SingleChildScrollView(
@@ -8526,39 +10726,59 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                       const LinearProgressIndicator(minHeight: 2),
                       const SizedBox(height: 12),
                     ],
-                    if (loadError != null) ...[
+                    if (snapshot.hasError) ...[
                       Text(
-                        '详情加载失败，已展示列表摘要：$loadError',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
+                        AdminFeedbackUiCopy.detailFailure(
+                          userVisibleApiError(snapshot.error!),
+                          I18n.current,
+                        ),
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(ctx).colorScheme.error,
                         ),
                       ),
                       const SizedBox(height: 12),
                     ],
-                    _AdminFeedbackDetailField(label: '用户', value: userLabel),
+                    _AdminFeedbackDetailField(
+                      label: AdminFeedbackUiCopy.userFor(),
+                      value: user.isEmpty
+                          ? AdminFeedbackUiCopy.anonymousFor()
+                          : user,
+                    ),
                     if (identity.isNotEmpty)
-                      _AdminFeedbackDetailField(label: '账号', value: identity),
+                      _AdminFeedbackDetailField(
+                        label: AdminFeedbackUiCopy.accountFor(),
+                        value: identity,
+                      ),
                     _AdminFeedbackDetailField(
-                      label: '分类',
-                      value: _feedbackCategoryLabel(category),
+                      label: AdminFeedbackUiCopy.categoryFor(),
+                      value: _feedbackCategoryLabel(
+                        (detail['category'] ?? '').toString(),
+                      ),
                     ),
                     _AdminFeedbackDetailField(
-                      label: '状态',
-                      value: _adminStatusLabel(status),
+                      label: AdminFeedbackUiCopy.statusFor(),
+                      value: AdminFeedbackUiCopy.statusLabel(
+                        (detail['status'] ?? 'open').toString(),
+                      ),
                     ),
-                    if (createdAt.isNotEmpty)
-                      _AdminFeedbackDetailField(label: '提交', value: createdAt),
-                    if (updatedAt.isNotEmpty)
-                      _AdminFeedbackDetailField(label: '更新', value: updatedAt),
-                    const SizedBox(height: 4),
+                    if ((detail['created_at'] ?? '').toString().isNotEmpty)
+                      _AdminFeedbackDetailField(
+                        label: AdminFeedbackUiCopy.createdFor(),
+                        value: detail['created_at'].toString(),
+                      ),
+                    if ((detail['updated_at'] ?? '').toString().isNotEmpty)
+                      _AdminFeedbackDetailField(
+                        label: AdminFeedbackUiCopy.updatedFor(),
+                        value: detail['updated_at'].toString(),
+                      ),
                     _AdminFeedbackDetailField(
-                      label: '内容',
-                      value: content,
+                      label: AdminFeedbackUiCopy.contentFor(),
+                      value: (detail['content'] ?? '').toString(),
                       multiline: true,
                     ),
-                    if (adminReply.trim().isNotEmpty)
+                    if (adminReply.isNotEmpty)
                       _AdminFeedbackDetailField(
-                        label: '管理员回复',
+                        label: AdminFeedbackUiCopy.adminReplyFor(),
                         value: adminReply,
                         multiline: true,
                       ),
@@ -8568,535 +10788,699 @@ class _FeedbackTabState extends State<_FeedbackTab> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('关闭'),
+                onPressed: () => _cancelDialog(ctx, route),
+                child: Text(AdminUiCopy.closeFor()),
               ),
               FilledButton(
                 onPressed: () {
-                  Navigator.pop(ctx);
-                  _reply(detail);
+                  if (_modalCanEdit(operation, route)) {
+                    Navigator.of(ctx).pop(Map<String, dynamic>.from(detail));
+                  }
                 },
-                child: const Text('回复'),
+                child: Text(AdminFeedbackUiCopy.replyFor()),
               ),
             ],
           );
         },
+      );
+    });
+    if (reply != null && _operationCurrent(operation)) {
+      await _editReply(operation, reply);
+    }
+  });
+
+  Future<void> _deleteFeedback(
+    _FeedbackAction origin,
+    Map<String, dynamic> item,
+    String user,
+  ) => _withOperation(origin, AdminUiCopy.deleteFor, (operation) async {
+    final id = (item['id'] as num).toInt();
+    final offset = _offsetAfterAdminDelete(
+      offset: _offset,
+      itemCount: _items.length,
+      pageSize: _pageSize,
+    );
+    if (!await _confirm(
+      operation,
+      title: AdminFeedbackUiCopy.deleteTitleFor,
+      message: (locale) => AdminFeedbackUiCopy.deleteMessage(user, locale),
+      confirm: AdminUiCopy.deleteFor,
+    )) {
+      return;
+    }
+    await _mutate(
+      operation,
+      (api, current) => api.deleteFeedback(id, isCurrent: current),
+      (locale) => AdminFeedbackUiCopy.deletedFor(locale),
+      offset: offset,
+    );
+  });
+
+  Future<void> _closeFeedback(
+    _FeedbackAction origin,
+    Map<String, dynamic> item,
+    String user,
+  ) => _withOperation(origin, AdminUiCopy.closeFor, (operation) async {
+    final id = (item['id'] as num).toInt();
+    final existingReply = (item['admin_reply'] ?? '').toString().trim();
+    final reply = existingReply.isEmpty ? '已关闭。' : existingReply;
+    if (!await _confirm(
+      operation,
+      title: AdminFeedbackUiCopy.closeTitleFor,
+      message: (locale) => AdminFeedbackUiCopy.closeMessage(user, locale),
+      confirm: AdminUiCopy.closeFor,
+    )) {
+      return;
+    }
+    await _mutate(
+      operation,
+      (api, current) => api.closeFeedback(id, reply: reply, isCurrent: current),
+      (locale) => AdminFeedbackUiCopy.closedFor(locale),
+    );
+  });
+
+  List<int> _currentPageIdsWithStatus(String status) => _items
+      .where((item) => (item['status'] ?? 'open').toString() == status)
+      .map((item) => (item['id'] as num).toInt())
+      .toList();
+
+  Map<String, int> get _currentPageStatusCounts {
+    final counts = <String, int>{};
+    for (final item in _items) {
+      final status = (item['status'] ?? 'open').toString();
+      counts[status] = (counts[status] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  Future<void> _bulkUpdateCurrentPageStatus(
+    _FeedbackAction origin, {
+    required List<int> ids,
+    required String toStatus,
+    required String reply,
+  }) => _withOperation(origin, AdminFeedbackUiCopy.bulkTitleFor, (
+    operation,
+  ) async {
+    final submittedIds = List<int>.unmodifiable(ids);
+    if (submittedIds.isEmpty) return;
+    if (submittedIds.length > 100) {
+      _notice(origin, (locale) => AdminFeedbackUiCopy.bulkLimitFor(locale));
+      return;
+    }
+    if (!await _confirm(
+      operation,
+      title: AdminFeedbackUiCopy.bulkTitleFor,
+      message: (locale) => AdminFeedbackUiCopy.bulkMessage(
+        submittedIds.length,
+        toStatus,
+        locale,
+      ),
+      confirm: AdminFeedbackUiCopy.submitFor,
+    )) {
+      return;
+    }
+    await _mutate(
+      operation,
+      (api, current) => api.bulkUpdateFeedbackStatus(
+        feedbackIds: submittedIds,
+        reply: reply,
+        status: toStatus,
+        isCurrent: current,
+      ),
+      (locale) =>
+          AdminFeedbackUiCopy.bulkSaved(submittedIds.length, toStatus, locale),
+    );
+  });
+
+  Future<void> _exportFilteredCsv(_FeedbackAction origin) => _withOperation(
+    origin,
+    AdminFeedbackUiCopy.exportFor,
+    (operation) async {
+      bool current() => _operationCurrent(operation);
+      final effects = widget.exportEffects;
+      final csv = await AdminApi(origin.client).exportFeedbackCsv(
+        status: _filter.isEmpty ? null : _filter,
+        query: _query.isEmpty ? null : _query,
+        category: _categoryFilter.isEmpty ? null : _categoryFilter,
+        sort: _sort,
+        isCurrent: current,
+      );
+      if (!current()) return;
+      final path = await exportAdminFeedbackCsv(
+        csv: csv,
+        isCurrent: current,
+        effects: effects,
+        shareText: AdminFeedbackUiCopy.exportShareTextFor,
+        shareSubject: AdminFeedbackUiCopy.exportSubjectFor,
+      );
+      if (current()) {
+        _notice(origin, (locale) => AdminFeedbackUiCopy.exported(path, locale));
+      }
+    },
+  );
+
+  Widget _pagination(_FeedbackAction origin) {
+    final compact = MediaQuery.sizeOf(context).width < 720;
+    final busy = _readBusy || _operation != null;
+    final totalPages = _adminTotalPages(_page, _pageSize);
+    final currentPage = _page == null || totalPages == 0
+        ? 0
+        : (_page!.offset ~/ (_page!.limit <= 0 ? _pageSize : _page!.limit)) + 1;
+    return Padding(
+      key: const ValueKey('admin_feedback_pagination'),
+      padding: compact
+          ? const EdgeInsets.symmetric(horizontal: 16, vertical: 4)
+          : const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${_adminPageSummary(_page)} · ${_adminPageNumber(_page)}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          SizedBox(height: compact ? 4 : 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              TextButton.icon(
+                onPressed: busy
+                    ? null
+                    : () => _pick<int>(
+                        origin,
+                        title: AdminUiCopy.perPageFor,
+                        selected: _pageSize,
+                        options: _adminPageSizeOptions,
+                        label: (value, _) => '$value',
+                        apply: (op, value) => _load(
+                          origin: op.origin,
+                          operation: op,
+                          pageSize: value,
+                          offset: 0,
+                        ),
+                      ),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                label: Text('${AdminUiCopy.perPageFor()}: $_pageSize'),
+              ),
+              if (!compact && totalPages > 1 && totalPages <= 200)
+                TextButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => _pick<int>(
+                          origin,
+                          title: AdminUiCopy.pageNumberFor,
+                          selected: currentPage,
+                          options: List.generate(totalPages, (i) => i + 1),
+                          label: (value, _) => '$value/$totalPages',
+                          apply: (op, value) => _load(
+                            origin: op.origin,
+                            operation: op,
+                            offset: (value - 1) * _pageSize,
+                          ),
+                        ),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                  label: Text(
+                    '${AdminUiCopy.pageNumberFor()}: $currentPage/$totalPages',
+                  ),
+                ),
+              if (!compact && totalPages > 1)
+                IconButton(
+                  tooltip: AdminUiCopy.jumpToFirstPageFor(),
+                  onPressed: busy || (_page?.offset ?? 0) <= 0
+                      ? null
+                      : () => _load(origin: origin, offset: 0),
+                  icon: const Icon(Icons.first_page),
+                ),
+              IconButton(
+                tooltip: AdminUiCopy.previousPageFor(),
+                onPressed: busy || (_page?.offset ?? 0) <= 0
+                    ? null
+                    : () => _load(
+                        origin: origin,
+                        offset: _previousAdminOffset(_offset, _pageSize),
+                      ),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              IconButton(
+                tooltip: AdminUiCopy.nextPageFor(),
+                onPressed: busy || !(_page?.hasMore ?? false)
+                    ? null
+                    : () => _load(origin: origin, offset: _offset + _pageSize),
+                icon: const Icon(Icons.chevron_right),
+              ),
+              if (!compact && totalPages > 1)
+                IconButton(
+                  tooltip: AdminUiCopy.jumpToLastPageFor(),
+                  onPressed: busy || !(_page?.hasMore ?? false)
+                      ? null
+                      : () => _load(
+                          origin: origin,
+                          offset: _lastAdminOffset(
+                            total: _page!.total,
+                            pageSize: _pageSize,
+                          ),
+                        ),
+                  icon: const Icon(Icons.last_page),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _deleteFeedback(
-    Map<String, dynamic> f,
-    String feedbackUserLabel,
-  ) async {
-    final confirmed = await _confirmAdminDangerAction(
-      context: context,
-      title: '删除反馈？',
-      message: '将删除 $feedbackUserLabel 的这条反馈，删除后无法恢复。',
+  Widget _summary(_FeedbackAction origin) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final transitions = [
+      ('open', 'in_progress', '已收到，进入处理中。'),
+      ('in_progress', 'resolved', '已处理完成。'),
+      ('resolved', 'closed', '已归档关闭。'),
+    ];
+    final counts = _currentPageStatusCounts;
+    final oversized = transitions.any((t) => (counts[t.$1] ?? 0) > 100);
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 8),
+      border: _adminSubtleListBorder(context),
+      elevation: 0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AdminFeedbackUiCopy.summary(_items.length, counts),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.normal,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            AdminFeedbackUiCopy.summaryHint(
+              _page?.total ?? _items.length,
+              _sort,
+            ),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          if (oversized)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                AdminFeedbackUiCopy.bulkLimitFor(),
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              IconButton(
+                tooltip: AdminFeedbackUiCopy.exportFor(),
+                onPressed: _readBusy || _operation != null
+                    ? null
+                    : () => _exportFilteredCsv(origin),
+                icon: const Icon(Icons.download_outlined),
+              ),
+              for (final t in transitions)
+                if ((counts[t.$1] ?? 0) > 0)
+                  TextButton.icon(
+                    onPressed:
+                        _readBusy ||
+                            _operation != null ||
+                            (counts[t.$1] ?? 0) > 100
+                        ? null
+                        : () => _bulkUpdateCurrentPageStatus(
+                            origin,
+                            ids: _currentPageIdsWithStatus(t.$1),
+                            toStatus: t.$2,
+                            reply: t.$3,
+                          ),
+                    icon: Icon(
+                      t.$2 == 'in_progress'
+                          ? Icons.playlist_add_check_outlined
+                          : t.$2 == 'resolved'
+                          ? Icons.task_alt_outlined
+                          : Icons.inventory_2_outlined,
+                    ),
+                    label: Text(AdminFeedbackUiCopy.bulkLabel(t.$1, t.$2)),
+                  ),
+            ],
+          ),
+        ],
+      ),
     );
-    if (!confirmed) return;
-    try {
-      await widget.api.deleteFeedback((f['id'] as num).toInt());
-      await _load(
-        offset: _offsetAfterAdminDelete(
-          offset: _offset,
-          itemCount: _items.length,
-          pageSize: _pageSize,
-        ),
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('反馈已删除')));
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_adminActionErrorMessage(e, '删除反馈'))),
-      );
-    }
-  }
-
-  Future<void> _closeFeedback(
-    Map<String, dynamic> f,
-    String feedbackUserLabel,
-  ) async {
-    final confirmed = await _confirmAdminDangerAction(
-      context: context,
-      title: '关闭反馈？',
-      message: '将把 $feedbackUserLabel 的这条反馈标记为已关闭。',
-      confirmLabel: '关闭',
-    );
-    if (!confirmed) return;
-    try {
-      final existingReply = (f['admin_reply'] ?? '').toString().trim();
-      await widget.api.closeFeedback(
-        (f['id'] as num).toInt(),
-        reply: existingReply.isEmpty ? '已关闭。' : existingReply,
-      );
-      await _load(offset: _offset);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('反馈已关闭')));
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_adminActionErrorMessage(e, '关闭反馈'))),
-      );
-    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final origin = _capture();
+    if (!_isCurrent(origin, checkRoute: false)) {
+      return const SizedBox.shrink();
+    }
+    final busy = _readBusy || _operation != null;
+    final loadingFirstPage = _readBusy && _page == null;
+    final compact = MediaQuery.sizeOf(context).width < 720;
+    return RefreshIndicator(
+      onRefresh: () async {
+        if (_isCurrent(origin) && !busy) await _load(origin: origin);
+      },
+      child: CustomScrollView(
+        key: const ValueKey('admin_feedback_scroll'),
+        controller: _scrollCtrl,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppSectionHeader(
+                  title: AdminFeedbackUiCopy.titleFor(),
+                  subtitle: _adminPageSummary(_page),
+                  actionLabel: AdminUiCopy.refreshFor(),
+                  actionIcon: Icons.refresh,
+                  onAction: busy ? null : () => _load(origin: origin),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: TextField(
+                    key: const ValueKey('admin_feedback_search'),
+                    controller: _searchCtrl,
+                    decoration: InputDecoration(
+                      hintText: AdminFeedbackUiCopy.searchHintFor(),
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _query.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: AdminFeedbackUiCopy.clearSearchFor(),
+                              icon: const Icon(Icons.close),
+                              onPressed: busy
+                                  ? null
+                                  : () {
+                                      if (!_isCurrent(origin)) return;
+                                      _searchCtrl.clear();
+                                      _load(
+                                        origin: origin,
+                                        query: '',
+                                        offset: 0,
+                                      );
+                                    },
+                            ),
+                      isDense: true,
+                    ),
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) {
+                      if (!busy && _isCurrent(origin)) {
+                        _load(
+                          origin: origin,
+                          query: _searchCtrl.text.trim(),
+                          offset: 0,
+                        );
+                      }
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final value in [
+                        '',
+                        'open',
+                        'in_progress',
+                        'resolved',
+                        'closed',
+                      ])
+                        ChoiceChip(
+                          key: ValueKey('admin_feedback_status_$value'),
+                          selected: _filter == value,
+                          label: Text(
+                            value.isEmpty
+                                ? AdminFeedbackUiCopy.allStatusesFor()
+                                : AdminFeedbackUiCopy.statusLabel(value),
+                          ),
+                          onSelected: busy
+                              ? null
+                              : (_) => _load(
+                                  origin: origin,
+                                  status: value,
+                                  offset: 0,
+                                ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final value in [
+                        '',
+                        'feature',
+                        'bug',
+                        'wish',
+                        'other',
+                      ])
+                        ChoiceChip(
+                          key: ValueKey('admin_feedback_category_$value'),
+                          selected: _categoryFilter == value,
+                          label: Text(_feedbackCategoryLabel(value)),
+                          onSelected: busy
+                              ? null
+                              : (_) => _load(
+                                  origin: origin,
+                                  category: value,
+                                  offset: 0,
+                                ),
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: _selector(
+                    key: const ValueKey('admin_feedback_sort'),
+                    label: AdminFeedbackUiCopy.sortTitleFor(),
+                    value: _adminFeedbackSortLabel(_sort),
+                    onTap: busy
+                        ? null
+                        : () => _pick<String>(
+                            origin,
+                            title: AdminFeedbackUiCopy.sortTitleFor,
+                            selected: _sort,
+                            options: const [
+                              'created_desc',
+                              'updated_desc',
+                              'status_asc',
+                              'user_asc',
+                            ],
+                            label: _adminFeedbackSortLabel,
+                            apply: (op, value) => _load(
+                              origin: op.origin,
+                              operation: op,
+                              sort: value,
+                              offset: 0,
+                            ),
+                          ),
+                  ),
+                ),
+                _AdminInlineLoadingIndicator(
+                  visible: _loading && _page != null,
+                  label: AdminFeedbackUiCopy.updatingFor(),
+                ),
+              ],
+            ),
+          ),
+          if (loadingFirstPage)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 12),
+                    Text(AdminFeedbackUiCopy.loadingFor()),
+                  ],
+                ),
+              ),
+            )
+          else if (_error != null)
+            SliverToBoxAdapter(
+              child: _AdminErrorState(
+                message: _adminErrorMessage(
+                  _error!,
+                  AdminFeedbackUiCopy.titleFor(),
+                ),
+                onRetry: busy ? () async {} : _failedLoad ?? () async {},
+              ),
+            )
+          else if (_items.isEmpty)
+            SliverToBoxAdapter(
+              child: EmptyState(
+                icon: Icons.inbox_outlined,
+                message:
+                    _query.isEmpty && _filter.isEmpty && _categoryFilter.isEmpty
+                    ? AdminFeedbackUiCopy.emptyFor()
+                    : AdminFeedbackUiCopy.noMatchesFor(),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              sliver: SliverList.builder(
+                itemCount: _items.length + (compact ? 0 : 1),
+                itemBuilder: (ctx, index) => !compact && index == 0
+                    ? _summary(origin)
+                    : _feedbackCard(
+                        ctx,
+                        origin,
+                        _items[index - (compact ? 0 : 1)],
+                      ),
+              ),
+            ),
+          SliverToBoxAdapter(child: _pagination(origin)),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
+      ),
+    );
+  }
+
+  Widget _feedbackCard(
+    BuildContext context,
+    _FeedbackAction origin,
+    Map<String, dynamic> item,
+  ) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final loadingFirstPage = _loading && _page == null;
-    final statusCounts = _currentPageStatusCounts;
-    final openIds = _currentPageOpenIds;
-    final inProgressIds = _currentPageIdsWithStatus('in_progress');
-    final resolvedIds = _currentPageIdsWithStatus('resolved');
-    final feedbackSummaryCard =
-        !loadingFirstPage && _error == null && _items.isNotEmpty
-        ? Padding(
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
-            child: AppSurfaceCard(
-              padding: const EdgeInsets.all(10),
-              color: cs.primary.withValues(alpha: 0.08),
-              border: Border.all(
-                color: cs.primary.withValues(alpha: 0.18),
-                width: 0.45,
+    final status = (item['status'] ?? 'open').toString();
+    final category = (item['category'] ?? '').toString();
+    final username = (item['username'] ?? '').toString();
+    final displayName = (item['display_name'] ?? '').toString();
+    final user = displayName.trim().isNotEmpty ? displayName : username;
+    final userLabel = user.isEmpty ? AdminFeedbackUiCopy.anonymousFor() : user;
+    final email = (item['email'] ?? '').toString();
+    final identity = [
+      if (username.isNotEmpty && username != user) '@$username',
+      if (email.isNotEmpty)
+        AdminFeedbackUiCopy.email(
+          email,
+          AdminFeedbackUiCopy.isEmailVerified(item['email_verified']),
+        ),
+    ].join(' · ');
+    final createdAt = (item['created_at'] ?? '').toString();
+    final meta = [
+      if (createdAt.isNotEmpty) createdAt,
+      if (identity.isNotEmpty) identity,
+    ].join(' · ');
+    final reply = (item['admin_reply'] ?? '').toString();
+    final color = switch (status) {
+      'resolved' => Colors.green,
+      'closed' => Colors.grey,
+      'in_progress' => Colors.orange,
+      _ => cs.primary,
+    };
+    final feedbackCard = AppSurfaceCard(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      border: _adminSubtleListBorder(context),
+      elevation: 0,
+      onTap: () => unawaited(_showFeedbackDetail(origin, Map.of(item))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                '$userLabel · ${_feedbackCategoryLabel(category)}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.normal,
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.dashboard_customize_outlined,
-                        color: cs.primary,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '本页 ${_items.length} 条 · 待处理 ${statusCounts['open'] ?? 0} · 处理中 ${statusCounts['in_progress'] ?? 0} · 已解决 ${statusCounts['resolved'] ?? 0}',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.normal,
-                                color: cs.onSurface,
-                              ),
-                            ),
-                            Text(
-                              '共 ${_page?.total ?? _items.length} 条反馈，当前按${_adminFeedbackSortLabel(_sort)}排列。大量反馈按状态、分类、搜索和分页拆开处理，也可导出当前筛选结果。',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.64),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '导出筛选结果',
-                        onPressed: _loading || _exporting
-                            ? null
-                            : _exportFilteredCsv,
-                        icon: _exporting
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.download_outlined),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 2,
-                    children: [
-                      if (openIds.isNotEmpty)
-                        TextButton.icon(
-                          onPressed: _loading
-                              ? null
-                              : _markCurrentPageOpenInProgress,
-                          icon: const Icon(Icons.playlist_add_check_outlined),
-                          label: const Text('本页待处理转处理中'),
-                        ),
-                      if (inProgressIds.isNotEmpty)
-                        TextButton.icon(
-                          onPressed: _loading
-                              ? null
-                              : () => _bulkUpdateCurrentPageStatus(
-                                  fromStatus: 'in_progress',
-                                  toStatus: 'resolved',
-                                  reply: '已处理完成。',
-                                  successMessage: '已将当前页 {count} 条处理中反馈标记为已解决',
-                                ),
-                          icon: const Icon(Icons.task_alt_outlined),
-                          label: const Text('本页处理中转已解决'),
-                        ),
-                      if (resolvedIds.isNotEmpty)
-                        TextButton.icon(
-                          onPressed: _loading
-                              ? null
-                              : () => _bulkUpdateCurrentPageStatus(
-                                  fromStatus: 'resolved',
-                                  toStatus: 'closed',
-                                  reply: '已归档关闭。',
-                                  successMessage: '已将当前页 {count} 条已解决反馈关闭归档',
-                                ),
-                          icon: const Icon(Icons.inventory_2_outlined),
-                          label: const Text('本页已解决转关闭'),
-                        ),
-                    ],
-                  ),
-                ],
+              AppStatusBadge(
+                label: AdminFeedbackUiCopy.statusLabel(status),
+                color: color,
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              ),
+            ],
+          ),
+          if (meta.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 4),
+              child: Text(
+                meta,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
               ),
             ),
-          )
-        : null;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compactAdminFilters = constraints.maxWidth < 720;
-        final effectiveFeedbackSummaryCard = compactAdminFilters
-            ? null
-            : feedbackSummaryCard;
-        final statusChips = [
-          _filterChip('全部', ''),
-          _filterChip('待处理', 'open'),
-          _filterChip('处理中', 'in_progress'),
-          _filterChip('已解决', 'resolved'),
-          _filterChip('已关闭', 'closed'),
-        ];
-        final categoryChips = [
-          _categoryChip(_feedbackCategoryLabel(''), ''),
-          _categoryChip(_feedbackCategoryLabel('feature'), 'feature'),
-          _categoryChip(_feedbackCategoryLabel('bug'), 'bug'),
-          _categoryChip(_feedbackCategoryLabel('wish'), 'wish'),
-          _categoryChip(_feedbackCategoryLabel('other'), 'other'),
-        ];
-        final paginationBar = _AdminPaginationBar(
-          barKey: const ValueKey('admin_feedback_pagination'),
-          page: _page,
-          loading: _loading,
-          pageSize: _pageSize,
-          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
-          onPrevious: () =>
-              _load(offset: _previousAdminOffset(_offset, _pageSize)),
-          onNext: () => _load(offset: _offset + _pageSize),
-          onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
-        );
-        Widget feedbackBody() {
-          if (loadingFirstPage) {
-            return const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text('正在加载反馈列表…'),
-                ],
-              ),
-            );
-          }
-          if (_error != null) {
-            return _AdminErrorState(
-              message: _error!,
-              onRetry: () => _load(offset: _offset),
-            );
-          }
-          if (_items.isEmpty) {
-            return EmptyState(
-              icon: Icons.inbox_outlined,
-              message:
-                  _query.isEmpty && _filter.isEmpty && _categoryFilter.isEmpty
-                  ? '暂无反馈'
-                  : '没有匹配的反馈，请调整筛选条件',
-            );
-          }
-          return RefreshIndicator(
-            onRefresh: () => _load(offset: _offset),
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-              itemCount:
-                  _items.length +
-                  (effectiveFeedbackSummaryCard == null ? 0 : 1),
-              itemBuilder: (_, i) {
-                if (effectiveFeedbackSummaryCard != null && i == 0) {
-                  return effectiveFeedbackSummaryCard;
-                }
-                final itemIndex = effectiveFeedbackSummaryCard == null
-                    ? i
-                    : i - 1;
-                final f = _items[itemIndex];
-                final status = (f['status'] ?? 'open').toString();
-                final category = (f['category'] ?? '').toString();
-                final username = (f['username'] ?? '').toString();
-                final displayName = (f['display_name'] ?? '').toString();
-                final email = (f['email'] ?? '').toString();
-                final emailVerified = f['email_verified'] == true;
-                final feedbackUserLabel = displayName.trim().isNotEmpty
-                    ? displayName.trim()
-                    : username;
-                final feedbackIdentity = [
-                  if (username.trim().isNotEmpty &&
-                      username.trim() != feedbackUserLabel)
-                    '@${username.trim()}',
-                  if (email.trim().isNotEmpty)
-                    '${email.trim()}${emailVerified ? ' (已验证)' : ' (未验证)'}',
-                ].join(' · ');
-                final statusColor = switch (status) {
-                  'resolved' => Colors.green,
-                  'closed' => Colors.grey,
-                  'in_progress' => Colors.orange,
-                  _ => cs.primary,
-                };
-                final reply = (f['admin_reply'] ?? '').toString();
-                final createdAt = (f['created_at'] ?? '').toString();
-                final metaLine = [
-                  if (createdAt.isNotEmpty) createdAt,
-                  if (feedbackIdentity.isNotEmpty) feedbackIdentity,
-                ].join(' · ');
-                final feedbackCard = AppSurfaceCard(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                  border: _adminSubtleListBorder(context),
-                  elevation: 0,
-                  onTap: () => unawaited(_showFeedbackDetail(f)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${feedbackUserLabel.isEmpty ? '匿名用户' : feedbackUserLabel} · ${_feedbackCategoryLabel(category)}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: cs.onSurface,
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          AppStatusBadge(
-                            label: _adminStatusLabel(status),
-                            color: statusColor,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 3,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (metaLine.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4, bottom: 4),
-                          child: Text(
-                            metaLine,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: cs.onSurface.withValues(alpha: 0.52),
-                            ),
-                          ),
-                        ),
-                      Text(
-                        (f['content'] ?? '').toString(),
-                        maxLines: 3,
+          Text(
+            (item['content'] ?? '').toString(),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+          if (reply.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.teal.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.teal.withValues(alpha: 0.16),
+                    width: 0.45,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.subdirectory_arrow_right,
+                      size: 16,
+                      color: Colors.teal,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        AdminFeedbackUiCopy.replyPreview(reply),
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.7),
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
-                      if (reply.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.teal.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.teal.withValues(alpha: 0.16),
-                                width: 0.45,
-                              ),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(
-                                  Icons.subdirectory_arrow_right,
-                                  size: 16,
-                                  color: Colors.teal,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    '回复: $reply',
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: cs.onSurface.withValues(
-                                        alpha: 0.68,
-                                      ),
-                                      fontWeight: FontWeight.normal,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-                return _AdminFeedbackSwipeActions(
-                  key: ValueKey('admin_feedback_swipe_${f['id']}'),
-                  onDetail: () => unawaited(_showFeedbackDetail(f)),
-                  onClose: () => _closeFeedback(f, feedbackUserLabel),
-                  onReply: () => _reply(f),
-                  onDelete: () => _deleteFeedback(f, feedbackUserLabel),
-                  child: feedbackCard,
-                );
-              },
-            ),
-          );
-        }
-
-        return Column(
-          children: [
-            AppSectionHeader(
-              title: '反馈列表',
-              subtitle: _adminPageSummary(_page),
-              actionLabel: '刷新',
-              actionIcon: Icons.refresh,
-              onAction: _loading ? null : () => _load(offset: _offset),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: TextField(
-                controller: _searchCtrl,
-                decoration: InputDecoration(
-                  hintText: '搜索反馈内容、回复或用户名',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: '清空反馈搜索',
-                          icon: const Icon(Icons.close),
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            _load(query: '', offset: 0);
-                          },
-                        ),
-                  isDense: true,
+                    ),
+                  ],
                 ),
-                textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _applySearch(),
               ),
             ),
-            compactAdminFilters
-                ? _AdminCompactChipStrip(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-                    children: [...statusChips, ...categoryChips],
-                  )
-                : Column(
-                    children: [
-                      _AdminChipWrap(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-                        children: statusChips,
-                      ),
-                      _AdminChipWrap(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                        children: categoryChips,
-                      ),
-                    ],
-                  ),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final sortField = AppDropdownField<String>(
-                  initialValue: _sort,
-                  labelText: '反馈排序',
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'created_desc',
-                      child: Text('最新反馈优先'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'updated_desc',
-                      child: Text('最近处理优先'),
-                    ),
-                    DropdownMenuItem(value: 'status_asc', child: Text('待处理优先')),
-                    DropdownMenuItem(value: 'user_asc', child: Text('用户 A-Z')),
-                  ],
-                  onChanged: (value) =>
-                      _load(sort: value ?? 'created_desc', offset: 0),
-                );
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-                  child: sortField,
-                );
-              },
-            ),
-            _AdminInlineLoadingIndicator(
-              visible: _loading && _page != null,
-              label: '正在更新反馈列表',
-            ),
-            Expanded(child: feedbackBody()),
-            paginationBar,
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _filterChip(String label, String value) {
-    final selected = _filter == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) {
-          setState(() => _filter = value);
-          _load(offset: 0);
-        },
+        ],
       ),
     );
-  }
-
-  Widget _categoryChip(String label, String value) {
-    final selected = _categoryFilter == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) {
-          setState(() => _categoryFilter = value);
-          _load(offset: 0);
-        },
-      ),
+    return _AdminFeedbackSwipeActions(
+      key: ValueKey('admin_feedback_swipe_${item['id']}'),
+      isCurrent: () => !_readBusy && _operation == null && _isCurrent(origin),
+      onDetail: () => unawaited(_showFeedbackDetail(origin, Map.of(item))),
+      onClose: () => _closeFeedback(origin, Map.of(item), userLabel),
+      onReply: () => _reply(origin, Map.of(item)),
+      onDelete: () => _deleteFeedback(origin, Map.of(item), userLabel),
+      child: feedbackCard,
     );
   }
 }
@@ -9154,6 +11538,7 @@ class _AdminFeedbackDetailField extends StatelessWidget {
 
 class _AdminFeedbackSwipeActions extends StatefulWidget {
   final Widget child;
+  final bool Function() isCurrent;
   final VoidCallback onDetail;
   final Future<void> Function() onClose;
   final Future<void> Function() onReply;
@@ -9162,6 +11547,7 @@ class _AdminFeedbackSwipeActions extends StatefulWidget {
   const _AdminFeedbackSwipeActions({
     super.key,
     required this.child,
+    required this.isCurrent,
     required this.onDetail,
     required this.onClose,
     required this.onReply,
@@ -9189,35 +11575,50 @@ class _AdminFeedbackSwipeActionsState
     _dragDistance = 0;
   }
 
-  Future<void> _runAction(Future<void> Function() action) async {
+  Future<void> _runAction(
+    Future<void> Function() action,
+    bool Function() isCurrent,
+  ) async {
+    if (!isCurrent()) return;
     _setOpen(false);
     await action();
   }
 
-  void _showDetail() {
+  void _showDetail(VoidCallback action, bool Function() isCurrent) {
+    if (!isCurrent()) return;
     _setOpen(false);
-    widget.onDetail();
+    action();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isCurrent = widget.isCurrent;
+    final onDetail = widget.onDetail;
+    final onReply = widget.onReply;
+    final onClose = widget.onClose;
+    final onDelete = widget.onDelete;
     return ClipRect(
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onHorizontalDragStart: (_) => _resetDragDistance(),
+        onHorizontalDragStart: (_) {
+          if (isCurrent()) _resetDragDistance();
+        },
         onHorizontalDragUpdate: (details) {
+          if (!isCurrent()) return;
           _dragDistance += details.delta.dx;
           if (_dragDistance <= -_dragOpenThreshold) _setOpen(true);
           if (_dragDistance >= _dragOpenThreshold) _setOpen(false);
         },
         onHorizontalDragEnd: (details) {
+          if (!isCurrent()) return;
           final velocity = details.primaryVelocity ?? 0;
           if (velocity < -120) _setOpen(true);
           if (velocity > 120) _setOpen(false);
           _resetDragDistance();
         },
         child: Stack(
+          fit: StackFit.passthrough,
           clipBehavior: Clip.hardEdge,
           children: [
             if (_open)
@@ -9251,34 +11652,34 @@ class _AdminFeedbackSwipeActionsState
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             _AdminFeedbackSwipeButton(
-                              tooltip: '查看反馈详情',
+                              tooltip: AdminFeedbackUiCopy.detailTooltipFor(),
                               icon: Icons.visibility_outlined,
                               color: cs.primary,
-                              onPressed: _showDetail,
+                              onPressed: () => _showDetail(onDetail, isCurrent),
                             ),
                             const SizedBox(width: 4),
                             _AdminFeedbackSwipeButton(
-                              tooltip: '回复',
+                              tooltip: AdminFeedbackUiCopy.replyFor(),
                               icon: Icons.reply_outlined,
                               color: cs.tertiary,
                               onPressed: () =>
-                                  unawaited(_runAction(widget.onReply)),
+                                  unawaited(_runAction(onReply, isCurrent)),
                             ),
                             const SizedBox(width: 4),
                             _AdminFeedbackSwipeButton(
-                              tooltip: '关闭',
+                              tooltip: AdminUiCopy.closeFor(),
                               icon: Icons.inventory_2_outlined,
                               color: cs.secondary,
                               onPressed: () =>
-                                  unawaited(_runAction(widget.onClose)),
+                                  unawaited(_runAction(onClose, isCurrent)),
                             ),
                             const SizedBox(width: 4),
                             _AdminFeedbackSwipeButton(
-                              tooltip: '删除',
+                              tooltip: AdminUiCopy.deleteFor(),
                               icon: Icons.delete_outline,
                               color: cs.error,
                               onPressed: () =>
-                                  unawaited(_runAction(widget.onDelete)),
+                                  unawaited(_runAction(onDelete, isCurrent)),
                             ),
                           ],
                         ),
@@ -9339,403 +11740,813 @@ class _AdminFeedbackSwipeButton extends StatelessWidget {
 // 邀请码
 // ====================================================================
 
+class _InviteAction {
+  _InviteAction(this.authority, this.view) : _viewRevision = view.value;
+
+  final AdminActionOrigin authority;
+  final ValueListenable<int> view;
+  final int _viewRevision;
+
+  ApiClient get client => authority.client;
+
+  bool isCurrent({bool checkRoute = true}) =>
+      view.value == _viewRevision &&
+      authority.isCurrent(checkRoute: checkRoute);
+}
+
 class _InvitesTab extends StatefulWidget {
   final AdminApi api;
-  const _InvitesTab({super.key, required this.api});
+  final bool isActive;
+  final ValueListenable<int> activationRevision;
+
+  const _InvitesTab({
+    super.key,
+    required this.api,
+    required this.isActive,
+    required this.activationRevision,
+  });
+
   @override
   State<_InvitesTab> createState() => _InvitesTabState();
 }
 
 class _InvitesTabState extends State<_InvitesTab> {
+  final _actionHost = AdminActionHost();
+  final _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _codes = [];
   AdminPage? _page;
   bool _loading = true;
-  String? _error;
+  bool _readNeedsReload = false;
+  Object? _error;
+  Object? _pendingMutation;
   String _status = '';
   String _query = '';
   String _sort = 'created_desc';
   int _pageSize = _adminPageSize;
   int _offset = 0;
   int _loadSerial = 0;
-  final _searchCtrl = TextEditingController();
+  int? _authorityRevision;
+  int? _viewRevision;
+  Future<void> Function()? _failedLoad;
+  Route<dynamic>? _sortMenuRoute;
+  int? _sortMenuAuthorityRevision;
+  int? _sortMenuViewRevision;
+
+  bool get _mutationPending => _pendingMutation != null;
+  bool get _readBusy => _loading || _readNeedsReload;
+
+  _InviteAction _capture() => _InviteAction(
+    _actionHost.capture(
+      client: widget.api.client,
+      anyOfPermissions: const {'invites'},
+    ),
+    widget.activationRevision,
+  );
+
+  bool _isCurrent(_InviteAction origin, {bool checkRoute = true}) =>
+      mounted && widget.isActive && origin.isCurrent(checkRoute: checkRoute);
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _actionHost.bind(context);
+    _viewRevision ??= widget.activationRevision.value;
+    final revision = _actionHost.revision;
+    if (_authorityRevision == revision) {
+      if (_readNeedsReload) {
+        final origin = _capture();
+        if (_isCurrent(origin)) {
+          _readNeedsReload = false;
+          _load(origin: origin);
+        }
+      }
+      return;
+    }
+    _authorityRevision = revision;
+    _loadSerial++;
+    _codes = [];
+    _page = null;
+    _readNeedsReload = false;
+    _error = null;
+    _failedLoad = null;
+    _pendingMutation = null;
+    _status = '';
+    _query = '';
+    _sort = 'created_desc';
+    _offset = 0;
+    _searchCtrl.clear();
+    final origin = _capture();
+    if (_isCurrent(origin)) {
+      _load(origin: origin);
+    } else {
+      // The new authority may arrive while an obsolete dialog covers the page.
+      // Load with a fresh receipt when the page becomes current again.
+      _readNeedsReload = widget.isActive;
+      _loading = false;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _InvitesTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final revision = widget.activationRevision.value;
+    if (oldWidget.isActive == widget.isActive && _viewRevision == revision) {
+      return;
+    }
+    _viewRevision = revision;
+    _readNeedsReload = false;
+    final serial = ++_loadSerial;
+    _failedLoad = null;
+    _pendingMutation = null;
+    _loading = false;
+    if (widget.isActive) {
+      final origin = _capture();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || serial != _loadSerial) return;
+        if (_isCurrent(origin)) {
+          _load(origin: origin);
+        } else if (widget.isActive) {
+          setState(() => _readNeedsReload = true);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    _loadSerial++;
+    _actionHost.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _load({
+  Future<bool> _load({
+    required _InviteAction origin,
+    _InviteAction? mutationOrigin,
     int? offset,
     String? status,
     String? query,
     String? sort,
     int? pageSize,
   }) async {
-    final loadSerial = ++_loadSerial;
+    bool current() =>
+        _isCurrent(origin) &&
+        (mutationOrigin == null || _isCurrent(mutationOrigin));
+    if (!current()) return false;
+    final serial = ++_loadSerial;
     final nextOffset = offset ?? _offset;
     final nextStatus = status ?? _status;
     final nextQuery = query ?? _query;
     final nextSort = sort ?? _sort;
     final nextPageSize = pageSize ?? _pageSize;
-    _offset = nextOffset;
-    _status = nextStatus;
-    _query = nextQuery;
-    _sort = nextSort;
-    _pageSize = nextPageSize;
     setState(() {
+      _offset = nextOffset;
+      _status = nextStatus;
+      _query = nextQuery;
+      _sort = nextSort;
+      _pageSize = nextPageSize;
       _loading = true;
       _error = null;
+      _readNeedsReload = false;
     });
+    var settled = false;
     try {
-      final page = await widget.api.listInviteCodesPage(
+      final page = await AdminApi(origin.client).listInviteCodesPage(
         query: nextQuery.isEmpty ? null : nextQuery,
         status: nextStatus.isEmpty ? null : nextStatus,
         sort: nextSort,
         limit: nextPageSize,
         offset: nextOffset,
+        isCurrent: current,
       );
-      if (!mounted || loadSerial != _loadSerial) return;
-      setState(() {
-        _page = page;
-        _codes = page.items;
-      });
-    } catch (e) {
-      if (!mounted || loadSerial != _loadSerial) return;
-      if (mounted) {
-        setState(() => _error = _adminErrorMessage(e, '邀请码列表'));
+      if (!current() || serial != _loadSerial) return false;
+      _page = page;
+      _codes = page.items;
+      _failedLoad = null;
+      settled = true;
+      return true;
+    } catch (error) {
+      if (!current() || serial != _loadSerial) return false;
+      _error = error;
+      settled = true;
+      _failedLoad = () async {
+        await _load(
+          origin: origin,
+          mutationOrigin: mutationOrigin,
+          offset: nextOffset,
+          status: nextStatus,
+          query: nextQuery,
+          sort: nextSort,
+          pageSize: nextPageSize,
+        );
+      };
+      return false;
+    } finally {
+      if (mounted && serial == _loadSerial) {
+        setState(() {
+          _loading = false;
+          // A temporary overlay may invalidate this read. On returning to the
+          // foreground, use a new receipt rather than presenting a false empty
+          // state or reviving the discarded interaction.
+          _readNeedsReload = !settled && mutationOrigin == null;
+        });
       }
     }
-    if (mounted && loadSerial == _loadSerial) setState(() => _loading = false);
   }
 
-  void _applySearch() {
-    _load(query: _searchCtrl.text.trim(), offset: 0);
+  void _showSnack(_InviteAction origin, String Function(AppLocale) copy) {
+    if (!_isCurrent(origin)) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: _AdminFeedbackText(copy)));
   }
 
-  Future<void> _generate() async {
-    int count = 5;
-    String note = '';
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AppDialog(
-          title: const Text('生成邀请码'),
-          icon: const Icon(Icons.vpn_key_outlined),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    const Text('数量:'),
-                    Expanded(
-                      child: Slider(
-                        value: count.toDouble(),
-                        min: 1,
-                        max: 50,
-                        divisions: 49,
-                        label: '$count',
-                        onChanged: (v) => setSt(() => count = v.toInt()),
-                      ),
+  bool _closeDialog(
+    BuildContext ctx,
+    ModalRoute<dynamic> route,
+    _InviteAction origin,
+    bool confirmed,
+  ) {
+    if (!ctx.mounted ||
+        !route.isActive ||
+        !route.isCurrent ||
+        (confirmed && !_isCurrent(origin, checkRoute: false))) {
+      return false;
+    }
+    Navigator.of(ctx).pop(confirmed);
+    return true;
+  }
+
+  void _finishMutation(Object operation) {
+    if (mounted && identical(operation, _pendingMutation)) {
+      setState(() => _pendingMutation = null);
+    }
+  }
+
+  Widget? _dialogIcon(BuildContext context, IconData icon) {
+    final media = MediaQuery.of(context);
+    if (media.size.width < 360 && media.textScaler.scale(16) >= 30) {
+      return null;
+    }
+    return Icon(icon);
+  }
+
+  Future<void> _generate(_InviteAction origin) async {
+    if (_readBusy || _mutationPending || !_isCurrent(origin)) return;
+    final operation = Object();
+    setState(() => _pendingMutation = operation);
+    final noteCtrl = TextEditingController();
+    var count = 5;
+    DialogRoute<bool>? dialogRoute;
+    var pushed = false;
+    bool canEdit() =>
+        _isCurrent(origin, checkRoute: false) &&
+        dialogRoute?.isActive == true &&
+        dialogRoute?.isCurrent == true;
+    try {
+      dialogRoute = DialogRoute<bool>(
+        context: context,
+        builder: (ctx) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => StatefulBuilder(
+            builder: (ctx, setSt) => AppDialog(
+              title: Text(AdminInviteUiCopy.generateTitleFor(locale)),
+              icon: _dialogIcon(ctx, Icons.vpn_key_outlined),
+              content: _adminDialogForm(
+                maxWidth: 430,
+                children: [
+                  Text('${AdminInviteUiCopy.quantityFor(locale)}: $count'),
+                  Slider(
+                    key: const ValueKey('admin_invites_count_slider'),
+                    value: count.toDouble(),
+                    min: 1,
+                    max: 50,
+                    divisions: 49,
+                    label: '$count',
+                    onChanged: (value) {
+                      if (canEdit()) {
+                        setSt(() => count = value.round().clamp(1, 50));
+                      }
+                    },
+                  ),
+                  TextField(
+                    key: const ValueKey('admin_invites_note_field'),
+                    controller: noteCtrl,
+                    minLines: 1,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      labelText: AdminInviteUiCopy.noteFor(locale),
                     ),
-                    Text('$count'),
-                  ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      _closeDialog(ctx, dialogRoute!, origin, false),
+                  child: Text(AdminUiCopy.cancelFor(locale)),
                 ),
-                TextField(
-                  decoration: const InputDecoration(labelText: '备注 (可选)'),
-                  onChanged: (v) => note = v,
+                FilledButton(
+                  onPressed: () {
+                    if (canEdit()) {
+                      _closeDialog(ctx, dialogRoute!, origin, true);
+                    }
+                  },
+                  child: Text(AdminInviteUiCopy.generateFor(locale)),
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
+        ),
+      );
+      final result = Navigator.of(context).push(dialogRoute);
+      pushed = true;
+      final confirmed = await result;
+      await dialogRoute.completed;
+      if (confirmed != true || !_isCurrent(origin)) return;
+      final codes = await AdminApi(origin.client).createInviteCodes(
+        count: count,
+        note: noteCtrl.text,
+        isCurrent: () => _isCurrent(origin),
+      );
+      if (!_isCurrent(origin)) return;
+      final reloaded = await _load(
+        origin: _capture(),
+        mutationOrigin: origin,
+        offset: 0,
+      );
+      if (!_isCurrent(origin)) return;
+      await _showGeneratedCodes(origin, codes, reloaded: reloaded);
+    } catch (error) {
+      _showSnack(
+        origin,
+        (locale) => _adminActionErrorMessage(
+          error,
+          AdminInviteUiCopy.generateActionFor(locale),
+          locale,
+        ),
+      );
+    } finally {
+      if (pushed) await dialogRoute!.completed;
+      noteCtrl.dispose();
+      _finishMutation(operation);
+    }
+  }
+
+  Future<void> _showGeneratedCodes(
+    _InviteAction origin,
+    List<String> codes, {
+    required bool reloaded,
+  }) async {
+    if (!_isCurrent(origin)) return;
+    var copying = false;
+    DialogRoute<void>? dialogRoute;
+    bool canCopy() =>
+        _isCurrent(origin, checkRoute: false) &&
+        dialogRoute?.isActive == true &&
+        dialogRoute?.isCurrent == true;
+    dialogRoute = DialogRoute<void>(
+      context: context,
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => StatefulBuilder(
+          builder: (ctx, setSt) => AppDialog(
+            title: Text(AdminInviteUiCopy.generatedTitle(codes.length, locale)),
+            icon: _dialogIcon(ctx, Icons.check_circle_outline),
+            content: _adminDialogForm(
+              maxWidth: 430,
+              children: [
+                if (codes.isEmpty)
+                  Text(AdminInviteUiCopy.noCodesReturnedFor(locale))
+                else
+                  SelectableText(
+                    key: const ValueKey('admin_invites_generated_codes'),
+                    codes.join('\n'),
+                    style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+                if (!reloaded) Text(AdminInviteUiCopy.refreshFailedFor(locale)),
+              ],
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('生成'),
-            ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () {
+                  final route = dialogRoute;
+                  if (ctx.mounted &&
+                      route != null &&
+                      route.isActive &&
+                      route.isCurrent) {
+                    Navigator.of(ctx).pop();
+                  }
+                },
+                child: Text(AdminUiCopy.closeFor(locale)),
+              ),
+              if (codes.isNotEmpty)
+                FilledButton(
+                  onPressed: copying
+                      ? null
+                      : () async {
+                          if (copying || !canCopy()) return;
+                          setSt(() => copying = true);
+                          try {
+                            await Clipboard.setData(
+                              ClipboardData(text: codes.join('\n')),
+                            );
+                            if (canCopy() && ctx.mounted) {
+                              Navigator.of(ctx).pop();
+                            }
+                          } catch (error) {
+                            if (canCopy() && ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(
+                                  content: _AdminFeedbackText(
+                                    (locale) => _adminActionErrorMessage(
+                                      error,
+                                      AdminInviteUiCopy.copyActionFor(locale),
+                                      locale,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                          } finally {
+                            if (ctx.mounted && dialogRoute!.isActive) {
+                              setSt(() => copying = false);
+                            }
+                          }
+                        },
+                  child: Text(AdminInviteUiCopy.copyAndCloseFor(locale)),
+                ),
+            ],
+          ),
         ),
       ),
     );
-    if (ok != true) return;
+    await Navigator.of(context).push(dialogRoute);
+    await dialogRoute.completed;
+  }
+
+  Future<void> _delete(_InviteAction origin, Map<String, dynamic> item) async {
+    if (_readBusy ||
+        _mutationPending ||
+        !_isCurrent(origin) ||
+        (item['used_by'] ?? '').toString().isNotEmpty) {
+      return;
+    }
+    final operation = Object();
+    setState(() => _pendingMutation = operation);
+    final code = (item['code'] ?? '').toString();
+    DialogRoute<bool>? dialogRoute;
+    var pushed = false;
     try {
-      final codes = await widget.api.createInviteCodes(
-        count: count,
-        note: note,
-      );
-      await _load(offset: 0);
-      if (!mounted) return;
-      await showDialog(
+      dialogRoute = DialogRoute<bool>(
         context: context,
-        builder: (ctx) => AppDialog(
-          title: Text('已生成 ${codes.length} 个邀请码'),
-          icon: const Icon(Icons.check_circle_outline),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: SingleChildScrollView(
-              child: SelectableText(codes.join('\n')),
-            ),
+        builder: (ctx) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => AppDialog(
+            title: Text(AdminInviteUiCopy.deleteTitleFor(locale)),
+            icon: _dialogIcon(ctx, Icons.delete_outline),
+            content: Text(AdminInviteUiCopy.deleteBody(code, locale)),
+            actions: [
+              TextButton(
+                onPressed: () => _closeDialog(ctx, dialogRoute!, origin, false),
+                child: Text(AdminUiCopy.cancelFor(locale)),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.error,
+                  foregroundColor: Theme.of(ctx).colorScheme.onError,
+                ),
+                onPressed: () => _closeDialog(ctx, dialogRoute!, origin, true),
+                child: Text(AdminUiCopy.deleteFor(locale)),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: codes.join('\n')));
-                Navigator.pop(ctx);
-              },
-              child: const Text('复制并关闭'),
-            ),
-          ],
         ),
       );
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userVisibleApiError(e))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_adminActionErrorMessage(e, '生成邀请码'))),
-        );
-      }
+      final result = Navigator.of(context).push(dialogRoute);
+      pushed = true;
+      final confirmed = await result;
+      await dialogRoute.completed;
+      if (confirmed != true || !_isCurrent(origin)) return;
+      await AdminApi(
+        origin.client,
+      ).deleteInviteCode(code, isCurrent: () => _isCurrent(origin));
+      if (!_isCurrent(origin)) return;
+      final reloaded = await _load(
+        origin: _capture(),
+        mutationOrigin: origin,
+        offset: _offsetAfterAdminDelete(
+          offset: _offset,
+          itemCount: _codes.length,
+          pageSize: _pageSize,
+        ),
+      );
+      _showSnack(
+        origin,
+        (locale) => reloaded
+            ? AdminInviteUiCopy.deletedFor(locale)
+            : AdminInviteUiCopy.deleteRefreshFailedFor(locale),
+      );
+    } catch (error) {
+      _showSnack(
+        origin,
+        (locale) => _adminActionErrorMessage(
+          error,
+          AdminInviteUiCopy.deleteActionFor(locale),
+          locale,
+        ),
+      );
+    } finally {
+      if (pushed) await dialogRoute!.completed;
+      _finishMutation(operation);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final origin = _capture();
+    final authorityRevision = _actionHost.revision;
+    final viewRevision = widget.activationRevision.value;
+    bool canSelectSort() =>
+        _isCurrent(origin, checkRoute: false) &&
+        ((_sortMenuRoute?.isActive == true &&
+                _sortMenuRoute?.isCurrent == true &&
+                _sortMenuAuthorityRevision == authorityRevision &&
+                _sortMenuViewRevision == viewRevision &&
+                _actionHost.revision == authorityRevision &&
+                widget.activationRevision.value == viewRevision) ||
+            _isCurrent(origin));
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final loadingFirstPage = _loading && _page == null;
+    final failedLoad = _failedLoad;
+    Future<void> retry() async {
+      if (!_isCurrent(origin)) return;
+      if (failedLoad != null) {
+        await failedLoad();
+      } else {
+        await _load(origin: origin);
+      }
+    }
+
+    final error = _error == null
+        ? null
+        : _adminErrorMessage(_error!, AdminInviteUiCopy.listTargetFor());
     return Column(
       children: [
-        AppSectionHeader(
-          title: '邀请码列表',
-          subtitle: _adminPageSummary(_page),
-          actionLabel: '刷新',
-          actionIcon: Icons.refresh,
-          onAction: _loading ? null : () => _load(offset: _offset),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              onPressed: _generate,
-              icon: const Icon(Icons.add),
-              label: const Text('生成邀请码'),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: TextField(
-            controller: _searchCtrl,
-            decoration: InputDecoration(
-              hintText: '搜索邀请码、备注或使用者',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _query.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: '清空邀请码搜索',
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        _load(query: '', offset: 0);
-                      },
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              await _load(origin: origin);
+            },
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              children: [
+                Text(
+                  AdminInviteUiCopy.listTitleFor(),
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _adminPageSummary(_page),
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      key: const ValueKey('admin_invites_generate_button'),
+                      onPressed: _readBusy || _mutationPending
+                          ? null
+                          : () => _generate(origin),
+                      icon: const Icon(Icons.add),
+                      label: Text(AdminInviteUiCopy.generateTitleFor()),
                     ),
-              isDense: true,
-            ),
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _applySearch(),
-          ),
-        ),
-        _AdminChipWrap(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          children: [
-            _inviteStatusChip('全部邀请码', ''),
-            _inviteStatusChip('未使用', 'unused'),
-            _inviteStatusChip('已使用', 'used'),
-          ],
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: AppDropdownField<String>(
-            initialValue: _sort,
-            labelText: '邀请码排序',
-            items: [
-              DropdownMenuItem(
-                value: 'created_desc',
-                child: Text(_adminInviteSortLabel('created_desc')),
-              ),
-              DropdownMenuItem(
-                value: 'used_desc',
-                child: Text(_adminInviteSortLabel('used_desc')),
-              ),
-              DropdownMenuItem(
-                value: 'code_asc',
-                child: Text(_adminInviteSortLabel('code_asc')),
-              ),
-              DropdownMenuItem(
-                value: 'note_asc',
-                child: Text(_adminInviteSortLabel('note_asc')),
-              ),
-            ],
-            onChanged: (value) =>
-                _load(sort: value ?? 'created_desc', offset: 0),
-          ),
-        ),
-        _AdminInlineLoadingIndicator(
-          visible: _loading && _page != null,
-          label: '正在更新邀请码列表',
-        ),
-        if (loadingFirstPage)
-          const Expanded(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text('正在加载邀请码列表…'),
-                ],
-              ),
-            ),
-          )
-        else if (_error != null)
-          Expanded(
-            child: _AdminErrorState(
-              message: _error!,
-              onRetry: () => _load(offset: _offset),
-            ),
-          )
-        else if (_codes.isEmpty)
-          Expanded(
-            child: EmptyState(
-              icon: Icons.vpn_key_outlined,
-              message: _query.isEmpty && _status.isEmpty
-                  ? '暂无邀请码，点击“生成邀请码”创建'
-                  : '没有匹配的邀请码，请调整筛选条件',
-            ),
-          )
-        else
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => _load(offset: _offset),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: _codes.length,
-                itemBuilder: (_, i) {
-                  final c = _codes[i];
-                  final used = (c['used_by'] ?? '').toString().isNotEmpty;
-                  return _AdminListTileCard(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: (used ? Colors.grey : Colors.blue).withValues(
-                          alpha: 0.12,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        used ? Icons.check_circle : Icons.key,
-                        color: used ? Colors.grey : Colors.blue,
-                      ),
+                    TextButton.icon(
+                      onPressed: _readBusy ? null : () => _load(origin: origin),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(AdminUiCopy.refreshFor()),
                     ),
-                    title: Row(
-                      children: [
-                        Expanded(
-                          child: SelectableText(
-                            c['code'].toString(),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontFamily: 'monospace',
-                              fontWeight: FontWeight.normal,
-                              color: cs.onSurface,
-                            ),
-                          ),
-                        ),
-                        AppStatusBadge(
-                          label: used ? '已使用' : '未使用',
-                          color: used ? Colors.grey : Colors.blue,
-                        ),
-                      ],
-                    ),
-                    subtitle: Text(
-                      used
-                          ? '已被 ${c['used_by_name'] ?? '?'} 使用 · ${c['used_at']}'
-                          : '创建 ${c['created_at']}${(c['note'] ?? '').toString().isNotEmpty ? ' · ${c['note']}' : ''}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.62),
-                      ),
-                    ),
-                    trailing: used
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: AdminInviteUiCopy.searchHintFor(),
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _query.isEmpty
                         ? null
                         : IconButton(
-                            tooltip: '删除',
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () async {
-                              final code = c['code'].toString();
-                              final confirmed = await _confirmAdminDangerAction(
-                                context: context,
-                                title: '删除邀请码？',
-                                message: '将删除未使用的邀请码 $code，删除后无法恢复。',
-                              );
-                              if (!confirmed) return;
-                              await widget.api.deleteInviteCode(code);
-                              await _load(
-                                offset: _offsetAfterAdminDelete(
-                                  offset: _offset,
-                                  itemCount: _codes.length,
-                                  pageSize: _pageSize,
-                                ),
-                              );
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('邀请码已删除')),
-                              );
+                            tooltip: AdminInviteUiCopy.clearSearchFor(),
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              if (!_isCurrent(origin)) return;
+                              _searchCtrl.clear();
+                              _load(origin: origin, query: '', offset: 0);
                             },
                           ),
-                  );
-                },
-              ),
+                    isDense: true,
+                  ),
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) {
+                    if (_isCurrent(origin)) {
+                      _load(
+                        origin: origin,
+                        query: _searchCtrl.text.trim(),
+                        offset: 0,
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final value in ['', 'unused', 'used'])
+                      _inviteStatusChip(origin, value),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                AppDropdownField<String>(
+                  key: ValueKey(('admin-invites-sort', _authorityRevision)),
+                  initialValue: _sort,
+                  isInteractionAllowed: () => _isCurrent(origin),
+                  isSelectionAllowed: canSelectSort,
+                  onMenuRouteCreated: (route) {
+                    if (!_isCurrent(origin, checkRoute: false)) return;
+                    _sortMenuRoute = route;
+                    _sortMenuAuthorityRevision = authorityRevision;
+                    _sortMenuViewRevision = viewRevision;
+                  },
+                  labelText: AdminInviteUiCopy.sortTitleFor(),
+                  items: [
+                    for (final value in [
+                      'created_desc',
+                      'used_desc',
+                      'code_asc',
+                      'note_asc',
+                    ])
+                      DropdownMenuItem(
+                        value: value,
+                        child: _AdminFeedbackText(
+                          (locale) => _adminInviteSortLabel(value, locale),
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) => _load(
+                    origin: origin,
+                    sort: value ?? 'created_desc',
+                    offset: 0,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _AdminInlineLoadingIndicator(
+                  visible: _loading && _page != null,
+                  label: AdminInviteUiCopy.updatingFor(),
+                ),
+                if (_readBusy && _page == null)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        if (_loading) ...[
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 12),
+                        ],
+                        Text(AdminInviteUiCopy.loadingFor()),
+                      ],
+                    ),
+                  )
+                else if (error != null)
+                  _AdminErrorState(message: error, onRetry: retry)
+                else if (_codes.isEmpty)
+                  EmptyState(
+                    icon: Icons.vpn_key_outlined,
+                    message: _query.isEmpty && _status.isEmpty
+                        ? AdminInviteUiCopy.emptyFor()
+                        : AdminInviteUiCopy.noMatchesFor(),
+                  )
+                else
+                  for (final item in _codes) _inviteCard(context, origin, item),
+              ],
             ),
           ),
+        ),
         _AdminPaginationBar(
+          barKey: const ValueKey('admin_invites_pagination_bar'),
           page: _page,
-          loading: _loading,
+          loading: _readBusy,
           pageSize: _pageSize,
-          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
-          onPrevious: () =>
-              _load(offset: _previousAdminOffset(_offset, _pageSize)),
-          onNext: () => _load(offset: _offset + _pageSize),
-          onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
+          onPageSizeChanged: (value) =>
+              _load(origin: origin, pageSize: value, offset: 0),
+          onPrevious: () => _load(
+            origin: origin,
+            offset: _previousAdminOffset(_offset, _pageSize),
+          ),
+          onNext: () => _load(origin: origin, offset: _offset + _pageSize),
+          onJumpToPage: (page) =>
+              _load(origin: origin, offset: (page - 1) * _pageSize),
         ),
       ],
     );
   }
 
-  Widget _inviteStatusChip(String label, String value) {
-    final selected = _status == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => _load(status: value, offset: 0),
+  Widget _inviteStatusChip(_InviteAction origin, String value) {
+    return ChoiceChip(
+      label: Text(switch (value) {
+        'unused' => AdminInviteUiCopy.unusedFor(),
+        'used' => AdminInviteUiCopy.usedFor(),
+        _ => AdminInviteUiCopy.allFor(),
+      }),
+      selected: _status == value,
+      onSelected: (_) => _load(origin: origin, status: value, offset: 0),
+    );
+  }
+
+  Widget _inviteCard(
+    BuildContext context,
+    _InviteAction origin,
+    Map<String, dynamic> item,
+  ) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final used = (item['used_by'] ?? '').toString().isNotEmpty;
+    final note = (item['note'] ?? '').toString();
+    String timestamp(Object? value) {
+      final text = (value ?? '').toString();
+      final date = DateTime.tryParse(text);
+      return date == null ? text : I18nDateFormat.shortDateTime(date);
+    }
+
+    return AppSurfaceCard(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      border: _adminSubtleListBorder(context),
+      elevation: 0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SelectableText(
+            (item['code'] ?? '').toString(),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.normal,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              AppStatusBadge(
+                label: used
+                    ? AdminInviteUiCopy.usedFor()
+                    : AdminInviteUiCopy.unusedFor(),
+                color: used ? cs.onSurfaceVariant : cs.primary,
+              ),
+              if (!used)
+                IconButton(
+                  tooltip: AdminInviteUiCopy.deleteTooltipFor(),
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _readBusy || _mutationPending
+                      ? null
+                      : () => _delete(origin, item),
+                ),
+            ],
+          ),
+          if (used)
+            Text(
+              AdminInviteUiCopy.usedBy(
+                (item['used_by_name'] ?? item['used_by'] ?? '-').toString(),
+              ),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          if (used && item['used_at'] != null)
+            Text(
+              AdminInviteUiCopy.usedAt(timestamp(item['used_at'])),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          Text(
+            AdminInviteUiCopy.createdAt(timestamp(item['created_at'])),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          if (note.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(note, style: theme.textTheme.bodySmall),
+          ],
+        ],
       ),
     );
   }
@@ -9745,262 +12556,826 @@ class _InvitesTabState extends State<_InvitesTab> {
 // 审计日志
 // ====================================================================
 
+class _AuditAction {
+  _AuditAction(this.authority, this.view, this.foreground)
+    : _viewRevision = view.value,
+      _foregroundRevision = foreground();
+
+  final AdminActionOrigin authority;
+  final ValueListenable<int> view;
+  final int _viewRevision;
+  final int Function() foreground;
+  final int _foregroundRevision;
+
+  ApiClient get client => authority.client;
+
+  bool isCurrent({bool checkRoute = true}) =>
+      view.value == _viewRevision &&
+      foreground() == _foregroundRevision &&
+      authority.isCurrent(checkRoute: checkRoute);
+}
+
+class _AuditPickerOperation {
+  _AuditPickerOperation(this.origin);
+
+  final _AuditAction origin;
+  DialogRoute<dynamic>? route;
+}
+
+/// Observes coverage of this exact picker, including cover/return while its
+/// parent Admin route remains covered throughout the entire interaction.
+class _AuditPickerRouteGuard extends StatefulWidget {
+  final VoidCallback onCovered;
+  final Widget child;
+
+  const _AuditPickerRouteGuard({required this.onCovered, required this.child});
+
+  @override
+  State<_AuditPickerRouteGuard> createState() => _AuditPickerRouteGuardState();
+}
+
+class _AuditPickerRouteGuardState extends State<_AuditPickerRouteGuard> {
+  bool? _wasCurrent;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    final current = route?.isCurrent ?? true;
+    if (_wasCurrent == true && !current && route?.isActive == true) {
+      widget.onCovered();
+    }
+    _wasCurrent = current;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class _AuditLogTab extends StatefulWidget {
   final AdminApi api;
-  const _AuditLogTab({super.key, required this.api});
+  final bool Function() isActiveNow;
+  final ValueListenable<int> activationRevision;
+
+  const _AuditLogTab({
+    super.key,
+    required this.api,
+    required this.isActiveNow,
+    required this.activationRevision,
+  });
+
   @override
   State<_AuditLogTab> createState() => _AuditLogTabState();
 }
 
 class _AuditLogTabState extends State<_AuditLogTab> {
+  final _actionHost = AdminActionHost();
+  final _searchCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _items = [];
   AdminPage? _page;
-  bool _loading = true;
-  String? _error;
+  Object? _error;
+  Future<void> Function()? _failedLoad;
+  bool _loading = false;
+  bool _readNeedsReload = false;
+  bool _loadScheduled = false;
+  bool _rebuildScheduled = false;
+  bool? _wasForeground;
+  int _foregroundRevision = 0;
+  _AuditPickerOperation? _picker;
+  AppAccessRouteGate? _routeEvents;
+  ModalRoute<dynamic>? _pageRoute;
+  Route<dynamic>? _lastTopRoute;
   String _action = '';
   String _query = '';
   String _sort = 'created_desc';
   int _pageSize = _adminPageSize;
   int _offset = 0;
   int _loadSerial = 0;
-  final _searchCtrl = TextEditingController();
+  int? _authorityRevision;
+  int? _viewRevision;
+
+  bool get _readBusy => _loading || _readNeedsReload;
+  bool get _isActive => widget.isActiveNow();
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _viewRevision = widget.activationRevision.value;
+    widget.activationRevision.addListener(_onViewEvent);
+  }
+
+  // A tab can leave and return before TabBarView updates this child. Suspend
+  // its read immediately and arrange recovery from a fresh receipt next frame.
+  void _onViewEvent() {
+    if (!mounted) return;
+    final revision = widget.activationRevision.value;
+    if (_viewRevision == revision) return;
+    _viewRevision = revision;
+    _invalidate();
+    _scheduleRebuild();
+    _deferLoad();
+  }
+
+  void _bindRouteEvents() {
+    _pageRoute = ModalRoute.of(context);
+    final observers = Navigator.of(context).widget.observers;
+    AppAccessRouteGate? source;
+    for (final observer in observers) {
+      if (observer is AppAccessRouteGate) {
+        source = observer;
+        break;
+      }
+    }
+    if (identical(source, _routeEvents)) return;
+    _routeEvents?.routeRevision.removeListener(_onRouteEvent);
+    _routeEvents = source;
+    _lastTopRoute = source?.currentRoute;
+    source?.routeRevision.addListener(_onRouteEvent);
+  }
+
+  void _onRouteEvent() {
+    if (!mounted) return;
+    final top = _routeEvents?.currentRoute;
+    if (identical(top, _lastTopRoute)) return;
+    _lastTopRoute = top;
+    final foreground = identical(top, _pageRoute);
+    _wasForeground = foreground;
+    if (!foreground) {
+      if (_picker != null && identical(top, _picker!.route)) {
+        final needsReload = _loading || _readNeedsReload;
+        _loadSerial++;
+        _loading = false;
+        _readNeedsReload = needsReload;
+      } else {
+        _foregroundRevision++;
+        _invalidate();
+      }
+      _scheduleRebuild();
+    } else if (_readNeedsReload) {
+      _deferLoad();
+    }
+  }
+
+  _AuditAction _capture() {
+    _syncAuthority();
+    return _AuditAction(
+      _actionHost.capture(
+        client: widget.api.client,
+        anyOfPermissions: const {'audit'},
+      ),
+      widget.activationRevision,
+      () => _foregroundRevision,
+    );
+  }
+
+  bool _isCurrent(_AuditAction origin, {bool checkRoute = true}) {
+    if (!mounted) return false;
+    _syncAuthority();
+    return _isActive && origin.isCurrent(checkRoute: checkRoute);
+  }
+
+  // A client token/base URL can change without a provider notification. Never
+  // give the previous server's displayed data a receipt for the new authority.
+  void _syncAuthority() {
+    final revision = _actionHost.revision;
+    if (_authorityRevision == revision) return;
+    _authorityRevision = revision;
+    _invalidate(clearPrivateData: true);
+    _deferLoad();
+  }
+
+  void _invalidate({bool clearPrivateData = false}) {
+    _loadSerial++;
+    _loading = false;
+    _readNeedsReload = _isActive;
+    _failedLoad = null;
+    if (!clearPrivateData) return;
+    _items = [];
+    _page = null;
+    _error = null;
+    _action = '';
+    _query = '';
+    _sort = 'created_desc';
+    _pageSize = _adminPageSize;
+    _offset = 0;
+    _searchCtrl.clear();
+    _scheduleRebuild();
+  }
+
+  void _scheduleRebuild() {
+    if (!mounted || _rebuildScheduled) return;
+    _rebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _rebuildScheduled = false;
+      if (mounted) setState(() {});
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  // Route dependencies schedule this again when a covering route is removed.
+  // Do not hold a receipt captured while the Admin page is underneath a route.
+  void _deferLoad() {
+    if (!mounted || !_isActive || _loadScheduled || _picker != null) {
+      return;
+    }
+    _loadScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadScheduled = false;
+      if (!mounted ||
+          !_isActive ||
+          !_readNeedsReload ||
+          _loading ||
+          _picker != null) {
+        return;
+      }
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isCurrent) return;
+      final origin = _capture();
+      if (_isCurrent(origin)) {
+        unawaited(_load(origin: origin));
+      }
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _actionHost.bind(context);
+    _bindRouteEvents();
+    _viewRevision ??= widget.activationRevision.value;
+    _syncAuthority();
+    final foreground = ModalRoute.of(context)?.isCurrent ?? true;
+    if (_wasForeground == true && !foreground) {
+      if (_picker == null) {
+        _foregroundRevision++;
+        _invalidate();
+      } else {
+        // Suspend an in-flight read without revoking our own picker. Opening
+        // and canceling a picker on settled data does not issue another GET.
+        final needsReload = _loading || _readNeedsReload;
+        _loadSerial++;
+        _loading = false;
+        _readNeedsReload = needsReload;
+      }
+    }
+    _wasForeground = foreground;
+    if (_readNeedsReload) _deferLoad();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AuditLogTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.activationRevision, widget.activationRevision)) {
+      oldWidget.activationRevision.removeListener(_onViewEvent);
+      widget.activationRevision.addListener(_onViewEvent);
+      _viewRevision = null;
+    }
+    _syncAuthority();
+    final revision = widget.activationRevision.value;
+    // A revision already handled by the synchronous listener must not start
+    // another read when TabBarView eventually updates its cached child.
+    if (_viewRevision == revision) return;
+    _viewRevision = revision;
+    _invalidate();
+    if (_isActive) _deferLoad();
   }
 
   @override
   void dispose() {
+    _loadSerial++;
+    widget.activationRevision.removeListener(_onViewEvent);
+    _actionHost.dispose();
+    _routeEvents?.routeRevision.removeListener(_onRouteEvent);
     _searchCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _load({
+  Future<bool> _load({
+    required _AuditAction origin,
     int? offset,
     String? action,
     String? query,
     String? sort,
     int? pageSize,
   }) async {
-    final loadSerial = ++_loadSerial;
+    if (!_isCurrent(origin)) return false;
+    final serial = ++_loadSerial;
+    bool current() => serial == _loadSerial && _isCurrent(origin);
     final nextOffset = offset ?? _offset;
     final nextAction = action ?? _action;
     final nextQuery = query ?? _query;
     final nextSort = sort ?? _sort;
     final nextPageSize = pageSize ?? _pageSize;
-    _offset = nextOffset;
-    _action = nextAction;
-    _query = nextQuery;
-    _sort = nextSort;
-    _pageSize = nextPageSize;
     setState(() {
+      _offset = nextOffset;
+      _action = nextAction;
+      _query = nextQuery;
+      _sort = nextSort;
+      _pageSize = nextPageSize;
       _loading = true;
+      _readNeedsReload = false;
       _error = null;
     });
+    var settled = false;
     try {
-      final page = await widget.api.auditLogPage(
+      final page = await AdminApi(origin.client).auditLogPage(
         action: nextAction.isEmpty ? null : nextAction,
         query: nextQuery.isEmpty ? null : nextQuery,
         sort: nextSort,
         limit: nextPageSize,
         offset: nextOffset,
+        isCurrent: current,
       );
-      if (!mounted || loadSerial != _loadSerial) return;
+      if (!current()) return false;
       setState(() {
         _page = page;
         _items = page.items;
+        _failedLoad = null;
       });
-    } catch (e) {
-      if (!mounted || loadSerial != _loadSerial) return;
-      if (mounted) {
-        setState(() => _error = _adminErrorMessage(e, '审计日志'));
+      settled = true;
+      return true;
+    } catch (error) {
+      if (!current()) return false;
+      setState(() {
+        _error = error;
+        _failedLoad = () async {
+          await _load(
+            origin: origin,
+            offset: nextOffset,
+            action: nextAction,
+            query: nextQuery,
+            sort: nextSort,
+            pageSize: nextPageSize,
+          );
+        };
+      });
+      settled = true;
+      return false;
+    } finally {
+      if (mounted && serial == _loadSerial) {
+        setState(() {
+          _loading = false;
+          _readNeedsReload = !settled && _isActive;
+        });
+        if (_readNeedsReload) _deferLoad();
       }
     }
-    if (mounted && loadSerial == _loadSerial) setState(() => _loading = false);
   }
 
-  void _applySearch() {
-    _load(query: _searchCtrl.text.trim(), offset: 0);
+  bool _pickerCanEdit(_AuditPickerOperation operation) =>
+      identical(_picker, operation) &&
+      _isCurrent(operation.origin, checkRoute: false) &&
+      operation.route?.isActive == true &&
+      operation.route?.isCurrent == true;
+
+  void _coverPicker(_AuditPickerOperation operation) {
+    if (!mounted || !identical(_picker, operation)) return;
+    _foregroundRevision++;
+    _invalidate();
+    _scheduleRebuild();
+  }
+
+  Future<void> _pick<T>(
+    _AuditAction origin, {
+    required String Function(AppLocale?) title,
+    required T selected,
+    required List<T> options,
+    required String Function(T, AppLocale?) label,
+    required Future<bool> Function(_AuditAction, T) apply,
+  }) async {
+    if (_readBusy || _picker != null || !_isCurrent(origin)) return;
+    final operation = _AuditPickerOperation(_capture());
+    setState(() => _picker = operation);
+    final route = DialogRoute<T>(
+      context: context,
+      builder: (ctx) => _AuditPickerRouteGuard(
+        onCovered: () => _coverPicker(operation),
+        child: ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => AppDialog(
+            key: const ValueKey('admin_audit_picker'),
+            title: Text(title(locale)),
+            content: _adminDialogForm(
+              maxWidth: 420,
+              children: [
+                for (final value in options)
+                  Semantics(
+                    selected: value == selected,
+                    button: true,
+                    child: ListTile(
+                      leading: Icon(
+                        value == selected
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                      ),
+                      title: Text(label(value, locale)),
+                      onTap: () {
+                        if (!_pickerCanEdit(operation) || !ctx.mounted) {
+                          return;
+                        }
+                        Navigator.of(ctx).pop(value);
+                      },
+                    ),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  if (!ctx.mounted ||
+                      operation.route?.isActive != true ||
+                      operation.route?.isCurrent != true) {
+                    return;
+                  }
+                  Navigator.of(ctx).pop();
+                },
+                child: Text(AdminUiCopy.cancelFor(locale)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    operation.route = route;
+    var pushed = false;
+    try {
+      pushed = true;
+      final picked = await Navigator.of(context).push(route);
+      await route.completed;
+      final current = _isCurrent(operation.origin);
+      if (mounted && identical(_picker, operation)) {
+        setState(() => _picker = null);
+      }
+      if (picked != null && current) {
+        await apply(_capture(), picked);
+      } else {
+        _deferLoad();
+      }
+    } finally {
+      if (pushed) await route.completed;
+      if (mounted && identical(_picker, operation)) {
+        setState(() => _picker = null);
+        _deferLoad();
+      }
+    }
+  }
+
+  Widget _auditPagination(_AuditAction origin) {
+    final busy = _readBusy || _picker != null;
+    final totalPages = _adminTotalPages(_page, _pageSize);
+    final currentPage = _page == null || totalPages == 0
+        ? 0
+        : (_page!.offset ~/ (_page!.limit <= 0 ? _pageSize : _page!.limit)) + 1;
+    return Padding(
+      key: const ValueKey('admin_audit_pagination_bar'),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${_adminPageSummary(_page)} · ${_adminPageNumber(_page)}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              TextButton.icon(
+                onPressed: busy
+                    ? null
+                    : () => _pick<int>(
+                        origin,
+                        title: AdminUiCopy.perPageFor,
+                        selected: _pageSize,
+                        options: _adminPageSizeOptions,
+                        label: (value, _) => '$value',
+                        apply: (origin, value) =>
+                            _load(origin: origin, pageSize: value, offset: 0),
+                      ),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                label: Text(AdminAuditUiCopy.pageSize(_pageSize)),
+              ),
+              if (totalPages > 1 && totalPages <= 200)
+                TextButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => _pick<int>(
+                          origin,
+                          title: AdminUiCopy.pageNumberFor,
+                          selected: currentPage,
+                          options: List.generate(
+                            totalPages,
+                            (index) => index + 1,
+                          ),
+                          label: (value, _) => '$value/$totalPages',
+                          apply: (origin, value) => _load(
+                            origin: origin,
+                            offset: (value - 1) * _pageSize,
+                          ),
+                        ),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                  label: Text(
+                    AdminAuditUiCopy.pageNumber(currentPage, totalPages),
+                  ),
+                ),
+              if (totalPages > 1)
+                IconButton(
+                  tooltip: AdminUiCopy.jumpToFirstPageFor(),
+                  onPressed: busy || (_page?.offset ?? 0) <= 0
+                      ? null
+                      : () => _load(origin: origin, offset: 0),
+                  icon: const Icon(Icons.first_page),
+                ),
+              IconButton(
+                tooltip: AdminUiCopy.previousPageFor(),
+                onPressed: busy || (_page?.offset ?? 0) <= 0
+                    ? null
+                    : () => _load(
+                        origin: origin,
+                        offset: _previousAdminOffset(_offset, _pageSize),
+                      ),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              IconButton(
+                tooltip: AdminUiCopy.nextPageFor(),
+                onPressed: busy || !(_page?.hasMore ?? false)
+                    ? null
+                    : () => _load(origin: origin, offset: _offset + _pageSize),
+                icon: const Icon(Icons.chevron_right),
+              ),
+              if (totalPages > 1)
+                IconButton(
+                  tooltip: AdminUiCopy.jumpToLastPageFor(),
+                  onPressed: busy || !(_page?.hasMore ?? false)
+                      ? null
+                      : () => _load(
+                          origin: origin,
+                          offset: _lastAdminOffset(
+                            total: _page!.total,
+                            pageSize: _pageSize,
+                          ),
+                        ),
+                  icon: const Icon(Icons.last_page),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final loadingFirstPage = _loading && _page == null;
-    return Column(
-      children: [
-        AppSectionHeader(
-          title: '审计日志',
-          subtitle: _adminPageSummary(_page),
-          actionLabel: '刷新',
-          actionIcon: Icons.refresh,
-          onAction: _loading ? null : () => _load(offset: _offset),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: TextField(
-            controller: _searchCtrl,
-            decoration: InputDecoration(
-              hintText: '搜索管理员、操作、对象或详情',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _query.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: '清空日志搜索',
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        _load(query: '', offset: 0);
-                      },
-                    ),
-              isDense: true,
-            ),
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _applySearch(),
-          ),
-        ),
-        _AdminChipWrap(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          children: [
-            _actionChip('全部操作', ''),
-            _actionChip('更新用户', 'user.update'),
-            _actionChip('公告', 'announcement.update'),
-            _actionChip('回复反馈', 'feedback.reply'),
-            _actionChip('邀请码', 'invite.create'),
-          ],
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: AppDropdownField<String>(
-            initialValue: _sort,
-            labelText: '日志排序',
-            items: [
-              DropdownMenuItem(
-                value: 'created_desc',
-                child: Text(_adminAuditSortLabel('created_desc')),
-              ),
-              DropdownMenuItem(
-                value: 'actor_asc',
-                child: Text(_adminAuditSortLabel('actor_asc')),
-              ),
-              DropdownMenuItem(
-                value: 'action_asc',
-                child: Text(_adminAuditSortLabel('action_asc')),
-              ),
-              DropdownMenuItem(
-                value: 'target_asc',
-                child: Text(_adminAuditSortLabel('target_asc')),
-              ),
-            ],
-            onChanged: (value) =>
-                _load(sort: value ?? 'created_desc', offset: 0),
-          ),
-        ),
-        _AdminInlineLoadingIndicator(
-          visible: _loading && _page != null,
-          label: '正在更新审计日志',
-        ),
-        if (loadingFirstPage)
-          const Expanded(
-            child: Center(
+    final origin = _capture();
+    final failedLoad = _failedLoad;
+    Future<void> retry() async {
+      if (!_isCurrent(origin)) return;
+      if (failedLoad != null) {
+        await failedLoad();
+      } else {
+        await _load(origin: origin);
+      }
+    }
+
+    final error = _error == null
+        ? null
+        : _adminErrorMessage(_error!, AdminAuditUiCopy.titleFor());
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _load(origin: origin);
+      },
+      child: CustomScrollView(
+        key: const ValueKey('admin_audit_body_scroll'),
+        controller: _scrollCtrl,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text('正在加载审计日志…'),
+                  Text(
+                    AdminAuditUiCopy.titleFor(),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _adminPageSummary(_page),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: _readBusy ? null : () => _load(origin: origin),
+                    icon: const Icon(Icons.refresh),
+                    label: Text(AdminUiCopy.refreshFor()),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    key: const ValueKey('admin_audit_search'),
+                    controller: _searchCtrl,
+                    decoration: InputDecoration(
+                      hintText: AdminAuditUiCopy.searchHintFor(),
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _query.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: AdminAuditUiCopy.clearSearchFor(),
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                if (!_isCurrent(origin)) return;
+                                _searchCtrl.clear();
+                                _load(origin: origin, query: '', offset: 0);
+                              },
+                            ),
+                      isDense: true,
+                    ),
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) {
+                      if (!_isCurrent(origin)) return;
+                      _load(
+                        origin: origin,
+                        query: _searchCtrl.text.trim(),
+                        offset: 0,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final value in [
+                        '',
+                        'user.update',
+                        'announcement.update',
+                        'feedback.reply',
+                        'invite.create',
+                      ])
+                        ChoiceChip(
+                          key: ValueKey('admin_audit_action_$value'),
+                          label: Text(_auditActionLabel(value)),
+                          selected: _action == value,
+                          onSelected: (_) =>
+                              _load(origin: origin, action: value, offset: 0),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    key: ValueKey(('admin-audit-sort', _authorityRevision)),
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: _readBusy || _picker != null
+                        ? null
+                        : () => _pick<String>(
+                            origin,
+                            title: AdminAuditUiCopy.sortTitleFor,
+                            selected: _sort,
+                            options: const [
+                              'created_desc',
+                              'actor_asc',
+                              'action_asc',
+                              'target_asc',
+                            ],
+                            label: _adminAuditSortLabel,
+                            apply: (origin, value) =>
+                                _load(origin: origin, sort: value, offset: 0),
+                          ),
+                    child: InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: AdminAuditUiCopy.sortTitleFor(),
+                        enabled: !_readBusy && _picker == null,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(_adminAuditSortLabel(_sort))),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.keyboard_arrow_down_rounded),
+                        ],
+                      ),
+                    ),
+                  ),
+                  _AdminInlineLoadingIndicator(
+                    visible: _loading && _page != null,
+                    label: AdminAuditUiCopy.updatingFor(),
+                  ),
                 ],
               ),
             ),
-          )
-        else if (_error != null)
-          Expanded(
-            child: _AdminErrorState(
-              message: _error!,
-              onRetry: () => _load(offset: _offset),
-            ),
-          )
-        else if (_items.isEmpty)
-          Expanded(
-            child: EmptyState(
-              icon: Icons.receipt_long_outlined,
-              message: _query.isEmpty && _action.isEmpty
-                  ? '暂无操作记录'
-                  : '没有匹配的操作记录，请调整筛选条件',
-            ),
-          )
-        else
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => _load(offset: _offset),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8),
+          ),
+          if (_readBusy && _page == null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    if (_loading) ...[
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 12),
+                    ],
+                    Text(AdminAuditUiCopy.loadingFor()),
+                  ],
+                ),
+              ),
+            )
+          else if (error != null)
+            SliverToBoxAdapter(
+              child: _AdminErrorState(message: error, onRetry: retry),
+            )
+          else if (_items.isEmpty)
+            SliverToBoxAdapter(
+              child: EmptyState(
+                icon: Icons.receipt_long_outlined,
+                message: _query.isEmpty && _action.isEmpty
+                    ? AdminAuditUiCopy.emptyFor()
+                    : AdminAuditUiCopy.noMatchesFor(),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList.builder(
                 itemCount: _items.length,
-                itemBuilder: (_, i) {
-                  final item = _items[i];
-                  final action = (item['action'] ?? '').toString();
-                  final actor = (item['actor_name'] ?? item['actor'] ?? '-')
-                      .toString();
-                  final target = (item['target'] ?? '').toString();
-                  final detail = (item['detail'] ?? '').toString();
-                  final createdAt = (item['created_at'] ?? '').toString();
-                  return _AdminListTileCard(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    leading: Icon(
-                      Icons.receipt_long_outlined,
-                      color: cs.primary,
-                    ),
-                    title: Text(
-                      '${_auditActionLabel(action)} · $actor',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                    subtitle: Text(
-                      [
-                        if (createdAt.isNotEmpty) createdAt,
-                        if (target.isNotEmpty) '对象: $target',
-                        if (detail.isNotEmpty) '详情: $detail',
-                      ].join('\n'),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.64),
-                      ),
-                    ),
-                  );
-                },
+                itemBuilder: (context, index) =>
+                    _auditCard(context, _items[index]),
               ),
             ),
-          ),
-        _AdminPaginationBar(
-          page: _page,
-          loading: _loading,
-          pageSize: _pageSize,
-          onPageSizeChanged: (value) => _load(pageSize: value, offset: 0),
-          onPrevious: () =>
-              _load(offset: _previousAdminOffset(_offset, _pageSize)),
-          onNext: () => _load(offset: _offset + _pageSize),
-          onJumpToPage: (page) => _load(offset: (page - 1) * _pageSize),
-        ),
-      ],
+          SliverToBoxAdapter(child: _auditPagination(origin)),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
+      ),
     );
   }
 
-  Widget _actionChip(String label, String value) {
-    final selected = _action == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => _load(action: value, offset: 0),
+  Widget _auditCard(BuildContext context, Map<String, dynamic> item) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final action = (item['action'] ?? '').toString();
+    final actor = (item['actor_name'] ?? item['actor'] ?? '-').toString();
+    final target = (item['target'] ?? '').toString();
+    final detail = (item['detail'] ?? '').toString();
+    final createdAt = (item['created_at'] ?? '').toString();
+    return AppSurfaceCard(
+      key: ValueKey(('admin-audit-record', item['id'])),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      border: _adminSubtleListBorder(context),
+      elevation: 0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.receipt_long_outlined, size: 20, color: cs.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _auditActionLabel(action),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SelectableText(
+            AdminAuditUiCopy.actor(actor),
+            style: theme.textTheme.bodySmall,
+          ),
+          if (createdAt.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              createdAt,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (target.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            SelectableText(
+              AdminAuditUiCopy.target(target),
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+          if (detail.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            SelectableText(
+              AdminAuditUiCopy.detail(detail),
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ],
       ),
     );
   }

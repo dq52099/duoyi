@@ -16,6 +16,8 @@ import '../models/todo.dart';
 import 'api_client.dart';
 import 'account_local_data_cleaner.dart';
 import '../core/i18n.dart';
+import '../core/weekly_review_summary.dart';
+import '../core/weekly_review_generation.dart';
 
 /// AI 客户端：**不再持有任何 key/base_url**，所有调用通过 `/api/ai/chat`
 /// 由已登录用户的 token 代理到管理员在服务端配置好的上游。
@@ -26,6 +28,7 @@ class AiService extends ChangeNotifier {
   bool _enabled = false;
   String _model = '';
   List<AiReviewEntry> _reviewHistory = [];
+  final Set<AiReviewEntry> _pendingOwnedEntries = {};
   int _storageGeneration = 0;
   int _historyRevision = 0;
   bool _historyNeedsPersistence = false;
@@ -49,6 +52,7 @@ class AiService extends ChangeNotifier {
 
   void _accountHistoryInvalidated() {
     if (_disposed) return;
+    _pendingOwnedEntries.clear();
     _storageGeneration++;
     _historyAccountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _reviewHistory = [];
@@ -57,7 +61,9 @@ class AiService extends ChangeNotifier {
     notifyListeners();
   }
 
-  _AiHistoryOperation _captureHistoryOperation() {
+  _AiHistoryOperation _captureHistoryOperation({
+    bool Function()? ownerIsCurrent,
+  }) {
     if (!_canAccessHistory) throw const AiReviewDiscardedException();
     return _AiHistoryOperation(
       storage: _storageGeneration,
@@ -66,11 +72,12 @@ class AiService extends ChangeNotifier {
       token: _client.token,
       baseUrl: _client.baseUrl,
       model: _model,
+      ownerIsCurrent: ownerIsCurrent,
     );
   }
 
-  bool _isHistoryOperationCurrent(_AiHistoryOperation operation) =>
-      _canAccessHistory &&
+  bool _sameHistoryOwner(_AiHistoryOperation operation) =>
+      !_disposed &&
       operation.storage == _storageGeneration &&
       operation.account == _historyAccountGeneration &&
       AccountLocalDataCleaner.isCurrentAccountDataGeneration(
@@ -79,6 +86,11 @@ class AiService extends ChangeNotifier {
       identical(operation.client, _client) &&
       operation.token == _client.token &&
       operation.baseUrl == _client.baseUrl;
+
+  bool _isHistoryOperationCurrent(_AiHistoryOperation operation) =>
+      _canAccessHistory &&
+      _sameHistoryOwner(operation) &&
+      (operation.ownerIsCurrent?.call() ?? true);
 
   void _requireHistoryOperation(_AiHistoryOperation operation) {
     if (!_isHistoryOperationCurrent(operation)) {
@@ -114,16 +126,52 @@ class AiService extends ChangeNotifier {
     AiReviewEntry entry,
   ) async {
     _requireHistoryOperation(operation);
+    if (operation.ownerIsCurrent != null) _pendingOwnedEntries.add(entry);
     _reviewHistory.insert(0, entry);
     _historyRevision++;
     _historyNeedsPersistence = true;
-    if (_reviewHistory.length > 50) {
+    _trimReviewHistory();
+    try {
+      await _saveHistory(operation);
+      _requireHistoryOperation(operation);
+      notifyListeners();
+      _requireHistoryOperation(operation);
+    } on AiReviewDiscardedException {
+      _pendingOwnedEntries.remove(entry);
+      // A page/session cancellation can leave the service itself current.
+      // Undo only this provisional row and repair any already-issued write.
+      if (operation.ownerIsCurrent != null && _sameHistoryOwner(operation)) {
+        final length = _reviewHistory.length;
+        _reviewHistory.removeWhere((item) => identical(item, entry));
+        if (_reviewHistory.length != length) {
+          _trimReviewHistory();
+          _historyRevision++;
+          _historyNeedsPersistence = true;
+          notifyListeners();
+          final cleanup = operation.withoutOwner();
+          if (_isHistoryOperationCurrent(cleanup)) {
+            try {
+              await _saveHistory(cleanup);
+              if (_isHistoryOperationCurrent(cleanup)) notifyListeners();
+            } catch (_) {
+              // Keep dirty history and the existing drain failure receipt.
+            }
+          }
+        }
+      }
+      rethrow;
+    } finally {
+      _pendingOwnedEntries.remove(entry);
+      _trimReviewHistory();
+    }
+  }
+
+  void _trimReviewHistory() {
+    // Retain the tail until owned appends settle so a cancelled 51st row
+    // cannot evict a previously saved review. Persist at most 50 rows.
+    if (_pendingOwnedEntries.isEmpty && _reviewHistory.length > 50) {
       _reviewHistory = _reviewHistory.sublist(0, 50);
     }
-    await _saveHistory(operation);
-    _requireHistoryOperation(operation);
-    notifyListeners();
-    _requireHistoryOperation(operation);
   }
 
   /// Wait for issued platform writes before account preferences are removed.
@@ -143,6 +191,7 @@ class AiService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _pendingOwnedEntries.clear();
     _storageGeneration++;
     AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
       _accountHistoryInvalidated,
@@ -153,6 +202,9 @@ class AiService extends ChangeNotifier {
   bool get enabled => _enabled;
   bool get isConfigured => _enabled;
   String get model => _model;
+
+  /// Changes when the owner of local review history is reset.
+  int get historyGeneration => _storageGeneration;
   List<AiReviewEntry> get reviewHistory =>
       _canAccessHistory &&
           _historyAccountGeneration ==
@@ -215,6 +267,7 @@ class AiService extends ChangeNotifier {
 
   void resetLocalState() {
     if (_disposed) return;
+    _pendingOwnedEntries.clear();
     _historyAccountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _storageGeneration++;
     _reviewHistory = [];
@@ -227,7 +280,7 @@ class AiService extends ChangeNotifier {
     _requireHistoryOperation(operation);
     final revision = _historyRevision;
     final snapshot = List<String>.unmodifiable(
-      _reviewHistory.map((entry) => jsonEncode(entry.toJson())),
+      _reviewHistory.take(50).map((entry) => jsonEncode(entry.toJson())),
     );
     final write = _historyWriteQueue.then((_) async {
       _requireHistoryOperation(operation);
@@ -307,6 +360,12 @@ class AiService extends ChangeNotifier {
     if (trimmed.isEmpty) {
       throw const AiException('请输入要创建的日程或待办内容');
     }
+    final _AiHistoryOperation operation;
+    try {
+      operation = _captureHistoryOperation();
+    } on AiReviewDiscardedException {
+      throw const AiScheduleDiscardedException();
+    }
     final localNow = now ?? DateTime.now();
     final baseDraft = _fallbackScheduleDraft(trimmed, now: localNow);
     if (!_enabled) return baseDraft.withSource(AiScheduleSource.localParser);
@@ -324,7 +383,8 @@ class AiService extends ChangeNotifier {
       '没有结束时间时，calendar 默认 60 分钟；todo 没有时间也可以创建。',
     ].join('\n');
     try {
-      final raw = await _chat(
+      final raw = await _reviewChat(
+        operation,
         '你是多仪的日程创建助手。你必须把自然语言转成可确认的结构化草稿。'
         '不要编造用户没有提到的地点、人名或重复规则。输出必须是严格 JSON。',
         prompt,
@@ -335,16 +395,21 @@ class AiService extends ChangeNotifier {
       return parsed ??
           baseDraft.withSource(
             AiScheduleSource.aiWithLocalFallback,
+            warningKind: AiScheduleWarningKind.noUsableDraft,
             warning: 'AI 没有返回可用草稿，已用本地时间解析生成草稿。',
           );
+    } on AiReviewDiscardedException {
+      throw const AiScheduleDiscardedException();
     } on AiException catch (e) {
       return baseDraft.withSource(
         AiScheduleSource.localParser,
+        warningKind: AiScheduleWarningKind.unavailable,
         warning: 'AI 识别失败，已用本地时间解析生成草稿：${e.message}',
       );
     } catch (e) {
       return baseDraft.withSource(
         AiScheduleSource.aiWithLocalFallback,
+        warningKind: AiScheduleWarningKind.invalidResponse,
         warning: 'AI 返回内容无法解析，已用本地时间解析生成草稿：$e',
       );
     }
@@ -381,10 +446,15 @@ class AiService extends ChangeNotifier {
     required int totalTodos,
     required int weeklyFocusMinutes,
     required int habitStreak,
-    String periodLabel = '本周',
+    String? periodLabel,
+    WeeklyReviewPeriod? period,
+    AppLocale? locale,
+    bool Function()? ownerIsCurrent,
     DateTime? now,
   }) async {
-    final operation = _captureHistoryOperation();
+    final operation = _captureHistoryOperation(ownerIsCurrent: ownerIsCurrent);
+    _requireHistoryOperation(operation);
+    final generationLocale = locale ?? I18n.current;
     final createdAt = now ?? DateTime.now();
     final cached = _findWeeklyReviewForDay(createdAt);
     if (cached != null) {
@@ -392,27 +462,31 @@ class AiService extends ChangeNotifier {
       _requireHistoryOperation(operation);
       return cached.content;
     }
-    final summary =
-        '$periodLabel数据：完成 $completedTodos / $totalTodos 项待办，专注 $weeklyFocusMinutes 分钟，习惯连续打卡 $habitStreak 天。';
-    final out = await _reviewChat(
-      operation,
-      _weeklyReviewSystemPrompt(periodLabel),
-      '周期：$periodLabel\n'
-      '待办完成：$completedTodos / $totalTodos\n'
-      '专注时长：$weeklyFocusMinutes 分钟\n'
-      '习惯连续打卡：$habitStreak 天\n'
-      '请生成这次周回顾。',
-      temperature: 0.45,
-      maxTokens: 260,
-    );
-    final review = _normalizeWeeklyReview(
-      out,
-      periodLabel: periodLabel,
+    final stats = WeeklyReviewStats(
       completedTodos: completedTodos,
       totalTodos: totalTodos,
-      weeklyFocusMinutes: weeklyFocusMinutes,
+      focusMinutes: weeklyFocusMinutes,
       habitStreak: habitStreak,
+      period:
+          period ??
+          (periodLabel == null
+              ? WeeklyReviewPeriod.thisWeek
+              : WeeklyReviewPeriod.custom),
+      customPeriodLabel: periodLabel ?? '',
     );
+    final generation = WeeklyReviewGeneration(
+      stats: stats,
+      isEnglish: generationLocale == AppLocale.en,
+    );
+    final summary = stats.format(isEnglish: generation.isEnglish);
+    final out = await _reviewChat(
+      operation,
+      generation.systemPrompt,
+      generation.userPrompt,
+      temperature: 0.45,
+      maxTokens: 400,
+    );
+    final review = generation.normalize(out);
     final entry = AiReviewEntry(
       id: createdAt.millisecondsSinceEpoch.toString(),
       createdAt: createdAt,
@@ -420,6 +494,7 @@ class AiService extends ChangeNotifier {
       summary: summary,
       model: operation.model,
       kind: weeklyReviewKind,
+      weeklyStats: stats,
     );
     await _appendReview(operation, entry);
     _requireHistoryOperation(operation);
@@ -435,25 +510,36 @@ class AiService extends ChangeNotifier {
     required int habitCheckIns,
     required int timeEntryMinutes,
     required String periodLabel,
+    AppLocale? locale,
   }) async {
-    final summary =
-        '$periodLabel数据：完成 $completedTodos / $totalTodos 项待办，'
-        '专注 $focusMinutes 分钟，习惯打卡 $habitCheckIns 次（最长连续 $habitStreak 天），'
-        '记录时间 $timeEntryMinutes 分钟。';
-    return _runReview(summary, periodLabel);
+    final generationLocale = locale ?? I18n.current;
+    final summary = generationLocale == AppLocale.en
+        ? '$periodLabel summary: tasks done $completedTodos / $totalTodos, '
+              'focus $focusMinutes min, habit check-ins $habitCheckIns '
+              '(longest streak $habitStreak days), time logged $timeEntryMinutes min.'
+        : '$periodLabel数据：完成 $completedTodos / $totalTodos 项待办，'
+              '专注 $focusMinutes 分钟，习惯打卡 $habitCheckIns 次（最长连续 $habitStreak 天），'
+              '记录时间 $timeEntryMinutes 分钟。';
+    return _runReview(summary, periodLabel, locale: generationLocale);
   }
 
   Future<String> personalizedReportReview({
     required String periodLabel,
     required String reportMarkdown,
+    AppLocale? locale,
   }) async {
+    final isEnglish = (locale ?? I18n.current) == AppLocale.en;
     final operation = _captureHistoryOperation();
     final out = await _reviewChat(
       operation,
-      '你是多仪的云端效率报告分析师。基于用户的周期统计报告，输出一段结构化中文个性化解读。'
-          '要求：1) 先给一句总判断；2) 分析待办、专注、习惯、时间足迹中最值得保留和最需要调整的点；'
-          '3) 给出未来 7 天 3 条可执行动作；4) 不要泛泛鼓励，不要重复原始数据堆砌。',
-      '周期：$periodLabel\n\n$reportMarkdown',
+      isEnglish
+          ? 'You are Duoyi’s productivity report analyst. Write a structured personalized review in English based on the user’s period report. '
+                'Start with one overall assessment; identify what to retain and adjust in tasks, focus, habits and time logs; '
+                'suggest three practical actions for the next seven days. Avoid generic encouragement and repeating raw data.'
+          : '你是多仪的云端效率报告分析师。基于用户的周期统计报告，输出一段结构化中文个性化解读。'
+                '要求：1) 先给一句总判断；2) 分析待办、专注、习惯、时间足迹中最值得保留和最需要调整的点；'
+                '3) 给出未来 7 天 3 条可执行动作；4) 不要泛泛鼓励，不要重复原始数据堆砌。',
+      '${isEnglish ? 'Period' : '周期'}：$periodLabel\n\n$reportMarkdown',
       temperature: 0.5,
       maxTokens: 900,
     );
@@ -461,7 +547,9 @@ class AiService extends ChangeNotifier {
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       createdAt: DateTime.now(),
       content: out,
-      summary: '统计报告 AI 解读：$periodLabel',
+      summary: isEnglish
+          ? 'Report AI review: $periodLabel'
+          : '统计报告 AI 解读：$periodLabel',
       model: operation.model,
     );
     await _appendReview(operation, entry);
@@ -472,9 +560,15 @@ class AiService extends ChangeNotifier {
   Future<String> deepDiaryReview({
     required Iterable<DiaryEntry> entries,
     DateTime? today,
+    AppLocale? locale,
   }) async {
+    final generationLocale = locale ?? I18n.current;
     final operation = _captureHistoryOperation();
-    final prompt = DiaryDeepReviewBuilder.build(entries: entries, today: today);
+    final prompt = DiaryDeepReviewBuilder.build(
+      entries: entries,
+      today: today,
+      locale: generationLocale,
+    );
     final out = await _reviewChat(
       operation,
       prompt.systemPrompt,
@@ -486,7 +580,9 @@ class AiService extends ChangeNotifier {
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       createdAt: DateTime.now(),
       content: out,
-      summary: '日记深度复盘：${prompt.summary}',
+      summary: generationLocale == AppLocale.en
+          ? 'Diary deep review: ${prompt.summary}'
+          : '日记深度复盘：${prompt.summary}',
       model: operation.model,
     );
     await _appendReview(operation, entry);
@@ -516,15 +612,21 @@ class AiService extends ChangeNotifier {
   Future<String> _runReview(
     String summary,
     String periodLabel, {
+    required AppLocale locale,
     String kind = '',
     DateTime? createdAt,
   }) async {
     final operation = _captureHistoryOperation();
     final out = await _reviewChat(
       operation,
-      '你是一个温柔且实用的效率教练。基于$periodLabel完成情况写一段 80-150 字的中文回顾，'
-      '开头必须明确写“$periodLabel回顾：”。语气积极不空洞，先肯定 1-2 点亮点，'
-      '再提 1-2 个具体可执行的下周建议。不要使用 Markdown、表格、emoji、加粗或分隔线。',
+      locale == AppLocale.en
+          ? 'You are a kind and practical productivity coach. Based on the supplied $periodLabel facts, '
+                'write a concise review in English (about 60–100 words). Start with "$periodLabel review:". '
+                'Recognize one or two useful practices, then suggest one or two practical actions for next week. '
+                'Do not invent facts or use Markdown, tables, emoji, bold or separators.'
+          : '你是一个温柔且实用的效率教练。基于$periodLabel完成情况写一段 80-150 字的中文回顾，'
+                '开头必须明确写“$periodLabel回顾：”。语气积极不空洞，先肯定 1-2 点亮点，'
+                '再提 1-2 个具体可执行的下周建议。不要使用 Markdown、表格、emoji、加粗或分隔线。',
       summary,
       temperature: 0.6,
       maxTokens: 400,
@@ -550,206 +652,19 @@ class AiService extends ChangeNotifier {
     if (entry.kind == weeklyReviewKind) return true;
     return RegExp(r'^(本周|上周)数据：').hasMatch(entry.summary);
   }
-
-  String _weeklyReviewSystemPrompt(String periodLabel) {
-    return '你是多仪的效率回顾助手。基于$periodLabel完成情况输出中文周回顾。'
-        '必须严格遵守：'
-        '1. 输出分层纯文本，不要写成长段落；'
-        '2. 不要 Markdown、表格、emoji、加粗、标题、分隔线或客套结尾；'
-        '3. 不要出现“根据你提供的数据”“随时告诉我”“加油”等套话；'
-        '4. 每行尽量不超过 32 个汉字；'
-        '5. 固定格式如下：\n'
-        '$periodLabel回顾\n'
-        '总览：一句总判断\n'
-        '数据\n'
-        '待办：完成情况\n'
-        '专注：专注时长\n'
-        '习惯：连续打卡\n'
-        '观察：一句关键原因或状态\n'
-        '下周行动\n'
-        '行动一：一个具体动作\n'
-        '行动二：一个具体动作';
-  }
-
-  String _normalizeWeeklyReview(
-    String raw, {
-    required String periodLabel,
-    required int completedTodos,
-    required int totalTodos,
-    required int weeklyFocusMinutes,
-    required int habitStreak,
-  }) {
-    final lines = raw
-        .split(RegExp(r'\r?\n'))
-        .where((line) => !_looksLikeMarkdownTableLine(line))
-        .map(_cleanReviewLine)
-        .where((line) => line.isNotEmpty)
-        .where((line) => !_looksLikeMarkdownTableLine(line))
-        .take(8)
-        .toList(growable: false);
-    final cleaned = lines.join('\n').trim();
-    if (_looksLikeStructuredWeeklyReview(cleaned, periodLabel)) return cleaned;
-    final suggestion = lines
-        .map(
-          (line) => line.replaceFirst(RegExp(r'^(下周建议|建议|行动)[:：]'), '').trim(),
-        )
-        .firstWhere(
-          (line) =>
-              line.length >= 8 &&
-              !line.contains('数据概览') &&
-              !line.startsWith('待办') &&
-              !line.startsWith('专注') &&
-              !line.startsWith('习惯') &&
-              !line.contains('根据你提供的数据') &&
-              !line.contains('随时告诉') &&
-              !line.contains('加油'),
-          orElse: () => '',
-        );
-    return _fallbackWeeklyReview(
-      periodLabel: periodLabel,
-      completedTodos: completedTodos,
-      totalTodos: totalTodos,
-      weeklyFocusMinutes: weeklyFocusMinutes,
-      habitStreak: habitStreak,
-      suggestion: suggestion,
-    );
-  }
-
-  String _cleanReviewLine(String line) {
-    return line
-        .trim()
-        .replaceAll(RegExp(r'^[#>\-\*\d\.\s]+'), '')
-        .replaceAll(RegExp(r'[`*_~|]'), '')
-        .replaceAll(RegExp(r'[\u{1F300}-\u{1FAFF}]', unicode: true), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-  }
-
-  bool _looksLikeMarkdownTableLine(String line) {
-    final compact = line.replaceAll(' ', '');
-    if (compact.contains('---')) return true;
-    if (line.contains('指标') && line.contains('完成')) return true;
-    if (line.contains('|')) return true;
-    return false;
-  }
-
-  bool _looksLikeStructuredWeeklyReview(String text, String periodLabel) {
-    final lines = text.split('\n').where((line) => line.trim().isNotEmpty);
-    if (lines.length != 10) return false;
-    return text.startsWith('$periodLabel回顾\n') &&
-        text.contains('\n总览：') &&
-        text.contains('\n数据\n') &&
-        text.contains('\n待办：') &&
-        text.contains('\n专注：') &&
-        text.contains('\n习惯：') &&
-        text.contains('\n观察：') &&
-        text.contains('\n下周行动\n') &&
-        text.contains('\n行动一：') &&
-        text.contains('\n行动二：') &&
-        !RegExp(r'[*_#|]').hasMatch(text) &&
-        !RegExp(r'[\u{1F300}-\u{1FAFF}]', unicode: true).hasMatch(text);
-  }
-
-  String _fallbackWeeklyReview({
-    required String periodLabel,
-    required int completedTodos,
-    required int totalTodos,
-    required int weeklyFocusMinutes,
-    required int habitStreak,
-    required String suggestion,
-  }) {
-    final rate = totalTodos <= 0
-        ? 0
-        : (completedTodos / totalTodos * 100).round();
-    final overview =
-        totalTodos <= 0 && weeklyFocusMinutes <= 0 && habitStreak <= 0
-        ? '记录偏少，先恢复基础节奏。'
-        : totalTodos > 0 && completedTodos >= totalTodos
-        ? '待办推进稳定，继续保持。'
-        : rate >= 70
-        ? '整体完成不错，可以继续加固。'
-        : '节奏还有提升空间。';
-    final todoLine = totalTodos <= 0
-        ? '待办：暂无计划项，先安排关键任务。'
-        : '待办：完成 $completedTodos / $totalTodos 项，完成率 $rate%。';
-    final focusLine = weeklyFocusMinutes <= 0
-        ? '专注：0 分钟，先从每天 10 分钟开始。'
-        : '专注：$weeklyFocusMinutes 分钟，保留固定专注窗口。';
-    final habitLine = habitStreak <= 0
-        ? '习惯：连续 0 天，先重启一个最小习惯。'
-        : '习惯：连续 $habitStreak 天，继续守住当前节奏。';
-    final observation = _weeklyObservation(
-      totalTodos: totalTodos,
-      completedTodos: completedTodos,
-      weeklyFocusMinutes: weeklyFocusMinutes,
-      habitStreak: habitStreak,
-    );
-    final firstAction = suggestion.isEmpty
-        ? _defaultWeeklyAction(totalTodos, weeklyFocusMinutes, habitStreak)
-        : suggestion;
-    final secondAction = _secondaryWeeklyAction(
-      totalTodos,
-      weeklyFocusMinutes,
-      habitStreak,
-    );
-    return [
-      '$periodLabel回顾',
-      '总览：$overview',
-      '数据',
-      todoLine,
-      focusLine,
-      habitLine,
-      '观察：$observation',
-      '下周行动',
-      '行动一：$firstAction',
-      '行动二：$secondAction',
-    ].join('\n');
-  }
-
-  String _weeklyObservation({
-    required int totalTodos,
-    required int completedTodos,
-    required int weeklyFocusMinutes,
-    required int habitStreak,
-  }) {
-    if (totalTodos > 0 && completedTodos > 0 && weeklyFocusMinutes <= 0) {
-      return '待办有推进，但专注时间没有形成记录。';
-    }
-    if (habitStreak <= 0 && weeklyFocusMinutes > 0) {
-      return '专注已经启动，习惯链还需要重新接上。';
-    }
-    if (totalTodos <= 0 && weeklyFocusMinutes <= 0 && habitStreak <= 0) {
-      return '本周更像恢复周，先把记录节奏找回来。';
-    }
-    return '当前节奏可延续，重点是减少目标切换。';
-  }
-
-  String _defaultWeeklyAction(
-    int totalTodos,
-    int weeklyFocusMinutes,
-    int habitStreak,
-  ) {
-    if (weeklyFocusMinutes <= 0) return '每天先排一个 10 分钟专注块。';
-    if (habitStreak <= 0) return '选择一个低门槛习惯连续打卡 3 天。';
-    if (totalTodos <= 0) return '提前列出 3 件本周关键任务。';
-    return '保留 2 件关键任务，完成后再加新任务。';
-  }
-
-  String _secondaryWeeklyAction(
-    int totalTodos,
-    int weeklyFocusMinutes,
-    int habitStreak,
-  ) {
-    if (habitStreak <= 0) return '把喝水或早睡设为本周最小习惯。';
-    if (weeklyFocusMinutes <= 0) return '把专注提醒放到每天固定时段。';
-    if (totalTodos <= 0) return '每天只确认一次任务清单。';
-    return '周中复盘一次，及时删掉低优先级任务。';
-  }
 }
 
 enum AiScheduleType { calendar, todo }
 
 enum AiScheduleSource { ai, aiWithLocalFallback, localParser }
+
+/// Stable fallback reasons for localized presentation without raw diagnostics.
+enum AiScheduleWarningKind {
+  unavailable,
+  noUsableDraft,
+  invalidResponse,
+  missingReminderTime,
+}
 
 class AiScheduleDraft {
   final AiScheduleType type;
@@ -762,6 +677,7 @@ class AiScheduleDraft {
   final List<String> subtasks;
   final AiScheduleSource source;
   final String? warning;
+  final AiScheduleWarningKind? warningKind;
 
   const AiScheduleDraft({
     required this.type,
@@ -774,12 +690,17 @@ class AiScheduleDraft {
     this.subtasks = const <String>[],
     this.source = AiScheduleSource.ai,
     this.warning,
+    this.warningKind,
   });
 
   bool get isCalendar => type == AiScheduleType.calendar;
   bool get hasTime => !allDay;
 
-  AiScheduleDraft withSource(AiScheduleSource next, {String? warning}) {
+  AiScheduleDraft withSource(
+    AiScheduleSource next, {
+    String? warning,
+    AiScheduleWarningKind? warningKind,
+  }) {
     return AiScheduleDraft(
       type: type,
       title: title,
@@ -791,6 +712,7 @@ class AiScheduleDraft {
       subtasks: subtasks,
       source: next,
       warning: warning ?? this.warning,
+      warningKind: warningKind ?? this.warningKind,
     );
   }
 
@@ -858,7 +780,7 @@ AiScheduleDraft _fallbackScheduleDraft(String input, {DateTime? now}) {
         : null,
     allDay: !hasExplicitTime,
     reminderEnabled: reminder,
-    notes: '来自输入：$input',
+    notes: input,
     source: AiScheduleSource.localParser,
   );
 }
@@ -960,6 +882,9 @@ AiScheduleDraft? _parseScheduleDraft(
     ]),
     subtasks: subtasks,
     warning: warning,
+    warningKind: warning == null
+        ? null
+        : AiScheduleWarningKind.missingReminderTime,
   );
 }
 
@@ -1228,6 +1153,7 @@ class AiReviewEntry {
   final String summary;
   final String model;
   final String kind;
+  final WeeklyReviewStats? weeklyStats;
 
   const AiReviewEntry({
     required this.id,
@@ -1236,7 +1162,14 @@ class AiReviewEntry {
     required this.summary,
     this.model = '',
     this.kind = '',
+    this.weeklyStats,
   });
+
+  String get displaySummary {
+    if (kind.isNotEmpty && kind != AiService.weeklyReviewKind) return summary;
+    final stats = weeklyStats ?? WeeklyReviewStats.fromLegacy(summary);
+    return stats?.format(isEnglish: I18n.current == AppLocale.en) ?? summary;
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -1245,6 +1178,7 @@ class AiReviewEntry {
     'summary': summary,
     'model': model,
     'kind': kind,
+    if (weeklyStats != null) 'weeklyStats': weeklyStats!.toJson(),
   };
 
   factory AiReviewEntry.fromJson(Map<String, dynamic> j) => AiReviewEntry(
@@ -1254,6 +1188,7 @@ class AiReviewEntry {
     summary: (j['summary'] ?? '').toString(),
     model: (j['model'] ?? '').toString(),
     kind: (j['kind'] ?? '').toString(),
+    weeklyStats: WeeklyReviewStats.fromJson(j['weeklyStats']),
   );
 }
 
@@ -1276,6 +1211,19 @@ class AiReviewDiscardedException extends AiException {
       : 'The account or local data changed. This AI review was canceled.';
 }
 
+/// Schedule results and local fallbacks belong to the requesting account.
+class AiScheduleDiscardedException extends AiException {
+  const AiScheduleDiscardedException()
+    : super('AI schedule request was canceled.');
+
+  static const code = 'schedule_discarded';
+
+  @override
+  String get message => I18n.current == AppLocale.zh
+      ? '账号或本地数据已变化，本次日程识别已取消。'
+      : 'The account or local data changed. This schedule request was canceled.';
+}
+
 class AiReviewHistoryWriteException extends AiException {
   const AiReviewHistoryWriteException()
     : super('AI review history could not be saved.');
@@ -1296,6 +1244,7 @@ final class _AiHistoryOperation {
     required this.token,
     required this.baseUrl,
     required this.model,
+    this.ownerIsCurrent,
   });
   final int storage;
   final int account;
@@ -1303,4 +1252,14 @@ final class _AiHistoryOperation {
   final String? token;
   final String baseUrl;
   final String model;
+  final bool Function()? ownerIsCurrent;
+
+  _AiHistoryOperation withoutOwner() => _AiHistoryOperation(
+    storage: storage,
+    account: account,
+    client: client,
+    token: token,
+    baseUrl: baseUrl,
+    model: model,
+  );
 }

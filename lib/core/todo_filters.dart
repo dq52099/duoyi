@@ -5,6 +5,8 @@ enum TodoDueFilter { all, overdue, dueToday, next7Days, noDue }
 
 enum TodoCompletionFilter { all, active, completed }
 
+enum TodoSortOrder { manual, dueDate, priority, created }
+
 class TodoFilterState<Q, P> {
   final Q? quadrant;
   final P? priority;
@@ -14,6 +16,8 @@ class TodoFilterState<Q, P> {
   final TodoCompletionFilter completion;
   final bool includeArchived;
   final bool todayOverview;
+  final String query;
+  final TodoSortOrder sortOrder;
 
   const TodoFilterState({
     this.quadrant,
@@ -24,6 +28,8 @@ class TodoFilterState<Q, P> {
     this.completion = TodoCompletionFilter.all,
     this.includeArchived = false,
     this.todayOverview = false,
+    this.query = '',
+    this.sortOrder = TodoSortOrder.manual,
   });
 
   bool get hasActiveFilters =>
@@ -34,7 +40,9 @@ class TodoFilterState<Q, P> {
       due != TodoDueFilter.all ||
       completion != TodoCompletionFilter.all ||
       includeArchived ||
-      todayOverview;
+      todayOverview ||
+      query.trim().isNotEmpty ||
+      sortOrder != TodoSortOrder.manual;
 
   TodoFilterState<Q, P> copyWith({
     Object? quadrant = _unset,
@@ -45,6 +53,8 @@ class TodoFilterState<Q, P> {
     TodoCompletionFilter? completion,
     bool? includeArchived,
     bool? todayOverview,
+    String? query,
+    TodoSortOrder? sortOrder,
   }) {
     return TodoFilterState<Q, P>(
       quadrant: identical(quadrant, _unset) ? this.quadrant : quadrant as Q?,
@@ -57,8 +67,24 @@ class TodoFilterState<Q, P> {
       completion: completion ?? this.completion,
       includeArchived: includeArchived ?? this.includeArchived,
       todayOverview: todayOverview ?? this.todayOverview,
+      query: query ?? this.query,
+      sortOrder: sortOrder ?? this.sortOrder,
     );
   }
+}
+
+/// Apply the default list preference without changing an explicit history view.
+TodoFilterState<Q, P> effectiveTodoFilter<Q, P>(
+  TodoFilterState<Q, P> filter, {
+  bool showCompletedTodos = true,
+}) {
+  if (showCompletedTodos ||
+      filter.completion != TodoCompletionFilter.all ||
+      filter.includeArchived ||
+      filter.todayOverview) {
+    return filter;
+  }
+  return filter.copyWith(completion: TodoCompletionFilter.active);
 }
 
 List<T> filterTodos<T, Q, P>(
@@ -73,10 +99,13 @@ List<T> filterTodos<T, Q, P>(
   required bool Function(T todo) isCompletedOf,
   required bool Function(T todo) isArchivedAfterRolloverOf,
   bool Function(T todo, DateTime reference)? isInTodayOverviewOf,
+  String Function(T todo)? titleOf,
+  String Function(T todo)? notesOf,
 }) {
   final reference = now ?? DateTime.now();
   final today = _dateOnly(reference);
   final next7Days = today.add(const Duration(days: 6));
+  final normalizedQuery = filter.query.trim().toLowerCase();
 
   return todos.where((todo) {
     if (!filter.includeArchived && isArchivedAfterRolloverOf(todo)) {
@@ -113,6 +142,21 @@ List<T> filterTodos<T, Q, P>(
       return false;
     }
 
+    if (normalizedQuery.isNotEmpty) {
+      final title = (titleOf?.call(todo) ?? '').toLowerCase();
+      final notes = (notesOf?.call(todo) ?? '').toLowerCase();
+      final listName = todoListGroupName(listGroupNameOf(todo)).toLowerCase();
+      final hasTagMatch = tagsOf(todo).any(
+        (t) => t.toLowerCase().contains(normalizedQuery),
+      );
+      if (!title.contains(normalizedQuery) &&
+          !notes.contains(normalizedQuery) &&
+          !listName.contains(normalizedQuery) &&
+          !hasTagMatch) {
+        return false;
+      }
+    }
+
     final due = dueDateOf(todo);
     switch (filter.due) {
       case TodoDueFilter.all:
@@ -129,6 +173,83 @@ List<T> filterTodos<T, Q, P>(
         return due == null;
     }
   }).toList();
+}
+
+List<T> sortTodos<T>(
+  Iterable<T> todos,
+  TodoSortOrder sortOrder, {
+  required DateTime? Function(T todo) dueDateOf,
+  required int Function(T todo) priorityRankOf,
+  required DateTime Function(T todo) createdAtOf,
+  required int Function(T todo) sortOrderOf,
+  bool Function(T todo)? isCompletedOf,
+}) {
+  final result = todos.toList();
+  if (sortOrder == TodoSortOrder.manual || result.length < 2) {
+    return result;
+  }
+  final originalIndex = <int, int>{
+    for (var i = 0; i < result.length; i++) i: i,
+  };
+  final indexed = List<int>.generate(result.length, (i) => i);
+  indexed.sort((ia, ib) {
+    final a = result[ia];
+    final b = result[ib];
+    if (isCompletedOf != null) {
+      final ca = isCompletedOf(a);
+      final cb = isCompletedOf(b);
+      if (ca != cb) return ca ? 1 : -1;
+    }
+    switch (sortOrder) {
+      case TodoSortOrder.manual:
+        final orderCmp = sortOrderOf(a).compareTo(sortOrderOf(b));
+        return orderCmp != 0
+            ? orderCmp
+            : originalIndex[ia]!.compareTo(originalIndex[ib]!);
+      case TodoSortOrder.dueDate:
+        final da = dueDateOf(a);
+        final db = dueDateOf(b);
+        if (da != null && db != null) {
+          final cmp = da.compareTo(db);
+          if (cmp != 0) return cmp;
+        } else if (da != null) {
+          return -1;
+        } else if (db != null) {
+          return 1;
+        }
+        final prioCmp = priorityRankOf(b).compareTo(priorityRankOf(a));
+        if (prioCmp != 0) return prioCmp;
+        final manualCmp = sortOrderOf(a).compareTo(sortOrderOf(b));
+        return manualCmp != 0
+            ? manualCmp
+            : originalIndex[ia]!.compareTo(originalIndex[ib]!);
+      case TodoSortOrder.priority:
+        final prioCmp = priorityRankOf(b).compareTo(priorityRankOf(a));
+        if (prioCmp != 0) return prioCmp;
+        final da = dueDateOf(a);
+        final db = dueDateOf(b);
+        if (da != null && db != null) {
+          final cmp = da.compareTo(db);
+          if (cmp != 0) return cmp;
+        } else if (da != null) {
+          return -1;
+        } else if (db != null) {
+          return 1;
+        }
+        final manualCmp = sortOrderOf(a).compareTo(sortOrderOf(b));
+        return manualCmp != 0
+            ? manualCmp
+            : originalIndex[ia]!.compareTo(originalIndex[ib]!);
+      case TodoSortOrder.created:
+        final cmp = createdAtOf(b).compareTo(createdAtOf(a));
+        if (cmp != 0) return cmp;
+        final manualCmp = sortOrderOf(a).compareTo(sortOrderOf(b));
+        return manualCmp != 0
+            ? manualCmp
+            : originalIndex[ia]!.compareTo(originalIndex[ib]!);
+    }
+  });
+  return [for (final idx in indexed) result[idx]];
 }
 
 Map<Q, List<T>> groupTodosByQuadrant<T, Q>(

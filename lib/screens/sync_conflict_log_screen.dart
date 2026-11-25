@@ -4,13 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:duoyi/desktop_web/desktop_embedded_scope.dart';
+
+import '../core/design_tokens.dart' show AppSurfaceStyle, DesignTokens;
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
 import '../providers/cloud_sync_provider.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
+import '../widgets/brand_background.dart'
+    show BrandBackground, BrandRouteSurface, LocaleStatePreservingRoute;
 
-class SyncConflictLogScreen extends StatefulWidget {
+class SyncConflictLogScreen extends StatefulWidget
+    implements LocaleStatePreservingRoute {
   const SyncConflictLogScreen({super.key});
 
   @override
@@ -24,7 +30,18 @@ class _SyncConflictLogScreenState extends State<SyncConflictLogScreen> {
   @override
   void initState() {
     super.initState();
+    I18n.localeListenable.addListener(_localeChanged);
     _load();
+  }
+
+  void _localeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_localeChanged);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -56,8 +73,10 @@ class _SyncConflictLogScreenState extends State<SyncConflictLogScreen> {
     final routeBackground = Theme.of(context).brightness == Brightness.dark
         ? cs.surface
         : cs.surfaceContainerLowest;
-    return Scaffold(
-      backgroundColor: routeBackground,
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+    final scaffold = Scaffold(
+      backgroundColor: isLiquidGlass ? Colors.transparent : routeBackground,
       appBar: AppBar(
         title: Text(I18n.tr('sync_conflict.title')),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
@@ -73,7 +92,7 @@ class _SyncConflictLogScreenState extends State<SyncConflictLogScreen> {
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
                   physics: const AlwaysScrollableScrollPhysics(),
                   children: [
-                    const _SyncStatusCard(),
+                    _SyncStatusCard(),
                     if (_items.isEmpty)
                       EmptyState(
                         icon: Icons.sync_problem_outlined,
@@ -87,12 +106,32 @@ class _SyncConflictLogScreenState extends State<SyncConflictLogScreen> {
               ),
       ),
     );
+
+    if (!isLiquidGlass) {
+      return scaffold;
+    }
+
+    final hasBrandSurface =
+        DesktopEmbeddedHostScope.isHosted(context) ||
+        context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+        context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+    if (hasBrandSurface) {
+      return scaffold;
+    }
+    return Material(
+      color: routeBackground,
+      child: BrandBackground(child: scaffold),
+    );
   }
 
   Widget _buildDecisionCard(BuildContext context, SyncMergeDecision item) {
     final cs = Theme.of(context).colorScheme;
     final remote = item.winner == 'remote';
-    final color = remote ? cs.primary : Colors.orange;
+    final color = remote ? cs.primary : DesignTokens.defaultWarning;
+    final titleText = remote
+        ? I18n.tr('sync_conflict.keep_remote')
+        : I18n.tr('sync_conflict.keep_local');
+    final timeText = _formatTime(item.decidedAt);
     return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -100,29 +139,90 @@ class _SyncConflictLogScreenState extends State<SyncConflictLogScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final textScaler = MediaQuery.textScalerOf(context);
+              final direction = Directionality.of(context);
+              final defaultStyle = DefaultTextStyle.of(context).style;
+
+              final titleStyle = defaultStyle.merge(
+                const TextStyle(fontWeight: FontWeight.normal),
+              );
+              final titlePainter = TextPainter(
+                text: TextSpan(text: titleText, style: titleStyle),
+                textDirection: direction,
+                textScaler: textScaler,
+              )..layout();
+
+              final timeStyle = defaultStyle.merge(
+                TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              );
+              final timePainter = TextPainter(
+                text: TextSpan(text: timeText, style: timeStyle),
+                textDirection: direction,
+                textScaler: textScaler,
+              )..layout();
+
+              const iconWidth = 20.0;
+              const iconGap = 8.0;
+              const minGap = 8.0;
+              final singleLineRowWidth =
+                  iconWidth +
+                  iconGap +
+                  titlePainter.width +
+                  minGap +
+                  timePainter.width;
+              final fitsOnOneRow = constraints.maxWidth >= singleLineRowWidth;
+
+              titlePainter.dispose();
+              timePainter.dispose();
+
+              final iconWidget = Icon(
                 remote
                     ? Icons.cloud_done_outlined
                     : Icons.phone_android_outlined,
                 color: color,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  remote
-                      ? I18n.tr('sync_conflict.keep_remote')
-                      : I18n.tr('sync_conflict.keep_local'),
-                  style: const TextStyle(fontWeight: FontWeight.normal),
-                ),
-              ),
-              Text(
-                _formatTime(item.decidedAt),
+                size: iconWidth,
+              );
+              final titleWidget = Text(
+                titleText,
+                style: const TextStyle(fontWeight: FontWeight.normal),
+              );
+              final timeWidget = Text(
+                timeText,
                 style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-              ),
-            ],
+              );
+
+              if (fitsOnOneRow) {
+                return Row(
+                  children: [
+                    iconWidget,
+                    const SizedBox(width: iconGap),
+                    Expanded(child: titleWidget),
+                    const SizedBox(width: minGap),
+                    timeWidget,
+                  ],
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      iconWidget,
+                      const SizedBox(width: iconGap),
+                      Expanded(child: titleWidget),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(left: iconWidth + iconGap),
+                    child: timeWidget,
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 8),
           Text(item.reason, style: TextStyle(color: cs.onSurfaceVariant)),
@@ -214,10 +314,22 @@ class _SyncStatusCard extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _InfoChip(label: '自动同步', value: status.autoSyncLabel),
-              _InfoChip(label: '本机改动', value: status.pendingLabel),
-              _InfoChip(label: '同步任务', value: status.syncingLabel),
-              _InfoChip(label: '远端拉取', value: status.remotePullLabel),
+              _InfoChip(
+                label: _syncText('自动同步', 'Auto sync'),
+                value: status.autoSyncLabel,
+              ),
+              _InfoChip(
+                label: _syncText('本机改动', 'Local changes'),
+                value: status.pendingLabel,
+              ),
+              _InfoChip(
+                label: _syncText('同步任务', 'Sync task'),
+                value: status.syncingLabel,
+              ),
+              _InfoChip(
+                label: _syncText('远端拉取', 'Remote pull'),
+                value: status.remotePullLabel,
+              ),
             ],
           ),
         ],
@@ -251,14 +363,17 @@ class _SyncStatus {
 
   factory _SyncStatus.fromProvider(CloudSyncProvider? provider) {
     if (provider == null) {
-      return const _SyncStatus(
+      return _SyncStatus(
         icon: Icons.sync_disabled_outlined,
-        title: '同步状态未接入',
-        message: '当前页面只能显示已记录的冲突，未读取到云同步运行状态。',
-        autoSyncLabel: '未知',
-        pendingLabel: '未知',
-        syncingLabel: '未知',
-        remotePullLabel: '未知',
+        title: _syncText('同步状态未接入', 'Sync status unavailable'),
+        message: _syncText(
+          '当前页面只能显示已记录的冲突，未读取到云同步运行状态。',
+          'Only saved conflicts are available; live sync status could not be read.',
+        ),
+        autoSyncLabel: _syncText('未知', 'Unknown'),
+        pendingLabel: _syncText('未知', 'Unknown'),
+        syncingLabel: _syncText('未知', 'Unknown'),
+        remotePullLabel: _syncText('未知', 'Unknown'),
         hasWarning: true,
       );
     }
@@ -270,25 +385,33 @@ class _SyncStatus {
     final autoSync = provider.config.autoSync;
     final pendingChanges = provider.hasPendingChanges;
     final syncing = provider.isSyncing;
-    final pendingLabel = pendingChanges ? '待上传' : '无待上传';
-    final autoSyncLabel = autoSync ? '开启' : '关闭';
-    final syncingLabel = syncing ? '同步中' : '空闲';
-    final remotePullLabel = queuedRemotePullStatus == null ? '无排队' : '已排队';
+    final pendingLabel = pendingChanges
+        ? _syncText('待上传', 'Pending upload')
+        : _syncText('无待上传', 'No pending uploads');
+    final autoSyncLabel = autoSync
+        ? _syncText('开启', 'On')
+        : _syncText('关闭', 'Off');
+    final syncingLabel = syncing
+        ? _syncText('同步中', 'Syncing')
+        : _syncText('空闲', 'Idle');
+    final remotePullLabel = queuedRemotePullStatus == null
+        ? _syncText('无排队', 'None queued')
+        : _syncText('已排队', 'Queued');
     if (unavailableStatus != null) {
       final title = !provider.isCloudSyncV2Enabled
-          ? '云同步暂不可用'
+          ? _syncText('云同步暂不可用', 'Cloud sync unavailable')
           : provider.isSyncSuspended
-          ? '云同步已暂停'
+          ? _syncText('云同步已暂停', 'Cloud sync paused')
           : !provider.hasAuthenticatedClient
-          ? '未登录云同步账号'
+          ? _syncText('未登录云同步账号', 'Sign in to cloud sync')
           : provider.isBackupDisabledByServer
-          ? '云端备份已关闭'
-          : '云同步暂不可用';
+          ? _syncText('云端备份已关闭', 'Cloud backup disabled')
+          : _syncText('云同步暂不可用', 'Cloud sync unavailable');
       return _SyncStatus(
         icon: Icons.sync_disabled_outlined,
         title: title,
         message: pendingChanges
-            ? '$unavailableStatus 本机改动已保存在本机；恢复云同步条件后才会上传。'
+            ? '$unavailableStatus ${_syncText('本机改动已保存在本机；恢复云同步条件后才会上传。', 'Changes are saved on this device and will upload when cloud sync is available.')}'
             : unavailableStatus,
         autoSyncLabel: autoSyncLabel,
         pendingLabel: pendingLabel,
@@ -300,8 +423,12 @@ class _SyncStatus {
     if (error != null) {
       return _SyncStatus(
         icon: Icons.error_outline,
-        title: pendingChanges ? '本机改动同步未完成' : '云同步上次未完成',
-        message: pendingChanges ? '$error\n本机改动已保留，稍后会自动重试。' : error,
+        title: pendingChanges
+            ? _syncText('本机改动同步未完成', 'Local changes not synced')
+            : _syncText('云同步上次未完成', 'Last cloud sync incomplete'),
+        message: pendingChanges
+            ? '$error\n${_syncText('本机改动已保留，稍后会自动重试。', 'Local changes are retained and will retry automatically.')}'
+            : error,
         autoSyncLabel: autoSyncLabel,
         pendingLabel: pendingLabel,
         syncingLabel: syncingLabel,
@@ -312,58 +439,72 @@ class _SyncStatus {
     if (queuedRemotePullStatus != null) {
       return _SyncStatus(
         icon: Icons.cloud_queue_outlined,
-        title: '远端更新已排队',
+        title: _syncText('远端更新已排队', 'Remote updates queued'),
         message: queuedRemotePullStatus,
         autoSyncLabel: autoSyncLabel,
         pendingLabel: pendingLabel,
         syncingLabel: syncingLabel,
-        remotePullLabel: '已排队',
+        remotePullLabel: _syncText('已排队', 'Queued'),
         hasWarning: true,
       );
     }
     if (syncing) {
       return _SyncStatus(
         icon: Icons.sync_outlined,
-        title: '正在同步',
-        message: '正在同步本机改动或拉取云端更新，完成后会刷新本机展示。',
+        title: _syncText('正在同步', 'Syncing'),
+        message: _syncText(
+          '正在同步本机改动或拉取云端更新，完成后会刷新本机展示。',
+          'Uploading local changes or fetching cloud updates. This page will update when sync finishes.',
+        ),
         autoSyncLabel: autoSyncLabel,
         pendingLabel: pendingLabel,
-        syncingLabel: '同步中',
-        remotePullLabel: '无排队',
+        syncingLabel: _syncText('同步中', 'Syncing'),
+        remotePullLabel: _syncText('无排队', 'None queued'),
       );
     }
     if (!autoSync && pendingChanges) {
-      return const _SyncStatus(
+      return _SyncStatus(
         icon: Icons.sync_disabled_outlined,
-        title: '本机改动未自动上传',
-        message: '本机保存已完成；自动同步关闭期间不会上传。重新开启后会继续同步。',
-        autoSyncLabel: '关闭',
-        pendingLabel: '待上传',
-        syncingLabel: '空闲',
-        remotePullLabel: '无排队',
+        title: _syncText('本机改动未自动上传', 'Automatic upload is off'),
+        message: _syncText(
+          '本机保存已完成；自动同步关闭期间不会上传。重新开启后会继续同步。',
+          'Saved on this device. Changes will upload when automatic sync is enabled again.',
+        ),
+        autoSyncLabel: _syncText('关闭', 'Off'),
+        pendingLabel: _syncText('待上传', 'Pending upload'),
+        syncingLabel: _syncText('空闲', 'Idle'),
+        remotePullLabel: _syncText('无排队', 'None queued'),
         hasWarning: true,
       );
     }
     if (pendingChanges) {
       return _SyncStatus(
         icon: Icons.upload_file_outlined,
-        title: '本机改动待上传',
-        message: '本机保存已完成，云同步会在后台同步到云端；失败会保留重试，不影响本机数据。',
+        title: _syncText('本机改动待上传', 'Local changes pending upload'),
+        message: _syncText(
+          '本机保存已完成，云同步会在后台同步到云端；失败会保留重试，不影响本机数据。',
+          'Saved on this device. Changes will upload in the background; failed syncs retain local data for retry.',
+        ),
         autoSyncLabel: autoSyncLabel,
-        pendingLabel: '待上传',
-        syncingLabel: '空闲',
-        remotePullLabel: '无排队',
+        pendingLabel: _syncText('待上传', 'Pending upload'),
+        syncingLabel: _syncText('空闲', 'Idle'),
+        remotePullLabel: _syncText('无排队', 'None queued'),
         hasWarning: true,
       );
     }
     if (retryStatus != null) {
       return _SyncStatus(
         icon: Icons.cloud_sync_outlined,
-        title: '云同步等待重试',
-        message: autoSync ? retryStatus : '云同步上次未完成；自动同步关闭期间不会重试。重新开启后会继续同步。',
+        title: _syncText('云同步等待重试', 'Cloud sync awaiting retry'),
+        message: autoSync
+            ? retryStatus
+            : _syncText(
+                '云同步上次未完成；自动同步关闭期间不会重试。重新开启后会继续同步。',
+                'Last sync was incomplete. It will retry when automatic sync is enabled again.',
+              ),
         autoSyncLabel: autoSyncLabel,
-        pendingLabel: '无待上传',
-        syncingLabel: '空闲',
+        pendingLabel: _syncText('无待上传', 'No pending uploads'),
+        syncingLabel: _syncText('空闲', 'Idle'),
         remotePullLabel: remotePullLabel,
         hasWarning: true,
       );
@@ -371,41 +512,47 @@ class _SyncStatus {
     if (realtimeWarning != null) {
       return _SyncStatus(
         icon: Icons.wifi_tethering_error_rounded,
-        title: '实时同步使用轮询兜底',
+        title: _syncText('实时同步使用轮询兜底', 'Live sync using polling'),
         message: realtimeWarning,
         autoSyncLabel: autoSyncLabel,
-        pendingLabel: '无待上传',
-        syncingLabel: '空闲',
-        remotePullLabel: '无排队',
+        pendingLabel: _syncText('无待上传', 'No pending uploads'),
+        syncingLabel: _syncText('空闲', 'Idle'),
+        remotePullLabel: _syncText('无排队', 'None queued'),
         hasWarning: true,
       );
     }
     if (!autoSync) {
-      return const _SyncStatus(
+      return _SyncStatus(
         icon: Icons.sync_disabled_outlined,
-        title: '自动同步已关闭',
-        message: '本机数据仍可使用；重新开启自动同步后才会继续上传本机改动和拉取远端更新。',
-        autoSyncLabel: '关闭',
-        pendingLabel: '无待上传',
-        syncingLabel: '空闲',
-        remotePullLabel: '无排队',
+        title: _syncText('自动同步已关闭', 'Automatic sync is off'),
+        message: _syncText(
+          '本机数据仍可使用；重新开启自动同步后才会继续上传本机改动和拉取远端更新。',
+          'Local data is available. Enable automatic sync to upload changes and fetch remote updates.',
+        ),
+        autoSyncLabel: _syncText('关闭', 'Off'),
+        pendingLabel: _syncText('无待上传', 'No pending uploads'),
+        syncingLabel: _syncText('空闲', 'Idle'),
+        remotePullLabel: _syncText('无排队', 'None queued'),
         hasWarning: true,
       );
     }
-    return const _SyncStatus(
+    return _SyncStatus(
       icon: Icons.cloud_done_outlined,
-      title: '云同步正常',
-      message: '没有待上传改动，也没有等待处理的远端更新。',
-      autoSyncLabel: '开启',
-      pendingLabel: '无待上传',
-      syncingLabel: '空闲',
-      remotePullLabel: '无排队',
+      title: _syncText('云同步正常', 'Cloud sync up to date'),
+      message: _syncText(
+        '没有待上传改动，也没有等待处理的远端更新。',
+        'No local changes to upload or remote updates waiting to be applied.',
+      ),
+      autoSyncLabel: _syncText('开启', 'On'),
+      pendingLabel: _syncText('无待上传', 'No pending uploads'),
+      syncingLabel: _syncText('空闲', 'Idle'),
+      remotePullLabel: _syncText('无排队', 'None queued'),
     );
   }
 
   Color color(ColorScheme cs) {
     if (hasError) return cs.error;
-    if (hasWarning) return Colors.amber.shade800;
+    if (hasWarning) return DesignTokens.defaultWarning;
     return cs.primary;
   }
 }
@@ -433,15 +580,20 @@ class _FieldChip extends StatelessWidget {
             color: cs.onTertiaryContainer,
           ),
           const SizedBox(width: 4),
-          Text(
-            '字段: $field',
-            style: TextStyle(fontSize: 11, color: cs.onTertiaryContainer),
+          Flexible(
+            child: Text(
+              '${_syncText('字段', 'Field')}: $field',
+              style: TextStyle(fontSize: 11, color: cs.onTertiaryContainer),
+            ),
           ),
         ],
       ),
     );
   }
 }
+
+String _syncText(String zh, String en) =>
+    I18n.current == AppLocale.en ? en : zh;
 
 class _InfoChip extends StatelessWidget {
   final String label;

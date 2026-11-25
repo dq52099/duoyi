@@ -14,7 +14,7 @@
 - 习惯：打卡、连续天数、热力图、目标次数、提醒、模板库（HabitTemplates）。
 - 目标：推荐目标、里程碑、多次提醒（ReminderPlan）、进度。
 - 日历：月/周/日视图，CalendarAggregator 聚合全模块事件，冲突标记。
-- 专注：番茄钟、白噪音（31 条单音轨）、淡入淡出、会话历史。
+- 专注：番茄钟、白噪音（当前 28 条单音轨；31 条为旧状态计数）、淡入淡出、会话历史。
 - 时间足迹：TimeEntry 模型、时间审计页、手动补记、多来源（番茄/待办/习惯/目标/手动）。
 - 共享协作：Workspace 模型、ShareProvider、邀请码、角色（owner/editor/viewer）。
 - 小组件：Android 10 个可见独立小组件、待办快捷添加/勾选、底部导航快捷入口、深链跳转。
@@ -56,6 +56,14 @@
 - 快捷操作：通知栏快捷添加、小组件快捷添加、快捷模板（对标各主流效率应用）。
 - 国际化支持：多语言、时区自动处理（面向海外用户拓展）。
 
+### 1.4 当前优先验收范围（2026-10-23）
+
+用户当前优先项为小组件、默认 iOS 风格主题（`defaultBrand`）及毛玻璃主题（`liquidGlass`）；目标末尾的“备”为笔误，不新增备份功能范围。完整需求与剩余项以[目标需求矩阵](goal-requirement-matrix.md)和各项当前证据为准。
+
+- 两种优先主题均须覆盖应用页面、详情/恢复页、弹层、设置与小组件预览，检查背景层级、文字对比、完整标题/说明/动作、窄屏/横屏及放大字号。
+- 页面保持挂载时切换中英文，应保留草稿、滚动和当前状态；取消、重试、返回、账号变化后失效的回调须分别验证。
+- Flutter 预览、宿主测试、原生编译、Android Launcher 与 iOS WidgetKit 的真实显示和操作分别验收；局部通过不代表全部主题、路由或设备完成。
+
 ## 2. 产品目标
 
 1. 多仪应成为一个「可落地执行」的个人时间系统，而不是只记录任务。
@@ -89,6 +97,7 @@
 - 数据可视化增强：年度报告、周报、趋势分析。
 - 快捷操作：通知栏快捷添加、小组件快捷添加、快捷模板。
 - 国际化：中英文多语言支持。
+- iOS 小组件签名、Apple SDK 编译与 WidgetKit 真机回归属于当前小组件验收范围；现有源码、App Group 数据契约及 Runner/Extension target 不替代这些验收，须按[设备回归证据要求](device-regression-evidence.md)补齐。
 
 ### 3.3 暂不进入本期
 
@@ -96,7 +105,6 @@
 - 第三方日历双向同步（Google Calendar / Apple Calendar）：Google/Outlook 已走 OAuth 只读拉取，Apple/iCloud 已补 CalDAV 快速配置入口，CalDAV 写回共用 ETag 冲突保护；仍需真实账号端到端验证。
 - 付费订阅、会员权益、应用商店内购。
 - 复杂团队项目管理。
-- iOS Widget 的签名和真机回归；WidgetKit 源码骨架、Flutter App Group 数据契约和 Xcode Runner/Extension target 已先行补齐。
 
 ---
 
@@ -317,25 +325,32 @@
 
 ### R8 小组件与深链
 
-> **v2 状态：已实现基础功能。** Android 已暴露 10 个可见独立小组件：
+> **v2 状态：已实现基础功能，桌面实测待验收。** Android 提供 10 类独立小组件：
 > 今日待办、专注、习惯、月历、今日日程、目标、课程表、随手记、纪念日、日记。
-> 不再暴露概览/组合入口；历史 DuoyiWidgetProvider 仅作为兼容类和资源保留，不在 Manifest
-> 注册，也不会作为可见入口参与应用内预览或桌面快捷创建。深链通过 HomeWidget.widgetClicked 流监听。
+> 目标仍为不暴露概览/组合入口。历史 DuoyiWidgetProvider 保留 Manifest 注册和资源，用于升级前旧实例刷新；
+> 不参与应用内预览或桌面快捷创建，并通过 `widgetFeatures="hide_from_picker"` 请求桌面从选择器隐藏。
+> AOSP Android 15 Launcher3 会执行该过滤；此标记属于宿主提示，其他桌面的选择器隐藏和旧实例升级刷新仍待实际验收。
+> 深链通过 HomeWidget.widgetClicked 流监听。
 > Android 习惯小组件已支持今日正向习惯快捷打卡，点击提示行走 `duoyi://action/checkin_habit`。
 > iOS 侧已补 `ios/DuoyiWidgets` WidgetKit 源码骨架、App Group entitlement、10 个独立 Widget kind、
-> Runner `duoyi://` URL scheme、`duoyi/deep_links` MethodChannel、AppDelegate/SceneDelegate URL 转发和 `Runner.xcodeproj` Extension target；`HomeWidgetService` 会在 iOS 写入同一组共享数据并按 kind 刷新。
+> Runner `duoyi://` URL scheme、`duoyi/deep_links` MethodChannel、AppDelegate/SceneDelegate URL 转发和 `Runner.xcodeproj` Extension target。
+> 当前 Android/iOS 通过 `duoyi/widget-publication` 通道发布完整规范文档至各自的 SQLite 存储；
+> iOS 存储位于 App Group 容器，WidgetKit 每次捕获读取一个完整 envelope。账号、主题、语言和业务摘要
+> 均来自该文档，不回退读取旧 Preferences/App Group 键；仅允许设备自己的显示模式偏好。
+> 提交、读回、宿主上下文仍有效后，`HomeWidgetService` 才请求对应 kind 刷新；存储确认不等于 Launcher/WidgetKit 已显示。
 > WidgetKit 视图已接入 `Link` 区域：待办快捷添加、待办 Top3 标题打开详情、待办“完成”动作、
-> 专注开始、习惯快捷打卡和底部待办/习惯/日历/专注导航都会走 Flutter 已处理的 deep link；底部导航文案读取同一组 `nav_*` App Group key。
-> 专注小组件已接入 `focus_timer_*` 共享数据：Android 展示倒计时快照和预计结束时间，iOS WidgetKit
+> 专注开始、习惯快捷打卡和受支持尺寸的底部导航走 Flutter 已处理的 deep link；导航文案读取规范文档的 `nav_*` 字段。
+> 专注小组件读取同一规范文档的 `focus_timer_*` 字段：Android 展示倒计时快照和预计结束时间，iOS WidgetKit
 > 使用 `.timer` 文本展示倒计时；launcher 逐秒刷新效果仍需真机验证。
 > WidgetKit 已新增锁屏 accessoryInline / accessoryCircular / accessoryRectangular 小尺寸 family，
 > 复用同一批独立 Widget kind 和共享数据，不新增“概览/组合”入口。
 > `test/services/ios_widget_resources_test.dart` 已覆盖 iOS Widget 资源/契约和 Runner deep-link 桥静态完整性；尚未完成开发者账号签名配置、App Group capability 真机确认和 launcher 尺寸拖拽回归。
+> 显式不确定持久性恢复、账号清理屏障及当前接线见[小组件发布通道](widget-publication-channel.md)。原生运行与存储验收另见[Android 验证说明](android-widget-validation.md)，不能以旧任务勾选替代真机证据。
 
 **功能要求**
 
 - R8.1 独立小组件分别支持待办完成/快捷添加、习惯快捷打卡、开始番茄、专注倒计时、今日事件列表。 **[部分实现 - Android 已有可交互入口和专注倒计时快照；iOS 已有 10 个 WidgetKit kind、共享数据展示骨架、Xcode Extension target、Runner deep-link 桥、待办详情/完成、快捷添加、习惯打卡、开始专注、专注 `.timer` 倒计时、底部导航共享文案 Link 和锁屏 accessory 小尺寸 family，静态契约测试已覆盖，真机签名验证待补]**
-- R8.2 点击小组件应深链到具体对象详情。 **[已实现]**
+- R8.2 点击小组件应深链到具体对象详情。 **[部分实现 - 小号 iOS 多类对象根目标已对齐；三种锁屏 family 已接入相同的主对象目标校验，并隐藏无法单独点击的第二对象，验证状态见 `evidence/widget-accessory-object-20261020/summary.md`。本地日程、番茄记录已新增具体对象发布与详情接收，宿主验证进度见 `evidence/widget-schedule-object-routes-20261020/summary.md`。源代码与宿主测试不替代 Android Launcher / iOS WidgetKit 的真实点击验收]**
 - R8.3 小组件刷新不应阻塞主应用启动。 **[已实现 - 异步 push]**
 - R8.4 数据变化后应推送最新摘要到小组件。 **[已实现 - HomeWidgetService.push]**
 
@@ -450,11 +465,13 @@
 
 ### R13 专注模式增强
 
-> **v2 状态：已有基础。** FocusSoundService 已支持 31 种白噪音单音轨
+> **v2 状态：已有基础。** 当前 FocusSoundCatalog 提供 28 条可追溯真实录音单音轨；旧文“31 条”及以下列名保留为历史目录描述：
 >（rain/forest/cafe/waves/brown_noise/night_rain/fan/pink_noise/deep_stream/
 > thunderstorm/storm_rain/campfire/dawn_birds/waterfall/brook/river/crickets/white_stream/clock/keyboard/wind/
-> train_station/classroom/pebble_beach/mall/restaurant/garden_birds/country_night/shallow_river/veranda_rain/breeze_birds），支持淡入/淡出/循环播放/
-> 音量控制。PomodoroProvider 已管理会话历史和标签字段。Android 已接入
+> train_station/classroom/pebble_beach/mall/restaurant/garden_birds/country_night/shallow_river/veranda_rain/breeze_birds）。
+> brown_noise/pink_noise/white_stream 已退役，仅兼容归一到 night_rain，不属于当前可选音轨；资源准入不允许恢复纯合成噪声。该历史状态不新增三项恢复任务。
+> 已有淡入/淡出/循环与音量代码路径；可辨识性、实际音量、无缝循环及锁屏持续播放仍需验收，根需求 25/26 和 R13 功能要求不变。
+> PomodoroProvider 已管理会话历史和标签字段。Android 已接入
 > `FocusDndService` + `duoyi/focus_dnd` MethodChannel，可在专注开始时请求系统
 > DND（Do Not Disturb）并在暂停、结束或重置后恢复原状态；未获系统勿扰权限时
 > 降级为仅提示，不阻塞专注启动。白噪音已支持导入自定义音频到应用沙盒，并在
@@ -706,7 +723,7 @@
 - P3：日历统一详情和跨模块编辑。 **[部分完成]**
 - P4：共享日程/清单/目标。 **[框架和核心数据链路完成]**
 - P5：成就事件管线。 **[已完成]**
-- P6：小组件增强和课程表/倒数日深度联动。 **[已完成]**
+- P6：小组件增强和课程表/倒数日深度联动。 **[已有实现与局部验证；T-32/T-33/T-34 的原生操作、对象深链、系统刷新及 Launcher/WidgetKit 真机验收仍未完成]**
 
 ### v2 优先级
 

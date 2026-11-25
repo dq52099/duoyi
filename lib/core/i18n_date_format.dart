@@ -10,13 +10,25 @@ import 'i18n.dart';
 class I18nDateFormat {
   I18nDateFormat._();
 
-  static String fullDateTime(DateTime value) {
-    return switch (I18n.current) {
-      AppLocale.en =>
-        '${_enMonth(value.month)} ${value.day}, ${value.year} ${_weekdayShort(value)} ${time(value)}',
-      AppLocale.zh =>
-        '${value.year}年${value.month}月${value.day}日 ${_weekdayShort(value)} ${time(value)}',
-    };
+  static const defaultPattern = 'yyyy-MM-dd';
+  static const supportedPatterns = <String>{
+    defaultPattern,
+    'MM/dd/yyyy',
+    'dd/MM/yyyy',
+    'yyyy年M月d日',
+  };
+
+  static String normalizePattern(String? pattern) =>
+      supportedPatterns.contains(pattern) ? pattern! : defaultPattern;
+
+  static String fullDateTime(
+    DateTime value, {
+    String? pattern,
+    AppLocale? locale,
+  }) {
+    final effectiveLocale = locale ?? I18n.current;
+    return '${date(value, pattern: pattern, locale: effectiveLocale)} '
+        '${_weekdayShort(value, effectiveLocale)} ${time(value, locale: effectiveLocale)}';
   }
 
   static String yearMonth(DateTime value) {
@@ -26,15 +38,26 @@ class I18nDateFormat {
     };
   }
 
-  static String date(DateTime value) {
-    return switch (I18n.current) {
+  static String date(DateTime value, {String? pattern, AppLocale? locale}) {
+    if (pattern != null) {
+      final year = value.year.toString().padLeft(4, '0');
+      final month = _twoDigits(value.month);
+      final day = _twoDigits(value.day);
+      return switch (normalizePattern(pattern)) {
+        'MM/dd/yyyy' => '$month/$day/$year',
+        'dd/MM/yyyy' => '$day/$month/$year',
+        'yyyy年M月d日' => '${value.year}年${value.month}月${value.day}日',
+        _ => '$year-$month-$day',
+      };
+    }
+    return switch (locale ?? I18n.current) {
       AppLocale.en => '${_enMonth(value.month)} ${value.day}, ${value.year}',
       AppLocale.zh => '${value.year}年${value.month}月${value.day}日',
     };
   }
 
-  static String time(DateTime value) {
-    return switch (I18n.current) {
+  static String time(DateTime value, {AppLocale? locale}) {
+    return switch (locale ?? I18n.current) {
       AppLocale.en => _enTime(value),
       AppLocale.zh => '${_twoDigits(value.hour)}:${_twoDigits(value.minute)}',
     };
@@ -66,9 +89,14 @@ class I18nDateFormat {
     };
   }
 
-  static String smartDate(DateTime value, {required bool includeTime}) {
-    if (!includeTime) return date(value);
-    return fullDateTime(value);
+  static String smartDate(
+    DateTime value, {
+    required bool includeTime,
+    String? pattern,
+    AppLocale? locale,
+  }) {
+    if (!includeTime) return date(value, pattern: pattern, locale: locale);
+    return fullDateTime(value, pattern: pattern, locale: locale);
   }
 
   static String compactDateTime(
@@ -81,11 +109,11 @@ class I18nDateFormat {
     return shortDateTime(value);
   }
 
-  static String _weekdayShort(DateTime value) {
+  static String _weekdayShort(DateTime value, [AppLocale? locale]) {
     const zh = <String>['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
     const en = <String>['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final index = (value.weekday - DateTime.monday).clamp(0, 6);
-    return switch (I18n.current) {
+    return switch (locale ?? I18n.current) {
       AppLocale.en => en[index],
       AppLocale.zh => zh[index],
     };

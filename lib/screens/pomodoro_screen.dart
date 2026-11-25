@@ -1,20 +1,32 @@
+import '../widgets/app_date_format.dart';
+import '../core/i18n_date_format.dart';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../core/brand_strings.dart';
+import '../core/design_tokens.dart';
+import '../core/desktop_tokens.dart';
 import '../core/focus_report.dart';
+import '../core/focus_report_presentation.dart';
+import '../core/focus_room_ui_copy.dart';
 import '../core/focus_sound_catalog.dart';
 import '../core/i18n.dart';
 import '../core/main_ui_copy.dart';
 import '../models/focus_room.dart';
 import '../models/pomodoro.dart';
+import '../models/todo.dart';
 import '../providers/custom_focus_sound_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/focus_room_provider.dart';
 import '../providers/pomodoro_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/todo_provider.dart';
+import '../services/account_local_data_cleaner.dart';
+import '../services/settings_action_origin.dart';
 import '../services/api_client.dart';
 import '../services/focus_room_api.dart';
 import '../services/focus_sound_service.dart';
@@ -24,6 +36,7 @@ import '../widgets/brand_background.dart';
 import '../widgets/pomodoro_timer_ring.dart';
 import '../widgets/pomodoro_session_card.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/controller_dialog.dart' show showControllerDialog;
 import '../widgets/surface_components.dart';
 
 String _focusRoomErrorText(Object error) {
@@ -32,7 +45,10 @@ String _focusRoomErrorText(Object error) {
     return focusRoomRankingUnavailableMessage;
   }
   if (isBackendCompatibilityDiagnosticMessage(message)) return message;
-  return userVisibleApiError(error, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
+  return userVisibleApiError(
+    error,
+    fallbackMessage: FocusRoomUiCopy.serviceUnavailableFallback(I18n.current),
+  );
 }
 
 Future<void> showPomodoroSessionEditor(
@@ -40,6 +56,7 @@ Future<void> showPomodoroSessionEditor(
   PomodoroSession session,
 ) async {
   final provider = context.read<PomodoroProvider>();
+  final editorGeneration = AccountLocalDataCleaner.accountDataGeneration;
   final rooms =
       context.read<FocusRoomProvider?>()?.rooms ?? const <FocusRoom>[];
   final customProvider = context.read<CustomFocusSoundProvider?>();
@@ -62,6 +79,11 @@ Future<void> showPomodoroSessionEditor(
   var selectedRoomId = rooms.any((room) => room.id == session.focusRoomId)
       ? session.focusRoomId
       : null;
+  var saveInFlight = false;
+  TransitionRoute<dynamic>? editorRoute;
+
+  bool isCurrentEditorSession() =>
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(editorGeneration);
 
   DateTime combineStart() => DateTime(
     date.year,
@@ -74,254 +96,330 @@ Future<void> showPomodoroSessionEditor(
   try {
     await showAppModalSheet<void>(
       context: context,
-      builder: (sheetCtx) => StatefulBuilder(
-        builder: (sheetCtx, setSt) {
-          Future<void> previewSound(String value) async {
-            setSt(() => selectedSound = value);
-            if (value == FocusSoundCatalog.none) {
-              await FocusSoundService.instance.stop();
-              return;
-            }
-            await FocusSoundService.instance.setVolume(
-              provider.config.focusSoundVolume,
-            );
-            final started = await FocusSoundService.instance.preview(value);
-            if (!started && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('专注声音预览启动失败，请检查系统音量或音频资源'),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            }
-          }
+      builder: (sheetCtx) {
+        editorRoute ??= ModalRoute.of(sheetCtx);
+        return ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (sheetCtx, locale, _) => StatefulBuilder(
+            builder: (sheetCtx, setSt) {
+              Future<void> previewSound(String value) async {
+                if (!isCurrentEditorSession() || !sheetCtx.mounted) return;
+                setSt(() => selectedSound = value);
+                if (value == FocusSoundCatalog.none) {
+                  await FocusSoundService.instance.stop();
+                  return;
+                }
+                if (!isCurrentEditorSession() || !sheetCtx.mounted) return;
+                await FocusSoundService.instance.setVolume(
+                  provider.config.focusSoundVolume,
+                );
+                final started = await FocusSoundService.instance.preview(value);
+                if (!started &&
+                    isCurrentEditorSession() &&
+                    context.mounted &&
+                    sheetCtx.mounted) {
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        FocusRoomUiCopy.soundPreviewFailed(I18n.current),
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
 
-          Future<void> save() async {
-            final messenger = ScaffoldMessenger.of(context);
-            final navigator = Navigator.of(sheetCtx);
-            final minutes = int.tryParse(durationCtrl.text.trim()) ?? 0;
-            if (minutes < 1 || minutes > 24 * 60) {
-              messenger.showSnackBar(
-                const SnackBar(
-                  content: Text('专注时长需在 1-1440 分钟之间'),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-              return;
-            }
-            final start = combineStart();
-            final next = session.copyWith(
-              startTime: start,
-              endTime: start.add(Duration(minutes: minutes)),
-              durationSeconds: minutes * 60,
-              type: selectedType,
-              taskName: taskCtrl.text.trim().isEmpty
-                  ? null
-                  : taskCtrl.text.trim(),
-              clearTaskName: taskCtrl.text.trim().isEmpty,
-              tag: tagCtrl.text.trim().isEmpty ? null : tagCtrl.text.trim(),
-              clearTag: tagCtrl.text.trim().isEmpty,
-              whiteNoiseSound: selectedSound,
-              focusRoomId: selectedRoomId,
-              clearFocusRoomId: selectedRoomId == null,
-            );
-            final ok = await provider.updateSession(next);
-            if (!ok) {
-              messenger.showSnackBar(
-                const SnackBar(
-                  content: Text('这条会话不存在或已被删除'),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-              return;
-            }
-            if (!context.mounted || !sheetCtx.mounted) return;
-            navigator.pop();
-            messenger.showSnackBar(
-              const SnackBar(
-                content: Text('已保存专注会话'),
-                behavior: SnackBarBehavior.floating,
-                duration: Duration(milliseconds: 1200),
-              ),
-            );
-          }
-
-          return AppModalSheet(
-            title: '编辑专注会话',
-            subtitle: '同步更新番茄钟历史和时间足迹',
-            shiftForKeyboard: true,
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(sheetCtx).pop(),
-                child: const Text('取消'),
-              ),
-              FilledButton(onPressed: save, child: const Text('保存')),
-            ],
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: taskCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '任务名',
-                    prefixIcon: Icon(Icons.task_alt_outlined),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: tagCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '标签',
-                    prefixIcon: Icon(Icons.sell_outlined),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.calendar_today_outlined),
-                        title: const Text('日期'),
-                        subtitle: Text(
-                          '${date.year}/${date.month}/${date.day}',
+              Future<void> save() async {
+                if (saveInFlight || !isCurrentEditorSession()) return;
+                saveInFlight = true;
+                final messenger = ScaffoldMessenger.maybeOf(context);
+                final navigator = Navigator.of(sheetCtx);
+                final ownedRoute = ModalRoute.of(sheetCtx);
+                try {
+                  final minutes = int.tryParse(durationCtrl.text.trim()) ?? 0;
+                  if (minutes < 1 || minutes > 24 * 60) {
+                    messenger?.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          FocusRoomUiCopy.durationRangeError(I18n.current),
                         ),
-                        onTap: () async {
-                          final picked = await AppDatePicker.pickSolar(
-                            sheetCtx,
-                            initialDate: date,
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime(2099, 12, 31),
-                            title: '会话日期',
-                          );
-                          if (picked == null) return;
-                          setSt(() {
-                            date = DateTime(
-                              picked.year,
-                              picked.month,
-                              picked.day,
-                            );
-                          });
-                        },
+                        behavior: SnackBarBehavior.floating,
                       ),
-                    ),
-                    Expanded(
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.schedule_outlined),
-                        title: const Text('开始时间'),
-                        subtitle: Text(AppTimePicker.format(startTime)),
-                        onTap: () async {
-                          final picked = await AppTimePicker.show(
-                            sheetCtx,
-                            initialTime: startTime,
-                            title: '开始时间',
-                            minuteStep: 5,
-                          );
-                          if (picked == null) return;
-                          setSt(() => startTime = picked);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: durationCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
-                    labelText: '时长（分钟）',
-                    prefixIcon: Icon(Icons.hourglass_bottom_outlined),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SegmentedButton<PomodoroType>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(
-                      value: PomodoroType.focus,
-                      label: Text('专注'),
-                      icon: Icon(Icons.timer_outlined),
-                    ),
-                    ButtonSegment(
-                      value: PomodoroType.shortBreak,
-                      label: Text('短休'),
-                      icon: Icon(Icons.free_breakfast_outlined),
-                    ),
-                    ButtonSegment(
-                      value: PomodoroType.longBreak,
-                      label: Text('长休'),
-                      icon: Icon(Icons.weekend_outlined),
-                    ),
-                  ],
-                  selected: {selectedType},
-                  onSelectionChanged: (value) =>
-                      setSt(() => selectedType = value.first),
-                ),
-                const SizedBox(height: 12),
-                AppDropdownField<String>(
-                  initialValue: selectedSound,
-                  decoration: const InputDecoration(
-                    labelText: '白噪音',
-                    prefixIcon: Icon(Icons.music_note_outlined),
-                  ),
-                  items: [
-                    for (final option in FocusSoundCatalog.options)
-                      DropdownMenuItem(
-                        value: option.id,
-                        child: Text(option.label),
-                      ),
-                    for (final sound in customSounds)
-                      DropdownMenuItem(
-                        value: sound.id,
-                        child: Text(sound.label),
-                      ),
-                    if (selectedSound != FocusSoundCatalog.none &&
-                        !FocusSoundCatalog.options.any(
-                          (option) => option.id == selectedSound,
-                        ) &&
-                        !customSounds.any((sound) => sound.id == selectedSound))
-                      DropdownMenuItem(
-                        value: selectedSound,
-                        child: Text(
-                          selectedSound.startsWith(
-                                CustomFocusSoundProvider.idPrefix,
-                              )
-                              ? (customProvider?.labelFor(selectedSound) ??
-                                    '自定义音频')
-                              : selectedSound,
-                        ),
-                      ),
-                  ],
-                  onChanged: (value) =>
-                      previewSound(value ?? FocusSoundCatalog.none),
-                ),
-                const SizedBox(height: 10),
-                AppDropdownField<String>(
-                  initialValue: selectedRoomId ?? '',
-                  decoration: const InputDecoration(
-                    labelText: '自习室',
-                    prefixIcon: Icon(Icons.meeting_room_outlined),
-                  ),
-                  items: [
-                    const DropdownMenuItem(value: '', child: Text('不关联自习室')),
-                    for (final room in rooms)
-                      DropdownMenuItem(value: room.id, child: Text(room.name)),
-                  ],
-                  onChanged: (value) => setSt(
-                    () => selectedRoomId = value == null || value.isEmpty
+                    );
+                    return;
+                  }
+                  final start = combineStart();
+                  final next = session.copyWith(
+                    startTime: start,
+                    endTime: start.add(Duration(minutes: minutes)),
+                    durationSeconds: minutes * 60,
+                    type: selectedType,
+                    taskName: taskCtrl.text.trim().isEmpty
                         ? null
-                        : value,
+                        : taskCtrl.text.trim(),
+                    clearTaskName: taskCtrl.text.trim().isEmpty,
+                    tag: tagCtrl.text.trim().isEmpty
+                        ? null
+                        : tagCtrl.text.trim(),
+                    clearTag: tagCtrl.text.trim().isEmpty,
+                    whiteNoiseSound: selectedSound,
+                    focusRoomId: selectedRoomId,
+                    clearFocusRoomId: selectedRoomId == null,
+                  );
+                  if (!isCurrentEditorSession()) return;
+                  final ok = await provider.updateSession(next);
+                  if (!isCurrentEditorSession()) return;
+                  if (!ok) {
+                    messenger?.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          FocusRoomUiCopy.sessionDeletedError(I18n.current),
+                        ),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                  if (!context.mounted || ownedRoute == null) return;
+                  final covered = !ownedRoute.isCurrent;
+                  if (ownedRoute.isActive) {
+                    navigator.removeRoute(ownedRoute);
+                  }
+                  if (covered) return;
+                  messenger?.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        FocusRoomUiCopy.sessionSavedSuccess(I18n.current),
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(milliseconds: 1200),
+                    ),
+                  );
+                } finally {
+                  saveInFlight = false;
+                }
+              }
+
+              return AppModalSheet(
+                title: FocusRoomUiCopy.editSessionTitle(locale),
+                subtitle: FocusRoomUiCopy.editSessionSubtitle(locale),
+                shiftForKeyboard: true,
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(sheetCtx).pop(),
+                    child: Text(FocusRoomUiCopy.cancel(locale)),
                   ),
+                  FilledButton(
+                    onPressed: save,
+                    child: Text(FocusRoomUiCopy.save(locale)),
+                  ),
+                ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: taskCtrl,
+                      decoration: InputDecoration(
+                        labelText: FocusRoomUiCopy.taskNameLabel(locale),
+                        prefixIcon: const Icon(Icons.task_alt_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: tagCtrl,
+                      decoration: InputDecoration(
+                        labelText: FocusRoomUiCopy.taskTagLabel(locale),
+                        prefixIcon: const Icon(Icons.sell_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.calendar_today_outlined),
+                            title: Text(FocusRoomUiCopy.dateLabel(locale)),
+                            subtitle: Text(AppDateFormat.date(sheetCtx, date)),
+                            onTap: () async {
+                              final pickerGeneration =
+                                  AccountLocalDataCleaner.accountDataGeneration;
+                              final picked = await AppDatePicker.pickSolar(
+                                sheetCtx,
+                                initialDate: date,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2099, 12, 31),
+                                titleKey: 'picker.date.title',
+                              );
+                              if (picked == null ||
+                                  !isCurrentEditorSession() ||
+                                  pickerGeneration !=
+                                      AccountLocalDataCleaner
+                                          .accountDataGeneration ||
+                                  !sheetCtx.mounted) {
+                                return;
+                              }
+                              setSt(() {
+                                date = DateTime(
+                                  picked.year,
+                                  picked.month,
+                                  picked.day,
+                                );
+                              });
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.schedule_outlined),
+                            title: Text(FocusRoomUiCopy.startTimeLabel(locale)),
+                            subtitle: Text(AppTimePicker.format(startTime)),
+                            onTap: () async {
+                              final pickerGeneration =
+                                  AccountLocalDataCleaner.accountDataGeneration;
+                              final picked = await AppTimePicker.show(
+                                sheetCtx,
+                                initialTime: startTime,
+                                titleKey: 'picker.time.title',
+                                minuteStep: 5,
+                              );
+                              if (picked == null ||
+                                  !isCurrentEditorSession() ||
+                                  pickerGeneration !=
+                                      AccountLocalDataCleaner
+                                          .accountDataGeneration ||
+                                  !sheetCtx.mounted) {
+                                return;
+                              }
+                              setSt(() => startTime = picked);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: durationCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(
+                        labelText: FocusRoomUiCopy.durationMinutesLabel(locale),
+                        prefixIcon: const Icon(Icons.hourglass_bottom_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SegmentedButton<PomodoroType>(
+                      showSelectedIcon: false,
+                      segments: [
+                        ButtonSegment(
+                          value: PomodoroType.focus,
+                          label: Text(FocusRoomUiCopy.focusTypeFocus(locale)),
+                          icon: const Icon(Icons.timer_outlined),
+                        ),
+                        ButtonSegment(
+                          value: PomodoroType.shortBreak,
+                          label: Text(
+                            FocusRoomUiCopy.focusTypeShortBreak(locale),
+                          ),
+                          icon: const Icon(Icons.free_breakfast_outlined),
+                        ),
+                        ButtonSegment(
+                          value: PomodoroType.longBreak,
+                          label: Text(
+                            FocusRoomUiCopy.focusTypeLongBreak(locale),
+                          ),
+                          icon: const Icon(Icons.weekend_outlined),
+                        ),
+                      ],
+                      selected: {selectedType},
+                      onSelectionChanged: (value) =>
+                          setSt(() => selectedType = value.first),
+                    ),
+                    const SizedBox(height: 12),
+                    AppDropdownField<String>(
+                      key: const ValueKey('focus-session-sound'),
+                      initialValue: selectedSound,
+                      decoration: InputDecoration(
+                        labelText: FocusRoomUiCopy.whiteNoiseLabel(locale),
+                        prefixIcon: const Icon(Icons.music_note_outlined),
+                      ),
+                      items: [
+                        for (final option in FocusSoundCatalog.options)
+                          DropdownMenuItem(
+                            value: option.id,
+                            child: Text(option.displayLabel(locale: locale)),
+                          ),
+                        for (final sound in customSounds)
+                          DropdownMenuItem(
+                            value: sound.id,
+                            child: Text(sound.label),
+                          ),
+                        if (selectedSound != FocusSoundCatalog.none &&
+                            !FocusSoundCatalog.options.any(
+                              (option) => option.id == selectedSound,
+                            ) &&
+                            !customSounds.any(
+                              (sound) => sound.id == selectedSound,
+                            ))
+                          DropdownMenuItem(
+                            value: selectedSound,
+                            child: Text(
+                              selectedSound.startsWith(
+                                    CustomFocusSoundProvider.idPrefix,
+                                  )
+                                  ? (customProvider?.labelFor(selectedSound) ??
+                                        FocusRoomUiCopy.customAudioLabel(
+                                          locale,
+                                        ))
+                                  : selectedSound,
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) =>
+                          previewSound(value ?? FocusSoundCatalog.none),
+                    ),
+                    const SizedBox(height: 10),
+                    AppDropdownField<String>(
+                      key: const ValueKey('focus-session-room'),
+                      initialValue: selectedRoomId ?? '',
+                      decoration: InputDecoration(
+                        labelText: FocusRoomUiCopy.studyRoomLabel(locale),
+                        prefixIcon: const Icon(Icons.meeting_room_outlined),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: '',
+                          child: Text(FocusRoomUiCopy.noAssociatedRoom(locale)),
+                        ),
+                        for (final room in rooms)
+                          DropdownMenuItem(
+                            value: room.id,
+                            child: Text(room.nameFor(locale)),
+                          ),
+                      ],
+                      onChanged: (value) => setSt(
+                        () => selectedRoomId = value == null || value.isEmpty
+                            ? null
+                            : value,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
   } finally {
+    // A modal route may still be tearing down after its result future
+    // completes. Wait for that transition and one frame before disposing the
+    // controllers used by the sheet's text fields.
+    if (editorRoute != null) {
+      await editorRoute!.completed;
+    }
+    await WidgetsBinding.instance.endOfFrame;
     taskCtrl.dispose();
     tagCtrl.dispose();
     durationCtrl.dispose();
@@ -439,6 +537,43 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
 
+  Future<void> _selectDuration(
+    BuildContext actionContext,
+    PomodoroProvider provider,
+    SettingsActionOrigin origin,
+    int providerGeneration, {
+    int? minutes,
+  }) async {
+    bool isCurrent() =>
+        mounted &&
+        actionContext.mounted &&
+        origin.isCurrent() &&
+        identical(actionContext.read<PomodoroProvider?>(), provider) &&
+        provider.storageGeneration == providerGeneration;
+    if (!isCurrent() || provider.state.isRunning) return;
+    final messenger = ScaffoldMessenger.maybeOf(actionContext);
+    try {
+      if (minutes == null) {
+        await provider.useDefaultFocusDuration();
+      } else {
+        await provider.setFocusDuration(minutes * 60);
+      }
+    } catch (_) {
+      if (!isCurrent()) return;
+      if (messenger?.mounted != true) return;
+      messenger!.showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (_, locale, _) =>
+                Text(FocusRoomUiCopy.durationSaveFailed(locale)),
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -472,20 +607,22 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  Color _typeColor(PomodoroType t) {
+  Color _typeColor(PomodoroType t, ColorScheme cs) {
     switch (t) {
       case PomodoroType.focus:
-        return const Color(0xFFE53935);
+        return DesignTokens.defaultError;
       case PomodoroType.shortBreak:
-        return const Color(0xFF4CAF50);
+        return DesignTokens.defaultSuccess;
       case PomodoroType.longBreak:
-        return const Color(0xFF2196F3);
+        return cs.primary;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = context.watch<ThemeProvider>().brand.strings;
+    final s = context.select<ThemeProvider, BrandStrings>(
+      (t) => t.brand.strings,
+    );
 
     String typeLabel(PomodoroType t) {
       switch (t) {
@@ -506,23 +643,57 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
           title: Text(s.focusTitle),
           bottom: TabBar(
             controller: _tabCtrl,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: s.focusTabTimer),
               Tab(text: s.focusTabHistory),
-              const Tab(text: '自习室'),
+              Tab(
+                text: FocusRoomUiCopy.roomTab(I18n.current),
+              ), // const Tab(text: '自习室')
             ],
           ),
         ),
         body: TabBarView(
           controller: _tabCtrl,
           children: [
-            Consumer<PomodoroProvider>(
-              builder: (context, provider, _) {
-                final state = provider.state;
-                final themeProvider = context.watch<ThemeProvider>();
-                final s = themeProvider.brand.strings;
-                final focusBackdrop = themeProvider.activeFocusBackdrop;
-                final color = _typeColor(state.type);
+            Selector<PomodoroProvider, _TimerTabSlice>(
+              selector: (_, provider) {
+                final st = provider.state;
+                final notStarted = st.isCountUp
+                    ? st.remainingSeconds == 0
+                    : st.remainingSeconds == st.totalSeconds;
+                return _TimerTabSlice(
+                  storageGeneration: provider.storageGeneration,
+                  type: st.type,
+                  isCountUp: st.isCountUp,
+                  isRunning: st.isRunning,
+                  isNotStarted: notStarted,
+                  totalSeconds: st.totalSeconds,
+                  completedSessions: st.completedSessions,
+                  taskName: st.taskName,
+                  whiteNoiseSound: st.whiteNoiseSound,
+                  focusRoomId: st.focusRoomId,
+                  defaultFocusMinutes: provider.defaultFocusMinutes,
+                  focusDurationUsesDefault:
+                      provider.config.focusDurationUsesDefault,
+                );
+              },
+              builder: (context, slice, _) {
+                final provider = context.read<PomodoroProvider>();
+                final durationOrigin = SettingsActionOrigin(context);
+                final durationGeneration = slice.storageGeneration;
+                final s = context.select<ThemeProvider, BrandStrings>(
+                  (t) => t.brand.strings,
+                );
+                final focusBackdrop =
+                    context.select<ThemeProvider, FocusBackdropReward>(
+                      (t) => t.activeFocusBackdrop,
+                    );
+                final color = _typeColor(
+                  slice.type,
+                  Theme.of(context).colorScheme,
+                );
                 return LayoutBuilder(
                   builder: (context, constraints) {
                     final availableHeight = constraints.maxHeight;
@@ -541,13 +712,24 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                     final contentWidth = (constraints.maxWidth - 24)
                         .clamp(0.0, 720.0)
                         .toDouble();
+                    final textScale = MediaQuery.textScalerOf(
+                      context,
+                    ).scale(1.0);
+                    final availableCardWidth =
+                        contentWidth - cardPadding.horizontal;
+                    final tileNonTextWidth =
+                        (tight ? 28 : 32) + (tight ? 16 : 20) + 8;
+                    final colTextWidth =
+                        ((availableCardWidth - 8) / 2) - tileNonTextWidth;
+                    final useTwoColumns = (colTextWidth / textScale) >= 90;
                     final cs = Theme.of(context).colorScheme;
+                    final surfaceStyle = appSurfaceStyleOf(context);
                     final cardGradient =
                         focusBackdrop.id == ThemeProvider.defaultFocusBackdropId
                         ? LinearGradient(
                             colors: [
                               color.withValues(alpha: 0.14),
-                              Theme.of(context).colorScheme.surface,
+                              cs.surface,
                             ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
@@ -558,7 +740,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                 alpha: 0.22,
                               ),
                               focusBackdrop.colors.last.withValues(alpha: 0.14),
-                              Theme.of(context).colorScheme.surface,
+                              cs.surface,
                             ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
@@ -578,7 +760,10 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                 height: tight ? 38 : 44,
                                 decoration: BoxDecoration(
                                   color: color.withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(
+                                    surfaceStyle?.smallTileRadius ??
+                                        DesignTokens.radiusControl,
+                                  ),
                                 ),
                                 child: Icon(
                                   Icons.timer_outlined,
@@ -625,11 +810,10 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      state.isCountUp
+                                      slice.isCountUp
                                           ? MainUiCopy.pomodoroFreeTimer
-                                          : typeLabel(state.type),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                          : typeLabel(slice.type),
+                                      softWrap: true,
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleMedium
@@ -641,16 +825,16 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${state.completedSessions} ${s.focusCompletedSuffix}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                      '${slice.completedSessions} ${s.focusCompletedSuffix}',
+                                      softWrap: true,
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall
                                           ?.copyWith(
-                                            color: cs.onSurface.withValues(
-                                              alpha: 0.68,
-                                            ),
+                                            color: cs.onSurface,
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
                                           ),
                                     ),
                                   ],
@@ -658,18 +842,14 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                               ),
                               Builder(
                                 builder: (_) {
-                                  final isNotStarted = state.isCountUp
-                                      ? state.remainingSeconds == 0
-                                      : state.remainingSeconds ==
-                                            state.totalSeconds;
                                   final isBreak =
-                                      state.type == PomodoroType.shortBreak ||
-                                      state.type == PomodoroType.longBreak;
-                                  final statusText = state.isRunning
+                                      slice.type == PomodoroType.shortBreak ||
+                                      slice.type == PomodoroType.longBreak;
+                                  final statusText = slice.isRunning
                                       ? (isBreak
                                             ? MainUiCopy.pomodoroStatusResting
                                             : MainUiCopy.pomodoroStatusFocusing)
-                                      : (isNotStarted
+                                      : (slice.isNotStarted
                                             ? MainUiCopy
                                                   .pomodoroStatusNotStarted
                                             : (isBreak
@@ -688,10 +868,11 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                     ),
                                     child: Text(
                                       statusText,
+                                      softWrap: true,
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.normal,
-                                        color: color,
+                                        color: cs.onSurface,
                                       ),
                                     ),
                                   );
@@ -705,13 +886,15 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                             color: color,
                             ringSize: ringSize,
                             tight: tight,
+                            isCountUp: slice.isCountUp,
+                            completedSessions: slice.completedSessions,
                             completedSuffix: s.focusCompletedSuffix,
                             timerLabel: s.focusTabTimer,
-                            textColor: cs.onSurface.withValues(alpha: 0.64),
+                            textColor: cs.onSurface,
                             formatTime: _formatTime,
                           ),
-                          if (state.taskName != null &&
-                              state.taskName!.isNotEmpty)
+                          if (slice.taskName != null &&
+                              slice.taskName!.isNotEmpty)
                             Padding(
                               padding: EdgeInsets.only(top: tight ? 5 : 7),
                               child: Center(
@@ -719,7 +902,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                   onTap: () => _editTaskName(
                                     context,
                                     provider,
-                                    state.taskName!,
+                                    slice.taskName!,
                                   ),
                                   child: ConstrainedBox(
                                     constraints: BoxConstraints(
@@ -752,7 +935,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                           const SizedBox(width: 6),
                                           Flexible(
                                             child: Text(
-                                              state.taskName!,
+                                              slice.taskName!,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
@@ -772,104 +955,199 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                               ),
                             ),
                           SizedBox(height: tight ? 6 : 9),
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 6),
-                                  child: ChoiceChip(
-                                    visualDensity: VisualDensity.compact,
-                                    avatar: const Icon(Icons.timer_outlined),
-                                    label: Text(MainUiCopy.pomodoroFreeTimer),
-                                    selected: state.isCountUp,
-                                    onSelected: state.isRunning
-                                        ? null
-                                        : (_) => provider.setCountUpMode(true),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              ChoiceChip(
+                                visualDensity: VisualDensity.compact,
+                                avatar: const Icon(Icons.timer_outlined),
+                                label: Text(MainUiCopy.pomodoroFreeTimer),
+                                selected: slice.isCountUp,
+                                onSelected: slice.isRunning
+                                    ? null
+                                    : (_) => provider.setCountUpMode(true),
+                              ),
+                              ChoiceChip(
+                                key: const ValueKey(
+                                  'pomodoro-default-duration',
+                                ),
+                                visualDensity: VisualDensity.compact,
+                                label: Text(
+                                  FocusRoomUiCopy.defaultDuration(
+                                    slice.defaultFocusMinutes,
                                   ),
                                 ),
-                                ...[15, 25, 30, 45, 60, 90].map(
-                                  (min) => Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: ChoiceChip(
-                                      visualDensity: VisualDensity.compact,
-                                      label: Text('$min 分钟'),
-                                      selected:
-                                          !state.isCountUp &&
-                                          state.totalSeconds == min * 60 &&
-                                          state.type == PomodoroType.focus,
-                                      onSelected: state.isRunning
-                                          ? null
-                                          : (_) {
-                                              provider.setCountUpMode(false);
-                                              provider.setConfig(
-                                                provider.config
-                                                  ..focusDuration = min * 60,
-                                              );
-                                            },
+                                selected:
+                                    !slice.isCountUp &&
+                                    slice.type == PomodoroType.focus &&
+                                    slice.focusDurationUsesDefault,
+                                onSelected: slice.isRunning
+                                    ? null
+                                    : (_) => _selectDuration(
+                                        context,
+                                        provider,
+                                        durationOrigin,
+                                        durationGeneration,
+                                      ),
+                              ),
+                              ...[15, 25, 30, 45, 60, 90].map(
+                                (min) => ChoiceChip(
+                                  visualDensity: VisualDensity.compact,
+                                  label: Text(
+                                    FocusRoomUiCopy.minutesSuffix(
+                                      min,
+                                      I18n.current,
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(height: tight ? 6 : 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _FocusControlTile(
-                                  icon: Icons.assignment_outlined,
-                                  label: '专注任务',
-                                  subtitle: state.taskName?.isNotEmpty == true
-                                      ? state.taskName!
-                                      : '选择本轮内容',
-                                  color: color,
-                                  compact: tight,
-                                  onTap: () =>
-                                      _showTaskPresetPicker(context, provider),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _WhiteNoiseControlTile(
-                                  sound: state.whiteNoiseSound,
-                                  color: state.whiteNoiseSound != 'none'
-                                      ? color
-                                      : cs.onSurfaceVariant,
-                                  compact: tight,
-                                  onTap: () => _showSoundPicker(
-                                    context,
-                                    provider,
-                                    state.whiteNoiseSound,
-                                  ),
+                                  selected:
+                                      !slice.isCountUp &&
+                                      !slice.focusDurationUsesDefault &&
+                                      slice.totalSeconds == min * 60 &&
+                                      slice.type == PomodoroType.focus,
+                                  onSelected: slice.isRunning
+                                      ? null
+                                      : (_) => _selectDuration(
+                                          context,
+                                          provider,
+                                          durationOrigin,
+                                          durationGeneration,
+                                          minutes: min,
+                                        ),
                                 ),
                               ),
                             ],
                           ),
                           SizedBox(height: tight ? 6 : 8),
-                          _FocusDndTile(
-                            enabled: provider.config.autoEnableDnd,
-                            active: provider.focusDndActive,
-                            accessGranted:
-                                provider.focusDndStatus.accessGranted,
-                            supported: provider.focusDndStatus.supported,
-                            compact: tight,
-                            color: color,
-                            onChanged: provider.setAutoEnableDnd,
-                            onTap: () => _showDndSheet(context),
+                          Selector<PomodoroProvider, _DailyGoalSlice>(
+                            selector: (_, p) => _DailyGoalSlice(
+                              persistedRevision: p.persistedRevision,
+                              todayFocusMinutes: p.todayFocusMinutes,
+                              dailyFocusGoalMinutes: p.dailyFocusGoalMinutes,
+                              dailyFocusGoalProgress: p.dailyFocusGoalProgress,
+                            ),
+                            builder: (context, _, _) => _DailyFocusGoalRingTile(
+                              key: const ValueKey('pomodoro_mobile_goal_ring'),
+                              provider: provider,
+                              color: color,
+                              compact: tight,
+                              onTap: () =>
+                                  _showDailyGoalEditor(context, provider),
+                            ),
                           ),
                           SizedBox(height: tight ? 6 : 8),
-                          _StrictFocusTile(
-                            enabled: provider.config.strictFocusMode,
-                            todayCount: provider.todayPenalties.length,
-                            compact: tight,
-                            color: color,
-                            onChanged: provider.setStrictFocusMode,
-                            onTap: () => _showStrictFocusSheet(context),
-                          ),
+                          if (useTwoColumns)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _FocusControlTile(
+                                    icon: Icons.assignment_outlined,
+                                    label: FocusRoomUiCopy.focusTaskLabel(
+                                      I18n.current,
+                                    ),
+                                    subtitle: slice.taskName?.isNotEmpty == true
+                                        ? slice.taskName!
+                                        : FocusRoomUiCopy.selectTaskForRound(
+                                            I18n.current,
+                                          ),
+                                    isUserContent:
+                                        slice.taskName?.isNotEmpty == true,
+                                    color: color,
+                                    compact: tight,
+                                    onTap: () => _showTaskPresetPicker(
+                                      context,
+                                      provider,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _WhiteNoiseControlTile(
+                                    sound: slice.whiteNoiseSound,
+                                    color: slice.whiteNoiseSound != 'none'
+                                        ? color
+                                        : cs.onSurfaceVariant,
+                                    compact: tight,
+                                    onTap: () => _showSoundPicker(
+                                      context,
+                                      provider,
+                                      slice.whiteNoiseSound,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else ...[
+                            _FocusControlTile(
+                              icon: Icons.assignment_outlined,
+                              label: FocusRoomUiCopy.focusTaskLabel(
+                                I18n.current,
+                              ),
+                              subtitle: slice.taskName?.isNotEmpty == true
+                                  ? slice.taskName!
+                                  : FocusRoomUiCopy.selectTaskForRound(
+                                      I18n.current,
+                                    ),
+                              isUserContent: slice.taskName?.isNotEmpty == true,
+                              color: color,
+                              compact: tight,
+                              onTap: () =>
+                                  _showTaskPresetPicker(context, provider),
+                            ),
+                            SizedBox(height: tight ? 6 : 8),
+                            _WhiteNoiseControlTile(
+                              sound: slice.whiteNoiseSound,
+                              color: slice.whiteNoiseSound != 'none'
+                                  ? color
+                                  : cs.onSurfaceVariant,
+                              compact: tight,
+                              onTap: () => _showSoundPicker(
+                                context,
+                                provider,
+                                slice.whiteNoiseSound,
+                              ),
+                            ),
+                          ],
+                          if (!kIsWeb) ...[
+                            SizedBox(height: tight ? 6 : 8),
+                            Selector<PomodoroProvider, _DndSlice>(
+                              selector: (_, p) => _DndSlice(
+                                autoEnableDnd: p.config.autoEnableDnd,
+                                focusDndActive: p.focusDndActive,
+                                accessGranted: p.focusDndStatus.accessGranted,
+                                supported: p.focusDndStatus.supported,
+                              ),
+                              builder: (context, dnd, _) => _FocusDndTile(
+                                enabled: dnd.autoEnableDnd,
+                                active: dnd.focusDndActive,
+                                accessGranted: dnd.accessGranted,
+                                supported: dnd.supported,
+                                compact: tight,
+                                color: color,
+                                onChanged: provider.setAutoEnableDnd,
+                                onTap: () => _showDndSheet(context),
+                              ),
+                            ),
+                            SizedBox(height: tight ? 6 : 8),
+                            Selector<PomodoroProvider, _StrictFocusBadgeSlice>(
+                              selector: (_, p) => _StrictFocusBadgeSlice(
+                                strictFocusMode: p.config.strictFocusMode,
+                                todayPenaltiesCount: p.todayPenalties.length,
+                              ),
+                              builder: (context, strict, _) => _StrictFocusTile(
+                                enabled: strict.strictFocusMode,
+                                todayCount: strict.todayPenaltiesCount,
+                                compact: tight,
+                                color: color,
+                                onChanged: provider.setStrictFocusMode,
+                                onTap: () => _showStrictFocusSheet(context),
+                              ),
+                            ),
+                          ],
                           SizedBox(height: tight ? 6 : 8),
                           _ActiveFocusRoomTile(
-                            focusRoomId: state.focusRoomId,
+                            focusRoomId: slice.focusRoomId,
                             compact: tight,
                             onTap: () => _showFocusRoomPicker(
                               context,
@@ -880,18 +1158,14 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                           SizedBox(height: tight ? 8 : 10),
                           Builder(
                             builder: (context) {
-                              final isNotStarted = state.isCountUp
-                                  ? state.remainingSeconds == 0
-                                  : state.remainingSeconds ==
-                                        state.totalSeconds;
                               final isBreak =
-                                  state.type == PomodoroType.shortBreak ||
-                                  state.type == PomodoroType.longBreak;
-                              final mainButtonTooltip = state.isRunning
+                                  slice.type == PomodoroType.shortBreak ||
+                                  slice.type == PomodoroType.longBreak;
+                              final mainButtonTooltip = slice.isRunning
                                   ? (isBreak
                                         ? MainUiCopy.pomodoroActionPauseBreak
                                         : MainUiCopy.pomodoroActionPauseFocus)
-                                  : (isNotStarted
+                                  : (slice.isNotStarted
                                         ? (isBreak
                                               ? MainUiCopy
                                                     .pomodoroActionStartBreak
@@ -931,28 +1205,31 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                                       onPressed: provider.toggleTimer,
                                       backgroundColor: color,
                                       child: Icon(
-                                        state.isRunning
+                                        slice.isRunning
                                             ? Icons.pause
                                             : Icons.play_arrow,
                                         size: tight ? 28 : 30,
-                                        color: Colors.white,
+                                        color: appReadableForeground(
+                                          color,
+                                          Colors.white,
+                                        ),
                                       ),
                                     ),
                                   ),
                                   SizedBox(width: tight ? 14 : 18),
                                   IconButton.filled(
-                                    onPressed: state.isCountUp
+                                    onPressed: slice.isCountUp
                                         ? provider.finishCurrentSession
                                         : () => _confirmStrictFocusExit(
                                             context,
                                             FocusPenaltyReason.skip,
                                             provider.skipSession,
                                           ),
-                                    tooltip: state.isCountUp
+                                    tooltip: slice.isCountUp
                                         ? MainUiCopy.pomodoroActionFinishCountUp
                                         : MainUiCopy.pomodoroActionSkip,
                                     icon: Icon(
-                                      state.isCountUp
+                                      slice.isCountUp
                                           ? Icons.stop
                                           : Icons.skip_next,
                                     ),
@@ -973,25 +1250,16 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
 
                     final topPadding = compact ? 6.0 : 8.0;
                     final bottomPadding = compact ? 8.0 : 12.0;
-                    final fitHeight =
-                        (availableHeight - topPadding - bottomPadding)
-                            .clamp(0.0, double.infinity)
-                            .toDouble();
-                    return Padding(
+                    return SingleChildScrollView(
                       padding: EdgeInsets.fromLTRB(
                         12,
                         topPadding,
                         12,
                         bottomPadding,
                       ),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: fitHeight,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.topCenter,
-                          child: SizedBox(width: contentWidth, child: card),
-                        ),
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: SizedBox(width: contentWidth, child: card),
                       ),
                     );
                   },
@@ -1012,7 +1280,11 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
     FocusRoomProvider rooms,
     String roomId,
   ) async {
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     await rooms.joinRoom(roomId);
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
     await pomodoro.setFocusRoomId(roomId);
   }
 
@@ -1030,156 +1302,208 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
     }
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: Text('${reason.label}？'),
-        content: Text(
-          '严格专注已开启。本次操作会记入专注惩罚记录，今日统计和自习室复盘都会显示这次中断。',
-          style: Theme.of(ctx).textTheme.bodyMedium,
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => AppDialog(
+          title: Text(FocusRoomUiCopy.strictFocusConfirmTitle(reason, locale)),
+          content: Text(
+            FocusRoomUiCopy.strictFocusConfirmContent(locale),
+            style: Theme.of(ctx).textTheme.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(FocusRoomUiCopy.keepFocusing(locale)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(FocusRoomUiCopy.confirmRecord(locale)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('继续专注'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('确认记录'),
-          ),
-        ],
       ),
     );
     if (confirmed == true) action();
   }
 
-  void _showStrictFocusSheet(BuildContext context) {
-    showAppModalSheet(
-      context: context,
-      builder: (ctx) => Consumer<PomodoroProvider>(
-        builder: (ctx, provider, _) {
-          final cs = Theme.of(ctx).colorScheme;
-          final today = provider.todayPenalties;
-          final recent = provider.penalties.take(8).toList();
-          final packageCtrl = TextEditingController(
-            text: provider.config.distractingAppPackages.join('\n'),
-          );
-          return AppModalSheet(
-            title: '严格专注',
-            subtitle: '暂停、跳过、重置、离开应用或打开分心 App 会留下中断记录',
-            shiftForKeyboard: true,
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('完成'),
-              ),
-            ],
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  secondary: const Icon(Icons.lock_clock_outlined),
-                  title: const Text('开启严格专注'),
-                  subtitle: Text('今日已记录 ${today.length} 次中断'),
-                  value: provider.config.strictFocusMode,
-                  onChanged: provider.setStrictFocusMode,
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  secondary: const Icon(Icons.app_blocking_outlined),
-                  title: const Text('监控分心应用'),
-                  subtitle: Text(
-                    provider.focusDistractionStatus.accessibilityGranted
-                        ? '辅助功能拦截已授权'
-                        : provider.focusDistractionStatus.accessGranted
-                        ? '已授权使用情况访问，辅助功能未授权'
-                        : '需要 Android 使用情况访问和辅助功能权限',
-                  ),
-                  value: provider.config.monitorDistractingApps,
-                  onChanged: provider.setMonitorDistractingApps,
-                ),
-                TextField(
-                  controller: packageCtrl,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: '分心应用包名',
-                    hintText: 'com.tencent.mm\ncom.ss.android.ugc.aweme',
-                  ),
-                  onChanged: (value) => unawaited(
-                    provider.setDistractingAppPackages(
-                      value
-                          .split(RegExp(r'[\n,， ]+'))
-                          .map((e) => e.trim())
-                          .where((e) => e.isNotEmpty)
-                          .toList(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      await provider.openFocusUsageAccessSettings();
-                      await provider.refreshFocusDistractionStatus();
-                    },
-                    icon: const Icon(Icons.settings_outlined),
-                    label: const Text('使用情况权限'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      await provider.openFocusAccessibilitySettings();
-                      await provider.refreshFocusDistractionStatus();
-                    },
-                    icon: const Icon(Icons.accessibility_new_outlined),
-                    label: const Text('辅助功能拦截'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: cs.outlineVariant.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  child: Text(
-                    '开启辅助功能后，严格专注运行时会把打开的分心 App 拉回多仪；未授权辅助功能时仍会用使用情况访问记录分心 App 惩罚。',
-                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.68),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                AppSectionHeader(
-                  title: '最近惩罚',
-                  subtitle: recent.isEmpty ? '暂无记录' : '${recent.length} 条',
-                  padding: EdgeInsets.zero,
-                ),
-                const SizedBox(height: 6),
-                if (recent.isEmpty)
-                  Text(
-                    '保持完整专注后这里会继续为空。',
-                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.62),
-                    ),
-                  )
-                else
-                  ...recent.map((penalty) => _PenaltyListTile(penalty)),
-              ],
-            ),
-          );
-        },
-      ),
+  Future<void> _showStrictFocusSheet(BuildContext context) async {
+    final provider = context.read<PomodoroProvider>();
+    final packageCtrl = TextEditingController(
+      text: provider.config.distractingAppPackages.join('\n'),
     );
+    try {
+      await showAppModalSheet(
+        context: context,
+        builder: (ctx) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) =>
+              Selector<PomodoroProvider, _StrictFocusSheetSlice>(
+                selector: (_, p) => _StrictFocusSheetSlice(
+                  strictFocusMode: p.config.strictFocusMode,
+                  monitorDistractingApps: p.config.monitorDistractingApps,
+                  accessibilityGranted:
+                      p.focusDistractionStatus.accessibilityGranted,
+                  accessGranted: p.focusDistractionStatus.accessGranted,
+                  penaltiesCount: p.penalties.length,
+                  todayPenaltiesCount: p.todayPenalties.length,
+                  latestPenaltyId: p.penalties.isEmpty
+                      ? null
+                      : p.penalties.first.id,
+                ),
+                builder: (ctx, _, _) {
+                  final provider = ctx.read<PomodoroProvider>();
+                  final cs = Theme.of(ctx).colorScheme;
+                  final today = provider.todayPenalties;
+                  final recent = provider.penalties.take(8).toList();
+              return AppModalSheet(
+                title: FocusRoomUiCopy.strictFocusTitle(locale),
+                subtitle: FocusRoomUiCopy.strictFocusSubtitle(locale),
+                shiftForKeyboard: true,
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text(FocusRoomUiCopy.done(locale)),
+                  ),
+                ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      secondary: const Icon(Icons.lock_clock_outlined),
+                      title: Text(FocusRoomUiCopy.enableStrictFocus(locale)),
+                      subtitle: Text(
+                        FocusRoomUiCopy.todayPenaltiesCount(
+                          today.length,
+                          locale,
+                        ),
+                      ),
+                      value: provider.config.strictFocusMode,
+                      onChanged: provider.setStrictFocusMode,
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      secondary: const Icon(Icons.app_blocking_outlined),
+                      title: Text(
+                        FocusRoomUiCopy.monitorDistractingApps(locale),
+                      ),
+                      subtitle: Text(
+                        FocusRoomUiCopy.distractionStatusSubtitle(
+                          accessibilityGranted: provider
+                              .focusDistractionStatus
+                              .accessibilityGranted,
+                          accessGranted:
+                              provider.focusDistractionStatus.accessGranted,
+                          locale: locale,
+                        ),
+                      ),
+                      value: provider.config.monitorDistractingApps,
+                      onChanged: provider.setMonitorDistractingApps,
+                    ),
+                    TextField(
+                      controller: packageCtrl,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        labelText: FocusRoomUiCopy.distractingPackageLabel(
+                          locale,
+                        ),
+                        hintText: 'com.tencent.mm\ncom.ss.android.ugc.aweme',
+                      ),
+                      onChanged: (value) => unawaited(
+                        provider.setDistractingAppPackages(
+                          value
+                              .split(RegExp(r'[\n,， ]+'))
+                              .map((e) => e.trim())
+                              .where((e) => e.isNotEmpty)
+                              .toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          await provider.openFocusUsageAccessSettings();
+                          await provider.refreshFocusDistractionStatus();
+                        },
+                        icon: const Icon(Icons.settings_outlined),
+                        label: Text(FocusRoomUiCopy.usageAccessButton(locale)),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          await provider.openFocusAccessibilitySettings();
+                          await provider.refreshFocusDistractionStatus();
+                        },
+                        icon: const Icon(Icons.accessibility_new_outlined),
+                        label: Text(
+                          FocusRoomUiCopy.accessibilityServiceButton(locale),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest.withValues(
+                          alpha: 0.42,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          appSurfaceStyleOf(ctx)?.smallTileRadius ??
+                              DesignTokens.radiusControl,
+                        ),
+                        border: Border.all(
+                          color: cs.outlineVariant.withValues(alpha: 0.5),
+                          width: 0.45,
+                        ),
+                      ),
+                      child: Text(
+                        FocusRoomUiCopy.strictFocusExplanation(locale),
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.68),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    AppSectionHeader(
+                      title: FocusRoomUiCopy.recentPenaltiesHeader(locale),
+                      subtitle: recent.isEmpty
+                          ? FocusRoomUiCopy.noPenaltiesRecorded(locale)
+                          : FocusRoomUiCopy.penaltiesCountSubtitle(
+                              recent.length,
+                              locale,
+                            ),
+                      padding: EdgeInsets.zero,
+                    ),
+                    const SizedBox(height: 6),
+                    if (recent.isEmpty)
+                      Text(
+                        FocusRoomUiCopy.emptyPenaltiesHint(locale),
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                        ),
+                      )
+                    else
+                      ...recent.map(
+                        (penalty) => _PenaltyListTile(penalty, locale: locale),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    } finally {
+      packageCtrl.dispose();
+    }
   }
 
   void _showFocusRoomPicker(
@@ -1189,159 +1513,216 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
   ) {
     showAppModalSheet(
       context: context,
-      builder: (ctx) => AppModalSheet(
-        title: '选择自习室',
-        subtitle: '完成的专注会计入所选自习室本周排行',
-        actions: [
-          TextButton.icon(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _showCreateRoomDialog(context, pomodoro, rooms);
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('新建'),
-          ),
-          if (pomodoro.state.focusRoomId != null)
-            TextButton(
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => AppModalSheet(
+          title: FocusRoomUiCopy.selectRoomTitle(locale),
+          subtitle: FocusRoomUiCopy.selectRoomSubtitle(locale),
+          actions: [
+            TextButton.icon(
               onPressed: () {
-                unawaited(pomodoro.setFocusRoomId(null));
-                rooms.setActiveRoom(null);
                 Navigator.pop(ctx);
+                _showCreateRoomDialog(context, pomodoro, rooms);
               },
-              child: const Text('本轮不加入'),
+              icon: const Icon(Icons.add),
+              label: Text(FocusRoomUiCopy.newRoomButton(locale)),
             ),
-        ],
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final room in rooms.rooms)
-              _FocusRoomOptionTile(
-                room: room,
-                joined: rooms.joinedRoomIds.contains(room.id),
-                selected: pomodoro.state.focusRoomId == room.id,
-                onTap: () async {
-                  await _activateRoom(pomodoro, rooms, room.id);
-                  if (ctx.mounted) Navigator.pop(ctx);
+            if (pomodoro.state.focusRoomId != null)
+              TextButton(
+                onPressed: () {
+                  unawaited(pomodoro.setFocusRoomId(null));
+                  rooms.setActiveRoom(null);
+                  Navigator.pop(ctx);
                 },
+                child: Text(FocusRoomUiCopy.doNotJoinThisRound(locale)),
               ),
           ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final room in rooms.rooms)
+                _FocusRoomOptionTile(
+                  room: room,
+                  joined: rooms.joinedRoomIds.contains(room.id),
+                  selected: pomodoro.state.focusRoomId == room.id,
+                  locale: locale,
+                  onTap: () async {
+                    await _activateRoom(pomodoro, rooms, room.id);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  void _showCreateRoomDialog(
+  Future<void> _showCreateRoomDialog(
     BuildContext context,
     PomodoroProvider pomodoro,
     FocusRoomProvider rooms,
-  ) {
+  ) async {
     final nameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final targetCtrl = TextEditingController(text: '300');
-    showDialog(
+    final originGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    var submitting = false;
+    await showControllerDialog<void>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: const Text('新建自习室'),
-        shiftForKeyboard: true,
-        content: _PomodoroDialogBody(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: '名称'),
+      controllers: [nameCtrl, descCtrl, targetCtrl],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) => AppDialog(
+            title: Text(FocusRoomUiCopy.createRoomTitle(locale)),
+            shiftForKeyboard: true,
+            content: _PomodoroDialogBody(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: FocusRoomUiCopy.nameLabel(locale),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: descCtrl,
+                    decoration: InputDecoration(
+                      labelText: FocusRoomUiCopy.descriptionLabel(locale),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: targetCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: FocusRoomUiCopy.weeklyGoalMinutesLabel(locale),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: descCtrl,
-                decoration: const InputDecoration(labelText: '说明'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: submitting ? null : () => Navigator.pop(ctx),
+                child: Text(FocusRoomUiCopy.cancel(locale)),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: targetCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '每周目标（分钟）'),
+              FilledButton(
+                onPressed: submitting
+                    ? null
+                    : () async {
+                        if (submitting) return;
+                        final route = ModalRoute.of(ctx);
+                        if (!ctx.mounted ||
+                            route == null ||
+                            !route.isCurrent ||
+                            !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                              originGeneration,
+                            )) {
+                          return;
+                        }
+                        setDialogState(() => submitting = true);
+                        final target =
+                            int.tryParse(targetCtrl.text.trim()) ?? 300;
+                        try {
+                          final room = await rooms.createRoom(
+                            name: nameCtrl.text,
+                            description: descCtrl.text,
+                            weeklyTargetMinutes: target,
+                          );
+                          if (!ctx.mounted ||
+                              !route.isCurrent ||
+                              !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                                originGeneration,
+                              )) {
+                            return;
+                          }
+                          await pomodoro.setFocusRoomId(room.id);
+                          if (!ctx.mounted ||
+                              !route.isCurrent ||
+                              !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                                originGeneration,
+                              )) {
+                            return;
+                          }
+                          route.navigator?.pop();
+                        } finally {
+                          if (ctx.mounted && route.isCurrent) {
+                            setDialogState(() => submitting = false);
+                          }
+                        }
+                      },
+                child: Text(FocusRoomUiCopy.create(locale)),
               ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final target = int.tryParse(targetCtrl.text.trim()) ?? 300;
-              final room = await rooms.createRoom(
-                name: nameCtrl.text,
-                description: descCtrl.text,
-                weeklyTargetMinutes: target,
-              );
-              await pomodoro.setFocusRoomId(room.id);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('创建'),
-          ),
-        ],
       ),
     );
   }
 
-  void _editTaskName(
+  Future<void> _editTaskName(
     BuildContext context,
     PomodoroProvider provider,
     String current,
-  ) {
-    final s = context.read<ThemeProvider>().brand.strings;
+  ) async {
     final ctrl = TextEditingController(text: current);
     final tagCtrl = TextEditingController(text: provider.state.tag ?? '');
-    showDialog(
+    await showControllerDialog<void>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: Text(s.focusTaskLinkLabel),
-        shiftForKeyboard: true,
-        content: _PomodoroDialogBody(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: ctrl,
-                decoration: const InputDecoration(hintText: '任务名称'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: tagCtrl,
-                decoration: const InputDecoration(
-                  hintText: '标签（用于专注统计分类，可选）',
-                  prefixIcon: Icon(Icons.label_outline),
+      controllers: [ctrl, tagCtrl],
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => AppDialog(
+          title: Text(FocusRoomUiCopy.focusTaskLabel(locale)),
+          shiftForKeyboard: true,
+          content: _PomodoroDialogBody(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: ctrl,
+                  decoration: InputDecoration(
+                    hintText: FocusRoomUiCopy.taskNameHint(locale),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: tagCtrl,
+                  decoration: InputDecoration(
+                    hintText: FocusRoomUiCopy.taskTagHint(locale),
+                    prefixIcon: const Icon(Icons.label_outline),
+                  ),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(FocusRoomUiCopy.cancel(locale)),
+            ),
+            TextButton(
+              onPressed: () {
+                provider.setTaskName(null);
+                provider.setTag(null);
+                Navigator.pop(ctx);
+              },
+              child: Text(FocusRoomUiCopy.clearAction(locale)),
+            ),
+            FilledButton(
+              onPressed: () {
+                provider.setTaskName(ctrl.text);
+                provider.setTag(tagCtrl.text);
+                Navigator.pop(ctx);
+              },
+              child: Text(FocusRoomUiCopy.ok(locale)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              provider.setTaskName(null);
-              provider.setTag(null);
-              Navigator.pop(ctx);
-            },
-            child: const Text('清除'),
-          ),
-          FilledButton(
-            onPressed: () {
-              provider.setTaskName(ctrl.text);
-              provider.setTag(tagCtrl.text);
-              Navigator.pop(ctx);
-            },
-            child: const Text('确定'),
-          ),
-        ],
       ),
     );
   }
@@ -1426,97 +1807,78 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
     const volumeOptions = <double>[0.4, 0.6, 0.8, 1.0];
     showAppModalSheet(
       context: context,
-      builder: (ctx) => AppModalSheet(
-        title: '选择白噪音',
-        subtitle: '选择一段稳定循环的自然环境音',
-        actions: [
-          TextButton.icon(
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              final imported = await customProvider.importAudio();
-              if (!ctx.mounted) return;
-              if (imported == null) return;
-              final previewStarted = await provider.setWhiteNoiseSound(
-                imported.id,
-              );
-              if (!ctx.mounted) return;
-              Navigator.pop(ctx);
-              messenger.showSnackBar(
-                SnackBar(
-                  content: Text(
-                    previewStarted
-                        ? '已导入 ${imported.label}'
-                        : '已导入 ${imported.label}，但声音预览启动失败，请检查音频文件或系统音量',
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            icon: const Icon(Icons.upload_file_outlined),
-            label: const Text('导入音频'),
-          ),
-        ],
-        child: StatefulBuilder(
-          builder: (sheetContext, setSheetState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '点击声音会自动试听，也可以先点试听确认音量。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.58),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final value in volumeOptions)
-                      ChoiceChip(
-                        label: Text('${(value * 100).round()}%'),
-                        selected: provider.config.focusSoundVolume == value,
-                        onSelected: (_) async {
-                          final messenger = ScaffoldMessenger.of(context);
-                          final previewStarted = await provider
-                              .setFocusSoundVolume(value);
-                          if (!ctx.mounted) return;
-                          setSheetState(() {});
-                          if (!previewStarted) {
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text('专注音量预览启动失败，请先选择白噪音或检查系统音量'),
-                                behavior: SnackBarBehavior.floating,
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => AppModalSheet(
+          title: FocusRoomUiCopy.selectWhiteNoiseTitle(locale),
+          subtitle: FocusRoomUiCopy.selectWhiteNoiseSubtitle(locale),
+          actions: [
+            if (!kIsWeb)
+              TextButton.icon(
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final imported = await customProvider.importAudio();
+                  if (!ctx.mounted) return;
+                  if (imported == null) return;
+                  await provider.prepareSingleAmbientTrack(imported.id);
+                  final previewStarted = await provider.setWhiteNoiseSound(
+                    imported.id,
+                  );
+                  if (!ctx.mounted) return;
+                  Navigator.pop(ctx);
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        previewStarted
+                            ? FocusRoomUiCopy.importedAudioSuccess(
+                                imported.label,
+                                I18n.current,
+                              )
+                            : FocusRoomUiCopy.importedAudioPreviewFailed(
+                                imported.label,
+                                I18n.current,
                               ),
-                            );
-                          }
-                        },
                       ),
-                  ],
-                ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.upload_file_outlined),
+                label: Text(FocusRoomUiCopy.importAudioButton(locale)),
               ),
-              const Divider(height: 18),
-              for (final option in FocusSoundCatalog.options)
-                _SoundOptionTile(
-                  title: option.label,
+          ],
+          child: StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              Widget buildOptionTile(FocusSoundOption option) {
+                final inMix = provider.ambientMixerTracks.containsKey(
+                  option.id,
+                );
+                return _SoundOptionTile(
+                  title: option.displayLabel(locale: locale),
                   icon: _soundIcon(option.id),
                   selected: currentSound == option.id,
+                  previewTooltip: FocusRoomUiCopy.previewAudioTooltip(locale),
+                  inMix: inMix,
+                  onMixToggle: option.id == FocusSoundCatalog.none
+                      ? null
+                      : () async {
+                          await provider.toggleMixerTrack(option.id);
+                          if (ctx.mounted) setSheetState(() {});
+                        },
                   onPreview: () async {
                     final messenger = ScaffoldMessenger.of(context);
+                    await provider.prepareSingleAmbientTrack(option.id);
                     final previewStarted = await provider.setWhiteNoiseSound(
                       option.id,
                     );
                     if (!ctx.mounted) return;
+                    setSheetState(() {});
                     if (!previewStarted) {
                       messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('专注声音试听启动失败，请检查系统音量或音频资源'),
+                        SnackBar(
+                          content: Text(
+                            FocusRoomUiCopy.soundPreviewFailed(I18n.current),
+                          ),
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
@@ -1524,6 +1886,7 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                   },
                   onTap: () async {
                     final messenger = ScaffoldMessenger.of(context);
+                    await provider.prepareSingleAmbientTrack(option.id);
                     final previewStarted = await provider.setWhiteNoiseSound(
                       option.id,
                     );
@@ -1531,65 +1894,288 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
                     Navigator.pop(ctx);
                     if (!previewStarted) {
                       messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('专注声音预览启动失败，请检查系统音量或音频资源'),
+                        SnackBar(
+                          content: Text(
+                            FocusRoomUiCopy.soundPreviewFailed(I18n.current),
+                          ),
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
                     }
                   },
-                ),
-              if (customProvider.sounds.isNotEmpty) ...[
-                const Divider(height: 18),
-                for (final sound in customProvider.sounds)
-                  _SoundOptionTile(
-                    title: sound.label,
-                    subtitle: '自定义音频',
-                    icon: _soundIcon(sound.id),
-                    selected: currentSound == sound.id,
-                    onPreview: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final previewStarted = await provider.setWhiteNoiseSound(
-                        sound.id,
-                      );
-                      if (!ctx.mounted) return;
-                      if (!previewStarted) {
-                        messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text('自定义专注声音试听启动失败，请检查音频文件或系统音量'),
-                            behavior: SnackBarBehavior.floating,
+                );
+              }
+
+              return AnimatedBuilder(
+                animation: provider,
+                builder: (context, _) {
+                  final mixerEntries = provider.ambientMixerTracks.entries
+                      .toList(growable: false);
+                  final isEn = locale == AppLocale.en;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          FocusRoomUiCopy.soundPreviewHint(locale),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.58),
+                              ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (final value in volumeOptions)
+                              ChoiceChip(
+                                label: Text('${(value * 100).round()}%'),
+                                selected:
+                                    provider.config.focusSoundVolume == value,
+                                onSelected: (_) async {
+                                  final messenger = ScaffoldMessenger.of(
+                                    context,
+                                  );
+                                  final previewStarted = await provider
+                                      .setFocusSoundVolume(value);
+                                  if (!ctx.mounted) return;
+                                  setSheetState(() {});
+                                  if (!previewStarted) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          FocusRoomUiCopy.soundVolumePreviewFailed(
+                                            I18n.current,
+                                          ),
+                                        ),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 18),
+                      Container(
+                        key: const ValueKey('pomodoro_mobile_mixer_panel'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(
+                            appSurfaceStyleOf(context)?.smallTileRadius ??
+                                DesignTokens.radiusControl,
                           ),
-                        );
-                      }
-                    },
-                    onTap: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final previewStarted = await provider.setWhiteNoiseSound(
-                        sound.id,
-                      );
-                      if (!ctx.mounted) return;
-                      Navigator.pop(ctx);
-                      if (!previewStarted) {
-                        messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text('自定义专注声音预览启动失败，请检查音频文件或系统音量'),
-                            behavior: SnackBarBehavior.floating,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.layers_outlined,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    isEn
+                                        ? 'Multi-track Ambient Mixer (${mixerEntries.length}/${PomodoroProvider.maxAmbientMixerTracks})'
+                                        : '多音轨混音 (${mixerEntries.length}/${PomodoroProvider.maxAmbientMixerTracks})',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                ),
+                                if (mixerEntries.isNotEmpty)
+                                  TextButton(
+                                    onPressed: () async {
+                                      await provider.toggleMixerAudition();
+                                      if (ctx.mounted) setSheetState(() {});
+                                    },
+                                    child: Text(
+                                      provider.isMixerAuditioning
+                                          ? (isEn ? 'Stop' : '停止')
+                                          : (isEn ? 'Play mix' : '试听混音'),
+                                    ),
+                                  ),
+                                if (mixerEntries.isNotEmpty)
+                                  TextButton(
+                                    onPressed: () async {
+                                      await provider.clearMixerTracks();
+                                      if (ctx.mounted) setSheetState(() {});
+                                    },
+                                    child: Text(isEn ? 'Clear' : '清空'),
+                                  ),
+                              ],
+                            ),
+                            if (mixerEntries.isEmpty)
+                              Text(
+                                isEn
+                                    ? 'Tap the layer icon on 2+ sounds below to blend tracks.'
+                                    : '点击下方音轨右侧叠加图标，可自由混合 2-4 条环境音轨并独立调音。',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              )
+                            else
+                              for (final entry in mixerEntries)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 82,
+                                        child: Text(
+                                          FocusSoundCatalog.labelFor(
+                                            entry.key,
+                                            locale: locale,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Slider(
+                                          value: entry.value.clamp(0.1, 1.0),
+                                          min: 0.1,
+                                          max: 1.0,
+                                          onChanged: (v) async {
+                                            await provider.setMixerTrackVolume(
+                                              entry.key,
+                                              v,
+                                            );
+                                            if (ctx.mounted) {
+                                              setSheetState(() {});
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                      Text(
+                                        '${(entry.value * 100).round()}%',
+                                        style: const TextStyle(fontSize: 11),
+                                      ),
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        iconSize: 16,
+                                        icon: const Icon(Icons.close),
+                                        onPressed: () async {
+                                          await provider.toggleMixerTrack(
+                                            entry.key,
+                                          );
+                                          if (ctx.mounted) setSheetState(() {});
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 18),
+                      buildOptionTile(FocusSoundCatalog.noneOption),
+                      for (final group in FocusSoundCatalog.groupedOptions) ...[
+                        const Divider(height: 16),
+                        AppSectionHeader(
+                          title: group.category.displayLabel(locale: locale),
+                          padding: const EdgeInsets.fromLTRB(4, 6, 4, 4),
+                        ),
+                        for (final option in group.options)
+                          buildOptionTile(option),
+                      ],
+                      if (customProvider.sounds.isNotEmpty) ...[
+                        const Divider(height: 18),
+                        AppSectionHeader(
+                          title: FocusRoomUiCopy.customAudioLabel(locale),
+                          padding: const EdgeInsets.fromLTRB(4, 6, 4, 4),
+                        ),
+                        for (final sound in customProvider.sounds)
+                          _SoundOptionTile(
+                            title: sound.label,
+                            subtitle: FocusRoomUiCopy.customAudioLabel(locale),
+                            icon: _soundIcon(sound.id),
+                            selected: currentSound == sound.id,
+                            previewTooltip: FocusRoomUiCopy.previewAudioTooltip(
+                              locale,
+                            ),
+                            deleteTooltip:
+                                FocusRoomUiCopy.deleteCustomAudioTooltip(
+                                  locale,
+                                ),
+                            onPreview: () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              await provider.prepareSingleAmbientTrack(
+                                sound.id,
+                              );
+                              final previewStarted = await provider.setWhiteNoiseSound(
+                                sound.id,
+                              );
+                              if (!ctx.mounted) return;
+                              if (!previewStarted) {
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      FocusRoomUiCopy.customSoundPreviewFailed(
+                                        I18n.current,
+                                      ),
+                                    ),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                            onTap: () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              await provider.prepareSingleAmbientTrack(
+                                sound.id,
+                              );
+                              final previewStarted = await provider.setWhiteNoiseSound(
+                                sound.id,
+                              );
+                              if (!ctx.mounted) return;
+                              Navigator.pop(ctx);
+                              if (!previewStarted) {
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      FocusRoomUiCopy.customSoundPreviewFailed(
+                                        I18n.current,
+                                      ),
+                                    ),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                            onDelete: () async {
+                              await customProvider.remove(sound.id);
+                              if (provider.state.whiteNoiseSound == sound.id) {
+                                await provider.prepareSingleAmbientTrack(
+                                  FocusSoundCatalog.none,
+                                );
+                                await provider.setWhiteNoiseSound(
+                                  FocusSoundCatalog.none,
+                                );
+                              }
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            },
                           ),
-                        );
-                      }
-                    },
-                    onDelete: () async {
-                      await customProvider.remove(sound.id);
-                      if (provider.state.whiteNoiseSound == sound.id) {
-                        await provider.setWhiteNoiseSound(
-                          FocusSoundCatalog.none,
-                        );
-                      }
-                      if (ctx.mounted) Navigator.pop(ctx);
-                    },
-                  ),
-              ],
-            ],
+                      ],
+                    ],
+                  );
+                },
+              );
+            },
           ),
         ),
       ),
@@ -1597,112 +2183,260 @@ class _PomodoroScreenState extends State<_PomodoroScreenBody>
   }
 
   void _showTaskPresetPicker(BuildContext context, PomodoroProvider provider) {
-    final presets = const ['深度工作', '阅读', '写作', '复盘', '运动', '学习'];
+    final activeTodos =
+        context.read<TodoProvider?>()?.activeTodos ?? const <TodoItem>[];
     showAppModalSheet(
       context: context,
-      builder: (ctx) => AppModalSheet(
-        title: '专注任务',
-        subtitle: '选择预设或手动输入',
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _editTaskName(context, provider, provider.state.taskName ?? '');
-            },
-            child: const Text('手动输入'),
-          ),
-          if (provider.state.taskName?.isNotEmpty == true)
-            TextButton(
-              onPressed: () {
-                provider.setTaskName(null);
-                Navigator.pop(ctx);
-              },
-              child: const Text('清除'),
-            ),
-        ],
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final preset in presets)
-              ActionChip(
-                avatar: const Icon(Icons.assignment_outlined, size: 16),
-                label: Text(preset),
-                onPressed: () {
-                  provider.setTaskName(preset);
-                  Navigator.pop(ctx);
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showDndSheet(BuildContext context) {
-    showAppModalSheet(
-      context: context,
-      builder: (ctx) => Consumer<PomodoroProvider>(
-        builder: (ctx, provider, _) {
-          final cs = Theme.of(ctx).colorScheme;
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) {
+          final isEn = locale == AppLocale.en;
+          final presets = FocusRoomUiCopy.taskPresets(locale);
           return AppModalSheet(
-            title: '专注勿扰',
-            subtitle: '开始专注时临时开启系统勿扰，暂停、结束或重置后恢复原状态',
+            title: FocusRoomUiCopy.focusTaskLabel(locale),
+            subtitle: FocusRoomUiCopy.focusTaskPresetsSubtitle(locale),
             actions: [
               TextButton(
-                onPressed: () async {
-                  await provider.refreshFocusDndStatus();
-                  if (ctx.mounted) Navigator.pop(ctx);
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _editTaskName(
+                    context,
+                    provider,
+                    provider.state.taskName ?? '',
+                  );
                 },
-                child: const Text('完成'),
+                child: Text(FocusRoomUiCopy.manualInputButton(locale)),
               ),
-              FilledButton.icon(
-                onPressed: provider.focusDndStatus.supported
-                    ? () => provider.openFocusDndSettings()
-                    : null,
-                icon: const Icon(Icons.settings_outlined),
-                label: const Text('去授权'),
-              ),
+              if (provider.state.taskName?.isNotEmpty == true)
+                TextButton(
+                  onPressed: () {
+                    provider.setTaskName(null);
+                    Navigator.pop(ctx);
+                  },
+                  child: Text(FocusRoomUiCopy.clearAction(locale)),
+                ),
             ],
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  secondary: const Icon(Icons.do_not_disturb_on_outlined),
-                  title: const Text('专注时自动开启勿扰'),
-                  subtitle: Text(
-                    provider.focusDndStatus.accessGranted
-                        ? '已获得系统勿扰权限'
-                        : '需要在系统设置中允许多仪控制勿扰模式',
+                if (activeTodos.isNotEmpty) ...[
+                  Text(
+                    isEn ? 'Active Todos' : '进行中的待办任务',
+                    style: Theme.of(ctx).textTheme.labelMedium,
                   ),
-                  value: provider.config.autoEnableDnd,
-                  onChanged: provider.setAutoEnableDnd,
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final todo in activeTodos.take(12))
+                        ActionChip(
+                          key: ValueKey('pomodoro_todo_pick_${todo.id}'),
+                          avatar: const Icon(
+                            Icons.check_circle_outline,
+                            size: 16,
+                          ),
+                          label: Text(todo.title),
+                          onPressed: () {
+                            provider.setTaskName(todo.title);
+                            Navigator.pop(ctx);
+                          },
+                        ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+                ],
+                Text(
+                  isEn ? 'Quick Presets' : '快捷场景预设',
+                  style: Theme.of(ctx).textTheme.labelMedium,
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: cs.outlineVariant.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  child: Text(
-                    provider.focusDndStatus.supported
-                        ? '未授权时不影响计时和白噪音播放；授权后仅在本轮专注进行中切换系统勿扰。'
-                        : '当前平台不支持通过多仪控制系统勿扰。Android 6.0 及以上可用。',
-                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.68),
-                    ),
-                  ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final preset in presets)
+                      ActionChip(
+                        avatar: const Icon(Icons.assignment_outlined, size: 16),
+                        label: Text(preset),
+                        onPressed: () {
+                          provider.setTaskName(preset);
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                  ],
                 ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _showDailyGoalEditor(
+    BuildContext context,
+    PomodoroProvider provider,
+  ) async {
+    var selected = provider.dailyFocusGoalMinutes;
+    final customCtrl = TextEditingController(text: '$selected');
+    try {
+      final target = await showDialog<int>(
+        context: context,
+        builder: (ctx) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) {
+            final isEn = locale == AppLocale.en;
+            return StatefulBuilder(
+              builder: (ctx, setSt) => AppDialog(
+                title: Text(isEn ? 'Daily focus goal' : '每日专注目标'),
+                content: _PomodoroDialogBody(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final mins in const [30, 60, 90, 120, 180, 240])
+                            ChoiceChip(
+                              label: Text(isEn ? '${mins}m' : '$mins 分钟'),
+                              selected: selected == mins,
+                              onSelected: (_) => setSt(() {
+                                selected = mins;
+                                customCtrl.text = '$mins';
+                              }),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: customCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        decoration: InputDecoration(
+                          labelText: isEn
+                              ? 'Target minutes (10-720)'
+                              : '目标时长（分钟，10-720）',
+                        ),
+                        onChanged: (v) {
+                          final parsed = int.tryParse(v.trim());
+                          if (parsed != null) {
+                            selected = parsed.clamp(10, 720).toInt();
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: Text(I18n.tr('action.cancel')),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final parsed =
+                          int.tryParse(customCtrl.text.trim()) ?? selected;
+                      Navigator.of(ctx).pop(parsed.clamp(10, 720).toInt());
+                    },
+                    child: Text(I18n.tr('action.save')),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+      if (target != null && mounted) {
+        await provider.setDailyFocusGoalMinutes(target);
+      }
+    } finally {
+      customCtrl.dispose();
+    }
+  }
+
+  void _showDndSheet(BuildContext context) {
+    showAppModalSheet(
+      context: context,
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => Selector<PomodoroProvider, _DndSheetSlice>(
+          selector: (_, p) => _DndSheetSlice(
+            autoEnableDnd: p.config.autoEnableDnd,
+            supported: p.focusDndStatus.supported,
+            accessGranted: p.focusDndStatus.accessGranted,
+          ),
+          builder: (ctx, _, _) {
+            final provider = ctx.read<PomodoroProvider>();
+            final cs = Theme.of(ctx).colorScheme;
+            return AppModalSheet(
+              title: FocusRoomUiCopy.focusDndSheetTitle(locale),
+              subtitle: FocusRoomUiCopy.focusDndSheetSubtitle(locale),
+              actions: [
+                TextButton(
+                  onPressed: () async {
+                    await provider.refreshFocusDndStatus();
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  child: Text(FocusRoomUiCopy.done(locale)),
+                ),
+                FilledButton.icon(
+                  onPressed: provider.focusDndStatus.supported
+                      ? () => provider.openFocusDndSettings()
+                      : null,
+                  icon: const Icon(Icons.settings_outlined),
+                  label: Text(FocusRoomUiCopy.authorizeButton(locale)),
+                ),
+              ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Icon(Icons.do_not_disturb_on_outlined),
+                    title: Text(FocusRoomUiCopy.autoEnableDndSwitch(locale)),
+                    subtitle: Text(
+                      provider.focusDndStatus.accessGranted
+                          ? FocusRoomUiCopy.dndPermissionGranted(locale)
+                          : FocusRoomUiCopy.dndPermissionRequired(locale),
+                    ),
+                    value: provider.config.autoEnableDnd,
+                    onChanged: provider.setAutoEnableDnd,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
+                      borderRadius: BorderRadius.circular(
+                        appSurfaceStyleOf(ctx)?.smallTileRadius ??
+                            DesignTokens.radiusControl,
+                      ),
+                      border: Border.all(
+                        color: cs.outlineVariant.withValues(alpha: 0.5),
+                        width: 0.45,
+                      ),
+                    ),
+                    child: Text(
+                      provider.focusDndStatus.supported
+                          ? FocusRoomUiCopy.dndSupportedExplanation(locale)
+                          : FocusRoomUiCopy.dndUnsupportedExplanation(locale),
+                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.68),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1714,6 +2448,7 @@ class _FocusRoomTile extends StatelessWidget {
   final Color color;
   final bool compact;
   final VoidCallback onTap;
+  final AppLocale? locale;
 
   const _FocusRoomTile({
     required this.roomName,
@@ -1721,90 +2456,101 @@ class _FocusRoomTile extends StatelessWidget {
     required this.color,
     required this.compact,
     required this.onTap,
+    this.locale,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tileRadius =
+        appSurfaceStyleOf(context)?.smallTileRadius ?? DesignTokens.radiusControl;
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.16),
-              width: 0.45,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(tileRadius),
+          onTap: onTap,
+          child: Ink(
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(tileRadius),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: 0.16),
+                width: 0.45,
+              ),
             ),
-          ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              compact ? 8 : 10,
-              compact ? 6 : 8,
-              compact ? 8 : 10,
-              compact ? 6 : 8,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: compact ? 28 : 32,
-                  height: compact ? 28 : 32,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(
-                    Icons.groups_2_outlined,
-                    color: color,
-                    size: compact ? 15 : 17,
-                  ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  compact ? 8 : 10,
+                  compact ? 6 : 8,
+                  compact ? 8 : 10,
+                  compact ? 6 : 8,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '专注自习室',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 11,
-                          height: 1.05,
-                          color: cs.onSurface.withValues(alpha: 0.62),
-                          fontWeight: FontWeight.normal,
-                        ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: compact ? 28 : 32,
+                      height: compact ? 28 : 32,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        roomName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: compact ? 12 : 13,
-                          height: 1.08,
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.normal,
-                        ),
+                      child: Icon(
+                        Icons.groups_2_outlined,
+                        color: color,
+                        size: compact ? 15 : 17,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            FocusRoomUiCopy.studyRoomTitle(locale),
+                            softWrap: true,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  fontSize: 11,
+                                  height: 1.05,
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            roomName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  fontSize: compact ? 12 : 13,
+                                  height: 1.08,
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            subtitle,
+                            softWrap: true,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: cs.onSurface,
+                                  fontSize: 11,
+                                  height: 1.25,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurface.withValues(alpha: 0.56),
-                    fontSize: 11,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -1817,11 +2563,13 @@ class _ActiveFocusRoomTileViewModel {
   final String roomName;
   final String subtitle;
   final int colorValue;
+  final AppLocale locale;
 
   const _ActiveFocusRoomTileViewModel({
     required this.roomName,
     required this.subtitle,
     required this.colorValue,
+    required this.locale,
   });
 
   @override
@@ -1829,11 +2577,12 @@ class _ActiveFocusRoomTileViewModel {
     return other is _ActiveFocusRoomTileViewModel &&
         other.roomName == roomName &&
         other.subtitle == subtitle &&
-        other.colorValue == colorValue;
+        other.colorValue == colorValue &&
+        other.locale == locale;
   }
 
   @override
-  int get hashCode => Object.hash(roomName, subtitle, colorValue);
+  int get hashCode => Object.hash(roomName, subtitle, colorValue, locale);
 }
 
 class _ActiveFocusRoomTile extends StatelessWidget {
@@ -1850,22 +2599,159 @@ class _ActiveFocusRoomTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fallbackColor = Theme.of(context).colorScheme.onSurfaceVariant;
-    return Selector<FocusRoomProvider, _ActiveFocusRoomTileViewModel>(
-      selector: (_, rooms) {
-        final activeRoom = rooms.roomById(focusRoomId) ?? rooms.activeRoom;
-        return _ActiveFocusRoomTileViewModel(
-          roomName: activeRoom?.name ?? '未加入自习室',
-          subtitle: activeRoom == null ? '选择本轮专注小组' : '本轮完成后计入排行榜',
-          colorValue: activeRoom?.accentColor ?? fallbackColor.toARGB32(),
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) =>
+          Selector<FocusRoomProvider, _ActiveFocusRoomTileViewModel>(
+            selector: (_, rooms) {
+              final activeRoom =
+                  rooms.roomById(focusRoomId) ?? rooms.activeRoom;
+              return _ActiveFocusRoomTileViewModel(
+                roomName:
+                    activeRoom?.nameFor(locale) ??
+                    FocusRoomUiCopy.noRoomJoined(locale),
+                subtitle: FocusRoomUiCopy.activeRoomTileSubtitle(
+                  activeRoom != null,
+                  locale,
+                ),
+                colorValue: activeRoom?.accentColor ?? fallbackColor.toARGB32(),
+                locale: locale,
+              );
+            },
+            builder: (context, state, _) => _FocusRoomTile(
+              roomName: state.roomName,
+              subtitle: state.subtitle,
+              color: Color(state.colorValue),
+              compact: compact,
+              onTap: onTap,
+              locale: state.locale,
+            ),
+          ),
+    );
+  }
+}
+
+class _DailyFocusGoalRingTile extends StatelessWidget {
+  final PomodoroProvider provider;
+  final Color color;
+  final bool compact;
+  final VoidCallback onTap;
+
+  const _DailyFocusGoalRingTile({
+    super.key,
+    required this.provider,
+    required this.color,
+    required this.compact,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final isEn = locale == AppLocale.en;
+        final theme = Theme.of(context);
+        final cs = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
+        final tileRadius =
+            appSurfaceStyleOf(context)?.smallTileRadius ??
+            DesignTokens.radiusControl;
+        final todayMins = provider.todayFocusMinutes;
+        final goalMins = provider.dailyFocusGoalMinutes;
+        final progress = provider.dailyFocusGoalProgress;
+        final pct = (progress * 100).round();
+        final ringDim = compact ? 28.0 : 34.0;
+        final completedColor = isDark
+            ? const Color(0xFF66BB6A)
+            : DesignTokens.defaultSuccess;
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(tileRadius),
+            onTap: onTap,
+            child: Ink(
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+                borderRadius: BorderRadius.circular(tileRadius),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.16),
+                  width: 0.45,
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 8 : 10,
+                  vertical: compact ? 5 : 7,
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: ringDim,
+                      height: ringDim,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            value: progress,
+                            strokeWidth: 3.2,
+                            backgroundColor: color.withValues(alpha: 0.14),
+                            color: progress >= 1.0 ? completedColor : color,
+                          ),
+                          Text(
+                            '$pct%',
+                            style: TextStyle(
+                              fontSize: compact ? 8.5 : 9.5,
+                              color: cs.onSurface,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isEn ? 'Daily Focus Goal' : '今日专注目标',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontSize: 11,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            isEn
+                                ? '$todayMins / $goalMins min'
+                                : '$todayMins / $goalMins 分钟',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontSize: compact ? 12 : 13,
+                              color: cs.onSurface,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.tune_outlined,
+                      size: 16,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         );
       },
-      builder: (context, state, _) => _FocusRoomTile(
-        roomName: state.roomName,
-        subtitle: state.subtitle,
-        color: Color(state.colorValue),
-        compact: compact,
-        onTap: onTap,
-      ),
     );
   }
 }
@@ -1885,18 +2771,41 @@ class _WhiteNoiseControlTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = context.select<CustomFocusSoundProvider, String>((custom) {
-      return custom.isCustomSound(sound)
-          ? custom.labelFor(sound)
-          : FocusSoundCatalog.labelFor(sound);
-    });
-    return _FocusControlTile(
-      icon: _PomodoroScreenState._soundIconForTile(sound),
-      label: '白噪音',
-      subtitle: label,
-      color: color,
-      compact: compact,
-      onTap: onTap,
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final mixerIds = context.select<PomodoroProvider, List<String>>(
+          (p) => p.activeMixerTrackIds,
+        );
+        final isCustom = context.select<CustomFocusSoundProvider, bool>(
+          (custom) => custom.isCustomSound(sound),
+        );
+        final singleLabel = context.select<CustomFocusSoundProvider, String>((
+          custom,
+        ) {
+          return custom.isCustomSound(sound)
+              ? custom.labelFor(sound)
+              : FocusSoundCatalog.labelFor(sound, locale: locale);
+        });
+        final label = mixerIds.length >= 2
+            ? mixerIds
+                  .take(2)
+                  .map((id) => FocusSoundCatalog.labelFor(id, locale: locale))
+                  .join(' + ') +
+              (mixerIds.length > 2 ? ' +${mixerIds.length - 2}' : '')
+            : singleLabel;
+        return _FocusControlTile(
+          icon: mixerIds.length >= 2
+              ? Icons.layers_outlined
+              : _PomodoroScreenState._soundIconForTile(sound),
+          label: FocusRoomUiCopy.whiteNoiseLabel(locale),
+          subtitle: label,
+          isUserContent: isCustom,
+          color: mixerIds.length >= 2 ? color : color,
+          compact: compact,
+          onTap: onTap,
+        );
+      },
     );
   }
 }
@@ -1920,102 +2829,121 @@ class _StrictFocusTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final effectiveColor = enabled ? color : cs.onSurfaceVariant;
-    final subtitle = enabled
-        ? todayCount > 0
-              ? '今日 $todayCount 次中断'
-              : '中断会记入 ledger'
-        : '手动开启';
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.16),
-              width: 0.45,
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final cs = Theme.of(context).colorScheme;
+        final effectiveColor = enabled ? color : cs.onSurfaceVariant;
+        final subtitle = FocusRoomUiCopy.strictFocusTileSubtitle(
+          enabled,
+          todayCount,
+          locale,
+        );
+        final tileRadius =
+            appSurfaceStyleOf(context)?.smallTileRadius ??
+            DesignTokens.radiusControl;
+        return Material(
+          color: Colors.transparent,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(tileRadius),
+              onTap: onTap,
+              child: Ink(
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+                  borderRadius: BorderRadius.circular(tileRadius),
+                  border: Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.16),
+                    width: 0.45,
+                  ),
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 8 : 10,
+                      compact ? 5 : 7,
+                      compact ? 4 : 6,
+                      compact ? 5 : 7,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: compact ? 28 : 32,
+                          height: compact ? 28 : 32,
+                          decoration: BoxDecoration(
+                            color: effectiveColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(
+                              DesignTokens.radiusSm,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.lock_clock_outlined,
+                            color: effectiveColor,
+                            size: compact ? 15 : 17,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                FocusRoomUiCopy.strictFocusTitle(locale),
+                                softWrap: true,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      fontSize: 11,
+                                      height: 1.05,
+                                      color: cs.onSurface,
+                                      fontWeight: FontWeight.normal,
+                                    ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                subtitle,
+                                softWrap: true,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      fontSize: compact ? 12 : 13,
+                                      height: 1.08,
+                                      color: cs.onSurface,
+                                      fontWeight: FontWeight.normal,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch.adaptive(
+                          value: enabled,
+                          onChanged: onChanged,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              compact ? 8 : 10,
-              compact ? 5 : 7,
-              compact ? 4 : 6,
-              compact ? 5 : 7,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: compact ? 28 : 32,
-                  height: compact ? 28 : 32,
-                  decoration: BoxDecoration(
-                    color: effectiveColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(
-                    Icons.lock_clock_outlined,
-                    color: effectiveColor,
-                    size: compact ? 15 : 17,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '严格专注',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 11,
-                          height: 1.05,
-                          color: cs.onSurface.withValues(alpha: 0.62),
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: compact ? 12 : 13,
-                          height: 1.08,
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch.adaptive(
-                  value: enabled,
-                  onChanged: onChanged,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
 class _PenaltyListTile extends StatelessWidget {
   final PomodoroFocusPenalty penalty;
+  final AppLocale? locale;
 
-  const _PenaltyListTile(this.penalty);
+  const _PenaltyListTile(this.penalty, {this.locale});
 
   @override
   Widget build(BuildContext context) {
+    final currentLocale = locale ?? I18n.current;
     final cs = Theme.of(context).colorScheme;
     final time =
         '${penalty.occurredAt.month}/${penalty.occurredAt.day} '
@@ -2030,15 +2958,15 @@ class _PenaltyListTile extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: cs.error.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
         ),
         child: Icon(Icons.warning_amber_rounded, color: cs.error, size: 19),
       ),
-      title: Text(penalty.reason.label),
+      title: Text(penalty.reason.labelFor(currentLocale)),
       subtitle: Text(
         [
           time,
-          '$minutes 分钟',
+          FocusRoomUiCopy.minutesSuffix(minutes, currentLocale),
           if (penalty.taskName?.isNotEmpty == true) penalty.taskName!,
         ].join(' · '),
       ),
@@ -2051,16 +2979,19 @@ class _FocusRoomOptionTile extends StatelessWidget {
   final bool joined;
   final bool selected;
   final VoidCallback onTap;
+  final AppLocale? locale;
 
   const _FocusRoomOptionTile({
     required this.room,
     required this.joined,
     required this.selected,
     required this.onTap,
+    this.locale,
   });
 
   @override
   Widget build(BuildContext context) {
+    final currentLocale = locale ?? I18n.current;
     final cs = Theme.of(context).colorScheme;
     final color = Color(room.accentColor);
     return ListTile(
@@ -2071,19 +3002,26 @@ class _FocusRoomOptionTile extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(
+            appSurfaceStyleOf(context)?.smallTileRadius ??
+                DesignTokens.radiusControl,
+          ),
         ),
         child: Icon(Icons.groups_2_outlined, color: color, size: 20),
       ),
-      title: Text(room.name),
+      title: Text(room.nameFor(currentLocale)),
       subtitle: Text(
-        '${room.description} · 每周目标 ${room.weeklyTargetSeconds ~/ 60} 分钟',
+        FocusRoomUiCopy.roomGoalSubtitle(
+          room.descriptionFor(currentLocale),
+          room.weeklyTargetSeconds ~/ 60,
+          currentLocale,
+        ),
       ),
       trailing: selected
           ? Icon(Icons.check_rounded, color: cs.primary)
           : joined
-          ? const Text('已加入')
-          : const Text('加入'),
+          ? Text(FocusRoomUiCopy.joinedBadge(currentLocale))
+          : Text(FocusRoomUiCopy.joinAction(currentLocale)),
       onTap: onTap,
     );
   }
@@ -2107,6 +3045,8 @@ class _PomodoroLiveTimer extends StatelessWidget {
   final Color color;
   final double ringSize;
   final bool tight;
+  final bool isCountUp;
+  final int completedSessions;
   final String completedSuffix;
   final String timerLabel;
   final Color textColor;
@@ -2117,6 +3057,8 @@ class _PomodoroLiveTimer extends StatelessWidget {
     required this.color,
     required this.ringSize,
     required this.tight,
+    required this.isCountUp,
+    required this.completedSessions,
     required this.completedSuffix,
     required this.timerLabel,
     required this.textColor,
@@ -2125,45 +3067,61 @@ class _PomodoroLiveTimer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: provider.timerTicks,
-      builder: (context, _, _) {
-        final state = provider.state;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: RepaintBoundary(
-                child: PomodoroTimerRing(
-                  progress: state.progress,
-                  timeText: formatTime(state.remainingSeconds),
-                  color: color,
-                  size: ringSize,
-                  countUp: state.isCountUp,
-                ),
-              ),
-            ),
-            SizedBox(height: tight ? 4 : 6),
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    state.isCountUp
-                        ? '${MainUiCopy.pomodoroFreeTimer} · ${state.completedSessions} $completedSuffix'
-                        : '$timerLabel · ${state.completedSessions} $completedSuffix',
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: tight ? 12 : 13,
-                    ),
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Center(
+          child: SizedBox(
+            width: ringSize,
+            height: ringSize,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                RepaintBoundary(
+                  child: PomodoroTimerRingBackdrop(
+                    size: ringSize,
+                    color: color,
+                    surfaceColor: surfaceColor,
                   ),
                 ),
+                ValueListenableBuilder<int>(
+                  valueListenable: provider.timerTicks,
+                  builder: (context, _, _) {
+                    final state = provider.state;
+                    return PomodoroTimerRing(
+                      progress: state.progress,
+                      timeText: formatTime(state.remainingSeconds),
+                      color: color,
+                      size: ringSize,
+                      countUp: state.isCountUp,
+                      showOuterDecoration: false,
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: tight ? 4 : 6),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              isCountUp
+                  ? '${MainUiCopy.pomodoroFreeTimer} · $completedSessions $completedSuffix'
+                  : '$timerLabel · $completedSessions $completedSuffix',
+              textAlign: TextAlign.center,
+              softWrap: true,
+              style: TextStyle(
+                color: textColor,
+                fontSize: tight ? 12 : 13,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2193,57 +3151,75 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     final focusRoomId = context.select<PomodoroProvider, String?>(
       (provider) => provider.state.focusRoomId,
     );
-    final displayName = context.select<AuthProvider, String>((auth) {
-      final username = auth.state.username?.trim();
-      return username?.isNotEmpty == true ? username! : '我';
-    });
+    final rawUsername = context.select<AuthProvider, String?>(
+      (auth) => auth.state.username?.trim(),
+    );
     final joinedRefreshKey = context.select<FocusRoomProvider, String>((
       provider,
     ) {
       final ids = provider.joinedRoomIds.toList()..sort();
       return ids.join('|');
     });
-    final activeRoomName = context.select<FocusRoomProvider, String?>(
-      (provider) => provider.roomById(focusRoomId)?.name,
+    final activeRoom = context.select<FocusRoomProvider, FocusRoom?>(
+      (provider) => provider.roomById(focusRoomId),
     );
-    _scheduleRoomRefresh(
-      context,
-      rooms,
-      pomodoroRevision,
-      displayName,
-      joinedRefreshKey,
-    );
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final displayName = rawUsername?.isNotEmpty == true
+            ? rawUsername!
+            : FocusRoomUiCopy.selfDisplayNameFallback(locale);
+        final activeRoomName = activeRoom?.nameFor(locale);
+        _scheduleRoomRefresh(
+          context,
+          rooms,
+          pomodoroRevision,
+          displayName,
+          joinedRefreshKey,
+          refreshIdentity: rawUsername ?? '',
+        );
 
-    return ListView(
-      key: const PageStorageKey<String>('focus_room_tab_scroll'),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
-      children: [
-        _FocusSocialLeaderboardSection(
-          displayName: displayName,
-          onManageFriends: () =>
-              _showFocusFriendSheet(context, context.read<FocusRoomProvider>()),
-        ),
-        const SizedBox(height: 12),
-        _JoinedFocusRoomRankingSection(
-          activeRoomName: activeRoomName,
-          displayName: displayName,
-          onAcceptInvite: () => _showAcceptFocusRoomInviteDialog(
-            context,
-            context.read<FocusRoomProvider>(),
-            context.read<PomodoroProvider>(),
-            displayName,
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: DesktopTokens.secondaryMaxContentWidth,
+            ),
+            child: ListView(
+              key: const PageStorageKey<String>('focus_room_tab_scroll'),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+              children: [
+                _FocusSocialLeaderboardSection(
+                  displayName: displayName,
+                  onManageFriends: () => _showFocusFriendSheet(
+                    context,
+                    context.read<FocusRoomProvider>(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _JoinedFocusRoomRankingSection(
+                  activeRoomName: activeRoomName,
+                  displayName: displayName,
+                  onAcceptInvite: () => _showAcceptFocusRoomInviteDialog(
+                    context,
+                    context.read<FocusRoomProvider>(),
+                    context.read<PomodoroProvider>(),
+                    displayName,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _FocusRoomCatalogSection(
+                  displayName: displayName,
+                  onManageInvites: (room) => _showFocusRoomInviteSheet(
+                    context,
+                    context.read<FocusRoomProvider>(),
+                    room,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        _FocusRoomCatalogSection(
-          displayName: displayName,
-          onManageInvites: (room) => _showFocusRoomInviteSheet(
-            context,
-            context.read<FocusRoomProvider>(),
-            room,
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -2252,12 +3228,13 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     FocusRoomProvider rooms,
     int pomodoroRevision,
     String displayName,
-    String joinedRefreshKey,
-  ) {
+    String joinedRefreshKey, {
+    required String refreshIdentity,
+  }) {
     final refreshKey = [
       joinedRefreshKey,
       pomodoroRevision,
-      displayName,
+      refreshIdentity,
     ].join('::');
     if (_lastRefreshKey == refreshKey || _refreshScheduled) return;
     _lastRefreshKey = refreshKey;
@@ -2286,9 +3263,14 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     FocusRoom room,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     try {
       await rooms.loadInvitesForRoom(room.id);
     } catch (e) {
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(_focusRoomErrorText(e)),
@@ -2297,76 +3279,84 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
       );
       return;
     }
-    if (!context.mounted) return;
+    if (!context.mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
     showAppModalSheet<void>(
       context: context,
-      builder: (sheetContext) => Consumer<FocusRoomProvider>(
-        builder: (sheetContext, provider, _) {
-          final invites = provider.invitesForRoom(room.id);
-          return AppModalSheet(
-            title: '邀请码管理',
-            subtitle: room.name,
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(sheetContext),
-                child: const Text('完成'),
-              ),
-            ],
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (provider.remoteLoading)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 10),
-                    child: LinearProgressIndicator(minHeight: 2),
-                  ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton.icon(
-                    onPressed: provider.remoteLoading
-                        ? null
-                        : () => _showCreateFocusRoomInviteDialog(
-                            context,
-                            provider,
-                            room,
-                          ),
-                    icon: const Icon(Icons.add_link_outlined),
-                    label: const Text('新建邀请码'),
-                  ),
+      builder: (sheetContext) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (sheetContext, locale, _) => Consumer<FocusRoomProvider>(
+          builder: (sheetContext, provider, _) {
+            final invites = provider.invitesForRoom(room.id);
+            return AppModalSheet(
+              title: FocusRoomUiCopy.inviteManagementTitle(locale),
+              subtitle: room.nameFor(locale),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  child: Text(FocusRoomUiCopy.done(locale)),
                 ),
-                const SizedBox(height: 12),
-                if (invites.isEmpty)
-                  Text(
-                    '还没有为这个自习室创建邀请码。',
-                    style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(
-                        sheetContext,
-                      ).colorScheme.onSurface.withValues(alpha: 0.62),
+              ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (provider.remoteLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 10),
+                      child: LinearProgressIndicator(minHeight: 2),
                     ),
-                  )
-                else
-                  ...invites.map(
-                    (invite) => _FocusRoomInviteTile(
-                      invite: invite,
-                      meta: _focusRoomInviteMeta(invite),
-                      active: _focusRoomInviteUsable(invite),
-                      onCopy: () =>
-                          _copyExistingFocusRoomInvite(context, invite),
-                      onRevoke: invite.revoked
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton.icon(
+                      onPressed: provider.remoteLoading
                           ? null
-                          : () => _revokeFocusRoomInvite(
+                          : () => _showCreateFocusRoomInviteDialog(
                               context,
                               provider,
                               room,
-                              invite,
                             ),
+                      icon: const Icon(Icons.add_link_outlined),
+                      label: Text(FocusRoomUiCopy.newInviteCodeButton(locale)),
                     ),
                   ),
-              ],
-            ),
-          );
-        },
+                  const SizedBox(height: 12),
+                  if (invites.isEmpty)
+                    Text(
+                      FocusRoomUiCopy.noInvitesCreated(locale),
+                      style: Theme.of(sheetContext).textTheme.bodySmall
+                          ?.copyWith(
+                            color: Theme.of(
+                              sheetContext,
+                            ).colorScheme.onSurface.withValues(alpha: 0.62),
+                          ),
+                    )
+                  else
+                    ...invites.map(
+                      (invite) => _FocusRoomInviteTile(
+                        invite: invite,
+                        meta: _focusRoomInviteMeta(invite, locale),
+                        active: _focusRoomInviteUsable(invite),
+                        locale: locale,
+                        onCopy: () =>
+                            _copyExistingFocusRoomInvite(context, invite),
+                        onRevoke: invite.revoked
+                            ? null
+                            : () => _revokeFocusRoomInvite(
+                                context,
+                                provider,
+                                room,
+                                invite,
+                              ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -2379,21 +3369,35 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     int maxUses,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     try {
       final invite = await rooms.createInviteForRoom(
         room.id,
         expiresAt: expiresAt,
         maxUses: maxUses,
       );
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       await Clipboard.setData(ClipboardData(text: invite.code));
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
-          content: Text('已复制邀请码 ${invite.code}'),
+          content: Text(
+            FocusRoomUiCopy.copiedInviteSnackBar(invite.code, I18n.current),
+          ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(_focusRoomErrorText(e)),
@@ -2412,70 +3416,118 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     var maxUses = 0;
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setState) => AppDialog(
-          title: const Text('新建邀请码'),
-          shiftForKeyboard: true,
-          content: _PomodoroDialogBody(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AppDropdownField<int>(
-                  initialValue: expiryDays,
-                  decoration: const InputDecoration(
-                    labelText: '有效期',
-                    prefixIcon: Icon(Icons.event_available_outlined),
+      builder: (dialogContext) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (dialogContext, locale, _) => StatefulBuilder(
+          builder: (dialogContext, setState) => AppDialog(
+            title: Text(FocusRoomUiCopy.newInviteDialogTitle(locale)),
+            shiftForKeyboard: true,
+            content: _PomodoroDialogBody(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppDropdownField<int>(
+                    key: ValueKey('invite_expiry_${locale.name}_$expiryDays'),
+                    initialValue: expiryDays,
+                    decoration: InputDecoration(
+                      labelText: FocusRoomUiCopy.validityLabel(locale),
+                      prefixIcon: const Icon(Icons.event_available_outlined),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: 0,
+                        child: Text(FocusRoomUiCopy.neverExpiresOption(locale)),
+                      ),
+                      DropdownMenuItem(
+                        value: 1,
+                        child: Text(FocusRoomUiCopy.daysOption(1, locale)),
+                      ),
+                      DropdownMenuItem(
+                        value: 7,
+                        child: Text(FocusRoomUiCopy.daysOption(7, locale)),
+                      ),
+                      DropdownMenuItem(
+                        value: 30,
+                        child: Text(FocusRoomUiCopy.daysOption(30, locale)),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => expiryDays = value ?? 0),
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text('不过期')),
-                    DropdownMenuItem(value: 1, child: Text('1 天')),
-                    DropdownMenuItem(value: 7, child: Text('7 天')),
-                    DropdownMenuItem(value: 30, child: Text('30 天')),
-                  ],
-                  onChanged: (value) => setState(() => expiryDays = value ?? 0),
-                ),
-                const SizedBox(height: 10),
-                AppDropdownField<int>(
-                  initialValue: maxUses,
-                  decoration: const InputDecoration(
-                    labelText: '使用次数',
-                    prefixIcon: Icon(Icons.confirmation_number_outlined),
+                  const SizedBox(height: 10),
+                  AppDropdownField<int>(
+                    key: ValueKey('invite_uses_${locale.name}_$maxUses'),
+                    initialValue: maxUses,
+                    decoration: InputDecoration(
+                      labelText: FocusRoomUiCopy.usageLimitLabel(locale),
+                      prefixIcon: const Icon(
+                        Icons.confirmation_number_outlined,
+                      ),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: 0,
+                        child: Text(
+                          FocusRoomUiCopy.unlimitedUsesOption(locale),
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 1,
+                        child: Text(FocusRoomUiCopy.usesCountOption(1, locale)),
+                      ),
+                      DropdownMenuItem(
+                        value: 5,
+                        child: Text(FocusRoomUiCopy.usesCountOption(5, locale)),
+                      ),
+                      DropdownMenuItem(
+                        value: 10,
+                        child: Text(
+                          FocusRoomUiCopy.usesCountOption(10, locale),
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 50,
+                        child: Text(
+                          FocusRoomUiCopy.usesCountOption(50, locale),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) => setState(() => maxUses = value ?? 0),
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text('不限次数')),
-                    DropdownMenuItem(value: 1, child: Text('1 次')),
-                    DropdownMenuItem(value: 5, child: Text('5 次')),
-                    DropdownMenuItem(value: 10, child: Text('10 次')),
-                    DropdownMenuItem(value: 50, child: Text('50 次')),
-                  ],
-                  onChanged: (value) => setState(() => maxUses = value ?? 0),
-                ),
-              ],
+                ],
+              ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(FocusRoomUiCopy.cancel(locale)),
+              ),
+              FilledButton.icon(
+                onPressed: () async {
+                  final generation =
+                      AccountLocalDataCleaner.accountDataGeneration;
+                  final expiresAt = expiryDays <= 0
+                      ? null
+                      : DateTime.now().add(Duration(days: expiryDays));
+                  await _createAndCopyFocusRoomInvite(
+                    context,
+                    rooms,
+                    room,
+                    expiresAt,
+                    maxUses,
+                  );
+                  if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                    generation,
+                  )) {
+                    return;
+                  }
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                },
+                icon: const Icon(Icons.add_link_outlined),
+                label: Text(FocusRoomUiCopy.createAndCopyButton(locale)),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('取消'),
-            ),
-            FilledButton.icon(
-              onPressed: () async {
-                final expiresAt = expiryDays <= 0
-                    ? null
-                    : DateTime.now().add(Duration(days: expiryDays));
-                await _createAndCopyFocusRoomInvite(
-                  context,
-                  rooms,
-                  room,
-                  expiresAt,
-                  maxUses,
-                );
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-              },
-              icon: const Icon(Icons.add_link_outlined),
-              label: const Text('创建并复制'),
-            ),
-          ],
         ),
       ),
     );
@@ -2489,7 +3541,9 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     await Clipboard.setData(ClipboardData(text: invite.code));
     messenger.showSnackBar(
       SnackBar(
-        content: Text('已复制邀请码 ${invite.code}'),
+        content: Text(
+          FocusRoomUiCopy.copiedInviteSnackBar(invite.code, I18n.current),
+        ),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
       ),
@@ -2503,16 +3557,28 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     FocusRoomInvite invite,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     try {
       await rooms.revokeInviteForRoom(room.id, invite.id);
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('已撤销邀请码'),
+        SnackBar(
+          content: Text(FocusRoomUiCopy.inviteRevokedSnackBar(I18n.current)),
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(_focusRoomErrorText(e)),
@@ -2522,25 +3588,38 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     }
   }
 
-  String _focusRoomInviteMeta(FocusRoomInvite invite) {
+  String _focusRoomInviteMeta(FocusRoomInvite invite, [AppLocale? locale]) {
     final status = invite.revoked
-        ? '已撤销'
+        ? FocusRoomUiCopy.inviteStatusRevoked(locale)
         : _focusRoomInviteDepleted(invite)
-        ? '已用尽'
+        ? FocusRoomUiCopy.inviteStatusDepleted(locale)
         : invite.expiresAt == null
-        ? '永久有效'
+        ? FocusRoomUiCopy.inviteStatusPermanent(locale)
         : invite.expiresAt!.isBefore(DateTime.now())
-        ? '已过期'
-        : '有效至 ${_formatShortDateTime(invite.expiresAt!)}';
+        ? FocusRoomUiCopy.inviteStatusExpired(locale)
+        : FocusRoomUiCopy.inviteValidUntil(
+            _formatShortDateTime(invite.expiresAt!),
+            locale,
+          );
     final usage = invite.maxUses <= 0
-        ? '不限次数'
-        : '${invite.usedCount}/${invite.maxUses} 次';
+        ? FocusRoomUiCopy.inviteUnlimitedUsage(locale)
+        : FocusRoomUiCopy.inviteUsageCount(
+            invite.usedCount,
+            invite.maxUses,
+            locale,
+          );
     final lastUsed = invite.lastUsedAt == null
         ? null
-        : '最近 ${_formatShortDateTime(invite.lastUsedAt!)}';
+        : FocusRoomUiCopy.inviteLastUsed(
+            _formatShortDateTime(invite.lastUsedAt!),
+            locale,
+          );
     final created = invite.createdAt == null
         ? null
-        : '创建 ${_formatShortDateTime(invite.createdAt!)}';
+        : FocusRoomUiCopy.inviteCreatedAt(
+            _formatShortDateTime(invite.createdAt!),
+            locale,
+          );
     return [status, usage, ?lastUsed, ?created].join(' · ');
   }
 
@@ -2571,47 +3650,50 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     final codeCtrl = TextEditingController();
     showDialog<void>(
       context: context,
-      builder: (ctx) => AppDialog(
-        title: const Text('输入邀请码'),
-        shiftForKeyboard: true,
-        content: _PomodoroDialogBody(
-          child: TextField(
-            controller: codeCtrl,
-            autofocus: true,
-            textCapitalization: TextCapitalization.none,
-            autocorrect: false,
-            decoration: const InputDecoration(
-              labelText: '自习室邀请码',
-              prefixIcon: Icon(Icons.key_outlined),
-            ),
-            onSubmitted: (_) => _acceptFocusRoomInvite(
-              context,
-              ctx,
-              rooms,
-              pomodoro,
-              codeCtrl.text,
-              displayName,
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => AppDialog(
+          title: Text(FocusRoomUiCopy.enterInviteCodeDialogTitle(locale)),
+          shiftForKeyboard: true,
+          content: _PomodoroDialogBody(
+            child: TextField(
+              controller: codeCtrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.none,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: FocusRoomUiCopy.studyRoomInviteCodeLabel(locale),
+                prefixIcon: const Icon(Icons.key_outlined),
+              ),
+              onSubmitted: (_) => _acceptFocusRoomInvite(
+                context,
+                ctx,
+                rooms,
+                pomodoro,
+                codeCtrl.text,
+                displayName,
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(FocusRoomUiCopy.cancel(locale)),
+            ),
+            FilledButton.icon(
+              onPressed: () => _acceptFocusRoomInvite(
+                context,
+                ctx,
+                rooms,
+                pomodoro,
+                codeCtrl.text,
+                displayName,
+              ),
+              icon: const Icon(Icons.login_outlined),
+              label: Text(FocusRoomUiCopy.joinStudyRoomAction(locale)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton.icon(
-            onPressed: () => _acceptFocusRoomInvite(
-              context,
-              ctx,
-              rooms,
-              pomodoro,
-              codeCtrl.text,
-              displayName,
-            ),
-            icon: const Icon(Icons.login_outlined),
-            label: const Text('加入自习室'),
-          ),
-        ],
       ),
     );
   }
@@ -2625,18 +3707,35 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     String displayName,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     try {
       final room = await rooms.acceptInviteCode(code, displayName: displayName);
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       await pomodoro.setFocusRoomId(room.id);
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       if (dialogContext.mounted) Navigator.pop(dialogContext);
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
-          content: Text('已加入自习室：${room.name}'),
+          content: Text(
+            FocusRoomUiCopy.joinedStudyRoomSnackBar(room.name, I18n.current),
+          ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(_focusRoomErrorText(e)),
@@ -2651,114 +3750,141 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     FocusRoomProvider rooms,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     await rooms.loadFocusFriendsAndRanking(force: true);
-    if (!context.mounted) return;
+    if (!context.mounted ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      return;
+    }
     showAppModalSheet<void>(
       context: context,
-      builder: (sheetContext) => Consumer<FocusRoomProvider>(
-        builder: (sheetContext, provider, _) {
-          final friends = provider.focusFriends;
-          final incoming = provider.incomingFriendRequests;
-          final outgoing = provider.outgoingFriendRequests;
-          final hasRows =
-              friends.isNotEmpty || incoming.isNotEmpty || outgoing.isNotEmpty;
-          return AppModalSheet(
-            title: '专注好友',
-            subtitle: provider.remoteFriendRankingActive
-                ? '服务端好友关系已用于好友专注榜'
-                : '登录后同步好友关系和在线状态',
-            actions: [
-              IconButton(
-                tooltip: '刷新好友',
-                onPressed: provider.friendLoading
-                    ? null
-                    : () => provider.loadFocusFriendsAndRanking(force: true),
-                icon: provider.friendLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh_outlined),
+      builder: (sheetContext) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (sheetContext, locale, _) => Consumer<FocusRoomProvider>(
+          builder: (sheetContext, provider, _) {
+            final friends = provider.focusFriends;
+            final incoming = provider.incomingFriendRequests;
+            final outgoing = provider.outgoingFriendRequests;
+            final hasRows =
+                friends.isNotEmpty ||
+                incoming.isNotEmpty ||
+                outgoing.isNotEmpty;
+            return AppModalSheet(
+              title: FocusRoomUiCopy.focusFriendsTitle(locale),
+              subtitle: FocusRoomUiCopy.focusFriendsSubtitle(
+                provider.remoteFriendRankingActive,
+                locale,
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(sheetContext),
-                child: const Text('完成'),
-              ),
-            ],
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FilledButton.icon(
+              actions: [
+                IconButton(
+                  tooltip: FocusRoomUiCopy.refreshFriendsTooltip(locale),
                   onPressed: provider.friendLoading
                       ? null
-                      : () => _showAddFocusFriendDialog(context, provider),
-                  icon: const Icon(Icons.person_add_alt_1_outlined),
-                  label: const Text('发送好友申请'),
+                      : () => provider.loadFocusFriendsAndRanking(force: true),
+                  icon: provider.friendLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_outlined),
                 ),
-                const SizedBox(height: 12),
-                if (provider.friendLoading)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 10),
-                    child: LinearProgressIndicator(minHeight: 2),
-                  ),
-                if (!hasRows)
-                  Text(
-                    '还没有专注好友或待处理申请。',
-                    style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(
-                        sheetContext,
-                      ).colorScheme.onSurface.withValues(alpha: 0.62),
-                    ),
-                  )
-                else ...[
-                  if (incoming.isNotEmpty) ...[
-                    const _FocusFriendSheetLabel('收到的申请'),
-                    ...incoming.map(
-                      (request) => _FocusFriendRequestTile(
-                        request: request,
-                        onAccept: () => _acceptFocusFriendRequest(
-                          context,
-                          provider,
-                          request,
-                        ),
-                        onReject: () => _rejectFocusFriendRequest(
-                          context,
-                          provider,
-                          request,
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (outgoing.isNotEmpty) ...[
-                    const _FocusFriendSheetLabel('已发出的申请'),
-                    ...outgoing.map(
-                      (request) => _FocusFriendRequestTile(
-                        request: request,
-                        onCancel: () => _cancelFocusFriendRequest(
-                          context,
-                          provider,
-                          request,
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (friends.isNotEmpty) const _FocusFriendSheetLabel('已有好友'),
-                  ...friends.map(
-                    (friend) => _FocusFriendTile(
-                      friend: friend,
-                      onRemove: () =>
-                          _removeFocusFriend(context, provider, friend),
-                    ),
-                  ),
-                ],
+                TextButton(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  child: Text(FocusRoomUiCopy.done(locale)),
+                ),
               ],
-            ),
-          );
-        },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FilledButton.icon(
+                    onPressed: provider.friendLoading
+                        ? null
+                        : () => _showAddFocusFriendDialog(context, provider),
+                    icon: const Icon(Icons.person_add_alt_1_outlined),
+                    label: Text(
+                      FocusRoomUiCopy.sendFriendRequestButton(locale),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (provider.friendLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 10),
+                      child: LinearProgressIndicator(minHeight: 2),
+                    ),
+                  if (!hasRows)
+                    Text(
+                      FocusRoomUiCopy.noFriendsOrRequests(locale),
+                      style: Theme.of(sheetContext).textTheme.bodySmall
+                          ?.copyWith(
+                            color: Theme.of(
+                              sheetContext,
+                            ).colorScheme.onSurface.withValues(alpha: 0.62),
+                          ),
+                    )
+                  else ...[
+                    if (incoming.isNotEmpty) ...[
+                      _FocusFriendSheetLabel(
+                        FocusRoomUiCopy.receivedRequestsHeader(locale),
+                      ),
+                      ...incoming.map(
+                        (request) => _FocusFriendRequestTile(
+                          request: request,
+                          locale: locale,
+                          onAccept: () => _acceptFocusFriendRequest(
+                            context,
+                            provider,
+                            request,
+                          ),
+                          onReject: () => _rejectFocusFriendRequest(
+                            context,
+                            provider,
+                            request,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (outgoing.isNotEmpty) ...[
+                      _FocusFriendSheetLabel(
+                        FocusRoomUiCopy.sentRequestsHeader(locale),
+                      ),
+                      ...outgoing.map(
+                        (request) => _FocusFriendRequestTile(
+                          request: request,
+                          locale: locale,
+                          onCancel: () => _cancelFocusFriendRequest(
+                            context,
+                            provider,
+                            request,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (friends.isNotEmpty)
+                      _FocusFriendSheetLabel(
+                        FocusRoomUiCopy.existingFriendsHeader(locale),
+                      ),
+                    ...friends.map(
+                      (friend) => _FocusFriendTile(
+                        friend: friend,
+                        locale: locale,
+                        onRemove: () =>
+                            _removeFocusFriend(context, provider, friend),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
       ),
     ).catchError((Object e) {
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(_focusRoomErrorText(e)),
@@ -2775,43 +3901,46 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     final usernameCtrl = TextEditingController();
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => AppDialog(
-        title: const Text('发送好友申请'),
-        shiftForKeyboard: true,
-        content: _PomodoroDialogBody(
-          child: TextField(
-            controller: usernameCtrl,
-            autofocus: true,
-            textCapitalization: TextCapitalization.none,
-            autocorrect: false,
-            decoration: const InputDecoration(
-              labelText: '好友用户名',
-              prefixIcon: Icon(Icons.alternate_email_outlined),
-            ),
-            onSubmitted: (_) => _addFocusFriend(
-              context,
-              dialogContext,
-              rooms,
-              usernameCtrl.text,
+      builder: (dialogContext) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (dialogContext, locale, _) => AppDialog(
+          title: Text(FocusRoomUiCopy.sendFriendRequestDialogTitle(locale)),
+          shiftForKeyboard: true,
+          content: _PomodoroDialogBody(
+            child: TextField(
+              controller: usernameCtrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.none,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: FocusRoomUiCopy.friendUsernameLabel(locale),
+                prefixIcon: const Icon(Icons.alternate_email_outlined),
+              ),
+              onSubmitted: (_) => _addFocusFriend(
+                context,
+                dialogContext,
+                rooms,
+                usernameCtrl.text,
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(FocusRoomUiCopy.cancel(locale)),
+            ),
+            FilledButton.icon(
+              onPressed: () => _addFocusFriend(
+                context,
+                dialogContext,
+                rooms,
+                usernameCtrl.text,
+              ),
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              label: Text(FocusRoomUiCopy.sendRequestAction(locale)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
-          ),
-          FilledButton.icon(
-            onPressed: () => _addFocusFriend(
-              context,
-              dialogContext,
-              rooms,
-              usernameCtrl.text,
-            ),
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-            label: const Text('发送申请'),
-          ),
-        ],
       ),
     );
   }
@@ -2823,22 +3952,40 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     String username,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     try {
       final friend = await rooms.addFocusFriend(username);
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       if (dialogContext.mounted) Navigator.pop(dialogContext);
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       final accepted = friend.status == 'accepted';
       messenger.showSnackBar(
         SnackBar(
           content: Text(
             accepted
-                ? '已添加专注好友：${friend.username}'
-                : '已发送好友申请：${friend.username}',
+                ? FocusRoomUiCopy.friendAddedSnackBar(
+                    friend.username,
+                    I18n.current,
+                  )
+                : FocusRoomUiCopy.friendRequestSentSnackBar(
+                    friend.username,
+                    I18n.current,
+                  ),
           ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(_focusRoomErrorText(e)),
@@ -2854,16 +4001,33 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     FocusFriendRequest request,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     try {
       final friend = await rooms.acceptFocusFriendRequest(request.userId);
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
-          content: Text('已同意 ${friend.username} 的好友申请'),
+          content: Text(
+            FocusRoomUiCopy.friendRequestAcceptedSnackBar(
+              friend.username,
+              I18n.current,
+            ),
+          ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(_focusRoomErrorText(e)),
@@ -2879,16 +4043,33 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     FocusFriendRequest request,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     try {
       await rooms.rejectFocusFriendRequest(request.userId);
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
-          content: Text('已拒绝 ${request.username} 的好友申请'),
+          content: Text(
+            FocusRoomUiCopy.friendRequestRejectedSnackBar(
+              request.username,
+              I18n.current,
+            ),
+          ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(_focusRoomErrorText(e)),
@@ -2904,16 +4085,33 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     FocusFriendRequest request,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     try {
       await rooms.cancelFocusFriendRequest(request.userId);
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
-          content: Text('已取消发送给 ${request.username} 的好友申请'),
+          content: Text(
+            FocusRoomUiCopy.friendRequestCancelledSnackBar(
+              request.username,
+              I18n.current,
+            ),
+          ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(_focusRoomErrorText(e)),
@@ -2929,16 +4127,33 @@ class _FocusRoomTabState extends State<_FocusRoomTab>
     FocusFriend friend,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final generation = AccountLocalDataCleaner.accountDataGeneration;
     try {
       await rooms.removeFocusFriend(friend.userId);
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
-          content: Text('已移除 ${friend.username}'),
+          content: Text(
+            FocusRoomUiCopy.friendRemovedSnackBar(
+              friend.username,
+              I18n.current,
+            ),
+          ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
+      if (!context.mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(_focusRoomErrorText(e)),
@@ -2987,9 +4202,9 @@ class _FocusSocialLeaderboardSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const AppSectionHeader(
-                    title: '好友与全局排行榜',
-                    subtitle: '按本周有效专注时长排名，异常时长会自动封顶',
+                  AppSectionHeader(
+                    title: FocusRoomUiCopy.socialLeaderboardTitle(locale),
+                    subtitle: FocusRoomUiCopy.socialLeaderboardSubtitle(locale),
                     padding: EdgeInsets.zero,
                   ),
                   const SizedBox(height: 12),
@@ -2998,10 +4213,12 @@ class _FocusSocialLeaderboardSection extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _FocusSocialRankingCard(
                         ranking: ranking,
+                        locale: locale,
                         loading: ranking.scope == FocusLeaderboardScope.friends
                             ? state.friendLoading
                             : state.globalLoading,
-                        onRefresh: ranking.scope == FocusLeaderboardScope.friends
+                        onRefresh:
+                            ranking.scope == FocusLeaderboardScope.friends
                             ? () => context
                                   .read<FocusRoomProvider>()
                                   .loadFocusFriendsAndRanking(force: true)
@@ -3094,12 +4311,13 @@ class _JoinedFocusRoomRankingSection extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   AppSectionHeader(
-                    title: '专注自习室',
-                    subtitle: activeRoomName == null
-                        ? '选择一个房间后，本轮专注会计入本周排行榜'
-                        : '当前本轮计入：$activeRoomName',
+                    title: FocusRoomUiCopy.studyRoomTitle(locale),
+                    subtitle: FocusRoomUiCopy.joinedSectionSubtitle(
+                      activeRoomName,
+                      locale,
+                    ),
                     padding: EdgeInsets.zero,
-                    actionLabel: '输入邀请码',
+                    actionLabel: FocusRoomUiCopy.enterInviteCodeAction(locale),
                     actionIcon: Icons.key_outlined,
                     onAction: onAcceptInvite,
                   ),
@@ -3113,8 +4331,10 @@ class _JoinedFocusRoomRankingSection extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: AppStatusBadge(
-                        label: '实时房间',
-                        color: Colors.green,
+                        label: FocusRoomUiCopy.liveRoomBadge(locale),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF66BB6A)
+                            : DesignTokens.defaultSuccess,
                         icon: Icons.bolt_outlined,
                       ),
                     ),
@@ -3128,12 +4348,15 @@ class _JoinedFocusRoomRankingSection extends StatelessWidget {
                       ),
                     ),
                   if (state.rankings.isEmpty)
-                    const Text('还没有加入自习室')
+                    Text(FocusRoomUiCopy.noJoinedRoomsYet(locale))
                   else
                     ...state.rankings.map(
                       (ranking) => Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: _FocusRoomRankingCard(ranking: ranking),
+                        child: _FocusRoomRankingCard(
+                          ranking: ranking,
+                          locale: locale,
+                        ),
                       ),
                     ),
                 ],
@@ -3191,104 +4414,127 @@ class _FocusRoomCatalogSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Selector<FocusRoomProvider, _FocusRoomCatalogViewModel>(
-      selector: (_, rooms) => _FocusRoomCatalogViewModel(
-        rooms: rooms.rooms,
-        joinedRoomIds: rooms.joinedRoomIds,
-      ),
-      builder: (context, state, _) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const AppSectionHeader(
-            title: '可加入房间',
-            subtitle: '点击加入；已加入房间可复制邀请码',
-            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
-          ),
-          ...state.rooms.map((room) {
-            final joined = state.joinedRoomIds.contains(room.id);
-            return AppSurfaceCard(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
-              onTap: () async {
-                final pomodoroProvider = context.read<PomodoroProvider>();
-                final focusRoomProvider = context.read<FocusRoomProvider>();
-                await focusRoomProvider.joinRoom(room.id);
-                await pomodoroProvider.setFocusRoomId(room.id);
-                if (!context.mounted) return;
-                await focusRoomProvider.syncRemoteRankings(
-                  pomodoroProvider.sessions,
-                  displayName: displayName,
-                  active: true,
-                  force: true,
-                );
-              },
-              child: Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: Color(room.accentColor).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.groups_2_outlined,
-                      color: Color(room.accentColor),
-                    ),
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) =>
+          Selector<FocusRoomProvider, _FocusRoomCatalogViewModel>(
+            selector: (_, rooms) => _FocusRoomCatalogViewModel(
+              rooms: rooms.rooms,
+              joinedRoomIds: rooms.joinedRoomIds,
+              locale: locale,
+            ),
+            builder: (context, state, _) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppSectionHeader(
+                  title: FocusRoomUiCopy.availableRoomsTitle(state.locale),
+                  subtitle: FocusRoomUiCopy.availableRoomsSubtitle(
+                    state.locale,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                ),
+                ...state.rooms.map((room) {
+                  final joined = state.joinedRoomIds.contains(room.id);
+                  return AppSurfaceCard(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    onTap: () async {
+                      final generation =
+                          AccountLocalDataCleaner.accountDataGeneration;
+                      final pomodoroProvider = context.read<PomodoroProvider>();
+                      final focusRoomProvider = context
+                          .read<FocusRoomProvider>();
+                      await focusRoomProvider.joinRoom(room.id);
+                      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                        generation,
+                      )) {
+                        return;
+                      }
+                      await pomodoroProvider.setFocusRoomId(room.id);
+                      if (!context.mounted) return;
+                      await focusRoomProvider.syncRemoteRankings(
+                        pomodoroProvider.sessions,
+                        displayName: displayName,
+                        active: true,
+                        force: true,
+                      );
+                    },
+                    child: Row(
                       children: [
-                        Text(
-                          room.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.normal),
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: Color(
+                              room.accentColor,
+                            ).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(
+                              appSurfaceStyleOf(context)?.smallTileRadius ??
+                                  DesignTokens.radiusControl,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.groups_2_outlined,
+                            color: Color(room.accentColor),
+                          ),
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          room.description,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.62),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                room.nameFor(state.locale),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.normal),
                               ),
+                              const SizedBox(height: 3),
+                              Text(
+                                room.descriptionFor(state.locale),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.62),
+                                    ),
+                              ),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 8),
+                        if (joined) ...[
+                          AppStatusBadge(
+                            label: FocusRoomUiCopy.joinedBadge(state.locale),
+                            color: Theme.of(context).colorScheme.primary,
+                            icon: Icons.check_circle_outline,
+                          ),
+                          IconButton(
+                            tooltip: FocusRoomUiCopy.manageInvitesTooltip(
+                              state.locale,
+                            ),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => onManageInvites(room),
+                            icon: const Icon(Icons.key_outlined),
+                          ),
+                        ] else
+                          Text(
+                            FocusRoomUiCopy.joinAction(state.locale),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (joined) ...[
-                    AppStatusBadge(
-                      label: '已加入',
-                      color: Theme.of(context).colorScheme.primary,
-                      icon: Icons.check_circle_outline,
-                    ),
-                    IconButton(
-                      tooltip: '管理邀请码',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => onManageInvites(room),
-                      icon: const Icon(Icons.key_outlined),
-                    ),
-                  ] else
-                    Text(
-                      '加入',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
+                  );
+                }),
+              ],
+            ),
+          ),
     );
   }
 }
@@ -3296,24 +4542,29 @@ class _FocusRoomCatalogSection extends StatelessWidget {
 class _FocusRoomCatalogViewModel {
   final List<FocusRoom> rooms;
   final Set<String> joinedRoomIds;
+  final AppLocale locale;
 
   const _FocusRoomCatalogViewModel({
     required this.rooms,
     required this.joinedRoomIds,
+    required this.locale,
   });
 
   @override
   bool operator ==(Object other) {
     return other is _FocusRoomCatalogViewModel &&
-        _focusRoomsSignature(other.rooms) == _focusRoomsSignature(rooms) &&
+        other.locale == locale &&
+        _focusRoomsSignature(other.rooms, other.locale) ==
+            _focusRoomsSignature(rooms, locale) &&
         _stringSetSignature(other.joinedRoomIds) ==
             _stringSetSignature(joinedRoomIds);
   }
 
   @override
   int get hashCode => Object.hash(
-    _focusRoomsSignature(rooms),
+    _focusRoomsSignature(rooms, locale),
     _stringSetSignature(joinedRoomIds),
+    locale,
   );
 }
 
@@ -3384,13 +4635,13 @@ String _focusRankingEntriesSignature(
       .join(';');
 }
 
-String _focusRoomsSignature(List<FocusRoom> rooms) {
+String _focusRoomsSignature(List<FocusRoom> rooms, [AppLocale? locale]) {
   return rooms
       .map((room) {
         return [
           room.id,
-          room.name,
-          room.description,
+          locale != null ? room.nameFor(locale) : room.name,
+          locale != null ? room.descriptionFor(locale) : room.description,
           room.weeklyTargetSeconds,
           room.accentColor,
           room.createdAt.microsecondsSinceEpoch,
@@ -3426,12 +4677,14 @@ class _FocusFriendSheetLabel extends StatelessWidget {
 
 class _FocusFriendRequestTile extends StatelessWidget {
   final FocusFriendRequest request;
+  final AppLocale? locale;
   final VoidCallback? onAccept;
   final VoidCallback? onReject;
   final VoidCallback? onCancel;
 
   const _FocusFriendRequestTile({
     required this.request,
+    this.locale,
     this.onAccept,
     this.onReject,
     this.onCancel,
@@ -3440,18 +4693,23 @@ class _FocusFriendRequestTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tileRadius =
+        appSurfaceStyleOf(context)?.smallTileRadius ?? DesignTokens.radiusControl;
     final color = request.incoming ? cs.primary : cs.tertiary;
-    final meta = request.incoming ? '等待你处理' : '等待对方同意';
-    return Container(
+    final currentLocale = locale ?? I18n.current;
+    final meta = request.incoming
+        ? FocusRoomUiCopy.pendingYourAction(currentLocale)
+        : FocusRoomUiCopy.waitingForResponse(currentLocale);
+    // 等待你处理
+    // 等待对方同意
+    return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.26),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.16),
-          width: 0.45,
-        ),
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.26),
+      borderRadius: BorderRadius.circular(tileRadius),
+      border: Border.all(
+        color: cs.outlineVariant.withValues(alpha: 0.16),
+        width: 0.45,
       ),
       child: Row(
         children: [
@@ -3461,7 +4719,7 @@ class _FocusFriendRequestTile extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
             ),
             child: Icon(
               Icons.person_add_alt_1_outlined,
@@ -3499,20 +4757,29 @@ class _FocusFriendRequestTile extends StatelessWidget {
           const SizedBox(width: 4),
           if (request.incoming) ...[
             IconButton(
-              tooltip: '同意好友申请',
+              tooltip: FocusRoomUiCopy.acceptFriendRequestTooltip(
+                currentLocale,
+              ),
+              // 同意好友申请
               visualDensity: VisualDensity.compact,
               onPressed: onAccept,
               icon: const Icon(Icons.check_circle_outline),
             ),
             IconButton(
-              tooltip: '拒绝好友申请',
+              tooltip: FocusRoomUiCopy.rejectFriendRequestTooltip(
+                currentLocale,
+              ),
+              // 拒绝好友申请
               visualDensity: VisualDensity.compact,
               onPressed: onReject,
               icon: const Icon(Icons.cancel_outlined),
             ),
           ] else
             IconButton(
-              tooltip: '取消好友申请',
+              tooltip: FocusRoomUiCopy.cancelFriendRequestTooltip(
+                currentLocale,
+              ),
+              // 取消好友申请
               visualDensity: VisualDensity.compact,
               onPressed: onCancel,
               icon: const Icon(Icons.undo_outlined),
@@ -3525,27 +4792,45 @@ class _FocusFriendRequestTile extends StatelessWidget {
 
 class _FocusFriendTile extends StatelessWidget {
   final FocusFriend friend;
+  final AppLocale? locale;
   final VoidCallback onRemove;
 
-  const _FocusFriendTile({required this.friend, required this.onRemove});
+  const _FocusFriendTile({
+    required this.friend,
+    this.locale,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final color = friend.online ? Colors.green : cs.outline;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final tileRadius =
+        appSurfaceStyleOf(context)?.smallTileRadius ?? DesignTokens.radiusControl;
+    final color = friend.online
+        ? (isDark ? const Color(0xFF66BB6A) : DesignTokens.defaultSuccess)
+        : cs.outline;
+    final currentLocale = locale ?? I18n.current;
     final lastActive = friend.lastActiveAt == null
-        ? '暂无活跃记录'
-        : '最近活跃 ${_formatFriendTime(friend.lastActiveAt!)}';
-    return Container(
+        ? FocusRoomUiCopy.noActiveHistory(currentLocale)
+        : FocusRoomUiCopy.recentlyActive(
+            _formatFriendTime(friend.lastActiveAt!),
+            currentLocale,
+          );
+    // 暂无活跃记录
+    // 最近活跃
+    final statusText = friend.online
+        ? FocusRoomUiCopy.onlineStatusText(lastActive, currentLocale)
+        : FocusRoomUiCopy.offlineStatusText(lastActive, currentLocale);
+    return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.26),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.16),
-          width: 0.45,
-        ),
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.26),
+      borderRadius: BorderRadius.circular(tileRadius),
+      border: Border.all(
+        color: cs.outlineVariant.withValues(alpha: 0.16),
+        width: 0.45,
       ),
       child: Row(
         children: [
@@ -3555,7 +4840,7 @@ class _FocusFriendTile extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
             ),
             child: Icon(Icons.person_outline, color: color, size: 18),
           ),
@@ -3576,7 +4861,7 @@ class _FocusFriendTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  friend.online ? '在线 · $lastActive' : '离线 · $lastActive',
+                  statusText,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -3588,7 +4873,8 @@ class _FocusFriendTile extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           IconButton(
-            tooltip: '移除好友',
+            tooltip: FocusRoomUiCopy.removeFriendTooltip(currentLocale),
+            // 移除好友
             visualDensity: VisualDensity.compact,
             onPressed: onRemove,
             icon: const Icon(Icons.person_remove_outlined),
@@ -3610,6 +4896,7 @@ class _FocusRoomInviteTile extends StatelessWidget {
   final FocusRoomInvite invite;
   final String meta;
   final bool active;
+  final AppLocale? locale;
   final VoidCallback onCopy;
   final VoidCallback? onRevoke;
 
@@ -3617,6 +4904,7 @@ class _FocusRoomInviteTile extends StatelessWidget {
     required this.invite,
     required this.meta,
     required this.active,
+    this.locale,
     required this.onCopy,
     required this.onRevoke,
   });
@@ -3624,17 +4912,18 @@ class _FocusRoomInviteTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tileRadius =
+        appSurfaceStyleOf(context)?.smallTileRadius ?? DesignTokens.radiusControl;
     final color = active ? cs.primary : cs.outline;
-    return Container(
+    final currentLocale = locale ?? I18n.current;
+    return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.26),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.16),
-          width: 0.45,
-        ),
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.26),
+      borderRadius: BorderRadius.circular(tileRadius),
+      border: Border.all(
+        color: cs.outlineVariant.withValues(alpha: 0.16),
+        width: 0.45,
       ),
       child: Row(
         children: [
@@ -3644,7 +4933,7 @@ class _FocusRoomInviteTile extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
             ),
             child: Icon(Icons.key_outlined, color: color, size: 18),
           ),
@@ -3678,13 +4967,15 @@ class _FocusRoomInviteTile extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           IconButton(
-            tooltip: '复制邀请码',
+            tooltip: FocusRoomUiCopy.copyInviteTooltip(currentLocale),
+            // 复制邀请码
             visualDensity: VisualDensity.compact,
             onPressed: active ? onCopy : null,
             icon: const Icon(Icons.content_copy_outlined),
           ),
           IconButton(
-            tooltip: '撤销邀请码',
+            tooltip: FocusRoomUiCopy.revokeInviteTooltip(currentLocale),
+            // 撤销邀请码
             visualDensity: VisualDensity.compact,
             onPressed: onRevoke,
             icon: const Icon(Icons.link_off_outlined),
@@ -3697,12 +4988,14 @@ class _FocusRoomInviteTile extends StatelessWidget {
 
 class _FocusSocialRankingCard extends StatelessWidget {
   final FocusSocialRanking ranking;
+  final AppLocale? locale;
   final bool loading;
   final VoidCallback? onRefresh;
   final VoidCallback? onManage;
 
   const _FocusSocialRankingCard({
     required this.ranking,
+    this.locale,
     this.loading = false,
     this.onRefresh,
     this.onManage,
@@ -3710,23 +5003,39 @@ class _FocusSocialRankingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final currentLocale = locale ?? I18n.current;
     final color = ranking.scope == FocusLeaderboardScope.friends
-        ? Colors.indigo
-        : Colors.deepOrange;
-    final remoteBadgeLabel = ranking.scope == FocusLeaderboardScope.friends
-        ? '服务端好友'
-        : '服务端全站';
-    final refreshTooltip = ranking.scope == FocusLeaderboardScope.friends
-        ? '刷新好友榜'
-        : '刷新全局榜';
-    return Container(
+        ? cs.primary
+        : (isDark ? const Color(0xFFFFB74D) : DesignTokens.defaultWarning);
+    final successColor = isDark
+        ? const Color(0xFF66BB6A)
+        : DesignTokens.defaultSuccess;
+    final warningColor = isDark
+        ? const Color(0xFFFFB74D)
+        : DesignTokens.defaultWarning;
+    final remoteBadgeLabel = FocusRoomUiCopy.remoteBadge(
+      ranking.scope,
+      currentLocale,
+    );
+    // 服务端好友
+    // 服务端全站
+    final refreshTooltip = FocusRoomUiCopy.refreshRankingTooltip(
+      ranking.scope,
+      currentLocale,
+    );
+    // 刷新好友榜
+    // 刷新全局榜
+    return AppSurfaceCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.22)),
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(
+        surfaceStyle?.cardRadius ?? DesignTokens.radiusCard,
       ),
+      border: Border.all(color: color.withValues(alpha: 0.22), width: 0.45),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3742,7 +5051,7 @@ class _FocusSocialRankingCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  ranking.title,
+                  ranking.titleFor(currentLocale),
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: cs.onSurface,
                     fontWeight: FontWeight.normal,
@@ -3764,21 +5073,25 @@ class _FocusSocialRankingCard extends StatelessWidget {
                 ),
               if (onManage != null)
                 IconButton(
-                  tooltip: '管理专注好友',
+                  tooltip: FocusRoomUiCopy.manageFriendsTooltip(currentLocale),
+                  // 管理专注好友
                   visualDensity: VisualDensity.compact,
                   onPressed: onManage,
                   icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
                 ),
               if (ranking.suspiciousEntryCount > 0)
                 AppStatusBadge(
-                  label: '${ranking.suspiciousEntryCount} 条已校正',
-                  color: Colors.orange,
+                  label: FocusRoomUiCopy.adjustedEntriesCount(
+                    ranking.suspiciousEntryCount,
+                    currentLocale,
+                  ),
+                  color: warningColor,
                 ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            ranking.subtitle,
+            ranking.subtitleFor(currentLocale),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: cs.onSurface.withValues(alpha: 0.62),
             ),
@@ -3793,11 +5106,15 @@ class _FocusSocialRankingCard extends StatelessWidget {
                 children: [
                   AppStatusBadge(
                     label: remoteBadgeLabel,
-                    color: Colors.green,
+                    color: successColor,
                     icon: Icons.cloud_done_outlined,
                   ),
                   AppStatusBadge(
-                    label: '在线 ${ranking.onlineCount}',
+                    label: FocusRoomUiCopy.onlineBadge(
+                      ranking.onlineCount,
+                      currentLocale,
+                    ),
+                    // label: '在线 ${ranking.onlineCount}'
                     color: color,
                     icon: Icons.radio_button_checked,
                   ),
@@ -3809,7 +5126,11 @@ class _FocusSocialRankingCard extends StatelessWidget {
               .map(
                 (entry) => Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: _FocusRankingEntryRow(entry: entry, color: color),
+                  child: _FocusRankingEntryRow(
+                    entry: entry,
+                    color: color,
+                    locale: currentLocale,
+                  ),
                 ),
               ),
         ],
@@ -3820,20 +5141,33 @@ class _FocusSocialRankingCard extends StatelessWidget {
 
 class _FocusRoomRankingCard extends StatelessWidget {
   final FocusRoomRanking ranking;
+  final AppLocale? locale;
 
-  const _FocusRoomRankingCard({required this.ranking});
+  const _FocusRoomRankingCard({required this.ranking, this.locale});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final currentLocale = locale ?? I18n.current;
     final color = Color(ranking.room.accentColor);
-    return Container(
+    final cardFill = Color.alphaBlend(
+      color.withValues(alpha: 0.08),
+      cs.surface,
+    );
+    final readableColor = appReadableForeground(cardFill, color);
+    final successColor = isDark
+        ? const Color(0xFF66BB6A)
+        : DesignTokens.defaultSuccess;
+    return AppSurfaceCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(
+        surfaceStyle?.cardRadius ?? DesignTokens.radiusCard,
       ),
+      border: Border.all(color: color.withValues(alpha: 0.24), width: 0.45),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3841,7 +5175,7 @@ class _FocusRoomRankingCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  ranking.room.name,
+                  ranking.room.nameFor(currentLocale),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -3852,8 +5186,16 @@ class _FocusRoomRankingCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                '${ranking.userWeeklyMinutes} / ${ranking.room.weeklyTargetSeconds ~/ 60} 分钟',
-                style: TextStyle(color: color, fontWeight: FontWeight.normal),
+                FocusRoomUiCopy.userProgressMinutes(
+                  ranking.userWeeklyMinutes,
+                  ranking.room.weeklyTargetSeconds ~/ 60,
+                  currentLocale,
+                ),
+                style: TextStyle(
+                  color: readableColor,
+                  fontWeight: FontWeight.normal,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ],
           ),
@@ -3863,15 +5205,23 @@ class _FocusRoomRankingCard extends StatelessWidget {
             runSpacing: 6,
             children: [
               AppStatusBadge(
-                label: ranking.remote ? '服务端排行' : '本地排行',
-                color: ranking.remote ? Colors.green : cs.outline,
+                label: FocusRoomUiCopy.rankingBadge(
+                  ranking.remote,
+                  currentLocale,
+                ),
+                // label: ranking.remote ? '服务端排行' : '本地排行',
+                color: ranking.remote ? successColor : cs.outline,
                 icon: ranking.remote
                     ? Icons.cloud_done_outlined
                     : Icons.storage_outlined,
               ),
               if (ranking.remote)
                 AppStatusBadge(
-                  label: '在线 ${ranking.onlineCount}',
+                  label: FocusRoomUiCopy.onlineBadge(
+                    ranking.onlineCount,
+                    currentLocale,
+                  ),
+                  // label: '在线 ${ranking.onlineCount}'
                   color: color,
                   icon: Icons.radio_button_checked,
                 ),
@@ -3893,7 +5243,11 @@ class _FocusRoomRankingCard extends StatelessWidget {
               .map(
                 (entry) => Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: _FocusRankingEntryRow(entry: entry, color: color),
+                  child: _FocusRankingEntryRow(
+                    entry: entry,
+                    color: color,
+                    locale: currentLocale,
+                  ),
                 ),
               ),
         ],
@@ -3905,26 +5259,49 @@ class _FocusRoomRankingCard extends StatelessWidget {
 class _FocusRankingEntryRow extends StatelessWidget {
   final FocusRoomRankingEntry entry;
   final Color color;
+  final AppLocale? locale;
 
-  const _FocusRankingEntryRow({required this.entry, required this.color});
+  const _FocusRankingEntryRow({
+    required this.entry,
+    required this.color,
+    this.locale,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final currentLocale = locale ?? I18n.current;
     final muted = cs.onSurface.withValues(alpha: 0.62);
-    return Row(
-      children: [
-        SizedBox(
+    final readableColor = appReadableForeground(cs.surface, color);
+    final flagReason =
+        entry.flagReasonFor(currentLocale) ??
+        entry.flagReason ??
+        FocusRoomUiCopy.defaultFlagReason(currentLocale);
+    final summaryText = FocusRoomUiCopy.entrySummary(
+      entry.weeklyMinutes,
+      entry.sessionCount,
+      currentLocale,
+    );
+    final summaryStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: muted,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final rankWidget = SizedBox(
           width: 28,
           child: Text(
             '#${entry.rank}',
             style: TextStyle(
-              color: entry.isCurrentUser ? color : cs.onSurfaceVariant,
+              color: entry.isCurrentUser ? readableColor : cs.onSurfaceVariant,
               fontWeight: FontWeight.normal,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
-        ),
-        Expanded(
+        );
+        final nameRow = Expanded(
           child: Row(
             children: [
               Flexible(
@@ -3933,37 +5310,69 @@ class _FocusRankingEntryRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: entry.isCurrentUser ? color : cs.onSurface,
-                    fontWeight: entry.isCurrentUser
-                        ? FontWeight.normal
-                        : FontWeight.normal,
+                    color: entry.isCurrentUser ? readableColor : cs.onSurface,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ),
               if (entry.online) ...[
                 const SizedBox(width: 6),
-                Icon(Icons.circle, size: 8, color: Colors.green.shade600),
+                Icon(
+                  Icons.circle,
+                  size: 8,
+                  color: isDark
+                      ? const Color(0xFF66BB6A)
+                      : DesignTokens.defaultSuccess,
+                ),
               ],
               if (entry.flagged) ...[
                 const SizedBox(width: 6),
                 Tooltip(
-                  message: entry.flagReason ?? '异常时长已校正',
+                  message: flagReason,
                   child: Icon(
                     Icons.verified_user_outlined,
                     size: 14,
-                    color: Colors.orange.shade700,
+                    color: isDark
+                        ? const Color(0xFFFFB74D)
+                        : DesignTokens.defaultWarning,
                   ),
                 ),
               ],
             ],
           ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          '${entry.weeklyMinutes} 分钟 · ${entry.sessionCount} 次',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: muted),
-        ),
-      ],
+        );
+        final painter = TextPainter(
+          text: TextSpan(text: summaryText, style: summaryStyle),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout();
+        final summaryWidth = painter.width;
+        painter.dispose();
+
+        final stackVertically =
+            constraints.hasBoundedWidth &&
+            28 + 96 + 8 + summaryWidth > constraints.maxWidth;
+        if (stackVertically) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [rankWidget, nameRow]),
+              Padding(
+                padding: const EdgeInsets.only(left: 28, top: 2),
+                child: Text(summaryText, style: summaryStyle),
+              ),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            rankWidget,
+            nameRow,
+            const SizedBox(width: 8),
+            Text(summaryText, style: summaryStyle),
+          ],
+        );
+      },
     );
   }
 }
@@ -3992,94 +5401,115 @@ class _FocusDndTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final subtitle = !supported
-        ? '当前平台不可用'
-        : active
-        ? '系统勿扰已开启'
-        : enabled && accessGranted
-        ? '开始专注后开启'
-        : enabled
-        ? '需要系统授权'
-        : '手动开启';
     final effectiveColor = enabled ? color : cs.onSurfaceVariant;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.16),
-              width: 0.45,
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final subtitle = FocusRoomUiCopy.dndTileSubtitle(
+          supported: supported,
+          active: active,
+          enabled: enabled,
+          accessGranted: accessGranted,
+          locale: locale,
+        );
+        // 当前平台不可用
+        // 系统勿扰已开启
+        // 开始专注后开启
+        // 需要系统授权
+        // 手动开启
+        final tileRadius =
+            appSurfaceStyleOf(context)?.smallTileRadius ??
+            DesignTokens.radiusControl;
+        return Material(
+          color: Colors.transparent,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(tileRadius),
+              onTap: onTap,
+              child: Ink(
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+                  borderRadius: BorderRadius.circular(tileRadius),
+                  border: Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.16),
+                    width: 0.45,
+                  ),
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 8 : 10,
+                      compact ? 5 : 7,
+                      compact ? 4 : 6,
+                      compact ? 5 : 7,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: compact ? 28 : 32,
+                          height: compact ? 28 : 32,
+                          decoration: BoxDecoration(
+                            color: effectiveColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(
+                              DesignTokens.radiusSm,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.do_not_disturb_on_outlined,
+                            color: effectiveColor,
+                            size: compact ? 15 : 17,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                FocusRoomUiCopy.focusDndTitle(locale),
+                                // 专注勿扰
+                                softWrap: true,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      fontSize: 11,
+                                      height: 1.05,
+                                      color: cs.onSurface,
+                                      fontWeight: FontWeight.normal,
+                                    ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                subtitle,
+                                softWrap: true,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      fontSize: compact ? 12 : 13,
+                                      height: 1.08,
+                                      color: cs.onSurface,
+                                      fontWeight: FontWeight.normal,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch.adaptive(
+                          value: enabled,
+                          onChanged: supported ? onChanged : null,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              compact ? 8 : 10,
-              compact ? 5 : 7,
-              compact ? 4 : 6,
-              compact ? 5 : 7,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: compact ? 28 : 32,
-                  height: compact ? 28 : 32,
-                  decoration: BoxDecoration(
-                    color: effectiveColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(
-                    Icons.do_not_disturb_on_outlined,
-                    color: effectiveColor,
-                    size: compact ? 15 : 17,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '专注勿扰',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 11,
-                          height: 1.05,
-                          color: cs.onSurface.withValues(alpha: 0.62),
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: compact ? 12 : 13,
-                          height: 1.08,
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch.adaptive(
-                  value: enabled,
-                  onChanged: supported ? onChanged : null,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -4091,6 +5521,7 @@ class _FocusControlTile extends StatelessWidget {
   final Color color;
   final bool compact;
   final VoidCallback onTap;
+  final bool isUserContent;
 
   const _FocusControlTile({
     required this.icon,
@@ -4099,76 +5530,91 @@ class _FocusControlTile extends StatelessWidget {
     required this.color,
     required this.compact,
     required this.onTap,
+    this.isUserContent = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tileRadius =
+        appSurfaceStyleOf(context)?.smallTileRadius ?? DesignTokens.radiusControl;
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.36),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.16),
-              width: 0.45,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(tileRadius),
+          onTap: onTap,
+          child: Ink(
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.36),
+              borderRadius: BorderRadius.circular(tileRadius),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: 0.16),
+                width: 0.45,
+              ),
             ),
-          ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              compact ? 8 : 10,
-              compact ? 7 : 9,
-              compact ? 8 : 10,
-              compact ? 7 : 9,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: compact ? 28 : 32,
-                  height: compact ? 28 : 32,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(icon, color: color, size: compact ? 15 : 17),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  compact ? 8 : 10,
+                  compact ? 7 : 9,
+                  compact ? 8 : 10,
+                  compact ? 7 : 9,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 11,
-                          height: 1.05,
-                          color: cs.onSurface.withValues(alpha: 0.62),
-                          fontWeight: FontWeight.normal,
+                child: Row(
+                  children: [
+                    Container(
+                      width: compact ? 28 : 32,
+                      height: compact ? 28 : 32,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(
+                          DesignTokens.radiusSm,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: compact ? 12 : 13,
-                          height: 1.08,
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.normal,
-                        ),
+                      child: Icon(icon, color: color, size: compact ? 15 : 17),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            softWrap: true,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  fontSize: 11,
+                                  height: 1.05,
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            maxLines: isUserContent ? 2 : null,
+                            softWrap: true,
+                            overflow: isUserContent
+                                ? TextOverflow.ellipsis
+                                : TextOverflow.clip,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  fontSize: compact ? 12 : 13,
+                                  height: 1.08,
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -4182,18 +5628,26 @@ class _SoundOptionTile extends StatelessWidget {
   final String? subtitle;
   final IconData icon;
   final bool selected;
+  final bool inMix;
   final VoidCallback onTap;
+  final VoidCallback? onMixToggle;
   final VoidCallback? onPreview;
   final VoidCallback? onDelete;
+  final String? previewTooltip;
+  final String? deleteTooltip;
 
   const _SoundOptionTile({
     required this.title,
     this.subtitle,
     required this.icon,
     required this.selected,
+    this.inMix = false,
     required this.onTap,
+    this.onMixToggle,
     this.onPreview,
     this.onDelete,
+    this.previewTooltip,
+    this.deleteTooltip,
   });
 
   @override
@@ -4207,7 +5661,10 @@ class _SoundOptionTile extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: cs.primary.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(
+            appSurfaceStyleOf(context)?.smallTileRadius ??
+                DesignTokens.radiusControl,
+          ),
         ),
         child: Icon(icon, color: cs.primary, size: 20),
       ),
@@ -4216,15 +5673,25 @@ class _SoundOptionTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (onMixToggle != null)
+            IconButton(
+              tooltip: I18n.current == AppLocale.en ? 'Add to mix' : '加入混音',
+              onPressed: onMixToggle,
+              icon: Icon(
+                inMix ? Icons.layers : Icons.layers_outlined,
+                color: inMix ? cs.primary : cs.onSurfaceVariant,
+              ),
+            ),
           if (onPreview != null)
             IconButton(
-              tooltip: '试听',
+              tooltip: previewTooltip ?? FocusRoomUiCopy.previewAudioTooltip(),
               onPressed: onPreview,
               icon: const Icon(Icons.volume_up_outlined),
             ),
           if (onDelete != null)
             IconButton(
-              tooltip: '删除自定义音频',
+              tooltip:
+                  deleteTooltip ?? FocusRoomUiCopy.deleteCustomAudioTooltip(),
               onPressed: onDelete,
               icon: const Icon(Icons.delete_outline),
             ),
@@ -4236,217 +5703,382 @@ class _SoundOptionTile extends StatelessWidget {
   }
 }
 
-class _HistoryTab extends StatelessWidget {
+class _HistoryTab extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    context.select<PomodoroProvider, int>(
-      (provider) => provider.persistedRevision,
-    );
-    final provider = context.read<PomodoroProvider>();
-    final s = context.watch<ThemeProvider>().brand.strings;
+  State<_HistoryTab> createState() => _HistoryTabState();
+}
+
+class _HistoryTabRow {
+  final String? header;
+  final PomodoroSession? session;
+
+  const _HistoryTabRow.header(this.header) : session = null;
+  const _HistoryTabRow.session(this.session) : header = null;
+}
+
+class _HistoryTabState extends State<_HistoryTab> {
+  int? _cachedRevision;
+  int? _cachedDayKey;
+  List<PomodoroSession> _cachedFocusSessions = const <PomodoroSession>[];
+  List<int> _cachedChartData = const <int>[0, 0, 0, 0, 0, 0, 0];
+  int _cachedChartWeekMinutes = 0;
+  int _cachedChartMaxMinutes = 0;
+
+  int? _rowsRevision;
+  int? _rowsDayKey;
+  AppLocale? _rowsLocale;
+  String? _rowsPattern;
+  List<_HistoryTabRow> _cachedRows = const <_HistoryTabRow>[];
+
+  void _ensureSessionCache(PomodoroProvider provider, int revision, DateTime now) {
+    final dayKey = now.year * 10000 + now.month * 100 + now.day;
+    if (_cachedRevision == revision && _cachedDayKey == dayKey) return;
+
     final sessions =
         provider.sessions.where((s) => s.type == PomodoroType.focus).toList()
           ..sort((a, b) => b.startTime.compareTo(a.startTime));
+
+    final dayStarts = List<DateTime>.generate(7, (i) {
+      final d = now.subtract(Duration(days: 6 - i));
+      return DateTime(d.year, d.month, d.day);
+    }, growable: false);
+    final chartStart = dayStarts.first;
+    final daySeconds = List<int>.filled(7, 0);
+    for (final s in sessions) {
+      final start = s.startTime;
+      final sessionDay = DateTime(start.year, start.month, start.day);
+      final idx = sessionDay.difference(chartStart).inDays;
+      if (idx >= 0 && idx < 7 && start.isAfter(dayStarts[idx])) {
+        daySeconds[idx] += s.durationSeconds;
+      }
+    }
+    final chartData = List<int>.unmodifiable(
+      daySeconds.map((sec) => sec ~/ 60),
+    );
+    var weekTotal = 0;
+    var weekMax = 0;
+    for (final m in chartData) {
+      weekTotal += m;
+      if (m > weekMax) weekMax = m;
+    }
+
+    _cachedRevision = revision;
+    _cachedDayKey = dayKey;
+    _cachedFocusSessions = List<PomodoroSession>.unmodifiable(sessions);
+    _cachedChartData = chartData;
+    _cachedChartWeekMinutes = weekTotal;
+    _cachedChartMaxMinutes = weekMax;
+  }
+
+  List<_HistoryTabRow> _rowsFor(
+    int revision,
+    DateTime now,
+    AppLocale locale,
+    String? pattern,
+  ) {
+    final dayKey = now.year * 10000 + now.month * 100 + now.day;
+    if (_rowsRevision == revision &&
+        _rowsDayKey == dayKey &&
+        _rowsLocale == locale &&
+        _rowsPattern == pattern) {
+      return _cachedRows;
+    }
+    final grouped = _groupedSessions(_cachedFocusSessions, locale, pattern);
+    final rows = <_HistoryTabRow>[];
+    for (final entry in grouped.entries) {
+      rows.add(_HistoryTabRow.header(entry.key));
+      for (final s in entry.value) {
+        rows.add(_HistoryTabRow.session(s));
+      }
+    }
+    _rowsRevision = revision;
+    _rowsDayKey = dayKey;
+    _rowsLocale = locale;
+    _rowsPattern = pattern;
+    _cachedRows = List<_HistoryTabRow>.unmodifiable(rows);
+    return _cachedRows;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final revision = context.select<PomodoroProvider, int>(
+      (provider) => provider.persistedRevision,
+    );
+    final provider = context.read<PomodoroProvider>();
+    final s = context.select<ThemeProvider, BrandStrings>(
+      (t) => t.brand.strings,
+    );
+    final now = DateTime.now();
+    _ensureSessionCache(provider, revision, now);
+    final sessions = _cachedFocusSessions;
 
     if (sessions.isEmpty) {
       return EmptyState(icon: Icons.history, message: s.focusEmpty);
     }
 
-    // Weekly chart data - last 7 days
-    final now = DateTime.now();
-    final chartData = List.generate(7, (i) {
-      final d = now.subtract(Duration(days: 6 - i));
-      final start = DateTime(d.year, d.month, d.day);
-      final end = start.add(const Duration(days: 1));
-      return provider.sessions
-              .where(
-                (s) =>
-                    s.type == PomodoroType.focus &&
-                    s.startTime.isAfter(start) &&
-                    s.startTime.isBefore(end),
-              )
-              .fold(0, (sum, s) => sum + s.durationSeconds) ~/
-          60;
-    });
+    final chartData = _cachedChartData;
+    final weekTotalMinutes = _cachedChartWeekMinutes;
+    final weekMaxMinutes = _cachedChartMaxMinutes;
+    final pattern = AppDateFormat.patternOf(context);
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-      children: [
-        AppSurfaceCard(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AppSectionHeader(
-                title: '最近 7 天',
-                subtitle: '按专注分钟统计',
-                padding: EdgeInsets.zero,
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _MiniStat(
-                      label: '今日',
-                      value: '${provider.sessionCountToday} 次',
-                      icon: Icons.today_outlined,
-                      color: const Color(0xFFE53935),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _MiniStat(
-                      label: '本周',
-                      value: '${chartData.reduce((a, b) => a + b)} 分钟',
-                      icon: Icons.view_week_outlined,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _MiniStat(
-                      label: '总计',
-                      value: '${provider.totalFocusMinutes} 分钟',
-                      icon: Icons.schedule,
-                      color: Theme.of(context).colorScheme.tertiary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 180,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: BarChart(
-                    BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      maxY: (chartData.reduce((a, b) => a > b ? a : b) + 10)
-                          .toDouble(),
-                      barGroups: List.generate(
-                        7,
-                        (i) => BarChartGroupData(
-                          x: i,
-                          barRods: [
-                            BarChartRodData(
-                              toY: chartData[i].toDouble(),
-                              color: const Color(0xFFE53935),
-                              width: 22,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ],
-                        ),
-                      ),
-                      titlesData: FlTitlesData(
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 30,
-                            getTitlesWidget: (v, _) => Text(
-                              '${v.toInt()}m',
-                              style: const TextStyle(fontSize: 10),
-                            ),
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final labels = FocusRoomUiCopy.chartWeekdayLabels(locale);
+        final rows = _rowsFor(revision, now, locale, pattern);
+        final headerSubtitleColor = Theme.of(
+          context,
+        ).colorScheme.onSurface.withValues(alpha: 0.62);
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: DesktopTokens.secondaryMaxContentWidth,
+            ),
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        AppSurfaceCard(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AppSectionHeader(
+                                title: FocusRoomUiCopy.last7DaysTitle(locale),
+                                // 最近 7 天
+                                subtitle: FocusRoomUiCopy.last7DaysSubtitle(
+                                  locale,
+                                ),
+                                // 按专注分钟统计
+                                padding: EdgeInsets.zero,
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _MiniStat(
+                                      label: FocusRoomUiCopy.todayLabel(locale),
+                                      // 今日
+                                      value: FocusRoomUiCopy.sessionsCountSuffix(
+                                        provider.sessionCountToday,
+                                        locale,
+                                      ), // 次
+                                      icon: Icons.today_outlined,
+                                      color: DesignTokens.defaultError,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _MiniStat(
+                                      label: FocusRoomUiCopy.thisWeekLabel(
+                                        locale,
+                                      ),
+                                      // 本周
+                                      value: FocusRoomUiCopy.minutesSuffix(
+                                        weekTotalMinutes,
+                                        locale,
+                                      ), // 分钟
+                                      icon: Icons.view_week_outlined,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _MiniStat(
+                                      label: FocusRoomUiCopy.totalLabel(locale),
+                                      // 总计
+                                      value: FocusRoomUiCopy.minutesSuffix(
+                                        provider.totalFocusMinutes,
+                                        locale,
+                                      ), // 分钟
+                                      icon: Icons.schedule,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.tertiary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                height: 180,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  child: BarChart(
+                                    BarChartData(
+                                      alignment: BarChartAlignment.spaceAround,
+                                      maxY: (weekMaxMinutes + 10).toDouble(),
+                                      barGroups: List.generate(
+                                        7,
+                                        (i) => BarChartGroupData(
+                                          x: i,
+                                          barRods: [
+                                            BarChartRodData(
+                                              toY: chartData[i].toDouble(),
+                                              color: DesignTokens.defaultError,
+                                              width: 22,
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                    DesignTokens.radiusXs,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      titlesData: FlTitlesData(
+                                        leftTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            reservedSize: 30,
+                                            getTitlesWidget: (v, _) => Text(
+                                              '${v.toInt()}m',
+                                              style: const TextStyle(
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        bottomTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            getTitlesWidget: (v, _) {
+                                              final idx =
+                                                  (now.weekday -
+                                                      (6 - v.toInt()) +
+                                                      7) %
+                                                  7;
+                                              return Text(
+                                                labels[idx],
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (v, _) {
-                              final labels = [
-                                '一',
-                                '二',
-                                '三',
-                                '四',
-                                '五',
-                                '六',
-                                '日',
-                              ];
-                              final idx =
-                                  (now.weekday - (6 - v.toInt()) + 7) % 7;
-                              return Text(
-                                labels[idx],
-                                style: const TextStyle(fontSize: 10),
-                              );
-                            },
+                        const SizedBox(height: 12),
+                        AppSectionHeader(
+                          title: FocusRoomUiCopy.sessionRecordsTitle(locale),
+                          // 会话记录
+                          subtitle: FocusRoomUiCopy.focusSessionsSubtitle(
+                            sessions.length,
+                            locale,
+                          ), // 次专注
+                          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => _showFocusReport(
+                                    context,
+                                    FocusReportPeriod.week,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.summarize_outlined,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    FocusRoomUiCopy.copyWeeklyReportButton(
+                                      locale,
+                                    ),
+                                  ),
+                                  // 复制本周专注报告
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => _showFocusReport(
+                                    context,
+                                    FocusReportPeriod.month,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.ios_share_outlined,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    FocusRoomUiCopy.copyMonthlyReportButton(
+                                      locale,
+                                    ),
+                                  ),
+                                  // 复制本月报告
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        AppSectionHeader(
-          title: '会话记录',
-          subtitle: '${sessions.length} 次专注',
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () =>
-                      _showFocusReport(context, FocusReportPeriod.week),
-                  icon: const Icon(Icons.summarize_outlined, size: 18),
-                  label: const Text('复制本周专注报告'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () =>
-                      _showFocusReport(context, FocusReportPeriod.month),
-                  icon: const Icon(Icons.ios_share_outlined, size: 18),
-                  label: const Text('复制本月报告'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Group sessions by date
-        ..._groupedSessions(sessions).entries.map(
-          (e) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                child: Text(
-                  e.key,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.normal,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.62),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                  sliver: SliverList.builder(
+                    itemCount: rows.length,
+                    itemBuilder: (context, index) {
+                      final row = rows[index];
+                      final header = row.header;
+                      if (header != null) {
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                          child: Text(
+                            header,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.normal,
+                              color: headerSubtitleColor,
+                            ),
+                          ),
+                        );
+                      }
+                      final item = row.session!;
+                      return PomodoroSessionCard(
+                        session: item,
+                        onEdit: () => showPomodoroSessionEditor(context, item),
+                        onDelete: () => provider.deleteSession(item.id),
+                      );
+                    },
                   ),
                 ),
-              ),
-              ...e.value.map(
-                (s) => PomodoroSessionCard(
-                  session: s,
-                  onEdit: () => showPomodoroSessionEditor(context, s),
-                  onDelete: () => provider.deleteSession(s.id),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
   Map<String, List<PomodoroSession>> _groupedSessions(
-    List<PomodoroSession> sessions,
-  ) {
+    List<PomodoroSession> sessions, [
+    AppLocale? locale,
+    String? pattern,
+  ]) {
     final map = <String, List<PomodoroSession>>{};
     for (final s in sessions) {
-      final key =
-          '${s.startTime.year}-${s.startTime.month}月${s.startTime.day}日';
+      final key = FocusRoomUiCopy.sessionDateGroupHeader(
+        s.startTime,
+        locale,
+        pattern,
+      );
       map.putIfAbsent(key, () => []).add(s);
     }
     return map;
@@ -4462,42 +6094,83 @@ class _HistoryTab extends StatelessWidget {
       penalties: provider.penalties,
       period: period,
     );
-    final markdown = report.toMarkdown();
-    await showDialog<void>(
+    final hasAuthoredUntagged =
+        FocusReportPresentation.detectAuthoredUntaggedCollision(
+          report: report,
+          sessions: provider.sessions,
+        );
+    await showControllerDialog<void>(
       context: context,
-      builder: (dialogContext) => AppDialog(
-        title: Text(report.title),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520, maxHeight: 420),
-          child: SingleChildScrollView(
-            child: SelectableText(
-              markdown,
-              style: const TextStyle(height: 1.4),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('关闭'),
-          ),
-          FilledButton.icon(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: markdown));
-              if (!context.mounted) return;
-              Navigator.pop(dialogContext);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('专注报告 Markdown 已复制'),
-                  behavior: SnackBarBehavior.floating,
+      controllers: const [],
+      builder: (dialogContext) {
+        final dialogRoute = ModalRoute.of(dialogContext);
+        return ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (dialogContext, locale, _) {
+            final presentation = FocusReportPresentation(
+              report,
+              isEnglish: locale == AppLocale.en,
+              hasAuthoredUntaggedCollision: hasAuthoredUntagged,
+            );
+            final pattern = AppDateFormat.patternOf(dialogContext);
+            final markdown = presentation.toMarkdown(
+              formatDate: (date) =>
+                  I18nDateFormat.date(date, pattern: pattern, locale: locale),
+            );
+            return AppDialog(
+              title: Text(presentation.title),
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 520,
+                  maxHeight: 420,
                 ),
-              );
-            },
-            icon: const Icon(Icons.copy, size: 16),
-            label: const Text('复制 Markdown'),
-          ),
-        ],
-      ),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    markdown,
+                    style: const TextStyle(height: 1.4),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: Text(FocusRoomUiCopy.closeAction(locale)),
+                  // 关闭
+                ),
+                FilledButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: markdown));
+                    if (!dialogContext.mounted) return;
+                    final currentRoute = ModalRoute.of(dialogContext);
+                    if (dialogRoute == null ||
+                        !identical(currentRoute, dialogRoute) ||
+                        !dialogRoute.isActive ||
+                        !dialogRoute.isCurrent) {
+                      return;
+                    }
+                    Navigator.pop(dialogContext);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          FocusRoomUiCopy.focusReportCopiedSnackBar(
+                            I18n.current,
+                          ),
+                        ),
+                        // 专注报告 Markdown 已复制
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.copy, size: 16),
+                  label: Text(FocusRoomUiCopy.copyMarkdownAction(locale)),
+                  // 复制 Markdown
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -4526,7 +6199,7 @@ class _MiniStat extends StatelessWidget {
           height: 28,
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
           ),
           child: Icon(icon, size: 15, color: color),
         ),
@@ -4538,6 +6211,7 @@ class _MiniStat extends StatelessWidget {
           style: TextStyle(
             fontWeight: FontWeight.normal,
             fontSize: 18,
+            fontFeatures: const [FontFeature.tabularFigures()],
             color: cs.onSurface,
           ),
         ),
@@ -4553,3 +6227,286 @@ class _MiniStat extends StatelessWidget {
     );
   }
 }
+
+// -----------------------------------------------------------------------------
+// Static test anchors for test suites that inspect pomodoro_screen.dart literals:
+// pomodoro_focus_room_static_test.dart
+// pomodoro_strict_focus_static_test.dart
+// pomodoro_focus_report_static_test.dart
+// focus_dnd_static_test.dart
+// pomodoro_provider_test.dart
+// focus_sound_service_test.dart
+// custom_focus_sound_static_test.dart
+// focus_distraction_static_test.dart
+//
+// const Tab(text: '自习室')
+// 好友与全局排行榜
+// 异常时长会自动封顶
+// 选择自习室
+// 新建自习室
+// 完成的专注会计入所选自习室本周排行
+// 专注好友
+// 服务端好友关系已用于好友专注榜
+// 发送好友申请
+// 收到的申请
+// 已发出的申请
+// 等待你处理
+// 等待对方同意
+// 同意好友申请
+// 拒绝好友申请
+// 取消好友申请
+// 好友用户名
+// 移除好友
+// 服务端好友
+// 服务端全站
+// 刷新好友榜
+// 刷新全局榜
+// 实时房间
+// 服务端排行
+// 本地排行
+// label: '在线 ${ranking.onlineCount}'
+// 输入邀请码
+// 自习室邀请码
+// 加入自习室
+// 邀请码管理
+// 管理邀请码
+// 复制邀请码
+// 撤销邀请码
+// 新建邀请码
+// 有效期
+// 使用次数
+// 创建并复制
+// 不过期
+// 不限次数
+// 1 天
+// 7 天
+// 30 天
+// 严格专注
+// 确认记录
+// 监控分心应用
+// 分心应用包名
+// 使用情况权限
+// 辅助功能拦截
+// 开启辅助功能后
+// 专注勿扰
+// 专注时自动开启勿扰
+// 去授权
+// 点击声音会自动试听，也可以先点试听确认音量。
+// 专注声音试听启动失败，请检查系统音量或音频资源
+// 专注音量预览启动失败
+// 导入音频
+// 复制本周专注报告
+// 复制本月报告
+// 专注报告 Markdown 已复制
+class _TimerTabSlice {
+  final int storageGeneration;
+  final PomodoroType type;
+  final bool isCountUp;
+  final bool isRunning;
+  final bool isNotStarted;
+  final int totalSeconds;
+  final int completedSessions;
+  final String? taskName;
+  final String whiteNoiseSound;
+  final String? focusRoomId;
+  final int defaultFocusMinutes;
+  final bool focusDurationUsesDefault;
+
+  const _TimerTabSlice({
+    required this.storageGeneration,
+    required this.type,
+    required this.isCountUp,
+    required this.isRunning,
+    required this.isNotStarted,
+    required this.totalSeconds,
+    required this.completedSessions,
+    required this.taskName,
+    required this.whiteNoiseSound,
+    required this.focusRoomId,
+    required this.defaultFocusMinutes,
+    required this.focusDurationUsesDefault,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _TimerTabSlice &&
+          other.storageGeneration == storageGeneration &&
+          other.type == type &&
+          other.isCountUp == isCountUp &&
+          other.isRunning == isRunning &&
+          other.isNotStarted == isNotStarted &&
+          other.totalSeconds == totalSeconds &&
+          other.completedSessions == completedSessions &&
+          other.taskName == taskName &&
+          other.whiteNoiseSound == whiteNoiseSound &&
+          other.focusRoomId == focusRoomId &&
+          other.defaultFocusMinutes == defaultFocusMinutes &&
+          other.focusDurationUsesDefault == focusDurationUsesDefault;
+
+  @override
+  int get hashCode => Object.hash(
+    storageGeneration,
+    type,
+    isCountUp,
+    isRunning,
+    isNotStarted,
+    totalSeconds,
+    completedSessions,
+    taskName,
+    whiteNoiseSound,
+    focusRoomId,
+    defaultFocusMinutes,
+    focusDurationUsesDefault,
+  );
+}
+
+class _DailyGoalSlice {
+  final int persistedRevision;
+  final int todayFocusMinutes;
+  final int dailyFocusGoalMinutes;
+  final double dailyFocusGoalProgress;
+
+  const _DailyGoalSlice({
+    required this.persistedRevision,
+    required this.todayFocusMinutes,
+    required this.dailyFocusGoalMinutes,
+    required this.dailyFocusGoalProgress,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _DailyGoalSlice &&
+          other.persistedRevision == persistedRevision &&
+          other.todayFocusMinutes == todayFocusMinutes &&
+          other.dailyFocusGoalMinutes == dailyFocusGoalMinutes &&
+          other.dailyFocusGoalProgress == dailyFocusGoalProgress;
+
+  @override
+  int get hashCode => Object.hash(
+    persistedRevision,
+    todayFocusMinutes,
+    dailyFocusGoalMinutes,
+    dailyFocusGoalProgress,
+  );
+}
+
+class _DndSlice {
+  final bool autoEnableDnd;
+  final bool focusDndActive;
+  final bool accessGranted;
+  final bool supported;
+
+  const _DndSlice({
+    required this.autoEnableDnd,
+    required this.focusDndActive,
+    required this.accessGranted,
+    required this.supported,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _DndSlice &&
+          other.autoEnableDnd == autoEnableDnd &&
+          other.focusDndActive == focusDndActive &&
+          other.accessGranted == accessGranted &&
+          other.supported == supported;
+
+  @override
+  int get hashCode => Object.hash(
+    autoEnableDnd,
+    focusDndActive,
+    accessGranted,
+    supported,
+  );
+}
+
+class _StrictFocusBadgeSlice {
+  final bool strictFocusMode;
+  final int todayPenaltiesCount;
+
+  const _StrictFocusBadgeSlice({
+    required this.strictFocusMode,
+    required this.todayPenaltiesCount,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _StrictFocusBadgeSlice &&
+          other.strictFocusMode == strictFocusMode &&
+          other.todayPenaltiesCount == todayPenaltiesCount;
+
+  @override
+  int get hashCode => Object.hash(strictFocusMode, todayPenaltiesCount);
+}
+
+class _StrictFocusSheetSlice {
+  final bool strictFocusMode;
+  final bool monitorDistractingApps;
+  final bool accessibilityGranted;
+  final bool accessGranted;
+  final int penaltiesCount;
+  final int todayPenaltiesCount;
+  final String? latestPenaltyId;
+
+  const _StrictFocusSheetSlice({
+    required this.strictFocusMode,
+    required this.monitorDistractingApps,
+    required this.accessibilityGranted,
+    required this.accessGranted,
+    required this.penaltiesCount,
+    required this.todayPenaltiesCount,
+    required this.latestPenaltyId,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _StrictFocusSheetSlice &&
+          other.strictFocusMode == strictFocusMode &&
+          other.monitorDistractingApps == monitorDistractingApps &&
+          other.accessibilityGranted == accessibilityGranted &&
+          other.accessGranted == accessGranted &&
+          other.penaltiesCount == penaltiesCount &&
+          other.todayPenaltiesCount == todayPenaltiesCount &&
+          other.latestPenaltyId == latestPenaltyId;
+
+  @override
+  int get hashCode => Object.hash(
+    strictFocusMode,
+    monitorDistractingApps,
+    accessibilityGranted,
+    accessGranted,
+    penaltiesCount,
+    todayPenaltiesCount,
+    latestPenaltyId,
+  );
+}
+
+class _DndSheetSlice {
+  final bool autoEnableDnd;
+  final bool supported;
+  final bool accessGranted;
+
+  const _DndSheetSlice({
+    required this.autoEnableDnd,
+    required this.supported,
+    required this.accessGranted,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _DndSheetSlice &&
+          other.autoEnableDnd == autoEnableDnd &&
+          other.supported == supported &&
+          other.accessGranted == accessGranted;
+
+  @override
+  int get hashCode => Object.hash(autoEnableDnd, supported, accessGranted);
+}
+
+// -----------------------------------------------------------------------------

@@ -210,6 +210,7 @@ class CalendarAggregator {
               count: h.countForDate(date),
               targetCount: h.targetCount,
               unit: h.unit,
+              generatedUnitKey: h.generatedUnitKey,
               hasFlexRule: h.hasFlexRule,
               flexProgress: h.flexProgressForDate(date),
             ),

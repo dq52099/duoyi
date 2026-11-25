@@ -5,16 +5,16 @@
       "widget_theme_brand_id": "defaultBrand",
       "widget_theme_card_skin_id": "plain_card",
       "widget_theme_dark": false,
-      "widget_theme_primary": "#FFC85656",
+      "widget_theme_primary": "#FF0066D6",
       "widget_theme_background": "#FFF6F7F9",
       "widget_theme_surface": "#FFFFFFFF",
       "widget_theme_nav_background": "#FFF1F3F6",
-      "widget_theme_border": "#00C85656",
+      "widget_theme_border": "#000066D6",
       "widget_theme_text": "#FF1F2933",
-      "widget_theme_muted_text": "#FF1F2933",
+      "widget_theme_muted_text": "#FF667085",
       "widget_theme_on_primary": "#FFFFFFFF",
-      "widget_theme_accent_start": "#FFC85656",
-      "widget_theme_accent_end": "#FF2F8F83",
+      "widget_theme_accent_start": "#FF0066D6",
+      "widget_theme_accent_end": "#FF3898FF",
       "widget_theme_background_asset_key": "",
       "widget_theme_corner_radius_dp": 16,
       "widget_theme_control_radius_dp": 12,
@@ -36,11 +36,11 @@
         "resource": "widget_surface_506cb96681f58066"
       },
       "primary": {
-        "fill": "#FFC85656",
-        "stroke": "#FFC85656",
+        "fill": "#FF0066D6",
+        "stroke": "#FF0066D6",
         "radius": 12,
         "strokeWidth": 0,
-        "resource": "widget_surface_4589149db13721e9"
+        "resource": "widget_surface_02a5bcd11271ef9c"
       },
       "secondary": {
         "fill": "#FFF1F3F6",
@@ -64,10 +64,10 @@
       "widget_theme_brand_id": "defaultBrand",
       "widget_theme_card_skin_id": "paper_card",
       "widget_theme_dark": false,
-      "widget_theme_primary": "#FFC85656",
+      "widget_theme_primary": "#FF0066D6",
       "widget_theme_background": "#FFF8F6F1",
       "widget_theme_surface": "#FFFFFCF3",
-      "widget_theme_nav_background": "#FFFAEBE3",
+      "widget_theme_nav_background": "#FFE6EDF0",
       "widget_theme_border": "#FF57544D",
       "widget_theme_text": "#FF1F2933",
       "widget_theme_muted_text": "#FF1F2933",
@@ -88,25 +88,25 @@
         "resource": "widget_surface_f2ab6e9e48245639"
       },
       "nav": {
-        "fill": "#FFFAEBE3",
-        "stroke": "#FFB0A79F",
+        "fill": "#FFE6EDF0",
+        "stroke": "#FFA5A8A6",
         "radius": 8,
         "strokeWidth": 1,
-        "resource": "widget_surface_256fbf30365eff41"
+        "resource": "widget_surface_e8b067f338f47bf9"
       },
       "primary": {
-        "fill": "#FFC85656",
-        "stroke": "#FFC85656",
+        "fill": "#FF0066D6",
+        "stroke": "#FF0066D6",
         "radius": 8,
         "strokeWidth": 0,
-        "resource": "widget_surface_bbe24b7742af5a5c"
+        "resource": "widget_surface_ba6c16bea6241d74"
       },
       "secondary": {
-        "fill": "#FFFAEBE3",
-        "stroke": "#FFC0B6AE",
+        "fill": "#FFE6EDF0",
+        "stroke": "#FFB3B7B6",
         "radius": 8,
         "strokeWidth": 1,
-        "resource": "widget_surface_a6a0fc6df2641f09"
+        "resource": "widget_surface_eaae5bc5b29f81f3"
       },
       "imageBorder": {
         "fill": "#00000000",
@@ -123,10 +123,10 @@
       "widget_theme_brand_id": "defaultBrand",
       "widget_theme_card_skin_id": "mint_card",
       "widget_theme_dark": false,
-      "widget_theme_primary": "#FFC85656",
+      "widget_theme_primary": "#FF0066D6",
       "widget_theme_background": "#FFEEF5F6",
       "widget_theme_surface": "#FFF3FAF9",
-      "widget_theme_nav_background": "#FFEEE9E9",
+      "widget_theme_nav_background": "#FFDAEBF6",
       "widget_theme_border": "#FF4C5252",
       "widget_theme_text": "#FF1F2933",
       "widget_theme_muted_text": "#FF1F2933",
@@ -147,25 +147,25 @@
         "resource": "widget_surface_3163fb20903def6e"
       },
       "nav": {
-        "fill": "#FFEEE9E9",
-        "stroke": "#FFA5A5A5",
+        "fill": "#FFDAEBF6",
+        "stroke": "#FF9AA6AC",
         "radius": 8,
         "strokeWidth": 1,
-        "resource": "widget_surface_3800bc88c3ac7843"
+        "resource": "widget_surface_284c967b356e7648"
       },
       "primary": {
-        "fill": "#FFC85656",
-        "stroke": "#FFC85656",
+        "fill": "#FF0066D6",
+        "stroke": "#FF0066D6",
         "radius": 8,
         "strokeWidth": 0,
-        "resource": "widget_surface_bbe24b7742af5a5c"
+        "resource": "widget_surface_ba6c16bea6241d74"
       },
       "secondary": {
-        "fill": "#FFEEE9E9",
-        "stroke": "#FFB5B4B4",
+        "fill": "#FFDAEBF6",
+        "stroke": "#FFA8B5BC",
         "radius": 8,
         "strokeWidth": 1,
-        "resource": "widget_surface_e057601944564978"
+        "resource": "widget_surface_e365e4502b504e41"
       },
       "imageBorder": {
         "fill": "#00000000",
@@ -182,10 +182,10 @@
       "widget_theme_brand_id": "defaultBrand",
       "widget_theme_card_skin_id": "starlight_card",
       "widget_theme_dark": false,
-      "widget_theme_primary": "#FFC85656",
+      "widget_theme_primary": "#FF0066D6",
       "widget_theme_background": "#FFD6D5E9",
       "widget_theme_surface": "#FFEAE4F5",
-      "widget_theme_nav_background": "#FFE7D6E5",
+      "widget_theme_nav_background": "#FFD3D8F2",
       "widget_theme_border": "#FF0E1232",
       "widget_theme_text": "#FF1F2933",
       "widget_theme_muted_text": "#FF1F2933",
@@ -206,25 +206,25 @@
         "resource": "widget_surface_8ad37439e3d3d711"
       },
       "nav": {
-        "fill": "#FFE7D6E5",
-        "stroke": "#FF857D94",
+        "fill": "#FFD3D8F2",
+        "stroke": "#FF7A7E9B",
         "radius": 8,
         "strokeWidth": 1,
-        "resource": "widget_surface_b1062465faa49a88"
+        "resource": "widget_surface_f5fa09c0475687fb"
       },
       "primary": {
-        "fill": "#FFC85656",
-        "stroke": "#FFC85656",
+        "fill": "#FF0066D6",
+        "stroke": "#FF0066D6",
         "radius": 8,
         "strokeWidth": 0,
-        "resource": "widget_surface_bbe24b7742af5a5c"
+        "resource": "widget_surface_ba6c16bea6241d74"
       },
       "secondary": {
-        "fill": "#FFE7D6E5",
-        "stroke": "#FF9B91A6",
+        "fill": "#FFD3D8F2",
+        "stroke": "#FF8E92AE",
         "radius": 8,
         "strokeWidth": 1,
-        "resource": "widget_surface_c8f305a8325df878"
+        "resource": "widget_surface_377e1de91f36c532"
       },
       "imageBorder": {
         "fill": "#00000000",
@@ -1894,55 +1894,55 @@
       "widget_theme_card_skin_id": "plain_card",
       "widget_theme_dark": false,
       "widget_theme_primary": "#FF0A6CDB",
-      "widget_theme_background": "#FFC5DDF3",
-      "widget_theme_surface": "#FFEEF6FC",
-      "widget_theme_nav_background": "#FFD7E8F9",
-      "widget_theme_border": "#FF021327",
+      "widget_theme_background": "#FFF3F6FA",
+      "widget_theme_surface": "#FFF9FAFC",
+      "widget_theme_nav_background": "#FFEFF3F9",
+      "widget_theme_border": "#59FFFFFF",
       "widget_theme_text": "#FF17233B",
       "widget_theme_muted_text": "#FF17233B",
       "widget_theme_on_primary": "#FFFFFFFF",
       "widget_theme_accent_start": "#FF0A6CDB",
       "widget_theme_accent_end": "#FF5AC8FA",
       "widget_theme_background_asset_key": "",
-      "widget_theme_corner_radius_dp": 13,
-      "widget_theme_control_radius_dp": 8,
-      "widget_theme_border_width_dp": 0
+      "widget_theme_corner_radius_dp": 16,
+      "widget_theme_control_radius_dp": 12,
+      "widget_theme_border_width_dp": 1
     },
     "surfaces": {
       "root": {
-        "fill": "#FFC5DDF3",
-        "stroke": "#FFC5DDF3",
-        "radius": 13,
-        "strokeWidth": 0,
-        "resource": "widget_surface_8f0de70619750f40"
+        "fill": "#FFF3F6FA",
+        "stroke": "#59FFFFFF",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_da093844a5470b9e"
       },
       "nav": {
-        "fill": "#FFD7E8F9",
-        "stroke": "#FFD7E8F9",
-        "radius": 8,
-        "strokeWidth": 0,
-        "resource": "widget_surface_506d7e11d5ed1192"
+        "fill": "#FFEFF3F9",
+        "stroke": "#FFF6F8FB",
+        "radius": 12,
+        "strokeWidth": 1,
+        "resource": "widget_surface_39d2722ce52293a6"
       },
       "primary": {
         "fill": "#FF0A6CDB",
         "stroke": "#FF0A6CDB",
-        "radius": 8,
+        "radius": 12,
         "strokeWidth": 0,
-        "resource": "widget_surface_65e9d3e2ad98745a"
+        "resource": "widget_surface_3f7849630eeb44e8"
       },
       "secondary": {
-        "fill": "#FFD7E8F9",
-        "stroke": "#FFD7E8F9",
-        "radius": 8,
-        "strokeWidth": 0,
-        "resource": "widget_surface_506d7e11d5ed1192"
+        "fill": "#FFEFF3F9",
+        "stroke": "#FFF4F7FB",
+        "radius": 12,
+        "strokeWidth": 1,
+        "resource": "widget_surface_258b64b4104c4dda"
       },
       "imageBorder": {
         "fill": "#00000000",
-        "stroke": "#00000000",
-        "radius": 13,
-        "strokeWidth": 0,
-        "resource": "widget_surface_c1b23766f55138bb"
+        "stroke": "#59FFFFFF",
+        "radius": 16,
+        "strokeWidth": 1,
+        "resource": "widget_surface_c7c14eab3dcf5ffd"
       }
     }
   },

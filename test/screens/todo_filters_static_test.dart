@@ -1,5 +1,8 @@
 import 'dart:io';
 
+import 'package:duoyi/core/i18n.dart';
+import 'package:duoyi/core/todo_board_ui_copy.dart';
+import 'package:duoyi/core/todo_filters.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -26,7 +29,15 @@ void main() {
     expect(source, contains('collectTodoTags(baseTodos, (todo) => todo.tags)'));
     expect(source, contains('collectTodoListGroups('));
     expect(source, contains('_TodoFilterBar'));
-    expect(source, contains('自定义视图 ·'));
+    expect(
+      source,
+      matches(
+        RegExp(
+          r'TodoBoardUiCopy\.customViewTitle\(\s*'
+          r'filteredCount,\s*totalCount,?\s*\)',
+        ),
+      ),
+    );
     expect(source, contains('_TodoQuickFilterChip'));
     expect(source, contains('_TodoFilterMenu<EisenhowerQuadrant>'));
     expect(source, contains('_TodoFilterMenu<TodoPriority>'));
@@ -39,24 +50,93 @@ void main() {
     expect(source, contains('height: 42'));
     expect(source, isNot(contains('fontSize: 20')));
     expect(source, isNot(contains('selectedColor: t.color,')));
-    expect(source, contains('selectedColor: t.color.withValues(alpha: 0.12)'));
+    expect(
+      RegExp(
+        r'selectedColor:\s*t\.color\.withValues\(\s*alpha:\s*0\.12,?\s*\)',
+      ).hasMatch(source),
+      isTrue,
+    );
+
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.customViewTitle(2, 3),
+      zh: '自定义视图 · 2/3',
+      en: 'Custom view · 2/3',
+    );
+    _expectBilingualCopy(() => TodoBoardUiCopy.clear, zh: '清空', en: 'Clear');
   });
 
   test('任务筛选覆盖日期、完成状态、标签、清单和空结果', () {
     final source = File('lib/screens/todo_screen.dart').readAsStringSync();
 
-    expect(source, contains("label: '今日'"));
-    expect(source, contains("label: '逾期'"));
-    expect(source, contains("label: '7天内'"));
-    expect(source, contains("label: '已完成'"));
-    expect(source, contains("label: filter.tag == null ? '标签'"));
-    expect(source, contains("label: filter.listGroupName ?? '清单'"));
-    expect(source, contains('TodoDueFilter.noDue'));
+    expect(source, contains('label: TodoBoardUiCopy.filterToday'));
+    expect(source, contains('label: TodoBoardUiCopy.filterOverdue'));
+    expect(source, contains('label: TodoBoardUiCopy.filterNext7Days'));
+    expect(source, contains('label: TodoBoardUiCopy.filterCompleted'));
+    expect(source, contains('? TodoBoardUiCopy.filterTag'));
+    expect(
+      source,
+      contains('filter.listGroupName ?? TodoBoardUiCopy.filterList'),
+    );
+    expect(source, contains('TodoBoardUiCopy.filterDueLabel(filter)'));
+    expect(source, contains('TodoBoardUiCopy.filterCompletionLabel(filter)'));
+    expect(source, contains('TodoDueFilter.values'));
     expect(source, contains('TodoCompletionFilter.active'));
     expect(source, contains('TodoCompletionFilter.completed'));
     expect(source, contains('_TodoNoMatches'));
-    expect(source, contains('没有匹配任务'));
-    expect(source, contains('清空筛选'));
+    expect(source, contains('TodoBoardUiCopy.noMatchingTasks'));
+    expect(source, contains('TodoBoardUiCopy.clearFilters'));
+
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.filterToday,
+      zh: '今日',
+      en: 'Today',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.filterOverdue,
+      zh: '逾期',
+      en: 'Overdue',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.filterNext7Days,
+      zh: '7天内',
+      en: 'Within 7 days',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.filterCompleted,
+      zh: '已完成',
+      en: 'Completed',
+    );
+    _expectBilingualCopy(() => TodoBoardUiCopy.filterTag, zh: '标签', en: 'Tag');
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.filterList,
+      zh: '清单',
+      en: 'List',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.filterDueLabel(TodoDueFilter.next7Days),
+      zh: '未来7天',
+      en: 'Next 7 days',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.filterDueLabel(TodoDueFilter.noDue),
+      zh: '无日期',
+      en: 'No date',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.filterCompletionLabel(TodoCompletionFilter.active),
+      zh: '未完成',
+      en: 'Incomplete',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.noMatchingTasks,
+      zh: '没有匹配任务',
+      en: 'No matching tasks',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.clearFilters,
+      zh: '清空筛选',
+      en: 'Clear filters',
+    );
   });
 
   test('任务页展示今日摘要且目标计入剩余项', () {
@@ -69,7 +149,7 @@ void main() {
       contains('class _TodoTodaySummaryCard extends StatelessWidget'),
     );
     expect(source, contains("key: const ValueKey('todo_today_summary_card')"));
-    expect(source, contains("'今日还要完成 \$remaining 项'"));
+    expect(source, contains('TodoBoardUiCopy.todayRemainingTasks(remaining)'));
     expect(
       source,
       contains(
@@ -81,10 +161,7 @@ void main() {
       isNot(contains('final remaining = dailyRemaining + todoCount;')),
     );
     expect(source, isNot(contains("'今日还要完成 \$actionableRemaining 项'")));
-    expect(
-      source,
-      contains("'日常 \$dailyRemaining / 待办 \$todoCount / 目标 \$activeGoalCount'"),
-    );
+    expect(source, contains('TodoBoardUiCopy.todaySummaryBreakdown('));
     expect(
       source,
       contains('CompletionVisibilityPolicy.shouldShowInToday(todo, now)'),
@@ -114,13 +191,19 @@ void main() {
     expect(templateBlock, isNot(contains('selectedColor: t.color,')));
     expect(
       templateBlock,
-      contains('selectedColor: t.color.withValues(alpha: 0.12)'),
+      matches(
+        RegExp(
+          r'.*selectedColor:\s*t\.color\.withValues\(\s*alpha:\s*0\.12,?\s*\).*',
+          dotAll: true,
+        ),
+      ),
     );
     expect(templateBlock, contains('checkmarkColor: t.color'));
   });
 
   test('四象限详情继承外层自定义视图条件', () {
     final source = File('lib/screens/todo_screen.dart').readAsStringSync();
+    final compactSource = source.replaceAll(RegExp(r'\s+'), '');
 
     expect(source, contains('filter: _filter'));
     expect(
@@ -129,14 +212,28 @@ void main() {
         'final TodoFilterState<EisenhowerQuadrant, TodoPriority>? filter',
       ),
     );
-    expect(source, contains('filter?.copyWith(quadrant: quadrant)'));
     expect(
       source,
+      contains('widget.filter?.copyWith(quadrant: widget.quadrant)'),
+    );
+    expect(
+      compactSource,
       contains(
-        'TodoFilterState<EisenhowerQuadrant, TodoPriority>(quadrant: quadrant)',
+        'TodoFilterState<EisenhowerQuadrant,TodoPriority>(quadrant:widget.quadrant,)',
       ),
     );
-    expect(source, contains('effectiveFilter,'));
+    expect(
+      compactSource,
+      contains(
+        'finalbaseTodos=filter.includeArchived?provider.todos:provider.visibleListTodos;',
+      ),
+    );
+    expect(
+      compactSource,
+      contains(
+        'effectiveTodoFilter(filter,showCompletedTodos:preferences?.showCompletedTodos??true,)',
+      ),
+    );
   });
 
   test('看板视图支持自定义列、拖拽移动和本地持久化', () {
@@ -151,18 +248,69 @@ void main() {
     expect(source, contains('todoKanbanColumnsPrefsKey'));
     expect(source, contains('TodoKanbanBoardConfig.decode'));
     expect(source, contains('_saveKanbanConfig'));
-    expect(source, contains("tooltip: '看板列设置'"));
+    expect(
+      source,
+      matches(
+        RegExp(
+          r'tooltip:\s*_kanbanLoadFailed\s*\?\s*'
+          r'TodoBoardUiCopy\.kanbanRetryLoadTooltip\s*:\s*'
+          r'TodoBoardUiCopy\.kanbanColumnSettingsTooltip',
+        ),
+      ),
+    );
     expect(source, contains('class _KanbanSettingsSheet'));
-    expect(source, contains("labelText: '默认分组'"));
+    expect(source, contains('labelText: TodoBoardUiCopy.defaultGroupingLabel'));
     expect(source, contains('TodoKanbanGroupMode.values'));
     expect(source, contains('_groupKanbanTodos'));
     expect(source, contains('config.groupMode'));
-    expect(source, contains("labelText: '列名称'"));
-    expect(source, contains("label: const Text('新增列')"));
+    expect(source, contains('labelText: TodoBoardUiCopy.columnNameLabel'));
+    expect(source, contains('label: Text(TodoBoardUiCopy.addColumn)'));
     expect(source, contains('DragTarget<String>'));
     expect(source, contains('LongPressDraggable<String>'));
     expect(source, contains('updateTodosKanbanColumn'));
     expect(source, contains('kanbanGroups'));
     expect(source, contains('config.sortedColumns'));
+
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.kanbanColumnSettingsTooltip,
+      zh: '看板列设置',
+      en: 'Column settings',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.kanbanSettingsTitle,
+      zh: '看板列设置',
+      en: 'Kanban Column Settings',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.defaultGroupingLabel,
+      zh: '默认分组',
+      en: 'Default grouping',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.columnNameLabel,
+      zh: '列名称',
+      en: 'Column name',
+    );
+    _expectBilingualCopy(
+      () => TodoBoardUiCopy.addColumn,
+      zh: '新增列',
+      en: 'Add column',
+    );
   });
+}
+
+void _expectBilingualCopy(
+  String Function() copy, {
+  required String zh,
+  required String en,
+}) {
+  final previousLocale = I18n.current;
+  try {
+    I18n.setLocale(AppLocale.zh);
+    expect(copy(), zh);
+    I18n.setLocale(AppLocale.en);
+    expect(copy(), en);
+  } finally {
+    I18n.setLocale(previousLocale);
+  }
 }

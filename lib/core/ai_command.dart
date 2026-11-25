@@ -1,5 +1,6 @@
 import '../models/diary_entry.dart';
 import '../models/note.dart';
+import 'i18n.dart';
 import 'smart_todo_draft.dart';
 
 enum AiCommandType { addTodo, addNote, addDiary, startFocus, unknown }
@@ -15,10 +16,16 @@ class AiCommandBatch {
 
   String get preview {
     if (commands.isEmpty) {
-      return '请说“添加待办… / 记笔记… / 写日记… / 开始专注”';
+      return I18n.current == AppLocale.en
+          ? 'Try “add a task… / save a note… / write a diary… / start focus”'
+          : '请说“添加待办… / 记笔记… / 写日记… / 开始专注”';
     }
     if (commands.length == 1) return commands.single.preview;
-    final lines = <String>['将执行 ${commands.length} 条指令：'];
+    final lines = <String>[
+      I18n.current == AppLocale.en
+          ? 'Will run ${commands.length} commands:'
+          : '将执行 ${commands.length} 条指令：',
+    ];
     for (var i = 0; i < commands.length; i++) {
       lines.add('${i + 1}. ${commands[i].preview}');
     }
@@ -46,11 +53,16 @@ class AiCommand {
   bool get executable => type != AiCommandType.unknown;
 
   String get title => switch (type) {
-    AiCommandType.addTodo => '创建待办',
-    AiCommandType.addNote => '保存笔记',
-    AiCommandType.addDiary => '写入日记',
-    AiCommandType.startFocus => '开始专注',
-    AiCommandType.unknown => '无法识别',
+    AiCommandType.addTodo =>
+      I18n.current == AppLocale.en ? 'Create task' : '创建待办',
+    AiCommandType.addNote =>
+      I18n.current == AppLocale.en ? 'Save note' : '保存笔记',
+    AiCommandType.addDiary =>
+      I18n.current == AppLocale.en ? 'Write diary' : '写入日记',
+    AiCommandType.startFocus =>
+      I18n.current == AppLocale.en ? 'Start focus' : '开始专注',
+    AiCommandType.unknown =>
+      I18n.current == AppLocale.en ? 'Unrecognized' : '无法识别',
   };
 
   String get preview {
@@ -59,14 +71,32 @@ class AiCommand {
       final date =
           '${todo.date.year}-${todo.date.month.toString().padLeft(2, '0')}-${todo.date.day.toString().padLeft(2, '0')}';
       final reminder = todo.hasReminder
-          ? '，提醒 ${todo.date.hour.toString().padLeft(2, '0')}:${todo.date.minute.toString().padLeft(2, '0')}'
+          ? I18n.current == AppLocale.en
+                ? ', reminder ${todo.date.hour.toString().padLeft(2, '0')}:${todo.date.minute.toString().padLeft(2, '0')}'
+                : '，提醒 ${todo.date.hour.toString().padLeft(2, '0')}:${todo.date.minute.toString().padLeft(2, '0')}'
           : '';
-      return '创建待办「${todo.title}」，日期 $date$reminder';
+      return I18n.current == AppLocale.en
+          ? 'Create task “${todo.title}”, due $date$reminder'
+          : '创建待办「${todo.title}」，日期 $date$reminder';
     }
-    if (type == AiCommandType.addNote) return '保存为随手记：$payload';
-    if (type == AiCommandType.addDiary) return '写入今天的日记：$payload';
-    if (type == AiCommandType.startFocus) return '开始当前番茄钟专注计时';
-    return '请说“添加待办… / 记笔记… / 写日记… / 开始专注”';
+    if (type == AiCommandType.addNote) {
+      return I18n.current == AppLocale.en
+          ? 'Save as quick note: $payload'
+          : '保存为随手记：$payload';
+    }
+    if (type == AiCommandType.addDiary) {
+      return I18n.current == AppLocale.en
+          ? 'Write today’s diary: $payload'
+          : '写入今天的日记：$payload';
+    }
+    if (type == AiCommandType.startFocus) {
+      return I18n.current == AppLocale.en
+          ? 'Start the current focus timer'
+          : '开始当前番茄钟专注计时';
+    }
+    return I18n.current == AppLocale.en
+        ? 'Try “add a task… / save a note… / write a diary… / start focus”'
+        : '请说“添加待办… / 记笔记… / 写日记… / 开始专注”';
   }
 }
 

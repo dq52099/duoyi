@@ -84,6 +84,9 @@ void main() {
     final service = File(
       'lib/services/calendar_sync_service.dart',
     ).readAsStringSync();
+    final storage = File(
+      'lib/core/oauth_calendar_storage.dart',
+    ).readAsStringSync();
     final screen = File(
       'lib/screens/integrations_screen.dart',
     ).readAsStringSync();
@@ -110,9 +113,12 @@ void main() {
     expect(service, contains('exchangeAuthorizationCode'));
     expect(service, contains('refreshAccessToken'));
     expect(service, contains('addOAuthAccountFromCode'));
-    expect(service, contains('duoyi_oauth_calendar_accounts_v1'));
-    expect(service, contains('duoyi_oauth_calendar_events_'));
-    expect(service, contains('duoyi_oauth_calendar_pending_authorization_v1'));
+    expect(service, contains("import '../core/oauth_calendar_storage.dart';"));
+    expect(
+      _missingOAuthStorageBindings(storage, service),
+      isEmpty,
+      reason: 'Each exact persisted OAuth key needs its declaration and service alias.',
+    );
     expect(service, contains('savePendingOAuthAuthorization'));
     expect(service, contains("'state': state"));
     expect(service, contains('loadPendingOAuthAuthorization'));
@@ -187,7 +193,21 @@ void main() {
     expect(appDelegate, contains('channel?.invokeMethod("onLink"'));
     expect(appDelegate, contains('url.host == "oauth"'));
     expect(sceneDelegate, contains('openURLContexts URLContexts'));
-    expect(sceneDelegate, contains('connectionOptions.urlContexts.first?.url'));
+    expect(
+      sceneDelegate,
+      contains('for context in connectionOptions.urlContexts {'),
+    );
+    expect(
+      sceneDelegate,
+      contains(
+        'DuoyiDeepLinkBridge.shared.handle(url: context.url, initial: true)',
+      ),
+    );
+    expect(sceneDelegate, contains('for context in URLContexts {'));
+    expect(
+      sceneDelegate,
+      contains('super.scene(scene, openURLContexts: URLContexts)'),
+    );
     expect(main, contains("import 'services/deep_link_service.dart';"));
     expect(main, contains("import 'screens/integrations_screen.dart';"));
     expect(main, contains('DeepLinkService.onLink = handleDeepLink'));
@@ -203,10 +223,70 @@ void main() {
     final agenda = File(
       'lib/widgets/calendar_day_agenda.dart',
     ).readAsStringSync();
+    // Local calendar entries can be edited without a source module. Opening a
+    // module detail still follows CalendarEvent.canOpen's source-ID guard.
     expect(
       sheet,
-      contains('if (event.sourceId == null) return const <Widget>[];'),
+      contains('onPressed: canEdit ? () => _editLocalEvent(context) : null'),
+    );
+    expect(
+      sheet,
+      contains(
+        'onPressed: widget.event.canOpen ? () => _openDetail(context) : null',
+      ),
+    );
+    final eventModel = File(
+      'lib/models/calendar_event.dart',
+    ).readAsStringSync();
+    expect(
+      eventModel,
+      contains('bool get canOpen => sourceId != null && sourceId!.isNotEmpty;'),
     );
     expect(agenda, contains('widget.event.sourceId != null'));
   });
+  test('OAuth storage guards reject changed keys and mismatched service aliases', () {
+    const storage = "static const accountsKey = 'duoyi_oauth_calendar_accounts_v1';\n"
+        "static const eventsKeyPrefix = 'duoyi_oauth_calendar_events_';\n"
+        "static const pendingAuthorizationKey =\n"
+        "    'duoyi_oauth_calendar_pending_authorization_v1';\n";
+    const service = 'static const _oauthAccountsKey = OAuthCalendarStorage.accountsKey;\n'
+        'static const _oauthEventsKeyPrefix = OAuthCalendarStorage.eventsKeyPrefix;\n'
+        'static const _pendingOAuthAuthorizationKey =\n'
+        '    OAuthCalendarStorage.pendingAuthorizationKey;\n';
+    expect(_missingOAuthStorageBindings(storage, service), isEmpty);
+    for (final binding in _oauthStorageKeyBindings) {
+      final changed = storage.replaceFirst(binding.$2, '${binding.$2}_changed');
+      expect(_missingOAuthStorageBindings(changed, service), ['declaration:${binding.$1}']);
+      final wrongAlias = service.replaceFirst('OAuthCalendarStorage.${binding.$1}', 'OAuthCalendarStorage.wrongKey');
+      expect(_missingOAuthStorageBindings(storage, wrongAlias), ['alias:${binding.$3}']);
+    }
+    // Having the literal somewhere else cannot substitute for its declaration.
+    expect(_missingOAuthStorageBindings('// ${storage.replaceAll('\n', '\n// ')}', service), hasLength(3));
+    expect(_missingOAuthStorageBindings(storage, '// ${service.replaceAll('\n', '\n// ')}'), hasLength(3));
+  });
+}
+
+const _oauthStorageKeyBindings = [
+  ('accountsKey', 'duoyi_oauth_calendar_accounts_v1', '_oauthAccountsKey'),
+  ('eventsKeyPrefix', 'duoyi_oauth_calendar_events_', '_oauthEventsKeyPrefix'),
+  ('pendingAuthorizationKey', 'duoyi_oauth_calendar_pending_authorization_v1', '_pendingOAuthAuthorizationKey'),
+];
+
+List<String> _missingOAuthStorageBindings(String storage, String service) {
+  final missing = <String>[];
+  for (final binding in _oauthStorageKeyBindings) {
+    final declaration = RegExp(
+      r'^\s*static\s+const\s+' + RegExp.escape(binding.$1) +
+          r"\s*=\s*'" + RegExp.escape(binding.$2) + r"'\s*;",
+      multiLine: true,
+    );
+    final alias = RegExp(
+      r'^\s*static\s+const\s+' + RegExp.escape(binding.$3) +
+          r'\s*=\s*OAuthCalendarStorage\.' + RegExp.escape(binding.$1) + r'\s*;',
+      multiLine: true,
+    );
+    if (!declaration.hasMatch(storage)) missing.add('declaration:${binding.$1}');
+    if (!alias.hasMatch(service)) missing.add('alias:${binding.$3}');
+  }
+  return missing;
 }

@@ -32,7 +32,7 @@ void main() {
     expect(adminScreen, contains('text.replaceFirst'));
     expect(adminScreen, contains('hasTimezone'));
     expect(adminScreen, contains('_formatLastLogin'));
-    expect(adminScreen, contains("online ? '在线' : '离线'"));
+    expect(adminScreen, contains("_userText('在线', 'Online')"));
     expect(adminScreen, contains(r'最近登录: $lastLoginAt'));
     expect(adminScreen, contains(r'最近活跃: $lastActiveAt'));
     expect(adminScreen, contains('从未登录'));
@@ -45,19 +45,16 @@ void main() {
     expect(adminScreen, contains('void _stopOnlineRefreshTimer()'));
     expect(adminScreen, contains('!widget.isActive ||'));
     expect(adminScreen, contains('_backgroundRefreshInFlight'));
-    expect(adminScreen, contains('_load(quiet: true, background: true)'));
+    expect(adminScreen, contains('background: !deferred'));
     expect(
       adminScreen,
-      contains('if (background && (_backgroundRefreshInFlight || _loading))'),
+      contains('(background && (_backgroundRefreshInFlight || _loading))'),
     );
     expect(
       adminScreen,
-      contains('if (background) _backgroundRefreshInFlight = true;'),
+      contains('if (background) _backgroundOperation = marker;'),
     );
-    expect(
-      adminScreen,
-      contains('if (background) _backgroundRefreshInFlight = false;'),
-    );
+    expect(adminScreen, contains('identical(_backgroundOperation, marker)'));
   });
 
   test('管理员后台大数据列表使用分页 API 和分页文案', () {
@@ -65,6 +62,21 @@ void main() {
       'lib/screens/admin_screen.dart',
     ).readAsStringSync();
     final adminApi = File('lib/services/admin_api.dart').readAsStringSync();
+    final announcementCopy = File(
+      'lib/core/admin_announcement_ui_copy.dart',
+    ).readAsStringSync();
+    final inviteCopy = File(
+      'lib/core/admin_invite_ui_copy.dart',
+    ).readAsStringSync();
+    final auditCopy = File(
+      'lib/core/admin_audit_ui_copy.dart',
+    ).readAsStringSync();
+    final feedbackCopy = File(
+      'lib/core/admin_feedback_ui_copy.dart',
+    ).readAsStringSync();
+    final feedbackExport = File(
+      'lib/services/admin_feedback_export.dart',
+    ).readAsStringSync();
 
     expect(adminApi, contains('class AdminPage'));
     expect(adminApi, contains('Future<AdminPage> listUsersPage'));
@@ -90,17 +102,40 @@ void main() {
     expect(adminScreen, contains('const int _adminPageSize = 20'));
     expect(adminScreen, contains('_AdminPaginationBar'));
     expect(adminScreen, contains(r'第 $start-$end 条 / 共 ${page.total} 条'));
-    expect(adminScreen, contains('String _adminPageNumber(AdminPage? page)'));
+    expect(
+      adminScreen,
+      contains('String _adminPageNumber(AdminPage? page, [AppLocale? locale])'),
+    );
     expect(adminScreen, contains(r'第 $current/$totalPages 页'));
-    expect(adminScreen, contains('正在加载公告列表…'));
-    expect(adminScreen, contains('正在加载反馈列表…'));
-    expect(adminScreen, contains('正在加载邀请码列表…'));
-    expect(adminScreen, contains('正在加载审计日志…'));
-    expect(adminScreen, contains("hintText: '搜索文件名、状态、路径或详情'"));
-    expect(adminScreen, contains("hintText: '搜索用户名、邮箱、昵称或用户 ID'"));
-    expect(adminScreen, contains("hintText: '搜索用户名、邮箱、昵称或用户 ID'"));
-    expect(adminScreen, contains("tooltip: '清空服务器备份搜索'"));
-    expect(adminScreen, contains("tooltip: '清空用户备份搜索'"));
+    expect(adminScreen, contains('AdminAnnouncementUiCopy.loadingFor()'));
+    expect(announcementCopy, contains('Loading announcements…'));
+    expect(adminScreen, contains('AdminFeedbackUiCopy.loadingFor()'));
+    expect(feedbackCopy, contains('正在加载反馈列表…'));
+    expect(adminScreen, contains('AdminInviteUiCopy.loadingFor()'));
+    expect(inviteCopy, contains('Loading invite codes…'));
+    expect(adminScreen, contains('AdminAuditUiCopy.loadingFor()'));
+    expect(auditCopy, contains('Loading audit log…'));
+    expect(adminScreen, contains("'Search username, email, name or user ID'"));
+    expect(
+      adminScreen,
+      contains('hintText: AdminUiCopy.searchServerBackupsHintFor(locale)'),
+    );
+    expect(
+      adminScreen,
+      contains('hintText: AdminUiCopy.searchUserBackupsHintFor(locale)'),
+    );
+    expect(
+      RegExp(
+        r'tooltip:\s*AdminUiCopy\.clearServerBackupSearchTooltipFor\(\s*locale\s*,?\s*\)',
+      ).hasMatch(adminScreen),
+      isTrue,
+    );
+    expect(
+      RegExp(
+        r'tooltip:\s*AdminUiCopy\.clearUserBackupSearchTooltipFor\(\s*locale\s*,?\s*\)',
+      ).hasMatch(adminScreen),
+      isTrue,
+    );
     expect(adminScreen, contains('Future<void> _exportBackupsCsv()'));
     expect(adminScreen, contains('Future<void> _exportServerBackupsCsv()'));
     expect(adminScreen, contains('widget.api.exportBackupsCsv('));
@@ -108,23 +143,40 @@ void main() {
     expect(adminScreen, contains("prefix: 'duoyi_backups'"));
     expect(adminScreen, contains("prefix: 'duoyi_server_backups'"));
     expect(
-      adminScreen,
-      contains("actionLabel: _exportingBackups ? '导出中…' : '导出筛选结果'"),
+      RegExp(
+        r'actionLabel: _exportingBackups\s*\?\s*AdminUiCopy\.exportingEllipsis\(locale\)\s*:\s*AdminUiCopy\.exportFilteredResultsFor\(locale\)',
+      ).hasMatch(adminScreen),
+      isTrue,
+    );
+    expect(
+      RegExp(
+        r'actionLabel: _exportingServerBackups\s*\?\s*AdminUiCopy\.exportingEllipsis\(locale\)\s*:\s*AdminUiCopy\.exportFilteredResultsFor\(locale\)',
+      ).hasMatch(adminScreen),
+      isTrue,
     );
     expect(
       adminScreen,
-      contains("actionLabel: _exportingServerBackups ? '导出中…' : '导出筛选结果'"),
+      contains('labelText: AdminUiCopy.serverBackupSortLabelFor(locale)'),
     );
-    expect(adminScreen, contains("labelText: '服务器备份排序'"));
-    expect(adminScreen, contains("labelText: '用户备份排序'"));
-    expect(adminScreen, contains("_serverBackupStatusChip('已上传', 'uploaded')"));
-    expect(adminScreen, contains("_backupStatusChip('已有快照', 'synced')"));
-    expect(adminScreen, contains("_userFilterChip('在线', 'online')"));
     expect(
       adminScreen,
-      contains("_userFilterChip('邮箱未验证', 'unverified_email')"),
+      contains('labelText: AdminUiCopy.userBackupSortLabelFor(locale)'),
     );
-    expect(adminScreen, contains("_userFilterChip('有反馈', 'has_feedback')"));
+    expect(
+      RegExp(
+        r"_serverBackupStatusChip\(\s*AdminUiCopy\.uploadedChipFor\(locale\),\s*'uploaded',?\s*\)",
+      ).hasMatch(adminScreen),
+      isTrue,
+    );
+    expect(
+      RegExp(
+        r"_backupStatusChip\(\s*AdminUiCopy\.hasSnapshotChipFor\(locale\),\s*'synced',?\s*\)",
+      ).hasMatch(adminScreen),
+      isTrue,
+    );
+    expect(adminScreen, contains("_userText('在线', 'Online'), 'online'"));
+    expect(adminScreen, contains("'unverified_email'"));
+    expect(adminScreen, contains("'has_feedback'"));
     expect(adminScreen, contains("online: _onlineFilter(nextStatus)"));
     expect(adminScreen, contains("status: _backendStatusFilter(nextStatus)"));
     expect(adminScreen, contains("value: 'email_asc'"));
@@ -133,35 +185,68 @@ void main() {
     expect(adminScreen, contains('backupPageSize: value'));
     expect(adminScreen, contains('_adminServerBackupSortLabel'));
     expect(adminScreen, contains('_adminBackupSortLabel'));
-    expect(adminScreen, contains('没有匹配的公告，请调整筛选条件'));
-    expect(adminScreen, contains('暂无反馈'));
-    expect(adminScreen, contains('没有匹配的反馈，请调整筛选条件'));
+    expect(adminScreen, contains('AdminAnnouncementUiCopy.noMatchesFor()'));
+    expect(announcementCopy, contains('No matching announcements.'));
+    expect(feedbackCopy, contains('暂无反馈'));
+    expect(adminScreen, contains('AdminFeedbackUiCopy.emptyFor()'));
+    expect(feedbackCopy, contains('没有匹配的反馈，请调整筛选条件'));
+    expect(adminScreen, contains('AdminFeedbackUiCopy.noMatchesFor()'));
     expect(adminScreen, contains('_categoryFilter.isEmpty'));
-    expect(adminScreen, contains('Future<void> _exportFilteredCsv()'));
-    expect(adminScreen, contains('widget.api.exportFeedbackCsv('));
-    expect(adminScreen, contains("tooltip: '导出筛选结果'"));
+    expect(
+      adminScreen,
+      contains('Future<void> _exportFilteredCsv(_FeedbackAction origin)'),
+    );
+    expect(adminScreen, contains('AdminApi(origin.client).exportFeedbackCsv('));
+    expect(adminScreen, contains('tooltip: AdminFeedbackUiCopy.exportFor()'));
     expect(adminScreen, contains('SharePlus.instance.share'));
-    expect(adminScreen, contains('duoyi_feedback_'));
-    expect(adminScreen, contains('也可导出当前筛选结果'));
-    expect(adminScreen, contains('没有匹配的邀请码，请调整筛选条件'));
-    expect(adminScreen, contains('搜索邀请码、备注或使用者'));
-    expect(adminScreen, contains('搜索管理员、操作、对象或详情'));
-    expect(adminScreen, contains("tooltip: '清空邀请码搜索'"));
-    expect(adminScreen, contains("tooltip: '清空日志搜索'"));
+    expect(feedbackExport, contains('duoyi_feedback_'));
+    expect(adminScreen, contains('exportAdminFeedbackCsv('));
+    expect(feedbackCopy, contains('导出当前筛选结果的前 5000 条'));
+    expect(feedbackExport, contains('handedOff = true'));
+    expect(adminScreen, contains('AdminInviteUiCopy.noMatchesFor()'));
+    expect(inviteCopy, contains('No matching invite codes.'));
+    expect(adminScreen, contains('AdminInviteUiCopy.searchHintFor()'));
+    expect(inviteCopy, contains('Search codes, notes or users'));
+    expect(adminScreen, contains('AdminAuditUiCopy.searchHintFor()'));
+    expect(
+      auditCopy,
+      contains('Search administrators, actions, targets or details'),
+    );
+    expect(
+      adminScreen,
+      contains('tooltip: AdminInviteUiCopy.clearSearchFor()'),
+    );
+    expect(inviteCopy, contains('Clear invite code search'));
+    expect(adminScreen, contains('tooltip: AdminAuditUiCopy.clearSearchFor()'));
+    expect(auditCopy, contains('Clear audit search'));
     expect(
       adminScreen,
       contains('query: nextQuery.isEmpty ? null : nextQuery'),
     );
-    expect(adminScreen, contains('删除公告？'));
-    expect(adminScreen, contains('删除反馈？'));
-    expect(adminScreen, contains('删除邀请码？'));
-    expect(adminScreen, contains("label: const Text('发布公告')"));
-    expect(adminScreen, contains("label: const Text('生成邀请码')"));
+    expect(
+      adminScreen,
+      contains('AdminAnnouncementUiCopy.deleteTitleFor(locale)'),
+    );
+    expect(announcementCopy, contains('Delete announcement?'));
+    expect(feedbackCopy, contains('删除反馈？'));
+    expect(adminScreen, contains('AdminFeedbackUiCopy.deleteTitleFor'));
+    expect(adminScreen, contains('AdminInviteUiCopy.deleteTitleFor(locale)'));
+    expect(inviteCopy, contains('Delete invite code?'));
+    expect(
+      adminScreen,
+      contains('label: Text(AdminAnnouncementUiCopy.newTitleFor())'),
+    );
+    expect(announcementCopy, contains('New announcement'));
+    expect(
+      adminScreen,
+      contains('label: Text(AdminInviteUiCopy.generateTitleFor())'),
+    );
+    expect(inviteCopy, contains('Generate invite codes'));
     expect(adminScreen, isNot(contains('floatingActionButton:')));
     expect(adminScreen, isNot(contains('FloatingActionButton.extended')));
-    expect(adminScreen, contains("'每页'"));
-    expect(adminScreen, contains("label: '每页'"));
-    expect(adminScreen, contains("label: '页码'"));
+    expect(adminScreen, contains('AdminUiCopy.perPageFor(locale)'));
+    expect(adminScreen, contains('label: AdminUiCopy.perPageFor(locale)'));
+    expect(adminScreen, contains('label: AdminUiCopy.pageNumberFor(locale)'));
     expect(adminScreen, contains('class _AdminPaginationLabeledControl'));
     expect(adminScreen, contains('constraints.maxWidth < 720'));
     expect(adminScreen, isNot(contains('constraints.maxWidth < 520')));
@@ -182,29 +267,65 @@ void main() {
     expect(adminScreen, contains('fromLTRB(10, 4, 10, 4)'));
     expect(
       adminScreen,
-      contains("'\${_adminPageSummary(page)} · \${_adminPageNumber(page)}'"),
+      contains(
+        "'\${_adminPageSummary(page, locale)} · \${_adminPageNumber(page, locale)}'",
+      ),
     );
     expect(adminScreen, contains('class _AdminChipWrap'));
-    expect(adminScreen, contains('minWidth: textWidth.clamp(72.0, 118.0)'));
+    // Complete, stable tab labels are verified by the rendered cases in
+    // admin_navigation_selection_labels_test.dart, independent of width math.
     expect(adminScreen, isNot(contains('width: 92')));
     expect(
-      RegExp(r'_AdminChipWrap\(').allMatches(adminScreen).length,
+      RegExp(
+        r'_AdminChipWrap\(|Wrap\(\s*spacing:\s*6',
+      ).allMatches(adminScreen).length,
       greaterThanOrEqualTo(8),
     );
     expect(
       RegExp(
         r'content:\s+SingleChildScrollView\(',
       ).allMatches(adminScreen).length,
-      greaterThanOrEqualTo(4),
+      greaterThanOrEqualTo(2),
     );
+    final sharedForm = adminScreen.substring(
+      adminScreen.indexOf('Widget _adminDialogForm({'),
+      adminScreen.indexOf('class _AdminPaginationBar'),
+    );
+    expect(sharedForm, contains('SingleChildScrollView('));
+    final announcements = adminScreen.substring(
+      adminScreen.indexOf('class _AnnouncementsTabState'),
+      adminScreen.indexOf('class _FeedbackTab'),
+    );
+    expect(announcements, contains('content: _adminDialogForm('));
+    final invites = adminScreen.substring(
+      adminScreen.indexOf('class _InvitesTabState'),
+      adminScreen.indexOf('class _AuditLogTab'),
+    );
+    expect(
+      RegExp(r'content:\s+_adminDialogForm\(').allMatches(invites),
+      hasLength(2),
+    );
+    expect(invites, contains('await dialogRoute.completed'));
+    expect(invites, contains('noteCtrl.dispose()'));
+    expect(invites, contains('isCurrent: current'));
+    expect(invites, contains('identical(operation, _pendingMutation)'));
+    expect(adminScreen, contains("allowed: canAccess('invites')"));
     expect(adminScreen, contains('Widget navButton({'));
     expect(adminScreen, contains('iconSize: 16'));
     expect(adminScreen, isNot(contains('admin_compact_pagination_inline')));
     expect(adminScreen, isNot(contains('compactHasPageShortcuts')));
     expect(adminScreen, isNot(contains('Expanded(child: previousButton)')));
     expect(adminScreen, isNot(contains('Expanded(child: nextButton)')));
+    final paginationStart = adminScreen.indexOf('class _AdminPaginationBar ');
+    expect(paginationStart, greaterThanOrEqualTo(0));
+    final paginationEnd = adminScreen.indexOf(
+      'class _AdminPaginationLabeledControl ',
+      paginationStart,
+    );
+    expect(paginationEnd, greaterThan(paginationStart));
+    final pagination = adminScreen.substring(paginationStart, paginationEnd);
     expect(
-      adminScreen,
+      pagination,
       isNot(contains('minimumSize: const WidgetStatePropertyAll')),
     );
     expect(adminScreen, contains('dimension: 32'));
@@ -217,17 +338,32 @@ void main() {
     expect(adminScreen, contains('class _AdminGlassControlTheme'));
     expect(adminScreen, contains('selectedFill'));
     expect(adminScreen, contains('glassControlFill'));
-    expect(adminScreen, contains("message: '分页导航'"));
-    expect(adminScreen, contains("message: '跳到第一页'"));
-    expect(adminScreen, contains("message: '上一页'"));
-    expect(adminScreen, contains("message: '下一页'"));
-    expect(adminScreen, contains("message: '跳到最后一页'"));
+    expect(
+      adminScreen,
+      contains('message: AdminUiCopy.paginationNavigationFor(locale)'),
+    );
+    expect(
+      adminScreen,
+      contains('message: AdminUiCopy.jumpToFirstPageFor(locale)'),
+    );
+    expect(
+      adminScreen,
+      contains('message: AdminUiCopy.previousPageFor(locale)'),
+    );
+    expect(adminScreen, contains('message: AdminUiCopy.nextPageFor(locale)'));
+    expect(
+      adminScreen,
+      contains('message: AdminUiCopy.jumpToLastPageFor(locale)'),
+    );
     expect(adminScreen, contains('onJumpToPage'));
     expect(adminScreen, isNot(contains("label: const Text('上一页')")));
     expect(adminScreen, isNot(contains("label: const Text('下一页')")));
-    expect(adminScreen, contains("tooltip: '回复'"));
-    expect(adminScreen, contains("tooltip: '删除'"));
-    expect(adminScreen, contains("tooltip: '查看反馈详情'"));
+    expect(adminScreen, contains('tooltip: AdminFeedbackUiCopy.replyFor()'));
+    expect(adminScreen, contains('tooltip: AdminUiCopy.deleteFor()'));
+    expect(
+      adminScreen,
+      contains('tooltip: AdminFeedbackUiCopy.detailTooltipFor()'),
+    );
     expect(adminScreen, contains('if (_open)'));
     expect(adminScreen, isNot(contains('Matrix4.translationValues')));
     expect(adminScreen, contains('static const double _actionRailWidth'));
@@ -237,26 +373,52 @@ void main() {
     );
     expect(adminScreen, contains('items: _adminPageSizeOptions'));
     expect(adminScreen, contains('DropdownMenuItem(value: v'));
-    expect(adminScreen, contains('widget.api.listAnnouncementsPage'));
-    expect(adminScreen, contains('widget.api.listFeedbackPage'));
-    expect(adminScreen, contains('widget.api.listInviteCodesPage'));
-    expect(adminScreen, contains('widget.api.auditLogPage'));
-    expect(adminScreen, contains('公告排序'));
-    expect(adminScreen, contains('反馈排序'));
-    expect(adminScreen, contains('邀请码排序'));
-    expect(adminScreen, contains('日志排序'));
-    expect(adminScreen, contains('最近更新优先'));
-    expect(adminScreen, contains('最近处理优先'));
-    expect(adminScreen, contains('最近使用优先'));
-    expect(adminScreen, contains('操作类型 A-Z'));
-    expect(adminScreen, contains('本页处理中转已解决'));
-    expect(adminScreen, contains('本页已解决转关闭'));
+    expect(
+      adminScreen,
+      contains('AdminApi(origin.client).listAnnouncementsPage'),
+    );
+    expect(adminScreen, contains("anyOfPermissions: const {'announcements'}"));
+    expect(adminScreen, contains('isCurrent: current'));
+    expect(adminScreen, contains('AdminApi(origin.client).listFeedbackPage'));
+    expect(
+      adminScreen,
+      contains('AdminApi(origin.client).listInviteCodesPage'),
+    );
+    expect(adminScreen, contains("anyOfPermissions: const {'invites'}"));
+    expect(adminScreen, contains('AdminApi(origin.client).auditLogPage'));
+    expect(adminScreen, contains("anyOfPermissions: const {'audit'}"));
+    expect(
+      adminScreen,
+      contains('labelText: AdminAnnouncementUiCopy.sortTitleFor()'),
+    );
+    expect(announcementCopy, contains('Sort announcements'));
+    expect(feedbackCopy, contains('反馈排序'));
+    expect(adminScreen, contains('AdminFeedbackUiCopy.sortTitleFor'));
+    expect(
+      adminScreen,
+      contains('labelText: AdminInviteUiCopy.sortTitleFor()'),
+    );
+    expect(inviteCopy, contains('Sort invite codes'));
+    expect(adminScreen, contains('labelText: AdminAuditUiCopy.sortTitleFor()'));
+    expect(auditCopy, contains("_text('日志排序', 'Sort audit log', locale)"));
+    expect(announcementCopy, contains('最近更新优先'));
+    expect(announcementCopy, contains('Recently updated'));
+    expect(feedbackCopy, contains('最近处理优先'));
+    expect(inviteCopy, contains('最近使用优先'));
+    expect(inviteCopy, contains('Recently used'));
+    expect(auditCopy, contains("_text('操作类型 A-Z', 'Action A–Z', locale)"));
+    expect(adminScreen, contains('AdminAuditUiCopy.sortLabel(value, locale)'));
+    expect(adminScreen, contains('AdminFeedbackUiCopy.bulkLabel(t.'));
+    expect(adminScreen, contains("('in_progress', 'resolved', '已处理完成。')"));
+    expect(adminScreen, contains("('resolved', 'closed', '已归档关闭。')"));
+    expect(feedbackCopy, contains('每次最多处理 100 条'));
     expect(adminScreen, contains('_adminAnnouncementSortLabel'));
     expect(adminScreen, contains('_adminFeedbackSortLabel'));
     expect(adminScreen, contains('_adminInviteSortLabel'));
     expect(adminScreen, contains('_adminAuditSortLabel'));
     expect(adminScreen, contains('_feedbackCategoryLabel(category)'));
-    expect(adminScreen, contains('_categoryChip(_feedbackCategoryLabel'));
+    expect(adminScreen, contains('label: Text(_feedbackCategoryLabel(value))'));
+    expect(adminScreen, contains("ValueKey('admin_feedback_category_"));
     expect(adminScreen, contains('_inviteStatusChip'));
     expect(adminScreen, contains('_offsetAfterAdminDelete'));
   });

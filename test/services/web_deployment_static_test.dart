@@ -73,8 +73,20 @@ void main() {
     final downloadPage = File('deploy/duoyi.html').readAsStringSync();
     expect(downloadPage, contains('href="/duoyi/"'));
     expect(downloadPage, contains('http://6688667.xyz/duoyi/'));
-    expect(downloadPage, contains('duoyi-web-desktop-v1.1.43.tar.gz'));
-    expect(downloadPage, contains('duoyi-web-mobile-v1.1.43.tar.gz'));
+    final archiveLinks = RegExp(
+      r'href="https://github\.com/dq52099/duoyi/releases/download/'
+      r'(v[0-9]+\.[0-9]+\.[0-9]+)/duoyi-web-(desktop|mobile)-\1\.tar\.gz"',
+    ).allMatches(downloadPage).toList();
+    expect(archiveLinks, hasLength(2));
+    expect(archiveLinks.map((match) => match.group(2)).toSet(), {
+      'desktop',
+      'mobile',
+    });
+    final archiveVersions = archiveLinks
+        .map((match) => match.group(1)!)
+        .toSet();
+    expect(archiveVersions, hasLength(1));
+    expect(downloadPage, contains('多仪 ${archiveVersions.single} 测试下载版'));
     expect(downloadPage, isNot(contains('v1.1.39')));
     expect(downloadPage, isNot(contains('v1.1.38')));
     expect(downloadPage, isNot(contains('v1.1.37')));
@@ -110,7 +122,12 @@ void main() {
       'lib/screens/preferences_screen.dart',
     ).readAsStringSync();
     expect(preferencesScreen, contains('WebTarget.isDesktopWebBuild'));
-    expect(preferencesScreen, contains('isBottomNavTabSupported(tab)'));
+    expect(
+      preferencesScreen,
+      contains(
+        RegExp(r'PreferencesProvider\.isBottomNavTabSupported\(\s*tab,?\s*\)'),
+      ),
+    );
     expect(
       preferencesScreen,
       contains('where(PreferencesProvider.isBottomNavTabSupported)'),
@@ -127,5 +144,20 @@ void main() {
     expect(sourceIndex, contains('<base href="\$FLUTTER_BASE_HREF">'));
     expect(sourceIndex, contains('the `--base-href` argument'));
     expect(sourceIndex, isNot(contains('<base href="/">')));
+
+    final versionScript = File('scripts/version_web_assets.py').readAsStringSync();
+    for (final expectedAsset in const <String>[
+      'favicon.png',
+      'favicon.ico',
+      'icons/Icon-192.png',
+      'icons/apple-touch-icon.png',
+      'manifest.json',
+      'web_resume_guard.js',
+      'flutter_bootstrap.js',
+      'main.dart.js',
+    ]) {
+      expect(versionScript, contains(expectedAsset));
+      expect(deployScript, contains(expectedAsset));
+    }
   });
 }

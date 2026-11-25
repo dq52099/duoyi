@@ -79,19 +79,24 @@ class CompletionVisibilityPolicy {
 
   /// 把 [TodoVisualState] 映射到 `DesignTokens` 颜色。
   ///
-  /// 调用方可以在列表项上直接使用这里返回的颜色作为主色 / 徽章色。
-  static Color colorFor(TodoVisualState s) {
+  /// 调用方可以在列表项上直接使用这里返回的颜色作为主色 / 徽章色；
+  /// 传入 `isDark` 可在深色主题下自动切换到高可读性的浅色调。
+  static Color colorFor(TodoVisualState s, {bool isDark = false}) {
     switch (s) {
       case TodoVisualState.normal:
-        return DesignTokens.todoNormal;
+        return isDark ? DesignTokens.todoNormalDark : DesignTokens.todoNormal;
       case TodoVisualState.dueSoon:
-        return DesignTokens.todoDueSoon;
+        return isDark ? DesignTokens.todoDueSoonDark : DesignTokens.todoDueSoon;
       case TodoVisualState.overdue:
-        return DesignTokens.todoOverdue;
+        return isDark ? DesignTokens.todoOverdueDark : DesignTokens.todoOverdue;
       case TodoVisualState.completed:
-        return DesignTokens.todoCompleted;
+        return isDark
+            ? DesignTokens.todoCompletedDark
+            : DesignTokens.todoCompleted;
       case TodoVisualState.archived:
-        return DesignTokens.todoArchived;
+        return isDark
+            ? DesignTokens.todoArchivedDark
+            : DesignTokens.todoArchived;
     }
   }
 
@@ -129,34 +134,44 @@ class CompletionVisibilityPolicy {
     TodoProvider provider,
     DateTime now, {
     GoalProvider? goalProvider,
+    int completedDays = 1,
   }) async {
     final todayDay = dateOnly(now);
 
     // Step 1: 归档昨日及更早的已完成任务。
-    await provider.archivePastCompletions(todayDay);
+    await provider.archivePastCompletions(
+      todayDay,
+      completedDays: completedDays,
+    );
+    if (goalProvider != null) {
+      await runRecurringGoalRollover(goalProvider, todayDay);
+    }
+  }
+
+  /// Recurring goal reminders continue when automatic archives are disabled.
+  /// A completed request is not a receipt for platform reminder registration.
+  static Future<void> runRecurringGoalRollover(
+    GoalProvider goalProvider,
+    DateTime todayDay, {
+    bool Function()? isCurrent,
+  }) async {
+    if (isCurrent?.call() == false) return;
 
     // Step 2: 基于 recurrence 派发今日实例。
-    if (goalProvider != null) {
-      final matched = <String>[];
-      RecurrenceEngine.materializeTodayFromRecurring(
-        goals: goalProvider.goals,
-        today: todayDay,
-        onHit: (g, _) => matched.add(g.id),
-      );
-      if (matched.isNotEmpty) {
-        debugPrint(
-          '[CompletionVisibilityPolicy] runDailyRollover: '
-          'materialized ${matched.length} recurring goal(s) for today.',
-        );
-        // 触发一次 onTimezoneChanged（它会通过 scheduler 重同步 goals），
-        // 让命中的 goal 进入当日调度。这条路径是幂等的。
-        await goalProvider.onTimezoneChanged();
-      }
-    } else {
+    final matched = <String>[];
+    RecurrenceEngine.materializeTodayFromRecurring(
+      goals: goalProvider.goals,
+      today: todayDay,
+      onHit: (g, _) => matched.add(g.id),
+    );
+    if (matched.isNotEmpty && isCurrent?.call() != false) {
       debugPrint(
         '[CompletionVisibilityPolicy] runDailyRollover: '
-        'goalProvider omitted; skipping materializeTodayFromRecurring.',
+        'materialized ${matched.length} recurring goal(s) for today.',
       );
+      // 触发一次 onTimezoneChanged（它会通过 scheduler 重同步 goals），
+      // 让命中的 goal 进入当日调度。这条路径是幂等的。
+      await goalProvider.onTimezoneChanged();
     }
   }
 }

@@ -234,6 +234,8 @@ class DuoyiWidgetContentTest {
             "duoyi://goal/goal-9",
             "duoyi://countdown/countdown-1",
             "duoyi://time-entry/entry-6",
+            "duoyi://event/%20local%2Fid%20",
+            "duoyi://pomodoro/%E6%B5%8B%E8%AF%95%2Fsession",
         )
 
         targets.forEach { target ->
@@ -262,6 +264,12 @@ class DuoyiWidgetContentTest {
             "duoyi://focus/?source=widget",
             "duoyi://todo:/x",
             "duoyi://focus:",
+            "duoyi://event",
+            "duoyi://pomodoro/",
+            "duoyi://event/a/b",
+            "duoyi://pomodoro/%20%0A",
+            "duoyi://event/%FF",
+            "duoyi://pomodoro/id?source=widget",
             "duoyi://todo/a|b",
             "duoyi://todo/a\"b",
             "duoyi://todo/a{b}",

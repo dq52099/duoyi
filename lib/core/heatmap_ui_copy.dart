@@ -76,6 +76,6 @@ class HeatmapUiCopy {
         ][date.month - 1]
       : '${date.month}月';
 
-  String range(DateTime start, DateTime end) =>
-      '${I18nDateFormat.date(start)} – ${I18nDateFormat.date(end)}';
+  String range(DateTime start, DateTime end, {String? pattern}) =>
+      '${I18nDateFormat.date(start, pattern: pattern, locale: locale)} – ${I18nDateFormat.date(end, pattern: pattern, locale: locale)}';
 }

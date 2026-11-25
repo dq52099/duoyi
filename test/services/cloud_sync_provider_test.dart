@@ -853,6 +853,17 @@ void main() {
         contains('VoidCallback? onLocalMutationPersisted'),
         reason: '$providerVariable 需要显式落盘回调。',
       );
+      if (providerVariable == 'anniversaryProvider' ||
+          providerVariable == 'countdownProvider') {
+        final publishBody = _methodBody(providerSource, 'void _publish(');
+        expect(publishBody, contains('_ownsStorage('));
+        _expectBefore(
+          publishBody,
+          'onLocalMutationPersisted?.call();',
+          'notifyListeners();',
+        );
+        continue;
+      }
       expect(
         providerSource,
         contains('void _notifyLocalMutationPersisted()'),
@@ -882,13 +893,10 @@ void main() {
       quickCaptureTemplateProviderSource,
       contains('void _notifyLocalMutationPersisted()'),
     );
-    expect(
-      quickCaptureTemplateProviderSource.indexOf(
-        '_notifyLocalMutationPersisted();',
-      ),
-      greaterThan(
-        quickCaptureTemplateProviderSource.indexOf('await prefs.set'),
-      ),
+    _expectBefore(
+      quickCaptureTemplateProviderSource,
+      'await _persist(transaction, snapshot);',
+      '_notifyLocalMutationPersisted();',
     );
     expect(
       mainSource,
@@ -905,7 +913,8 @@ void main() {
     expect(
       mainSource,
       contains(
-        'preferencesProvider.onChangedKeys =\n      cloudSyncProvider.markUserPreferencesChanged;',
+        'preferencesProvider.onChangedKeys = (keys) {\n'
+        '    cloudSyncProvider.markUserPreferencesChanged(keys);',
       ),
     );
     expect(
@@ -1031,7 +1040,8 @@ void main() {
         ),
       ),
     );
-    expect(source, contains('await _writePendingChanges(localPrefs, true);'));
+    // Pending-marker acknowledgement and retry ownership are exercised with
+    // platform failures in cloud_location_repair_boundary_test.dart.
     expect(source, contains('_setSyncRetryPending('));
     expect(source, contains('CloudSyncNoticeKind.baselineRetry'));
     expect(
@@ -1247,7 +1257,7 @@ void main() {
     expect(providerSource, contains('sha256'));
     expect(providerSource, contains('.convert(utf8.encode'));
     expect(providerSource, contains('SplayTreeMap<String, Object?>'));
-    expect(providerSource, contains('await _applySyncResponse('));
+    expect(providerSource, contains('_applySyncResponse('));
     expect(
       providerSource,
       contains('await _pullRemoteChanges(\n        expectedAccountGeneration:'),
@@ -1392,8 +1402,8 @@ void main() {
     );
     expect(itemDeltaCollectionsBody, contains("'countdowns'"));
     expect(
-      countdownSource,
-      contains("CloudSyncProvider.recordDeletedItem('countdowns'"),
+      countdownSource.replaceAll(RegExp(r'\s+'), ''),
+      contains("CloudSyncProvider.recordDeletedItem('countdowns',deletedId,"),
     );
   });
 
@@ -1588,10 +1598,8 @@ void main() {
       providerSource,
       contains('_syncPayloadHash(_readLocalObject(prefs, localKey))'),
     );
-    expect(
-      providerSource,
-      contains('if (!await _writeLocalList(prefs, localKey, writeValue))'),
-    );
+    // Checked location writeback carries request authority into the helper;
+    // persistence/stale-response behavior is covered by external-origin tests.
     expect(
       providerSource,
       contains('await _writeLocalObject(prefs, localKey, value);'),
@@ -2277,26 +2285,33 @@ void main() {
       timeAudit.replaceAll(RegExp(r'\s+'), ''),
       contains("CloudSyncProvider.recordDeletedItems('time_entries'"),
     );
-    expect(habit, contains("CloudSyncProvider.recordDeletedItem('habits'"));
+    expect(
+      habit.replaceAll(RegExp(r'\s+'), ''),
+      contains("CloudSyncProvider.recordDeletedItem('habits'"),
+    );
+    expect(habit, contains('deletedId: id'));
+    expect(habit, contains('transaction: transaction'));
     // TodoProvider 统一使用批量删除 recordDeletedItems
     expect(todo, contains('CloudSyncProvider.recordDeletedItems('));
     expect(todo, contains("'todos',"));
     expect(note, contains("CloudSyncProvider.recordDeletedItem('notes'"));
     expect(
-      countdown,
-      contains("CloudSyncProvider.recordDeletedItem('countdowns'"),
+      countdown.replaceAll(RegExp(r'\s+'), ''),
+      contains("CloudSyncProvider.recordDeletedItem('countdowns',deletedId,"),
     );
     expect(
       calendar.replaceAll(RegExp(r'\s+'), ''),
       contains("CloudSyncProvider.recordDeletedItem('calendar_events'"),
     );
     expect(
-      locationReminders,
-      contains("CloudSyncProvider.recordDeletedItem('location_reminders'"),
+      locationReminders.replaceAll(RegExp(r'\s+'), ''),
+      contains("CloudSyncProvider.recordDeletedItems('location_reminders'"),
     );
     expect(
-      quickCaptureTemplates,
-      contains("CloudSyncProvider.recordDeletedItem('quick_capture_templates'"),
+      quickCaptureTemplates.replaceAll(RegExp(r'\s+'), ''),
+      contains(
+        "CloudSyncProvider.recordDeletedItem('quick_capture_templates',id,",
+      ),
     );
     expect(
       course.replaceAll(RegExp(r'\s+'), ''),
@@ -2304,14 +2319,18 @@ void main() {
     );
     expect(diary, contains("CloudSyncProvider.recordDeletedItem('diaries'"));
     expect(
-      anniversary,
-      contains("CloudSyncProvider.recordDeletedItem('anniversaries'"),
+      anniversary.replaceAll(RegExp(r'\s+'), ''),
+      contains(
+        "CloudSyncProvider.recordDeletedItem('anniversaries',deletedId,",
+      ),
     );
     expect(
       goal.replaceAll(RegExp(r'\s+'), ''),
       contains("CloudSyncProvider.recordDeletedItem('goals'"),
     );
-    expect(goal, contains('workspaceId: entry.key'));
+    expect(goal, contains('for (final goal in deletedGoals)'));
+    expect(goal, contains('workspaceId: goal.workspaceId'));
+    expect(goal, contains('transaction: transaction'));
   });
 
   test('偏好、位置提醒和共享空间漏项纳入同步链路', () {
@@ -2342,7 +2361,8 @@ void main() {
       "changedCollections.contains('location_reminders')",
       'reloadTasks.add(locationReminderProvider.loadFromStorage)',
       'locationReminderProvider.addListener(syncLocationGeofences);',
-      'preferencesProvider.onChangedKeys =\n      cloudSyncProvider.markUserPreferencesChanged;',
+      'preferencesProvider.onChangedKeys = (keys) {\n'
+          '    cloudSyncProvider.markUserPreferencesChanged(keys);',
       'ReminderRingtoneSettings.onChanged = (keys)',
       'cloudSyncProvider.markUserPreferencesChanged(keys);',
       'await ReminderRingtoneSettings.applyPersistedSettingsToNative();',
@@ -2461,10 +2481,23 @@ void main() {
     }
 
     expect(courseProvider, contains('course.updatedAt = DateTime.now();'));
-    expect(anniversaryProvider, contains('item.updatedAt = DateTime.now();'));
-    expect(
-      anniversaryProvider,
-      contains('_items[idx].updatedAt = DateTime.now();'),
+    _expectBefore(
+      _methodSection(
+        anniversaryProvider,
+        'Future<String?> _upsert(',
+        'Future<AnniversaryImportSummary> importAnniversaries(',
+      ),
+      'candidate.updatedAt = DateTime.now();',
+      'await _persist(',
+    );
+    _expectBefore(
+      _methodSection(
+        anniversaryProvider,
+        'Future<void> _setPinned(',
+        'class AnniversaryImportSummary {',
+      ),
+      'item.updatedAt = DateTime.now();',
+      'await _persist(',
     );
     expect(
       locationProvider,
@@ -2489,103 +2522,110 @@ void main() {
 
   test('会触发云同步的本地修改必须先落盘再通知监听', () {
     final habit = File('lib/providers/habit_provider.dart').readAsStringSync();
-    final locationReminders = File(
-      'lib/providers/location_reminder_provider.dart',
-    ).readAsStringSync();
     final quickCaptureTemplates = File(
       'lib/providers/quick_capture_template_provider.dart',
     ).readAsStringSync();
 
     final addHabitBody = _methodBody(habit, 'Future<void> addHabit(');
-    expect(addHabitBody, contains('await _save();'));
+    expect(addHabitBody, contains('await _persistSnapshot(next, isCurrent);'));
     expect(addHabitBody, contains('notifyListeners();'));
-    _expectBefore(addHabitBody, 'await _save();', 'notifyListeners();');
+    _expectBefore(
+      addHabitBody,
+      'await _persistSnapshot(next, isCurrent);',
+      'notifyListeners();',
+    );
+    _expectBefore(
+      addHabitBody,
+      'await _persistSnapshot(next, isCurrent);',
+      'DomainEventBus.instance.publish(',
+    );
 
     final importHabitsBody = _methodBody(
       habit,
       'Future<HabitImportSummary> importHabits(',
     );
-    _expectBefore(importHabitsBody, 'await _save();', 'notifyListeners();');
+    _expectBefore(
+      importHabitsBody,
+      'await _persistSnapshot(next, isCurrent);',
+      'notifyListeners();',
+    );
+    _expectBefore(
+      importHabitsBody,
+      'await _persistSnapshot(next, isCurrent);',
+      'DomainEventBus.instance.publish(',
+    );
 
     final incrementBody = _methodBody(
       habit,
       'Future<void> incrementHabitForDate(',
     );
-    _expectBefore(incrementBody, 'await _save();', 'notifyListeners();');
+    _expectBefore(
+      incrementBody,
+      'await _persistSnapshot(next, isCurrent);',
+      'notifyListeners();',
+    );
+    _expectBefore(
+      incrementBody,
+      'await _persistSnapshot(next, isCurrent);',
+      'DomainEventBus.instance.publish(',
+    );
 
     final decrementBody = _methodBody(
       habit,
       'Future<void> decrementHabitForDate(',
     );
-    _expectBefore(decrementBody, 'await _save();', 'notifyListeners();');
-
-    final locationRemoveBody = _methodBody(
-      locationReminders,
-      'Future<void> remove(String id)',
-    );
     _expectBefore(
-      locationRemoveBody,
-      "await CloudSyncProvider.recordDeletedItem('location_reminders', id);",
-      'notifyListeners();',
-    );
-    _expectBefore(locationRemoveBody, 'await _save();', 'notifyListeners();');
-
-    final saveTriggeredHitsBody = _methodBody(
-      locationReminders,
-      'Future<void> _saveTriggeredHits(',
-    );
-    final normalizedSaveTriggeredHitsBody = saveTriggeredHitsBody.replaceAll(
-      '\r\n',
-      '\n',
-    );
-    expect(
-      normalizedSaveTriggeredHitsBody,
-      contains(
-        "CloudSyncProvider.recordDeletedItems(\n        'location_reminders',",
-      ),
-    );
-    _expectBefore(
-      saveTriggeredHitsBody,
-      "await CloudSyncProvider.recordDeletedItems(",
-      'await _save();',
-    );
-    _expectBefore(
-      saveTriggeredHitsBody,
-      'await _save();',
+      decrementBody,
+      'await _persistSnapshot(nextHabits, isCurrent);',
       'notifyListeners();',
     );
 
-    final ingestFixBody = _methodBody(
-      locationReminders,
-      'List<LocationReminderHit> ingestFix(',
-    );
-    expect(ingestFixBody, contains('_saveTriggeredHits(removedIds);'));
-    expect(
-      ingestFixBody,
-      isNot(contains('_save();\n      notifyListeners();')),
-    );
+    // Location mutations are exercised through delayed and rejected platform
+    // writes in location_reminder_trigger_persistence_test.dart. Those checks
+    // cover the actual two-key commit, rollback and downstream notification.
 
-    final saveTemplateBody = _methodBody(
+    final saveTemplateBody = _methodSection(
       quickCaptureTemplates,
       'Future<void> saveTemplate(',
-    );
-    _expectBefore(saveTemplateBody, 'await _persist();', 'notifyListeners();');
-
-    final deleteTemplateBody = _methodBody(
-      quickCaptureTemplates,
       'Future<void> deleteTemplate(String id)',
     );
-    _expectBefore(
-      deleteTemplateBody,
-      "await CloudSyncProvider.recordDeletedItem('quick_capture_templates', id);",
-      'notifyListeners();',
+    final deleteTemplateBody = _methodSection(
+      quickCaptureTemplates,
+      'Future<void> deleteTemplate(String id)',
+      'Future<void> _enqueueStorage(',
     );
     _expectBefore(
-      deleteTemplateBody,
-      'await _persist();',
-      'notifyListeners();',
+      deleteTemplateBody.replaceAll(RegExp(r'\s+'), ''),
+      "awaitCloudSyncProvider.recordDeletedItem('quick_capture_templates',id,",
+      'transaction.commit();',
     );
+    for (final body in [saveTemplateBody, deleteTemplateBody]) {
+      _expectBefore(
+        body,
+        'await _persist(transaction, snapshot);',
+        'transaction.commit();',
+      );
+      _expectBefore(
+        body,
+        'transaction.commit();',
+        '_notifyLocalMutationPersisted();',
+      );
+      _expectBefore(
+        body,
+        '_notifyLocalMutationPersisted();',
+        'notifyListeners();',
+      );
+    }
   });
+}
+
+String _methodSection(String source, String signature, String nextSignature) {
+  final start = source.indexOf(signature);
+  expect(start, isNonNegative, reason: signature);
+  final end = source.indexOf(nextSignature, start + signature.length);
+  expect(end, isNonNegative, reason: nextSignature);
+  expect(end, greaterThan(start), reason: nextSignature);
+  return source.substring(start, end);
 }
 
 String _methodBody(String source, String signature) {

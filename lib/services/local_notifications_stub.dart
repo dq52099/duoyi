@@ -40,6 +40,7 @@ class LocalNotifications {
     required String body,
     String? payload,
     String? channelId,
+    bool silent = false,
   }) async {}
 
   Future<void> showQuickAddOngoing({
@@ -59,6 +60,7 @@ class LocalNotifications {
     String? payload,
     String? channelId,
     bool requestIfNeeded = false,
+    bool silent = false,
   }) async {}
 
   Future<void> scheduleDaily({
@@ -71,7 +73,18 @@ class LocalNotifications {
     String? channelId,
     List<int>? weekdays,
     bool requestIfNeeded = false,
+    bool silent = false,
   }) async {}
+
+  Future<void> recordScheduledMetadata({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {}
+
+  Future<({String title, String body, String? originalPayload})?>
+  metadataForNotification(int id) async => null;
 
   Future<void> cancel(int id) async {}
   Future<void> cancelAll() async {}
@@ -80,6 +93,10 @@ class LocalNotifications {
   Future<Set<String>?> notificationChannelIds() async => const <String>{};
   Future<void> refreshAndroidRingtoneChannels() async {}
   String? takeLaunchPayload() => null;
+
+  Future<String?> payloadForNotificationResponse(
+    NotificationResponse response,
+  ) async => null;
 
   void dispatchNotificationResponse(
     NotificationResponse response, {

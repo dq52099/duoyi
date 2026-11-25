@@ -147,8 +147,9 @@ class TodoBoardUiCopy {
   static String get todaySummaryChipFilterOverdueTooltip =>
       isEn ? 'Filter overdue tasks' : '筛选逾期待办';
 
-  static String todayRemainingTasks(int remaining) =>
-      isEn ? '$remaining tasks remaining today' : '今日还要完成 $remaining 项';
+  static String todayRemainingTasks(int remaining) => isEn
+      ? '$remaining ${remaining == 1 ? 'task' : 'tasks'} remaining today'
+      : '今日还要完成 $remaining 项';
 
   static String todaySummaryBreakdown(int daily, int todo, int goal) => isEn
       ? 'Habits $daily / Todos $todo / Goals $goal'
@@ -160,13 +161,22 @@ class TodoBoardUiCopy {
   // ---------------------------------------------------------------------------
   // 云同步横幅 (Cloud Sync Notice Banner)
   // ---------------------------------------------------------------------------
-  static String syncNoticeError(String message) => isEn
-      ? 'Todo saved locally, but server sync failed: $message. It will retry automatically once connected or re-logged in.'
-      : '本机待办已保存，但服务器同步失败：$message。恢复网络或重新登录后会自动重试。';
+  static String _trimTrailingSentenceMark(String raw) =>
+      raw.trim().replaceFirst(RegExp(r'[。.]+$'), '');
 
-  static String syncNoticeWarning(String message) => isEn
-      ? 'Todo saved locally, server sync is pending: $message. It will retry automatically once connected or re-logged in.'
-      : '本机待办已保存，服务器同步暂未完成：$message。恢复网络或重新登录后会自动重试。';
+  static String syncNoticeError(String message) {
+    final clean = _trimTrailingSentenceMark(message);
+    return isEn
+        ? 'Todo saved locally, but server sync failed: $clean. It will retry automatically once connected or re-logged in.'
+        : '本机待办已保存，但服务器同步失败：$clean。恢复网络或重新登录后会自动重试。';
+  }
+
+  static String syncNoticeWarning(String message) {
+    final clean = _trimTrailingSentenceMark(message);
+    return isEn
+        ? 'Todo saved locally, server sync is pending: $clean. It will retry automatically once connected or re-logged in.'
+        : '本机待办已保存，服务器同步暂未完成：$clean。恢复网络或重新登录后会自动重试。';
+  }
 
   static String syncNoticeInfo(String message) => isEn
       ? 'Todo saved locally, cloud sync is queued: $message'
@@ -184,6 +194,7 @@ class TodoBoardUiCopy {
   static String get filterOverdue => isEn ? 'Overdue' : '逾期';
   static String get filterNext7Days => isEn ? 'Within 7 days' : '7天内';
   static String get filterCompleted => isEn ? 'Completed' : '已完成';
+  static String get filterIncludeArchived => isEn ? 'Include archived' : '包含归档';
   static String get filterQuadrant => isEn ? 'Quadrant' : '象限';
   static String get filterAllQuadrants => isEn ? 'All quadrants' : '全部象限';
   static String get filterPriority => isEn ? 'Priority' : '优先级';
@@ -240,6 +251,7 @@ class TodoBoardUiCopy {
   static String get moveToTooltip => isEn ? 'Move to' : '移动到';
 
   static String get cardCompletedBadge => isEn ? 'Completed' : '已完成';
+  static String get ungroupedListLabel => isEn ? 'Ungrouped' : '未分组';
   static String get cardOverdueBadge => isEn ? 'Overdue' : '过期';
   static String get cardDueSoonBadge => isEn ? 'Due soon' : '临期';
 
@@ -248,13 +260,14 @@ class TodoBoardUiCopy {
 
   static String columnTitle(TodoKanbanColumn column) {
     if (column.builtIn) {
-      if (column.id == defaultKanbanPendingColumnId) {
+      if (column.id == defaultKanbanPendingColumnId && column.title == '待处理') {
         return isEn ? 'To Do' : '待处理';
       }
-      if (column.id == defaultKanbanInProgressColumnId) {
+      if (column.id == defaultKanbanInProgressColumnId &&
+          column.title == '进行中') {
         return isEn ? 'In Progress' : '进行中';
       }
-      if (column.id == defaultKanbanDoneColumnId) {
+      if (column.id == defaultKanbanDoneColumnId && column.title == '已完成') {
         return isEn ? 'Completed' : '已完成';
       }
     }
@@ -272,6 +285,17 @@ class TodoBoardUiCopy {
       : '调整列顺序、颜色和默认分组';
 
   static String get save => isEn ? 'Save' : '保存';
+
+  static String get kanbanSaveFailed => isEn
+      ? 'Could not save column settings. Please try again.'
+      : '看板设置未保存，请重试。';
+
+  static String get kanbanLoadFailed => isEn
+      ? 'Could not load column settings. Tap column settings to retry.'
+      : '看板设置未能读取，请点击看板列设置重试。';
+
+  static String get kanbanRetryLoadTooltip =>
+      isEn ? 'Retry loading column settings' : '重新读取看板列设置';
 
   static String get defaultGroupingLabel => isEn ? 'Default grouping' : '默认分组';
 
@@ -329,11 +353,15 @@ class TodoBoardUiCopy {
   static String get onlyMyselfVisible =>
       isEn ? 'Visible only to myself' : '仅自己可见';
 
-  static String workspaceMemberInfo(int count, String roleLabel) =>
-      isEn ? '$count members · $roleLabel' : '$count 位成员 · $roleLabel';
+  static String workspaceMemberInfo(int count, String roleLabel) => isEn
+      ? '$count ${count == 1 ? 'member' : 'members'} · $roleLabel'
+      : '$count 位成员 · $roleLabel';
 
   static String get shareStatusUpdated =>
       isEn ? 'Sharing status updated' : '共享状态已更新';
+
+  static String get shareStatusSaveFailed =>
+      isEn ? 'Could not update sharing. Please try again.' : '共享状态保存失败，请重试';
 
   static String get dragToReorderTooltip => isEn ? 'Drag to reorder' : '拖拽排序';
 

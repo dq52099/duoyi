@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/achievement_engine.dart';
+import '../core/account_preference_writes.dart';
 import '../core/achievements.dart';
 import '../core/domain_event_bus.dart';
 import '../core/growth_levels.dart';
@@ -49,6 +50,60 @@ class RewardLedgerEntry {
   }
 }
 
+/// One debit tied to the same preference transaction as its purchased item.
+class CoinPurchase {
+  CoinPurchase._(this._provider, this.isCurrent);
+
+  final AchievementProvider _provider;
+  final bool Function() isCurrent;
+  AccountPreferenceTransaction? _transaction;
+  RewardLedgerEntry? _receipt;
+  String? _previousUpdatedAt;
+
+  bool get committed => _transaction?.isCommitted == true;
+
+  void ensureCurrent() {
+    if (!isCurrent()) throw const AccountPreferenceWriteCanceled();
+  }
+
+  Future<bool> debit(
+    AccountPreferenceTransaction transaction, {
+    required int coins,
+    required String title,
+    required String reason,
+  }) async {
+    ensureCurrent();
+    if (_receipt != null) throw StateError('Purchase already debited');
+    if (coins < 0 || _provider._coinBalance < coins) return false;
+    if (coins == 0) return true;
+    _transaction = transaction;
+    _previousUpdatedAt = _provider._rewardsUpdatedAt;
+    final now = DateTime.now();
+    final receipt = RewardLedgerEntry(
+      id: 'spend:${now.microsecondsSinceEpoch}:${++_provider._receiptSequence}',
+      title: title,
+      coins: -coins,
+      reason: reason,
+      awardedAt: now,
+    );
+    _receipt = receipt;
+    _provider._coinBalance -= coins;
+    // Keep old entries until commit, so a failed debit cannot discard history.
+    _provider._rewardLedger.insert(0, receipt);
+    await _provider._writeRewards(transaction);
+    ensureCurrent();
+    return true;
+  }
+
+  void _refund() {
+    final receipt = _receipt;
+    if (receipt == null) return;
+    _provider._coinBalance -= receipt.coins;
+    _provider._rewardLedger.removeWhere((entry) => entry.id == receipt.id);
+    _provider._rewardsUpdatedAt = _previousUpdatedAt!;
+  }
+}
+
 class AchievementProvider extends ChangeNotifier {
   static const _storageKey = 'duoyi_achievements_unlocked';
   static const _rewardStorageKey = 'duoyi_virtual_rewards';
@@ -84,6 +139,94 @@ class AchievementProvider extends ChangeNotifier {
   int _unlockSuppressionGeneration = 0;
   Future<void>? _storageLoadFuture;
   int _storageGeneration = 0;
+  int _receiptSequence = 0;
+  Future<void> _rewardWriteTail = Future<void>.value();
+  AccountPreferenceWriteToken? _activeRewardWriteToken;
+  int get storageGeneration => _storageGeneration;
+
+  Future<T> _enqueueRewardChange<T>(
+    Future<T> Function(
+      SharedPreferences prefs,
+      AccountPreferenceWriteToken token,
+    )
+    operation, {
+    required T Function() canceledResult,
+  }) {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    return AccountPreferenceWrites.runResult<T>((token) {
+      bool isCurrent() =>
+          generation == _storageGeneration &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          ) &&
+          token.isCurrent;
+      final pending = _rewardWriteTail.then<T>((_) async {
+        if (!isCurrent()) return canceledResult();
+        final prefs = await SharedPreferences.getInstance();
+        if (!isCurrent()) return canceledResult();
+        _activeRewardWriteToken = token;
+        try {
+          return await operation(prefs, token);
+        } on AccountPreferenceWriteCanceled {
+          return canceledResult();
+        } finally {
+          _activeRewardWriteToken = null;
+        }
+      });
+      _rewardWriteTail = pending.then<void>(
+        (_) {},
+        onError: (Object _, StackTrace _) {},
+      );
+      return pending;
+    }, canceledResult: canceledResult);
+  }
+
+  /// Holds reward mutation/hydration until the item transaction also settles.
+  Future<bool> runCoinPurchase(
+    Future<bool> Function(CoinPurchase purchase) operation, {
+    bool Function()? isAuthorized,
+  }) {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    bool belongsToAccount() =>
+        generation == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        );
+    return _enqueueRewardChange<bool>((prefs, token) async {
+      final purchase = CoinPurchase._(
+        this,
+        () =>
+            belongsToAccount() &&
+            token.isCurrent &&
+            (isAuthorized?.call() ?? true),
+      );
+      if (!purchase.isCurrent()) return false;
+      try {
+        return await operation(purchase);
+      } on AccountPreferenceWriteCanceled {
+        return purchase.committed;
+      } catch (_) {
+        // A post-commit observer failure must never make an unlocked item free.
+        if (purchase.committed) return true;
+        rethrow;
+      } finally {
+        if (belongsToAccount() && purchase._receipt != null) {
+          if (purchase.committed) {
+            _trimRewardLedger();
+            _persistedRevision++;
+            notifyListeners();
+          } else {
+            // Token invalidation can be an aborted boundary in the same account.
+            // The shared transaction has already restored disk before this runs.
+            purchase._refund();
+            notifyListeners();
+          }
+        }
+      }
+    }, canceledResult: () => false);
+  }
 
   AchievementProvider({AchievementEngine? engine, DomainEventBus? bus})
     : _engine = engine ?? AchievementEngine(),
@@ -171,77 +314,95 @@ class AchievementProvider extends ChangeNotifier {
     required int coins,
     required String title,
     required String reason,
-  }) async {
-    if (coins <= 0 || _coinBalance < coins) return false;
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    _coinBalance -= coins;
-    _rewardLedger.insert(
-      0,
-      RewardLedgerEntry(
-        id: 'spend:${DateTime.now().microsecondsSinceEpoch}',
-        title: title,
-        coins: -coins,
-        reason: reason,
-        awardedAt: DateTime.now(),
-      ),
-    );
-    if (_rewardLedger.length > 50) {
-      _rewardLedger.removeRange(50, _rewardLedger.length);
-    }
-    await _saveRewards();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
+  }) {
+    if (coins <= 0) return Future<bool>.value(false);
+    return runCoinPurchase((purchase) async {
+      final prefs = await SharedPreferences.getInstance();
+      final transaction = AccountPreferenceTransaction(
+        prefs,
+        purchase.isCurrent,
+      );
+      try {
+        if (!await purchase.debit(
+          transaction,
+          coins: coins,
+          title: title,
+          reason: reason,
         )) {
-      return false;
-    }
-    _persistedRevision++;
-    notifyListeners();
-    return true;
+          return false;
+        }
+        transaction.commit();
+        return true;
+      } catch (_) {
+        await transaction.rollback(canceledBeforeCleanup: true);
+        rethrow;
+      }
+    });
   }
 
-  Future<void> applyRewardsSnapshot(Map<dynamic, dynamic> rewards) async {
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
-    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-      accountGeneration,
-    )) {
-      return;
-    }
+  Future<void> applyRewardsSnapshot(Map<dynamic, dynamic> rewards) {
     final incoming = Map<String, dynamic>.from(rewards);
-    if (_isIncomingRewardsOlder(incoming)) {
-      debugPrint(
-        '[reward-sync] skipped older snapshot incoming='
-        '${_rewardsUpdatedAtOf(incoming)} current=$_rewardsUpdatedAt',
+    return _enqueueRewardChange<void>((prefs, token) async {
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      if (generation != _storageGeneration) return;
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        accountGeneration,
+      )) {
+        return;
+      }
+      if (_isIncomingRewardsOlder(incoming)) {
+        debugPrint(
+          '[reward-sync] skipped older snapshot incoming='
+          '${_rewardsUpdatedAtOf(incoming)} current=$_rewardsUpdatedAt',
+        );
+        return;
+      }
+      final transaction = AccountPreferenceTransaction(
+        prefs,
+        () =>
+            token.isCurrent &&
+            generation == _storageGeneration &&
+            AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              accountGeneration,
+            ),
       );
-      return;
-    }
-    await prefs.setString(_rewardStorageKey, jsonEncode(incoming));
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return;
-    }
-    final changed = _loadRewardsFromPrefs(prefs);
-    if (!changed) return;
-    _persistedRevision++;
-    _serverConfirmedRewardsChangePending = true;
-    debugPrint(
-      '[reward-sync] applied server snapshot balance=$_coinBalance '
-      'lifetime=$_lifetimeCoins revision=$_persistedRevision',
-    );
-    notifyListeners();
+      try {
+        await transaction.setString(_rewardStorageKey, jsonEncode(incoming));
+        transaction.commit();
+      } on AccountPreferenceWriteCanceled {
+        await transaction.rollback(canceledBeforeCleanup: true);
+        return;
+      } catch (_) {
+        await transaction.rollback(canceledBeforeCleanup: true);
+        rethrow;
+      }
+      if (generation != _storageGeneration ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return;
+      }
+      final changed = _loadRewardsFromPrefs(prefs);
+      if (!changed) return;
+      _persistedRevision++;
+      _serverConfirmedRewardsChangePending = true;
+      debugPrint(
+        '[reward-sync] applied server snapshot balance=$_coinBalance '
+        'lifetime=$_lifetimeCoins revision=$_persistedRevision',
+      );
+      notifyListeners();
+    }, canceledResult: () {});
   }
 
   Future<void> loadFromStorage() async {
     final existing = _storageLoadFuture;
     if (existing != null) return existing;
     final generation = _storageGeneration;
-    final future = _loadFromStorageNow(generation);
+    final future = _enqueueRewardChange<void>(
+      (_, _) => _loadFromStorageNow(generation),
+      canceledResult: () {},
+    );
     _storageLoadFuture = future;
     await future.whenComplete(() {
       if (_storageLoadFuture == future) {
@@ -273,17 +434,14 @@ class AchievementProvider extends ChangeNotifier {
   Future<void> _loadFromStorageNow(int generation) async {
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
+    _activeRewardWriteToken?.ensureCurrent();
     if (generation != _storageGeneration) return;
     if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
       accountGeneration,
     )) {
       return;
     }
-    final beforeUnlocked = jsonEncode(
-      _unlockedAt.map(
-        (id, unlockedAt) => MapEntry(id, unlockedAt.toIso8601String()),
-      ),
-    );
+    final beforeUnlocked = Map<String, DateTime>.of(_unlockedAt);
     final raw = prefs.getString(_storageKey);
     _unlockedAt.clear();
     if (raw != null && raw.isNotEmpty) {
@@ -310,17 +468,11 @@ class AchievementProvider extends ChangeNotifier {
       storedNotifiedIds,
       _notifiedAchievementIds,
     );
-    final unlockedChanged =
-        beforeUnlocked !=
-        jsonEncode(
-          _unlockedAt.map(
-            (id, unlockedAt) => MapEntry(id, unlockedAt.toIso8601String()),
-          ),
-        );
+    final unlockedChanged = !mapEquals(beforeUnlocked, _unlockedAt);
     final rewardsChanged = _loadRewardsFromPrefs(prefs);
     _storageLoaded = true;
     _subscribe();
-    _rebuildSnapshots(notify: false);
+    await _rebuildSnapshots(notify: false);
     if (shouldPersistNotified &&
         generation == _storageGeneration &&
         AccountLocalDataCleaner.isCurrentAccountDataGeneration(
@@ -338,11 +490,21 @@ class AchievementProvider extends ChangeNotifier {
     AchievementContext context, {
     bool silentUnlockFeedback = false,
   }) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!_storageLoaded) {
       await loadFromStorage();
     }
-    _context = context;
-    _rebuildSnapshots(silentUnlockFeedback: silentUnlockFeedback);
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
+    await _enqueueRewardChange<void>((_, _) async {
+      _context = context;
+      await _rebuildSnapshots(silentUnlockFeedback: silentUnlockFeedback);
+    }, canceledResult: () {});
   }
 
   AchievementSnapshot snapshotFor(String achievementId) {
@@ -355,21 +517,25 @@ class AchievementProvider extends ChangeNotifier {
 
   void _subscribe() {
     _eventSub ??= _bus.events.listen((event) {
-      _lastEventAt = event.occurredAt;
-      final grant = VirtualRewardRules.forEvent(event);
-      var rewardsChanged = false;
-      if (grant != null) {
-        rewardsChanged = _award(grant, awardedAt: event.occurredAt);
-      }
-      _rebuildSnapshots(rewardsChanged: rewardsChanged);
+      unawaited(
+        _enqueueRewardChange<void>((_, _) async {
+          _lastEventAt = event.occurredAt;
+          final grant = VirtualRewardRules.forEvent(event);
+          var rewardsChanged = false;
+          if (grant != null) {
+            rewardsChanged = _award(grant, awardedAt: event.occurredAt);
+          }
+          await _rebuildSnapshots(rewardsChanged: rewardsChanged);
+        }, canceledResult: () {}),
+      );
     });
   }
 
-  void _rebuildSnapshots({
+  Future<void> _rebuildSnapshots({
     bool notify = true,
     bool rewardsChanged = false,
     bool silentUnlockFeedback = false,
-  }) {
+  }) async {
     final context = _context;
     if (context == null) {
       _snapshots = [
@@ -382,6 +548,10 @@ class AchievementProvider extends ChangeNotifier {
             unlockedAt: _unlockedAt[achievement.id],
           ),
       ];
+      if (rewardsChanged) {
+        await _saveRewards();
+        _persistedRevision++;
+      }
       if (notify) notifyListeners();
       return;
     }
@@ -461,14 +631,12 @@ class AchievementProvider extends ChangeNotifier {
     }
 
     if (newlyUnlocked.isNotEmpty || shouldSaveRewards) {
-      unawaited(
-        _persistChangesThenNotify(
-          saveAchievements: newlyUnlocked.isNotEmpty,
-          saveRewards: shouldSaveRewards,
-          notify: notify,
-          achievementIdsToMarkNotified: achievementIdsToMarkNotified,
-          achievementsToNotify: achievementsToNotify,
-        ),
+      await _persistChangesThenNotify(
+        saveAchievements: newlyUnlocked.isNotEmpty,
+        saveRewards: shouldSaveRewards,
+        notify: notify,
+        achievementIdsToMarkNotified: achievementIdsToMarkNotified,
+        achievementsToNotify: achievementsToNotify,
       );
       return;
     }
@@ -553,10 +721,14 @@ class AchievementProvider extends ChangeNotifier {
         awardedAt: awardedAt,
       ),
     );
+    _trimRewardLedger();
+    return true;
+  }
+
+  void _trimRewardLedger() {
     if (_rewardLedger.length > 50) {
       _rewardLedger.removeRange(50, _rewardLedger.length);
     }
-    return true;
   }
 
   bool _loadRewardsFromPrefs(SharedPreferences prefs) {
@@ -615,23 +787,36 @@ class AchievementProvider extends ChangeNotifier {
   Future<void> _saveRewards() async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final prefs = await SharedPreferences.getInstance();
+    bool isCurrent() =>
+        _activeRewardWriteToken?.isCurrent == true &&
+        generation == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        );
+    if (!isCurrent()) return;
+    final transaction = AccountPreferenceTransaction(prefs, isCurrent);
+    try {
+      await _writeRewards(transaction);
+      transaction.commit();
+    } catch (_) {
+      await transaction.rollback(canceledBeforeCleanup: true);
+      rethrow;
+    }
+  }
+
+  Future<void> _writeRewards(AccountPreferenceTransaction transaction) async {
     final updatedAt = DateTime.now().toUtc().toIso8601String();
+    // Encode at execution time while the reward queue is held.
     final data = jsonEncode({
       'balance': _coinBalance,
       'lifetime': _lifetimeCoins,
       'grantIds': _rewardGrantIds.toList(growable: false),
-      'ledger': _rewardLedger.map((entry) => entry.toJson()).toList(),
+      'ledger': _rewardLedger.take(50).map((entry) => entry.toJson()).toList(),
       'updatedAt': updatedAt,
     });
-    final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration ||
-        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
-        )) {
-      return;
-    }
+    await transaction.setString(_rewardStorageKey, data);
     _rewardsUpdatedAt = updatedAt;
-    await prefs.setString(_rewardStorageKey, data);
   }
 
   Future<void> _saveNotifiedAchievements() async {
@@ -674,14 +859,32 @@ class AchievementProvider extends ChangeNotifier {
         '';
   }
 
-  String _rewardsSnapshotHash() {
-    return jsonEncode({
-      'balance': _coinBalance,
-      'lifetime': _lifetimeCoins,
-      'grantIds': _rewardGrantIds.toList(growable: false)..sort(),
-      'ledger': _rewardLedger.map((entry) => entry.toJson()).toList(),
-      'updatedAt': _rewardsUpdatedAt,
-    });
+  Object _rewardsSnapshotHash() {
+    var grantsHash = 0;
+    for (final id in _rewardGrantIds) {
+      grantsHash ^= id.hashCode;
+    }
+    var ledgerHash = 0;
+    for (var i = 0; i < _rewardLedger.length; i++) {
+      final entry = _rewardLedger[i];
+      ledgerHash = Object.hash(
+        ledgerHash,
+        entry.id,
+        entry.title,
+        entry.coins,
+        entry.reason,
+        entry.awardedAt.millisecondsSinceEpoch,
+      );
+    }
+    return (
+      _coinBalance,
+      _lifetimeCoins,
+      _rewardsUpdatedAt,
+      _rewardGrantIds.length,
+      grantsHash,
+      _rewardLedger.length,
+      ledgerHash,
+    );
   }
 
   @override

@@ -65,13 +65,13 @@ void main() {
 
   for (final operation in ['add', 'update', 'import', 'upsert']) {
     test(
-      'dispose during $operation write suppresses later effects',
+      'dispose during $operation write rolls back and suppresses later effects',
       () async => _disposeDuringStartedWrite(operation),
     );
   }
 
   test(
-    'dispose during tombstone write prevents the subsequent entry save',
+    'dispose during deletion rolls back entries and the pending tombstone',
     () async {
       final existing = _entry(
         'delete-during-tombstone',
@@ -93,7 +93,7 @@ void main() {
       await store.tombstoneSetEntered.future.timeout(
         const Duration(seconds: 1),
       );
-      expect(provider.entries, isEmpty);
+      expect(provider.entries.map((entry) => entry.id), [existing.id]);
 
       provider.dispose();
       store.releaseTombstoneSet.complete();
@@ -101,8 +101,9 @@ void main() {
 
       expect(notifications, 0);
       expect(callbacks, 0);
-      expect(store.writes, ['flutter.sync_deleted_items']);
-      expect(store.timeEntrySetAttempts, 0);
+      expect(await _storedEntries(store), [jsonEncode(existing.toJson())]);
+      expect((await store.getAll())['flutter.sync_deleted_items'], isNull);
+      expect(store.timeEntrySetAttempts, 2);
     },
   );
 
@@ -211,7 +212,7 @@ Future<void> _disposeDuringStartedWrite(String operation) async {
       pending = provider
           .importTimeEntries([_entry('write-imported', 'imported entry')])
           .then<void>((summary) {
-            expect(summary.inserted, 1);
+            expect(summary.inserted, 0);
             expect(summary.skippedDuplicates, 0);
           });
       break;
@@ -232,9 +233,10 @@ Future<void> _disposeDuringStartedWrite(String operation) async {
   expect(_entryFingerprints(provider), entriesAtDispose);
   expect(notifications, 0);
   expect(callbacks, 0);
-  // This set call began before dispose and cannot be rolled back. The fence
-  // suppresses later effects and prevents any additional storage operation.
-  expect(store.writes, ['flutter.duoyi_time_entries']);
+  // Issued writes finish before restoring the prior committed snapshot. No
+  // staged entry reaches the disposed provider or survives in platform storage.
+  expect(await _storedEntries(store), [jsonEncode(existing.toJson())]);
+  expect(store.timeEntrySetAttempts, 2);
 }
 
 Future<void> _expectFreshEntryAfterLoadInvalidation({

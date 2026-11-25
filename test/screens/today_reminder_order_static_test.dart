@@ -5,14 +5,20 @@ import 'package:test/test.dart';
 void main() {
   test('今日提醒按优先级展示且今日建议默认收起放在末尾', () {
     final today = File('lib/screens/today_screen.dart').readAsStringSync();
+    final copy = File('lib/core/today_ui_copy.dart').readAsStringSync();
 
     expect(
       today,
       contains('final reminderGroups = _TodayReminderGroups.build'),
     );
     expect(today, contains('class _TodayReminderGroups'));
-    expect(today, contains("Text(\n                            '今日提醒'"));
-    expect(today, contains('今日待提醒 > 即将开始 > 逾期优先处理'));
+    expect(
+      today,
+      contains(RegExp(r'Text\(\s*TodayUiCopy\.reminderHeaderTitle,')),
+    );
+    expect(copy, contains("'Today Reminders' : '今日提醒'"));
+    expect(today, contains('TodayUiCopy.reminderSectionSubtitle('));
+    expect(copy, contains('今日待提醒 > 即将开始 > 逾期优先处理'));
     expect(
       today,
       contains("ValueKey('today_reminder_section_collapsed_by_default')"),
@@ -22,9 +28,12 @@ void main() {
       today,
       contains('if (_expanded && widget.groups.dueToday.isNotEmpty)'),
     );
-    expect(today, contains("title: '今日待提醒事项'"));
-    expect(today, contains("title: '即将开始事项'"));
-    expect(today, contains("title: '已逾期事项'"));
+    expect(today, contains("title: TodayUiCopy.reminderGroupDueToday"));
+    expect(today, contains("title: TodayUiCopy.reminderGroupUpcoming"));
+    expect(today, contains("title: TodayUiCopy.reminderGroupOverdue"));
+    expect(copy, contains("'Due today' : '今日待提醒事项'"));
+    expect(copy, contains("'Starting soon' : '即将开始事项'"));
+    expect(copy, contains("'Overdue' : '已逾期事项'"));
     expect(today, contains('overdue: true'));
     expect(today, contains('class _OverdueReminderBadge'));
     expect(today, contains("I18n.tr('todo.status.overdue')"));
@@ -46,12 +55,22 @@ void main() {
     expect(today, contains('showOverdueBadge: overdue'));
     expect(today, contains('showStatusDecoration: true'));
     expect(today, contains('ExpansionTile('));
-    expect(today, contains('initiallyExpanded: false'));
+    final suggestionStart = today.indexOf('class _SuggestionSectionState');
+    expect(suggestionStart, isNonNegative);
+    final suggestionEnd = today.indexOf(
+      'class _QuoteCardState',
+      suggestionStart,
+    );
+    expect(suggestionEnd, greaterThan(suggestionStart));
+    final suggestion = today.substring(suggestionStart, suggestionEnd);
+    expect(suggestion, contains('bool _expanded = false;'));
+    expect(suggestion, contains('initiallyExpanded: _expanded'));
     expect(today, contains('maintainState: true'));
     expect(today, contains('class _SuggestionSectionState'));
     expect(today, contains("final Set<String> _addingTodoIds = <String>{};"));
     expect(today, contains("ValueKey('today_suggestion_add_"));
-    expect(today, contains('默认收起'));
+    expect(today, contains('TodayUiCopy.collapsedByDefault'));
+    expect(copy, contains("'Collapsed by default' : '默认收起'"));
     expect(today, contains('class _TodoTemplateAvatar'));
     expect(today, contains('today_suggestion_template_icon'));
     expect(today, contains('class _TodayTodoLeading'));
@@ -68,7 +87,10 @@ void main() {
     expect(
       today,
       contains(
-        'final showReminderSection =\n        !reminderGroups.isEmpty || suggestions.isNotEmpty;',
+        RegExp(
+          r'final showReminderSection =\s*'
+          r'!reminderGroups\.isEmpty \|\| suggestions\.isNotEmpty;',
+        ),
       ),
     );
     final reminderFactoryIndex = today.indexOf('Widget? reminderSection()');
@@ -102,10 +124,17 @@ void main() {
     expect(sectionStart, greaterThanOrEqualTo(0));
     expect(sectionEnd, greaterThan(sectionStart));
     final section = today.substring(sectionStart, sectionEnd);
+    expect(section, contains('bool _expanded = false;'));
 
-    final dueIndex = section.indexOf("title: '今日待提醒事项'");
-    final upcomingIndex = section.indexOf("title: '即将开始事项'");
-    final overdueIndex = section.indexOf("title: '已逾期事项'");
+    final dueIndex = section.indexOf(
+      'title: TodayUiCopy.reminderGroupDueToday',
+    );
+    final upcomingIndex = section.indexOf(
+      'title: TodayUiCopy.reminderGroupUpcoming',
+    );
+    final overdueIndex = section.indexOf(
+      'title: TodayUiCopy.reminderGroupOverdue',
+    );
     final suggestionIndex = section.indexOf(
       'if (_expanded && widget.suggestions.isNotEmpty)',
     );

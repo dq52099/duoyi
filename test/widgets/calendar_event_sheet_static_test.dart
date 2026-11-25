@@ -128,12 +128,13 @@ void main() {
       sheet,
       contains('context.read<CountdownProvider>().deleteItem(sourceId)'),
     );
-    expect(sheet, contains('reminderSyncIssue = await provider.update(item)'));
-    expect(sheet, contains('reminderSyncIssue = await provider.updateItem('));
     expect(
       sheet,
-      contains('CalendarEventSheetUiCopy.reminderSyncIssue(issue)'),
+      contains('await origin.anniversaries.update(item, canWrite: canWrite)'),
     );
+    expect(sheet, contains('await origin.countdown.updateItem('));
+    expect(sheet, contains('canWrite: canWrite'));
+    expect(sheet, contains('DateItemUiCopy.savedReminderWarning'));
     final copy = File(
       'lib/core/calendar_event_sheet_ui_copy.dart',
     ).readAsStringSync();
@@ -175,7 +176,10 @@ void main() {
     );
     expect(habit, contains('Future<void> showHabitEditor'));
     expect(habit, contains('habitProvider.updateHabit(habit.id, updated)'));
-    expect(habit, contains('onPressed: () => showHabitEditor(context, habit)'));
+    expect(
+      habit,
+      contains('showHabitEditor(context, habit, actionOrigin: origin)'),
+    );
     final pomodoro = File(
       'lib/screens/pomodoro_screen.dart',
     ).readAsStringSync();
@@ -186,7 +190,7 @@ void main() {
     expect(pomodoro, contains('provider.updateSession(next)'));
     expect(
       pomodoro,
-      contains('onEdit: () => showPomodoroSessionEditor(context, s)'),
+      contains('onEdit: () => showPomodoroSessionEditor(context, item)'),
     );
     expect(card, contains('final VoidCallback? onEdit;'));
     expect(card, contains('message: MainUiCopy.pomodoroEditRecord'));

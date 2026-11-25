@@ -1,6 +1,8 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/account_preference_writes.dart';
+import '../core/date_item_ui_copy.dart';
 import '../models/countdown.dart';
 import '../models/goal.dart' show ReminderKind;
 import '../services/account_local_data_cleaner.dart';
@@ -9,221 +11,351 @@ import 'cloud_sync_provider.dart';
 
 class CountdownProvider extends ChangeNotifier {
   static const _key = 'duoyi_countdowns';
-  static const Duration _reminderSyncTimeout = Duration(seconds: 5);
+  static const _reminderSyncTimeout = Duration(seconds: 5);
   List<CountdownItem> _items = [];
   ReminderScheduler? _scheduler;
   int _storageGeneration = 0;
-  String? _lastReminderSyncIssue;
+  bool _storageLoaded = false;
+  bool _disposed = false;
+  Future<void> _storageTail = Future<void>.value();
+  DateItemReminderIssue? _lastReminderSyncIssue;
   VoidCallback? onLocalMutationPersisted;
+  int get storageGeneration => _storageGeneration;
+  DateItemReminderIssue? get lastReminderIssue => _lastReminderSyncIssue;
 
   List<CountdownItem> get items => List.unmodifiable(
     [..._items]..sort((a, b) {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
+      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
       return a.targetDate.compareTo(b.targetDate);
     }),
   );
 
-  String? get lastReminderSyncIssue => _lastReminderSyncIssue;
-
-  // ignore: use_setters_to_change_properties
-  set scheduler(ReminderScheduler? scheduler) {
-    _scheduler = scheduler;
-  }
-
-  bool _isCurrentStorageGeneration(
-    int storageGeneration,
-    int accountGeneration,
-  ) {
-    return storageGeneration == _storageGeneration &&
-        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-          accountGeneration,
+  String? get lastReminderSyncIssue => _lastReminderSyncIssue == null
+      ? null
+      : DateItemUiCopy.reminderIssue(
+          _lastReminderSyncIssue!,
+          anniversary: false,
         );
-  }
+  set scheduler(ReminderScheduler? value) => _scheduler = value;
 
-  Future<void> loadFromStorage() async {
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final prefs = await SharedPreferences.getInstance();
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    final data = prefs.getStringList(_key) ?? [];
+  Future<void> loadFromStorage() =>
+      _enqueueStorage<void>((token, isCurrent) async {
+        final prefs = await SharedPreferences.getInstance();
+        _ensureCurrent(token, isCurrent);
+        _items = _decode(prefs);
+        _storageLoaded = true;
+        notifyListeners();
+      });
+
+  List<CountdownItem> _decode(SharedPreferences prefs) {
     final loaded = <CountdownItem>[];
-    for (final entry in data) {
+    for (final raw in prefs.getStringList(_key) ?? <String>[]) {
       try {
-        final decoded = jsonDecode(entry);
-        if (decoded is Map<String, dynamic>) {
-          loaded.add(CountdownItem.fromJson(decoded));
-        } else if (decoded is Map) {
-          loaded.add(
-            CountdownItem.fromJson(Map<String, dynamic>.from(decoded)),
-          );
+        final json = jsonDecode(raw);
+        if (json is Map) {
+          loaded.add(CountdownItem.fromJson(Map<String, dynamic>.from(json)));
         }
-      } catch (error, stackTrace) {
+      } catch (error, stack) {
         debugPrint(
-          '[CountdownProvider] skipped invalid countdown record: $error\n$stackTrace',
+          '[CountdownProvider] skipped invalid record: $error\n$stack',
         );
       }
     }
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
-    _items = loaded;
-    notifyListeners();
+    return loaded;
+  }
+
+  void _hydrate(SharedPreferences prefs) {
+    if (_storageLoaded) return;
+    _items = _decode(prefs);
+    _storageLoaded = true;
   }
 
   void resetLocalState() {
     _storageGeneration++;
+    _storageLoaded = false;
     _items = [];
     _lastReminderSyncIssue = null;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
-  Future<bool> _save() async {
+  @override
+  void dispose() {
+    _disposed = true;
+    _storageGeneration++;
+    super.dispose();
+  }
+
+  Future<T> _enqueueStorage<T>(
+    Future<T> Function(AccountPreferenceWriteToken, bool Function())
+    operation, {
+    bool Function()? canWrite,
+  }) {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    final data = _items.map((e) => jsonEncode(e.toJson())).toList();
-    final prefs = await SharedPreferences.getInstance();
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
-      return false;
-    }
-    await prefs.setStringList(_key, data);
-    _notifyLocalMutationPersisted();
-    notifyListeners();
-    return true;
+    final preceding = _storageTail;
+    // Future.sync also turns a boundary's synchronous cancellation into a Future.
+    final result = Future<T>.sync(
+      () => AccountPreferenceWrites.runResult<T>((token) async {
+        bool isCurrent() {
+          try {
+            return _ownsStorage(token, generation, accountGeneration) &&
+                (canWrite?.call() ?? true);
+          } catch (_) {
+            return false;
+          }
+        }
+
+        await preceding;
+        _ensureCurrent(token, isCurrent);
+        return operation(token, isCurrent);
+      }, canceledResult: () => throw const AccountPreferenceWriteCanceled()),
+    );
+    _storageTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
   }
 
-  void _notifyLocalMutationPersisted() {
+  bool _ownsStorage(
+    AccountPreferenceWriteToken token,
+    int generation,
+    int accountGeneration,
+  ) =>
+      !_disposed &&
+      token.isCurrent &&
+      generation == _storageGeneration &&
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(accountGeneration);
+
+  void _ensureCurrent(
+    AccountPreferenceWriteToken token,
+    bool Function() isCurrent,
+  ) {
+    token.ensureCurrent();
+    if (!isCurrent()) throw const AccountPreferenceWriteCanceled();
+  }
+
+  Future<void> _persist(
+    SharedPreferences prefs,
+    List<CountdownItem> snapshot,
+    AccountPreferenceWriteToken token,
+    bool Function() isCurrent, {
+    String? deletedId,
+    DeletedItemsWriteLease? lease,
+  }) async {
+    final shouldOffload =
+        !kIsWeb &&
+        (snapshot.length >= _isolateEncodeMinItems ||
+            _estimateCountdownPayloadChars(snapshot) >= _isolateEncodeMinChars);
+    final payload = shouldOffload
+        ? await compute(_encodeCountdownStoragePayload, snapshot)
+        : _encodeCountdownStoragePayload(snapshot);
+    _ensureCurrent(token, isCurrent);
+    final transaction = AccountPreferenceTransaction(
+      prefs,
+      () => token.isCurrent && isCurrent(),
+    );
+    try {
+      await transaction.setStringList(_key, payload);
+      if (deletedId != null) {
+        await CloudSyncProvider.recordDeletedItem(
+          'countdowns',
+          deletedId,
+          transaction: transaction,
+          lease: lease,
+        );
+      }
+      transaction.commit();
+      _items = snapshot;
+    } catch (_) {
+      // Cleanup drains this registered operation, including its rollback.
+      await transaction.rollback(canceledBeforeCleanup: true);
+      rethrow;
+    }
+  }
+
+  void _publish(
+    AccountPreferenceWriteToken token,
+    int generation,
+    int accountGeneration,
+  ) {
+    if (!_ownsStorage(token, generation, accountGeneration)) return;
     try {
       onLocalMutationPersisted?.call();
-    } catch (e, st) {
-      debugPrint('[CountdownProvider] local mutation callback failed: $e\n$st');
+    } catch (error, stack) {
+      debugPrint(
+        '[CountdownProvider] local mutation callback failed: $error\n$stack',
+      );
     }
+    if (_ownsStorage(token, generation, accountGeneration)) notifyListeners();
   }
 
-  Future<String?> _syncRemindersNow() async {
-    final generation = _storageGeneration;
-    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+  Future<String?> _afterCommit(
+    AccountPreferenceWriteToken token,
+    int generation,
+    int accountGeneration, {
+    bool syncReminders = true,
+  }) async {
+    _publish(token, generation, accountGeneration);
+    bool ownsStorage() => _ownsStorage(token, generation, accountGeneration);
+    if (!syncReminders || !ownsStorage()) return null;
     final scheduler = _scheduler;
     if (scheduler == null) {
-      if (!_hasEnabledReminders()) {
-        _lastReminderSyncIssue = null;
-        return null;
-      }
-      final issue = '提醒服务未初始化，未能注册倒数日提醒。请重启应用或重新打开提醒设置后再保存。';
-      _lastReminderSyncIssue = issue;
-      return issue;
+      _lastReminderSyncIssue =
+          _items.any(
+            (item) => item.remind && item.reminderKind != ReminderKind.off,
+          )
+          ? DateItemReminderIssue.serviceUnavailable
+          : null;
+      return lastReminderSyncIssue;
     }
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
-      return null;
-    }
-    final items = List.of(_items);
+    final snapshot = List<CountdownItem>.of(_items);
     try {
-      await scheduler.syncCountdowns(items).timeout(_reminderSyncTimeout);
-      if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
-        return null;
+      await scheduler.syncCountdowns(snapshot).timeout(_reminderSyncTimeout);
+      if (ownsStorage()) _lastReminderSyncIssue = null;
+    } catch (error, stack) {
+      if (ownsStorage()) {
+        _lastReminderSyncIssue = DateItemReminderIssue.registrationFailed;
       }
-      _lastReminderSyncIssue = null;
-      return null;
-    } on ReminderScheduleSyncException catch (error, stackTrace) {
-      if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
-        return null;
-      }
-      final issue = error.failures.isEmpty
-          ? '提醒未注册，请检查通知权限、提醒方式和提醒时间后重新保存。'
-          : error.failures.first;
-      _lastReminderSyncIssue = issue;
-      debugPrint(
-        '[CountdownProvider] reminder sync failed: $error\n$stackTrace',
-      );
-      return issue;
-    } catch (error, stackTrace) {
-      if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
-        return null;
-      }
-      final issue = '提醒未注册，请检查通知权限、提醒方式和提醒时间后重新保存。';
-      _lastReminderSyncIssue = issue;
-      debugPrint(
-        '[CountdownProvider] reminder sync failed: $error\n$stackTrace',
-      );
-      return issue;
+      debugPrint('[CountdownProvider] reminder sync failed: $error\n$stack');
     }
+    return ownsStorage() ? lastReminderSyncIssue : null;
   }
 
-  bool _hasEnabledReminders() {
-    return _items.any(
-      (item) => item.remind && item.reminderKind != ReminderKind.off,
-    );
+  Future<String?> addItem(CountdownItem item, {bool Function()? canWrite}) {
+    final candidate = item;
+    return _upsert(candidate, canWrite: canWrite);
   }
 
-  Future<String?> addItem(CountdownItem item) async {
-    final idx = _items.indexWhere((e) => e.id == item.id);
-    if (idx == -1) {
-      _items.add(item);
+  Future<String?> updateItem(CountdownItem item, {bool Function()? canWrite}) {
+    final candidate = item;
+    return _upsert(candidate, requireExisting: false, canWrite: canWrite);
+  }
+
+  Future<String?> _upsert(
+    CountdownItem candidate, {
+    bool requireExisting = false,
+    bool Function()? canWrite,
+  }) => _enqueueStorage((token, isCurrent) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final prefs = await SharedPreferences.getInstance();
+    _ensureCurrent(token, isCurrent);
+    _hydrate(prefs);
+    final snapshot = List<CountdownItem>.of(_items);
+    final index = snapshot.indexWhere((item) => item.id == candidate.id);
+    if (requireExisting && index < 0) {
+      throw StateError('Date item no longer exists');
+    }
+
+    if (index < 0) {
+      snapshot.add(candidate);
     } else {
-      _items[idx] = item;
+      snapshot[index] = candidate;
     }
-    final saved = await _save();
-    if (!saved) return null;
-    return _syncRemindersNow();
-  }
+    await _persist(prefs, snapshot, token, isCurrent);
+    return _afterCommit(token, generation, accountGeneration);
+  }, canWrite: canWrite);
 
   Future<CountdownImportSummary> importCountdowns(
-    Iterable<CountdownItem> items,
-  ) async {
-    var inserted = 0;
-    var skippedDuplicates = 0;
-    final seen = _items.map(_importDuplicateKey).toSet();
-    for (final item in items) {
-      if (item.title.trim().isEmpty) {
-        skippedDuplicates++;
-        continue;
+    Iterable<CountdownItem> items, {
+    bool Function()? canWrite,
+  }) {
+    final candidates = items.toList();
+    return _enqueueStorage((token, isCurrent) async {
+      final generation = _storageGeneration;
+      final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+      final prefs = await SharedPreferences.getInstance();
+      _ensureCurrent(token, isCurrent);
+      _hydrate(prefs);
+      final snapshot = List<CountdownItem>.of(_items);
+      final seen = snapshot.map(_importDuplicateKey).toSet();
+      var inserted = 0;
+      var skippedDuplicates = 0;
+      for (final item in candidates) {
+        if (item.title.trim().isEmpty) {
+          skippedDuplicates++;
+          continue;
+        }
+        if (!seen.add(_importDuplicateKey(item))) {
+          skippedDuplicates++;
+          continue;
+        }
+        snapshot.add(item);
+        inserted++;
       }
-      final key = _importDuplicateKey(item);
-      if (seen.contains(key)) {
-        skippedDuplicates++;
-        continue;
+      String? issue;
+      if (inserted > 0) {
+        await _persist(prefs, snapshot, token, isCurrent);
+        issue = await _afterCommit(token, generation, accountGeneration);
       }
-      seen.add(key);
-      _items.add(item);
-      inserted++;
-    }
-    String? reminderSyncIssue;
-    if (inserted > 0) {
-      final saved = await _save();
-      if (saved) reminderSyncIssue = await _syncRemindersNow();
-    }
-    return CountdownImportSummary(
-      inserted: inserted,
-      skippedDuplicates: skippedDuplicates,
-      reminderSyncIssue: reminderSyncIssue,
+      return CountdownImportSummary(
+        inserted: inserted,
+        skippedDuplicates: skippedDuplicates,
+        reminderSyncIssue: issue,
+      );
+    }, canWrite: canWrite);
+  }
+
+  Future<void> deleteItem(String id, {bool Function()? canWrite}) =>
+      _enqueueStorage((token, isCurrent) async {
+        final generation = _storageGeneration;
+        final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+        final prefs = await SharedPreferences.getInstance();
+        _ensureCurrent(token, isCurrent);
+        _hydrate(prefs);
+        final snapshot = List<CountdownItem>.of(_items)
+          ..removeWhere((item) => item.id == id);
+        var committed = false;
+        try {
+          await CloudSyncProvider.withDeletedItemsLock<void>((lease) async {
+            await _persist(
+              prefs,
+              snapshot,
+              token,
+              isCurrent,
+              deletedId: id,
+              lease: lease,
+            );
+            committed = true;
+          });
+        } on AccountPreferenceWriteCanceled {
+          if (!committed) rethrow;
+        }
+        await _afterCommit(token, generation, accountGeneration);
+      }, canWrite: canWrite);
+
+  Future<void> togglePin(String id, {bool Function()? canWrite}) =>
+      _setPinned(id, canWrite: canWrite);
+
+  Future<void> setPinned(String id, bool pinned, {bool Function()? canWrite}) =>
+      _setPinned(id, pinned: pinned, canWrite: canWrite);
+
+  Future<void> _setPinned(
+    String id, {
+    bool? pinned,
+    bool Function()? canWrite,
+  }) => _enqueueStorage((token, isCurrent) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final prefs = await SharedPreferences.getInstance();
+    _ensureCurrent(token, isCurrent);
+    _hydrate(prefs);
+    final snapshot = List<CountdownItem>.of(_items);
+    final index = snapshot.indexWhere((item) => item.id == id);
+    if (index < 0) return;
+    if (pinned != null && snapshot[index].isPinned == pinned) return;
+    snapshot[index] = snapshot[index].copyWith(
+      isPinned: pinned ?? !snapshot[index].isPinned,
     );
-  }
-
-  Future<String?> updateItem(CountdownItem item) async {
-    final idx = _items.indexWhere((e) => e.id == item.id);
-    if (idx == -1) {
-      _items.add(item);
-    } else {
-      _items[idx] = item;
-    }
-    final saved = await _save();
-    if (!saved) return null;
-    return _syncRemindersNow();
-  }
-
-  Future<void> deleteItem(String id) async {
-    await CloudSyncProvider.recordDeletedItem('countdowns', id);
-    _items.removeWhere((e) => e.id == id);
-    final saved = await _save();
-    if (saved) await _syncRemindersNow();
-  }
-
-  Future<void> togglePin(String id) async {
-    final idx = _items.indexWhere((e) => e.id == id);
-    if (idx != -1) {
-      final old = _items[idx];
-      _items[idx] = old.copyWith(isPinned: !old.isPinned);
-      await _save();
-    }
-  }
+    await _persist(prefs, snapshot, token, isCurrent);
+    await _afterCommit(
+      token,
+      generation,
+      accountGeneration,
+      syncReminders: false,
+    );
+  }, canWrite: canWrite);
 }
 
 class CountdownImportSummary {
@@ -239,9 +371,26 @@ class CountdownImportSummary {
 }
 
 String _importDuplicateKey(CountdownItem item) {
-  return [
+  return jsonEncode([
     item.title.trim().toLowerCase(),
     item.targetDate.toIso8601String(),
-    item.category.trim().toLowerCase(),
-  ].join('|');
+    item.categoryIsDefault
+        ? ['default']
+        : ['custom', item.category.trim().toLowerCase()],
+  ]);
 }
+
+const int _isolateEncodeMinItems = 500;
+const int _isolateEncodeMinChars = 120 * 1024;
+
+int _estimateCountdownPayloadChars(List<CountdownItem> items) {
+  var total = 0;
+  for (final item in items) {
+    total += item.title.length + item.category.length + 160;
+    if (total >= _isolateEncodeMinChars) return total;
+  }
+  return total;
+}
+
+List<String> _encodeCountdownStoragePayload(List<CountdownItem> items) =>
+    items.map((item) => jsonEncode(item.toJson())).toList();

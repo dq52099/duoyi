@@ -223,6 +223,7 @@ class ReminderEditorUiCopy {
     int? byMonthDay,
     DateTime? endDate,
     int? maxOccurrences,
+    String? datePattern,
   }) {
     if (frequencyIndex == 0) {
       return isEn ? 'Do not repeat' : '不重复';
@@ -259,7 +260,9 @@ class ReminderEditorUiCopy {
     }
     if (endDate != null) {
       pieces.add(
-        isEn ? 'Until ${formatDate(endDate)}' : '至 ${formatDate(endDate)}',
+        isEn
+            ? 'Until ${formatDate(endDate, pattern: datePattern)}'
+            : '至 ${formatDate(endDate, pattern: datePattern)}',
       );
     }
     if (maxOccurrences != null && maxOccurrences > 0) {
@@ -274,5 +277,6 @@ class ReminderEditorUiCopy {
     return pieces.join(' · ');
   }
 
-  static String formatDate(DateTime value) => I18nDateFormat.date(value);
+  static String formatDate(DateTime value, {String? pattern}) =>
+      I18nDateFormat.date(value, pattern: pattern);
 }

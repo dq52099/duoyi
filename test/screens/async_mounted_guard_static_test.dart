@@ -32,12 +32,16 @@ void main() {
     expect(source, contains('static final DateTime _lastSupportedDate'));
     expect(source, contains('DateTime _clampDate(DateTime value)'));
     expect(source, contains('_date = _clampDate(widget.initialDate'));
-    expect(source, contains('_clampDate(_date.add(Duration(days: days)))'));
+    expect(
+      source,
+      contains('CalendarDateNavigation.tryShiftDays(_date, days)'),
+    );
+    expect(source, contains('_date = _clampDate(target)'));
     expect(source, contains('firstDate: _firstSupportedDate'));
     expect(source, contains('lastDate: _lastSupportedDate'));
     expect(source, contains('onPressed: _date == _firstSupportedDate'));
     expect(source, contains('onPressed: _date == _lastSupportedDate'));
-    expect(source, contains("tooltip: '回到今天'"));
+    expect(source, contains('tooltip: AlmanacUiCopy.todayTooltip'));
     expect(source, contains('void _goToday()'));
     expect(source, isNot(contains('void _toggleMode()')));
     expect(source, isNot(contains('Navigator.pushReplacement')));
@@ -45,14 +49,24 @@ void main() {
 
   test('无状态日期字段使用 context.mounted 防止返回后回调继续写状态', () {
     final source = File('lib/screens/goal_edit_screen.dart').readAsStringSync();
-    final dateFieldBody = source.substring(
-      source.indexOf('class _DateField extends StatelessWidget'),
-      source.indexOf('String _formatDate(DateTime d)'),
+    final dateFieldStart = source.indexOf(
+      'class _DateField extends StatelessWidget',
     );
+    expect(dateFieldStart, isNonNegative);
+    final dateFieldEnd = source.indexOf('String _goalText(', dateFieldStart);
+    expect(dateFieldEnd, greaterThan(dateFieldStart));
+    final dateFieldBody = source.substring(dateFieldStart, dateFieldEnd);
 
     expect(dateFieldBody, contains('await AppDatePicker.pickSolar('));
     expect(dateFieldBody, contains('if (!context.mounted) return;'));
     expect(dateFieldBody, contains('if (picked != null) onPick(picked);'));
+    final pickerIndex = dateFieldBody.indexOf('await AppDatePicker.pickSolar(');
+    final guardIndex = dateFieldBody.indexOf('if (!context.mounted) return;');
+    final onPickIndex = dateFieldBody.indexOf(
+      'if (picked != null) onPick(picked);',
+    );
+    expect(guardIndex, greaterThan(pickerIndex));
+    expect(onPickIndex, greaterThan(guardIndex));
   });
 
   test('管理员后台异步返回后不写已销毁 controller 或 setState', () {
@@ -102,7 +116,9 @@ void main() {
     );
     expect(
       share,
-      contains('if (!context.mounted) return;\n      _commentCtrl.clear();'),
+      matches(
+        RegExp(r'if \(!context\.mounted\) return;\s+_commentCtrl\.clear\(\);'),
+      ),
     );
     expect(
       todoDetail,

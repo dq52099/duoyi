@@ -4,15 +4,16 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="12dp"
-    android:background="@drawable/widget_bg">
+    android:background="@drawable/widget_picker_preview_background">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="多仪 · 紧凑"
-        android:textColor="#FF6B6B"
+        android:text="@string/widget_preview_compact_title"
+        android:textColor="#FF0066D6"
+        android:textStyle="normal"
         android:textSize="14sp" />
 
     <TextView
@@ -22,8 +23,9 @@
         android:gravity="center_vertical"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="今日关键事项"
-        android:textColor="#333333"
+        android:text="@string/widget_preview_compact_sample"
+        android:textColor="#FF1F2933"
+        android:textStyle="normal"
         android:textSize="12sp" />
 
     <TextView
@@ -32,8 +34,9 @@
         android:gravity="center"
         android:ellipsize="end"
         android:maxLines="1"
-        android:background="@drawable/widget_nav_bg"
-        android:text="2×2"
-        android:textColor="#666666"
+        android:background="@drawable/widget_picker_preview_nav_background"
+        android:text="@string/widget_preview_compact_size"
+        android:textColor="#FF667085"
+        android:textStyle="normal"
         android:textSize="10sp" />
 </LinearLayout>

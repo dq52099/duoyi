@@ -1,8 +1,11 @@
+import '../core/almanac_locale_format.dart';
+import '../core/almanac_ui_copy.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/calendar_provider.dart';
+import '../providers/preferences_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/anniversary_provider.dart';
 import '../providers/course_provider.dart';
@@ -10,6 +13,7 @@ import '../providers/diary_provider.dart';
 import '../providers/time_audit_provider.dart';
 import '../providers/todo_provider.dart';
 import '../core/completion_visibility_policy.dart';
+import '../core/design_tokens.dart';
 import '../core/todo_templates.dart';
 import '../models/calendar_event.dart';
 import '../core/i18n.dart';
@@ -19,9 +23,13 @@ import '../models/diary_entry.dart';
 import '../models/todo.dart';
 import '../core/calendar_agenda_ui_copy.dart';
 import '../core/lunar_calendar.dart';
+import '../screens/almanac_screen.dart';
 import '../screens/diary_screen.dart';
+import '../services/holiday_calendar.dart';
 import '../core/calendar_event_display_text.dart';
+import 'brand_background.dart' show BrandRouteSurface;
 import 'calendar_event_sheet.dart';
+import 'surface_components.dart';
 
 class CalendarDayAgenda extends StatelessWidget {
   final DateTime date;
@@ -48,8 +56,16 @@ class CalendarDayAgenda extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ValueListenableBuilder<AppLocale>(
+    valueListenable: I18n.localeListenable,
+    builder: (context, locale, child) => _buildContent(context),
+  );
+
+  Widget _buildContent(BuildContext context) {
     final s = context.watch<ThemeProvider>().brand.strings;
+    final showLunar = context.select<PreferencesProvider?, bool>(
+      (p) => p?.showLunar ?? true,
+    );
     final anniversaries = context.watch<AnniversaryProvider>();
     final courses = context.watch<CourseProvider>();
     final diary = context.watch<DiaryProvider>();
@@ -79,8 +95,8 @@ class CalendarDayAgenda extends StatelessWidget {
     final lunarFes = LunarCalendar.lunarFestival(lunar);
 
     // 纪念日命中
-    final hitAnniversaries = anniversaries.items.where((a) {
-      final n = a.nextOccurrence;
+    final hitAnniversaries = anniversaries.itemsAt(date).where((a) {
+      final n = a.nextOccurrenceForDate(date);
       return n.year == date.year && n.month == date.month && n.day == date.day;
     }).toList();
 
@@ -93,21 +109,30 @@ class CalendarDayAgenda extends StatelessWidget {
         hasActiveFilters ?? (activeTypes != null || projectKey != null);
 
     final children = [
-      // 农历 / 节日 / 节气头
-      _dayHeader(context, lunar, term, solarFes, lunarFes),
+      // 农历 / 节日 / 节气 / 放假 / 周数星座头
+      _dayHeader(
+        context,
+        lunar,
+        term,
+        solarFes,
+        lunarFes,
+        showLunar: showLunar,
+      ),
 
       // 日记按钮
       _DiaryQuickEntry(date: date, entry: todayDiary),
 
       if (hitAnniversaries.isNotEmpty) ...[
         const SizedBox(height: 8),
-        _sectionTitle(CalendarAgendaUiCopy.anniversarySectionTitle),
+        _sectionTitle(CalendarAgendaUiCopy.anniversarySectionTitleForDate(date)),
         ...hitAnniversaries.map(
           (a) => _AnniversaryTile(
             title: a.title,
             color: Color(a.colorValue),
-            subtitle: a.yearsPassed != null
-                ? CalendarAgendaUiCopy.anniversaryCount(a.yearsPassed! + 1)
+            subtitle: a.yearsPassedForDate(date) != null
+                ? CalendarAgendaUiCopy.anniversaryCount(
+                    a.yearsPassedForDate(date)! + 1,
+                  )
                 : null,
           ),
         ),
@@ -115,19 +140,11 @@ class CalendarDayAgenda extends StatelessWidget {
 
       if (todayCourses.isNotEmpty) ...[
         const SizedBox(height: 12),
-        _sectionTitle(CalendarAgendaUiCopy.courseSectionTitle),
+        _sectionTitle(CalendarAgendaUiCopy.courseSectionTitleForDate(date)),
         ...todayCourses.map(
-          (c) => Container(
+          (c) => AppSurfaceCard(
             margin: const EdgeInsets.only(bottom: 6),
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Color(c.colorValue).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: Color(c.colorValue).withValues(alpha: 0.2),
-                width: 0.45,
-              ),
-            ),
             child: Row(
               children: [
                 Icon(
@@ -151,7 +168,7 @@ class CalendarDayAgenda extends StatelessWidget {
                         '${CalendarAgendaUiCopy.coursePeriod(c.startSection, c.endSection)}${c.location.isNotEmpty ? ' · ${c.location}' : ''}${c.teacher.isNotEmpty ? ' · ${c.teacher}' : ''}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey.shade600,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -259,9 +276,33 @@ class CalendarDayAgenda extends StatelessWidget {
     LunarDate lunar,
     String? term,
     String? solarFes,
-    String? lunarFes,
-  ) {
-    final cs = Theme.of(context).colorScheme;
+    String? lunarFes, {
+    bool showLunar = true,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final headerSurface = Color.alphaBlend(
+      cs.primary.withValues(alpha: 0.06),
+      Color.alphaBlend(
+        surfaceStyle?.cardFillColor ?? cs.surface,
+        theme.scaffoldBackgroundColor,
+      ),
+    );
+    final headerForeground = surfaceStyle == null
+        ? cs.primary
+        : appReadableForeground(headerSurface, cs.primary);
+    final isHoliday = HolidayCalendar.isHoliday(date);
+    final isMakeup = HolidayCalendar.isWorkMakeupDay(date);
+    final holidayName = isHoliday ? HolidayCalendar.holidayName(date) : null;
+    final isoWeek = LunarCalendar.isoWeekNumber(date);
+    var xingZuo = '';
+    try {
+      xingZuo = AlmanacLocaleFormat.formatXingZuo(LunarCalendar.xingZuo(date));
+    } catch (_) {}
+    final weekConstellationText = xingZuo.isEmpty
+        ? AlmanacUiCopy.isoWeekBadge(isoWeek)
+        : '${AlmanacUiCopy.isoWeekBadge(isoWeek)} · $xingZuo';
     return Container(
       margin: const EdgeInsets.only(top: 8, bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -283,32 +324,136 @@ class CalendarDayAgenda extends StatelessWidget {
               runSpacing: 5,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text(
-                  '${I18n.tr('calendar.chinese_lunar_calendar')} ${lunar.chineseText}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: cs.primary,
-                    fontWeight: FontWeight.normal,
+                if (showLunar)
+                  Text(
+                    '${I18n.tr('calendar.chinese_lunar_calendar')} ${AlmanacLocaleFormat.formatLunarDate(lunar)}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: headerForeground,
+                      fontWeight: FontWeight.normal,
+                    ),
                   ),
-                ),
+                if (isHoliday)
+                  _dayBadge(
+                    holidayName != null && holidayName.isNotEmpty
+                        ? '${AlmanacUiCopy.holidayTag} · $holidayName'
+                        : AlmanacUiCopy.holidayBadge,
+                    cs.brightness == Brightness.dark
+                        ? const Color(0xFF4DB6AC)
+                        : const Color(0xFF00796B),
+                    (cs.brightness == Brightness.dark
+                            ? const Color(0xFF4DB6AC)
+                            : const Color(0xFF00796B))
+                        .withValues(alpha: 0.12),
+                    surface: surfaceStyle == null ? null : headerSurface,
+                  ),
+                if (isMakeup)
+                  _dayBadge(
+                    AlmanacUiCopy.makeupWorkdayBadge,
+                    cs.brightness == Brightness.dark
+                        ? const Color(0xFFB39DDB)
+                        : const Color(0xFF5E35B1),
+                    (cs.brightness == Brightness.dark
+                            ? const Color(0xFFB39DDB)
+                            : const Color(0xFF5E35B1))
+                        .withValues(alpha: 0.12),
+                    surface: surfaceStyle == null ? null : headerSurface,
+                  ),
                 if (term != null)
                   _dayBadge(
-                    term,
-                    Colors.green,
-                    Colors.green.withValues(alpha: 0.12),
+                    AlmanacLocaleFormat.formatSolarTerm(term)!,
+                    cs.brightness == Brightness.dark
+                        ? DesignTokens.todoCompletedDark
+                        : DesignTokens.defaultSuccess,
+                    (cs.brightness == Brightness.dark
+                            ? DesignTokens.todoCompletedDark
+                            : DesignTokens.defaultSuccess)
+                        .withValues(alpha: 0.12),
+                    surface: surfaceStyle == null ? null : headerSurface,
                   ),
                 if (solarFes != null)
                   _dayBadge(
-                    solarFes,
-                    Colors.red,
-                    Colors.red.withValues(alpha: 0.12),
+                    AlmanacLocaleFormat.formatFestival(solarFes)!,
+                    cs.brightness == Brightness.dark
+                        ? DesignTokens.todoOverdueDark
+                        : DesignTokens.defaultError,
+                    (cs.brightness == Brightness.dark
+                            ? DesignTokens.todoOverdueDark
+                            : DesignTokens.defaultError)
+                        .withValues(alpha: 0.12),
+                    surface: surfaceStyle == null ? null : headerSurface,
                   ),
                 if (lunarFes != null)
                   _dayBadge(
-                    lunarFes,
-                    Colors.deepOrange,
-                    Colors.deepOrange.withValues(alpha: 0.12),
+                    AlmanacLocaleFormat.formatFestival(lunarFes)!,
+                    cs.brightness == Brightness.dark
+                        ? DesignTokens.todoDueSoonDark
+                        : DesignTokens.todoDueSoon,
+                    (cs.brightness == Brightness.dark
+                            ? DesignTokens.todoDueSoonDark
+                            : DesignTokens.todoDueSoon)
+                        .withValues(alpha: 0.12),
+                    surface: surfaceStyle == null ? null : headerSurface,
                   ),
+                _dayBadge(
+                  weekConstellationText,
+                  cs.primary,
+                  cs.primary.withValues(alpha: 0.09),
+                  surface: surfaceStyle == null ? null : headerSurface,
+                ),
+                Semantics(
+                  button: true,
+                  label: AlmanacUiCopy.openAlmanacLabel,
+                  child: InkWell(
+                    key: const ValueKey('agenda_open_almanac_chip'),
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => BrandRouteSurface(
+                            child: AlmanacScreen(initialDate: date),
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: cs.primary.withValues(alpha: 0.25),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              AlmanacUiCopy.openAlmanacLabel,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: headerForeground,
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 13,
+                            color: headerForeground,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -317,25 +462,35 @@ class CalendarDayAgenda extends StatelessWidget {
     );
   }
 
-  Widget _dayBadge(String text, Color color, Color backgroundColor) {
+  Widget _dayBadge(
+    String text,
+    Color color,
+    Color backgroundColor, {
+    Color? surface,
+  }) {
+    final foreground = surface == null
+        ? color
+        : appReadableForeground(Color.alphaBlend(backgroundColor, surface), color);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(text, style: TextStyle(fontSize: 11, color: color)),
+      child: Text(text, style: TextStyle(fontSize: 11, color: foreground)),
     );
   }
 
-  Widget _sectionTitle(String text) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Text(
-      text,
-      style: TextStyle(
-        fontSize: 12,
-        color: Colors.grey.shade600,
-        fontWeight: FontWeight.normal,
+  Widget _sectionTitle(String text) => Builder(
+    builder: (context) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.normal,
+        ),
       ),
     ),
   );
@@ -372,7 +527,17 @@ class CalendarDayAgenda extends StatelessWidget {
                   ),
                   if (!isLast)
                     Expanded(
-                      child: Container(width: 2, color: Colors.grey.shade200),
+                      child: Container(
+                        width: 2,
+                        color: Theme.of(context).colorScheme.outlineVariant
+                            .withValues(
+                              alpha:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? 0.28
+                                  : 0.45,
+                            ),
+                      ),
                     ),
                 ],
               ),
@@ -391,7 +556,21 @@ class CalendarDayAgenda extends StatelessWidget {
   }
 }
 
-class _CalendarDayTimeGrid extends StatelessWidget {
+class _CalendarEventPlacement {
+  final double top;
+  final double height;
+  final double left;
+  final double width;
+
+  const _CalendarEventPlacement({
+    required this.top,
+    required this.height,
+    required this.left,
+    required this.width,
+  });
+}
+
+class _CalendarDayTimeGrid extends StatefulWidget {
   static const double _hourHeight = 54;
   static const double _timeColumnWidth = 48;
 
@@ -405,11 +584,320 @@ class _CalendarDayTimeGrid extends StatelessWidget {
     required this.todoById,
   });
 
+  static double _resolveTimeColumnWidth(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final defaultTextStyle = DefaultTextStyle.of(context);
+    var labelStyle = TextStyle(
+      fontSize: 10,
+      color: cs.onSurfaceVariant.withValues(alpha: 0.72),
+    );
+    if (labelStyle.inherit) {
+      labelStyle = defaultTextStyle.style.merge(labelStyle);
+    }
+    if (MediaQuery.boldTextOf(context)) {
+      labelStyle = labelStyle.merge(const TextStyle(fontWeight: FontWeight.bold));
+    }
+    final textScaler = MediaQuery.textScalerOf(context);
+    final textDirection = Directionality.maybeOf(context) ?? TextDirection.ltr;
+    final locale = Localizations.maybeLocaleOf(context);
+
+    var maxLabelWidth = 0.0;
+    final painter = TextPainter(
+      textDirection: textDirection,
+      textScaler: textScaler,
+      locale: locale,
+    );
+    try {
+      for (var hour = 0; hour < 24; hour++) {
+        final label = '${hour.toString().padLeft(2, '0')}:00';
+        painter.text = TextSpan(text: label, style: labelStyle);
+        painter.layout();
+        final width = math.max(painter.width, painter.maxIntrinsicWidth);
+        if (width > maxLabelWidth) {
+          maxLabelWidth = width;
+        }
+      }
+    } finally {
+      painter.dispose();
+    }
+    return math.max(_timeColumnWidth, maxLabelWidth);
+  }
+
+  @override
+  State<_CalendarDayTimeGrid> createState() => _CalendarDayTimeGridState();
+}
+
+class _CalendarDayTimeGridState extends State<_CalendarDayTimeGrid> {
+  final ScrollController _horizontalController = ScrollController();
+
+  @override
+  void dispose() {
+    _horizontalController.dispose();
+    super.dispose();
+  }
+
+  static double _measureCompactEventWidth(
+    BuildContext context,
+    CalendarEvent event,
+  ) {
+    final defaultStyle = DefaultTextStyle.of(context).style;
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.maybeOf(context) ?? TextDirection.ltr;
+    final locale = Localizations.maybeLocaleOf(context);
+
+    final title = CalendarEventDisplayText.resolveTitle(event);
+    var titleStyle = const TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.normal,
+    );
+    if (titleStyle.inherit) {
+      titleStyle = defaultStyle.merge(titleStyle);
+    }
+    if (MediaQuery.boldTextOf(context)) {
+      titleStyle = titleStyle.merge(const TextStyle(fontWeight: FontWeight.bold));
+    }
+
+    final titlePainter = TextPainter(
+      text: TextSpan(text: title, style: titleStyle),
+      textDirection: direction,
+      textScaler: scaler,
+      locale: locale,
+      maxLines: 1,
+    )..layout();
+    final rawTitleWidth = titlePainter.width;
+    titlePainter.dispose();
+
+    // Cap measured title contribution at 12em of the scaled 12px font for one-line preview.
+    final maxTitlePreviewBudget = scaler.scale(12.0) * 12.0;
+    final titleWidth = math.min(rawTitleWidth, maxTitlePreviewBudget);
+
+    double timeWidth = 0.0;
+    if (event.time != null) {
+      final timeText = I18nDateFormat.timeOfDay(
+        hour: event.time!.hour,
+        minute: event.time!.minute,
+      );
+      var timeStyle = const TextStyle(fontSize: 10);
+      if (timeStyle.inherit) {
+        timeStyle = defaultStyle.merge(timeStyle);
+      }
+      if (MediaQuery.boldTextOf(context)) {
+        timeStyle = timeStyle.merge(const TextStyle(fontWeight: FontWeight.bold));
+      }
+      final timePainter = TextPainter(
+        text: TextSpan(text: timeText, style: timeStyle),
+        textDirection: direction,
+        textScaler: scaler,
+        locale: locale,
+        maxLines: 1,
+      )..layout();
+      timeWidth = timePainter.width;
+      timePainter.dispose();
+    }
+
+    double badgeWidth = 0.0;
+    final visual = _eventVisualState(event);
+    final isCompleted = visual == TodoVisualState.completed;
+    final isOverdue = visual == TodoVisualState.overdue;
+    if (isCompleted || isOverdue) {
+      final badgeLabel = isCompleted
+          ? MainUiCopy.calendarStatusCompleted
+          : MainUiCopy.calendarStatusOverdue;
+      var badgeStyle = const TextStyle(fontSize: 10);
+      if (badgeStyle.inherit) {
+        badgeStyle = defaultStyle.merge(badgeStyle);
+      }
+      if (MediaQuery.boldTextOf(context)) {
+        badgeStyle = badgeStyle.merge(const TextStyle(fontWeight: FontWeight.bold));
+      }
+      final badgePainter = TextPainter(
+        text: TextSpan(text: badgeLabel, style: badgeStyle),
+        textDirection: direction,
+        textScaler: scaler,
+        locale: locale,
+        maxLines: 1,
+      )..layout();
+      badgeWidth = 6.0 + badgePainter.width + 12.0;
+      badgePainter.dispose();
+    }
+
+    final baseWidth = 16.0 +
+        19.0 +
+        (event.time != null ? (6.0 + timeWidth) : 0.0) +
+        (event.hasConflict ? 18.0 : 0.0) +
+        badgeWidth +
+        4.0;
+    return baseWidth + titleWidth;
+  }
+
+  (List<_CalendarEventPlacement>, double) _computeEventPlacements(
+    BuildContext context,
+    double availableWidth,
+  ) {
+    final events = widget.events;
+    final date = widget.date;
+    const hourHeight = _CalendarDayTimeGrid._hourHeight;
+
+    if (events.isEmpty) {
+      return (<_CalendarEventPlacement>[], availableWidth);
+    }
+
+    final rawTops = List<double>.filled(events.length, 0);
+    final rawHeights = List<double>.filled(events.length, 0);
+    final rawBottoms = List<double>.filled(events.length, 0);
+
+    for (var i = 0; i < events.length; i++) {
+      final event = events[i];
+      final start = _eventStartOnDay(event, date);
+      final end = _eventEndOnDay(event, date);
+      final top = _minutesFromDayStart(start) / 60 * hourHeight;
+      final durationMinutes = math.max(30, end.difference(start).inMinutes);
+      final height = math.max(44.0, durationMinutes / 60 * hourHeight);
+      final clampedTop = top.clamp(0.0, hourHeight * 24 - 44).toDouble();
+      final clampedHeight = height
+          .clamp(44.0, hourHeight * 24 - clampedTop)
+          .toDouble();
+      rawTops[i] = clampedTop;
+      rawHeights[i] = clampedHeight;
+      rawBottoms[i] = clampedTop + clampedHeight;
+    }
+
+    final parent = List<int>.generate(events.length, (i) => i);
+    int find(int i) {
+      var root = i;
+      while (root != parent[root]) {
+        root = parent[root];
+      }
+      var curr = i;
+      while (curr != root) {
+        final next = parent[curr];
+        parent[curr] = root;
+        curr = next;
+      }
+      return root;
+    }
+
+    void union(int i, int j) {
+      final rootI = find(i);
+      final rootJ = find(j);
+      if (rootI != rootJ) {
+        parent[rootI] = rootJ;
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      for (var j = i + 1; j < events.length; j++) {
+        final overlap = math.min(rawBottoms[i], rawBottoms[j]) -
+            math.max(rawTops[i], rawTops[j]);
+        if (overlap > 0.1) {
+          union(i, j);
+        }
+      }
+    }
+
+    final groups = <int, List<int>>{};
+    for (var i = 0; i < events.length; i++) {
+      groups.putIfAbsent(find(i), () => []).add(i);
+    }
+
+    final laneAssignments = List<int>.filled(events.length, 0);
+    final groupLaneCounts = <int, int>{};
+
+    for (final entry in groups.entries) {
+      final groupIndices = entry.value;
+      groupIndices.sort((a, b) {
+        final cmp = rawTops[a].compareTo(rawTops[b]);
+        return cmp != 0 ? cmp : a.compareTo(b);
+      });
+      final laneEndTimes = <double>[];
+      for (final idx in groupIndices) {
+        final top = rawTops[idx];
+        final bottom = rawBottoms[idx];
+        int assigned = -1;
+        for (var l = 0; l < laneEndTimes.length; l++) {
+          if (laneEndTimes[l] <= top + 0.1) {
+            assigned = l;
+            laneEndTimes[l] = bottom;
+            break;
+          }
+        }
+        if (assigned == -1) {
+          assigned = laneEndTimes.length;
+          laneEndTimes.add(bottom);
+        }
+        laneAssignments[idx] = assigned;
+      }
+      groupLaneCounts[entry.key] = laneEndTimes.length;
+    }
+
+    const double laneGap = 4.0;
+    final placements = List<_CalendarEventPlacement?>.filled(events.length, null);
+    double maxTotalGroupWidth = availableWidth;
+
+    for (final entry in groups.entries) {
+      final groupRoot = entry.key;
+      final groupIndices = entry.value;
+      final k = groupLaneCounts[groupRoot] ?? 1;
+
+      double maxRequiredWidth = 0.0;
+      for (final idx in groupIndices) {
+        final required = _measureCompactEventWidth(context, events[idx]);
+        if (required > maxRequiredWidth) {
+          maxRequiredWidth = required;
+        }
+      }
+      final minLaneWidth = math.max(120.0, maxRequiredWidth);
+
+      if (k <= 1) {
+        final cardWidth = math.max(availableWidth, minLaneWidth);
+        for (final idx in groupIndices) {
+          placements[idx] = _CalendarEventPlacement(
+            top: rawTops[idx],
+            height: rawHeights[idx],
+            left: 0.0,
+            width: cardWidth,
+          );
+        }
+        if (cardWidth > maxTotalGroupWidth) {
+          maxTotalGroupWidth = cardWidth;
+        }
+      } else {
+        final totalMinGroupWidth = k * minLaneWidth + (k - 1) * laneGap;
+        final double laneWidth;
+        if (totalMinGroupWidth <= availableWidth) {
+          laneWidth = (availableWidth - (k - 1) * laneGap) / k;
+        } else {
+          laneWidth = minLaneWidth;
+        }
+        final groupWidth = k * laneWidth + (k - 1) * laneGap;
+        if (groupWidth > maxTotalGroupWidth) {
+          maxTotalGroupWidth = groupWidth;
+        }
+        for (final idx in groupIndices) {
+          final lane = laneAssignments[idx];
+          final left = lane * (laneWidth + laneGap);
+          placements[idx] = _CalendarEventPlacement(
+            top: rawTops[idx],
+            height: rawHeights[idx],
+            left: left,
+            width: laneWidth,
+          );
+        }
+      }
+    }
+
+    return (
+      placements.map((p) => p!).toList(growable: false),
+      maxTotalGroupWidth,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final timeColumnWidth = _CalendarDayTimeGrid._resolveTimeColumnWidth(context);
     return Container(
-      height: _hourHeight * 24,
+      height: _CalendarDayTimeGrid._hourHeight * 24,
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
         border: Border.all(
@@ -419,44 +907,77 @@ class _CalendarDayTimeGrid extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          for (var hour = 0; hour < 24; hour++)
-            Positioned(
-              top: hour * _hourHeight,
-              left: 0,
-              right: 0,
-              height: _hourHeight,
-              child: _TimelineHourRow(hour: hour),
-            ),
-          for (var i = 0; i < events.length; i++)
-            _positionedEvent(context, events[i], i),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final totalWidth = constraints.maxWidth;
+          final availableEventsWidth = math.max(
+            0.0,
+            totalWidth - (timeColumnWidth + 8) - 8,
+          );
+          final (placements, contentWidth) = _computeEventPlacements(
+            context,
+            availableEventsWidth,
+          );
+
+          return Stack(
+            children: [
+              for (var hour = 0; hour < 24; hour++)
+                Positioned(
+                  top: hour * _CalendarDayTimeGrid._hourHeight,
+                  left: 0,
+                  right: 0,
+                  height: _CalendarDayTimeGrid._hourHeight,
+                  child: _TimelineHourRow(
+                    hour: hour,
+                    timeColumnWidth: timeColumnWidth,
+                  ),
+                ),
+              Positioned(
+                top: 0,
+                bottom: 0,
+                left: timeColumnWidth + 8,
+                right: 8,
+                child: Scrollbar(
+                  controller: _horizontalController,
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: _horizontalController,
+                    scrollDirection: Axis.horizontal,
+                    physics: const ClampingScrollPhysics(),
+                    child: SizedBox(
+                      width: contentWidth,
+                      height: _CalendarDayTimeGrid._hourHeight * 24,
+                      child: Stack(
+                        children: [
+                          for (var i = 0; i < widget.events.length; i++)
+                            _buildPositionedEvent(
+                              context,
+                              widget.events[i],
+                              placements[i],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _positionedEvent(
+  Widget _buildPositionedEvent(
     BuildContext context,
     CalendarEvent event,
-    int index,
+    _CalendarEventPlacement placement,
   ) {
-    final start = _eventStartOnDay(event, date);
-    final end = _eventEndOnDay(event, date);
-    final top = _minutesFromDayStart(start) / 60 * _hourHeight;
-    final durationMinutes = math.max(30, end.difference(start).inMinutes);
-    final height = math.max(44.0, durationMinutes / 60 * _hourHeight);
-    final overlapLane = _overlapLane(event, index);
-    final left = _timeColumnWidth + 8 + overlapLane * 10.0;
-    final clampedTop = top.clamp(0.0, _hourHeight * 24 - 44).toDouble();
-    final clampedHeight = height
-        .clamp(44.0, _hourHeight * 24 - clampedTop)
-        .toDouble();
     return Positioned(
-      top: clampedTop,
-      left: left,
-      right: 8,
-      height: clampedHeight,
+      top: placement.top,
+      left: placement.left,
+      width: placement.width,
+      height: placement.height,
       child: DecoratedBox(
         decoration: BoxDecoration(
           boxShadow: [
@@ -469,25 +990,12 @@ class _CalendarDayTimeGrid extends StatelessWidget {
         ),
         child: _DraggableEventCard(
           event: event,
-          compact: clampedHeight < 88,
-          timelineHeight: clampedHeight,
-          todoById: todoById,
+          compact: placement.height < 88,
+          timelineHeight: placement.height,
+          todoById: widget.todoById,
         ),
       ),
     );
-  }
-
-  int _overlapLane(CalendarEvent event, int index) {
-    final start = _eventStartOnDay(event, date);
-    final end = _eventEndOnDay(event, date);
-    var overlaps = 0;
-    for (var i = 0; i < index; i++) {
-      final other = events[i];
-      final otherStart = _eventStartOnDay(other, date);
-      final otherEnd = _eventEndOnDay(other, date);
-      if (start.isBefore(otherEnd) && end.isAfter(otherStart)) overlaps++;
-    }
-    return overlaps.clamp(0, 2);
   }
 }
 
@@ -515,8 +1023,12 @@ class _AgendaOverflowNotice extends StatelessWidget {
 
 class _TimelineHourRow extends StatelessWidget {
   final int hour;
+  final double timeColumnWidth;
 
-  const _TimelineHourRow({required this.hour});
+  const _TimelineHourRow({
+    required this.hour,
+    this.timeColumnWidth = _CalendarDayTimeGrid._timeColumnWidth,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -526,7 +1038,7 @@ class _TimelineHourRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: _CalendarDayTimeGrid._timeColumnWidth,
+          width: timeColumnWidth,
           child: Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
@@ -535,6 +1047,7 @@ class _TimelineHourRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 10,
                 color: cs.onSurfaceVariant.withValues(alpha: 0.72),
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ),
@@ -572,6 +1085,8 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
   double _dragDy = 0;
 
   bool get _canDrag =>
+      widget.timelineHeight != null &&
+      widget.event.time != null &&
       widget.event.sourceId != null &&
       (widget.event.type == CalendarEventType.todo ||
           widget.event.type == CalendarEventType.timeEntry);
@@ -601,6 +1116,37 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
         ? cs.error
         : null;
     final radius = BorderRadius.circular(compact ? 8 : 10);
+    if (widget.timelineHeight == null && appSurfaceStyleOf(context) != null) {
+      return AppSurfaceCard(
+        padding: EdgeInsets.zero,
+        borderRadius: radius,
+        onTap: () => showCalendarEventSheet(context, e),
+        border: e.hasConflict || statusColor != null
+            ? Border.all(
+                color: e.hasConflict
+                    ? cs.error.withValues(alpha: 0.36)
+                    : statusColor!.withValues(alpha: 0.24),
+                width: 0.45,
+              )
+            : null,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: statusColor?.withValues(alpha: 0.07),
+            borderRadius: radius,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: _buildRegularContent(
+              context,
+              e,
+              title: title,
+              subtitle: subtitle,
+              limitedHeight: false,
+            ),
+          ),
+        ),
+      );
+    }
     final card = InkWell(
       borderRadius: radius,
       onTap: () => showCalendarEventSheet(context, e),
@@ -621,7 +1167,11 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
                 ? cs.error.withValues(alpha: 0.36)
                 : statusColor != null
                 ? statusColor.withValues(alpha: 0.24)
-                : Colors.grey.withValues(alpha: 0.1),
+                : cs.outlineVariant.withValues(
+                    alpha: Theme.of(context).brightness == Brightness.dark
+                        ? 0.22
+                        : 0.14,
+                  ),
             width: 0.45,
           ),
         ),
@@ -690,9 +1240,12 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
               fontSize: 12,
               fontWeight: FontWeight.normal,
               color: isCompleted
-                  ? Colors.grey
+                  ? cs.onSurfaceVariant
                   : isOverdue
-                  ? cs.error
+                  ? _readableStateForeground(
+                      cs.error,
+                      isDark: cs.brightness == Brightness.dark,
+                    )
                   : null,
               decoration: isCompleted ? TextDecoration.lineThrough : null,
             ),
@@ -705,7 +1258,11 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
               hour: e.time!.hour,
               minute: e.time!.minute,
             ),
-            style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+            style: TextStyle(
+              fontSize: 10,
+              color: cs.onSurfaceVariant,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
         ],
         if (e.hasConflict) ...[
@@ -740,13 +1297,14 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
         : isOverdue
         ? cs.error
         : null;
+    final stackStatus = !limitedHeight && appSurfaceStyleOf(context) != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             if (_canDrag) ...[
-              Icon(Icons.drag_indicator, size: 16, color: Colors.grey.shade500),
+              Icon(Icons.drag_indicator, size: 16, color: cs.onSurfaceVariant),
               const SizedBox(width: 4),
             ],
             Icon(eventVisual.icon, size: 16, color: eventVisual.color),
@@ -761,15 +1319,18 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
                   height: 1.2,
                   fontWeight: FontWeight.normal,
                   color: isCompleted
-                      ? Colors.grey
+                      ? cs.onSurfaceVariant
                       : isOverdue
-                      ? cs.error
+                      ? _readableStateForeground(
+                          cs.error,
+                          isDark: cs.brightness == Brightness.dark,
+                        )
                       : null,
                   decoration: isCompleted ? TextDecoration.lineThrough : null,
                 ),
               ),
             ),
-            if (statusColor != null) ...[
+            if (statusColor != null && !stackStatus) ...[
               const SizedBox(width: 6),
               _CalendarAgendaStatusBadge(
                 label: isCompleted
@@ -778,7 +1339,7 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
                 color: statusColor,
               ),
             ],
-            if (e.hasConflict)
+            if (e.hasConflict && !stackStatus)
               Tooltip(
                 message: CalendarAgendaUiCopy.timeConflictTooltip,
                 child: Icon(
@@ -789,17 +1350,45 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
               ),
           ],
         ),
+        if (stackStatus && (statusColor != null || e.hasConflict))
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (statusColor != null)
+                  _CalendarAgendaStatusBadge(
+                    label: isCompleted
+                        ? MainUiCopy.calendarStatusCompleted
+                        : MainUiCopy.calendarStatusOverdue,
+                    color: statusColor,
+                    useSurfaceForeground: true,
+                  ),
+                if (e.hasConflict)
+                  Tooltip(
+                    message: CalendarAgendaUiCopy.timeConflictTooltip,
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      size: 16,
+                      color: cs.error,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         if (subtitle != null && subtitle.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 3),
             child: Text(
               subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              maxLines: limitedHeight ? 1 : null,
+              overflow: limitedHeight ? TextOverflow.ellipsis : null,
               style: TextStyle(
                 fontSize: 11,
                 height: 1.2,
-                color: Colors.grey.shade600,
+                color: cs.onSurfaceVariant,
               ),
             ),
           ),
@@ -814,7 +1403,8 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
               style: TextStyle(
                 fontSize: 11,
                 height: 1.2,
-                color: Colors.grey.shade500,
+                color: cs.onSurfaceVariant,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ),
@@ -823,7 +1413,7 @@ class _DraggableEventCardState extends State<_DraggableEventCard> {
           child: Icon(
             Icons.chevron_right,
             size: 16,
-            color: Colors.grey.shade500,
+            color: cs.onSurfaceVariant,
           ),
         ),
       ],
@@ -1000,10 +1590,10 @@ _CalendarTodoVisual _calendarTodoVisual(TodoItem todo) {
       EisenhowerQuadrant.notUrgentNotImportant => Icons.checklist_rounded,
     },
     color: switch (todo.quadrant) {
-      EisenhowerQuadrant.urgentImportant => const Color(0xFFE53935),
-      EisenhowerQuadrant.notUrgentImportant => const Color(0xFFF6A339),
-      EisenhowerQuadrant.urgentNotImportant => const Color(0xFF42A5F5),
-      EisenhowerQuadrant.notUrgentNotImportant => const Color(0xFF8E8E8E),
+      EisenhowerQuadrant.urgentImportant => DesignTokens.defaultError,
+      EisenhowerQuadrant.notUrgentImportant => DesignTokens.todoDueSoon,
+      EisenhowerQuadrant.urgentNotImportant => DesignTokens.defaultInfo,
+      EisenhowerQuadrant.notUrgentNotImportant => DesignTokens.defaultTextMuted,
     },
   );
 }
@@ -1023,23 +1613,54 @@ IconData _fallbackEventIcon(CalendarEventType t) {
   };
 }
 
+Color _readableStateForeground(Color color, {bool isDark = false}) {
+  var resolved = color;
+  var iterations = 0;
+  if (isDark) {
+    while (resolved.computeLuminance() < 0.40 && iterations < 20) {
+      resolved = Color.alphaBlend(Colors.white.withValues(alpha: 0.08), resolved);
+      iterations++;
+    }
+  } else {
+    while (resolved.computeLuminance() > 0.12 && iterations < 20) {
+      resolved = Color.alphaBlend(Colors.black.withValues(alpha: 0.08), resolved);
+      iterations++;
+    }
+  }
+  return resolved;
+}
+
 class _CalendarAgendaStatusBadge extends StatelessWidget {
   final String label;
   final Color color;
+  final bool useSurfaceForeground;
 
-  const _CalendarAgendaStatusBadge({required this.label, required this.color});
+  const _CalendarAgendaStatusBadge({
+    required this.label,
+    required this.color,
+    this.useSurfaceForeground = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.24), width: 0.7),
+        border: Border.all(color: color.withValues(alpha: 0.24), width: 0.55),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        child: Text(label, style: TextStyle(fontSize: 10, color: color)),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: useSurfaceForeground
+                ? Theme.of(context).colorScheme.onSurface
+                : _readableStateForeground(color, isDark: isDark),
+          ),
+        ),
       ),
     );
   }
@@ -1091,53 +1712,44 @@ class _DiaryQuickEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final hasEntry = entry != null;
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => DiaryEditScreen(entry: entry, initialDate: date),
-        ),
-      ),
-      child: Container(
+    return Semantics(
+      button: true,
+      child: AppSurfaceCard(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          color: hasEntry
-              ? cs.primary.withValues(alpha: 0.08)
-              : Colors.grey.shade50,
-          border: Border.all(
-            color: hasEntry
-                ? cs.primary.withValues(alpha: 0.2)
-                : Colors.grey.shade200,
-            width: 0.45,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DiaryEditScreen(entry: entry, initialDate: date),
           ),
         ),
-        child: Row(
-          children: [
-            Icon(
-              hasEntry ? Icons.book : Icons.edit_note,
-              size: 18,
-              color: hasEntry ? cs.primary : Colors.grey.shade600,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                hasEntry
-                    ? entry!.title
-                    : CalendarAgendaUiCopy.emptyDiaryPrompt,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: hasEntry ? cs.primary : Colors.grey.shade600,
-                  fontWeight: hasEntry ? FontWeight.normal : FontWeight.normal,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 24),
+          child: Row(
+            children: [
+              Icon(
+                hasEntry ? Icons.book : Icons.edit_note,
+                size: 18,
+                color: cs.onSurfaceVariant,
               ),
-            ),
-            if (hasEntry && entry!.mood != null)
-              Text(entry!.mood!.emoji, style: const TextStyle(fontSize: 16)),
-            Icon(Icons.chevron_right, size: 16, color: Colors.grey.shade400),
-          ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  hasEntry
+                      ? entry!.title
+                      : CalendarAgendaUiCopy.emptyDiaryPrompt,
+                  softWrap: true,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: hasEntry ? cs.onSurface : cs.onSurfaceVariant,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ),
+              if (hasEntry && entry!.mood != null)
+                Text(entry!.mood!.emoji, style: const TextStyle(fontSize: 16)),
+              Icon(Icons.chevron_right, size: 16, color: cs.onSurfaceVariant),
+            ],
+          ),
         ),
       ),
     );
@@ -1157,14 +1769,10 @@ class _AnniversaryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final cs = Theme.of(context).colorScheme;
+    return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.18), width: 0.45),
-      ),
       child: Row(
         children: [
           Icon(Icons.celebration_outlined, color: color, size: 16),
@@ -1183,7 +1791,7 @@ class _AnniversaryTile extends StatelessWidget {
                 if (subtitle != null)
                   Text(
                     subtitle!,
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                   ),
               ],
             ),

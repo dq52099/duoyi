@@ -2,6 +2,7 @@
 library;
 
 import 'i18n.dart';
+import 'calendar_date_navigation.dart';
 import 'i18n_date_format.dart';
 import 'main_ui_copy.dart';
 
@@ -18,6 +19,13 @@ class CalendarAgendaUiCopy {
       ? const ['M', 'T', 'W', 'T', 'F', 'S', 'S']
       : const ['一', '二', '三', '四', '五', '六', '日'];
 
+  static List<String> weekdayInitialsFor(int firstDayOfWeek) => [
+    for (final weekday in CalendarDateNavigation.orderedWeekdays(
+      firstDayOfWeek,
+    ))
+      weekdayInitials[weekday - 1],
+  ];
+
   static String monthEventBadge(int count) =>
       isEn ? '$count ${count == 1 ? 'item' : 'items'}' : '$count项';
 
@@ -27,10 +35,11 @@ class CalendarAgendaUiCopy {
     required bool isSelected,
     required int eventCount,
     required String? subText,
+    String? pattern,
   }) {
     if (isEn) {
       final parts = <String>[
-        I18nDateFormat.date(date),
+        I18nDateFormat.date(date, pattern: pattern),
         if (isToday) 'Today',
         if (isSelected) 'Selected',
         if (subText != null && subText.isNotEmpty) subText,
@@ -41,7 +50,7 @@ class CalendarAgendaUiCopy {
       return parts.join(', ');
     }
     final parts = <String>[
-      '${date.year}年${date.month}月${date.day}日',
+      I18nDateFormat.date(date, pattern: pattern),
       if (isToday) '今天',
       if (isSelected) '已选中',
       if (subText != null && subText.isNotEmpty) subText,
@@ -62,6 +71,25 @@ class CalendarAgendaUiCopy {
   static String get courseSectionTitle =>
       isEn ? '📚 Today\'s Courses' : '📚 今日课程';
 
+  static bool _isToday(DateTime date) {
+    final today = DateTime.now();
+    return date.year == today.year &&
+        date.month == today.month &&
+        date.day == today.day;
+  }
+
+  static String anniversarySectionTitleForDate(DateTime date) => _isToday(date)
+      ? anniversarySectionTitle
+      : isEn
+      ? '🎉 Anniversaries on this day'
+      : '🎉 当日纪念';
+
+  static String courseSectionTitleForDate(DateTime date) => _isToday(date)
+      ? courseSectionTitle
+      : isEn
+      ? '📚 Courses on this day'
+      : '📚 当日课程';
+
   static String coursePeriod(int startSection, int endSection) {
     if (isEn) {
       return startSection == endSection
@@ -73,8 +101,7 @@ class CalendarAgendaUiCopy {
         : '第$startSection-$endSection节';
   }
 
-  static String get timelineSectionTitle =>
-      isEn ? '🕘 Timeline' : '🕘 时间线';
+  static String get timelineSectionTitle => isEn ? '🕘 Timeline' : '🕘 时间线';
 
   static String get allDaySectionTitle =>
       isEn ? '📝 All-day / Untimed' : '📝 全天/无时间';
@@ -86,8 +113,7 @@ class CalendarAgendaUiCopy {
       ? '$hiddenCount more ${hiddenCount == 1 ? 'item' : 'items'}, switch to Day view for full schedule'
       : '还有 $hiddenCount 项，请切换到日视图查看完整日程';
 
-  static String get timeConflictTooltip =>
-      isEn ? 'Time conflict' : '时间冲突';
+  static String get timeConflictTooltip => isEn ? 'Time conflict' : '时间冲突';
 
   // ---------------------------------------------------------------------------
   // Status Badges (completed / overdue)
@@ -101,10 +127,9 @@ class CalendarAgendaUiCopy {
   static String get dragTaskSavingBusy =>
       isEn ? 'Task is saving, please try again later' : '待办正在保存中，请稍后重试';
 
-  static String dragReminderWarning(String formattedTime, String issue) =>
-      isEn
-          ? 'Adjusted to $formattedTime, but reminder was not registered: $issue'
-          : '已调整到 $formattedTime，但提醒未注册：$issue';
+  static String dragReminderWarning(String formattedTime, String issue) => isEn
+      ? 'Adjusted to $formattedTime, but reminder was not registered: $issue'
+      : '已调整到 $formattedTime，但提醒未注册：$issue';
 
   static String dragTaskSaveFailed(Object error) =>
       isEn ? 'Failed to save task: $error' : '待办保存失败：$error';

@@ -16,6 +16,7 @@ import 'package:duoyi/services/native_reminder_ringtone.dart';
 import 'package:duoyi/services/reminder_scheduler.dart';
 import 'package:duoyi/widgets/surface_components.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -73,8 +74,11 @@ void main() {
     expect(syncBody, contains('result.issueForSlot(index)'));
     expect(syncBody, isNot(contains('notif?.lastScheduleIssue')));
     expect(syncBody, isNot(contains('_isDailyReminderIssue(issue)')));
-    expect(syncBody, contains('每日提醒已保存，但未注册'));
-    expect(syncBody, contains('每日提醒已保存，但需要确认'));
+    expect(
+      syncBody,
+      contains('NotificationUiCopy.dailyRegistrationIssue(issue)'),
+    );
+    expect(syncBody, contains('NotificationUiCopy.dailyRegistrationFailed'));
 
     expect(
       main,
@@ -107,11 +111,11 @@ void main() {
     expect(stateEnd, greaterThan(stateStart));
     final summary = screen.substring(summaryStart, stateEnd);
 
-    expect(summary, contains('系统待触发'));
-    expect(summary, contains('部分待触发'));
-    expect(summary, contains('待确认'));
-    expect(summary, contains('需重新保存'));
-    expect(summary, contains('点查看简述和原因'));
+    expect(summary, contains('NotificationUiCopy.registeredSummary('));
+    expect(summary, contains('queued: queued'));
+    expect(summary, contains('partial: partial'));
+    expect(summary, contains('unconfirmed: unconfirmed'));
+    expect(summary, contains('missing: missing'));
     expect(summary, contains('_registeredReminderQueueProbe'));
     expect(summary, contains('_RegisteredReminderQueueProbe.resolved'));
     expect(summary, contains('_entryAcceptedBySystemQueue'));
@@ -136,7 +140,7 @@ void main() {
     expect(detail, contains('SingleChildScrollView('));
     expect(detail, contains("ValueKey('notification_record_detail_scroll')"));
     expect(source, contains('isScrollControlled: true'));
-    expect(detail, contains('_NotificationRecordDetailLine(label: \'内容\''));
+    expect(detail, contains('detailSheetContentLabel'));
   });
 
   test('1 分钟弹出测试使用全局 popup sink 而不是临时 sink', () {
@@ -168,7 +172,7 @@ void main() {
     ).readAsStringSync();
     final todoStart = source.indexOf('final todo = draft.toTodo()');
     final syncStatusStart = source.indexOf(
-      'final syncStatus = _localSaveSyncMessage',
+      'final syncStatus = _syncStatus()',
       todoStart,
     );
     expect(todoStart, greaterThanOrEqualTo(0));
@@ -187,11 +191,8 @@ void main() {
       ),
     );
     expect(todoBranch, contains('waitForReminderSync: true'));
-    expect(
-      todoBranch,
-      contains('final syncIssue = reminderSyncResult?.issue;'),
-    );
-    expect(todoBranch, contains("reminderStatus = '待办提醒同步失败：\$syncIssue';"));
+    expect(todoBranch, contains('reminderSyncResult.hasIssue'));
+    expect(todoBranch, contains('AiScheduleUiCopy.renderReminderIssue'));
     expect(
       afterAddTodo,
       isNot(contains('final issue = notificationService.lastScheduleIssue')),
@@ -275,7 +276,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('通知设置 320px 下多个设置按钮保持同一行', (tester) async {
+  testWidgets('通知设置 320px 下操作对齐且宽操作自适应换行', (tester) async {
     tester.view.physicalSize = const Size(320, 760);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -531,6 +532,7 @@ void main() {
         matching: find.byIcon(Icons.inventory_2_outlined),
       ),
       action: find.byKey(const ValueKey('notification_history_limit_dropdown')),
+      stacked: true,
     );
 
     if (find
@@ -602,11 +604,12 @@ void main() {
         matching: find.byIcon(Icons.schedule),
       ),
       action: find.byKey(const ValueKey('report_reminder_time_button_daily')),
+      stacked: true,
     );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('每日提醒 320px 下四种提醒方式保持一行', (tester) async {
+  testWidgets('每日提醒 320px 默认字号下四种提醒方式保持一行', (tester) async {
     tester.view.physicalSize = const Size(320, 760);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -875,6 +878,12 @@ void main() {
     expect(find.text('提醒事项：客户回访 21'), findsOneWidget);
     expect(find.text('提醒事项：喝水'), findsNothing);
 
+    await tester.scrollUntilVisible(
+      find.text('全部 · 25'),
+      -240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('全部 · 25'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('registered_reminders_next')));
@@ -885,6 +894,12 @@ void main() {
     expect(find.text('提醒事项：喝水'), findsOneWidget);
     expect(find.text('每页 20 条 · 21-25 / 25 · 第 2/2 页'), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.text('部分待触发 · 1'),
+      -240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('部分待触发 · 1'));
     await tester.pumpAndSettle();
 
@@ -892,6 +907,12 @@ void main() {
     expect(find.text('提醒事项：复查材料'), findsOneWidget);
     expect(find.text('部分待触发'), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.text('需重新保存 · 1'),
+      -240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('需重新保存 · 1'));
     await tester.pumpAndSettle();
 
@@ -908,6 +929,12 @@ void main() {
     Navigator.of(tester.element(find.text('打开事项并重新保存'))).pop();
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('待确认 · 2'),
+      -240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('待确认 · 2'));
     await tester.pumpAndSettle();
 
@@ -1736,6 +1763,7 @@ void _expectTileIconAndActionCenteredWithReadableText(
   required Finder subtitle,
   required Finder icon,
   required Finder action,
+  bool stacked = false,
 }) {
   final titleRect = tester.getRect(title);
   final subtitleRect = tester.getRect(subtitle);
@@ -1744,9 +1772,31 @@ void _expectTileIconAndActionCenteredWithReadableText(
   final textCenterDy = _textBlockCenterDy(titleRect, subtitleRect);
 
   expect((iconRect.center.dy - textCenterDy).abs(), lessThan(5));
-  expect((actionRect.center.dy - textCenterDy).abs(), lessThan(5));
   expect(subtitleRect.top, greaterThan(titleRect.bottom));
   expect(actionRect.left, greaterThan(titleRect.left));
+  if (stacked) {
+    final tile = find.ancestor(
+      of: title,
+      matching: find.byType(AppSettingsTile),
+    );
+    final tileRect = tester.getRect(tile);
+    expect(actionRect.top, greaterThan(subtitleRect.bottom));
+    expect(actionRect.right, lessThanOrEqualTo(tileRect.right));
+    expect(actionRect.bottom, lessThanOrEqualTo(tileRect.bottom));
+    for (final text in [title, subtitle]) {
+      final rect = tester.getRect(text);
+      expect(tileRect.inflate(0.1).contains(rect.topLeft), isTrue);
+      expect(tileRect.inflate(0.1).contains(rect.bottomRight), isTrue);
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.descendant(of: text, matching: find.byType(RichText)),
+      );
+      expect(paragraph.didExceedMaxLines, isFalse);
+      expect(paragraph.textSize.width, lessThanOrEqualTo(rect.width + 0.1));
+      expect(paragraph.textSize.height, lessThanOrEqualTo(rect.height + 0.1));
+    }
+  } else {
+    expect((actionRect.center.dy - textCenterDy).abs(), lessThan(5));
+  }
 }
 
 void _expectExpansionHeaderAligned(

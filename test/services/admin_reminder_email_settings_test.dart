@@ -8,6 +8,7 @@ void main() {
       'lib/screens/admin_screen.dart',
     ).readAsStringSync();
     final backend = File('backend/main.py').readAsStringSync();
+    final labels = File('lib/core/admin_ui_copy.dart').readAsStringSync();
 
     for (final key in [
       'email_service_enabled',
@@ -39,13 +40,27 @@ void main() {
       expect(adminScreen, contains(key));
       expect(backend, contains(key));
     }
-    expect(adminScreen, contains('账号验证码邮件'));
-    expect(adminScreen, contains('账号邮件标题'));
-    expect(adminScreen, contains('兼容 RE0 的 TITLE，默认使用多仪'));
-    expect(adminScreen, contains('注册验证、邮箱登录和找回密码共用主备通道'));
+    expect(
+      adminScreen,
+      contains('AdminUiCopy.accountEmailEnableTitleFor(locale)'),
+    );
+    expect(adminScreen, contains('AdminUiCopy.emailTitleLabelFor(locale)'));
+    expect(adminScreen, contains('AdminUiCopy.emailTitleHelperFor(locale)'));
+    expect(
+      adminScreen,
+      contains('AdminUiCopy.accountEmailEnableSubtitleFor(locale)'),
+    );
+    expect(labels, contains('账号验证码邮件'));
+    expect(labels, contains('账号邮件标题'));
+    expect(labels, contains('兼容 RE0 的 TITLE，默认使用多仪'));
+    expect(labels, contains('注册验证、邮箱登录和找回密码共用主备通道'));
     expect(adminScreen, contains('Claw163'));
     expect(adminScreen, contains('Resend'));
-    expect(adminScreen, contains('备用成功后自动切换'));
+    expect(
+      adminScreen,
+      contains('AdminUiCopy.autoSwitchOnSuccessTitleFor(locale)'),
+    );
+    expect(labels, contains('备用成功后自动切换'));
     expect(adminScreen, contains('_mailProviderValue'));
     expect(adminScreen, contains('_mailProviderItems'));
     expect(adminScreen, contains('_openclawMailKeyMasked'));
@@ -69,14 +84,35 @@ void main() {
     expect(adminScreen, contains("'email_code_active_slot': _emailActiveSlot"));
     expect(adminScreen, contains('reminder_email_smtp_password_set'));
 
-    expect(adminScreen, contains('邮件提醒投递'));
-    expect(adminScreen, contains('默认提醒收件人'));
-    expect(adminScreen, contains('提醒 SMTP Host'));
-    expect(adminScreen, contains('提醒 SMTP 密码'));
-    expect(adminScreen, contains('测试提醒邮件'));
+    expect(
+      adminScreen,
+      contains('AdminUiCopy.reminderEmailEnableTitleFor(locale)'),
+    );
+    expect(
+      adminScreen,
+      contains('AdminUiCopy.reminderDefaultRecipientLabelFor('),
+    );
+    expect(
+      adminScreen,
+      contains('AdminUiCopy.reminderSmtpHostLabelFor(locale)'),
+    );
+    expect(
+      adminScreen,
+      contains('AdminUiCopy.reminderSmtpPasswordLabelFor(locale)'),
+    );
+    expect(
+      adminScreen,
+      contains('AdminUiCopy.testReminderEmailBtnFor(locale)'),
+    );
+    expect(labels, contains('邮件提醒投递'));
+    expect(labels, contains('默认提醒收件人'));
+    expect(labels, contains('提醒 SMTP Host'));
+    expect(labels, contains('提醒 SMTP 密码'));
+    expect(labels, contains('测试提醒邮件'));
     expect(adminScreen, contains('_testReminderEmail'));
     expect(adminScreen, contains('testReminderEmail()'));
-    expect(adminScreen, contains('测试账号邮件'));
+    expect(adminScreen, contains('AdminUiCopy.testAccountEmailBtnFor(locale)'));
+    expect(labels, contains('测试账号邮件'));
     expect(adminScreen, contains('_testingAccountEmail'));
     expect(adminScreen, contains('_testAccountEmail'));
     expect(adminScreen, contains('testAccountEmail()'));

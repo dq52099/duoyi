@@ -4,6 +4,18 @@ import 'package:duoyi/services/widget_navigation_request.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('replayed requests keep their original account generation', () {
+    var generation = 12;
+    final requests = WidgetNavigationRequests(
+      accountGeneration: () => generation,
+    );
+    final pending = requests.capture();
+    expect(pending.isCurrentAccount, isTrue);
+    generation++;
+    expect(pending.isCurrentAccount, isFalse);
+    expect(requests.capture().isCurrentAccount, isTrue);
+  });
+
   test('a request keeps its receipt order through queue and retries', () {
     final requests = WidgetNavigationRequests();
     final first = requests.capture();

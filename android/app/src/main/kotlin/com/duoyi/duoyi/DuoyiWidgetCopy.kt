@@ -115,13 +115,33 @@ object DuoyiWidgetCopy {
         zh: String,
         en: String,
     ): String {
-        // Theme navigation is already localized by Flutter; keep its wording.
         val saved = prefs.getString(key, null)?.trim()
-        return saved?.takeIf { it.isNotEmpty() } ?: if (isZh) zh else en
+        return localizeGeneratedLabel(saved, isZh, zh, en)
+    }
+
+    /**
+     * Normalize labels written by the app's built-in locale while preserving
+     * user-authored navigation names. This keeps an old payload from leaking
+     * Chinese labels into an English widget (or the reverse) after a switch.
+     */
+    private fun localizeGeneratedLabel(
+        saved: String?,
+        isZh: Boolean,
+        zh: String,
+        en: String,
+    ): String {
+        val value = saved?.trim().orEmpty()
+        if (value.isEmpty()) return if (isZh) zh else en
+        val generated = value == zh || value == en || (zh == "待办" && value == "To-Do")
+        return if (generated) {
+            if (isZh) zh else en
+        } else {
+            value
+        }
     }
 
     fun navTodo(prefs: SharedPreferences, isZh: Boolean): String =
-        navLabel(prefs, "nav_todo", isZh, "待办", "To-Do")
+        navLabel(prefs, "nav_todo", isZh, "待办", "Tasks")
     fun navHabit(prefs: SharedPreferences, isZh: Boolean): String =
         navLabel(prefs, "nav_habit", isZh, "习惯", "Habits")
     fun navCalendar(prefs: SharedPreferences, isZh: Boolean): String =
@@ -145,6 +165,18 @@ object DuoyiWidgetCopy {
         if (isZh) "查看待办：$title" else "View todo: $title"
     fun defaultTodoEmpty(isZh: Boolean): String =
         if (isZh) "今天没有未完成待办" else "No open tasks today"
+    fun cleanTodoTitle(raw: String): String {
+        val title = raw.trim().removePrefix("·").trim()
+        return title.ifBlank { raw }
+    }
+    fun todoItemTitle(prefs: SharedPreferences, slot: Int, isZh: Boolean): String {
+        val raw = prefs.getString("todo_top3_$slot", null)
+        return if (slot == 1 && (raw.isNullOrBlank() || raw == "今天没有未完成待办" || raw == "No open tasks today")) {
+            defaultTodoEmpty(isZh)
+        } else {
+            cleanTodoTitle(raw ?: "")
+        }
+    }
 
     // Focus
     fun focusTitle(isZh: Boolean): String = if (isZh) "专注" else "Focus"
@@ -179,8 +211,9 @@ object DuoyiWidgetCopy {
         if (raw == unpublishedMessage(true) || raw == unpublishedMessage(false)) {
             return unpublishedMessage(isZh)
         }
-        if (raw.isNullOrBlank() || raw == "今日还未专注" || raw == "No focus sessions today") {
-            return if (isZh) "今日还未专注" else "No focus sessions today"
+        if (raw.isNullOrBlank() || raw == "今日还未专注" || raw == "No focus sessions today" ||
+            raw == "No focus today yet") {
+            return if (isZh) "今日还未专注" else "No focus today yet"
         }
         return raw
     }
@@ -263,11 +296,54 @@ object DuoyiWidgetCopy {
         }
     }
 
-    fun localizeTimerLabel(label: String, isZh: Boolean): String = when {
-        !isZh && (label == "专注倒计时" || label == "倒计时") -> "Focus countdown"
-        !isZh && (label == "专注正计时" || label == "正计时") -> "Focus count-up"
-        isZh && label == "Focus countdown" -> "专注倒计时"
-        isZh && label == "Focus count-up" -> "专注正计时"
+    fun focusQuickStartShort(canStart: Boolean, paused: Boolean, running: Boolean, isZh: Boolean): String = when {
+        canStart && paused -> if (isZh) "继续专注" else "Resume focus"
+        canStart -> if (isZh) "开始专注" else "Start focus"
+        running -> if (isZh) "查看计时" else "View timer"
+        else -> if (isZh) "打开专注" else "Open Focus"
+    }
+
+    fun focusControlText(
+        sessionTrusted: Boolean,
+        expired: Boolean,
+        paused: Boolean,
+        timerRunning: Boolean,
+        countUp: Boolean,
+        nextFocusLabel: String,
+        isZh: Boolean,
+    ): String = when {
+        sessionTrusted && !expired && timerRunning -> if (isZh) "暂停专注" else "Pause focus"
+        else -> focusQuickStartText(
+            sessionTrusted = sessionTrusted,
+            expired = expired,
+            paused = paused,
+            timerRunning = timerRunning,
+            countUp = countUp,
+            nextFocusLabel = nextFocusLabel,
+            isZh = isZh,
+        )
+    }
+
+    fun focusControlShort(canStart: Boolean, paused: Boolean, running: Boolean, isZh: Boolean): String = when {
+        running && !canStart -> if (isZh) "暂停" else "Pause"
+        else -> focusQuickStartShort(canStart, paused, running, isZh)
+    }
+
+    fun focusFinishLabel(isZh: Boolean): String = if (isZh) "结束" else "Stop"
+
+    fun quickAddNoteDescription(isZh: Boolean): String = if (isZh) "快速记一笔" else "Quick add note"
+    fun quickAddDiaryDescription(isZh: Boolean): String = if (isZh) "写今日日记" else "Quick add diary"
+    fun quickAddGoalDescription(isZh: Boolean): String = if (isZh) "新建目标" else "Quick add goal"
+    fun quickAddScheduleDescription(isZh: Boolean): String = if (isZh) "新建日程" else "Quick add schedule"
+
+    fun focusTimerUnit(isZh: Boolean): String = if (isZh) "分钟" else "min"
+
+    fun localizeTimerLabel(label: String, isZh: Boolean): String = when (label) {
+        "专注倒计时", "倒计时", "Focus countdown" -> if (isZh) "专注倒计时" else "Focus countdown"
+        "专注正计时", "正计时", "正计时专注中", "Focus count-up", "Focus counting up" ->
+            if (isZh) "正计时专注中" else "Focus counting up"
+        "短休息倒计时", "Short break countdown" -> if (isZh) "短休息倒计时" else "Short break countdown"
+        "长休息倒计时", "Long break countdown" -> if (isZh) "长休息倒计时" else "Long break countdown"
         else -> label
     }
 
@@ -303,22 +379,28 @@ object DuoyiWidgetCopy {
         }
         return raw
     }
+    private val generatedStreakPatterns = listOf(
+        Regex("(?:· )?当前连续 (\\d+) 天"),
+        Regex("(?:· )?Current streak: (\\d+) days"),
+        Regex("(?:· )?连续记录 (\\d+) 天"),
+        Regex("(?:· )?(\\d+)-day streak"),
+        Regex("(?:· )?Streak: (\\d+) days"),
+    )
+
     fun streakSummary(raw: String?, isZh: Boolean): String {
-        if (raw.isNullOrBlank()) return if (isZh) "· 连续记录 0 天" else "· 0-day streak"
-        if (!isZh && raw.contains("连续记录")) {
-            val n = Regex("\\d+").find(raw)?.value ?: "0"
-            return "· $n-day streak"
+        val n = if (raw.isNullOrBlank()) {
+            "0"
+        } else {
+            generatedStreakPatterns.firstNotNullOfOrNull {
+                it.matchEntire(raw)?.groupValues?.get(1)
+            } ?: return raw
         }
-        if (isZh && raw.contains("-day streak")) {
-            val n = Regex("\\d+").find(raw)?.value ?: "0"
-            return "· 连续记录 $n 天"
-        }
-        return raw
+        return if (isZh) "· 当前连续 $n 天" else "· Current streak: $n days"
     }
     fun habitQuickCheckLabel(raw: String?, isZh: Boolean): String {
         if (raw == "") return ""
         if (raw == unpublishedMessage(isZh) || raw == unpublishedMessage(!isZh)) {
-            return raw
+            return unpublishedMessage(isZh)
         }
         if (raw == "打开习惯刷新" || raw == "Open habits to refresh") {
             return if (isZh) "打开习惯刷新" else "Open habits to refresh"
@@ -327,11 +409,10 @@ object DuoyiWidgetCopy {
             raw == "Tap to check in habits") {
             return if (isZh) "点击进入习惯打卡" else "Tap to check in"
         }
-        if (!isZh && raw.startsWith("打卡：")) {
-            return "Check-in: " + raw.removePrefix("打卡：")
-        }
-        if (isZh && raw.startsWith("Check-in: ")) {
-            return "打卡：" + raw.removePrefix("Check-in: ")
+        val generatedPrefix = listOf("打卡：", "Check in: ", "Check-in: ")
+            .firstOrNull { raw.startsWith(it) }
+        if (generatedPrefix != null) {
+            return (if (isZh) "打卡：" else "Check in: ") + raw.substring(generatedPrefix.length)
         }
         return raw
     }
@@ -348,8 +429,9 @@ object DuoyiWidgetCopy {
     }
     fun calendarTodayButton(isZh: Boolean): String = if (isZh) "今天" else "Today"
     fun calendarMonthSummary(raw: String?, isZh: Boolean): String {
-        if (raw.isNullOrBlank() || raw == "本月日期 · 今日已标记" || raw == "Monthly view · Today marked") {
-            return if (isZh) "本月日期 · 今日已标记" else "Monthly view · Today marked"
+        if (raw.isNullOrBlank() || raw == "本月日期 · 今日已标记" || raw == "Monthly view · Today marked" ||
+            raw == "Month view · today is marked") {
+            return if (isZh) "本月日期 · 今日已标记" else "Month view · today is marked"
         }
         return raw
     }
@@ -373,14 +455,15 @@ object DuoyiWidgetCopy {
             raw == "Today’s schedule" || raw == "Today's schedule") {
             return if (isZh) "今日日程" else "Today’s schedule"
         }
-        if (raw == "今日没有日程" || raw == "No schedule today") {
-            return if (isZh) "今日没有日程" else "No schedule today"
+        if (raw == "今日没有日程" || raw == "No schedule today" || raw == "No events today") {
+            return if (isZh) "今日没有日程" else "No events today"
         }
         return raw
     }
     fun scheduleHighlight1(raw: String?, todayEvent: String, isZh: Boolean): String {
         if (raw.isNullOrBlank() || raw == "· 今日没有日程" || raw == "今日没有日程" ||
-            raw == "· No schedule today" || raw == "No schedule today") {
+            raw == "· No schedule today" || raw == "No schedule today" ||
+            raw == "· No events today" || raw == "No events today") {
             return "· $todayEvent"
         }
         return raw
@@ -458,5 +541,156 @@ object DuoyiWidgetCopy {
             return if (isZh) "· 暂无日记" else "· No diary entries yet"
         }
         return raw
+    }
+
+    // Recovery / No-fit
+    fun todoRecoveryText(isZh: Boolean): String =
+        if (isZh) "打开待办查看完整内容" else "Open Tasks to view all content"
+
+    fun habitRecoveryText(isZh: Boolean): String =
+        if (isZh) "打开习惯查看完整内容" else "Open Habits to view all content"
+
+    fun goalRecoveryText(isZh: Boolean): String =
+        if (isZh) "打开目标查看完整内容" else "Open Goals to view all content"
+
+    fun calendarRecoveryText(isZh: Boolean): String =
+        if (isZh) "打开日历查看完整内容" else "Open Calendar to view all content"
+
+    private fun buildNoFitContentDescription(
+        isFresh: Boolean,
+        isZh: Boolean,
+        publicationState: DuoyiWidgetPublicationDocument.State?,
+        recoveryVisible: Boolean,
+        zhSubject: String,
+        enSubjectTitle: String,
+        enSubjectNoun: String,
+    ): String = when {
+        publicationState != DuoyiWidgetPublicationDocument.State.PUBLISHED -> {
+            if (recoveryVisible) {
+                if (isZh) "空间不足，打开多仪更新并查看${zhSubject}完整内容"
+                else "Widget space insufficient, open Duoyi to update and view all $enSubjectNoun"
+            } else {
+                if (isZh) "空间不足无可见内容，打开多仪更新并查看${zhSubject}"
+                else "Widget space insufficient, no visible content, open Duoyi to update and view $enSubjectNoun"
+            }
+        }
+        !isFresh -> {
+            if (recoveryVisible) {
+                if (isZh) "空间不足，数据待刷新，打开${zhSubject}查看完整内容"
+                else "Widget space insufficient, data pending refresh, open $enSubjectTitle to view all content"
+            } else {
+                if (isZh) "空间不足无可见内容，数据待刷新，打开${zhSubject}"
+                else "Widget space insufficient, no visible content, data pending refresh, open $enSubjectTitle"
+            }
+        }
+        else -> {
+            if (recoveryVisible) {
+                if (isZh) "空间不足，打开${zhSubject}查看完整内容"
+                else "Widget space insufficient, open $enSubjectTitle to view all content"
+            } else {
+                if (isZh) "空间不足无可见内容，打开${zhSubject}"
+                else "Widget space insufficient, no visible content, open $enSubjectTitle"
+            }
+        }
+    }
+
+    fun goalNoFitContentDescription(
+        isFresh: Boolean,
+        isZh: Boolean,
+        publicationState: DuoyiWidgetPublicationDocument.State? = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+        recoveryVisible: Boolean = false,
+    ): String = buildNoFitContentDescription(
+        isFresh = isFresh,
+        isZh = isZh,
+        publicationState = publicationState,
+        recoveryVisible = recoveryVisible,
+        zhSubject = "目标",
+        enSubjectTitle = "Goals",
+        enSubjectNoun = "goals",
+    )
+
+    fun calendarNoFitContentDescription(
+        isFresh: Boolean,
+        isZh: Boolean,
+        publicationState: DuoyiWidgetPublicationDocument.State? = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+        recoveryVisible: Boolean = false,
+    ): String = buildNoFitContentDescription(
+        isFresh = isFresh,
+        isZh = isZh,
+        publicationState = publicationState,
+        recoveryVisible = recoveryVisible,
+        zhSubject = "日历",
+        enSubjectTitle = "Calendar",
+        enSubjectNoun = "calendar",
+    )
+
+    fun todoNoFitContentDescription(
+        isFresh: Boolean,
+        isZh: Boolean,
+        publicationState: DuoyiWidgetPublicationDocument.State? = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+        recoveryVisible: Boolean = false,
+    ): String = when {
+        publicationState != DuoyiWidgetPublicationDocument.State.PUBLISHED -> {
+            if (recoveryVisible) {
+                if (isZh) "空间不足，打开多仪更新并查看待办完整内容"
+                else "Widget space insufficient, open Duoyi to update and view all tasks"
+            } else {
+                if (isZh) "空间不足无可见内容，打开多仪更新并查看待办"
+                else "Widget space insufficient, no visible content, open Duoyi to update and view tasks"
+            }
+        }
+        !isFresh -> {
+            if (recoveryVisible) {
+                if (isZh) "空间不足，数据待刷新，打开待办查看完整内容"
+                else "Widget space insufficient, data pending refresh, open Tasks to view all content"
+            } else {
+                if (isZh) "空间不足无可见内容，数据待刷新，打开待办"
+                else "Widget space insufficient, no visible content, data pending refresh, open Tasks"
+            }
+        }
+        else -> {
+            if (recoveryVisible) {
+                if (isZh) "空间不足，打开待办查看完整内容"
+                else "Widget space insufficient, open Tasks to view all content"
+            } else {
+                if (isZh) "空间不足无可见内容，打开待办"
+                else "Widget space insufficient, no visible content, open Tasks"
+            }
+        }
+    }
+
+    fun habitNoFitContentDescription(
+        isFresh: Boolean,
+        isZh: Boolean,
+        publicationState: DuoyiWidgetPublicationDocument.State? = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+        recoveryVisible: Boolean = false,
+    ): String = when {
+        publicationState != DuoyiWidgetPublicationDocument.State.PUBLISHED -> {
+            if (recoveryVisible) {
+                if (isZh) "空间不足，打开多仪更新并查看习惯完整内容"
+                else "Widget space insufficient, open Duoyi to update and view all habits"
+            } else {
+                if (isZh) "空间不足无可见内容，打开多仪更新并查看习惯"
+                else "Widget space insufficient, no visible content, open Duoyi to update and view habits"
+            }
+        }
+        !isFresh -> {
+            if (recoveryVisible) {
+                if (isZh) "空间不足，数据待刷新，打开习惯查看完整内容"
+                else "Widget space insufficient, data pending refresh, open Habits to view all content"
+            } else {
+                if (isZh) "空间不足无可见内容，数据待刷新，打开习惯"
+                else "Widget space insufficient, no visible content, data pending refresh, open Habits"
+            }
+        }
+        else -> {
+            if (recoveryVisible) {
+                if (isZh) "空间不足，打开习惯查看完整内容"
+                else "Widget space insufficient, open Habits to view all content"
+            } else {
+                if (isZh) "空间不足无可见内容，打开习惯"
+                else "Widget space insufficient, no visible content, open Habits"
+            }
+        }
     }
 }

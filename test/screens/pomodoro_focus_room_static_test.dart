@@ -187,7 +187,15 @@ void main() {
     expect(rankingSection, isNot(contains('token')));
     expect(rankingSection, contains('Icons.cloud_off_outlined'));
     expect(rankingSection, contains('Theme.of(context).colorScheme.outline'));
-    expect(rankingSection, contains('_FocusRoomRankingCard(ranking: ranking)'));
+    expect(
+      rankingSection,
+      contains(
+        RegExp(
+          r'_FocusRoomRankingCard\(\s*ranking:\s*ranking,\s*'
+          r'locale:\s*locale,?\s*\)',
+        ),
+      ),
+    );
     expect(screen, contains("label: ranking.remote ? '服务端排行' : '本地排行'"));
     expect(
       screen,

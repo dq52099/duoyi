@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_todo_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg_round_16"
+    android:clipToOutline="true"
+    android:outlineProvider="background">
+
+    <ImageView
+        android:id="@+id/widget_theme_background"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/widget_theme_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:visibility="gone" />
+
+    <!-- Keep the skin border above the cropped photo at every launcher size. -->
+    <ImageView
+        android:id="@+id/widget_theme_border"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/widget_todo_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+    <TextView
+        android:id="@+id/widget_todo_recovery"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textColor="#333333"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/widget_todo_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/widget_todo_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="多仪"
+                android:textColor="#0066D6"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/widget_todo_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:text="0"
+                android:textColor="#0066D6"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/widget_todo_unit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/widget_todo_unit"
+                android:textColor="#888888"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/widget_refresh"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="36dp"
+                android:minHeight="36dp"
+                android:layout_marginLeft="4dp"
+                android:gravity="center"
+                android:text="↻"
+                android:contentDescription="@string/widget_refresh_description"
+                android:textColor="#888888"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_todo_quick_add"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="44dp"
+            android:minHeight="34dp"
+            android:layout_marginTop="4dp"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:background="@drawable/widget_nav_bg"
+            android:gravity="center"
+            android:text="@string/widget_todo_quick_add"
+            android:textColor="#0066D6"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_todo_row_1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="38dp"
+        android:layout_marginTop="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_todo_item_1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="· …"
+            android:textColor="#333333"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/widget_todo_done_1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="38dp"
+            android:minHeight="38dp"
+            android:background="@drawable/widget_btn_done"
+            android:gravity="center"
+            android:text="○"
+            android:contentDescription="@string/widget_todo_complete"
+            android:textColor="#0066D6"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_todo_row_2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="38dp"
+        android:layout_marginTop="3dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_todo_item_2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="· …"
+            android:textColor="#333333"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/widget_todo_done_2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="38dp"
+            android:minHeight="38dp"
+            android:background="@drawable/widget_btn_done"
+            android:gravity="center"
+            android:text="○"
+            android:contentDescription="@string/widget_todo_complete"
+            android:textColor="#0066D6"
+            android:textSize="14sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_todo_row_3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="38dp"
+        android:layout_marginTop="3dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_todo_item_3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="· …"
+            android:textColor="#333333"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/widget_todo_done_3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="38dp"
+            android:minHeight="38dp"
+            android:background="@drawable/widget_btn_done"
+            android:gravity="center"
+            android:text="○"
+            android:contentDescription="@string/widget_todo_complete"
+            android:textColor="#0066D6"
+            android:textSize="14sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_todo_today_summary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/widget_todo_summary_default"
+        android:textColor="#666666"
+        android:textSize="11sp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/widget_todo_spacer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal" />
+
+    <LinearLayout
+        android:id="@+id/widget_todo_bottom_nav"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="30dp"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/widget_nav_bg"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingLeft="4dp"
+        android:paddingRight="4dp"
+        android:weightSum="4"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_todo_nav_todo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_tab_todo"
+            android:textColor="#0066D6"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/widget_todo_nav_habit"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_tab_habit"
+            android:textColor="#333333"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/widget_todo_nav_calendar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_tab_calendar"
+            android:textColor="#333333"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/widget_todo_nav_focus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_tab_focus"
+            android:textColor="#333333"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    </LinearLayout>
+</FrameLayout>

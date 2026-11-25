@@ -10,14 +10,19 @@ void main() {
     final dateFields = File(
       'lib/widgets/habit_date_range_fields.dart',
     ).readAsStringSync();
-    final source = '$detail\n$dateFields';
+    final unitField = File(
+      'lib/widgets/habit_unit_field.dart',
+    ).readAsStringSync();
+    final source = '$detail\n$dateFields\n$unitField';
 
     expect(detail, contains("import '../services/alarm_service.dart';"));
     expect(
       detail,
-      contains('AlarmService.instance.requestExactAlarmPermission()'),
+      matches(
+        RegExp(r'AlarmService\.instance\s*\.requestExactAlarmPermission\(\)'),
+      ),
     );
-    expect(detail, contains('.requestFullScreenIntentPermission()'));
+    expect(detail, matches(RegExp(r'\.requestFullScreenIntentPermission\(\)')));
     expect(
       detail,
       isNot(contains('onRequestExactAlarmPermission: () async {}')),
@@ -31,24 +36,16 @@ void main() {
       'habit.detail.title',
       'habit.detail.not_found',
       'habit.edit.title',
-      'habit.saved',
       'habit.field.name',
       'habit.field.group',
       'habit.field.group.empty_hint',
       'habit.field.daily_target_count',
       'habit.field.unit',
-      'habit.unit.times',
       'habit.kind',
       'habit.kind.positive',
       'habit.kind.negative',
       'habit.color',
       'habit.reminder',
-      'habit.error.name_required',
-      'habit.error.daily_target',
-      'habit.error.flex_target',
-      'habit.error.date_range',
-      'habit.error.notification_permission',
-      'habit.error.reminder_register_failed',
       'habit.flex.rule',
       'habit.flex.period_target',
       'habit.flex.period_target_hint',
@@ -84,6 +81,18 @@ void main() {
       'unit.day',
     ]) {
       expect(source, contains("'$key'"), reason: key);
+    }
+
+    for (final helper in [
+      'saveSuccess',
+      'nameRequired',
+      'dailyTargetInvalid',
+      'flexTargetInvalid',
+      'dateRangeInvalid',
+      'reminderPermissionError',
+      'reminderRegisterFailed',
+    ]) {
+      expect(detail, contains('HabitUiCopy.$helper('), reason: helper);
     }
 
     final generatedBase = File(

@@ -14,8 +14,14 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/account_preference_writes.dart';
+import '../core/location_reminder_storage.dart';
 import '../models/location_reminder.dart';
+import '../services/account_local_data_cleaner.dart';
 import 'cloud_sync_provider.dart';
+
+export '../core/location_reminder_storage.dart'
+    show LocationReminderStorageIndeterminate;
 
 class LocationFix {
   final double latitude;
@@ -108,50 +114,29 @@ class LocationReminderEngine {
 
 class LocationReminderProvider extends ChangeNotifier {
   static const _key = 'duoyi_location_reminders_v1';
-
   final List<LocationReminder> _reminders = [];
   final Map<String, bool> _inRange = {};
   bool _loaded = false;
   int _storageGeneration = 0;
+  bool _disposed = false;
   VoidCallback? onLocalMutationPersisted;
 
   List<LocationReminder> get reminders =>
       List<LocationReminder>.unmodifiable(_reminders);
   bool get isLoaded => _loaded;
+  int get storageGeneration => _storageGeneration;
+  bool get storageNeedsReconciliation =>
+      LocationReminderStorage.failure != null;
 
-  Future<void> loadFromStorage() async {
-    final generation = _storageGeneration;
+  Future<void> loadFromStorage() => _enqueueStorage<void>((isCurrent) async {
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
-    final raw = prefs.getString(_key);
-    if (raw == null || raw.isEmpty) {
-      // 存储已被 wipe（清空本机数据）时，内存里的旧提醒也必须清掉，
-      // 否则 UI 仍显示旧列表，且下一次写操作会把整份内存列表重新
-      // 持久化——刚被删除的旧数据“复活”。与 QuickCaptureTemplateProvider
-      // / HabitProvider 的空键清空行为保持一致。
-      _reminders.clear();
-      _inRange.clear();
-      _loaded = true;
-      notifyListeners();
-      return;
-    }
-    try {
-      final list = jsonDecode(raw) as List;
-      _reminders
-        ..clear()
-        ..addAll(
-          list.whereType<Map>().map(
-            (m) => LocationReminder.fromJson(Map<String, dynamic>.from(m)),
-          ),
-        );
-    } catch (e) {
-      debugPrint('[LocationReminder] load failed: $e');
-    }
-    _loaded = true;
+    _ensureCurrent(isCurrent);
+    _publish(_decode(prefs.getString(_key)), const {});
     notifyListeners();
-  }
+  }).onError<AccountPreferenceWriteCanceled>((_, _) {});
 
   void resetLocalState() {
+    if (_disposed) return;
     _storageGeneration++;
     _reminders.clear();
     _inRange.clear();
@@ -159,81 +144,248 @@ class LocationReminderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> add(LocationReminder reminder) async {
-    _reminders.add(reminder);
-    await _save();
-    _notifyLocalMutationPersisted();
-    notifyListeners();
+  Future<void> add(LocationReminder reminder, {bool Function()? isCurrent}) =>
+      _mutate<void>((snapshot, range) {
+        final existing = snapshot.where((item) => item.id == reminder.id);
+        if (existing.isNotEmpty) {
+          if (jsonEncode(existing.single.toJson()) !=
+              jsonEncode(reminder.toJson())) {
+            throw StateError(
+              'Location reminder ID already belongs to another draft',
+            );
+          }
+          return _LocationMutation(snapshot, range, null, changed: false);
+        }
+        snapshot.add(reminder);
+        return _LocationMutation(snapshot, range, null);
+      }, authority: isCurrent);
+
+  Future<void> update(LocationReminder reminder) {
+    final replacement = reminder.copyWith(updatedAt: DateTime.now());
+    return _mutate<void>((snapshot, range) {
+      final i = snapshot.indexWhere((r) => r.id == replacement.id);
+      if (i < 0) {
+        return _LocationMutation(snapshot, range, null, changed: false);
+      }
+      snapshot[i] = replacement;
+      range.remove(replacement.id);
+      return _LocationMutation(snapshot, range, null);
+    });
   }
 
-  Future<void> update(LocationReminder reminder) async {
-    final i = _reminders.indexWhere((r) => r.id == reminder.id);
-    if (i < 0) return;
-    _reminders[i] = reminder.copyWith(updatedAt: DateTime.now());
-    await _save();
-    _notifyLocalMutationPersisted();
-    notifyListeners();
-  }
-
-  Future<void> remove(String id) async {
-    await CloudSyncProvider.recordDeletedItem('location_reminders', id);
-    _reminders.removeWhere((r) => r.id == id);
-    _inRange.remove(id);
-    await _save();
-    _notifyLocalMutationPersisted();
-    notifyListeners();
-  }
+  Future<void> remove(String id) => _mutate<void>((snapshot, range) {
+    final found = snapshot.any((r) => r.id == id);
+    snapshot.removeWhere((r) => r.id == id);
+    range.remove(id);
+    return _LocationMutation(
+      snapshot,
+      range,
+      null,
+      changed: found,
+      removedIds: found ? [id] : const [],
+    );
+  });
 
   /// 注入一次位置更新；返回命中的提醒。
-  List<LocationReminderHit> ingestFix(LocationFix fix) {
+  Future<List<LocationReminderHit>> ingestFix(
+    LocationFix fix, {
+    bool Function()? isCurrent,
+  }) => _mutate<List<LocationReminderHit>>((snapshot, range) {
     final (hits, nextRange) = LocationReminderEngine.evaluate(
-      reminders: _reminders,
+      reminders: snapshot,
       fix: fix,
-      previousInRange: _inRange,
+      previousInRange: range,
     );
+    final removedIds = <String>[];
+    for (final hit in hits) {
+      final i = snapshot.indexWhere((r) => r.id == hit.reminder.id);
+      if (i < 0) continue;
+      if (snapshot[i].oneShot) {
+        removedIds.add(snapshot[i].id);
+        snapshot.removeAt(i);
+        nextRange.remove(hit.reminder.id);
+      } else {
+        snapshot[i] = snapshot[i].copyWith(lastFiredAt: fix.at);
+      }
+    }
+    return _LocationMutation(
+      snapshot,
+      nextRange,
+      hits,
+      changed: hits.isNotEmpty,
+      removedIds: removedIds,
+    );
+  }, authority: isCurrent);
+
+  Future<T> _mutate<T>(
+    _LocationMutation<T> Function(List<LocationReminder>, Map<String, bool>)
+    prepare, {
+    bool Function()? authority,
+  }) => _enqueueStorage<T>((isCurrent) async {
+    final attemptAccount = AccountLocalDataCleaner.accountDataGeneration;
+    final attemptEpoch = LocationReminderStorage.storageEpoch;
+    final prefs = await SharedPreferences.getInstance();
+    _ensureCurrent(isCurrent);
+    final snapshot = _decode(prefs.getString(_key));
+    final range = <String, bool>{
+      for (final item in snapshot)
+        if (_inRange.containsKey(item.id)) item.id: _inRange[item.id]!,
+    };
+    final mutation = prepare(snapshot, range);
+    if (!mutation.changed) {
+      _publish(mutation.snapshot, mutation.range);
+      return mutation.result;
+    }
+    var committed = false;
+    Future<void> persist({DeletedItemsWriteLease? lease}) async {
+      bool ownsWrite() => isCurrent() && (lease?.isCurrent ?? true);
+      _ensureCurrent(ownsWrite);
+      final transaction = AccountPreferenceTransaction(prefs, ownsWrite);
+      try {
+        if (lease != null) {
+          await CloudSyncProvider.recordDeletedItems(
+            'location_reminders',
+            mutation.removedIds,
+            transaction: transaction,
+            lease: lease,
+          );
+        }
+        await transaction.setString(
+          _key,
+          jsonEncode(mutation.snapshot.map((r) => r.toJson()).toList()),
+        );
+        transaction.commit();
+        committed = true;
+        // No await or callbacks between the authority check and publication.
+        _publish(mutation.snapshot, mutation.range);
+      } catch (error, stack) {
+        await LocationReminderStorage.compensateLocked(
+          transaction,
+          error,
+          account: attemptAccount,
+          epoch: attemptEpoch,
+        );
+        Error.throwWithStackTrace(error, stack);
+      }
+    }
+
+    if (mutation.removedIds.isEmpty) {
+      await persist();
+    } else {
+      try {
+        await CloudSyncProvider.withDeletedItemsLock<void>(
+          (lease) => persist(lease: lease),
+        );
+      } on AccountPreferenceWriteCanceled {
+        // A boundary after the final durable commit is not an add/delete failure.
+        if (!committed) rethrow;
+      }
+    }
+    if (isCurrent()) _notifyLocalMutationPersisted();
+    if (isCurrent()) notifyListeners();
+    return mutation.result;
+  }, authority: authority);
+
+  Future<T> _enqueueStorage<T>(
+    Future<T> Function(bool Function()) operation, {
+    bool Function()? authority,
+    bool allowUncertain = false,
+  }) {
+    final generation = _storageGeneration;
+    final account = AccountLocalDataCleaner.accountDataGeneration;
+    final epoch = LocationReminderStorage.storageEpoch;
+    return AccountPreferenceWrites.runResult<T>(
+      (token) => LocationReminderStorage.run<T>(
+        () async {
+          bool isCurrent() =>
+              !_disposed &&
+              token.isCurrent &&
+              generation == _storageGeneration &&
+              AccountLocalDataCleaner.isCurrentAccountDataGeneration(account) &&
+              _authorityCurrent(authority);
+          _ensureCurrent(isCurrent);
+          return operation(isCurrent);
+        },
+        allowUncertain: allowUncertain,
+        epoch: epoch,
+      ),
+      canceledResult: () => throw const AccountPreferenceWriteCanceled(),
+    );
+  }
+
+  /// Explicitly restore an indeterminate write before accepting another draft.
+  /// Refuse to overwrite storage changed by an independent writer meanwhile.
+  Future<void> reconcileStorage() => _enqueueStorage<void>((isCurrent) async {
+    final prefs = await SharedPreferences.getInstance();
+    _ensureCurrent(isCurrent);
+    if (!storageNeedsReconciliation) return;
+    await CloudSyncProvider.withDeletedItemsLock<void>((lease) async {
+      bool ownsWrite() => isCurrent() && lease.isCurrent;
+      await LocationReminderStorage.reconcileLocked(prefs, ownsWrite);
+      _publish(_decode(prefs.getString(_key)), const {});
+    });
+    if (isCurrent()) notifyListeners();
+  }, allowUncertain: true);
+
+  void _ensureCurrent(bool Function() isCurrent) {
+    if (!isCurrent()) throw const AccountPreferenceWriteCanceled();
+  }
+
+  bool _authorityCurrent(bool Function()? authority) {
+    try {
+      return authority?.call() ?? true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  List<LocationReminder> _decode(String? raw) {
+    if (raw == null || raw.isEmpty) return [];
+    final list = jsonDecode(raw) as List;
+    return list
+        .whereType<Map>()
+        .map((m) => LocationReminder.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
+  }
+
+  void _publish(List<LocationReminder> snapshot, Map<String, bool> range) {
+    _reminders
+      ..clear()
+      ..addAll(snapshot);
     _inRange
       ..clear()
-      ..addAll(nextRange);
-    if (hits.isNotEmpty) {
-      // 更新 lastFiredAt + oneShot 删除
-      final removedIds = <String>[];
-      for (final hit in hits) {
-        final i = _reminders.indexWhere((r) => r.id == hit.reminder.id);
-        if (i < 0) continue;
-        if (_reminders[i].oneShot) {
-          removedIds.add(_reminders[i].id);
-          _reminders.removeAt(i);
-        } else {
-          _reminders[i] = _reminders[i].copyWith(lastFiredAt: fix.at);
-        }
-      }
-      // ignore: discarded_futures
-      _saveTriggeredHits(removedIds);
-    }
-    return hits;
-  }
-
-  Future<void> _saveTriggeredHits(List<String> removedIds) async {
-    if (removedIds.isNotEmpty) {
-      await CloudSyncProvider.recordDeletedItems(
-        'location_reminders',
-        removedIds,
-      );
-    }
-    await _save();
-    _notifyLocalMutationPersisted();
-    notifyListeners();
-  }
-
-  Future<void> _save() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _key,
-      jsonEncode(_reminders.map((r) => r.toJson()).toList()),
-    );
+      ..addAll(range);
+    _loaded = true;
   }
 
   void _notifyLocalMutationPersisted() {
-    onLocalMutationPersisted?.call();
+    try {
+      onLocalMutationPersisted?.call();
+    } catch (e, st) {
+      debugPrint('[LocationReminder] committed callback failed: $e\n$st');
+    }
   }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _storageGeneration++;
+    onLocalMutationPersisted = null;
+    super.dispose();
+  }
+}
+
+class _LocationMutation<T> {
+  final List<LocationReminder> snapshot;
+  final Map<String, bool> range;
+  final T result;
+  final bool changed;
+  final List<String> removedIds;
+  _LocationMutation(
+    this.snapshot,
+    this.range,
+    this.result, {
+    this.changed = true,
+    this.removedIds = const [],
+  });
 }

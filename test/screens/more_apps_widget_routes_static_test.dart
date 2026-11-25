@@ -28,13 +28,20 @@ void main() {
         ),
       ),
     );
-    expect(main, contains('WidgetScreen(key: widgetKey)'));
+    expect(
+      main,
+      matches(
+        RegExp(
+          r'WidgetScreen\(\s*key:\s*widgetKey,\s*isActive:\s*tab\s*==\s*activeIndex,\s*activityRevision:\s*_widgetActivityRevision,?\s*\)',
+        ),
+      ),
+    );
     expect(main, contains('final Set<int> _builtTabs = <int>{0}'));
     expect(main, contains('_LazyTabPlaceholder'));
-    expect(main, contains('_buildTab(tab, safeVisibleTabs)'));
-    expect(main, contains('state.navigateTo(idx, allowHidden: true);'));
+    expect(main, contains('_buildTab(tab, safeVisibleTabs, safeIndex)'));
+    expect(main, contains('_navigateWidgetSection(state, ctx, idx);'));
     expect(main, contains('bottomNavigationBar: showingHiddenTab'));
-    expect(main, contains("const Text('返回我的')"));
+    expect(main, contains("? 'Back to Me' : '返回我的'"));
 
     expect(
       moreApps,
@@ -57,7 +64,7 @@ void main() {
     expect(moreApps, contains('child: app.builder(routeContext)'));
     expect(moreApps, contains('appSecondaryMenuItemTextStyle('));
     expect(moreApps, isNot(contains('fontSize: 13')));
-    expect(moreApps, contains("label: '小组件'"));
+    expect(moreApps, contains("label: I18n.tr('nav.widget')"));
     expect(moreApps, contains('builder: (_) => const WidgetScreen()'));
     expect(moreApps, isNot(contains("label: '番茄专注'")));
     expect(moreApps, isNot(contains("label: '倒数日'")));
@@ -105,11 +112,11 @@ void main() {
     for (final tab in ['todo', 'habit', 'calendar', 'focus', 'widget']) {
       expect(main, contains("'$tab' => "));
     }
-    expect(main, contains('state.navigateTo(idx, allowHidden: true);'));
-    expect(main, contains('state.navigateTo(4, allowHidden: true)'));
-    expect(main, contains('state.navigateTo(1, allowHidden: true)'));
-    expect(main, contains('state.navigateTo(2, allowHidden: true)'));
-    expect(main, contains('state.navigateTo(5, allowHidden: true)'));
+    expect(main, contains('_navigateWidgetSection(state, ctx, idx);'));
+    expect(main, contains('_navigateWidgetSection(state, ctx, 4)'));
+    expect(main, contains('_navigateWidgetSection(state, ctx, 1)'));
+    expect(main, contains('_navigateWidgetSection(state, ctx, 2)'));
+    expect(main, contains('_navigateWidgetSection(state, ctx, 5)'));
     expect(main, contains('_pushHiddenWidgetFallbackRoute'));
     expect(
       main,
@@ -124,27 +131,33 @@ void main() {
     );
     expect(
       main,
-      contains('_pushHiddenWidgetFallbackRoute(ctx, const GoalScreen())'),
-    );
-    expect(
-      main,
       contains(
-        '_pushHiddenWidgetFallbackRoute(ctx, const CourseScheduleScreen())',
+        '_pushHiddenWidgetFallbackRoute(ctx, const GoalScreen(), access)',
       ),
     );
     expect(
       main,
       contains(
-        '_pushHiddenWidgetFallbackRoute(ctx, const AnniversaryScreen())',
+        '_pushHiddenWidgetFallbackRoute(ctx, const CourseScheduleScreen(), access)',
       ),
     );
     expect(
       main,
-      contains('_pushHiddenWidgetFallbackRoute(ctx, const NoteScreen())'),
+      contains(
+        '_pushHiddenWidgetFallbackRoute(ctx, const AnniversaryScreen(), access)',
+      ),
     );
     expect(
       main,
-      contains('_pushHiddenWidgetFallbackRoute(ctx, const DiaryScreen())'),
+      contains(
+        '_pushHiddenWidgetFallbackRoute(ctx, const NoteScreen(), access)',
+      ),
+    );
+    expect(
+      main,
+      contains(
+        '_pushHiddenWidgetFallbackRoute(ctx, const DiaryScreen(), access)',
+      ),
     );
 
     expect(
@@ -224,12 +237,18 @@ void main() {
     final main = File('lib/main.dart').readAsStringSync();
 
     final handlerStart = main.indexOf('void handleDeepLink(Uri uri)');
-    final handlerEnd = main.indexOf('void handleSharedText', handlerStart);
+    final handlerEnd = main.indexOf('DeepLinkService.onLink =', handlerStart);
     expect(handlerStart, greaterThanOrEqualTo(0));
     expect(handlerEnd, greaterThan(handlerStart));
     final handler = main.substring(handlerStart, handlerEnd);
     expect(handler, contains('WidgetsBinding.instance.addPostFrameCallback'));
-    expect(handler, contains('_handleWidgetUri(uri, pomodoroProvider)'));
+    expect(handler, contains('_widgetNavigationRequests.capture()'));
+    expect(
+      handler,
+      contains(
+        '_handleWidgetUri(uri, pomodoroProvider, navigationRequest: request)',
+      ),
+    );
 
     final widgetStreamStart = main.indexOf(
       'HomeWidgetService.widgetClickedStream.listen',
@@ -253,20 +272,18 @@ void main() {
       main,
       contains('_handleWidgetUri(initialDeepLink, pomodoroProvider)'),
     );
-    expect(main, contains('final List<Uri> _pendingWidgetUris = <Uri>[]'));
     expect(
       main,
-      contains('void _queuePendingWidgetUri(Uri uri, String reason)'),
+      contains('final List<_PendingWidgetLaunch> _pendingWidgetUris'),
     );
+    expect(main, contains('void _queuePendingWidgetUri('));
     expect(
       main,
       contains('void _drainPendingWidgetUris(PomodoroProvider pomodoro)'),
     );
     expect(
       main,
-      contains(
-        "_queuePendingWidgetUri(uri, 'main shell not ready after \$retry frames')",
-      ),
+      contains("'main shell not ready after \$retry frames'"),
       reason:
           'Deep links that arrive before the shell attaches should be queued instead of dropped.',
     );
@@ -282,20 +299,25 @@ void main() {
       expect(diagnostic, isNot(contains(r'$uri')));
       expect(diagnostic, isNot(contains(r'${uri.')));
     }
-    expect(main, contains("state.navigateTo(6, allowHidden: true);"));
+    expect(main, contains('_navigateWidgetSection(state, ctx, 6);'));
   });
 
   test(
     'share text note route keeps brand surface instead of transparent route',
     () {
       final main = File('lib/main.dart').readAsStringSync();
-      final start = main.indexOf("} else if (action == 'note') {");
-      final end = main.indexOf('\n  }\n}', start);
+      final start = main.indexOf('Future<void> _showSharedTextImportSheet(');
+      expect(start, greaterThanOrEqualTo(0));
+      final end = main.indexOf('Future<void> _showTodoCompletePrompt(', start);
       expect(start, greaterThanOrEqualTo(0));
       expect(end, greaterThan(start));
       final noteBranch = main.substring(start, end);
 
       expect(noteBranch, contains('NoteItem('));
+      expect(noteBranch, contains('await notes.addOrUpdateNotePersisted('));
+      expect(noteBranch, contains('request.markActionStarted()'));
+      expect(noteBranch, contains('!canDeliver()'));
+      expect(noteBranch, contains('request.isCurrentAccount'));
       expect(noteBranch, contains('BrandRouteSurface(child: NoteScreen())'));
       expect(
         noteBranch,

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:duoyi/core/admin_ui_copy.dart';
 import 'package:duoyi/core/app_update_ui_copy.dart';
 import 'package:duoyi/core/app_version.dart';
 import 'package:duoyi/core/i18n.dart';
@@ -30,7 +31,15 @@ void main() {
       backend,
       contains('_normalize_update_version_floor(minimum_supported_version)'),
     );
-    expect(adminScreen, contains('当前客户端版本 \${AppVersion.name}'));
+    expect(adminScreen, contains('AdminUiCopy.currentClientVersionTitle('));
+    expect(
+      AdminUiCopy.currentClientVersionTitle(AppVersion.name, AppLocale.zh),
+      '当前客户端版本 ${AppVersion.name}',
+    );
+    expect(
+      AdminUiCopy.currentClientVersionTitle(AppVersion.name, AppLocale.en),
+      'Current Client Version ${AppVersion.name}',
+    );
     expect(
       '$pubspec$appVersion$backend$adminScreen',
       isNot(contains('1.1.20')),
@@ -43,6 +52,7 @@ void main() {
     final adminScreen = File(
       'lib/screens/admin_screen.dart',
     ).readAsStringSync();
+    final labels = File('lib/core/admin_ui_copy.dart').readAsStringSync();
     final updateService = File(
       'lib/services/app_update_service.dart',
     ).readAsStringSync();
@@ -71,10 +81,20 @@ void main() {
     expect(adminApi, contains('minimumSupportedVersion'));
     expect(adminApi, contains('updateDownloadUrl'));
     expect(adminApi, contains('client.patch'));
-    expect(adminScreen, contains("title: '应用更新'"));
-    expect(adminScreen, contains("labelText: '版本策略'"));
-    expect(adminScreen, contains("title: '版本选择'"));
-    expect(adminScreen, contains('管理员只需选择上方策略'));
+    expect(
+      adminScreen,
+      contains('title: AdminUiCopy.appUpdateSectionTitleFor(locale)'),
+    );
+    expect(
+      adminScreen,
+      contains('labelText: AdminUiCopy.versionPolicyLabelFor(locale)'),
+    );
+    expect(
+      adminScreen,
+      contains('title: AdminUiCopy.versionSelectionTitleFor(locale)'),
+    );
+    expect(adminScreen, contains('AdminUiCopy.versionSelectionMessage('));
+    expect(labels, contains('管理员只需选择上方策略'));
     expect(adminScreen, contains("_data['version_options']"));
     expect(
       adminScreen,
@@ -86,9 +106,13 @@ void main() {
     expect(adminScreen, isNot(contains("labelText: '最低支持版本'")));
     expect(adminScreen, isNot(contains("hintText: '默认当前版本'")));
     expect(adminScreen, isNot(contains("hintText: '默认当前版本，低于该版本时强制更新'")));
-    expect(adminScreen, contains("title: '更新内容预览'"));
+    expect(
+      adminScreen,
+      contains('title: AdminUiCopy.updateNotesPreviewTitleFor(locale)'),
+    );
     expect(adminScreen, contains('_updateNotesPreview'));
-    expect(adminScreen, contains('保存时会自动写入以上摘要'));
+    expect(adminScreen, contains('AdminUiCopy.updateNotesSaveHintFor(locale)'));
+    expect(labels, contains('保存时会自动写入以上摘要'));
     expect(adminScreen, isNot(contains("labelText: '更新内容摘要'")));
     expect(
       adminScreen,
@@ -98,7 +122,7 @@ void main() {
     expect(adminScreen, isNot(contains('_updateNotesForSave')));
     expect(adminScreen, contains('_defaultUpdateNotesFor'));
     expect(adminScreen, contains("updateDownloadUrl: ''"));
-    expect(adminScreen, contains('安装包与完整发布说明由后端发布通道自动读取'));
+    expect(labels, contains('安装包与完整发布说明由后端发布通道自动读取'));
     expect(adminScreen, contains('_adminUpdatePresetCurrent'));
     expect(adminScreen, contains('_adminUpdatePresetNextPatch'));
     expect(adminScreen, contains('_adminUpdatePresetNextMinor'));
@@ -119,20 +143,24 @@ void main() {
     );
     expect(adminScreen, contains('void _syncUpdateVersionPreset()'));
     expect(adminScreen, contains('_syncUpdateVersionPreset();'));
-    expect(adminScreen, contains('当前版本'));
-    expect(adminScreen, contains('下一补丁'));
-    expect(adminScreen, contains('下一小版本'));
-    expect(adminScreen, contains('强制低于'));
-    expect(adminScreen, contains("label: const Text('保存更新配置')"));
+    expect(labels, contains('当前版本'));
+    expect(labels, contains('下一补丁'));
+    expect(labels, contains('下一小版本'));
+    expect(labels, contains('强制低于'));
+    expect(
+      adminScreen,
+      contains('label: Text(AdminUiCopy.saveUpdateConfigBtnFor(locale))'),
+    );
     expect(adminScreen, contains('Future<void> _saveUpdateConfig() async'));
     expect(adminScreen, contains('Future<void> _saveForceUpdateRequired'));
     expect(adminScreen, contains('_validateUpdatePolicy'));
     expect(adminScreen, isNot(contains('强制更新未生效')));
     expect(adminScreen, isNot(contains('hasRaisedMinimum')));
-    expect(adminScreen, contains('当前版本也允许保存强制更新开关'));
-    expect(adminScreen, contains('由后端发布通道'));
-    expect(adminScreen, contains('用户需完成更新后继续使用'));
-    expect(adminScreen, contains('当前客户端版本 \${AppVersion.name}'));
+    expect(adminScreen, contains('forceUpdateRequired: value'));
+    expect(adminScreen, contains("_data['force_update_required'] = value"));
+    expect(labels, contains('由后端发布通道'));
+    expect(labels, contains('用户需完成更新后继续使用'));
+    expect(adminScreen, contains('AdminUiCopy.currentClientVersionTitle('));
 
     expect(updateService, contains("_backendUri("));
     expect(updateService, contains("'/api/mobile/apps/duoyi/update'"));
@@ -172,11 +200,15 @@ void main() {
       isNot(contains('Future<void>.delayed(const Duration(seconds: 6), ()')),
       reason: '启动更新策略检查不再使用独立定时器，避免和提醒、通知栏、小组件任务并发抢首屏。',
     );
-    expect(mainApp, contains('home: updater.mustUpdate'));
+    expect(mainApp, contains('builder: (context, child) => AppAccessLayer('));
     expect(
       mainApp,
-      contains('? const Stack(children: [ForceUpdateGate()])'),
-      reason: '强制更新首帧不能先构建 MainShell，再用弹层覆盖。',
+      matches(
+        RegExp(
+          r'home:[\s\S]*?!_hasOpenedHome\s*\?\s*const SizedBox\.shrink\(\)',
+        ),
+      ),
+      reason: '冷启动强制更新延后 home；之后到达的策略保留已打开路由。',
     );
     expect(mainApp, contains('const ForceUpdateGate()'));
     expect(mainApp, contains("import 'widgets/force_update_gate.dart';"));

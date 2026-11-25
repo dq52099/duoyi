@@ -10,6 +10,9 @@ void main() {
       final adminScreen = File(
         'lib/screens/admin_screen.dart',
       ).readAsStringSync();
+      final adminUiCopy = File(
+        'lib/core/admin_ui_copy.dart',
+      ).readAsStringSync();
       final diaryScreen = File(
         'lib/screens/diary_screen.dart',
       ).readAsStringSync();
@@ -36,14 +39,33 @@ void main() {
       expect(adminScreen, contains('baseUrl: _baseCtrl.text.trim()'));
       expect(adminScreen, contains('apiKey: submitKey'));
       expect(adminScreen, contains('model: _modelCtrl.text.trim()'));
-      expect(adminScreen, contains('测试当前表单'));
+      expect(adminScreen, contains('AdminUiCopy.aiTestCurrentFormFor(locale)'));
+      expect(
+        adminUiCopy,
+        contains('static String aiTestCurrentFormFor([AppLocale? locale])'),
+      );
+      expect(
+        adminUiCopy,
+        contains('(locale ?? I18n.current) == AppLocale.zh;'),
+      );
       expect(adminScreen, isNot(contains('ai.testConnection()')));
       expect(adminScreen, contains("res['sample']"));
       expect(adminScreen, isNot(contains("res['content']")));
       expect(adminScreen, contains('_adminAiFailureReason'));
-      expect(adminScreen, contains('AI 上游服务不可达'));
-      expect(adminScreen, contains('AI 代理或上游模型不可用'));
-      expect(adminScreen, contains('AI 功能未启用'));
+      expect(adminScreen, contains('AdminUiCopy.aiFailureReason(raw, locale)'));
+      expect(
+        adminUiCopy,
+        contains(
+          'static String aiFailureReason(Object raw, [AppLocale? locale])',
+        ),
+      );
+      expect(
+        adminUiCopy,
+        contains('final effectiveLocale = locale ?? I18n.current;'),
+      );
+      expect(adminUiCopy, contains('AI 上游服务不可达'));
+      expect(adminUiCopy, contains('AI 代理或上游模型不可用'));
+      expect(adminUiCopy, contains('AI 功能未启用'));
 
       expect(diaryScreen, contains('context.read<AiService>()'));
       expect(diaryScreen, contains('ai.deepDiaryReview(entries: entries)'));

@@ -8,6 +8,29 @@ import java.time.ZoneId
 import java.util.Collections
 import java.util.UUID
 
+/** Immutable host intent; the caller must recheck current authorization after every await. */
+class DuoyiWidgetRecoveryContext private constructor(
+    val kind: String,
+    val scopeToken: String,
+    val binding: DuoyiWidgetWorkspaceBinding?,
+) {
+    fun toMap(): Map<String, Any?> = linkedMapOf("kind" to kind, "scopeToken" to scopeToken, "binding" to binding?.toMap())
+
+    companion object {
+        fun tryFromMap(raw: Any?): DuoyiWidgetRecoveryContext? {
+            if (raw !is Map<*, *> || raw.keys != setOf("kind", "scopeToken", "binding")) return null
+            val kind = raw["kind"] as? String ?: return null
+            if (kind != "workspace" && kind != "cleanup") return null
+            val scope = (raw["scopeToken"] as? String)?.takeUnless { DuoyiWidgetPublicationDocument.wireBlank(it) } ?: return null
+            val binding = if (kind == "workspace") DuoyiWidgetWorkspaceBinding.tryFromMap(raw["binding"]) ?: return null else {
+                if (raw["binding"] != null) return null
+                null
+            }
+            return DuoyiWidgetRecoveryContext(kind, scope, binding)
+        }
+    }
+}
+
 /** A parsed immutable request. The digest is native-computed, never caller authority. */
 class DuoyiWidgetPublicationRequest private constructor(
     val method: String,
@@ -16,6 +39,7 @@ class DuoyiWidgetPublicationRequest private constructor(
     val presentationValues: Map<String, Any>?,
     val document: DuoyiWidgetPublicationDocument?,
     val binding: DuoyiWidgetWorkspaceBinding?,
+    val recoveryContext: DuoyiWidgetRecoveryContext?,
 ) {
     val operationId: String get() = fields["operationId"] as String
     val expectedStoreRevision: Long? get() = fields["expectedStoreRevision"] as Long?
@@ -31,6 +55,7 @@ class DuoyiWidgetPublicationRequest private constructor(
         const val INVALIDATE = "invalidateWidgetWorkspace"
         const val ADVANCE = "advanceDesiredWidgetPresentation"
         const val PUBLISH = "publishWidgetPublication"
+        const val RECOVER = "recoverWidgetStore"
 
         fun tryFromMap(method: String, raw: Any?): DuoyiWidgetPublicationRequest? {
             val extra = when (method) {
@@ -38,6 +63,7 @@ class DuoyiWidgetPublicationRequest private constructor(
                 INVALIDATE -> setOf("presentation")
                 ADVANCE -> setOf("writerLeaseId", "desiredPresentation")
                 PUBLISH -> setOf("writerLeaseId", "expectedPublicationRevision", "document")
+                RECOVER -> setOf("presentation", "recoveryContext")
                 else -> return null
             }
             if (raw !is Map<*, *> || raw.keys != common + extra) return null
@@ -55,7 +81,7 @@ class DuoyiWidgetPublicationRequest private constructor(
             val binding = if (method == OPEN) DuoyiWidgetWorkspaceBinding.tryFromMap(raw["binding"]) ?: return null else null
             var presentation: DuoyiWidgetDesiredPresentation? = null
             var values: Map<String, Any>? = null
-            if (method == OPEN || method == INVALIDATE) {
+            if (method == OPEN || method == INVALIDATE || method == RECOVER) {
                 val p = raw["presentation"] as? Map<*, *> ?: return null
                 if (p.keys != setOf("revision", "locale", "values")) return null
                 presentation = DuoyiWidgetDesiredPresentation.tryFromMap(mapOf("revision" to p["revision"], "locale" to p["locale"])) ?: return null
@@ -75,6 +101,7 @@ class DuoyiWidgetPublicationRequest private constructor(
             }
             val document = if (method == PUBLISH) DuoyiWidgetPublicationDocument.tryFromMap(raw["document"]) ?: return null else null
             val publication = if (method == PUBLISH) DuoyiWidgetPublicationDocument.nonnegativeExact(raw["expectedPublicationRevision"]) ?: return null else null
+            val recovery = if (method == RECOVER) DuoyiWidgetRecoveryContext.tryFromMap(raw["recoveryContext"]) ?: return null else null
             val fields = linkedMapOf<String, Any?>("protocolVersion" to 1L, "operationId" to id,
                 "expectedStoreRevision" to revision, "expectedOwnerEpoch" to epoch)
             when (method) {
@@ -85,7 +112,8 @@ class DuoyiWidgetPublicationRequest private constructor(
             if (values != null) fields["presentation"] = linkedMapOf("revision" to presentation!!.revision,
                 "locale" to presentation.locale, "values" to values)
             if (lease != null) fields["writerLeaseId"] = lease
-            return DuoyiWidgetPublicationRequest(method, Collections.unmodifiableMap(fields), presentation, values, document, binding)
+            if (recovery != null) fields["recoveryContext"] = recovery.toMap()
+            return DuoyiWidgetPublicationRequest(method, Collections.unmodifiableMap(fields), presentation, values, document, binding, recovery)
         }
 
         private fun opaque(value: Any?): String? = (value as? String)?.takeUnless { DuoyiWidgetPublicationDocument.wireBlank(it) }
@@ -133,6 +161,11 @@ object DuoyiWidgetPublicationTransition {
     ): DuoyiWidgetPublicationPlan {
         fun reject(status: String) = DuoyiWidgetPublicationPlan(status)
         if (current != null && current.lastReceipt.operationId == request.operationId) {
+            // Receipt visibility is not recovery proof. Never reseal or replay
+            // an unconfirmed recovery under its original immutable identity.
+            if (request.method == DuoyiWidgetPublicationRequest.RECOVER) {
+                return reject(if (current.lastReceipt.requestDigest == request.digest) "durabilityUnknown" else "invalid")
+            }
             return if (current.lastReceipt.requestDigest == request.digest)
                 DuoyiWidgetPublicationPlan("alreadyApplied", replay = current.lastReceipt) else reject("invalid")
         }
@@ -183,7 +216,7 @@ object DuoyiWidgetPublicationTransition {
                 if (lease == epoch) return reject("invalid")
                 state = "active"
             }
-            DuoyiWidgetPublicationRequest.INVALIDATE -> {
+            DuoyiWidgetPublicationRequest.INVALIDATE, DuoyiWidgetPublicationRequest.RECOVER -> {
                 val p = request.presentation!!
                 if (!acceptsPresentation(p)) return reject("supersededPresentation")
                 epoch = issued(newToken, current!!.ownerEpoch) ?: return reject("invalid")

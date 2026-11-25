@@ -14,7 +14,13 @@ void main() {
   final main = File('lib/main.dart').readAsStringSync();
 
   test('receipt order survives shell retries, queuing and hydration', () {
-    expect(main, contains('WidgetNavigationRequest request}'));
+    final pending = _between(
+      main,
+      'typedef _PendingWidgetLaunch',
+      'final List<_PendingWidgetLaunch>',
+    );
+    expect(pending, contains('WidgetNavigationRequest request,'));
+    expect(pending, contains('WidgetLinkOrigin origin,'));
     final handle = _between(
       main,
       'void _handleWidgetUri(',
@@ -29,15 +35,12 @@ void main() {
     expect(handle, contains('dataReady: dataReady'));
     expect(
       handle,
-      contains('_dispatchWidgetUriAfterHydration(uri, pomodoro, request)'),
-    );
-    expect(main, contains('navigationRequest: launch.request'));
-    expect(
-      main,
       contains(
-        '_pendingWidgetUris[existingIndex] = (uri: uri, request: request)',
+        '_dispatchWidgetUriAfterHydration(uri, pomodoro, request, origin: origin)',
       ),
     );
+    expect(main, contains('navigationRequest: launch.request'));
+    expect(main, contains('_pendingWidgetUris[existingIndex] = ('));
   });
 
   test(
@@ -52,7 +55,9 @@ void main() {
       expect(branch, contains('WidgetCalendarLink.dateFromUri(uri)'));
       expect(
         branch,
-        contains('_openWidgetCalendarDate(ctx, date, navigationRequest)'),
+        contains(
+          '_openWidgetCalendarDate(ctx, date, navigationRequest, access)',
+        ),
       );
       expect(
         branch,
@@ -76,13 +81,14 @@ void main() {
     );
     final capture = open.indexOf('final auth = context.read<AuthProvider>()');
     final scope = open.indexOf('final scope = WidgetActionScope(');
-    final frame = open.indexOf('scope.afterFrame(');
+    final frame = open.indexOf('access.afterFrame(');
     expect(capture, greaterThanOrEqualTo(0));
     expect(scope, greaterThan(capture));
     expect(frame, greaterThan(scope));
     expect(open, contains('context.mounted'));
     expect(open, contains('!_widgetAccountUnavailable(auth)'));
     expect(open, contains('request.isLatest'));
+    expect(open, contains('if (!scope.isCurrent) return'));
     expect(open, contains("RouteSettings(name: 'widget/calendar/date')"));
     expect(open, contains('_widgetCalendarRoutes.open(navigator, route)'));
   });
@@ -143,11 +149,10 @@ void main() {
           '!_isCalendarNavigationUri(uri) || navigationRequest.isLatest',
         ),
       );
-      expect(dispatch, contains('HomeWidgetService.isReceivedLaunch(uri)'));
-      expect(
-        dispatch,
-        contains('!HomeWidgetService.isReceivedLaunch(result.uri!)'),
-      );
+      expect(dispatch, contains('receivedUri: uri'));
+      expect(dispatch, contains('if (_appAccessBlocked) {'));
+      expect(dispatch, contains("'locked during hydration',"));
+      expect(dispatch, contains('origin: origin'));
       expect(
         dispatch,
         contains('await HomeWidgetService.acknowledgeLaunch(uri)'),

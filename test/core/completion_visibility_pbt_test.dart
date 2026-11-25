@@ -12,7 +12,7 @@ import 'package:duoyi/providers/todo_provider.dart';
 /// Feature: app-alignment-overhaul
 /// Property 4 (P4): Today completion non-destructive
 ///   ∀ TodoItem t，当日执行 `toggleTodo(t.id)` 将 `isCompleted` false → true 后：
-///   `t ∈ provider.todos` ∧ `shouldShowInToday(t, now) = false`
+///   `t ∈ provider.todos` ∧ `isInTodayOverview(t, now) = true`
 ///                       ∧ `visualState(t) = completed`。
 ///
 /// Validates: Requirements 3.1
@@ -63,7 +63,7 @@ void main() {
   group('P4 - 当日完成不销毁', () {
     test(
       'forward: 对今日 todos 中随机一条 toggle 为完成后，'
-      '仍在 provider.todos；shouldShowInToday=false；visualState=completed',
+      '仍在 provider.todos；待办筛选=false；今日总览=true；visualState=completed',
       () async {
         final rng = Random(kSeed);
 
@@ -131,11 +131,16 @@ void main() {
             reason: 'iter=$iter — completedAt=$ca 不应迟于 $tAfter+2s',
           );
 
-          // 本次规则：已完成任务不再展示在今日待办。
+          // Pending-only filtering is separate from completed-today retention.
           expect(
             CompletionVisibilityPolicy.shouldShowInToday(updated, now),
             isFalse,
-            reason: 'iter=$iter n=$n — 已完成 todo 不应出现在今日待办',
+            reason: 'iter=$iter n=$n — 已完成 todo 不应属于未完成筛选',
+          );
+          expect(
+            CompletionVisibilityPolicy.isInTodayOverview(updated, now),
+            isTrue,
+            reason: 'iter=$iter n=$n — ROOT-7/P4: 当日完成仍在今日总览中',
           );
 
           // P4 断言：可视状态 = completed。

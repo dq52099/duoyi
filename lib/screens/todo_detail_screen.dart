@@ -1,6 +1,8 @@
+import '../widgets/app_date_format.dart';
 import 'dart:convert';
 import 'dart:io' show File;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/design_tokens.dart';
 import '../core/i18n.dart';
+import '../core/image_decode_cache.dart';
 import '../core/i18n_date_format.dart';
 import '../core/todo_detail_ui_copy.dart';
 import '../models/goal.dart' show ReminderKind, ReminderPlan;
@@ -21,6 +24,7 @@ import '../services/api_client.dart';
 import '../services/alarm_service.dart';
 import '../services/local_notifications.dart';
 import '../services/note_attachment_picker.dart';
+import '../services/reminder_issue_copy.dart' show NotificationIssueTitle;
 import '../services/reminder_scheduler.dart';
 import '../providers/location_reminder_provider.dart';
 import '../providers/notification_service.dart';
@@ -31,6 +35,8 @@ import '../widgets/reminder_health_hint.dart';
 import '../widgets/app_date_picker.dart';
 import '../widgets/reminder_plan_editor.dart';
 import '../widgets/surface_components.dart';
+import '../widgets/brand_background.dart';
+import '../widgets/controller_dialog.dart';
 
 /// Todo 详情页 / 编辑页。
 ///
@@ -43,7 +49,8 @@ import '../widgets/surface_components.dart';
 ///
 /// 同时保留 Task 7 的视觉对齐：token 化间距 / 圆角、优先级 ChoiceChip、提醒
 /// 分段、目标时长模块、标签 / 子任务 / 重复 / 截止日 等模块。
-class TodoDetailScreen extends StatefulWidget {
+class TodoDetailScreen extends StatefulWidget
+    implements LocaleStatePreservingRoute {
   final String todoId;
   final int? accountGeneration;
 
@@ -383,7 +390,9 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
           context,
           todo: nextTodo,
           notificationService: context.read<NotificationService?>(),
-          issueTitle: TodoDetailUiCopy.reminderRegisterFailedIssueTitle,
+          issueTitleBuilder: () =>
+              TodoDetailUiCopy.reminderRegisterFailedIssueTitle,
+          issueTitleCode: NotificationIssueTitle.taskRegistrationFailed,
           accountGeneration: _originAccountGeneration,
         );
         if (!mounted ||
@@ -444,8 +453,9 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
           SnackBar(
             content: ValueListenableBuilder<AppLocale>(
               valueListenable: I18n.localeListenable,
-              builder: (context, _, _) =>
-                  Text(TodoDetailUiCopy.savedWithoutReminder(reminderSyncIssue)),
+              builder: (context, _, _) => Text(
+                TodoDetailUiCopy.savedWithoutReminder(reminderSyncIssue),
+              ),
             ),
             behavior: SnackBarBehavior.floating,
             backgroundColor: cs.error,
@@ -517,8 +527,9 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     if (_state != _EditState.editing) return true;
 
     setState(() => _state = _EditState.confirmDiscard);
-    final discard = await showDialog<bool>(
+    final discard = await showControllerDialog<bool>(
       context: context,
+      controllers: const [],
       builder: (dialogCtx) => ValueListenableBuilder<AppLocale>(
         valueListenable: I18n.localeListenable,
         builder: (context, _, _) => AppDialog(
@@ -694,8 +705,9 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     final nameCtrl = TextEditingController();
     final uriCtrl = TextEditingController();
     final mimeCtrl = TextEditingController();
-    final attachment = await showDialog<NoteAttachment>(
+    final attachment = await showControllerDialog<NoteAttachment>(
       context: context,
+      controllers: [nameCtrl, uriCtrl, mimeCtrl],
       builder: (ctx) => ValueListenableBuilder<AppLocale>(
         valueListenable: I18n.localeListenable,
         builder: (context, _, _) => AppDialog(
@@ -947,12 +959,38 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     return ValueListenableBuilder<AppLocale>(
       valueListenable: I18n.localeListenable,
       builder: (context, locale, _) {
+        final theme = Theme.of(context);
+        final routeBackground = theme.brightness == Brightness.dark
+            ? theme.colorScheme.surface
+            : theme.colorScheme.surfaceContainerLowest;
+        final surfaceStyle = appSurfaceStyleOf(context);
+        final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+
+        Widget wrapWithBackground(Widget child) {
+          if (!isLiquidGlass) {
+            return child;
+          }
+          final hasBrandSurface =
+              context.findAncestorWidgetOfExactType<BrandBackground>() !=
+                  null ||
+              context.findAncestorWidgetOfExactType<BrandRouteSurface>() !=
+                  null;
+          if (hasBrandSurface) {
+            return child;
+          }
+          return Material(
+            color: routeBackground,
+            child: BrandBackground(child: child),
+          );
+        }
+
         if (!_isCurrentAccount ||
             _missingTodo ||
             !provider.todos.any((t) => t.id == widget.todoId)) {
-          return PopScope(
+          final missingRoute = PopScope(
             canPop: true,
             child: Scaffold(
+              backgroundColor: isLiquidGlass ? Colors.transparent : null,
               appBar: AppBar(
                 title: Text(TodoDetailUiCopy.screenTitle),
                 titleTextStyle: appSecondaryRouteTitleTextStyle(context),
@@ -961,34 +999,47 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
               ),
-              body: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(DesignTokens.space3xl),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.inbox_outlined,
-                        size: 56,
-                        color: Theme.of(context).colorScheme.primary,
+              body: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
                       ),
-                      const SizedBox(height: DesignTokens.spaceMd),
-                      Text(
-                        TodoDetailUiCopy.taskNotFound,
-                        style: Theme.of(context).textTheme.bodyMedium,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(DesignTokens.space3xl),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.inbox_outlined,
+                                size: 56,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(height: DesignTokens.spaceMd),
+                              Text(
+                                TodoDetailUiCopy.taskNotFound,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: DesignTokens.spaceLg),
+                              FilledButton.tonalIcon(
+                                onPressed: () =>
+                                    Navigator.of(context).maybePop(),
+                                icon: const Icon(Icons.arrow_back),
+                                label: Text(TodoDetailUiCopy.back),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: DesignTokens.spaceLg),
-                      FilledButton.tonalIcon(
-                        onPressed: () => Navigator.of(context).maybePop(),
-                        icon: const Icon(Icons.arrow_back),
-                        label: Text(TodoDetailUiCopy.back),
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           );
+          return wrapWithBackground(missingRoute);
         }
         if (_isCurrentAccount) {
           final providerTodo = provider.todos.firstWhere(
@@ -999,12 +1050,13 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
             _syncDraftFromProvider(providerTodo);
           }
         }
-        final canEdit = _isCurrentAccount &&
+        final canEdit =
+            _isCurrentAccount &&
             (context.watch<ShareProvider?>()?.canEdit(_todo.workspaceId) ??
                 true);
         final shareProvider = context.watch<ShareProvider?>();
-        final locationReminderProvider =
-            context.watch<LocationReminderProvider?>();
+        final locationReminderProvider = context
+            .watch<LocationReminderProvider?>();
         final linkedLocationReminders =
             locationReminderProvider?.reminders
                 .where((r) => r.linkedType == 'todo' && r.linkedId == _todo.id)
@@ -1029,7 +1081,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
         // - clean：没有未保存改动，系统返回键 / AppBar 返回键直接放行；
         // - 其它：拦截，走 `_handleBack` → 弹"放弃修改"对话框的分支。
         final bool canPop = !_isCurrentAccount || _state == _EditState.clean;
-        return PopScope(
+        final detailRoute = PopScope(
           canPop: canPop,
           onPopInvokedWithResult: (didPop, _) async {
             if (didPop) return;
@@ -1041,6 +1093,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
             }
           },
           child: Scaffold(
+            backgroundColor: isLiquidGlass ? Colors.transparent : null,
             appBar: AppBar(
               title: Text(TodoDetailUiCopy.screenTitle),
               titleTextStyle: appSecondaryRouteTitleTextStyle(context),
@@ -1114,6 +1167,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                 const SizedBox(height: DesignTokens.spaceLg),
                 AppDropdownField<EisenhowerQuadrant>(
                   initialValue: _todo.quadrant,
+                  wrapSelectedText: true,
                   labelText: TodoDetailUiCopy.quadrantLabel,
                   enabled: canEdit,
                   items: [
@@ -1153,37 +1207,62 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
                 // ---- 截止日 + 重复 --------------------------------------------
                 const SizedBox(height: DesignTokens.spaceLg),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.event_outlined),
-                  title: Text(TodoDetailUiCopy.dueDateTileTitle),
-                  subtitle: Text(
-                    _todo.dueDate == null
-                        ? TodoDetailUiCopy.dueDateNotSet
-                        : _formatYmd(_todo.dueDate!),
+                AppSurfaceCard(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 2,
                   ),
-                  trailing: _todo.dueDate == null
-                      ? const Icon(Icons.chevron_right)
-                      : IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: canEdit
-                              ? () {
-                                  setState(
-                                    () => _todo = _todo.copyWith(dueDate: null),
-                                  );
-                                  _markEditing();
-                                }
-                              : null,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.event_outlined),
+                        title: Text(TodoDetailUiCopy.dueDateTileTitle),
+                        subtitle: Text(
+                          _todo.dueDate == null
+                              ? TodoDetailUiCopy.dueDateNotSet
+                              : AppDateFormat.date(context, _todo.dueDate!),
                         ),
-                  onTap: canEdit ? _pickDueDate : null,
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.repeat),
-                  title: Text(TodoDetailUiCopy.repeatTileTitle),
-                  subtitle: Text(_todo.recurrence.label),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: canEdit ? _pickRecurrence : null,
+                        trailing: _todo.dueDate == null
+                            ? const Icon(Icons.chevron_right)
+                            : IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: canEdit
+                                    ? () {
+                                        setState(
+                                          () => _todo = _todo.copyWith(
+                                            dueDate: null,
+                                          ),
+                                        );
+                                        _markEditing();
+                                      }
+                                    : null,
+                              ),
+                        onTap: canEdit ? _pickDueDate : null,
+                      ),
+                      Divider(
+                        height: 1,
+                        thickness: 0.5,
+                        indent: 40,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.repeat),
+                        title: Text(TodoDetailUiCopy.repeatTileTitle),
+                        subtitle: Text(
+                          _todo.recurrence.displayLabel(
+                            datePattern: AppDateFormat.patternOf(context),
+                          ),
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: canEdit ? _pickRecurrence : null,
+                      ),
+                    ],
+                  ),
                 ),
 
                 // ---- 共享负责人 ----------------------------------------------
@@ -1420,6 +1499,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
             ),
           ),
         );
+        return wrapWithBackground(detailRoute);
       },
     );
   }
@@ -1447,146 +1527,219 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     var trigger = LocationTrigger.enter;
     var oneShot = true;
 
-    final ok = await showDialog<bool>(
+    final ok = await showControllerDialog<bool>(
       context: context,
+      controllers: [titleCtrl, noteCtrl, latCtrl, lngCtrl, radiusCtrl],
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => ValueListenableBuilder<AppLocale>(
           valueListenable: I18n.localeListenable,
-          builder: (context, _, _) => AppDialog(
-            title: Text(TodoDetailUiCopy.addLocationReminderDialogTitle), // title: const Text('添加位置提醒')
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleCtrl,
-                    decoration: InputDecoration(
-                      labelText: TodoDetailUiCopy.locationReminderTitleLabel,
-                    ),
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: noteCtrl,
-                    decoration: InputDecoration(
-                      labelText: TodoDetailUiCopy.locationReminderNotesLabel,
-                    ),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
+          builder: (context, _, _) {
+            final media = MediaQuery.of(context);
+            final horizontalInset = media.size.width < 360 ? 12.0 : 20.0;
+            final availableWidth = media.size.width - horizontalInset * 2;
+            final dialogMaxWidth = availableWidth.isFinite
+                ? availableWidth.clamp(0.0, 420.0).toDouble()
+                : 420.0;
+            final contentWidth = dialogMaxWidth - 48.0;
+
+            final textDirection = Directionality.of(context);
+            final locale = Localizations.maybeLocaleOf(context);
+
+            final labelPainter = TextPainter(
+              text: TextSpan(
+                text: TodoDetailUiCopy.triggerDirectionLabel,
+                style: DefaultTextStyle.of(context).style,
+              ),
+              textDirection: textDirection,
+              textScaler: media.textScaler,
+              locale: locale,
+              maxLines: 1,
+            )..layout();
+            final labelWidth = labelPainter.width;
+            labelPainter.dispose();
+
+            final arrivePainter = TextPainter(
+              text: TextSpan(
+                text: TodoDetailUiCopy.arriveTrigger,
+                style:
+                    Theme.of(context).textTheme.labelLarge ??
+                    DefaultTextStyle.of(context).style,
+              ),
+              textDirection: textDirection,
+              textScaler: media.textScaler,
+              locale: locale,
+              maxLines: 1,
+            )..layout();
+            final arriveChipWidth = arrivePainter.width + 36.0;
+            arrivePainter.dispose();
+
+            final leavePainter = TextPainter(
+              text: TextSpan(
+                text: TodoDetailUiCopy.leaveTrigger,
+                style:
+                    Theme.of(context).textTheme.labelLarge ??
+                    DefaultTextStyle.of(context).style,
+              ),
+              textDirection: textDirection,
+              textScaler: media.textScaler,
+              locale: locale,
+              maxLines: 1,
+            )..layout();
+            final leaveChipWidth = leavePainter.width + 36.0;
+            leavePainter.dispose();
+
+            final chipsWidth = arriveChipWidth + leaveChipWidth + 8.0;
+            const double minSpacerWidth = 16.0;
+            final fitsInline =
+                labelWidth + chipsWidth + minSpacerWidth <= contentWidth;
+
+            final chipWrap = Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                ChoiceChip(
+                  label: Text(TodoDetailUiCopy.arriveTrigger),
+                  selected: trigger == LocationTrigger.enter,
+                  onSelected: (_) =>
+                      setSt(() => trigger = LocationTrigger.enter),
+                ),
+                ChoiceChip(
+                  label: Text(TodoDetailUiCopy.leaveTrigger),
+                  selected: trigger == LocationTrigger.leave,
+                  onSelected: (_) =>
+                      setSt(() => trigger = LocationTrigger.leave),
+                ),
+              ],
+            );
+
+            final triggerControl = fitsInline
+                ? Row(
                     children: [
-                      Expanded(
-                        child: TextField(
-                          controller: latCtrl,
-                          decoration: InputDecoration(
-                            labelText: TodoDetailUiCopy.latitudeLabel,
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(
-                            signed: true,
-                            decimal: true,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: lngCtrl,
-                          decoration: InputDecoration(
-                            labelText: TodoDetailUiCopy.longitudeLabel,
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(
-                            signed: true,
-                            decimal: true,
-                          ),
-                        ),
-                      ),
+                      Text(TodoDetailUiCopy.triggerDirectionLabel),
+                      const Spacer(),
+                      chipWrap,
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: radiusCtrl,
-                    decoration: InputDecoration(
-                      labelText: TodoDetailUiCopy.radiusLabel,
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(TodoDetailUiCopy.triggerDirectionLabel),
+                      const SizedBox(height: 4),
+                      chipWrap,
+                    ],
+                  );
+
+            return AppDialog(
+              title: Text(
+                TodoDetailUiCopy.addLocationReminderDialogTitle,
+              ), // title: const Text('添加位置提醒')
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleCtrl,
+                      decoration: InputDecoration(
+                        labelText: TodoDetailUiCopy.locationReminderTitleLabel,
+                      ),
+                      autofocus: true,
                     ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 8),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final chipWrap = Wrap(
-                        spacing: 4,
-                        runSpacing: 4,
-                        children: [
-                          ChoiceChip(
-                            label: Text(TodoDetailUiCopy.arriveTrigger),
-                            selected: trigger == LocationTrigger.enter,
-                            onSelected: (_) =>
-                                setSt(() => trigger = LocationTrigger.enter),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: noteCtrl,
+                      decoration: InputDecoration(
+                        labelText: TodoDetailUiCopy.locationReminderNotesLabel,
+                      ),
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: latCtrl,
+                            decoration: InputDecoration(
+                              labelText: TodoDetailUiCopy.latitudeLabel,
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              signed: true,
+                              decimal: true,
+                            ),
                           ),
-                          ChoiceChip(
-                            label: Text(TodoDetailUiCopy.leaveTrigger),
-                            selected: trigger == LocationTrigger.leave,
-                            onSelected: (_) =>
-                                setSt(() => trigger = LocationTrigger.leave),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: lngCtrl,
+                            decoration: InputDecoration(
+                              labelText: TodoDetailUiCopy.longitudeLabel,
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              signed: true,
+                              decimal: true,
+                            ),
                           ),
-                        ],
-                      );
-                      if (constraints.maxWidth < 260) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(TodoDetailUiCopy.triggerDirectionLabel),
-                            const SizedBox(height: 4),
-                            chipWrap,
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Text(TodoDetailUiCopy.triggerDirectionLabel),
-                          const Spacer(),
-                          chipWrap,
-                        ],
-                      );
-                    },
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: oneShot,
-                    onChanged: (value) => setSt(() => oneShot = value),
-                    title: Text(TodoDetailUiCopy.autoCloseAfterTrigger),
-                  ),
-                ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: radiusCtrl,
+                      decoration: InputDecoration(
+                        labelText: TodoDetailUiCopy.radiusLabel,
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 8),
+                    triggerControl,
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: oneShot,
+                      onChanged: (value) => setSt(() => oneShot = value),
+                      title: Text(TodoDetailUiCopy.autoCloseAfterTrigger),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(TodoDetailUiCopy.cancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(TodoDetailUiCopy.save),
-              ),
-            ],
-          ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    if (ctx.mounted && ModalRoute.of(ctx)?.isCurrent == true) {
+                      Navigator.pop(ctx, false);
+                    }
+                  },
+                  child: Text(TodoDetailUiCopy.cancel),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (ctx.mounted &&
+                        ModalRoute.of(ctx)?.isCurrent == true &&
+                        _isCurrentAccount) {
+                      Navigator.pop(ctx, true);
+                    }
+                  },
+                  child: Text(TodoDetailUiCopy.save),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
-    // if (ok != true) return;
-    if (!context.mounted ||
+    if (ok != true ||
+        !context.mounted ||
         !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
           _originAccountGeneration,
-        ) ||
-        ok != true) {
+        )) {
       return;
     }
 
     final title = titleCtrl.text.trim();
+    final note = noteCtrl.text.trim();
     final lat = double.tryParse(latCtrl.text.trim());
     final lng = double.tryParse(lngCtrl.text.trim());
     final radius = double.tryParse(radiusCtrl.text.trim()) ?? 200;
+
     if (title.isEmpty || lat == null || lng == null) {
       if (!context.mounted ||
           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
@@ -1610,7 +1763,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     await provider.add(
       LocationReminder(
         title: title,
-        note: noteCtrl.text.trim(),
+        note: note,
         latitude: lat,
         longitude: lng,
         radiusMeters: radius.clamp(50, 10000).toDouble(),
@@ -1630,8 +1783,9 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       SnackBar(
         content: ValueListenableBuilder<AppLocale>(
           valueListenable: I18n.localeListenable,
-          builder: (context, _, _) =>
-              Text(TodoDetailUiCopy.locationReminderAdded), // content: Text('已添加任务位置提醒')
+          builder: (context, _, _) => Text(
+            TodoDetailUiCopy.locationReminderAdded,
+          ), // content: Text('已添加任务位置提醒')
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -1644,6 +1798,8 @@ Future<bool> preflightTodoReminderSave(
   required TodoItem todo,
   NotificationService? notificationService,
   String? issueTitle,
+  String Function()? issueTitleBuilder,
+  NotificationIssueTitle? issueTitleCode,
   int? accountGeneration,
 }) async {
   bool isAborted() =>
@@ -1653,8 +1809,10 @@ Future<bool> preflightTodoReminderSave(
             accountGeneration,
           ));
 
-  final resolvedIssueTitle =
-      issueTitle ?? TodoDetailUiCopy.reminderRegisterFailedIssueTitle;
+  String renderIssueTitle() =>
+      issueTitleBuilder?.call() ??
+      issueTitle ??
+      TodoDetailUiCopy.reminderRegisterFailedIssueTitle;
   final result = preflightTodoReminderPlan(todo);
   if (!result.hasEnabledPlan) return true;
 
@@ -1684,7 +1842,8 @@ Future<bool> preflightTodoReminderSave(
     final ready = await notif
         .ensureReadyForReminder(
           scheduledTime: result.firstScheduledTime,
-          issueTitle: resolvedIssueTitle,
+          issueTitle: renderIssueTitle(),
+          issueTitleCode: issueTitleCode,
           relatedId: todo.id,
         )
         .timeout(const Duration(seconds: 5), onTimeout: () => false);
@@ -1698,9 +1857,9 @@ Future<bool> preflightTodoReminderSave(
             builder: (context, _, _) => Text(
               issue == null
                   ? TodoDetailUiCopy.reminderPreflightUnregistered(
-                      resolvedIssueTitle,
+                      renderIssueTitle(),
                     )
-                  : '${issue.title}：${issue.message}',
+                  : '${issue.renderTitle()}：${issue.renderMessage()}',
             ),
           ),
           behavior: SnackBarBehavior.floating,
@@ -1721,8 +1880,9 @@ Future<bool> preflightTodoReminderSave(
         SnackBar(
           content: ValueListenableBuilder<AppLocale>(
             valueListenable: I18n.localeListenable,
-            builder: (context, _, _) =>
-                Text(TodoDetailUiCopy.alarmPermissionDenied), // 闹钟提醒注册失败：系统通知权限未开启
+            builder: (context, _, _) => Text(
+              TodoDetailUiCopy.alarmPermissionDenied,
+            ), // 闹钟提醒注册失败：系统通知权限未开启
           ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 4),
@@ -1732,7 +1892,7 @@ Future<bool> preflightTodoReminderSave(
     }
   }
 
-  final warnings = <String>[];
+  final warnings = <String Function()>[];
 
   if (usesPush || usesPopup) {
     final channelIds = await LocalNotifications.instance
@@ -1742,7 +1902,7 @@ Future<bool> preflightTodoReminderSave(
     if (channelIds != null &&
         channelIds.isNotEmpty &&
         !channelIds.contains(NotificationService.channelId)) {
-      warnings.add(TodoDetailUiCopy.normalChannelNotReadyWarning);
+      warnings.add(() => TodoDetailUiCopy.normalChannelNotReadyWarning);
     }
   }
 
@@ -1756,8 +1916,7 @@ Future<bool> preflightTodoReminderSave(
         SnackBar(
           content: ValueListenableBuilder<AppLocale>(
             valueListenable: I18n.localeListenable,
-            builder: (context, _, _) =>
-                Text(TodoDetailUiCopy.alarmInitFailed),
+            builder: (context, _, _) => Text(TodoDetailUiCopy.alarmInitFailed),
           ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 4),
@@ -1773,7 +1932,7 @@ Future<bool> preflightTodoReminderSave(
     if (alarmChannelIds != null &&
         alarmChannelIds.isNotEmpty &&
         !alarmChannelIds.contains(AlarmService.channelId)) {
-      warnings.add(TodoDetailUiCopy.alarmChannelNotReadyWarning);
+      warnings.add(() => TodoDetailUiCopy.alarmChannelNotReadyWarning);
     }
     // 主动申请精准闹钟 / 全屏 intent 权限，而不只是检查后给软提示。
     // 否则首次保存的闹钟提醒会静默降级，用户必须先点一次“测试强提醒”
@@ -1816,8 +1975,9 @@ Future<bool> preflightTodoReminderSave(
         SnackBar(
           content: ValueListenableBuilder<AppLocale>(
             valueListenable: I18n.localeListenable,
-            builder: (context, _, _) =>
-                Text(TodoDetailUiCopy.fullScreenIntentDenied), // 闹钟提醒注册失败：全屏提醒权限未开启
+            builder: (context, _, _) => Text(
+              TodoDetailUiCopy.fullScreenIntentDenied,
+            ), // 闹钟提醒注册失败：全屏提醒权限未开启
           ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 4),
@@ -1832,8 +1992,12 @@ Future<bool> preflightTodoReminderSave(
       SnackBar(
         content: ValueListenableBuilder<AppLocale>(
           valueListenable: I18n.localeListenable,
-          builder: (context, _, _) =>
-              Text(TodoDetailUiCopy.reminderWarnings(resolvedIssueTitle, warnings)),
+          builder: (context, _, _) => Text(
+            TodoDetailUiCopy.reminderWarnings(
+              renderIssueTitle(),
+              warnings.map((render) => render()).toList(),
+            ),
+          ),
         ),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 5),
@@ -2015,7 +2179,9 @@ class _TodoMarkdownDescriptionEditor extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: _SectionLabel(text: TodoDetailUiCopy.descriptionSection),
+                  child: _SectionLabel(
+                    text: TodoDetailUiCopy.descriptionSection,
+                  ),
                 ),
                 IconButton(
                   tooltip: preview
@@ -2275,7 +2441,7 @@ class _TodoMarkdownPreviewBlock extends StatelessWidget {
               block.checked ? Icons.check_box : Icons.check_box_outline_blank,
               size: 18,
               color: block.checked
-                  ? Colors.green
+                  ? DesignTokens.defaultSuccess
                   : colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 8),
@@ -2340,11 +2506,18 @@ class _TodoInlineMarkdownText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = style ?? const TextStyle(fontSize: 15, height: 1.5);
-    return Text.rich(TextSpan(style: base, children: _parseInline(text, base)));
+    return Text.rich(
+      TextSpan(style: base, children: _parseInline(text, base, cs)),
+    );
   }
 
-  List<InlineSpan> _parseInline(String source, TextStyle base) {
+  List<InlineSpan> _parseInline(
+    String source,
+    TextStyle base,
+    ColorScheme cs,
+  ) {
     final spans = <InlineSpan>[];
     var i = 0;
     while (i < source.length) {
@@ -2388,7 +2561,7 @@ class _TodoInlineMarkdownText extends StatelessWidget {
               text: source.substring(i + 1, end),
               style: base.copyWith(
                 fontFamily: 'monospace',
-                backgroundColor: Colors.black.withValues(alpha: 0.06),
+                backgroundColor: cs.onSurface.withValues(alpha: 0.08),
               ),
             ),
           );
@@ -2404,7 +2577,7 @@ class _TodoInlineMarkdownText extends StatelessWidget {
             TextSpan(
               text: source.substring(i + 1, closeLabel),
               style: base.copyWith(
-                color: Colors.blue,
+                color: cs.primary,
                 decoration: TextDecoration.underline,
               ),
             ),
@@ -2454,11 +2627,7 @@ class _AssignmentEditor extends StatelessWidget {
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.person_outline),
         title: Text(TodoDetailUiCopy.assigneeLabel),
-        subtitle: Text(
-          TodoDetailUiCopy.assigneePrivateSubtitle,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
+        subtitle: Text(TodoDetailUiCopy.assigneePrivateSubtitle),
       );
     }
     final members = workspace.members;
@@ -2662,8 +2831,9 @@ class _TaskCommentsPanelState extends State<_TaskCommentsPanel> {
         SnackBar(
           content: ValueListenableBuilder<AppLocale>(
             valueListenable: I18n.localeListenable,
-            builder: (context, _, _) =>
-                Text(TodoDetailUiCopy.commentSendFailed(_shareError(e))), // 评论发送失败: ${_shareError(e)}
+            builder: (context, _, _) => Text(
+              TodoDetailUiCopy.commentSendFailed(_shareError(e)),
+            ), // 评论发送失败: ${_shareError(e)}
           ),
         ),
       );
@@ -2755,7 +2925,7 @@ class _TimeTargetEditor extends StatelessWidget {
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: TodoDetailUiCopy.targetDurationHint,
+                  hintText: TodoDetailUiCopy.minutesSuffix,
                   suffixText: TodoDetailUiCopy.minutesSuffix,
                 ),
                 onChanged: onChanged,
@@ -2767,6 +2937,13 @@ class _TimeTargetEditor extends StatelessWidget {
               icon: const Icon(Icons.clear),
             ),
           ],
+        ),
+        const SizedBox(height: DesignTokens.spaceXs),
+        Text(
+          TodoDetailUiCopy.targetDurationHint,
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: DesignTokens.spaceXs),
         Wrap(
@@ -2811,27 +2988,92 @@ class _TodoAttachmentPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.attach_file, size: 18),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  TodoDetailUiCopy.attachmentsSection,
-                  style: const TextStyle(fontWeight: FontWeight.normal),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final headingStyle = DefaultTextStyle.of(
+                context,
+              ).style.merge(const TextStyle(fontWeight: FontWeight.normal));
+              final textPainter = TextPainter(
+                text: TextSpan(
+                  text: TodoDetailUiCopy.attachmentsSection,
+                  style: headingStyle,
                 ),
-              ),
-              IconButton(
+                textDirection: Directionality.of(context),
+                textScaler: MediaQuery.textScalerOf(context),
+                locale: Localizations.maybeLocaleOf(context),
+                maxLines: 1,
+              )..layout();
+              final headingTextWidth = textPainter.width;
+              textPainter.dispose();
+
+              const double headingLeadingWidth = 18.0 + 6.0;
+              final double headingWidth =
+                  headingLeadingWidth + headingTextWidth;
+
+              const double actionButtonWidth = 44.0;
+              const double actionsWidth = actionButtonWidth * 2;
+
+              final fitsInline =
+                  !constraints.hasBoundedWidth ||
+                  (headingWidth + actionsWidth <= constraints.maxWidth);
+
+              final pickFileButton = IconButton(
                 tooltip: TodoDetailUiCopy.pickFileTooltip,
+                visualDensity: VisualDensity.standard,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
                 onPressed: enabled ? onPickFile : null,
                 icon: const Icon(Icons.upload_file_outlined),
-              ),
-              IconButton(
+              );
+              final addLinkButton = IconButton(
                 tooltip: TodoDetailUiCopy.addLinkTooltip,
+                visualDensity: VisualDensity.standard,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
                 onPressed: enabled ? onAddManual : null,
                 icon: const Icon(Icons.add_link),
-              ),
-            ],
+              );
+
+              if (fitsInline) {
+                return Row(
+                  children: [
+                    const Icon(Icons.attach_file, size: 18),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        TodoDetailUiCopy.attachmentsSection,
+                        style: const TextStyle(fontWeight: FontWeight.normal),
+                      ),
+                    ),
+                    pickFileButton,
+                    addLinkButton,
+                  ],
+                );
+              }
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.attach_file, size: 18),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          TodoDetailUiCopy.attachmentsSection,
+                          style: const TextStyle(fontWeight: FontWeight.normal),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [pickFileButton, addLinkButton],
+                  ),
+                ],
+              );
+            },
           ),
           if (attachments.isEmpty)
             Padding(
@@ -2877,6 +3119,7 @@ class _TodoAttachmentChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final uri = Uri.tryParse(attachment.uri);
+    final target = _resolveOpenTarget(uri);
     return InputChip(
       visualDensity: VisualDensity.compact,
       avatar: Icon(
@@ -2888,15 +3131,23 @@ class _TodoAttachmentChip extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
       onDeleted: onDeleted,
-      onPressed: uri == null
+      onPressed: target == null
           ? null
           : () async {
-              final target = _isWebUri(uri)
-                  ? uri
-                  : Uri.file(attachment.uri, windows: false);
               await launchUrl(target, mode: LaunchMode.externalApplication);
             },
     );
+  }
+
+  Uri? _resolveOpenTarget(Uri? uri) {
+    if (uri == null) return null;
+    if (_isWebUri(uri) || (kIsWeb && uri.scheme == 'blob')) return uri;
+    if (kIsWeb) return null;
+    if (uri.scheme == 'file' || uri.scheme == 'content') return uri;
+    if (uri.scheme.isEmpty) {
+      return Uri.file(attachment.uri, windows: false);
+    }
+    return null;
   }
 
   bool _isWebUri(Uri? uri) => uri?.scheme == 'http' || uri?.scheme == 'https';
@@ -2911,23 +3162,52 @@ class _TodoAttachmentImagePreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final uri = Uri.tryParse(attachment.uri);
+    final dataBytes = ImageDecodeCache.decodeBase64Image(attachment.uri);
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final maxLogicalWidth = MediaQuery.sizeOf(context).width;
+    final cacheWidth = ImageDecodeCache.boundedCachePixels(maxLogicalWidth, dpr);
+    final cacheHeight = ImageDecodeCache.boundedCachePixels(
+      maxLogicalWidth * 9 / 16,
+      dpr,
+    );
     Widget image;
-    if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+    if (dataBytes != null) {
+      image = Image.memory(
+        dataBytes,
+        fit: BoxFit.cover,
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => _fallback(cs),
+      );
+    } else if (uri != null &&
+        (uri.scheme == 'http' ||
+            uri.scheme == 'https' ||
+            (kIsWeb && uri.scheme == 'blob'))) {
       image = Image.network(
         attachment.uri,
         fit: BoxFit.cover,
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
+        gaplessPlayback: true,
         errorBuilder: (_, _, _) => _fallback(cs),
       );
-    } else if (uri != null && uri.scheme == 'file') {
+    } else if (!kIsWeb && uri != null && uri.scheme == 'file') {
       image = Image.file(
         File(uri.toFilePath()),
         fit: BoxFit.cover,
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
+        gaplessPlayback: true,
         errorBuilder: (_, _, _) => _fallback(cs),
       );
-    } else if (attachment.uri.startsWith('/')) {
+    } else if (!kIsWeb && attachment.uri.startsWith('/')) {
       image = Image.file(
         File(attachment.uri),
         fit: BoxFit.cover,
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
+        gaplessPlayback: true,
         errorBuilder: (_, _, _) => _fallback(cs),
       );
     } else {
@@ -2972,32 +3252,62 @@ class _TagsEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: DesignTokens.spaceXs,
-      runSpacing: DesignTokens.spaceXs,
-      children: [
-        ...tags.map(
-          (t) => ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 180),
-            child: Chip(
-              label: Text('#$t', maxLines: 1, overflow: TextOverflow.ellipsis),
-              onDeleted: enabled ? () => onRemove(t) : null,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final theme = Theme.of(context);
+        final hint = TextPainter(
+          text: TextSpan(
+            text: TodoDetailUiCopy.newTagHint,
+            style: (theme.textTheme.titleMedium ?? const TextStyle()).merge(
+              theme.inputDecorationTheme.hintStyle,
             ),
           ),
-        ),
-        SizedBox(
-          width: 140,
-          child: TextField(
-            controller: controller,
-            enabled: enabled,
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: TodoDetailUiCopy.newTagHint,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          locale: Localizations.maybeLocaleOf(context),
+        )..layout();
+        final padding = theme.inputDecorationTheme.contentPadding?.resolve(
+          Directionality.of(context),
+        );
+        final naturalWidth =
+            hint.width.ceilToDouble() + (padding?.horizontal ?? 24) + 2;
+        hint.dispose();
+        final width = naturalWidth
+            .clamp(140.0, double.infinity)
+            .clamp(0.0, constraints.maxWidth);
+        return Wrap(
+          spacing: DesignTokens.spaceXs,
+          runSpacing: DesignTokens.spaceXs,
+          children: [
+            ...tags.map(
+              (t) => ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: Chip(
+                  label: Text(
+                    '#$t',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onDeleted: enabled ? () => onRemove(t) : null,
+                ),
+              ),
             ),
-            onSubmitted: enabled ? onAdd : null,
-          ),
-        ),
-      ],
+            SizedBox(
+              width: width,
+              child: TextField(
+                controller: controller,
+                enabled: enabled,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: TodoDetailUiCopy.newTagHint,
+                  hintMaxLines: 2,
+                ),
+                onSubmitted: enabled ? onAdd : null,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -3032,7 +3342,7 @@ class _PriorityDot extends StatelessWidget {
 Color priorityColor(TodoPriority p) {
   switch (p) {
     case TodoPriority.urgent:
-      return const Color(0xFFD32F2F); // 深红，区分于 high
+      return DesignTokens.defaultError; // 区分于 high
     case TodoPriority.high:
       return DesignTokens.priorityHigh;
     case TodoPriority.medium:
@@ -3043,5 +3353,3 @@ Color priorityColor(TodoPriority p) {
       return DesignTokens.priorityNone;
   }
 }
-
-String _formatYmd(DateTime d) => I18nDateFormat.date(d);

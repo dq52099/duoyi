@@ -14,6 +14,9 @@ VALIDATE_EVIDENCE_SCRIPT="$ROOT_DIR/scripts/validate_device_evidence.sh"
 READINESS_SCRIPT="$ROOT_DIR/scripts/generate_device_readiness_report.sh"
 VALIDATE_READINESS_SCRIPT="$ROOT_DIR/scripts/validate_device_readiness_report.sh"
 READINESS_DIR="${READINESS_DIR:-$ROOT_DIR/build/device-readiness/latest}"
+DEVICE_EVIDENCE_ROOT="${EVIDENCE_DIR:-$ROOT_DIR/build/device-regression}"
+ANDROID_EVIDENCE_DIR="${ANDROID_EVIDENCE_DIR:-$DEVICE_EVIDENCE_ROOT/android}"
+IOS_EVIDENCE_DIR="${IOS_EVIDENCE_DIR:-$DEVICE_EVIDENCE_ROOT/ios}"
 KVM_DEVICE="${KVM_DEVICE:-/dev/kvm}"
 BUILD_MODE="${BUILD_MODE:-debug}"
 EXPLICIT_APK_PATH="${APK_PATH:-}"
@@ -88,7 +91,7 @@ else
   echo "$KVM_DEVICE missing; accelerated Android emulator is not available in this environment"
 fi
 
-if ! "$FLUTTER_BIN" devices --machine | grep -Eq '"targetPlatform":"(android|ios)'; then
+if ! "$FLUTTER_BIN" devices --machine | python3 "$ROOT_DIR/scripts/flutter_device_platform.py" mobile; then
   cat <<'MSG' >&2
 
 No Android or iOS device/emulator is attached.
@@ -121,11 +124,11 @@ echo "== Integration smoke test =="
 android_evidence_status=1
 ios_evidence_status=1
 
-if "$FLUTTER_BIN" devices --machine | grep -Eq '"targetPlatform":"android'; then
+if "$FLUTTER_BIN" devices --machine | python3 "$ROOT_DIR/scripts/flutter_device_platform.py" android; then
   echo
   echo "== Android device evidence =="
-  APK_PATH="$APK_PATH" "$ANDROID_EVIDENCE_SCRIPT"
-  if "$VALIDATE_EVIDENCE_SCRIPT" android; then
+  EVIDENCE_DIR="$ANDROID_EVIDENCE_DIR" APK_PATH="$APK_PATH" "$ANDROID_EVIDENCE_SCRIPT"
+  if ANDROID_EVIDENCE_DIR="$ANDROID_EVIDENCE_DIR" "$VALIDATE_EVIDENCE_SCRIPT" android; then
     android_evidence_status=0
   fi
 else
@@ -133,11 +136,11 @@ else
   echo "No Android device detected for android_device_evidence.sh; iOS/manual WidgetKit checks still required where applicable."
 fi
 
-if "$FLUTTER_BIN" devices --machine | grep -Eq '"targetPlatform":"ios'; then
+if "$FLUTTER_BIN" devices --machine | python3 "$ROOT_DIR/scripts/flutter_device_platform.py" ios; then
   echo
   echo "== iOS device evidence =="
-  "$IOS_EVIDENCE_SCRIPT"
-  if "$VALIDATE_EVIDENCE_SCRIPT" ios; then
+  EVIDENCE_DIR="$IOS_EVIDENCE_DIR" "$IOS_EVIDENCE_SCRIPT"
+  if IOS_EVIDENCE_DIR="$IOS_EVIDENCE_DIR" "$VALIDATE_EVIDENCE_SCRIPT" ios; then
     ios_evidence_status=0
   fi
 else

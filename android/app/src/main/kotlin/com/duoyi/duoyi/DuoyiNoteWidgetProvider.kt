@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
@@ -50,6 +51,7 @@ open class DuoyiNoteWidgetProvider : DuoyiStyledWidgetProvider() {
                     prefs,
                     primaryIds = intArrayOf(
                         R.id.widget_note_title,
+                        R.id.widget_note_quick_add,
                         R.id.widget_note_nav_calendar,
                     ),
                     bodyIds = intArrayOf(
@@ -63,6 +65,8 @@ open class DuoyiNoteWidgetProvider : DuoyiStyledWidgetProvider() {
                         R.id.widget_note_nav_habit,
                         R.id.widget_note_nav_focus,
                     ),
+                    context = context,
+                    appWidgetId = id,
                 )
 
                 val isZh = DuoyiWidgetCopy.isZh(prefs)
@@ -117,6 +121,17 @@ open class DuoyiNoteWidgetProvider : DuoyiStyledWidgetProvider() {
                     context, MainActivity::class.java, Uri.parse("duoyi://tab/focus")
                 )
 
+                val showQuickAdd = !DuoyiWidgetDisplayMode.isCompact(prefs, id) && frame.fresh
+                views.setViewVisibility(R.id.widget_note_quick_add, if (showQuickAdd) View.VISIBLE else View.GONE)
+                views.setContentDescription(R.id.widget_note_quick_add, DuoyiWidgetCopy.quickAddNoteDescription(isZh))
+                views.setOnClickPendingIntent(
+                    R.id.widget_note_quick_add,
+                    if (showQuickAdd) HomeWidgetLaunchIntent.getActivity(
+                        context,
+                        MainActivity::class.java,
+                        DuoyiWidgetSnapshot.actionUri(frame, Uri.parse("duoyi://action/quick_note")),
+                    ) else openNote,
+                )
                 views.setOnClickPendingIntent(R.id.widget_note_root, openNote)
                 views.setOnClickPendingIntent(R.id.widget_note_title, openNote)
                 views.setOnClickPendingIntent(R.id.widget_note_subtitle, openNote)

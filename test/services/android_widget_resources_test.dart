@@ -1,7 +1,24 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:duoyi/core/i18n.dart';
+import 'package:duoyi/core/widget_ui_copy.dart';
+import 'package:duoyi/services/android_widget_manager.dart';
 import 'package:test/test.dart';
+
+void _expectHostPreviewBuilder(String source) {
+  expect(
+    source,
+    matches(
+      RegExp(
+        r'item\.previewBuilder\(\s*_displayMode,\s*'
+        r'_hostPlatform\s*==\s*WidgetHostPlatform\.android\s*'
+        r'\?\s*TargetPlatform\.android\s*:\s*TargetPlatform\.iOS,\s*\)',
+      ),
+    ),
+    reason: 'Previews use the selected density and the current native host.',
+  );
+}
 
 void main() {
   group('Android 小组件资源', () {
@@ -297,6 +314,8 @@ void main() {
         'android/app/src/main/res/layout/duoyi_calendar_widget.xml',
       ).readAsStringSync();
 
+      expect(uiCopy, contains('lookupAppLocalizations(I18n.current.flutterLocale)'));
+      _expectGeneratedWidgetCopy();
       expect(widgetScreen, contains('WidgetUiCopy.previewTitle(kind)'));
       expect(widgetScreen, contains('WidgetUiCopy.catalogTitle(kind)'));
       expect(widgetScreen, contains('WidgetUiCopy.catalogSubtitle(kind)'));
@@ -304,8 +323,8 @@ void main() {
         uiCopy.indexOf('static String previewTitle('),
         uiCopy.indexOf('static String previewSampleBadge('),
       );
-      expect(previewTitleCopy, contains('AppLocale.en => switch (kind)'));
-      expect(previewTitleCopy, contains('AppLocale.zh => switch (kind)'));
+      expect(previewTitleCopy, contains('return switch (kind) {'));
+      expect(previewTitleCopy, contains('final l10n = _l10n();'));
       for (final kind in [
         'todo',
         'focus',
@@ -325,7 +344,12 @@ void main() {
       expect(widgetScreen, contains('WidgetUiCopy.actionRetry'));
       expect(
         widgetScreen,
-        contains('WidgetUiCopy.styleSyncSuccess(mode.label)'),
+        matches(
+          RegExp(
+            r'WidgetUiCopy\.hostStyleSyncSuccess\(\s*mode\.label,\s*'
+            r'_hostPlatform,?\s*\)',
+          ),
+        ),
       );
       expect(uiCopy, contains('static String get styleSyncFailed'));
       expect(uiCopy, contains('static String get actionRetry'));
@@ -333,6 +357,23 @@ void main() {
         uiCopy,
         contains('static String styleSyncSuccess(String modeLabel)'),
       );
+      expect(uiCopy, contains('static String hostStyleSyncSuccess('));
+      expect(
+        uiCopy,
+        contains(
+          'if (platform == WidgetHostPlatform.android) return styleSyncSuccess(label)',
+        ),
+      );
+      final feedbackStart = widgetScreen.indexOf('Widget _widgetFeedback(');
+      final feedbackEnd = widgetScreen.indexOf(
+        '\ntypedef _WidgetCategory',
+        feedbackStart,
+      );
+      expect(feedbackStart, greaterThanOrEqualTo(0));
+      expect(feedbackEnd, greaterThan(feedbackStart));
+      final feedback = widgetScreen.substring(feedbackStart, feedbackEnd);
+      expect(feedback, contains('ValueListenableBuilder<AppLocale>'));
+      expect(feedback, contains('valueListenable: I18n.localeListenable'));
 
       expect(widgetScreen, contains('WidgetUiCopy.pinHelpMessage('));
       expect(widgetScreen, contains('WidgetUiCopy.actionOpenPermissions'));
@@ -341,8 +382,8 @@ void main() {
         uiCopy.indexOf('static String pinHelpMessage('),
         uiCopy.indexOf('// Pin confirmation failures'),
       );
-      expect(pinHelpCopy, contains('AppLocale.en => switch (result)'));
-      expect(pinHelpCopy, contains('AppLocale.zh => switch (result)'));
+      expect(pinHelpCopy, contains('return switch (result) {'));
+      expect(pinHelpCopy, contains('final l10n = _l10n();'));
       for (final result in [
         'unsupported',
         'unsupportedPlatform',
@@ -365,8 +406,8 @@ void main() {
         ),
         uiCopy.indexOf('// Add button labels'),
       );
-      expect(pinConfirmationCopy, contains('AppLocale.en => switch (status)'));
-      expect(pinConfirmationCopy, contains('AppLocale.zh => switch (status)'));
+      expect(pinConfirmationCopy, contains('return switch (status) {'));
+      expect(pinConfirmationCopy, contains('final l10n = _l10n();'));
       for (final status in [
         'invalidWidgetId',
         'timeout',
@@ -398,8 +439,8 @@ void main() {
         uiCopy.indexOf('static String get actionAppSettings'),
       );
       for (final copy in [pinSupportTitleCopy, pinSupportMessageCopy]) {
-        expect(copy, contains('AppLocale.en => switch (support)'));
-        expect(copy, contains('AppLocale.zh => switch (support)'));
+        expect(copy, contains('return switch (support) {'));
+        expect(copy, contains('final l10n = _l10n();'));
         for (final result in [
           'unsupportedPlatform',
           'unsupportedLauncher',
@@ -418,7 +459,7 @@ void main() {
       expect(widgetScreen, contains('WidgetUiCopy.calendarToday'));
       expect(
         uiCopy,
-        contains("static String get calendarToday => isZh ? '今天' : 'Today'"),
+        contains('static String get calendarToday => _l10n().pickerActionToday'),
       );
 
       expect(
@@ -470,41 +511,59 @@ void main() {
         calendarProvider,
         contains('DuoyiWidgetCopy.calendarMonthTitle(now, compact, isZh)'),
       );
+      expect(calendarProvider, contains('R.layout.duoyi_calendar_day_cell'));
       expect(
         calendarProvider,
-        contains('buildMonthGridSpan(prefs, now, compact, detailed, isZh)'),
+        matches(
+          RegExp(
+            r'DuoyiWidgetContent\.buildMonthGrid\(\s*'
+            r'now\.time,\s*now\.timeZone,\s*isZh,\s*firstDayOfWeek,?\s*\)',
+          ),
+        ),
+      );
+      expect(
+        calendarProvider,
+        contains('prefs.getInt("widget_first_day_of_week", 1)'),
       );
       expect(
         calendarProvider,
         contains(
-          'DuoyiWidgetContent.buildMonthGrid(now.time, now.timeZone, isZh)',
+          'DuoyiWidgetContent.calendarWeekdayLabels(isZh, firstDayOfWeek)',
         ),
       );
-      expect(calendarProvider, contains('BackgroundColorSpan(theme.primary)'));
       expect(
         calendarProvider,
-        contains('ForegroundColorSpan(theme.onPrimary)'),
+        contains('createTodayCircleBitmap(theme.primary'),
+      );
+      expect(
+        calendarProvider,
+        contains('if (cell.isToday) theme.readableOnPrimary else theme.text'),
       );
       expect(calendarLayout, contains('@+id/widget_calendar_event_summary'));
       expect(
         calendarProvider,
         contains('DuoyiWidgetContent.resolveCalendarSummaryAndTarget('),
       );
-      expect(calendarProvider, contains('rawSummary = rawEventSummary'));
-      expect(calendarProvider, contains('rawSchedule1Id = rawSchedule1Id'));
-      expect(calendarProvider, contains('isFresh = isFresh'));
+      expect(
+        calendarProvider,
+        contains('rawSummary = prefs.getString("today_event_summary", null)'),
+      );
+      expect(
+        calendarProvider,
+        contains(
+          'rawSchedule1Id = prefs.getString("schedule_highlight_1_id", null)',
+        ),
+      );
+      expect(calendarProvider, contains('isFresh = frame.fresh'));
       expect(calendarProvider, contains('Uri.parse(summaryResult.target)'));
+      expect(calendarProvider, contains('DuoyiWidgetLayoutPolicy.calendarMeasured('));
       expect(
         calendarProvider,
-        contains('!compact && (height == 0 || height >= 140)'),
+        contains('R.id.widget_calendar_event_summary, visible(showEventSummary)'),
       );
       expect(
         calendarProvider,
-        contains('if (summaryResult.summary != null && canFitEventSummary)'),
-      );
-      expect(
-        calendarProvider,
-        contains('R.id.widget_calendar_event_summary, View.GONE'),
+        contains('R.id.widget_calendar_info_row, visible(showInfoRow)'),
       );
       expect(
         calendarProvider,
@@ -529,6 +588,7 @@ void main() {
     });
 
     test('所有桌面小组件单行文本都声明截断边界', () {
+      final seenNatural = <String>{};
       final layoutFiles =
           Directory(
               'android/app/src/main/res/layout',
@@ -546,6 +606,30 @@ void main() {
         for (final block in _textViewBlocks(layout)) {
           final id = _textViewId(block);
           if (id == 'widget_calendar_grid') continue;
+          if (id == 'widget_focus_quick_start') {
+            expect(block, contains('android:layout_height="wrap_content"'));
+            expect(block, contains('android:minHeight="36dp"'));
+            expect(block, isNot(contains('android:maxLines=')));
+            expect(block, isNot(contains('android:ellipsize=')));
+            continue;
+          }
+          final scope = _naturalWidgetTextScopes[file.uri.pathSegments.last];
+          final natural = scope?[id];
+          if (natural != null) {
+            seenNatural.add('${file.uri.pathSegments.last}/${id!}');
+            expect(block, isNot(contains('android:maxLines=')));
+            expect(block, isNot(contains('android:ellipsize=')));
+            if (file.uri.pathSegments.last == 'duoyi_calendar_widget.xml' ||
+                file.uri.pathSegments.last == 'duoyi_goal_widget.xml') {
+              expect(block, isNot(contains('android:autoSizeTextType="uniform"')));
+              expect(block, isNot(contains('android:autoSizeMinTextSize=')));
+              expect(block, isNot(contains('android:autoSizePresetSizes=')));
+            }
+            for (final attribute in natural.entries) {
+              expect(block, contains('android:${attribute.key}="${attribute.value}"'));
+            }
+            continue;
+          }
           expect(
             block,
             contains('android:maxLines='),
@@ -559,11 +643,14 @@ void main() {
           );
         }
       }
+      expect(seenNatural, _naturalWidgetTextScopes.entries.expand(
+        (scope) => scope.value.keys.map((id) => '${scope.key}/$id'),
+      ).toSet());
     });
 
     test('桌面小组件动态短文本使用 wrap_content 时声明最大宽度', () {
+      var seenHabitPercent = 0;
       const constrainedDynamicTextIds = {
-        'widget_todo_count',
         'widget_focus_habit_date',
         'widget_calendar_month',
         'widget_habit_percent',
@@ -585,6 +672,29 @@ void main() {
         for (final block in _textViewBlocks(layout)) {
           final id = _textViewId(block);
           if (!constrainedDynamicTextIds.contains(id)) continue;
+          if (block.contains('android:layout_width="0dp"')) {
+            expect(block, contains('android:layout_weight="1"'));
+            if (file.uri.pathSegments.last == 'duoyi_calendar_widget.xml' &&
+                id == 'widget_calendar_month') {
+              expect(block, contains('android:layout_height="wrap_content"'));
+              expect(block, isNot(contains('android:maxLines=')));
+              expect(block, isNot(contains('android:ellipsize=')));
+            } else {
+              expect(block, contains('android:ellipsize="end"'));
+            }
+            continue;
+          }
+          if (file.uri.pathSegments.last == 'duoyi_habit_widget.xml' &&
+              id == 'widget_habit_percent') {
+            seenHabitPercent++;
+            expect(block, contains('android:layout_width="wrap_content"'));
+            expect(block, contains('android:layout_height="wrap_content"'));
+            expect(block, contains('android:maxLines="1"'));
+            expect(block, contains('android:ellipsize="end"'));
+            expect(block, contains('android:textSize="14sp"'));
+            expect(block, isNot(contains('android:maxWidth=')));
+            continue;
+          }
           expect(block, contains('android:layout_width="wrap_content"'));
           expect(
             block,
@@ -594,6 +704,7 @@ void main() {
           );
         }
       }
+      expect(seenHabitPercent, 1);
     });
 
     test('桌面小组件圆角背景和按钮跟随主题且不被纯色背景覆盖', () {
@@ -824,6 +935,12 @@ void main() {
       final legacyInfo = File(
         'android/app/src/main/res/xml/duoyi_widget_info.xml',
       ).readAsStringSync();
+      expect(
+        legacyInfo,
+        contains('android:widgetFeatures="hide_from_picker"'),
+        reason:
+            'Keep existing instances registered while requesting picker exclusion.',
+      );
       expect(legacyInfo, contains('android:targetCellWidth="3"'));
       expect(legacyInfo, contains('android:targetCellHeight="2"'));
       expect(legacyInfo, isNot(contains('android:targetCellHeight="3"')));
@@ -1039,7 +1156,11 @@ void main() {
         confirmationHelp,
         contains('WidgetUiCopy.pinConfirmationFailure('),
       );
-      expect(widgetScreen, contains('if (widget.canOpenWidgetSettings)'));
+      expect(
+        widgetScreen,
+        contains('widget.hostPlatform == WidgetHostPlatform.android &&'),
+      );
+      expect(widgetScreen, contains('widget.canOpenWidgetSettings'));
       expect(widgetScreen, contains('if (canOpenSettings)'));
       expect(widgetScreen, contains('WidgetUiCopy.actionOpenPermissions'));
       expect(mainActivity, contains('miui.intent.action.APP_PERM_EDITOR'));
@@ -1346,6 +1467,131 @@ void main() {
       expect(previewRow, isNot(contains('Icons.check_circle')));
     });
 
+    test('专注保留系统字号并按测量容量决定主操作与完整指标', () {
+      final layout = File(
+        'android/app/src/main/res/layout/duoyi_focus_habit_widget.xml',
+      ).readAsStringSync();
+      final provider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiFocusHabitWidgetProvider.kt',
+      ).readAsStringSync();
+      final snapshot = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetSnapshot.kt',
+      ).readAsStringSync();
+      expect(layout, isNot(contains('autoSize')));
+      expect(layout, contains('@+id/widget_focus_header'));
+      expect(layout, contains('android:minHeight="36dp"'));
+      expect(provider, contains('DuoyiWidgetLayoutPolicy.focus('));
+      expect(provider, contains('mode = frame.core.requestedMode'));
+      expect(provider, contains('measure.wrapped(actionText, 12f'));
+      expect(provider, contains('visible(plan.showMetrics)'));
+      expect(provider, contains('visible(plan.showAction)'));
+      expect(provider, contains('visible(plan.showAllMetrics)'));
+      expect(provider, contains('frame.fresh && !storedRunning'));
+      expect(
+        provider,
+        contains('sessionTrusted && (frame.fresh || timerRunning)'),
+      );
+      expect(
+        snapshot,
+        contains('if (!providerFitsLayout && height in 1..149)'),
+      );
+      expect(snapshot, isNot(contains('height in 1..159')));
+    });
+
+    test('纪念日按已解析条目适配容量并保留来源和点击保护', () {
+      final provider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiAnniversaryWidgetProvider.kt',
+      ).readAsStringSync();
+      final layout = File(
+        'android/app/src/main/res/layout/duoyi_anniversary_widget.xml',
+      ).readAsStringSync();
+      final snapshot = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetSnapshot.kt',
+      ).readAsStringSync();
+      expect(provider, contains('DuoyiWidgetContent.resolveAnniversaryItems('));
+      expect(provider, contains('frame.core.publicationState'));
+      expect(provider, contains('mode = frame.core.requestedMode'));
+      expect(
+        provider,
+        contains('secondaryRows = listOf(item2 != null, item3 != null)'),
+      );
+      expect(provider, contains('thirdLineIsSmall = false'));
+      expect(
+        provider,
+        contains('navigationHeight = maxOf(30, measure.line(10f))'),
+      );
+      expect(
+        provider,
+        contains('measure.width(it, 10f) + 2 <= (contentWidth - 8) / 4'),
+      );
+      expect(provider, contains('visible(plan.rows[0])'));
+      expect(provider, contains('visible(plan.rows[1])'));
+      expect(provider, contains('visible(plan.rows[2])'));
+      expect(provider, contains('visible(plan.showSubtitle)'));
+      expect(provider, contains('visible(plan.showNavigation)'));
+      expect(provider, contains('views.setContentDescription('));
+      expect(provider, contains('DuoyiWidgetSnapshot.entityUri(frame,'));
+      expect(layout, contains('@+id/widget_anniversary_content'));
+      expect(layout, contains('android:padding="8dp"'));
+      expect(layout, isNot(contains('android:padding="12dp"')));
+      final refresh = _textViewBlocks(
+        layout,
+      ).firstWhere((block) => _textViewId(block) == 'widget_refresh');
+      expect(refresh, contains('android:layout_height="wrap_content"'));
+      expect(refresh, contains('android:minHeight="36dp"'));
+      final providerLayouts = snapshot.substring(
+        snapshot.indexOf('val providerFitsLayout ='),
+        snapshot.indexOf('if (!providerFitsLayout)'),
+      );
+      expect(providerLayouts, contains('R.layout.duoyi_anniversary_widget'));
+    });
+
+    test('六类文字列表导航使用自然行高和全部本地化标签的宽度', () {
+      final snapshot = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetSnapshot.kt',
+      ).readAsStringSync();
+      expect(
+        snapshot,
+        contains('navigationHeight = maxOf(30, lineHeight(10f))'),
+      );
+      expect(
+        snapshot,
+        contains(
+          'textMetrics.fitsSingleLine(it, 10f, navigationCellWidth - 2)',
+        ),
+      );
+      expect(snapshot, contains('navigationCellWidth > 2 && navigationLabels.all {'));
+      expect(snapshot, contains('frame.core.requestedMode, width, height,'));
+      for (final kind in [
+        'anniversary',
+        'schedule',
+        'course',
+        'goal',
+        'note',
+        'diary',
+      ]) {
+        final layout = File(
+          'android/app/src/main/res/layout/duoyi_${kind}_widget.xml',
+        ).readAsStringSync();
+        final navigation = layout.substring(
+          layout.indexOf('android:id="@+id/widget_${kind}_bottom_nav"'),
+        );
+        expect(navigation, isNot(contains('android:layout_height="30dp"')));
+        expect(
+          navigation,
+          isNot(contains('android:layout_height="match_parent"')),
+        );
+        expect(
+          RegExp('android:minHeight="30dp"').allMatches(navigation),
+          hasLength(5),
+        );
+        for (final block in _textViewBlocks(navigation)) {
+          expect(block, contains('android:layout_height="wrap_content"'));
+          expect(block, contains('android:textSize="10sp"'));
+        }
+      }
+    });
+
     test('月历小组件按尺寸裁剪网格并提供今天交互按钮', () {
       final layout = File(
         'android/app/src/main/res/layout/duoyi_calendar_widget.xml',
@@ -1359,36 +1605,198 @@ void main() {
 
       expect(layout, contains('@+id/widget_calendar_today_button'));
       expect(layout, contains('android:text="今天"'));
+      final title = _textViewBlocks(
+        layout,
+      ).firstWhere((block) => _textViewId(block) == 'widget_calendar_title');
+      expect(title, contains('android:layout_marginEnd="8dp"'));
       expect(provider, contains('R.id.widget_calendar_today_button'));
       expect(provider, contains('DuoyiWidgetTheme.applyButtonSurfaces'));
-      expect(provider, contains('DuoyiWidgetDisplayMode.isCompact(prefs, id)'));
-      expect(
-        provider,
-        contains('DuoyiWidgetDisplayMode.isDetailed(prefs, id)'),
-      );
+      expect(provider, contains('frame.core.requestedMode == "compact"'));
+      expect(provider, contains('frame.core.requestedMode == "detailed"'));
       expect(
         provider,
         contains('DuoyiWidgetCopy.calendarMonthTitle(now, compact, isZh)'),
       );
-      expect(
-        provider,
-        contains('buildMonthGridSpan(prefs, now, compact, detailed, isZh)'),
-      );
-      expect(provider, contains('views.setTextViewTextSize('));
+      expect(provider, contains('R.layout.duoyi_calendar_day_cell'));
+      expect(provider, contains('cellViews.setTextViewTextSize('));
       expect(provider, contains('TypedValue.COMPLEX_UNIT_SP'));
-      expect(provider, contains('if (compact) View.GONE else View.VISIBLE'));
+      expect(provider, contains('val isTitleVisible = titleMeasure?.fits == true'));
+      expect(provider, contains('if (!compact && monthSingle.fits && titleAvailableWidth > 0)'));
+      expect(provider, contains('measure.measureSingleLine(titleText, 13f, titleAvailableWidth)'));
       expect(
         provider,
         contains(
           'views.setOnClickPendingIntent(R.id.widget_calendar_today_button, openCalendar)',
         ),
       );
-      expect(provider, contains('compact -> currentWeek..currentWeek'));
-      expect(provider, contains('detailed -> 0..5'));
-      expect(provider, contains('currentWeek - 1'));
-      expect(widgetScreen, contains('class _WidgetPreviewCalendarGrid'));
+      expect(provider, contains('DuoyiWidgetLayoutPolicy.calendarMeasured('));
+      expect(provider, contains('val hasPrimaryDateContent = plan.weeks.isNotEmpty() || plan.showDateFallback'));
+      expect(provider, contains('val requiresEventSummary = !compact && summaryResult.summary != null'));
+      expect(provider, contains('val requiredContentFits = hasPrimaryDateContent && (!requiresEventSummary || plan.showEventSummary)'));
+      expect(provider, contains('val visibleWeeks = if (requiredContentFits) plan.weeks else emptyList()'));
+      expect(provider, contains('currentWeek = currentWeek'));
+      expect(widgetScreen, contains('final cellsFit ='));
+      expect(widgetScreen, contains('WidgetUiCopy.calendarCurrentDate'));
       expect(widgetScreen, contains('class _WidgetPreviewCalendarCell'));
       expect(widgetScreen, contains('WidgetUiCopy.calendarToday'));
+    });
+
+    test('Calendar dates use child-scoped actions and measured no-fit handling', () {
+      final provider = File(
+        'android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiCalendarWidgetProvider.kt',
+      ).readAsStringSync();
+      final layout = File(
+        'android/app/src/main/res/layout/duoyi_calendar_widget.xml',
+      ).readAsStringSync();
+      final cell = File(
+        'android/app/src/main/res/layout/duoyi_calendar_day_cell.xml',
+      ).readAsStringSync();
+
+      expect(provider, contains('views.removeAllViews(rowId)'));
+      expect(provider, contains('views.addView(rowId, cellViews)'));
+      expect(provider, contains('cellViews.setOnClickPendingIntent('));
+      expect(
+        provider,
+        isNot(
+          contains(
+            'views.setOnClickPendingIntent(R.id.widget_calendar_day_text',
+          ),
+        ),
+      );
+      expect(provider, contains('val rawTarget = cell.target'));
+      expect(provider, contains('Uri.parse(rawTarget)'));
+      expect(
+        provider,
+        contains(
+          'DuoyiWidgetSnapshot.entityUri(frame, targetUri, fallbackCalendarUri)',
+        ),
+      );
+      expect(
+        provider,
+        contains(
+          'cellViews.setContentDescription(R.id.widget_calendar_day_text, null)',
+        ),
+      );
+      expect(
+        provider,
+        contains(
+          'cellViews.setOnClickPendingIntent(R.id.widget_calendar_day_text, null)',
+        ),
+      );
+      expect(provider, contains('Bitmap.createBitmap(sizePx, sizePx'));
+      expect(
+        provider,
+        contains('canvas.drawCircle(radius, radius, radius, paint)'),
+      );
+      expect(cell, contains('android:scaleType="fitCenter"'));
+      expect(cell, contains('android:includeFontPadding="false"'));
+      expect(cell, contains('android:layout_weight="1"'));
+      expect(provider, isNot(contains('fitTextSizeSp')));
+      expect(provider, contains('DuoyiWidgetTextMetrics(displayMetrics)'));
+      expect(provider, contains('val gridFitsWidth = cellWidth > 2 &&'));
+      expect(provider, contains('weekdays.all { measure.measureSingleLine(it, 9.5f, cellWidth - 2).fits }'));
+      expect(provider, contains('measure.measureSingleLine(it.dayNumber.toString(), dateSizeSp, cellWidth - 2).fits'));
+      expect(provider, contains('model.cells.filter { it.dayNumber > 0 }.all'));
+      expect(provider, contains('val dateSizeSp = if (detailed) 12f else 11f'));
+      expect(provider, contains('visible(visibleWeeks.isNotEmpty())'));
+      expect(provider, contains('visible(plan.showDateFallback)'));
+      expect(
+        provider,
+        contains('val fallbackTarget = DuoyiWidgetSnapshot.entityUri(frame,'),
+      );
+      expect(provider, contains('fallbackDescription'));
+      expect(layout, contains('@+id/widget_calendar_date_fallback'));
+      expect(layout, contains('android:minHeight="14dp"'));
+      expect(layout, isNot(contains('android:layout_height="14dp"')));
+      expect(layout, isNot(contains('android:layout_height="12dp"')));
+      for (var row = 0; row < 6; row++) {
+        expect(layout, contains('@+id/widget_calendar_row_$row'));
+      }
+
+      final planStart = provider.indexOf('val plan = DuoyiWidgetLayoutPolicy.calendarMeasured(');
+      final planEnd = provider.indexOf('val hasPrimaryDateContent =', planStart);
+      expect(planStart, greaterThanOrEqualTo(0));
+      expect(planEnd, greaterThan(planStart));
+      final measuredPlan = provider.substring(planStart, planEnd);
+      for (final binding in [
+        'mode = frame.core.requestedMode', 'headerFits = headerFits',
+        'headerHeight = headerHeight', 'gridFitsWidth = gridFitsWidth',
+        'fallbackHeight = fallbackMeasure.height', 'fallbackFitsWidth = fallbackMeasure.fits',
+        'monthSummaryHeight = monthSummaryMeasure.height', 'monthSummaryFitsWidth = monthSummaryMeasure.fits',
+        'hasEventSummary = summaryResult.summary != null',
+        'eventSummaryHeight = eventSummaryMeasure?.height ?: 0',
+        'eventSummaryFitsWidth = eventSummaryMeasure?.fits ?: false',
+        'navigationFitsWidth = navigationCellWidth > 2 && tabLabels.all {',
+        'measure.measureSingleLine(it, 9.5f, navigationCellWidth - 2).fits',
+      ]) {
+        expect(measuredPlan, contains(binding));
+      }
+      expect(provider, contains('measure.measureWrapped(fallbackDate, 11f, contentWidth)'));
+      expect(provider, contains('measure.measureWrapped(monthSummaryText, 10f, contentWidth)'));
+      expect(provider, contains('measure.measureWrapped(it, 10f, contentWidth)'));
+      final requiredStart = provider.indexOf('val hasPrimaryDateContent =');
+      final requiredEnd = provider.indexOf('for (col in 0 until 7)', requiredStart);
+      expect(requiredStart, greaterThanOrEqualTo(planEnd));
+      expect(requiredEnd, greaterThan(requiredStart));
+      final requiredGate = provider.substring(requiredStart, requiredEnd);
+      expect(requiredGate, contains('val requiresEventSummary = !compact && summaryResult.summary != null'));
+      expect(requiredGate, contains('val requiredContentFits = hasPrimaryDateContent && (!requiresEventSummary || plan.showEventSummary)'));
+      expect(requiredGate, contains('val visibleWeeks = if (requiredContentFits) plan.weeks else emptyList()'));
+      expect(provider, isNot(contains('if (!hasPrimaryDateContent) {')));
+      final failureStart = provider.indexOf('if (!requiredContentFits) {');
+      final restoreStart = provider.indexOf('val showEventSummary = plan.showEventSummary && summaryResult.summary != null', failureStart);
+      final restoreEnd = provider.indexOf('val theme = DuoyiWidgetTheme.read(prefs)', restoreStart);
+      expect(failureStart, greaterThan(planEnd));
+      expect(restoreStart, greaterThan(failureStart));
+      expect(restoreEnd, greaterThan(restoreStart));
+      final failed = provider.substring(failureStart, restoreStart);
+      final restored = provider.substring(restoreStart, restoreEnd);
+      for (final id in ['header', 'title', 'today_button', 'weekday_header', 'date_fallback',
+        'grid', 'info_row', 'summary', 'event_summary', 'spacer', 'bottom_nav']) {
+        expect(failed, contains('R.id.widget_calendar_$id, View.GONE'));
+      }
+      expect(failed, contains('R.id.widget_refresh, View.GONE'));
+      expect(failed, contains('measure.measureWrapped(recoveryText, 12f, contentWidth)'));
+      expect(failed, contains('contentWidth > 0 && recoveryMeasure.fits &&'));
+      expect(failed, contains('availableHeight >= 16 + recoveryMeasure.height'));
+      expect(failed, contains('if (recoveryFits) {'));
+      expect(failed, contains('R.id.widget_calendar_recovery, View.VISIBLE'));
+      expect(failed, contains('R.id.widget_calendar_recovery, View.GONE'));
+      expect(failed, contains('DuoyiWidgetCopy.calendarNoFitContentDescription('));
+      expect(failed, contains('frame.fresh, isZh, frame.core.publicationState, recoveryVisible = recoveryFits'));
+      expect(failed, contains('R.id.widget_calendar_root, recoveryDesc'));
+      expect(restored, contains('val showInfoRow = plan.showMonthSummary || showEventSummary'));
+      expect(restored, contains('R.id.widget_calendar_recovery, View.GONE'));
+      expect(restored, contains('R.id.widget_calendar_root, null'));
+      expect(restored, contains('R.id.widget_calendar_summary, visible(plan.showMonthSummary)'));
+      expect(restored, contains('R.id.widget_calendar_event_summary, visible(showEventSummary)'));
+      expect(restored, contains('R.id.widget_calendar_info_row, visible(showInfoRow)'));
+      expect(restored, contains('R.id.widget_calendar_bottom_nav, visible(plan.showNavigation)'));
+      expect(provider, contains('R.id.widget_calendar_recovery, openCalendar'));
+      expect(layout, contains('@+id/widget_calendar_content'));
+      expect(layout, contains('@+id/widget_calendar_header'));
+      final info = RegExp(r'<LinearLayout\s+android:id="@\+id/widget_calendar_info_row"[^>]*>').firstMatch(layout)!.group(0)!;
+      expect(info, contains('android:orientation="vertical"'));
+      final policy = File('android/app/src/main/kotlin/com/duoyi/duoyi/DuoyiWidgetLayoutPolicy.kt').readAsStringSync();
+      final policyStart = policy.indexOf('fun calendarMeasured(');
+      final policyEnd = policy.indexOf('data class Goal(', policyStart);
+      expect(policyStart, greaterThanOrEqualTo(0));
+      expect(policyEnd, greaterThan(policyStart));
+      final measuredPolicy = policy.substring(policyStart, policyEnd);
+      for (final gate in [
+        'if (!headerFits || 18 + headerHeight > available)',
+        'return CalendarMeasured(emptyList(), false, false, false, false, 18)',
+        'weeks.isEmpty() && fallbackFitsWidth && used + fallbackHeight + 2 <= available',
+        'mode != "compact" && (completeGrid || fallback)',
+        'canShowInfo && monthSummaryFitsWidth && used + monthSummaryCost <= available',
+        'showMonthSummary && hasEventSummary && eventSummaryFitsWidth &&',
+        'used + eventSummaryCost <= available',
+        'val allInfoShown = showMonthSummary && (!hasEventSummary || showEventSummary)',
+        'mode != "compact" && allInfoShown && navigationFitsWidth &&',
+      ]) {
+        expect(measuredPolicy, contains(gate));
+      }
+      expect(policy, contains('fun calendar(')); // Preserve the old API, not provider wiring.
     });
 
     test('小组件样式密度设置同步预览、新增固定请求和系统添加默认值', () {
@@ -1406,13 +1814,33 @@ void main() {
       expect(service, contains('widget_display_mode'));
       expect(
         widgetScreen,
-        contains('WidgetUiCopy.styleSyncSuccess(mode.label)'),
+        matches(
+          RegExp(
+            r'WidgetUiCopy\.hostStyleSyncSuccess\(\s*mode\.label,\s*'
+            r'_hostPlatform,?\s*\)',
+          ),
+        ),
       );
-      expect(widgetScreen, contains('if (!homeWidgetSynced)'));
+      expect(
+        widgetScreen,
+        contains('if (!synced || !isCurrent()) return false'),
+      );
+      expect(
+        widgetScreen,
+        contains(
+          'WidgetDisplayModeStore.acknowledge(selection, isCurrent: isCurrent)',
+        ),
+      );
+      expect(widgetScreen, contains('showFailure(selection)'));
       expect(widgetScreen, contains('WidgetUiCopy.styleSyncFailed'));
       expect(
         widgetScreen,
-        contains('if (!mounted || _isUpdatingDisplayMode) return'),
+        matches(
+          RegExp(
+            r'if \(!mounted \|\|\s*_isUpdatingDisplayMode \|\|\s*'
+            r'_refreshingData \|\|\s*!origin\.isCurrent\(context\) \|\|',
+          ),
+        ),
       );
       expect(widgetScreen, contains('enabled: !_isUpdatingDisplayMode'));
       expect(widgetScreen, contains('_userChangedDisplayMode = true'));
@@ -1420,7 +1848,10 @@ void main() {
         widgetScreen,
         contains('setState(() => _isUpdatingDisplayMode = false)'),
       );
-      expect(widgetScreen, contains('label: WidgetUiCopy.actionRetry'));
+      expect(
+        widgetScreen,
+        contains('actionLabel: () => WidgetUiCopy.actionRetry'),
+      );
       expect(widgetScreen, contains('SegmentedButton<WidgetDisplayMode>'));
       expect(
         widgetScreen,
@@ -1430,7 +1861,12 @@ void main() {
       );
       expect(
         widgetScreen,
-        contains('transaction.setString(_displayModeKey, mode.id)'),
+        matches(
+          RegExp(
+            r'WidgetDisplayModeStore\.save\(\s*mode\.id,\s*'
+            r'isCurrent: isCurrent,?\s*\)',
+          ),
+        ),
       );
       expect(
         service,
@@ -1485,29 +1921,40 @@ void main() {
       );
       expect(
         widgetScreen,
-        contains('WidgetPreviewCard.todo(displayMode: mode)'),
+        contains(
+          'WidgetPreviewCard.todo(displayMode: mode, platformOverride: platform)',
+        ),
       );
-      expect(widgetScreen, contains('item.previewBuilder(_displayMode)'));
+      _expectHostPreviewBuilder(widgetScreen);
       expect(widgetScreen, contains('class _WidgetPreviewDensity'));
       expect(widgetScreen, contains('class _WidgetPreviewDensityScope'));
       expect(widgetScreen, contains('class _WidgetPreviewLineList'));
+      expect(widgetScreen, contains('final candidates = lines.take(maxLines)'));
+      expect(widgetScreen, contains('class _WidgetPreviewContentFrame'));
+      expect(widgetScreen, isNot(contains('FittedBox(')));
+      expect(widgetScreen, isNot(contains('BoxFit.scaleDown')));
+      expect(widgetScreen, contains('class _WidgetPreviewParts'));
+      expect(widgetScreen, contains('selected.length == parts.length'));
+      expect(widgetScreen, contains('a.compareTo(b)'));
       expect(
         widgetScreen,
-        contains('for (final line in lines.take(maxLines))'),
+        contains('line.heightFor(context, constraints.maxWidth)'),
       );
-      expect(widgetScreen, contains('class _WidgetPreviewContentFrame'));
-      expect(widgetScreen, contains('FittedBox('));
-      expect(widgetScreen, contains('BoxFit.scaleDown'));
+      expect(widgetScreen, contains('visible.length == candidates.length'));
       expect(
         widgetScreen,
         isNot(contains('NeverScrollableScrollPhysics')),
         reason:
-            'Preview cards should scale their fixed widget content instead of hiding overflow in a disabled scroll view.',
+            'Preview cards should budget readable content without a disabled scroll view.',
       );
       expect(widgetScreen, contains('final visibleWeeks = switch (maxLines)'));
       expect(widgetScreen, contains('currentWeekIndex - 1'));
-      expect(widgetScreen, contains('_ => [0, 1, 2, 3, 4, 5]'));
-      expect(widgetScreen, contains('class _WidgetPreviewCalendarGrid'));
+      expect(
+        widgetScreen,
+        contains('_ => List.generate(totalWeeks, (index) => index)'),
+      );
+      expect(widgetScreen, contains('dateSizes.every'));
+      expect(widgetScreen, contains('labelSizes.every'));
       expect(widgetScreen, contains('class _WidgetPreviewCalendarCell'));
       expect(
         widgetScreen,
@@ -1627,7 +2074,19 @@ void main() {
         final bottomNavName = bottomNav.replaceFirst('@+id/', '');
         expect(source, contains('DuoyiWidgetDisplayMode'));
         expect(source, contains('R.id.$bottomNavName'));
-        expect(source, contains('DuoyiWidgetDisplayMode.bottomNavVisibility'));
+        if ({
+          'DuoyiFocusHabitWidgetProvider',
+          'DuoyiCalendarWidgetProvider',
+          'DuoyiAnniversaryWidgetProvider',
+        }.contains(widget.receiver)) {
+          expect(source, contains('mode = frame.core.requestedMode'));
+          expect(source, contains('visible(plan.showNavigation)'));
+        } else {
+          expect(
+            source,
+            contains('DuoyiWidgetDisplayMode.bottomNavVisibility'),
+          );
+        }
         expect(source, contains('override fun onDeleted'));
         expect(source, contains('DuoyiWidgetDisplayMode.clearForWidget'));
       }
@@ -1650,7 +2109,13 @@ void main() {
         contains('Future<bool> updateTheme(HomeWidgetThemePayload theme)'),
       );
       expect(service, contains('Future<bool> push({'));
-      expect(service, contains('Future<bool> _updateAllWidgets()'));
+      expect(
+        service,
+        contains(
+          'Future<bool> _updateAllWidgets({bool Function()? isCurrent})',
+        ),
+      );
+      expect(service, contains('_updateAllWidgets(isCurrent: isCurrent)'));
       expect(service, contains("debugPrint('[HomeWidget]"));
       expect(service, isNot(contains('catch (_) {}')));
       expect(service, contains('AndroidWidgetManager.refreshAllWidgets()'));
@@ -1666,7 +2131,11 @@ void main() {
       expect(service, isNot(contains('await updateOne(variantName)')));
       expect(service, isNot(contains('_androidLegacyProviderName')));
       final main = File('lib/main.dart').readAsStringSync();
-      expect(main, contains('Future<bool> pushHomeWidgetNow()'));
+      expect(
+        main,
+        contains('Future<bool> pushHomeWidgetNow({bool force = false})'),
+      );
+      expect(main, contains('return pushHomeWidgetNow(force: true)'));
       expect(main, contains('runQueuedHomeWidgetPush'));
       expect(main, contains('queued push completed with failures'));
 
@@ -1793,19 +2262,60 @@ void main() {
         widgetScreen,
         contains('class _AddWidgetButton extends StatefulWidget'),
       );
-      expect(widgetScreen, contains('bool _requesting = false'));
       expect(
         widgetScreen,
-        contains('onPressed: _requesting || widget.checkingPinSupport'),
+        contains('final Set<DuoyiWidgetKind> _pendingPinRequests = {}'),
+      );
+      expect(widgetScreen, contains('_pendingPinRequests.add(kind)'));
+      expect(widgetScreen, contains('!_pendingPinRequests.add(kind)'));
+      expect(
+        widgetScreen,
+        matches(
+          RegExp(
+            r'requesting: _pendingPinRequests\.contains\(\s*item\.kind,?\s*\)',
+          ),
+        ),
       );
       expect(
         widgetScreen,
-        contains('? () => _showPinWidgetHelp(context, support)'),
+        contains('beginRequest: () => _beginPinRequest(item.kind)'),
       );
-      expect(widgetScreen, contains('BoxConstraints(maxWidth: maxWidth)'));
-      expect(widgetScreen, contains('softWrap: false'));
+      expect(
+        widgetScreen,
+        contains('endRequest: () => _endPinRequest(item.kind)'),
+      );
+      expect(
+        widgetScreen,
+        matches(
+          RegExp(
+            r'widget.styleStatusLabel != null \|\|\s*'
+            r'widget.requesting \|\|\s*widget.checkingPinSupport',
+          ),
+        ),
+      );
+      expect(
+        widgetScreen,
+        contains('? () => _showPinWidgetHelp(context, support, origin)'),
+      );
+      final addButtonStart = widgetScreen.indexOf(
+        'class _AddWidgetButtonState',
+      );
+      final addButtonEnd = widgetScreen.indexOf(
+        'Future<void> _request(',
+        addButtonStart,
+      );
+      expect(addButtonStart, greaterThanOrEqualTo(0));
+      expect(addButtonEnd, greaterThan(addButtonStart));
+      final addButton = widgetScreen.substring(addButtonStart, addButtonEnd);
+      expect(addButton, contains('width: maxWidth'));
+      expect(addButton, contains('WidgetStatePropertyAll(Size(44, 44))'));
+      expect(addButton, contains('Text(label, textAlign: TextAlign.center)'));
+      expect(addButton, isNot(contains('softWrap: false')));
       expect(widgetScreen, contains('Icons.help_outline'));
-      expect(widgetScreen, contains('if (_requesting) return'));
+      expect(
+        widgetScreen,
+        contains('widget.requesting && !_showingHelp && !manualHost'),
+      );
       expect(widgetScreen, contains('CircularProgressIndicator'));
       expect(widgetScreen, contains('WidgetUiCopy.requestingAdd'));
       expect(widgetScreen, contains('requestPinWidgetDetailed'));
@@ -1818,6 +2328,22 @@ void main() {
       expect(widgetScreen, contains('waitForPinResult'));
       expect(widgetScreen, contains('confirmation.isSuccess'));
       expect(widgetScreen, contains('style: requestedMode.androidStyle'));
+      final requestStart = widgetScreen.indexOf('Future<void> _request(');
+      final requestEnd = widgetScreen.indexOf(
+        '\n  Future<void> _showPinWidgetHelp(',
+        requestStart,
+      );
+      expect(requestStart, greaterThanOrEqualTo(0));
+      expect(requestEnd, greaterThan(requestStart));
+      final pinRequest = widgetScreen.substring(requestStart, requestEnd);
+      expect(
+        pinRequest,
+        contains('widget.hostPlatform != WidgetHostPlatform.android ||'),
+      );
+      expect(pinRequest, contains('!origin.isCurrent(context) ||'));
+      expect(pinRequest, contains('!widget.beginRequest()'));
+      expect(pinRequest, contains('final endRequest = widget.endRequest'));
+      expect(pinRequest, contains('} finally {\n      endRequest();\n    }'));
       expect(widgetScreen, isNot(contains('_showBeforePinPrompt')));
       expect(widgetScreen, contains('openWidgetSettings'));
       expect(mainActivity, contains('call.argument<String>("style")'));
@@ -2319,7 +2845,12 @@ void main() {
       expect(widgetScreen, contains("'4x3'"));
       expect(
         widgetScreen,
-        contains('WidgetUiCopy.styleSyncSuccess(mode.label)'),
+        matches(
+          RegExp(
+            r'WidgetUiCopy\.hostStyleSyncSuccess\(\s*mode\.label,\s*'
+            r'_hostPlatform,?\s*\)',
+          ),
+        ),
       );
       expect(widgetScreen, contains('label: Text('));
       expect(widgetScreen, contains('WidgetUiCopy.addWidgetButtonLabel('));
@@ -2329,7 +2860,10 @@ void main() {
           'launcherRequestLabel: widget.displayMode.launcherRequestLabel',
         ),
       );
-      expect(widgetScreen, contains('AspectRatio('));
+      expect(widgetScreen, contains('final aspectHeight ='));
+      expect(widgetScreen, contains('final baseMinimumHeight ='));
+      expect(widgetScreen, contains('aspectHeight > baseMinimumHeight'));
+      expect(widgetScreen, contains('widgetTheme.borderWidthDp * 2'));
       expect(widgetScreen, contains('displayMode.aspectRatio('));
       expect(widgetScreen, contains('isAndroid: isAndroidPlatform,'));
       expect(widgetScreen, contains('displayMode.previewCellLabel'));
@@ -2499,10 +3033,12 @@ void main() {
             'DuoyiWidgetDisplayMode.saveForWidgetIfMissing(backing, id, initialStyle)',
           ),
         );
+        const capture = 'capture = { store.read(nonBlocking = true) }';
+        expect(snapshot, contains(capture));
         expect(
           snapshot.indexOf('saveForWidgetIfMissing('),
           lessThan(
-            snapshot.indexOf('val read = store.read(nonBlocking = true)'),
+            snapshot.indexOf(capture),
           ),
           reason: '${widget.title} style must be saved before frame capture.',
         );
@@ -3188,15 +3724,39 @@ void main() {
         'lib/screens/widget_screen.dart',
       ).readAsStringSync();
 
-      expect(main, contains('WidgetScreen(key: widgetKey)'));
-      expect(main, contains('final Set<int> _builtTabs = <int>{0}'));
-      expect(main, contains('_LazyTabPlaceholder'));
-      expect(main, contains('_buildTab(tab, safeVisibleTabs)'));
-      expect(main, contains('var homeWidgetPushInFlight = false'));
-      expect(main, contains('homeWidgetPushQueued = true'));
       expect(
         main,
-        contains('Timer(const Duration(milliseconds: 2200)'),
+        matches(
+          RegExp(
+            r'5\s*=>\s*WidgetScreen\(\s*key:\s*widgetKey,\s*isActive:\s*tab\s*==\s*activeIndex,\s*activityRevision:\s*_widgetActivityRevision,?\s*\)',
+          ),
+        ),
+      );
+      expect(
+        widgetScreen,
+        contains('themeProvider = context.watch<ThemeProvider>()'),
+      );
+      expect(
+        widgetScreen,
+        contains(
+          'final routeBackground = Theme.of(context).scaffoldBackgroundColor',
+        ),
+      );
+      expect(main, contains('final Set<int> _builtTabs = <int>{0}'));
+      expect(main, contains('_LazyTabPlaceholder'));
+      expect(main, contains('_buildTab(tab, safeVisibleTabs, safeIndex)'));
+      final widgetQueue = File(
+        'lib/services/home_widget_push_queue.dart',
+      ).readAsStringSync();
+      expect(
+        main,
+        contains('final homeWidgetPushQueue = HomeWidgetPushQueue('),
+      );
+      expect(widgetQueue, contains('if (running != null) return running;'));
+      expect(widgetQueue, contains('_pending = true'));
+      expect(
+        widgetQueue,
+        contains('debounceDelay = Duration(milliseconds: 2200)'),
         reason: '小组件推送会重建日程摘要，启动和连续数据变化时必须合并，不能 800ms 高频抢 UI。',
       );
       // 底导航文案已迁移到 BrandStrings（主题换文案对导航生效），
@@ -3262,8 +3822,12 @@ void main() {
         expect(widgetScreen, contains('kind: DuoyiWidgetKind.$kind,'));
         expect(
           widgetScreen,
-          contains(
-            'previewBuilder: (mode) => WidgetPreviewCard.$kind(displayMode: mode)',
+          matches(
+            RegExp(
+              'previewBuilder:\\s*\\(mode,\\s*platform\\)\\s*=>\\s*'
+              'WidgetPreviewCard\\.$kind\\(\\s*displayMode:\\s*mode,\\s*'
+              'platformOverride:\\s*platform,?\\s*\\)',
+            ),
           ),
         );
         expect(widgetScreen, contains('WidgetPreviewKind.$kind'));
@@ -3282,7 +3846,7 @@ void main() {
       ]) {
         expect(widgetScreen, contains('const $body()'));
       }
-      expect(widgetScreen, contains('item.previewBuilder(_displayMode)'));
+      _expectHostPreviewBuilder(widgetScreen);
       expect(widgetScreen, contains('class _WidgetPreviewNav'));
       expect(widgetScreen, isNot(contains('多仪概览')));
       expect(widgetScreen, isNot(contains('WidgetPreviewCard.overview')));
@@ -3352,11 +3916,34 @@ void main() {
       expect(main, contains('final showingHiddenTab'));
       expect(main, contains('bottomNavigationBar: showingHiddenTab'));
       expect(main, contains('? _HiddenTabReturnBar('));
-      expect(main, contains("const Text('返回我的')"));
+      final hiddenReturnStart = main.indexOf(
+        'class _HiddenTabReturnBar extends StatelessWidget',
+      );
+      final hiddenReturnEnd = main.indexOf(
+        '\nclass _BottomNavBadgeIcon',
+        hiddenReturnStart,
+      );
+      expect(hiddenReturnStart, greaterThanOrEqualTo(0));
+      expect(hiddenReturnEnd, greaterThan(hiddenReturnStart));
+      final hiddenReturnBar = main.substring(
+        hiddenReturnStart,
+        hiddenReturnEnd,
+      );
+      expect(hiddenReturnBar, contains('ValueListenableBuilder<AppLocale>'));
+      expect(
+        hiddenReturnBar,
+        contains('valueListenable: I18n.localeListenable'),
+      );
+      expect(
+        hiddenReturnBar,
+        contains("I18n.current == AppLocale.en ? 'Back to Me' : '返回我的'"),
+      );
       final noteBranch = _widgetUriBranch(main, 'note');
       expect(
         noteBranch,
-        contains('_pushHiddenWidgetFallbackRoute(ctx, const NoteScreen())'),
+        contains(
+          '_pushHiddenWidgetFallbackRoute(ctx, const NoteScreen(), access)',
+        ),
         reason:
             'duoyi://note without an id should not push a black-backed route',
       );
@@ -3382,8 +3969,6 @@ void main() {
       );
       expect(quickTodoBranch, contains('_createQuickTodoFromAction'));
       expect(main, contains('_showWidgetActionFeedbackFromShell'));
-      expect(main, contains('String _quickTodoCreatedMessage(TodoItem todo)'));
-      expect(main, contains('_quickTodoCreatedNotice(todo).render()'));
       final quickTodoNoticeStart = main.indexOf(
         'WidgetActionMessage _quickTodoCreatedNotice(TodoItem todo)',
       );
@@ -3483,7 +4068,9 @@ void main() {
       );
       expect(
         checkinHabitBranch,
-        contains('unawaited(_checkInHabitFromWidgetAction(habits, target))'),
+        contains(
+          'access.run(() => _checkInHabitFromWidgetAction(habits, target, access))',
+        ),
       );
       final checkinStart = main.indexOf(
         'Future<void> _checkInHabitFromWidgetAction(',
@@ -3598,15 +4185,16 @@ void main() {
           }
           expect(
             source,
-            contains(
-              'if (item2 != null) DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id) else View.GONE',
-            ),
+            contains('secondaryRows = listOf(item2 != null, item3 != null)'),
+          );
+          expect(source, contains('mode = frame.core.requestedMode'));
+          expect(
+            source,
+            contains('R.id.widget_anniversary_2, visible(plan.rows[1])'),
           );
           expect(
             source,
-            contains(
-              'if (item3 != null) DuoyiWidgetDisplayMode.detailedVisibility(prefs, id) else View.GONE',
-            ),
+            contains('R.id.widget_anniversary_3, visible(plan.rows[2])'),
           );
           continue;
         }
@@ -3848,7 +4436,7 @@ Iterable<String> _textViewBlocks(String layout) {
 }
 
 String? _textViewId(String block) {
-  final match = RegExp(r'android:id="@\+id/([^"]+)"').firstMatch(block);
+  final match = RegExp(r'android:id="@\+?id/([^"]+)"').firstMatch(block);
   return match?.group(1);
 }
 
@@ -4005,3 +4593,516 @@ class _DetailWidgetBinding {
     required this.fallback,
   });
 }
+
+void _expectGeneratedWidgetCopy() {
+  final originalLocale = I18n.current;
+  try {
+    I18n.setLocale(AppLocale.zh);
+    final previewzh = <WidgetPreviewKind, String>{
+      WidgetPreviewKind.todo: "今日待办",
+      WidgetPreviewKind.focus: "专注",
+      WidgetPreviewKind.habit: "习惯",
+      WidgetPreviewKind.calendar: "月历",
+      WidgetPreviewKind.schedule: "今日日程",
+      WidgetPreviewKind.goal: "目标",
+      WidgetPreviewKind.course: "课程表",
+      WidgetPreviewKind.note: "随手记",
+      WidgetPreviewKind.anniversary: "纪念日",
+      WidgetPreviewKind.diary: "日记",
+    };
+    expect(previewzh.keys.whereType<WidgetPreviewKind>().toSet(), WidgetPreviewKind.values.toSet());
+    for (final entry in previewzh.entries) {
+      expect(WidgetUiCopy.previewTitle(entry.key), entry.value,
+          reason: 'zh preview must retain complete localized copy for ${entry.key}');
+    }
+    final helpzh = <AndroidWidgetPinResult, String>{
+      AndroidWidgetPinResult.unsupported: "当前桌面不支持应用内直接添加小组件。请长按桌面空白处，从系统小组件列表添加。",
+      AndroidWidgetPinResult.unsupportedPlatform: "当前平台不支持直接添加 Android 桌面小组件。请在 Android 手机上从系统小组件列表添加多仪。",
+      AndroidWidgetPinResult.unsupportedLauncher: "当前桌面启动器未开放应用内添加，请长按桌面空白处从系统小组件列表添加。",
+      AndroidWidgetPinResult.permissionDenied: "系统未允许多仪添加桌面小组件。请在系统设置中开启权限后重试，或从系统小组件列表添加。",
+      AndroidWidgetPinResult.confirmationBlocked: "系统确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。",
+      AndroidWidgetPinResult.invalidKind: "当前小组件类型暂不支持添加，请更新应用后重试。",
+      AndroidWidgetPinResult.unavailable: "无法发起添加请求，请检查桌面权限后重试，或从系统小组件列表添加。",
+      AndroidWidgetPinResult.requested: "已发起添加请求，请在桌面系统弹窗中确认。",
+    };
+    expect(helpzh.keys.whereType<AndroidWidgetPinResult>().toSet(), AndroidWidgetPinResult.values.toSet());
+    for (final entry in helpzh.entries) {
+      expect(WidgetUiCopy.pinHelpMessage(entry.key), entry.value,
+          reason: 'zh help must retain complete localized copy for ${entry.key}');
+    }
+    final confirmationzh = <AndroidWidgetPinFinalStatus, (String, String)>{
+      AndroidWidgetPinFinalStatus.invalidWidgetId: ("添加未完成", "桌面未成功创建小组件，请重试或从系统小组件列表添加。"),
+      AndroidWidgetPinFinalStatus.timeout: ("等待桌面确认", "已发起添加请求，但尚未收到系统确认。请查看桌面是否有确认弹窗，或在系统设置中检查权限。"),
+      AndroidWidgetPinFinalStatus.unavailable: ("添加异常", "桌面未返回添加结果。请重试或从系统小组件列表添加。"),
+      AndroidWidgetPinFinalStatus.success: ("已添加", "桌面小组件已添加。"),
+    };
+    expect(confirmationzh.keys.whereType<AndroidWidgetPinFinalStatus>().toSet(), AndroidWidgetPinFinalStatus.values.toSet());
+    for (final entry in confirmationzh.entries) {
+      expect(WidgetUiCopy.pinConfirmationFailure(entry.key), entry.value,
+          reason: 'zh confirmation must retain complete localized copy for ${entry.key}');
+    }
+    final supportTitlezh = <AndroidWidgetPinResult?, String>{
+      AndroidWidgetPinResult.unsupportedPlatform: "当前平台不支持应用内添加",
+      AndroidWidgetPinResult.unsupportedLauncher: "当前桌面不支持应用内添加",
+      AndroidWidgetPinResult.permissionDenied: "桌面添加权限未通过",
+      AndroidWidgetPinResult.confirmationBlocked: "桌面确认弹窗可能被拦截",
+      AndroidWidgetPinResult.invalidKind: "当前小组件类型不可添加",
+      AndroidWidgetPinResult.requested: "当前桌面可能不支持应用内添加",
+      AndroidWidgetPinResult.unsupported: "当前桌面可能不支持应用内添加",
+      AndroidWidgetPinResult.unavailable: "当前桌面可能不支持应用内添加",
+      null: "当前桌面可能不支持应用内添加",
+    };
+    expect(supportTitlezh.keys.whereType<AndroidWidgetPinResult>().toSet(), AndroidWidgetPinResult.values.toSet());
+    for (final entry in supportTitlezh.entries) {
+      expect(WidgetUiCopy.pinSupportResultTitle(entry.key), entry.value,
+          reason: 'zh supportTitle must retain complete localized copy for ${entry.key}');
+    }
+    final supportMessagezh = <AndroidWidgetPinResult?, String>{
+      AndroidWidgetPinResult.unsupportedPlatform: "请在 Android 手机上通过系统小组件列表添加多仪。",
+      AndroidWidgetPinResult.unsupportedLauncher: "当前桌面启动器未开放应用内添加，请从系统小组件列表选择添加。",
+      AndroidWidgetPinResult.permissionDenied: "系统未允许多仪添加桌面小组件，请在系统设置中开启权限后重试。",
+      AndroidWidgetPinResult.confirmationBlocked: "桌面确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。",
+      AndroidWidgetPinResult.invalidKind: "请更新应用后重试。",
+      AndroidWidgetPinResult.requested: "若未弹出确认框，请打开系统设置检查桌面小组件与后台弹窗权限，或从系统小组件列表添加。",
+      AndroidWidgetPinResult.unsupported: "若未弹出确认框，请打开系统设置检查桌面小组件与后台弹窗权限，或从系统小组件列表添加。",
+      AndroidWidgetPinResult.unavailable: "若未弹出确认框，请打开系统设置检查桌面小组件与后台弹窗权限，或从系统小组件列表添加。",
+      null: "若未弹出确认框，请打开系统设置检查桌面小组件与后台弹窗权限，或从系统小组件列表添加。",
+    };
+    expect(supportMessagezh.keys.whereType<AndroidWidgetPinResult>().toSet(), AndroidWidgetPinResult.values.toSet());
+    for (final entry in supportMessagezh.entries) {
+      expect(WidgetUiCopy.pinSupportResultMessage(entry.key), entry.value,
+          reason: 'zh supportMessage must retain complete localized copy for ${entry.key}');
+    }
+    expect(WidgetUiCopy.calendarToday, "今天");
+    I18n.setLocale(AppLocale.en);
+    final previewen = <WidgetPreviewKind, String>{
+      WidgetPreviewKind.todo: "Tasks",
+      WidgetPreviewKind.focus: "Focus",
+      WidgetPreviewKind.habit: "Habits",
+      WidgetPreviewKind.calendar: "Calendar",
+      WidgetPreviewKind.schedule: "Schedule",
+      WidgetPreviewKind.goal: "Goals",
+      WidgetPreviewKind.course: "Timetable",
+      WidgetPreviewKind.note: "Notes",
+      WidgetPreviewKind.anniversary: "Anniversaries",
+      WidgetPreviewKind.diary: "Diary",
+    };
+    expect(previewen.keys.whereType<WidgetPreviewKind>().toSet(), WidgetPreviewKind.values.toSet());
+    for (final entry in previewen.entries) {
+      expect(WidgetUiCopy.previewTitle(entry.key), entry.value,
+          reason: 'en preview must retain complete localized copy for ${entry.key}');
+    }
+    final helpen = <AndroidWidgetPinResult, String>{
+      AndroidWidgetPinResult.unsupported: "Current launcher does not support direct pinning. Long press an empty area on your home screen to add from the widget picker.",
+      AndroidWidgetPinResult.unsupportedPlatform: "Current platform does not support adding Android widgets. Please add Duoyi from the system widget picker on Android.",
+      AndroidWidgetPinResult.unsupportedLauncher: "Current launcher has not enabled in-app pinning. Long press an empty area on home screen to add from widget picker.",
+      AndroidWidgetPinResult.permissionDenied: "System did not allow Duoyi to add widgets. Enable permission in system settings and retry, or add from widget picker.",
+      AndroidWidgetPinResult.confirmationBlocked: "System confirmation dialog may be blocked. Please check background pop-up permissions.",
+      AndroidWidgetPinResult.invalidKind: "This widget type is not supported yet. Update the app and try again.",
+      AndroidWidgetPinResult.unavailable: "Failed to send request. Check home screen permissions and retry, or add from widget picker.",
+      AndroidWidgetPinResult.requested: "Pin request initiated. Please confirm in the system dialog.",
+    };
+    expect(helpen.keys.whereType<AndroidWidgetPinResult>().toSet(), AndroidWidgetPinResult.values.toSet());
+    for (final entry in helpen.entries) {
+      expect(WidgetUiCopy.pinHelpMessage(entry.key), entry.value,
+          reason: 'en help must retain complete localized copy for ${entry.key}');
+    }
+    final confirmationen = <AndroidWidgetPinFinalStatus, (String, String)>{
+      AndroidWidgetPinFinalStatus.invalidWidgetId: ("Addition Incomplete", "Widget was not created on home screen. Retry or add from system widget picker."),
+      AndroidWidgetPinFinalStatus.timeout: ("Awaiting Confirmation", "Request sent, but system confirmation not received. Check home screen for dialog or verify permissions."),
+      AndroidWidgetPinFinalStatus.unavailable: ("Addition Error", "No result returned by launcher. Retry or add from system widget picker."),
+      AndroidWidgetPinFinalStatus.success: ("Added", "Home screen widget added."),
+    };
+    expect(confirmationen.keys.whereType<AndroidWidgetPinFinalStatus>().toSet(), AndroidWidgetPinFinalStatus.values.toSet());
+    for (final entry in confirmationen.entries) {
+      expect(WidgetUiCopy.pinConfirmationFailure(entry.key), entry.value,
+          reason: 'en confirmation must retain complete localized copy for ${entry.key}');
+    }
+    final supportTitleen = <AndroidWidgetPinResult?, String>{
+      AndroidWidgetPinResult.unsupportedPlatform: "Platform does not support in-app pinning",
+      AndroidWidgetPinResult.unsupportedLauncher: "Current launcher does not support in-app pinning",
+      AndroidWidgetPinResult.permissionDenied: "Home screen permission denied",
+      AndroidWidgetPinResult.confirmationBlocked: "Confirmation dialog may be blocked",
+      AndroidWidgetPinResult.invalidKind: "Widget kind cannot be pinned",
+      AndroidWidgetPinResult.requested: "Current launcher may not support in-app pinning",
+      AndroidWidgetPinResult.unsupported: "Current launcher may not support in-app pinning",
+      AndroidWidgetPinResult.unavailable: "Current launcher may not support in-app pinning",
+      null: "Current launcher may not support in-app pinning",
+    };
+    expect(supportTitleen.keys.whereType<AndroidWidgetPinResult>().toSet(), AndroidWidgetPinResult.values.toSet());
+    for (final entry in supportTitleen.entries) {
+      expect(WidgetUiCopy.pinSupportResultTitle(entry.key), entry.value,
+          reason: 'en supportTitle must retain complete localized copy for ${entry.key}');
+    }
+    final supportMessageen = <AndroidWidgetPinResult?, String>{
+      AndroidWidgetPinResult.unsupportedPlatform: "Please add Duoyi via the system widget picker on Android.",
+      AndroidWidgetPinResult.unsupportedLauncher: "Current launcher has not enabled in-app pinning. Please add from system widget picker.",
+      AndroidWidgetPinResult.permissionDenied: "System did not allow Duoyi to add widgets. Enable permission in settings and retry.",
+      AndroidWidgetPinResult.confirmationBlocked: "Confirmation dialog may be blocked. Please check background pop-up permissions.",
+      AndroidWidgetPinResult.invalidKind: "Please update the app and retry.",
+      AndroidWidgetPinResult.requested: "If no dialog appears, check widget and pop-up permissions in system settings, or add via system widget picker.",
+      AndroidWidgetPinResult.unsupported: "If no dialog appears, check widget and pop-up permissions in system settings, or add via system widget picker.",
+      AndroidWidgetPinResult.unavailable: "If no dialog appears, check widget and pop-up permissions in system settings, or add via system widget picker.",
+      null: "If no dialog appears, check widget and pop-up permissions in system settings, or add via system widget picker.",
+    };
+    expect(supportMessageen.keys.whereType<AndroidWidgetPinResult>().toSet(), AndroidWidgetPinResult.values.toSet());
+    for (final entry in supportMessageen.entries) {
+      expect(WidgetUiCopy.pinSupportResultMessage(entry.key), entry.value,
+          reason: 'en supportMessage must retain complete localized copy for ${entry.key}');
+    }
+    expect(WidgetUiCopy.calendarToday, "Today");
+  } finally {
+    I18n.setLocale(originalLocale);
+  }
+}
+
+const _naturalWidgetTextScopes = <String, Map<String, Map<String, String>>>{
+  "duoyi_calendar_widget.xml": {
+    "widget_calendar_title": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "layout_marginEnd": "8dp",
+      "includeFontPadding": "false",
+      "textSize": "13sp",
+    },
+    "widget_calendar_month": {
+      "layout_width": "0dp",
+      "layout_height": "wrap_content",
+      "layout_weight": "1",
+      "includeFontPadding": "false",
+      "textSize": "11sp",
+    },
+    "widget_calendar_today_button": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "layout_marginLeft": "6dp",
+      "includeFontPadding": "false",
+      "minWidth": "36dp",
+      "minHeight": "22dp",
+      "paddingTop": "2dp",
+      "paddingBottom": "2dp",
+      "paddingLeft": "6dp",
+      "paddingRight": "6dp",
+      "textSize": "10sp",
+      "gravity": "center",
+    },
+    "widget_calendar_date_fallback": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "layout_marginTop": "2dp",
+      "textSize": "11sp",
+      "visibility": "gone",
+    },
+    "widget_calendar_summary": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "10sp",
+      "gravity": "center_vertical",
+      "visibility": "gone",
+    },
+    "widget_calendar_event_summary": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "layout_marginTop": "2dp",
+      "textSize": "10sp",
+      "gravity": "center_vertical",
+      "visibility": "gone",
+    },
+    "widget_calendar_recovery": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "12sp",
+      "gravity": "center",
+      "visibility": "gone",
+    },
+    "widget_refresh": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "layout_marginLeft": "4dp",
+      "includeFontPadding": "false",
+      "minWidth": "22dp",
+      "minHeight": "22dp",
+      "padding": "2dp",
+      "textSize": "12sp",
+      "gravity": "center",
+    },
+  },
+  "duoyi_goal_widget.xml": {
+    "widget_goal_title": {
+      "layout_width": "0dp",
+      "layout_height": "wrap_content",
+      "layout_weight": "1",
+      "textSize": "14sp",
+    },
+    "widget_goal_subtitle": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "layout_marginTop": "2dp",
+      "textSize": "11sp",
+    },
+    "widget_goal_1": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "12sp",
+    },
+    "widget_goal_2": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "layout_marginTop": "6dp",
+      "textSize": "12sp",
+      "visibility": "gone",
+    },
+    "widget_goal_3": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "layout_marginTop": "6dp",
+      "textSize": "11sp",
+      "visibility": "gone",
+    },
+    "widget_goal_recovery": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "12sp",
+      "gravity": "center",
+      "visibility": "gone",
+    },
+    "widget_refresh": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "36dp",
+      "minHeight": "36dp",
+      "textSize": "14sp",
+      "gravity": "center",
+    },
+  },
+  "duoyi_habit_widget.xml": {
+    "widget_habit_recovery": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "12sp",
+    },
+    "widget_refresh": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "36dp",
+      "minHeight": "36dp",
+      "textSize": "14sp",
+    },
+    "widget_habit_subtitle": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "11sp",
+    },
+    "widget_habit_summary": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "12sp",
+    },
+    "widget_habit_streak": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "12sp",
+    },
+    "widget_habit_hint": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "minHeight": "36dp",
+      "textSize": "11sp",
+    },
+  },
+  "duoyi_todo_widget.xml": {
+    "widget_todo_recovery": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "12sp",
+    },
+    "widget_todo_quick_add": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "44dp",
+      "minHeight": "34dp",
+      "paddingLeft": "8dp",
+      "paddingRight": "8dp",
+      "textSize": "11sp",
+    },
+    "widget_refresh": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "36dp",
+      "minHeight": "36dp",
+      "textSize": "14sp",
+    },
+    "widget_todo_item_1": {
+      "layout_width": "0dp",
+      "layout_height": "wrap_content",
+      "layout_weight": "1",
+      "textSize": "12sp",
+    },
+    "widget_todo_done_1": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "38dp",
+      "minHeight": "38dp",
+      "textSize": "14sp",
+    },
+    "widget_todo_item_2": {
+      "layout_width": "0dp",
+      "layout_height": "wrap_content",
+      "layout_weight": "1",
+      "textSize": "12sp",
+    },
+    "widget_todo_done_2": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "38dp",
+      "minHeight": "38dp",
+      "textSize": "14sp",
+    },
+    "widget_todo_item_3": {
+      "layout_width": "0dp",
+      "layout_height": "wrap_content",
+      "layout_weight": "1",
+      "textSize": "12sp",
+    },
+    "widget_todo_done_3": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "38dp",
+      "minHeight": "38dp",
+      "textSize": "14sp",
+    },
+    "widget_todo_today_summary": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "11sp",
+    },
+  },
+  "duoyi_todo_widget_reflow.xml": {
+    "widget_todo_recovery": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "12sp",
+    },
+    "widget_refresh": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "36dp",
+      "minHeight": "36dp",
+      "textSize": "14sp",
+    },
+    "widget_todo_quick_add": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "44dp",
+      "minHeight": "34dp",
+      "paddingLeft": "8dp",
+      "paddingRight": "8dp",
+      "textSize": "11sp",
+    },
+    "widget_todo_item_1": {
+      "layout_width": "0dp",
+      "layout_height": "wrap_content",
+      "layout_weight": "1",
+      "textSize": "12sp",
+    },
+    "widget_todo_done_1": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "38dp",
+      "minHeight": "38dp",
+      "textSize": "14sp",
+    },
+    "widget_todo_item_2": {
+      "layout_width": "0dp",
+      "layout_height": "wrap_content",
+      "layout_weight": "1",
+      "textSize": "12sp",
+    },
+    "widget_todo_done_2": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "38dp",
+      "minHeight": "38dp",
+      "textSize": "14sp",
+    },
+    "widget_todo_item_3": {
+      "layout_width": "0dp",
+      "layout_height": "wrap_content",
+      "layout_weight": "1",
+      "textSize": "12sp",
+    },
+    "widget_todo_done_3": {
+      "layout_width": "wrap_content",
+      "layout_height": "wrap_content",
+      "minWidth": "38dp",
+      "minHeight": "38dp",
+      "textSize": "14sp",
+    },
+    "widget_todo_today_summary": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "11sp",
+    },
+  },
+  "duoyi_note_widget.xml": {
+    "widget_note_recovery": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "minWidth": "0dp",
+      "minHeight": "36dp",
+      "paddingLeft": "4dp",
+      "paddingRight": "4dp",
+      "gravity": "center",
+      "textSize": "12sp",
+      "visibility": "gone",
+    },
+    "widget_note_1": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "12sp",
+    },
+    "widget_note_2": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "12sp",
+      "visibility": "gone",
+    },
+    "widget_note_3": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "layout_marginTop": "6dp",
+      "textSize": "12sp",
+      "visibility": "gone",
+    },
+  },
+  "duoyi_note_widget_tail_horizontal.xml": {
+    "widget_note_2": {
+      "layout_width": "0dp",
+      "layout_height": "wrap_content",
+      "layout_weight": "1",
+      "layout_marginRight": "6dp",
+      "textSize": "12sp",
+    },
+    "widget_note_3": {
+      "layout_width": "0dp",
+      "layout_height": "wrap_content",
+      "layout_weight": "1",
+      "textSize": "12sp",
+    },
+  },
+  "duoyi_note_widget_tail_vertical.xml": {
+    "widget_note_2": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "textSize": "12sp",
+      "visibility": "gone",
+    },
+    "widget_note_3": {
+      "layout_width": "match_parent",
+      "layout_height": "wrap_content",
+      "layout_marginTop": "6dp",
+      "textSize": "12sp",
+      "visibility": "gone",
+    },
+  },
+};

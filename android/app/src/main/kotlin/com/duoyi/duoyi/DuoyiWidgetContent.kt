@@ -311,7 +311,7 @@ object DuoyiWidgetContent {
         }
 
         val supportedMutationHosts = setOf(
-            "todo", "habit", "anniversary", "course", "diary", "goal", "countdown", "time-entry"
+            "todo", "habit", "anniversary", "course", "diary", "goal", "countdown", "time-entry", "event", "pomodoro"
         )
         if (host in supportedMutationHosts) {
             val rawPath = uri.rawPath.orEmpty()
@@ -396,6 +396,7 @@ object DuoyiWidgetContent {
         anchorDate: Date,
         timeZone: TimeZone,
         isZh: Boolean,
+        firstDayOfWeek: Int = 1,
     ): DuoyiMonthGridModel {
         val anchorMillis = anchorDate.time
         // Resolve this instance's offset at the instant, including custom IDs,
@@ -403,7 +404,7 @@ object DuoyiWidgetContent {
         val day = Instant.ofEpochMilli(anchorMillis)
             .plusMillis(timeZone.getOffset(anchorMillis).toLong())
             .atOffset(ZoneOffset.UTC).toLocalDate()
-        return buildMonthGrid(day.year, day.monthValue, day.dayOfMonth, isZh, timeZone)
+        return buildMonthGrid(day.year, day.monthValue, day.dayOfMonth, isZh, timeZone, firstDayOfWeek)
     }
 
     // Retain the zone argument for existing callers; a resolved civil month
@@ -415,11 +416,13 @@ object DuoyiWidgetContent {
         todayDay: Int,
         isZh: Boolean,
         timeZone: TimeZone = TimeZone.getDefault(),
+        firstDayOfWeek: Int = 1,
     ): DuoyiMonthGridModel {
         require(year in 1..9999) { "Calendar year must be within 1..9999" }
         require(month in 1..12) { "Calendar month must be within 1..12" }
         val first = LocalDate.of(year, month, 1)
-        val firstWeekdayOffset = first.dayOfWeek.value - 1
+        val weekStart = firstDayOfWeek.takeIf { it in 1..7 } ?: 1
+        val firstWeekdayOffset = (first.dayOfWeek.value - weekStart + 7) % 7
         val daysInMonth = first.lengthOfMonth()
 
         val cells = ArrayList<DuoyiMonthCell>(42)
@@ -439,7 +442,7 @@ object DuoyiWidgetContent {
             }
         }
 
-        val weekdayHeader = if (isZh) "一 二 三 四 五 六 日" else "Mo Tu We Th Fr Sa Su"
+        val weekdayHeader = calendarWeekdayLabels(isZh, weekStart).joinToString(" ")
 
         return DuoyiMonthGridModel(
             year = year,
@@ -450,5 +453,78 @@ object DuoyiWidgetContent {
             cells = cells,
             weekdayHeader = weekdayHeader,
         )
+    }
+
+    fun calendarWeekdayLabels(isZh: Boolean, firstDayOfWeek: Int = 1, full: Boolean = false): List<String> {
+        val first = firstDayOfWeek.takeIf { it in 1..7 } ?: 1
+        val labels = if (isZh) {
+            if (full) listOf("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
+            else listOf("一", "二", "三", "四", "五", "六", "日")
+        } else {
+            if (full) listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+            else listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+        }
+        return List(7) { labels[(first - 1 + it) % 7] }
+    }
+
+    private val goalPercentRegex = Regex("(\\d{1,3}(?:\\.\\d+)?)\\s*%")
+
+    fun extractGoalProgressPercent(raw: String?): Int? {
+        if (raw.isNullOrBlank()) return null
+        val match = goalPercentRegex.find(raw) ?: return null
+        val value = match.groupValues[1].toDoubleOrNull() ?: return null
+        return Math.round(value).toInt().coerceIn(0, 100)
+    }
+
+    fun resolveGoalProgressPercent(
+        highlights: List<String?>,
+        isFresh: Boolean,
+        publicationState: DuoyiWidgetPublicationDocument.State? = DuoyiWidgetPublicationDocument.State.PUBLISHED,
+    ): Int? {
+        if (publicationState != DuoyiWidgetPublicationDocument.State.PUBLISHED || !isFresh) return null
+        val percents = highlights.mapNotNull(::extractGoalProgressPercent)
+        if (percents.isEmpty()) return null
+        return percents.first()
+    }
+
+    fun calendarTodayDateKey(
+        nowMillis: Long,
+        timeZone: TimeZone = TimeZone.getDefault(),
+    ): String {
+        val date = Instant.ofEpochMilli(nowMillis)
+            .plusMillis(timeZone.getOffset(nowMillis).toLong())
+            .atOffset(ZoneOffset.UTC)
+            .toLocalDate()
+        return date.toString()
+    }
+
+    fun calendarTodayTarget(
+        nowMillis: Long,
+        timeZone: TimeZone = TimeZone.getDefault(),
+    ): String = "duoyi://calendar?date=${calendarTodayDateKey(nowMillis, timeZone)}"
+
+    fun appendPendingBgAction(existing: String?, actionUri: String, maxEntries: Int = 24): String {
+        val trimmed = actionUri.trim()
+        if (trimmed.isEmpty()) return existing.orEmpty()
+        val items = existing.orEmpty()
+            .split('\n')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toMutableList()
+        if (!items.contains(trimmed)) {
+            items.add(trimmed)
+        }
+        val capped = if (items.size > maxEntries) items.takeLast(maxEntries) else items
+        return capped.joinToString("\n")
+    }
+
+    fun resolveFocusActionPath(
+        isFresh: Boolean,
+        storedRunning: Boolean,
+        timerRunning: Boolean,
+    ): String = when {
+        isFresh && !storedRunning -> "duoyi://action/start_pomodoro"
+        isFresh && timerRunning -> "duoyi://action/toggle_pomodoro"
+        else -> "duoyi://tab/focus"
     }
 }

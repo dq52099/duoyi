@@ -1,10 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import '../core/share_ui_copy.dart';
 import '../models/workspace.dart';
 import '../services/api_client.dart';
 
 class ShareProvider extends ChangeNotifier {
-  static const _serviceUnavailableMessage = '共享空间服务暂不可用，请稍后重试或联系管理员';
   static const _loadFreshnessWindow = Duration(seconds: 20);
 
   ApiClient? Function()? apiClientGetter;
@@ -18,13 +20,16 @@ class ShareProvider extends ChangeNotifier {
       {};
   bool _loading = false;
   bool _detailLoading = false;
-  String? _lastError;
+  Object? _lastError;
   String? _activeWorkspaceId;
   int _accountGeneration = 0;
   Future<void>? _loadInFlight;
   bool _loadInFlightNotifiesLoading = false;
   bool _suppressLoadLoadingNotification = false;
   DateTime? _lastLoadedAt;
+  bool _disposed = false;
+  int _mutationRevision = 0;
+  Future<void>? _mutationRefresh;
 
   List<Workspace> get workspaces => List.unmodifiable(_workspaces);
   List<WorkspaceMention> get mentions => List.unmodifiable(_mentions);
@@ -32,7 +37,16 @@ class ShareProvider extends ChangeNotifier {
       _mentions.where((mention) => mention.isUnread).length;
   bool get loading => _loading;
   bool get detailLoading => _detailLoading;
-  String? get lastError => _lastError;
+  String? get lastError {
+    final error = _lastError;
+    if (error == null) return null;
+    return _userVisibleWorkspaceError(error);
+  }
+
+  String _userVisibleWorkspaceError(Object error) {
+    return ShareUiCopy.error(error);
+  }
+
   String? get activeWorkspaceId => _activeWorkspaceId;
 
   Workspace? get activeWorkspace {
@@ -41,16 +55,54 @@ class ShareProvider extends ChangeNotifier {
     return workspaceById(id);
   }
 
-  String _userVisibleWorkspaceError(Object error) {
+  void _recordError(Object error) {
     debugPrint('[ShareProvider] $error');
-    return userVisibleApiError(
-      error,
-      fallbackMessage: _serviceUnavailableMessage,
-    );
+    _lastError = error;
   }
 
   bool _isCurrentAccountGeneration(int generation) =>
-      generation == _accountGeneration;
+      !_disposed && generation == _accountGeneration;
+
+  _ShareRequestOrigin? _captureOrigin() {
+    if (_disposed) return null;
+    final client = apiClientGetter?.call();
+    final token = client?.token;
+    if (client == null || token == null || token.isEmpty) return null;
+    return _ShareRequestOrigin(
+      generation: _accountGeneration,
+      client: client,
+      token: token,
+      baseUrl: client.baseUrl,
+      userId: _currentUserId,
+    );
+  }
+
+  String? get _currentUserId {
+    final value = userIdGetter?.call();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  _ShareRequestOrigin _requireOrigin() =>
+      _captureOrigin() ?? (throw const ApiException('请先登录'));
+
+  bool _isCurrentOrigin(_ShareRequestOrigin origin) {
+    if (!_isCurrentAccountGeneration(origin.generation)) return false;
+    final current = apiClientGetter?.call();
+    // Getters may construct equivalent clients. Compare credentials rather
+    // than object identity, and also reject a captured client's mutation.
+    if (current == null ||
+        current.token != origin.token ||
+        current.baseUrl != origin.baseUrl ||
+        origin.client.token != origin.token ||
+        origin.client.baseUrl != origin.baseUrl) {
+      return false;
+    }
+    // Legacy sessions can receive their first server ID during hydration.
+    // Learn it once while the original generation and credentials still match.
+    final userId = _currentUserId;
+    origin.userId ??= userId;
+    return userId == origin.userId;
+  }
 
   Workspace? workspaceById(String id) {
     for (final workspace in _workspaces) {
@@ -80,7 +132,12 @@ class ShareProvider extends ChangeNotifier {
       List.unmodifiable(_leaderboardByWorkspace[workspaceId] ?? const []);
 
   void resetLocalState() {
+    if (_disposed) return;
     _accountGeneration++;
+    _loadInFlight = null;
+    _loadInFlightNotifiesLoading = false;
+    _mutationRefresh = null;
+    _mutationRevision = 0;
     _workspaces = const <Workspace>[];
     _mentions = const <WorkspaceMention>[];
     _commentsByWorkspace.clear();
@@ -115,6 +172,17 @@ class ShareProvider extends ChangeNotifier {
   }
 
   Future<void> load({bool force = false, bool notifyLoading = true}) {
+    return _load(force: force, notifyLoading: notifyLoading);
+  }
+
+  Future<void> _load({
+    bool force = false,
+    bool notifyLoading = true,
+    _ShareRequestOrigin? origin,
+  }) {
+    if (_disposed || (origin != null && !_isCurrentOrigin(origin))) {
+      return Future<void>.value();
+    }
     final effectiveNotifyLoading =
         notifyLoading && !_suppressLoadLoadingNotification;
     final inFlight = _loadInFlight;
@@ -130,18 +198,57 @@ class ShareProvider extends ChangeNotifier {
       return inFlight;
     }
     _loadInFlightNotifiesLoading = effectiveNotifyLoading;
-    final task = _loadLocked(
-      force: force,
-      notifyLoading: effectiveNotifyLoading,
-    );
-    late final Future<void> wrapped;
-    wrapped = task.whenComplete(() {
+    // Publish the identity before notifying listeners in _loadLocked; a
+    // listener can synchronously join this load or reset the account.
+    final completion = Completer<void>();
+    final wrapped = completion.future;
+    _loadInFlight = wrapped;
+    void release() {
       if (identical(_loadInFlight, wrapped)) {
         _loadInFlight = null;
         _loadInFlightNotifiesLoading = false;
       }
+    }
+
+    _loadLocked(
+      force: force,
+      notifyLoading: effectiveNotifyLoading,
+      requestOrigin: origin,
+    ).then(
+      (_) {
+        release();
+        completion.complete();
+      },
+      onError: (Object error, StackTrace stack) {
+        release();
+        completion.completeError(error, stack);
+      },
+    );
+    return wrapped;
+  }
+
+  Future<void> _refreshAfterMutation(_ShareRequestOrigin origin) {
+    if (!_isCurrentOrigin(origin)) return Future<void>.value();
+    _mutationRevision++;
+    final existing = _mutationRefresh;
+    if (existing != null) return existing;
+    final run = () async {
+      while (_isCurrentOrigin(origin)) {
+        await _loadInFlight;
+        if (!_isCurrentOrigin(origin)) return;
+        final requiredRevision = _mutationRevision;
+        await _load(force: true, origin: origin);
+        if (!_isCurrentOrigin(origin) ||
+            requiredRevision == _mutationRevision) {
+          return;
+        }
+      }
+    }();
+    late final Future<void> wrapped;
+    wrapped = run.whenComplete(() {
+      if (identical(_mutationRefresh, wrapped)) _mutationRefresh = null;
     });
-    _loadInFlight = wrapped;
+    _mutationRefresh = wrapped;
     return wrapped;
   }
 
@@ -159,14 +266,15 @@ class ShareProvider extends ChangeNotifier {
   Future<void> _loadLocked({
     required bool force,
     required bool notifyLoading,
+    _ShareRequestOrigin? requestOrigin,
   }) async {
     final generation = _accountGeneration;
     final beforeWorkspacesRevision = _workspaceListRevision(_workspaces);
     final beforeMentionsRevision = _mentionListRevision(_mentions);
     final beforeActiveWorkspaceId = _activeWorkspaceId;
     final beforeLastError = _lastError;
-    final client = apiClientGetter?.call();
-    if (client == null || client.token == null || client.token!.isEmpty) {
+    final origin = requestOrigin ?? _captureOrigin();
+    if (origin == null) {
       if (!_isCurrentAccountGeneration(generation)) return;
       final shouldNotify =
           _workspaces.isNotEmpty ||
@@ -191,9 +299,11 @@ class ShareProvider extends ChangeNotifier {
       _loading = true;
       notifyListeners();
     }
+    if (!_isCurrentOrigin(origin)) return;
+    final client = origin.client;
     try {
       final list = await client.getList('/api/workspaces');
-      if (!_isCurrentAccountGeneration(generation)) return;
+      if (!_isCurrentOrigin(origin)) return;
       _workspaces = list
           .whereType<Map>()
           .map((raw) => Workspace.fromJson(Map<String, dynamic>.from(raw)))
@@ -204,16 +314,16 @@ class ShareProvider extends ChangeNotifier {
         _activeWorkspaceId = _workspaces.isEmpty ? null : _workspaces.first.id;
       }
       try {
-        await _loadMentionInboxFrom(client, generation: generation);
+        await _loadMentionInboxFrom(origin);
       } catch (_) {
-        if (!_isCurrentAccountGeneration(generation)) return;
+        if (!_isCurrentOrigin(origin)) return;
         _mentions = const <WorkspaceMention>[];
       }
     } catch (e) {
-      if (!_isCurrentAccountGeneration(generation)) return;
-      _lastError = _userVisibleWorkspaceError(e);
+      if (!_isCurrentOrigin(origin)) return;
+      _recordError(e);
     }
-    if (!_isCurrentAccountGeneration(generation)) return;
+    if (!_isCurrentOrigin(origin)) return;
     if (_lastError == null) {
       _lastLoadedAt = DateTime.now();
     }
@@ -275,25 +385,22 @@ class ShareProvider extends ChangeNotifier {
   }
 
   Future<void> loadMentionInbox() async {
-    final generation = _accountGeneration;
-    final client = _requireClient();
+    final origin = _requireOrigin();
     _lastError = null;
     try {
-      await _loadMentionInboxFrom(client, generation: generation);
+      await _loadMentionInboxFrom(origin);
     } catch (e) {
-      if (!_isCurrentAccountGeneration(generation)) return;
-      _lastError = _userVisibleWorkspaceError(e);
+      if (!_isCurrentOrigin(origin)) return;
+      _recordError(e);
     }
-    if (!_isCurrentAccountGeneration(generation)) return;
+    if (!_isCurrentOrigin(origin)) return;
     notifyListeners();
   }
 
-  Future<void> _loadMentionInboxFrom(
-    ApiClient client, {
-    required int generation,
-  }) async {
-    final mentions = await client.getList('/api/workspaces/mentions');
-    if (!_isCurrentAccountGeneration(generation)) return;
+  Future<void> _loadMentionInboxFrom(_ShareRequestOrigin origin) async {
+    if (!_isCurrentOrigin(origin)) return;
+    final mentions = await origin.client.getList('/api/workspaces/mentions');
+    if (!_isCurrentOrigin(origin)) return;
     _mentions = mentions
         .whereType<Map>()
         .map((raw) => WorkspaceMention.fromJson(Map<String, dynamic>.from(raw)))
@@ -302,10 +409,9 @@ class ShareProvider extends ChangeNotifier {
   }
 
   Future<void> markMentionRead(int mentionId) async {
-    final generation = _accountGeneration;
-    final client = _requireClient();
-    await client.post('/api/workspaces/mentions/$mentionId/read');
-    if (!_isCurrentAccountGeneration(generation)) return;
+    final origin = _requireOrigin();
+    await origin.client.post('/api/workspaces/mentions/$mentionId/read');
+    if (!_isCurrentOrigin(origin)) return;
     _mentions = [
       for (final mention in _mentions)
         if (mention.id == mentionId)
@@ -317,32 +423,32 @@ class ShareProvider extends ChangeNotifier {
   }
 
   Future<void> createWorkspace(String name) async {
-    final generation = _accountGeneration;
-    final client = _requireClient();
-    await client.post('/api/workspaces', {'name': name});
-    if (!_isCurrentAccountGeneration(generation)) return;
-    await load();
+    final origin = _requireOrigin();
+    await origin.client.post('/api/workspaces', {'name': name});
+    if (!_isCurrentOrigin(origin)) return;
+    await _refreshAfterMutation(origin);
   }
 
   Future<void> loadWorkspaceCollaboration(String workspaceId) async {
-    final generation = _accountGeneration;
-    final client = _requireClient();
+    final origin = _requireOrigin();
+    final client = origin.client;
     _detailLoading = true;
     _lastError = null;
     notifyListeners();
+    if (!_isCurrentOrigin(origin)) return;
     try {
       final comments = await client.getList(
         '/api/workspaces/$workspaceId/comments',
       );
-      if (!_isCurrentAccountGeneration(generation)) return;
+      if (!_isCurrentOrigin(origin)) return;
       final activities = await client.getList(
         '/api/workspaces/$workspaceId/activities',
       );
-      if (!_isCurrentAccountGeneration(generation)) return;
+      if (!_isCurrentOrigin(origin)) return;
       final leaderboard = await client.getList(
         '/api/workspaces/$workspaceId/leaderboard',
       );
-      if (!_isCurrentAccountGeneration(generation)) return;
+      if (!_isCurrentOrigin(origin)) return;
       _commentsByWorkspace[workspaceId] = comments
           .whereType<Map>()
           .map(
@@ -367,10 +473,10 @@ class ShareProvider extends ChangeNotifier {
           .where((entry) => entry.userId.isNotEmpty)
           .toList();
     } catch (e) {
-      if (!_isCurrentAccountGeneration(generation)) return;
-      _lastError = _userVisibleWorkspaceError(e);
+      if (!_isCurrentOrigin(origin)) return;
+      _recordError(e);
     }
-    if (!_isCurrentAccountGeneration(generation)) return;
+    if (!_isCurrentOrigin(origin)) return;
     _detailLoading = false;
     notifyListeners();
   }
@@ -380,8 +486,8 @@ class ShareProvider extends ChangeNotifier {
     String body, {
     String? targetId,
   }) async {
-    final generation = _accountGeneration;
-    final client = _requireClient();
+    final origin = _requireOrigin();
+    final client = origin.client;
     final payload = <String, dynamic>{'body': body};
     if (targetId != null && targetId.isNotEmpty) {
       payload['target_id'] = targetId;
@@ -390,7 +496,7 @@ class ShareProvider extends ChangeNotifier {
       '/api/workspaces/$workspaceId/comments',
       payload,
     );
-    if (!_isCurrentAccountGeneration(generation)) return;
+    if (!_isCurrentOrigin(origin)) return;
     final comment = WorkspaceComment.fromJson(res);
     final current = <WorkspaceComment>[
       ...(_commentsByWorkspace[workspaceId] ?? const <WorkspaceComment>[]),
@@ -404,19 +510,22 @@ class ShareProvider extends ChangeNotifier {
     String workspaceId, {
     WorkspaceRole role = WorkspaceRole.viewer,
   }) async {
-    final client = _requireClient();
-    final res = await client.post('/api/workspaces/$workspaceId/invites', {
-      'role': role.name,
-    });
+    final origin = _requireOrigin();
+    final res = await origin.client.post(
+      '/api/workspaces/$workspaceId/invites',
+      {'role': role.name},
+    );
+    if (!_isCurrentOrigin(origin)) throw const ApiException('请先登录');
     return ShareInvite.fromJson(res);
   }
 
   Future<void> acceptInvite(String code) async {
-    final generation = _accountGeneration;
-    final client = _requireClient();
-    await client.post('/api/invites/${Uri.encodeComponent(code)}/accept');
-    if (!_isCurrentAccountGeneration(generation)) return;
-    await load();
+    final origin = _requireOrigin();
+    await origin.client.post(
+      '/api/invites/${Uri.encodeComponent(code)}/accept',
+    );
+    if (!_isCurrentOrigin(origin)) return;
+    await _refreshAfterMutation(origin);
   }
 
   Future<void> updateMemberRole(
@@ -424,34 +533,51 @@ class ShareProvider extends ChangeNotifier {
     String userId,
     WorkspaceRole role,
   ) async {
-    final generation = _accountGeneration;
-    final client = _requireClient();
-    await client.patch('/api/workspaces/$workspaceId/members/$userId', {
+    final origin = _requireOrigin();
+    await origin.client.patch('/api/workspaces/$workspaceId/members/$userId', {
       'role': role.name,
     });
-    if (!_isCurrentAccountGeneration(generation)) return;
-    await load();
+    if (!_isCurrentOrigin(origin)) return;
+    await _refreshAfterMutation(origin);
   }
 
   Future<void> removeMember(String workspaceId, String userId) async {
-    final generation = _accountGeneration;
-    final client = _requireClient();
-    await client.delete('/api/workspaces/$workspaceId/members/$userId');
-    if (!_isCurrentAccountGeneration(generation)) return;
-    await load();
+    final origin = _requireOrigin();
+    await origin.client.delete('/api/workspaces/$workspaceId/members/$userId');
+    if (!_isCurrentOrigin(origin)) return;
+    await _refreshAfterMutation(origin);
   }
 
   void setActiveWorkspace(String workspaceId) {
+    if (_disposed) return;
     if (_activeWorkspaceId == workspaceId) return;
     _activeWorkspaceId = workspaceId;
     notifyListeners();
   }
 
-  ApiClient _requireClient() {
-    final client = apiClientGetter?.call();
-    if (client == null || client.token == null || client.token!.isEmpty) {
-      throw const ApiException('请先登录');
-    }
-    return client;
+  @override
+  void dispose() {
+    _disposed = true;
+    _accountGeneration++;
+    _loadInFlight = null;
+    _mutationRefresh = null;
+    _loadInFlightNotifiesLoading = false;
+    super.dispose();
   }
+}
+
+class _ShareRequestOrigin {
+  final int generation;
+  final ApiClient client;
+  final String token;
+  final String baseUrl;
+  String? userId;
+
+  _ShareRequestOrigin({
+    required this.generation,
+    required this.client,
+    required this.token,
+    required this.baseUrl,
+    required this.userId,
+  });
 }

@@ -6,6 +6,19 @@ class CalendarDateNavigation {
   static final _lastDay = DateTime.utc(9999, 12, 31);
   static const _lastMonthIndex = 9999 * 12 - 1;
 
+  /// ISO weekday IDs stay stable; an invalid display preference uses Monday.
+  static int normalizeFirstDayOfWeek(int value) =>
+      value >= DateTime.monday && value <= DateTime.sunday
+      ? value
+      : DateTime.monday;
+
+  static List<int> orderedWeekdays(int firstDayOfWeek) {
+    final first = normalizeFirstDayOfWeek(firstDayOfWeek);
+    return List<int>.unmodifiable(
+      List<int>.generate(7, (index) => (first - 1 + index) % 7 + 1),
+    );
+  }
+
   /// Returns null at the range boundary or for an absent local civil day.
   static DateTime? tryShiftDays(DateTime date, int offset) {
     final civil = _utcCivilDay(date);
@@ -46,17 +59,21 @@ class CalendarDateNavigation {
     return _inMonth(date, date.year + offset, date.month);
   }
 
-  /// Monday through Sunday; unavailable days retain their empty position.
-  static List<DateTime?> weekDays(DateTime date) {
+  /// Seven civil-day slots; unavailable days retain their empty position.
+  static List<DateTime?> weekDays(
+    DateTime date, {
+    int firstDayOfWeek = DateTime.monday,
+  }) {
     final civil = _utcCivilDay(date);
     if (civil == null) {
       return List<DateTime?>.unmodifiable(List<DateTime?>.filled(7, null));
     }
-    final mondayOffset = 1 - civil.weekday;
+    final first = normalizeFirstDayOfWeek(firstDayOfWeek);
+    final startOffset = -((civil.weekday - first) % 7);
     return List<DateTime?>.unmodifiable(
       List<DateTime?>.generate(
         7,
-        (index) => tryShiftDays(date, mondayOffset + index),
+        (index) => tryShiftDays(date, startOffset + index),
       ),
     );
   }

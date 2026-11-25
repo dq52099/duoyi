@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:duoyi/models/diary_entry.dart';
 import 'package:duoyi/widgets/mood_heatmap.dart';
+import 'package:duoyi/widgets/surface_components.dart' show appContrastRatio;
 
 /// 空格子不再固定亮灰 #EDEDED，需跟随亮/暗主题取色（仿 habit_heatmap 范式）。
 const Color bannedLegacyEmpty = Color(0xFFEDEDED);
@@ -95,10 +96,47 @@ void main() {
       final element = tester.element(find.byType(MoodHeatmap));
       final cs = Theme.of(element).colorScheme;
 
+      final weekdayFinder = find.text('一');
+      final weekdayElement = tester.element(weekdayFinder);
+      final weekdayWidget = tester.widget<Text>(weekdayFinder);
+
+      expect(weekdayWidget.style?.color, cs.onSurfaceVariant);
+
+      // In this fixture, MoodHeatmap is pumped directly in Scaffold without card wrapper;
+      // the weekday axis is painted directly over the Scaffold background.
+      // Collect ancestor fill layers leaf-to-root, then composite root-to-leaf:
+      final layers = <Color>[];
+      weekdayElement.visitAncestorElements((ancestor) {
+        if (ancestor.widget case Material(:final color?)) {
+          layers.add(color);
+        } else if (ancestor.widget case DecoratedBox(:final decoration)) {
+          if (decoration is BoxDecoration) {
+            final color = decoration.color;
+            if (color != null) layers.add(color);
+          }
+        } else if (ancestor.widget case Scaffold(:final backgroundColor)) {
+          if (backgroundColor != null) layers.add(backgroundColor);
+          return false; // Stop at nearest enclosing Scaffold
+        }
+        return true;
+      });
+
+      Color effectiveBg = Theme.of(weekdayElement).scaffoldBackgroundColor;
+      for (final layer in layers.reversed) {
+        effectiveBg = Color.alphaBlend(layer, effectiveBg);
+      }
+      final weekdayFg =
+          weekdayWidget.style?.color ??
+          DefaultTextStyle.of(weekdayElement).style.color!;
+      final effectiveFg = Color.alphaBlend(weekdayFg, effectiveBg);
+      final contrast = appContrastRatio(effectiveFg, effectiveBg);
       expect(
-        tester.widget<Text>(find.text('一')).style?.color,
-        cs.onSurface.withValues(alpha: 0.45),
+        contrast,
+        greaterThanOrEqualTo(4.5),
+        reason:
+            'Weekday label contrast $contrast must be >= 4.5 on $effectiveBg',
       );
+
       for (final label in ['超棒', '开心', '平静', '郁闷', '糟糕']) {
         final legendLabel = find.text(label);
         expect(legendLabel, findsOneWidget);

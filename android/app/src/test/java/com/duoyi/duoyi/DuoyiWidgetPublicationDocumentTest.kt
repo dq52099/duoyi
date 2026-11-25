@@ -10,15 +10,15 @@ import org.junit.Test
 class DuoyiWidgetPublicationDocumentTest {
 
     @Test
-    fun completePublishedFixtureMatchesIndependentTenFieldAndEightyNineValueManifest() {
+    fun completePublishedFixtureMatchesIndependentTenFieldAndNinetyValueManifest() {
         val rawValues = completeRawValues()
         val raw = rawDocument(values = rawValues)
         val document = requireDocument(raw, "complete published fixture should parse")
 
         assertEquals(10, EXPECTED_DOCUMENT_KEYS.size)
-        assertEquals(89, EXPECTED_VALUE_KEYS.size)
+        assertEquals(90, EXPECTED_VALUE_KEYS.size)
         assertEquals(73, EXPECTED_STRING_KEYS.size)
-        assertEquals(11, INT32_BOUNDS.size)
+        assertEquals(12, INT32_BOUNDS.size)
         assertEquals(2, LONG_VALUE_KEYS.size)
         assertEquals(3, BOOLEAN_KEYS.size)
         assertEquals(EXPECTED_DOCUMENT_KEYS, document.toMap().keys)
@@ -29,6 +29,7 @@ class DuoyiWidgetPublicationDocumentTest {
         assertEquals("2024-02-29", document.snapshotDay)
         assertEquals(-480, document.snapshotUtcOffsetMinutes)
         assertEquals("zh", document.locale)
+        assertEquals(1, document.values["widget_first_day_of_week"])
 
         assertEquals(
             "  todo / 雪 + cafe\u0301 %2F \t",
@@ -80,6 +81,8 @@ class DuoyiWidgetPublicationDocumentTest {
         assertEquals("2024-02-29", flat["widget_snapshot_day"])
         assertEquals(-480, flat["widget_snapshot_utc_offset_minutes"])
         assertTrue(flat["widget_snapshot_utc_offset_minutes"] is Int)
+        assertEquals(1, flat["widget_first_day_of_week"])
+        assertTrue(flat["widget_first_day_of_week"] is Int)
         INT32_BOUNDS.keys.forEach { key ->
             assertTrue("$key flat projection must be Int", flat[key] is Int)
         }
@@ -452,8 +455,8 @@ class DuoyiWidgetPublicationDocumentTest {
     }
 
     @Test
-    fun clearedAndBlockedDocumentsRetainTwentyTwoPresentationValuesAndRejectEveryBusinessTamper() {
-        assertEquals(22, PRESENTATION_KEYS.size)
+    fun clearedAndBlockedDocumentsRetainTwentyThreePresentationValuesAndRejectEveryBusinessTamper() {
+        assertEquals(23, PRESENTATION_KEYS.size)
         assertEquals(67, BUSINESS_VALUE_KEYS.size)
         assertEquals(EXPECTED_VALUE_KEYS, PRESENTATION_KEYS + BUSINESS_VALUE_KEYS)
 
@@ -479,6 +482,10 @@ class DuoyiWidgetPublicationDocumentTest {
         assertNull(DuoyiWidgetPublicationDocument.clearedValuesFrom(extra))
         val wrongType = completeRawValues().apply { put("todo_count", "3") }
         assertNull(DuoyiWidgetPublicationDocument.clearedValuesFrom(wrongType))
+        val missingWeekStart = completeRawValues().apply {
+            remove("widget_first_day_of_week")
+        }
+        assertNull(DuoyiWidgetPublicationDocument.clearedValuesFrom(missingWeekStart))
 
         listOf("cleared", "blocked").forEach { state ->
             val publicationRevision = if (state == "cleared") 0L else 9L
@@ -516,6 +523,228 @@ class DuoyiWidgetPublicationDocumentTest {
         val nonzeroTombstoneOffset = tombstoneDocument("cleared", 0L, expectedTombstone)
             .apply { put("snapshotUtcOffsetMinutes", 1) }
         assertNull(DuoyiWidgetPublicationDocument.tryFromMap(nonzeroTombstoneOffset))
+    }
+
+    @Test
+    fun onlyStoredEnvelopeDocumentsMayDefaultAnExactLegacyWeekStartField() {
+        val legacyDocument = rawDocument().apply {
+            mutableRawValues(this).remove("widget_first_day_of_week")
+        }
+        assertNull(
+            "direct document parsing stays strict for an 89-value legacy map",
+            DuoyiWidgetPublicationDocument.tryFromMap(legacyDocument),
+        )
+        assertNull(
+            "strict PUBLISH requests must not inherit the stored-envelope default",
+            DuoyiWidgetPublicationRequest.tryFromMap(
+                DuoyiWidgetPublicationRequest.PUBLISH,
+                rawPublishRequest(legacyDocument),
+            ),
+        )
+
+        fun legacyEnvelope(): LinkedHashMap<String, Any?> = rawEnvelope("  epoch/雪 + %2F  ").apply {
+            val nestedDocument = this["document"] as MutableMap<String, Any?>
+            mutableRawValues(nestedDocument).remove("widget_first_day_of_week")
+        }
+
+        val stored = requireEnvelope(
+            legacyEnvelope(),
+            "stored envelope accepts the exact prior 89-value document shape",
+        )
+        assertEquals(1, stored.document.values["widget_first_day_of_week"])
+        assertEquals(1, stored.document.toFlatValues()["widget_first_day_of_week"])
+
+        val missingOtherValue = legacyEnvelope().apply {
+            val nestedDocument = this["document"] as MutableMap<String, Any?>
+            mutableRawValues(nestedDocument).remove("focus_summary")
+        }
+        assertNull(
+            "legacy stored parsing only permits the new week-start field to be absent",
+            DuoyiWidgetPublicationEnvelope.tryFromMap(missingOtherValue),
+        )
+
+        val unknownValue = legacyEnvelope().apply {
+            val nestedDocument = this["document"] as MutableMap<String, Any?>
+            mutableRawValues(nestedDocument)["unmanifested_week_start"] = 7
+        }
+        assertNull(
+            "legacy stored parsing still rejects unknown document values",
+            DuoyiWidgetPublicationEnvelope.tryFromMap(unknownValue),
+        )
+    }
+
+    @Test
+    fun canonicalStoredLegacyRowDefaultsWeekStartWithoutChangingOwnershipOrReceipt() {
+        val raw = storedEnvelope(legacy = true)
+        val encoded = DuoyiWidgetPublicationJson.encode(raw)
+        val read = DuoyiWidgetPublicationRow.decode(encoded)
+        assertEquals("ready", read.status)
+        val envelope = read.envelope ?: throw AssertionError("canonical legacy row must remain readable")
+        assertEquals(1, envelope.document.values["widget_first_day_of_week"])
+        assertEquals(1, envelope.document.toFlatValues()["widget_first_day_of_week"])
+        assertEquals(90, envelope.document.values.size)
+        assertEquals(raw["ownerEpoch"], envelope.ownerEpoch)
+        assertEquals(raw["storeRevision"], envelope.storeRevision)
+        assertEquals(raw["lastReceipt"], envelope.lastReceipt.toMap())
+        assertEquals(raw["writerLeaseId"], envelope.writerLeaseId)
+        assertFalse(envelope.readMetadata().containsKey("writerLeaseId"))
+        assertEquals(encoded, DuoyiWidgetPublicationJson.encode(raw))
+        assertFalse(encoded.contains("widget_first_day_of_week"))
+
+        // The next normal write emits the current complete representation. A
+        // read itself never edits the stored bytes or invents a new receipt.
+        val currentEncoding = DuoyiWidgetPublicationJson.encode(envelope.toMap())
+        assertTrue(currentEncoding.contains("\"widget_first_day_of_week\":1"))
+        val currentRead = DuoyiWidgetPublicationRow.decode(currentEncoding)
+        assertEquals("ready", currentRead.status)
+        assertEquals(envelope.toMap(), currentRead.envelope!!.toMap())
+    }
+
+    @Test
+    fun canonicalStoredRowsPreserveModernSundayAndAcceptLegacySealedTombstones() {
+        val sunday = storedEnvelope().apply {
+            val document = this["document"] as MutableMap<String, Any?>
+            mutableRawValues(document)["widget_first_day_of_week"] = 7
+        }
+        val sundayRead = DuoyiWidgetPublicationRow.decode(DuoyiWidgetPublicationJson.encode(sunday))
+        assertEquals("ready", sundayRead.status)
+        assertEquals(7, sundayRead.envelope!!.document.values["widget_first_day_of_week"])
+
+        for (state in listOf("cleared", "blocked")) {
+            for (legacy in listOf(false, true)) {
+                val raw = storedEnvelope(state, legacy, sealed = true)
+                val read = DuoyiWidgetPublicationRow.decode(DuoyiWidgetPublicationJson.encode(raw))
+                assertEquals("$state legacy=$legacy", "sealed", read.status)
+                val envelope = read.envelope ?: throw AssertionError("sealed row should parse")
+                assertNull(envelope.binding)
+                assertNull(envelope.writerLeaseId)
+                assertEquals(state, envelope.document.state.wire)
+                assertEquals(1, envelope.document.values["widget_first_day_of_week"])
+                assertEquals("", envelope.document.values["todo_top3_1"])
+                assertEquals(0, envelope.document.values["todo_count"])
+                assertEquals(raw["lastReceipt"], envelope.lastReceipt.toMap())
+            }
+        }
+    }
+
+    @Test
+    fun storedRowCompatibilityStillRejectsMalformedManifestsAndNoncanonicalJson() {
+        for (legacy in listOf(false, true)) {
+            fun changed(change: (MutableMap<String, Any?>) -> Unit): String {
+                val raw = storedEnvelope(legacy = legacy)
+                val document = raw["document"] as MutableMap<String, Any?>
+                change(mutableRawValues(document))
+                return DuoyiWidgetPublicationJson.encode(raw)
+            }
+            val invalidManifests = listOf(
+                changed { it.remove("focus_summary") },
+                changed { it["unmanifested_week_start"] = 7 },
+                changed { it["widget_first_day_of_week"] = "1" },
+                changed { it["widget_first_day_of_week"] = 0 },
+                changed { it["widget_first_day_of_week"] = 8 },
+                changed { it["todo_count"] = 2 },
+            )
+            val encoded = DuoyiWidgetPublicationJson.encode(storedEnvelope(legacy = legacy))
+            val alternateEncodings = listOf(
+                " $encoded", "$encoded ", "$encoded{}",
+                encoded.replace("{\"binding\":", "{ \"binding\":"),
+                encoded.replace("\\u96ea", "雪"),
+                encoded.replace("\"storeRevision\":9", "\"storeRevision\":9.0"),
+                encoded.replace("\"storeRevision\":9", "\"storeRevision\":9,\"storeRevision\":9"),
+                encoded.replace("\"ownerEpoch\":", "\"unexpected\":null,\"ownerEpoch\":"),
+            )
+            for (candidate in invalidManifests + alternateEncodings) {
+                assertTrue("test must exercise changed bytes", candidate != encoded)
+                val read = DuoyiWidgetPublicationRow.decode(candidate)
+                assertEquals("legacy=$legacy must fail closed: $candidate", "corrupt", read.status)
+                assertNull(read.envelope)
+            }
+        }
+    }
+
+    @Test
+    fun storedRowUnsupportedSchemaRemainsDistinctFromCorruption() {
+        val future = storedEnvelope(legacy = true).apply { put("storeSchemaVersion", 2) }
+        val read = DuoyiWidgetPublicationRow.decode(DuoyiWidgetPublicationJson.encode(future))
+        assertEquals("unsupported", read.status)
+        assertNull(read.envelope)
+        for (encoded in listOf("", "null", "[]", "{", "{}")) {
+            assertEquals("corrupt", DuoyiWidgetPublicationRow.decode(encoded).status)
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun storedEnvelope(
+        state: String = "published",
+        legacy: Boolean = false,
+        sealed: Boolean = false,
+    ): LinkedHashMap<String, Any?> = rawEnvelope("  epoch/雪 + %2F  ").apply {
+        if (state != "published") {
+            this["document"] = tombstoneDocument(state, 7L, canonicalTombstoneValues())
+        }
+        val document = this["document"] as MutableMap<String, Any?>
+        if (legacy) mutableRawValues(document).remove("widget_first_day_of_week")
+        val receipt = this["lastReceipt"] as MutableMap<String, Any?>
+        val result = receipt["resultMetadata"] as MutableMap<String, Any?>
+        result["documentState"] = state
+        if (sealed) {
+            this["binding"] = null
+            this["writerLeaseId"] = null
+            this["leaseState"] = "sealed"
+            result["writerLeaseId"] = null
+        }
+    }
+
+    @Test
+    fun exactNativeReceiptReplayDoesNotPlanASecondReplacement() {
+        val (current, request) = preparedPublication()
+        val replay = DuoyiWidgetPublicationTransition.plan(
+            current, request, replayNow(), java.time.ZoneId.of("America/Los_Angeles"),
+        ) { throw AssertionError("receipt replay must not issue ownership tokens") }
+        assertEquals("alreadyApplied", replay.status)
+        assertNull(replay.replacement)
+        assertEquals(current.lastReceipt.toMap(), replay.replay!!.toMap())
+        assertEquals(10L, replay.replay!!.committedStoreRevision)
+        assertEquals(10L, current.storeRevision)
+        assertEquals(8L, current.document.publicationRevision)
+    }
+
+    @Test
+    fun nativeReceiptRejectsReusedOperationIdentityWithDifferentContent() {
+        val (current, original) = preparedPublication()
+        val changed = rawDocument(
+            publicationRevision = 8L, capturedAtMillis = publicationNow(),
+        ).apply { mutableRawValues(this)["todo_top3_1"] = "different request content" }
+        val request = DuoyiWidgetPublicationRequest.tryFromMap(
+            DuoyiWidgetPublicationRequest.PUBLISH, rawPublishRequest(changed),
+        ) ?: throw AssertionError("changed complete request should parse")
+        assertEquals(original.operationId, request.operationId)
+        assertFalse(original.digest == request.digest)
+        val rejected = DuoyiWidgetPublicationTransition.plan(
+            current, request, replayNow(), java.time.ZoneId.of("America/Los_Angeles"),
+        ) { throw AssertionError("rejected receipt replay must not issue tokens") }
+        assertEquals("invalid", rejected.status)
+        assertNull(rejected.replacement)
+        assertNull(rejected.replay)
+        assertEquals(10L, current.storeRevision)
+        assertEquals(original.digest, current.lastReceipt.requestDigest)
+    }
+
+    private fun publicationNow(): Long = java.time.Instant.parse("2024-02-29T20:00:00Z").toEpochMilli()
+    private fun replayNow(): Long = publicationNow() + 24L * 60L * 60L * 1000L
+
+    private fun preparedPublication(): Pair<DuoyiWidgetPublicationEnvelope, DuoyiWidgetPublicationRequest> {
+        val current = requireEnvelope(rawEnvelope("  epoch/雪 + %2F  "), "current fixture should parse")
+        val document = rawDocument(publicationRevision = 8L, capturedAtMillis = publicationNow())
+        val request = DuoyiWidgetPublicationRequest.tryFromMap(
+            DuoyiWidgetPublicationRequest.PUBLISH, rawPublishRequest(document),
+        ) ?: throw AssertionError("current complete request should parse")
+        val planned = DuoyiWidgetPublicationTransition.plan(
+            current, request, publicationNow(), java.time.ZoneId.of("America/Los_Angeles"),
+        ) { throw AssertionError("PUBLISH must preserve ownership tokens") }
+        assertEquals("prepared", planned.status)
+        assertNull(planned.replay)
+        return (planned.replacement ?: throw AssertionError("publish should plan replacement")) to request
     }
 
     private fun completeRawValues(): LinkedHashMap<String, Any?> =
@@ -622,6 +851,17 @@ class DuoyiWidgetPublicationDocumentTest {
         )
     }
 
+    private fun rawPublishRequest(document: Map<String, Any?>): LinkedHashMap<String, Any?> =
+        linkedMapOf(
+            "protocolVersion" to 1,
+            "operationId" to "legacy-week-start-publish",
+            "expectedStoreRevision" to 9L,
+            "expectedOwnerEpoch" to "  epoch/雪 + %2F  ",
+            "writerLeaseId" to "lease-1",
+            "expectedPublicationRevision" to 7L,
+            "document" to document,
+        )
+
     private fun rawWithInt32Value(key: String, value: Any?): LinkedHashMap<String, Any?> {
         val raw = rawDocument()
         val values = mutableRawValues(raw)
@@ -692,6 +932,7 @@ class DuoyiWidgetPublicationDocumentTest {
         "widget_theme_corner_radius_dp" -> 18L
         "widget_theme_control_radius_dp" -> 12L
         "widget_theme_border_width_dp" -> 1L
+        "widget_first_day_of_week" -> 1L
         else -> error("Unclassified Int32 key: $key")
     }
 
@@ -800,6 +1041,7 @@ class DuoyiWidgetPublicationDocumentTest {
             "widget_theme_corner_radius_dp" to (0L..MAX_INT32),
             "widget_theme_control_radius_dp" to (0L..MAX_INT32),
             "widget_theme_border_width_dp" to (0L..MAX_INT32),
+            "widget_first_day_of_week" to (1L..7L),
         )
 
         private val LONG_VALUE_KEYS = listOf(
@@ -838,6 +1080,7 @@ class DuoyiWidgetPublicationDocumentTest {
             "widget_theme_corner_radius_dp",
             "widget_theme_control_radius_dp",
             "widget_theme_border_width_dp",
+            "widget_first_day_of_week",
         )
 
         private val PRESENTATION_BOOLEAN_KEYS = listOf("widget_theme_dark")

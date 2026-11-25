@@ -1,0 +1,444 @@
+{
+  "size": [
+    720,
+    480
+  ],
+  "kind": "example-data illustration",
+  "palette": "defaultBrand|plain_card",
+  "generator_sha256": "cf488bb16ae71de9bc60d6b0ef43d7232438fc8876047033aed2b0f190856f0d",
+  "palette_sha256": "08283f3d99bb93e199aa7c97aee670f1db17b9fa916a7718132f342d8fbbe7d5",
+  "fonts": {
+    "latin": "690243adfefe0ce154b547db6205794bd30ac4277275179517a90994f4980648",
+    "cjk": "acb6440a713d880a13a21b468ba7cd43f5a2b2934972e51be791c880730777b8"
+  },
+  "assets": [
+    {
+      "resource": "widget_preview",
+      "locale": "zh",
+      "path": "android/app/src/main/res/drawable-nodpi/widget_preview.png",
+      "sha256": "6b7f08632cd6c392bbd4a4f6d662b0debb371d08669f0d4330cb1a30fbc632e6",
+      "title": "今日概览",
+      "rows": [
+        [
+          "整理今日计划",
+          "待办 · 09:00"
+        ],
+        [
+          "阅读 20 分钟",
+          "习惯 · 今日待打卡"
+        ],
+        [
+          "项目讨论",
+          "日历 · 14:00"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_todo_preview",
+      "locale": "zh",
+      "path": "android/app/src/main/res/drawable-nodpi/widget_todo_preview.png",
+      "sha256": "cc266f844cb3fe599f599ffe635df128022ae75a2292ee2d6836059af3d47bf5",
+      "title": "今日待办",
+      "rows": [
+        [
+          "整理今日计划",
+          "09:00 · 重要"
+        ],
+        [
+          "写周报",
+          "14:00 · 工作"
+        ],
+        [
+          "准备明日事项",
+          "18:00 · 个人"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_focus_habit_preview",
+      "locale": "zh",
+      "path": "android/app/src/main/res/drawable-nodpi/widget_focus_habit_preview.png",
+      "sha256": "e195f6e43d81b90e4674a10111024d78326047957c45e5544ca40743e4224616",
+      "title": "专注与习惯",
+      "rows": [
+        [
+          "阅读 20 分钟",
+          "今日习惯 · 尚未打卡"
+        ],
+        [
+          "本周打卡",
+          "已完成 5 / 7 天"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_habit_preview",
+      "locale": "zh",
+      "path": "android/app/src/main/res/drawable-nodpi/widget_habit_preview.png",
+      "sha256": "5ef164ff96e69991b89b335b3182b6b0de421aab7efd6e58800cf046b25b1fa4",
+      "title": "今日习惯",
+      "rows": [
+        [
+          "阅读 20 分钟",
+          "本周 5 / 7 天"
+        ],
+        [
+          "喝水",
+          "今日 3 / 8 杯"
+        ],
+        [
+          "散步",
+          "连续坚持 6 天"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_calendar_preview",
+      "locale": "zh",
+      "path": "android/app/src/main/res/drawable-nodpi/widget_calendar_preview.png",
+      "sha256": "20b4e17eceecc7cf6487732b09dbbf81383ba9edbb2d0bea0bfb9b8784d50479",
+      "title": "2026 年 10 月",
+      "rows": []
+    },
+    {
+      "resource": "widget_schedule_preview",
+      "locale": "zh",
+      "path": "android/app/src/main/res/drawable-nodpi/widget_schedule_preview.png",
+      "sha256": "4ac3dc1719a37af69dfea3609b5b621a65574bf9a1b10c64b7c1faa092b220b1",
+      "title": "今日日程",
+      "rows": [
+        [
+          "09:00  整理计划",
+          "待办 · 30 分钟"
+        ],
+        [
+          "14:00  项目讨论",
+          "日历 · 会议"
+        ],
+        [
+          "19:00  阅读",
+          "习惯 · 20 分钟"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_goal_preview",
+      "locale": "zh",
+      "path": "android/app/src/main/res/drawable-nodpi/widget_goal_preview.png",
+      "sha256": "fd8733cf2f8d11edbb8e166f4f6a83800adce1bdf41e577329e71cd21b6b30d9",
+      "title": "目标进度",
+      "rows": [
+        [
+          "本月读完一本书",
+          "已完成 60%"
+        ],
+        [
+          "每周运动三次",
+          "已完成 2 / 3 次"
+        ],
+        [
+          "整理个人项目",
+          "下一步 · 完成第一章"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_course_preview",
+      "locale": "zh",
+      "path": "android/app/src/main/res/drawable-nodpi/widget_course_preview.png",
+      "sha256": "9f36d09beac7627b9676e6b08a9ca1e6f2ac6f6a81b88c696e8a288c3c4a4951",
+      "title": "今日课程",
+      "rows": [
+        [
+          "09:00  数学",
+          "教室 201 · 第一节"
+        ],
+        [
+          "11:00  英语",
+          "教室 302 · 第二节"
+        ],
+        [
+          "14:00  项目实践",
+          "实验室 · 第三节"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_note_preview",
+      "locale": "zh",
+      "path": "android/app/src/main/res/drawable-nodpi/widget_note_preview.png",
+      "sha256": "c6d5d083f27c36e7c67f2e96688a8c2fa1b6d361977bd55ebace16a195d0b54d",
+      "title": "最近笔记",
+      "rows": [
+        [
+          "周末计划",
+          "散步、阅读，留一点休息时间"
+        ],
+        [
+          "项目灵感",
+          "把大目标拆成小步骤"
+        ],
+        [
+          "阅读摘记",
+          "记录今天的新发现"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_anniversary_preview",
+      "locale": "zh",
+      "path": "android/app/src/main/res/drawable-nodpi/widget_anniversary_preview.png",
+      "sha256": "a6595e516b1827880875261349fad349d8017d67741d45c86fd22b53e33c008e",
+      "title": "纪念日",
+      "rows": [
+        [
+          "阅读计划",
+          "还有 7 天 · 10 月 20 日"
+        ],
+        [
+          "项目里程碑",
+          "还有 18 天 · 10 月 31 日"
+        ],
+        [
+          "开始记录",
+          "已经 30 天"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_diary_preview",
+      "locale": "zh",
+      "path": "android/app/src/main/res/drawable-nodpi/widget_diary_preview.png",
+      "sha256": "ff62f75d15f0cd96b57f31a8476026a2c16d7660e806df72cc1a82bc2715d67e",
+      "title": "今日日记",
+      "rows": [
+        [
+          "今天心情不错",
+          "记录一件让自己开心的小事"
+        ],
+        [
+          "完成了一项计划",
+          "给今天的努力留个纪念"
+        ],
+        [
+          "期待明天",
+          "慢一点，也在向前走"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_preview",
+      "locale": "en",
+      "path": "android/app/src/main/res/drawable-en-nodpi/widget_preview.png",
+      "sha256": "7d514bdff47353cdc6e8f2a33c3db555190db4b71c12cf95b1713eae4b9b6165",
+      "title": "Today",
+      "rows": [
+        [
+          "Plan the day",
+          "Todo · 09:00"
+        ],
+        [
+          "Read for 20 minutes",
+          "Habit · Check in today"
+        ],
+        [
+          "Project discussion",
+          "Calendar · 14:00"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_todo_preview",
+      "locale": "en",
+      "path": "android/app/src/main/res/drawable-en-nodpi/widget_todo_preview.png",
+      "sha256": "5d2bb769c296de57e7cf0e7519727c99f7ee7fdea4da9242154d897e6a9e0a50",
+      "title": "Today's todos",
+      "rows": [
+        [
+          "Plan the day",
+          "09:00 · Important"
+        ],
+        [
+          "Write the weekly report",
+          "14:00 · Work"
+        ],
+        [
+          "Prepare for tomorrow",
+          "18:00 · Personal"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_focus_habit_preview",
+      "locale": "en",
+      "path": "android/app/src/main/res/drawable-en-nodpi/widget_focus_habit_preview.png",
+      "sha256": "bd5f79ce8760fa172258dcb8ea8c549235b4b337629465ff40508fc715507d18",
+      "title": "Focus & habits",
+      "rows": [
+        [
+          "Read for 20 minutes",
+          "Today's habit · Not checked in"
+        ],
+        [
+          "This week's check-ins",
+          "5 of 7 days completed"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_habit_preview",
+      "locale": "en",
+      "path": "android/app/src/main/res/drawable-en-nodpi/widget_habit_preview.png",
+      "sha256": "8512afd6d797de3d8a8f94e2ecbb231fd4895bdfdb082163a3a84477943ebe62",
+      "title": "Today's habits",
+      "rows": [
+        [
+          "Read for 20 minutes",
+          "5 of 7 days this week"
+        ],
+        [
+          "Drink water",
+          "3 of 8 glasses today"
+        ],
+        [
+          "Take a walk",
+          "6-day streak"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_calendar_preview",
+      "locale": "en",
+      "path": "android/app/src/main/res/drawable-en-nodpi/widget_calendar_preview.png",
+      "sha256": "c479081a74e31da310f7e21157eba9005fb1a7df59840e883927b3fa5a73e129",
+      "title": "October 2026",
+      "rows": []
+    },
+    {
+      "resource": "widget_schedule_preview",
+      "locale": "en",
+      "path": "android/app/src/main/res/drawable-en-nodpi/widget_schedule_preview.png",
+      "sha256": "6f5a12f3fae030b79c5fad579db5fb7ffab475ed2705e0d3e89b04f1a049463e",
+      "title": "Today's schedule",
+      "rows": [
+        [
+          "09:00  Plan the day",
+          "Todo · 30 minutes"
+        ],
+        [
+          "14:00  Project discussion",
+          "Calendar · Meeting"
+        ],
+        [
+          "19:00  Read",
+          "Habit · 20 minutes"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_goal_preview",
+      "locale": "en",
+      "path": "android/app/src/main/res/drawable-en-nodpi/widget_goal_preview.png",
+      "sha256": "b42364b22871b5da78988b4fb98fb47ef47d522cb0be512eba1d6b62a83393bc",
+      "title": "Goal progress",
+      "rows": [
+        [
+          "Finish a book this month",
+          "60% completed"
+        ],
+        [
+          "Exercise three times a week",
+          "2 of 3 sessions completed"
+        ],
+        [
+          "Organize a personal project",
+          "Next · Finish chapter one"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_course_preview",
+      "locale": "en",
+      "path": "android/app/src/main/res/drawable-en-nodpi/widget_course_preview.png",
+      "sha256": "ae1264037c3e888b8ad85c9a345f79443af1ccf77a2afe458739f98adb5dd87b",
+      "title": "Today's classes",
+      "rows": [
+        [
+          "09:00  Mathematics",
+          "Room 201 · Period 1"
+        ],
+        [
+          "11:00  English",
+          "Room 302 · Period 2"
+        ],
+        [
+          "14:00  Project workshop",
+          "Lab · Period 3"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_note_preview",
+      "locale": "en",
+      "path": "android/app/src/main/res/drawable-en-nodpi/widget_note_preview.png",
+      "sha256": "d5d0d2eef18fa6a3dc0fe7778a2c511c0d4bc8a284484a456342d643b31dff9c",
+      "title": "Recent notes",
+      "rows": [
+        [
+          "Weekend plans",
+          "Walk, read and leave time to rest"
+        ],
+        [
+          "Project ideas",
+          "Break big goals into small steps"
+        ],
+        [
+          "Reading notes",
+          "Keep today's discoveries"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_anniversary_preview",
+      "locale": "en",
+      "path": "android/app/src/main/res/drawable-en-nodpi/widget_anniversary_preview.png",
+      "sha256": "ede76399a9887f14fbbc1072220fcb79b10416a5d6a689d272e2bc43c016bd02",
+      "title": "Anniversaries",
+      "rows": [
+        [
+          "Reading plan",
+          "7 days to go · Oct 20"
+        ],
+        [
+          "Project milestone",
+          "18 days to go · Oct 31"
+        ],
+        [
+          "Started journaling",
+          "30 days ago"
+        ]
+      ]
+    },
+    {
+      "resource": "widget_diary_preview",
+      "locale": "en",
+      "path": "android/app/src/main/res/drawable-en-nodpi/widget_diary_preview.png",
+      "sha256": "a5c4638bac85bdbb5e8e6605a9262a36bccad26192951a19c979301c7e19308a",
+      "title": "Today's journal",
+      "rows": [
+        [
+          "Feeling good today",
+          "Remember one small happy moment"
+        ],
+        [
+          "Finished a planned task",
+          "Keep a note of today's effort"
+        ],
+        [
+          "Looking ahead",
+          "Small steps still move us forward"
+        ]
+      ]
+    }
+  ]
+}

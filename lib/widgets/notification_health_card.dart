@@ -1,6 +1,9 @@
+import 'app_date_format.dart';
 import 'package:flutter/material.dart';
 
-import '../core/i18n_date_format.dart';
+import '../core/design_tokens.dart';
+import '../core/i18n.dart';
+import '../core/notification_ui_copy.dart';
 import '../services/permission_health_service.dart';
 import 'surface_components.dart';
 
@@ -40,6 +43,13 @@ class NotificationHealthCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) => _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final report = this.report;
     return AppSurfaceCard(
@@ -48,11 +58,13 @@ class NotificationHealthCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppSectionHeader(
-            title: '通知健康检查',
-            subtitle:
-                report?.summarySubtitle ??
-                (loading ? '正在检查系统权限与通知渠道' : '用于排查系统通知和闹钟异常'),
-            actionLabel: '刷新',
+            title: NotificationUiCopy.healthCardTitle,
+            subtitle: report != null
+                ? NotificationUiCopy.healthReportSummarySubtitle(report)
+                : (loading
+                      ? NotificationUiCopy.healthCheckingSubtitle
+                      : NotificationUiCopy.healthIntroSubtitle),
+            actionLabel: NotificationUiCopy.refreshActionShort,
             actionIcon: Icons.refresh_rounded,
             onAction: onRefresh,
             padding: EdgeInsets.zero,
@@ -63,8 +75,10 @@ class NotificationHealthCard extends StatelessWidget {
             const SizedBox(height: 12),
             AppActionTile(
               icon: Icons.error_outline,
-              label: '检测失败',
-              color: Colors.red,
+              label: NotificationUiCopy.healthCheckFailed,
+              color: cs.brightness == Brightness.dark
+                  ? DesignTokens.todoOverdueDark
+                  : DesignTokens.defaultError,
               subtitle: errorText,
               onTap: onRefresh,
             ),
@@ -90,43 +104,56 @@ class NotificationHealthCard extends StatelessWidget {
           AppSettingsTile(
             icon: Icons.notifications_active_outlined,
             color: cs.primary,
-            title: '立即发送测试通知',
+            title: NotificationUiCopy.sendTestNowTitle,
             subtitle: lastTestAt == null
-                ? '验证普通通知渠道是否可见、可响铃'
-                : '上次测试 ${_formatDateTime(lastTestAt!)}',
+                ? NotificationUiCopy.sendTestNowSubtitle
+                : NotificationUiCopy.lastTestSubtitle(
+                    AppDateFormat.fullDateTime(context, lastTestAt!),
+                  ),
             onTap: onSendTest,
           ),
           AppSettingsTile(
             icon: Icons.alarm_on_outlined,
-            color: Colors.deepOrange,
-            title: '测试强提醒铃声',
-            subtitle: '验证闹钟提醒、内置铃声和通知停止按钮，同时检查系统闹钟音量和勿扰影响，可能会响铃',
+            color: cs.brightness == Brightness.dark
+                ? DesignTokens.todoDueSoonDark
+                : DesignTokens.todoDueSoon,
+            title: NotificationUiCopy.strongTestTitle,
+            subtitle: NotificationUiCopy.strongTestSubtitle,
             onTap: onSendStrongTest,
           ),
           if (report == null ||
               report.summaryStatus != PermissionHealthStatus.ok)
             AppSettingsTile(
               icon: Icons.settings_outlined,
-              color: Colors.deepOrange,
-              title: '疑难设置入口',
-              subtitle: '系统无法直达厂商开关时再打开应用页；先按上方检查项逐项确认',
+              color: cs.brightness == Brightness.dark
+                  ? DesignTokens.todoDueSoonDark
+                  : DesignTokens.todoDueSoon,
+              title: NotificationUiCopy.troubleshootingSettingsTitle,
+              subtitle: NotificationUiCopy.troubleshootingSettingsSubtitle,
               onTap: onOpenSystemSettings,
             ),
           AppSettingsTile(
             icon: Icons.schedule,
-            color: Colors.teal,
-            title: '已调度提醒',
+            color: cs.brightness == Brightness.dark
+                ? const Color(0xFF4DB6AC)
+                : DesignTokens.defaultAccent,
+            title: NotificationUiCopy.scheduledRemindersTitle,
             subtitle: pendingCount == null
-                ? '正在读取待触发队列'
-                : '${pendingCount!} 条待触发',
+                ? NotificationUiCopy.scheduledRemindersLoading
+                : NotificationUiCopy.scheduledRemindersCount(pendingCount!),
             trailing: pendingCount == null
                 ? null
                 : (pendingCount! > 0
                       ? TextButton(
                           onPressed: onClearPending,
-                          child: const Text('全部取消'),
+                          child: Text(NotificationUiCopy.cancelAllAction),
                         )
-                      : const Icon(Icons.check_circle, color: Colors.green)),
+                      : Icon(
+                          Icons.check_circle,
+                          color: cs.brightness == Brightness.dark
+                              ? DesignTokens.todoCompletedDark
+                              : DesignTokens.defaultSuccess,
+                        )),
           ),
         ],
       ),
@@ -147,10 +174,19 @@ class _SummaryBanner extends StatelessWidget {
     final status = report?.summaryStatus ?? PermissionHealthStatus.unknown;
     final color = _statusColor(status, cs);
     final icon = _statusIcon(status);
-    final title = report?.summaryTitle ?? (loading ? '正在检查' : '尚未读取通知健康状态');
+    final title = report == null
+        ? (loading
+              ? NotificationUiCopy.healthSummaryChecking
+              : NotificationUiCopy.healthSummaryUnavailable)
+        : NotificationUiCopy.healthSummaryTitle(report!.summaryStatus);
     final subtitle = report == null
-        ? (loading ? '请稍候，正在读取权限和渠道状态' : '刷新后可查看系统通知健康结果')
-        : '${report!.checks.length} 项检查 · ${_formatDateTime(report!.checkedAt)}';
+        ? (loading
+              ? NotificationUiCopy.healthSummaryWaiting
+              : NotificationUiCopy.healthSummaryRefreshHint)
+        : NotificationUiCopy.healthSummaryChecks(
+            report!.checks.length,
+            AppDateFormat.fullDateTime(context, report!.checkedAt),
+          );
 
     return Container(
       width: double.infinity,
@@ -248,8 +284,10 @@ class _HealthCheckTile extends StatelessWidget {
     return AppSettingsTile(
       icon: icon,
       color: color,
-      title: check.title,
-      subtitle: check.manual ? '${check.subtitle} · 需要人工确认' : check.subtitle,
+      title: NotificationUiCopy.healthCheckTitle(check),
+      subtitle: check.manual
+          ? '${NotificationUiCopy.healthCheckSubtitle(check)}${NotificationUiCopy.isEn ? ' · Manual review' : ' · 需要人工确认'}'
+          : NotificationUiCopy.healthCheckSubtitle(check),
       trailing: trailing,
     );
   }
@@ -259,14 +297,16 @@ class _HealthCheckTile extends StatelessWidget {
     if (check.action == PermissionHealthAction.openAppSettings &&
         check.actionChannelIds.length > 1) {
       return PopupMenuButton<String>(
-        tooltip: check.actionLabel ?? '渠道设置',
+        tooltip: NotificationUiCopy.channelSettingsAction,
         icon: Icon(Icons.tune_outlined, color: color),
         onSelected: onOpenNotificationChannelSettings,
         itemBuilder: (context) => [
           for (final id in check.actionChannelIds)
             PopupMenuItem(
               value: id,
-              child: AppSecondaryMenuText(_notificationChannelLabel(id)),
+              child: AppSecondaryMenuText(
+                NotificationUiCopy.channelDisplayName(id),
+              ),
             ),
         ],
       );
@@ -285,7 +325,7 @@ class _HealthCheckTile extends StatelessWidget {
         ),
         onPressed: action,
         child: Text(
-          check.actionLabel ?? '处理',
+          NotificationUiCopy.healthActionLabel(check),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
@@ -295,27 +335,17 @@ class _HealthCheckTile extends StatelessWidget {
   }
 }
 
-String _notificationChannelLabel(String id) {
-  if (id.contains('alarm') || id.contains('fullscreen')) return '强提醒渠道';
-  if (id.contains('fallback')) return '闹钟兜底通知';
-  if (id.contains('native') || id.contains('status')) return '内置铃声状态';
-  if (id.contains('reminder') ||
-      id.contains('notification') ||
-      id.contains('general') ||
-      id.contains('alerts')) {
-    return '通知提醒渠道';
-  }
-  return id;
-}
-
 Color _statusColor(PermissionHealthStatus status, ColorScheme cs) {
+  final isDark = cs.brightness == Brightness.dark;
   switch (status) {
     case PermissionHealthStatus.ok:
-      return Colors.green;
+      return isDark
+          ? DesignTokens.todoCompletedDark
+          : DesignTokens.defaultSuccess;
     case PermissionHealthStatus.warning:
-      return Colors.orange;
+      return isDark ? DesignTokens.todoDueSoonDark : DesignTokens.todoDueSoon;
     case PermissionHealthStatus.blocked:
-      return Colors.red;
+      return isDark ? DesignTokens.todoOverdueDark : DesignTokens.defaultError;
     case PermissionHealthStatus.unknown:
       return cs.primary;
   }
@@ -345,8 +375,4 @@ IconData _statusTrailingIcon(PermissionHealthStatus status) {
     case PermissionHealthStatus.unknown:
       return Icons.help_outline;
   }
-}
-
-String _formatDateTime(DateTime value) {
-  return I18nDateFormat.fullDateTime(value);
 }

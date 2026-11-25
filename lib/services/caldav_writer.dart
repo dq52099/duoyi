@@ -7,6 +7,8 @@ library;
 
 import 'package:http/http.dart' as http;
 
+import '../core/account_preference_writes.dart';
+
 abstract class CalDavWriter {
   /// 返回远端 VEVENT 的 ETag；服务器不支持或事件不存在时返回 null。
   Future<String?> remoteEtag(String uid);
@@ -49,13 +51,21 @@ class HttpCalDavWriter implements CalDavWriter {
   final String collectionUrl;
   final Map<String, String> headers;
   final http.Client client;
+  final bool Function()? isCurrent;
 
   HttpCalDavWriter({
     required this.collectionUrl,
     Map<String, String>? headers,
     http.Client? client,
+    this.isCurrent,
   }) : headers = headers ?? const <String, String>{},
        client = client ?? http.Client();
+
+  void _ensureCurrent() {
+    if (isCurrent?.call() == false) {
+      throw const AccountPreferenceWriteCanceled();
+    }
+  }
 
   String _eventUrl(String uid) {
     final base = collectionUrl.endsWith('/')
@@ -120,10 +130,14 @@ class HttpCalDavWriter implements CalDavWriter {
   @override
   Future<String?> remoteEtag(String uid) async {
     final url = Uri.parse(_eventUrl(uid));
+    _ensureCurrent();
     final resp = await client.head(url, headers: headers);
+    _ensureCurrent();
     if (resp.statusCode == 404) return null;
     if (resp.statusCode == 405) {
+      _ensureCurrent();
       final fallback = await client.get(url, headers: headers);
+      _ensureCurrent();
       if (fallback.statusCode == 404) return null;
       if (fallback.statusCode < 200 || fallback.statusCode >= 300) {
         throw Exception(
@@ -157,11 +171,13 @@ class HttpCalDavWriter implements CalDavWriter {
       description: description,
       location: location,
     );
+    _ensureCurrent();
     final resp = await client.put(
       Uri.parse(_eventUrl(uid)),
       headers: _requestHeaders(contentType: 'text/calendar; charset=utf-8'),
       body: ics,
     );
+    _ensureCurrent();
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw Exception('CalDAV create failed: ${resp.statusCode} ${resp.body}');
     }
@@ -186,6 +202,7 @@ class HttpCalDavWriter implements CalDavWriter {
       description: description,
       location: location,
     );
+    _ensureCurrent();
     final resp = await client.put(
       Uri.parse(_eventUrl(uid)),
       headers: _requestHeaders(
@@ -194,6 +211,7 @@ class HttpCalDavWriter implements CalDavWriter {
       ),
       body: ics,
     );
+    _ensureCurrent();
     if (resp.statusCode == 412) {
       throw CalDavConflictException(uid);
     }
@@ -204,11 +222,14 @@ class HttpCalDavWriter implements CalDavWriter {
 
   @override
   Future<void> deleteEvent(String uid, {String? ifMatch}) async {
+    _ensureCurrent();
     final resp = await client.delete(
       Uri.parse(_eventUrl(uid)),
       headers: _requestHeaders(ifMatch: ifMatch),
     );
+    _ensureCurrent();
     if (resp.statusCode == 404) return;
+    _ensureCurrent();
     if (resp.statusCode == 412) {
       throw CalDavConflictException(uid);
     }

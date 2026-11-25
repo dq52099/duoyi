@@ -214,6 +214,25 @@ private func displayAssertBudgetedRange(
     }
 }
 
+displayRunCase("todo count decoder preserves valid int32 values and rejects malformed values") {
+    displayExpect(DuoyiWidgetDisplayCore.decodeTodoCount(NSNumber(value: 0)) == 0, "zero remains a valid count")
+    displayExpect(DuoyiWidgetDisplayCore.decodeTodoCount(NSNumber(value: 5)) == 5, "positive integer remains exact")
+    displayExpect(DuoyiWidgetDisplayCore.decodeTodoCount(NSNumber(value: Int32.max)) == Int(Int32.max), "int32 maximum remains exact")
+    displayExpect(DuoyiWidgetDisplayCore.decodeTodoCount(NSNumber(value: true)) == nil, "boolean is unavailable")
+    displayExpect(DuoyiWidgetDisplayCore.decodeTodoCount(NSNumber(value: 1.0)) == nil, "floating representation is unavailable")
+    displayExpect(DuoyiWidgetDisplayCore.decodeTodoCount(NSNumber(value: 1.5)) == nil, "fraction is unavailable")
+    displayExpect(DuoyiWidgetDisplayCore.decodeTodoCount(-1) == nil, "negative count is unavailable")
+    displayExpect(DuoyiWidgetDisplayCore.decodeTodoCount("5") == nil, "text is not coerced")
+    displayExpect(DuoyiWidgetDisplayCore.decodeTodoCount(nil) == nil, "missing count is unavailable")
+}
+
+displayRunCase("todo count labels retain locale and singular semantics") {
+    displayExpect(DuoyiWidgetDisplayCore.todoCountLabel(0, isZh: true) == "0 项", "Chinese zero label")
+    displayExpect(DuoyiWidgetDisplayCore.todoCountLabel(1, isZh: false) == "1 task", "English singular label")
+    displayExpect(DuoyiWidgetDisplayCore.todoCountLabel(2, isZh: false) == "2 tasks", "English plural label")
+    displayExpect(DuoyiWidgetDisplayCore.todoCountLabel(2147483647, isZh: true) == "2147483647 项", "large count stays exact")
+}
+
 private func displayMaximumWeeksFitting(
     availableHeight: Double,
     hasEventSummary: Bool,
@@ -535,6 +554,8 @@ displayRunCase("calendar read-only targets, mutation targets, summaries, and emp
         "duoyi://habit/new",
         "duoyi://habit/entry%2Fpart",
         "duoyi://course/class%2B1",
+        "duoyi://event/%20local%2Fid%20",
+        "duoyi://pomodoro/%E6%B5%8B%E8%AF%95%2Fsession",
         "duoyi://todo/id%22quote",
         "duoyi://todo/id%7Bbrace",
         "duoyi://todo/id%7Dbrace",
@@ -785,7 +806,7 @@ displayRunCase("month grids cover 28, 29, 30, and 31 day months") {
     }
 }
 
-displayRunCase("month grids use Monday-first columns for Monday and Sunday starts") {
+displayRunCase("month grids retain Monday-first defaults for Monday and Sunday starts") {
     let utc = displayTimeZone("UTC")
     let calendar = displayGregorian(utc)
     let monday = DuoyiWidgetDisplayCore.buildMonthGrid(
@@ -807,6 +828,138 @@ displayRunCase("month grids use Monday-first columns for Monday and Sunday start
     displayExpect(sunday.weekdayHeaders == ["一", "二", "三", "四", "五", "六", "日"], "Chinese headers are Monday-first")
     displayAssertGrid(monday, expectedDays: 30, context: "Monday-start month")
     displayAssertGrid(sunday, expectedDays: 28, context: "Sunday-start month")
+}
+
+displayRunCase("week-start preferences rotate all seven civil columns and localized labels") {
+    let utc = displayTimeZone("UTC")
+    let calendar = displayGregorian(utc)
+    let shortEnglish = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+    let fullEnglish = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    let shortChinese = ["一", "二", "三", "四", "五", "六", "日"]
+    let fullChinese = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+
+    func rotate(_ labels: [String], firstDayOfWeek: Int) -> [String] {
+        (0..<7).map { labels[(firstDayOfWeek - 1 + $0) % 7] }
+    }
+
+    for firstDayOfWeek in 1...7 {
+        guard let grid = DuoyiWidgetDisplayCore.buildMonthGrid(
+            year: 2024,
+            month: 9,
+            todayDay: 4,
+            isZh: false,
+            firstDayOfWeek: firstDayOfWeek
+        ) else {
+            fatalError("FAIL: September 2024 should build for week start \(firstDayOfWeek)")
+        }
+        let expectedOffset = (7 - firstDayOfWeek + 7) % 7
+        displayExpect(grid.firstWeekdayOffset == expectedOffset, "week start \(firstDayOfWeek) places September 1 at its ISO weekday column")
+        displayExpect(grid.cells[expectedOffset].dayNumber == 1, "week start \(firstDayOfWeek) places September 1 in the first row")
+        displayExpect(
+            DuoyiWidgetDisplayCore.calendarWeekdayHeaders(isZh: false, firstDayOfWeek: firstDayOfWeek) == rotate(shortEnglish, firstDayOfWeek: firstDayOfWeek),
+            "English short labels rotate with week start \(firstDayOfWeek)"
+        )
+        displayExpect(
+            DuoyiWidgetDisplayCore.calendarWeekdayHeaders(isZh: false, firstDayOfWeek: firstDayOfWeek, full: true) == rotate(fullEnglish, firstDayOfWeek: firstDayOfWeek),
+            "English full labels use the same rotation for week start \(firstDayOfWeek)"
+        )
+        displayExpect(
+            DuoyiWidgetDisplayCore.calendarWeekdayHeaders(isZh: true, firstDayOfWeek: firstDayOfWeek) == rotate(shortChinese, firstDayOfWeek: firstDayOfWeek),
+            "Chinese short labels rotate with week start \(firstDayOfWeek)"
+        )
+        displayExpect(
+            DuoyiWidgetDisplayCore.calendarWeekdayHeaders(isZh: true, firstDayOfWeek: firstDayOfWeek, full: true) == rotate(fullChinese, firstDayOfWeek: firstDayOfWeek),
+            "Chinese full labels use the same rotation for week start \(firstDayOfWeek)"
+        )
+    }
+
+    guard let sundayFirst = DuoyiWidgetDisplayCore.buildMonthGrid(
+        year: 2024,
+        month: 9,
+        todayDay: 1,
+        isZh: true,
+        firstDayOfWeek: 7
+    ) else {
+        fatalError("FAIL: Sunday-first September 2024 should build")
+    }
+    for sunday in [1, 8, 15, 22, 29] {
+        guard let index = sundayFirst.cells.firstIndex(where: { $0.dayNumber == sunday }) else {
+            fatalError("FAIL: Sunday \(sunday) was not found in the month grid")
+        }
+        displayExpect(index % 7 == 0, "September \(sunday) occupies the Sunday-first column")
+    }
+
+    let defaultAnchor = DuoyiWidgetDisplayCore.buildMonthGrid(
+        anchorDate: displayLocalDate(2024, 9, 4, hour: 12, calendar: calendar),
+        timeZone: utc,
+        isZh: false
+    )
+    displayExpect(defaultAnchor.firstWeekdayOffset == 6, "Date overload defaults to Monday-first columns")
+    displayExpect(defaultAnchor.weekdayHeaders == shortEnglish, "Date overload keeps Monday-first labels by default")
+}
+
+displayRunCase("invalid week-start values default to Monday in both grid overloads") {
+    let utc = displayTimeZone("UTC")
+    let anchor = displayLocalDate(2024, 9, 4, hour: 12, calendar: displayGregorian(utc))
+    let shortEnglish = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+
+    for invalid in [Int.min, -1, 0, 8, Int.max] {
+        guard let civil = DuoyiWidgetDisplayCore.buildMonthGrid(
+            year: 2024,
+            month: 9,
+            todayDay: 4,
+            isZh: false,
+            firstDayOfWeek: invalid
+        ) else {
+            fatalError("FAIL: invalid week-start value should still build a valid month")
+        }
+        let anchored = DuoyiWidgetDisplayCore.buildMonthGrid(
+            anchorDate: anchor,
+            timeZone: utc,
+            isZh: false,
+            firstDayOfWeek: invalid
+        )
+        displayExpect(civil.firstWeekdayOffset == 6 && anchored.firstWeekdayOffset == 6, "invalid \(invalid) falls back to Monday columns")
+        displayExpect(civil.weekdayHeaders == shortEnglish && anchored.weekdayHeaders == shortEnglish, "invalid \(invalid) uses Monday labels")
+        displayExpect(
+            DuoyiWidgetDisplayCore.calendarWeekdayHeaders(isZh: false, firstDayOfWeek: invalid) == shortEnglish,
+            "weekday labels normalize invalid \(invalid) to Monday"
+        )
+        displayExpect(DuoyiWidgetDisplayCore.resolveFirstDayOfWeek(invalid) == 1, "resolver normalizes invalid integer \(invalid)")
+    }
+
+    let invalidDynamicValues: [Any?] = [nil, true, false, "7", 7.0, Float(7), NSNull()]
+    for value in invalidDynamicValues {
+        displayExpect(
+            DuoyiWidgetDisplayCore.resolveFirstDayOfWeek(value) == 1,
+            "resolver rejects non-Int week-start input \(String(describing: value))"
+        )
+    }
+    for valid in 1...7 {
+        displayExpect(DuoyiWidgetDisplayCore.resolveFirstDayOfWeek(valid) == valid, "resolver preserves valid ISO weekday \(valid)")
+    }
+}
+
+displayRunCase("Sunday-first civil year boundaries keep their real dates") {
+    guard let first = DuoyiWidgetDisplayCore.buildMonthGrid(
+        year: 1,
+        month: 1,
+        todayDay: 1,
+        isZh: false,
+        firstDayOfWeek: 7
+    ), let last = DuoyiWidgetDisplayCore.buildMonthGrid(
+        year: 9999,
+        month: 12,
+        todayDay: 31,
+        isZh: false,
+        firstDayOfWeek: 7
+    ) else {
+        fatalError("FAIL: supported Gregorian year boundaries should build")
+    }
+    displayExpect(first.cells.first(where: { $0.isToday })?.dateKey == "0001-01-01", "year 0001 first day remains available")
+    displayExpect(last.cells.first(where: { $0.isToday })?.dateKey == "9999-12-31", "year 9999 last day remains available")
+    displayExpect(first.cells.firstIndex(where: { $0.dayNumber == 1 })! % 7 == 1, "Monday 0001-01-01 stays in its Sunday-first weekday column")
+    displayExpect(last.cells.firstIndex(where: { $0.dayNumber == 31 })! % 7 == 5, "Friday 9999-12-31 stays in its Sunday-first weekday column")
 }
 
 displayRunCase("UTC, Shanghai, and New York grids use explicit local dates across a year boundary") {
@@ -853,12 +1006,13 @@ displayRunCase("New York local midnights remain correct across the spring DST ch
         fatalError("FAIL: could not construct the midnight after DST transition")
     }
     let elapsed = nextLocalMidnight.timeIntervalSince(transitionMidnight)
-    let beforeGrid = DuoyiWidgetDisplayCore.buildMonthGrid(anchorDate: transitionMidnight, timeZone: newYork, isZh: false)
-    let afterGrid = DuoyiWidgetDisplayCore.buildMonthGrid(anchorDate: nextLocalMidnight, timeZone: newYork, isZh: false)
+    let beforeGrid = DuoyiWidgetDisplayCore.buildMonthGrid(anchorDate: transitionMidnight, timeZone: newYork, isZh: false, firstDayOfWeek: 7)
+    let afterGrid = DuoyiWidgetDisplayCore.buildMonthGrid(anchorDate: nextLocalMidnight, timeZone: newYork, isZh: false, firstDayOfWeek: 7)
 
     displayExpect(elapsed == 23 * 60 * 60, "New York spring transition has a 23-hour local day")
     displayExpect(beforeGrid.year == 2026 && beforeGrid.month == 3 && beforeGrid.todayDay == 8, "transition-day midnight maps to March 8")
     displayExpect(afterGrid.year == 2026 && afterGrid.month == 3 && afterGrid.todayDay == 9, "next local midnight maps to March 9")
+    displayExpect(beforeGrid.cells.firstIndex(where: { $0.isToday })! % 7 == 0, "Sunday DST transition stays in the Sunday-first column")
     displayAssertGrid(beforeGrid, expectedDays: 31, context: "DST transition midnight")
     displayAssertGrid(afterGrid, expectedDays: 31, context: "midnight after DST transition")
 }
@@ -1393,5 +1547,456 @@ displayRunCase("visible family and height budgets retain each real cell date and
                 }
             }
         }
+    }
+}
+
+displayRunCase("theme colors parse trimmed six-digit RGB and eight-digit ARGB values") {
+    let fixtures: [(String, UInt32)] = [
+        (" #aBcDeF ", 0xFFABCDEF),
+        ("012345", 0xFF012345),
+        ("\t#00aBcDeF\n", 0x00ABCDEF),
+        ("80112233", 0x80112233),
+    ]
+
+    for (raw, expected) in fixtures {
+        displayExpect(
+            DuoyiWidgetThemeColorCore.parse(raw) == expected,
+            "theme color \(raw.debugDescription) preserves its RGB or ARGB value"
+        )
+    }
+}
+
+displayRunCase("theme colors reject malformed hashes signs prefixes Unicode and lengths") {
+    let invalid = [
+        "",
+        "   ",
+        "#",
+        "#ABC",
+        "12345",
+        "1234567",
+        "123456789",
+        "##AABBC",
+        "#AABB#C",
+        "#AABBC#",
+        "+12345",
+        "-12345",
+        "#-12345",
+        "0xAABBCC",
+        "#0xAABBCC",
+        "#中ABBCC",
+        "#１２３４５６",
+        "#AABBCG",
+        "#AA BCD",
+    ]
+
+    for raw in invalid {
+        displayExpect(
+            DuoyiWidgetThemeColorCore.parse(raw) == nil,
+            "invalid theme color \(raw.debugDescription) is rejected"
+        )
+    }
+}
+
+displayRunCase("theme color defaults match every configured widget color role") {
+    let defaults: [(String, String, UInt32)] = [
+        ("widget_theme_primary", "#FF0066D6", 0xFF0066D6),
+        ("widget_theme_background", "#FFF6F7F9", 0xFFF6F7F9),
+        ("widget_theme_surface", "#FFFFFFFF", 0xFFFFFFFF),
+        ("widget_theme_nav_background", "#FFF1F3F6", 0xFFF1F3F6),
+        ("widget_theme_border", "#000066D6", 0x000066D6),
+        ("widget_theme_text", "#FF1F2933", 0xFF1F2933),
+        ("widget_theme_muted_text", "#FF667085", 0xFF667085),
+        ("widget_theme_on_primary", "#FFFFFFFF", 0xFFFFFFFF),
+        ("widget_theme_accent_start", "#FF0066D6", 0xFF0066D6),
+        ("widget_theme_accent_end", "#FF2F8F83", 0xFF2F8F83),
+    ]
+
+    for (role, fallback, expected) in defaults {
+        let resolved = DuoyiWidgetThemeColorCore.resolve("invalid", fallback: fallback)
+        displayExpect(resolved == expected, "\(role) uses its configured fallback")
+    }
+}
+
+displayRunCase("theme color resolution preserves custom palettes and uses the primary fallback when needed") {
+    let customPalette: [(String, String, String, UInt32)] = [
+        ("widget_theme_primary", "#123456", "#FF0066D6", 0xFF123456),
+        ("widget_theme_background", "#234567", "#FFF6F7F9", 0xFF234567),
+        ("widget_theme_surface", "#345678", "#FFFFFFFF", 0xFF345678),
+        ("widget_theme_nav_background", "#456789", "#FFF1F3F6", 0xFF456789),
+        ("widget_theme_border", "#80456789", "#000066D6", 0x80456789),
+        ("widget_theme_text", "#56789A", "#FF1F2933", 0xFF56789A),
+        ("widget_theme_muted_text", "#6789AB", "#FF667085", 0xFF6789AB),
+        ("widget_theme_on_primary", "#789ABC", "#FFFFFFFF", 0xFF789ABC),
+        ("widget_theme_accent_start", "#89ABCD", "#FF0066D6", 0xFF89ABCD),
+        ("widget_theme_accent_end", "#9ABCDE", "#FF2F8F83", 0xFF9ABCDE),
+    ]
+
+    for (role, custom, fallback, expected) in customPalette {
+        let resolved = DuoyiWidgetThemeColorCore.resolve(custom, fallback: fallback)
+        displayExpect(resolved == expected, "\(role) retains its valid custom color")
+    }
+
+    displayExpect(
+        DuoyiWidgetThemeColorCore.resolve(nil, fallback: "bad fallback") == 0xFF0066D6,
+        "missing value with invalid role fallback uses the primary fallback"
+    )
+    displayExpect(
+        DuoyiWidgetThemeColorCore.resolve(nil, fallback: "#FF010203") == 0xFF010203,
+        "missing value uses its valid role fallback"
+    )
+    displayExpect(
+        DuoyiWidgetThemeColorCore.resolve(42, fallback: "bad fallback") == 0xFF0066D6,
+        "nonstring value with invalid role fallback uses the primary fallback"
+    )
+    displayExpect(
+        DuoyiWidgetThemeColorCore.resolve(["#112233"], fallback: "#FF010203") == 0xFF010203,
+        "nonstring value falls back to its valid role color"
+    )
+}
+
+displayRunCase("calendar accessory dates format exact inline, short, and rectangular literals for zh and en") {
+    let utc = displayTimeZone("UTC")
+    let calendar = displayGregorian(utc)
+    let aprilFifteen = displayLocalDate(2024, 4, 15, hour: 12, calendar: calendar)
+    let maySeventeen = displayLocalDate(2026, 5, 17, hour: 9, calendar: calendar)
+
+    let enApril = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: aprilFifteen, timeZone: utc, isZh: false)
+    displayExpect(enApril.inline == "Apr 15", "English inline date is compact month and day")
+    displayExpect(enApril.short == "15", "English short date is the day of month")
+    displayExpect(enApril.rectangular == "Apr 15 · Monday", "English rectangular date includes month, day, and full weekday")
+
+    let zhApril = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: aprilFifteen, timeZone: utc, isZh: true)
+    displayExpect(zhApril.inline == "4月15日", "Chinese inline date is month and day")
+    displayExpect(zhApril.short == "15", "Chinese short date is the day of month")
+    displayExpect(zhApril.rectangular == "4月15日 · 周一", "Chinese rectangular date includes month, day, and concise weekday")
+
+    let enMay = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: maySeventeen, timeZone: utc, isZh: false)
+    displayExpect(enMay.inline == "May 17", "English May 17 inline date matches platform copy")
+    displayExpect(enMay.short == "17", "English May 17 short date is day 17")
+    displayExpect(enMay.rectangular == "May 17 · Sunday", "English May 17 rectangular date matches platform copy")
+
+    let zhMay = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: maySeventeen, timeZone: utc, isZh: true)
+    displayExpect(zhMay.inline == "5月17日", "Chinese May 17 inline date matches platform copy")
+    displayExpect(zhMay.short == "17", "Chinese May 17 short date is day 17")
+    displayExpect(zhMay.rectangular == "5月17日 · 周日", "Chinese May 17 rectangular date matches platform copy")
+}
+
+displayRunCase("calendar accessory dates resolve across timezone, day, month, and year boundaries") {
+    let instant = displayUTCInstant("2026-01-01T00:30:00Z")
+    let utc = displayTimeZone("UTC")
+    let shanghai = displayTimeZone("Asia/Shanghai")
+    let newYork = displayTimeZone("America/New_York")
+
+    let nyDisplayEn = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: instant, timeZone: newYork, isZh: false)
+    displayExpect(nyDisplayEn.inline == "Dec 31", "New York year boundary stays on Dec 31 in English")
+    displayExpect(nyDisplayEn.short == "31", "New York short date is 31")
+    displayExpect(nyDisplayEn.rectangular == "Dec 31 · Wednesday", "New York rectangular date is Wednesday Dec 31")
+
+    let nyDisplayZh = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: instant, timeZone: newYork, isZh: true)
+    displayExpect(nyDisplayZh.inline == "12月31日", "New York year boundary stays on 12月31日 in Chinese")
+    displayExpect(nyDisplayZh.short == "31", "New York short date is 31 in Chinese")
+    displayExpect(nyDisplayZh.rectangular == "12月31日 · 周三", "New York rectangular date is 12月31日 · 周三")
+
+    let utcDisplayEn = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: instant, timeZone: utc, isZh: false)
+    displayExpect(utcDisplayEn.inline == "Jan 1", "UTC new year date is Jan 1 in English")
+    displayExpect(utcDisplayEn.short == "1", "UTC short date is 1")
+    displayExpect(utcDisplayEn.rectangular == "Jan 1 · Thursday", "UTC rectangular date is Thursday Jan 1")
+
+    let shanghaiDisplayZh = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: instant, timeZone: shanghai, isZh: true)
+    displayExpect(shanghaiDisplayZh.inline == "1月1日", "Shanghai new year date is 1月1日 in Chinese")
+    displayExpect(shanghaiDisplayZh.short == "1", "Shanghai short date is 1")
+    displayExpect(shanghaiDisplayZh.rectangular == "1月1日 · 周四", "Shanghai rectangular date is 1月1日 · 周四")
+
+    let monthCrossingInstant = displayUTCInstant("2024-03-31T23:30:00Z")
+    let utcMarch = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: monthCrossingInstant, timeZone: utc, isZh: false)
+    displayExpect(utcMarch.inline == "Mar 31", "UTC month end is Mar 31")
+    displayExpect(utcMarch.short == "31", "UTC month end short is 31")
+    displayExpect(utcMarch.rectangular == "Mar 31 · Sunday", "UTC month end rectangular is Sunday")
+
+    let shanghaiApril = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: monthCrossingInstant, timeZone: shanghai, isZh: true)
+    displayExpect(shanghaiApril.inline == "4月1日", "Shanghai month crossing is 4月1日")
+    displayExpect(shanghaiApril.short == "1", "Shanghai month crossing short is 1")
+    displayExpect(shanghaiApril.rectangular == "4月1日 · 周一", "Shanghai month crossing rectangular is 周一")
+
+    let nyCalendar = displayGregorian(newYork)
+    let transitionMidnight = displayLocalDate(2026, 3, 8, calendar: nyCalendar)
+    guard let nextMidnight = nyCalendar.date(byAdding: .day, value: 1, to: transitionMidnight) else {
+        fatalError("FAIL: could not construct next midnight")
+    }
+    let beforeRollover = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: transitionMidnight, timeZone: newYork, isZh: false)
+    let afterRollover = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: nextMidnight, timeZone: newYork, isZh: false)
+    displayExpect(beforeRollover.short == "8" && beforeRollover.rectangular == "Mar 8 · Sunday", "before rollover is Mar 8 Sunday")
+    displayExpect(afterRollover.short == "9" && afterRollover.rectangular == "Mar 9 · Monday", "after rollover is Mar 9 Monday")
+}
+
+displayRunCase("calendar accessory dates handle leap day, extreme boundaries, and malformed grid fallback") {
+    let utc = displayTimeZone("UTC")
+    let calendar = displayGregorian(utc)
+    let leapDay = displayLocalDate(2024, 2, 29, hour: 12, calendar: calendar)
+
+    let enLeap = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: leapDay, timeZone: utc, isZh: false)
+    displayExpect(enLeap.inline == "Feb 29", "English leap day inline date is Feb 29")
+    displayExpect(enLeap.short == "29", "English leap day short date is 29")
+    displayExpect(enLeap.rectangular == "Feb 29 · Thursday", "English leap day rectangular date is Feb 29 · Thursday")
+
+    let zhLeap = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: leapDay, timeZone: utc, isZh: true)
+    displayExpect(zhLeap.inline == "2月29日", "Chinese leap day inline date is 2月29日")
+    displayExpect(zhLeap.short == "29", "Chinese leap day short date is 29")
+    displayExpect(zhLeap.rectangular == "2月29日 · 周四", "Chinese leap day rectangular date is 2月29日 · 周四")
+
+    let validGrid = DuoyiWidgetDisplayCore.buildMonthGrid(anchorDate: leapDay, timeZone: utc, isZh: false)
+    let fromGrid = DuoyiWidgetDisplayCore.calendarAccessoryDates(grid: validGrid, isZh: false)
+    displayExpect(fromGrid.inline == "Feb 29", "dates from valid grid match inline")
+    displayExpect(fromGrid.short == "29", "dates from valid grid match short")
+    displayExpect(fromGrid.rectangular == "Feb 29 · Thursday", "dates from valid grid match rectangular")
+
+    let malformedGrid = DuoyiMonthGridModel(
+        year: 0,
+        month: 0,
+        todayDay: 0,
+        firstWeekdayOffset: 0,
+        daysInMonth: 0,
+        cells: [],
+        weekdayHeaders: [],
+        monthTitle: "Malformed"
+    )
+    let recoveredFromAnchor = DuoyiWidgetDisplayCore.calendarAccessoryDates(
+        grid: malformedGrid,
+        anchorDate: leapDay,
+        timeZone: utc,
+        isZh: false
+    )
+    displayExpect(recoveredFromAnchor.inline == "Feb 29", "malformed grid recovers using anchorDate inline")
+    displayExpect(recoveredFromAnchor.short == "29", "malformed grid recovers using anchorDate short")
+    displayExpect(recoveredFromAnchor.rectangular == "Feb 29 · Thursday", "malformed grid recovers using anchorDate rectangular")
+
+    let fallbackEn = DuoyiWidgetDisplayCore.calendarAccessoryDates(
+        grid: malformedGrid,
+        anchorDate: nil,
+        timeZone: utc,
+        isZh: false
+    )
+    displayExpect(fallbackEn.inline == "Month view · today is marked", "malformed grid without anchor falls back in English inline")
+    displayExpect(fallbackEn.short == "None", "malformed grid without anchor falls back to None in English short")
+    displayExpect(fallbackEn.rectangular == "Month view · today is marked", "malformed grid without anchor falls back in English rectangular")
+
+    let fallbackZh = DuoyiWidgetDisplayCore.calendarAccessoryDates(
+        grid: nil,
+        anchorDate: Date(timeIntervalSince1970: .nan),
+        timeZone: utc,
+        isZh: true
+    )
+    displayExpect(fallbackZh.inline == "本月日期 · 今日已标记", "NaN anchor falls back in Chinese inline")
+    displayExpect(fallbackZh.short == "暂无", "NaN anchor falls back to 暂无 in Chinese short")
+    displayExpect(fallbackZh.rectangular == "本月日期 · 今日已标记", "NaN anchor falls back in Chinese rectangular")
+
+    let minSupported = Date(timeIntervalSince1970: -62_135_596_800)
+    let minDisplay = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: minSupported, timeZone: utc, isZh: false)
+    displayExpect(minDisplay.inline == "Jan 1" && minDisplay.short == "1" && minDisplay.rectangular == "Jan 1 · Monday", "minimum supported date is Jan 1 Monday")
+
+    let maxSupported = Date(timeIntervalSince1970: 253_402_300_799)
+    let maxDisplay = DuoyiWidgetDisplayCore.calendarAccessoryDates(anchorDate: maxSupported, timeZone: utc, isZh: false)
+    displayExpect(maxDisplay.inline == "Dec 31" && maxDisplay.short == "31" && maxDisplay.rectangular == "Dec 31 · Friday", "maximum supported date is Dec 31 Friday")
+}
+
+displayRunCase("theme color contrast verifies independent WCAG literal anchors for pure black, pure white, and identical colors") {
+    let blackWhite = DuoyiWidgetThemeColorCore.contrast(0xFF000000, 0xFFFFFFFF)
+    let whiteBlack = DuoyiWidgetThemeColorCore.contrast(0xFFFFFFFF, 0xFF000000)
+    displayExpect(abs(blackWhite - 21.0) < 0.0001, "black on white achieves literal WCAG maximum contrast 21:1")
+    displayExpect(blackWhite == 21.0, "black on white is exactly 21.0 in standard luminance math")
+    displayExpect(abs(whiteBlack - 21.0) < 0.0001, "white on black achieves literal WCAG maximum contrast 21:1")
+    displayExpect(whiteBlack == 21.0, "white on black is exactly 21.0 in standard luminance math")
+
+    let blackOnBlack = DuoyiWidgetThemeColorCore.contrast(0xFF000000, 0xFF000000)
+    let whiteOnWhite = DuoyiWidgetThemeColorCore.contrast(0xFFFFFFFF, 0xFFFFFFFF)
+    let brandOnBrand = DuoyiWidgetThemeColorCore.contrast(0xFF0066D6, 0xFF0066D6)
+    let textOnText = DuoyiWidgetThemeColorCore.contrast(0xFF1F2933, 0xFF1F2933)
+    displayExpect(abs(blackOnBlack - 1.0) < 0.0001, "black on black achieves literal WCAG identical contrast 1:1")
+    displayExpect(blackOnBlack == 1.0, "black on black is exactly 1.0")
+    displayExpect(abs(whiteOnWhite - 1.0) < 0.0001, "white on white achieves literal WCAG identical contrast 1:1")
+    displayExpect(whiteOnWhite == 1.0, "white on white is exactly 1.0")
+    displayExpect(abs(brandOnBrand - 1.0) < 0.0001, "brand on brand achieves literal WCAG identical contrast 1:1")
+    displayExpect(brandOnBrand == 1.0, "brand on brand is exactly 1.0")
+    displayExpect(abs(textOnText - 1.0) < 0.0001, "dark text on dark text achieves literal WCAG identical contrast 1:1")
+    displayExpect(textOnText == 1.0, "dark text on dark text is exactly 1.0")
+}
+
+displayRunCase("theme color contrast calculates alpha-composited foreground semantics over light and dark backgrounds") {
+    let transparentBlackOnWhite = DuoyiWidgetThemeColorCore.contrast(0x00000000, 0xFFFFFFFF)
+    let transparentWhiteOnBlack = DuoyiWidgetThemeColorCore.contrast(0x00FFFFFF, 0xFF000000)
+    let transparentColorOnWidget = DuoyiWidgetThemeColorCore.contrast(0x00123456, 0xFFF6F7F9)
+    displayExpect(abs(transparentBlackOnWhite - 1.0) < 0.0001, "transparent black on white blends to white with contrast 1.0")
+    displayExpect(abs(transparentWhiteOnBlack - 1.0) < 0.0001, "transparent white on black blends to black with contrast 1.0")
+    displayExpect(abs(transparentColorOnWidget - 1.0) < 0.0001, "transparent color on widget background blends to background with contrast 1.0")
+
+    let halfBlackOnWhite = DuoyiWidgetThemeColorCore.contrast(0x80000000, 0xFFFFFFFF)
+    displayExpect(abs(halfBlackOnWhite - 4.0041) < 0.001, "50% black on white yields standard blended contrast ~4.0041")
+    displayExpect(halfBlackOnWhite < 4.5, "50% black on white does not satisfy the 4.5 contrast threshold")
+
+    let halfWhiteOnBlack = DuoyiWidgetThemeColorCore.contrast(0x80FFFFFF, 0xFF000000)
+    displayExpect(abs(halfWhiteOnBlack - 5.3172) < 0.001, "50% white on black yields standard blended contrast ~5.3172")
+    displayExpect(halfWhiteOnBlack >= 4.5, "50% white on black satisfies the 4.5 contrast threshold")
+
+    let alphaPass = DuoyiWidgetThemeColorCore.contrast(0x89000000, 0xFFFFFFFF)
+    displayExpect(abs(alphaPass - 4.5422) < 0.001, "alpha-137 black on white yields ~4.5422 contrast")
+    displayExpect(alphaPass >= 4.5, "alpha-137 black on white satisfies 4.5 threshold")
+
+    let alphaFail = DuoyiWidgetThemeColorCore.contrast(0x88000000, 0xFFFFFFFF)
+    displayExpect(abs(alphaFail - 4.4781) < 0.001, "alpha-136 black on white yields ~4.4781 contrast")
+    displayExpect(alphaFail < 4.5, "alpha-136 black on white fails 4.5 threshold")
+
+    displayExpect(
+        DuoyiWidgetThemeColorCore.readable(0x89000000, backgrounds: [0xFFFFFFFF]) == 0x89000000,
+        "readable preserves alpha-137 black on white because blended contrast >= 4.5"
+    )
+    displayExpect(
+        DuoyiWidgetThemeColorCore.readable(0x88000000, backgrounds: [0xFFFFFFFF]) == 0xFF000000,
+        "readable falls back to opaque black for alpha-136 black on white because blended contrast < 4.5"
+    )
+    displayExpect(
+        DuoyiWidgetThemeColorCore.readable(0x80FFFFFF, backgrounds: [0xFF000000]) == 0x80FFFFFF,
+        "readable preserves 50% white on black because blended contrast >= 4.5"
+    )
+    displayExpect(
+        DuoyiWidgetThemeColorCore.readable(0x00000000, backgrounds: [0xFFFFFFFF]) == 0xFF000000,
+        "transparent foreground on white falls back to black"
+    )
+    displayExpect(
+        DuoyiWidgetThemeColorCore.readable(0x00FFFFFF, backgrounds: [0xFF000000]) == 0xFFFFFFFF,
+        "transparent foreground on black falls back to white"
+    )
+
+    let c25 = DuoyiWidgetThemeColorCore.contrast(0x40000000, 0xFFFFFFFF)
+    let c50 = DuoyiWidgetThemeColorCore.contrast(0x80000000, 0xFFFFFFFF)
+    let c100 = DuoyiWidgetThemeColorCore.contrast(0xFF000000, 0xFFFFFFFF)
+    displayExpect(c25 < c50 && c50 < c100, "black foreground contrast on white strictly increases with opacity")
+}
+
+displayRunCase("theme color readability validates preferred-gray boundary around 4.5 where 767676 passes on white and 777777 falls back to black") {
+    let contrast76 = DuoyiWidgetThemeColorCore.contrast(0xFF767676, 0xFFFFFFFF)
+    displayExpect(abs(contrast76 - 4.5422) < 0.001, "contrast of #767676 on white matches literal anchor ~4.5422")
+    displayExpect(contrast76 >= 4.5, "#767676 achieves at least 4.5:1 contrast on white")
+    let readable76 = DuoyiWidgetThemeColorCore.readable(0xFF767676, backgrounds: [0xFFFFFFFF])
+    displayExpect(readable76 == 0xFF767676, "#767676 passes on white and is preserved as preferred color")
+
+    let contrast77 = DuoyiWidgetThemeColorCore.contrast(0xFF777777, 0xFFFFFFFF)
+    displayExpect(abs(contrast77 - 4.4781) < 0.001, "contrast of #777777 on white matches literal anchor ~4.4781")
+    displayExpect(contrast77 < 4.5, "#777777 fails the 4.5:1 contrast threshold on white")
+    let readable77 = DuoyiWidgetThemeColorCore.readable(0xFF777777, backgrounds: [0xFFFFFFFF])
+    displayExpect(readable77 == 0xFF000000, "#777777 fails on white and falls back to opaque black")
+
+    let contrastBrandWhite = DuoyiWidgetThemeColorCore.contrast(0xFF0066D6, 0xFFFFFFFF)
+    displayExpect(abs(contrastBrandWhite - 5.4242) < 0.001, "brand color #0066D6 on white has literal contrast ~5.4242")
+    displayExpect(contrastBrandWhite >= 4.5, "brand color #0066D6 on white satisfies 4.5:1 threshold")
+    let readableBrandWhite = DuoyiWidgetThemeColorCore.readable(0xFF0066D6, backgrounds: [0xFFFFFFFF])
+    displayExpect(readableBrandWhite == 0xFF0066D6, "brand color #0066D6 on white is preserved as preferred color")
+
+    let contrastCoralWhite = DuoyiWidgetThemeColorCore.contrast(0xFFD85A5A, 0xFFFFFFFF)
+    displayExpect(contrastCoralWhite < 4.5, "sample coral on white is below 4.5:1 threshold")
+    let readableCoralWhite = DuoyiWidgetThemeColorCore.readable(0xFFD85A5A, backgrounds: [0xFFFFFFFF])
+    displayExpect(readableCoralWhite == 0xFF000000, "sample coral on white falls back to black")
+}
+
+displayRunCase("theme color readability falls back to white on dark surfaces for unreadable text") {
+    let blackOnBlack = DuoyiWidgetThemeColorCore.readable(0xFF000000, backgrounds: [0xFF000000])
+    displayExpect(blackOnBlack == 0xFFFFFFFF, "black text on black surface falls back to white")
+
+    let darkTextOnBlackContrast = DuoyiWidgetThemeColorCore.contrast(0xFF1F2933, 0xFF000000)
+    displayExpect(darkTextOnBlackContrast < 4.5, "dark text #1F2933 has insufficient contrast on black")
+    let darkTextOnBlack = DuoyiWidgetThemeColorCore.readable(0xFF1F2933, backgrounds: [0xFF000000])
+    displayExpect(darkTextOnBlack == 0xFFFFFFFF, "dark text #1F2933 on black surface falls back to white")
+
+    let darkTextOnSlateContrast = DuoyiWidgetThemeColorCore.contrast(0xFF1F2933, 0xFF121212)
+    displayExpect(darkTextOnSlateContrast < 4.5, "dark text #1F2933 on dark slate #121212 fails 4.5 threshold")
+    let darkTextOnSlate = DuoyiWidgetThemeColorCore.readable(0xFF1F2933, backgrounds: [0xFF121212])
+    displayExpect(darkTextOnSlate == 0xFFFFFFFF, "dark text #1F2933 on dark slate #121212 falls back to white")
+
+    let mutedTextOnDarkSlateContrast = DuoyiWidgetThemeColorCore.contrast(0xFF667085, 0xFF1F2933)
+    displayExpect(abs(mutedTextOnDarkSlateContrast - 2.9660) < 0.001, "muted text on dark slate #1F2933 has ~2.9660 contrast")
+    displayExpect(mutedTextOnDarkSlateContrast < 4.5, "muted text fails 4.5 threshold on dark slate #1F2933")
+    let mutedTextOnDarkSlate = DuoyiWidgetThemeColorCore.readable(0xFF667085, backgrounds: [0xFF1F2933])
+    displayExpect(mutedTextOnDarkSlate == 0xFFFFFFFF, "muted text on dark slate #1F2933 falls back to white")
+
+    let whiteOnDarkSlateContrast = DuoyiWidgetThemeColorCore.contrast(0xFFFFFFFF, 0xFF1F2933)
+    displayExpect(abs(whiteOnDarkSlateContrast - 14.7551) < 0.001, "white on dark slate #1F2933 has literal anchor contrast ~14.7551")
+    displayExpect(whiteOnDarkSlateContrast >= 4.5, "white on dark slate #1F2933 satisfies 4.5 threshold")
+    let whiteOnDarkSlate = DuoyiWidgetThemeColorCore.readable(0xFFFFFFFF, backgrounds: [0xFF1F2933])
+    displayExpect(whiteOnDarkSlate == 0xFFFFFFFF, "white text on dark slate #1F2933 is preserved as preferred color")
+}
+
+displayRunCase("theme color readability selects minimum contrast across all candidate backgrounds") {
+    let lightSurfaces: [UInt32] = [0xFFFFFFFF, 0xFFF6F7F9, 0xFFF1F3F6]
+
+    let minContrast76 = lightSurfaces.map { DuoyiWidgetThemeColorCore.contrast(0xFF767676, $0) }.min() ?? 0
+    displayExpect(abs(minContrast76 - 4.0861) < 0.001, "minimum contrast of #767676 across light surfaces is ~4.0861")
+    displayExpect(minContrast76 < 4.5, "#767676 fails minimum contrast requirement across candidate light surfaces")
+    let readable76Multi = DuoyiWidgetThemeColorCore.readable(0xFF767676, backgrounds: lightSurfaces)
+    displayExpect(readable76Multi == 0xFF000000, "all-background minimum selection causes #767676 to fall back to black")
+
+    let singleWhiteReadable76 = DuoyiWidgetThemeColorCore.readable(0xFF767676, backgrounds: [0xFFFFFFFF])
+    displayExpect(singleWhiteReadable76 == 0xFF767676, "on white alone #767676 is preserved")
+
+    let minContrastDarkText = lightSurfaces.map { DuoyiWidgetThemeColorCore.contrast(0xFF1F2933, $0) }.min() ?? 0
+    displayExpect(minContrastDarkText >= 4.5, "dark text #1F2933 satisfies 4.5 threshold across all light surfaces")
+    let readableDarkTextMulti = DuoyiWidgetThemeColorCore.readable(0xFF1F2933, backgrounds: lightSurfaces)
+    displayExpect(readableDarkTextMulti == 0xFF1F2933, "dark text #1F2933 is preserved across candidate light surfaces")
+
+    let darkSurfaces: [UInt32] = [0xFF000000, 0xFF121212, 0xFF1F2933]
+    let minContrastWhite = darkSurfaces.map { DuoyiWidgetThemeColorCore.contrast(0xFFFFFFFF, $0) }.min() ?? 0
+    displayExpect(minContrastWhite >= 4.5, "white text satisfies 4.5 threshold across all dark surfaces")
+    let readableWhiteDarkMulti = DuoyiWidgetThemeColorCore.readable(0xFFFFFFFF, backgrounds: darkSurfaces)
+    displayExpect(readableWhiteDarkMulti == 0xFFFFFFFF, "white text is preserved across candidate dark surfaces")
+
+    let readableBlackDarkMulti = DuoyiWidgetThemeColorCore.readable(0xFF000000, backgrounds: darkSurfaces)
+    displayExpect(readableBlackDarkMulti == 0xFFFFFFFF, "black text on dark surfaces falls back to white via minimum contrast selection")
+}
+
+displayRunCase("theme color readability preserves preferred color when background array is empty") {
+    let testColors: [UInt32] = [
+        0xFF000000,
+        0xFFFFFFFF,
+        0xFF767676,
+        0xFF777777,
+        0xFF0066D6,
+        0x00000000,
+        0x80123456,
+    ]
+    for color in testColors {
+        let preserved = DuoyiWidgetThemeColorCore.readable(color, backgrounds: [])
+        displayExpect(preserved == color, "empty background preserves preferred color 0x\(String(color, radix: 16, uppercase: true))")
+    }
+}
+
+displayRunCase("theme color readability deterministically breaks ties with black on impossible mixed backgrounds") {
+    let mixed: [UInt32] = [0xFF000000, 0xFFFFFFFF]
+    let reversedMixed: [UInt32] = [0xFFFFFFFF, 0xFF000000]
+
+    let blackMinContrast = mixed.map { DuoyiWidgetThemeColorCore.contrast(0xFF000000, $0) }.min() ?? 0
+    let whiteMinContrast = mixed.map { DuoyiWidgetThemeColorCore.contrast(0xFFFFFFFF, $0) }.min() ?? 0
+    displayExpect(blackMinContrast == 1.0, "black minimum contrast on mixed black/white is literal 1.0")
+    displayExpect(whiteMinContrast == 1.0, "white minimum contrast on mixed black/white is literal 1.0")
+    displayExpect(blackMinContrast < 4.5, "black cannot achieve 4.5 across both black and white")
+    displayExpect(whiteMinContrast < 4.5, "white cannot achieve 4.5 across both black and white")
+
+    let brandMinContrast = mixed.map { DuoyiWidgetThemeColorCore.contrast(0xFF0066D6, $0) }.min() ?? 0
+    displayExpect(brandMinContrast < 4.5, "brand color cannot achieve 4.5 across both black and white")
+
+    let unreadableColors: [UInt32] = [
+        0xFF777777,
+        0xFF0066D6,
+        0xFFFFFFFF,
+        0xFF000000,
+    ]
+    for color in unreadableColors {
+        let resolved = DuoyiWidgetThemeColorCore.readable(color, backgrounds: mixed)
+        displayExpect(
+            resolved == 0xFF000000,
+            "mixed black/white tie deterministically resolves to black for 0x\(String(color, radix: 16, uppercase: true))"
+        )
+        let resolvedReversed = DuoyiWidgetThemeColorCore.readable(color, backgrounds: reversedMixed)
+        displayExpect(
+            resolvedReversed == 0xFF000000,
+            "reversed mixed black/white tie deterministically resolves to black for 0x\(String(color, radix: 16, uppercase: true))"
+        )
     }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/models/goal.dart';
 import 'package:duoyi/models/habit.dart';
 import 'package:duoyi/providers/habit_provider.dart';
@@ -12,7 +13,11 @@ import 'package:duoyi/screens/habit_screen.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  final originalLocale = I18n.current;
+  tearDown(() => I18n.setLocale(originalLocale));
+
   setUp(() {
+    I18n.setLocale(AppLocale.zh);
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
@@ -422,6 +427,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('habit_swipe_end_button')));
     await tester.pumpAndSettle();
 
+    expect(find.text('结束习惯？'), findsOneWidget);
+    expect(habitProvider.habits.single.isActiveToday(), isTrue);
+    await tester.tap(find.widgetWithText(FilledButton, '结束习惯'));
+    await tester.pumpAndSettle();
+
     expect(habitProvider.habits.single.isActiveToday(), isFalse);
     expect(find.text('阅读'), findsNothing);
   });
@@ -443,6 +453,11 @@ void main() {
     await tester.drag(find.text('阅读').first, const Offset(-180, 0));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('habit_swipe_end_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('结束习惯？'), findsOneWidget);
+    expect(habitProvider.habits.single.isActiveToday(), isTrue);
+    await tester.tap(find.widgetWithText(FilledButton, '结束习惯'));
     await tester.pumpAndSettle();
 
     expect(habitProvider.habits.single.isActiveToday(), isFalse);
@@ -594,6 +609,11 @@ void main() {
     await tester.drag(find.text('阅读').first, const Offset(-180, 0));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('habit_swipe_end_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('结束习惯？'), findsOneWidget);
+    expect(habitProvider.habits.single.isActiveToday(), isTrue);
+    await tester.tap(find.widgetWithText(FilledButton, '结束习惯'));
     await tester.pumpAndSettle();
 
     expect(habitProvider.habits.single.isActiveToday(), isFalse);

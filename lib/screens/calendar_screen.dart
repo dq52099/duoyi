@@ -1,13 +1,24 @@
+import 'dart:collection';
+
+import '../widgets/app_date_format.dart';
 import 'package:flutter/material.dart';
+import '../core/almanac_locale_format.dart';
+import '../core/almanac_ui_copy.dart';
+import '../core/brand_strings.dart';
 import '../core/completion_visibility_policy.dart';
+import '../core/calendar_date_navigation.dart';
 import '../core/calendar_ui_copy.dart';
 import '../core/design_tokens.dart';
+import '../core/desktop_tokens.dart';
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
+import '../core/lunar_calendar.dart';
 import '../core/main_ui_copy.dart';
 import '../services/account_local_data_cleaner.dart';
+import '../services/holiday_calendar.dart';
 import 'package:provider/provider.dart';
 import '../providers/calendar_provider.dart';
+import '../providers/preferences_provider.dart';
 import '../providers/todo_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/pomodoro_provider.dart';
@@ -39,6 +50,8 @@ import '../widgets/app_time_picker.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/surface_components.dart';
 import 'ai_schedule_screen.dart';
+import 'almanac_screen.dart';
+import 'goal_edit_screen.dart';
 import 'todo_screen.dart';
 
 class CalendarScreen extends StatefulWidget
@@ -239,6 +252,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         item.kind.index,
         item.targetCount,
         item.unit,
+        item.generatedUnitKey,
         item.updatedAt.millisecondsSinceEpoch,
       ),
   ]);
@@ -357,91 +371,136 @@ class _CalendarScreenState extends State<CalendarScreen>
   }
 
   void _previousMonth() {
+    final nextMonth = CalendarDateNavigation.tryShiftMonths(_focusedMonth, -1);
+    final nextDay = CalendarDateNavigation.tryShiftMonths(_selectedDay, -1);
+    if (nextMonth == null || nextDay == null) return;
     setState(() {
-      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
-      _selectedDay = _clampSelectedDayToFocusedMonth();
+      _focusedMonth = DateTime(nextMonth.year, nextMonth.month);
+      _selectedDay = nextDay;
     });
   }
 
   void _nextMonth() {
+    final nextMonth = CalendarDateNavigation.tryShiftMonths(_focusedMonth, 1);
+    final nextDay = CalendarDateNavigation.tryShiftMonths(_selectedDay, 1);
+    if (nextMonth == null || nextDay == null) return;
     setState(() {
-      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
-      _selectedDay = _clampSelectedDayToFocusedMonth();
+      _focusedMonth = DateTime(nextMonth.year, nextMonth.month);
+      _selectedDay = nextDay;
     });
   }
 
   void _previousWeek() {
+    final shifted = CalendarDateNavigation.tryShiftDays(_selectedDay, -7);
+    if (shifted == null) return;
     setState(() {
-      _selectedDay = _selectedDay.subtract(const Duration(days: 7));
-      _focusedMonth = DateTime(_selectedDay.year, _selectedDay.month);
+      _selectedDay = shifted;
+      _focusedMonth = DateTime(shifted.year, shifted.month);
     });
   }
 
   void _nextWeek() {
+    final shifted = CalendarDateNavigation.tryShiftDays(_selectedDay, 7);
+    if (shifted == null) return;
     setState(() {
-      _selectedDay = _selectedDay.add(const Duration(days: 7));
-      _focusedMonth = DateTime(_selectedDay.year, _selectedDay.month);
+      _selectedDay = shifted;
+      _focusedMonth = DateTime(shifted.year, shifted.month);
     });
   }
 
   void _previousDay() {
+    final shifted = CalendarDateNavigation.tryShiftDays(_selectedDay, -1);
+    if (shifted == null) return;
     setState(() {
-      _selectedDay = _selectedDay.subtract(const Duration(days: 1));
-      _focusedMonth = DateTime(_selectedDay.year, _selectedDay.month);
+      _selectedDay = shifted;
+      _focusedMonth = DateTime(shifted.year, shifted.month);
     });
   }
 
   void _nextDay() {
+    final shifted = CalendarDateNavigation.tryShiftDays(_selectedDay, 1);
+    if (shifted == null) return;
     setState(() {
-      _selectedDay = _selectedDay.add(const Duration(days: 1));
-      _focusedMonth = DateTime(_selectedDay.year, _selectedDay.month);
+      _selectedDay = shifted;
+      _focusedMonth = DateTime(shifted.year, shifted.month);
     });
   }
 
   void _previousThreeDays() {
+    final shifted = CalendarDateNavigation.tryShiftDays(_selectedDay, -3);
+    if (shifted == null) return;
     setState(() {
-      _selectedDay = _selectedDay.subtract(const Duration(days: 3));
-      _focusedMonth = DateTime(_selectedDay.year, _selectedDay.month);
+      _selectedDay = shifted;
+      _focusedMonth = DateTime(shifted.year, shifted.month);
     });
   }
 
   void _nextThreeDays() {
+    final shifted = CalendarDateNavigation.tryShiftDays(_selectedDay, 3);
+    if (shifted == null) return;
     setState(() {
-      _selectedDay = _selectedDay.add(const Duration(days: 3));
-      _focusedMonth = DateTime(_selectedDay.year, _selectedDay.month);
+      _selectedDay = shifted;
+      _focusedMonth = DateTime(shifted.year, shifted.month);
     });
   }
 
   void _previousYear() {
+    final nextMonth = CalendarDateNavigation.tryShiftYears(_focusedMonth, -1);
+    final nextDay = CalendarDateNavigation.tryShiftYears(_selectedDay, -1);
+    if (nextMonth == null || nextDay == null) return;
     setState(() {
-      _focusedMonth = DateTime(_focusedMonth.year - 1, _focusedMonth.month);
-      final targetYear = _selectedDay.year - 1;
-      final lastDay = DateTime(targetYear, _selectedDay.month + 1, 0).day;
-      final day = _selectedDay.day.clamp(1, lastDay);
-      _selectedDay = DateTime(targetYear, _selectedDay.month, day);
+      _focusedMonth = DateTime(nextMonth.year, nextMonth.month);
+      _selectedDay = nextDay;
     });
   }
 
   void _nextYear() {
+    final nextMonth = CalendarDateNavigation.tryShiftYears(_focusedMonth, 1);
+    final nextDay = CalendarDateNavigation.tryShiftYears(_selectedDay, 1);
+    if (nextMonth == null || nextDay == null) return;
     setState(() {
-      _focusedMonth = DateTime(_focusedMonth.year + 1, _focusedMonth.month);
-      final targetYear = _selectedDay.year + 1;
-      final lastDay = DateTime(targetYear, _selectedDay.month + 1, 0).day;
-      final day = _selectedDay.day.clamp(1, lastDay);
-      _selectedDay = DateTime(targetYear, _selectedDay.month, day);
+      _focusedMonth = DateTime(nextMonth.year, nextMonth.month);
+      _selectedDay = nextDay;
     });
   }
 
-  int _monthGridRows(DateTime focusedMonth) {
-    final firstDay = DateTime(focusedMonth.year, focusedMonth.month, 1);
-    final lastDay = DateTime(focusedMonth.year, focusedMonth.month + 1, 0);
-    final startOffset = (firstDay.weekday - 1) % 7;
+  int _monthGridRows(DateTime focusedMonth, int firstDayOfWeek) {
+    final firstDay = DateTime.utc(focusedMonth.year, focusedMonth.month, 1);
+    final lastDay = DateTime.utc(focusedMonth.year, focusedMonth.month + 1, 0);
+    final startOffset = (firstDay.weekday - firstDayOfWeek) % 7;
     return ((startOffset + lastDay.day) / 7).ceil();
   }
 
-  double _monthGridHeightFor(double availableHeight, int rows) {
+  double _monthGridHeightFor(
+    BuildContext context,
+    double availableHeight,
+    int rows,
+  ) {
     final minGridHeight = rows >= 6 ? 288.0 : (rows == 5 ? 260.0 : 236.0);
     final preferredGridHeight = rows >= 6 ? 318.0 : (rows == 5 ? 292.0 : 268.0);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final scale = textScaler.scale(14) / 14;
+    if (scale > 1.05) {
+      final weekdayHeight = (textScaler.scale(12) * 1.3).clamp(20.0, 48.0);
+      final dayNumHeight = (textScaler.scale(13.0) * 1.25).ceilToDouble();
+      final subTextHeight = 1.0 + (textScaler.scale(10.0) * 1.3).ceilToDouble();
+      final dotsOrBadgeHeight =
+          1.0 + 4.0 + 1.0 + (textScaler.scale(10.0) * 1.3).ceilToDouble();
+      final minCellHeight =
+          dayNumHeight + subTextHeight + dotsOrBadgeHeight + 6.0;
+      final minRowSlotHeight = minCellHeight + 4.0;
+      final minHeightForScale =
+          12.0 + weekdayHeight + 4.0 + (rows * minRowSlotHeight);
+      final resolvedMin = minGridHeight > minHeightForScale
+          ? minGridHeight
+          : minHeightForScale;
+      final resolvedPreferred = preferredGridHeight > resolvedMin
+          ? preferredGridHeight
+          : resolvedMin;
+      if (!availableHeight.isFinite) return resolvedPreferred;
+      final viewportTarget = availableHeight * 0.46;
+      return viewportTarget.clamp(resolvedMin, resolvedPreferred).toDouble();
+    }
     if (!availableHeight.isFinite) return preferredGridHeight;
     final viewportTarget = availableHeight * 0.46;
     return viewportTarget.clamp(minGridHeight, preferredGridHeight).toDouble();
@@ -616,23 +675,13 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
   }
 
-  DateTime _clampSelectedDayToFocusedMonth() {
-    final lastDay = DateTime(
-      _focusedMonth.year,
-      _focusedMonth.month + 1,
-      0,
-    ).day;
-    final day = _selectedDay.day.clamp(1, lastDay);
-    return DateTime(_focusedMonth.year, _focusedMonth.month, day);
-  }
-
   Future<void> _pickDate() async {
     final origin = _createOriginScope();
     final picked = await AppDatePicker.pickSolar(
       context,
       initialDate: _selectedDay,
-      firstDate: DateTime(1900),
-      lastDate: DateTime(2099, 12, 31),
+      firstDate: DateTime(1, 1, 1),
+      lastDate: DateTime(9999, 12, 31),
       titleKey: 'calendar.content.date_picker_title',
       subtitleKey: 'calendar.content.date_picker_subtitle',
     );
@@ -653,6 +702,30 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
     final pomodoroProvider = context.read<PomodoroProvider>();
     final calendarProvider = context.watch<CalendarProvider>();
+    final firstDayOfWeek = context.select<PreferencesProvider?, int>(
+      (p) => CalendarDateNavigation.normalizeFirstDayOfWeek(
+        p?.firstDayOfWeek ?? 1,
+      ),
+    );
+    final showLunarPref = context.select<PreferencesProvider?, bool>(
+      (p) => p?.showLunar ?? true,
+    );
+    final calendarMenuConfigKey = context.select<PreferencesProvider?, String>(
+      (p) {
+        final order =
+            p?.calendarMenuOrder ?? PreferencesProvider.defaultCalendarMenuOrder;
+        final hidden = (p?.calendarMenuHidden.toList() ?? <String>[])..sort();
+        return '${order.join(',')}|${hidden.join(',')}';
+      },
+    );
+    final calendarMenuParts = calendarMenuConfigKey.split('|');
+    final calendarMenuOrder = calendarMenuParts[0].isEmpty
+        ? PreferencesProvider.defaultCalendarMenuOrder
+        : calendarMenuParts[0].split(',');
+    final calendarMenuHidden = calendarMenuParts.length > 1 &&
+            calendarMenuParts[1].isNotEmpty
+        ? calendarMenuParts[1].split(',').toSet()
+        : const <String>{};
     final anniversaryProvider = context.watch<AnniversaryProvider>();
     final countdownProvider = context.watch<CountdownProvider>();
     final courseProvider = context.watch<CourseProvider>();
@@ -660,7 +733,9 @@ class _CalendarScreenState extends State<CalendarScreen>
     final goalProvider = context.watch<GoalProvider>();
     final shareProvider = context.watch<ShareProvider>();
     final timeAuditProvider = context.watch<TimeAuditProvider>();
-    final s = context.watch<ThemeProvider>().brand.strings;
+    final s = context.select<ThemeProvider, BrandStrings>(
+      (t) => t.brand.strings,
+    );
     final cs = Theme.of(context).colorScheme;
 
     _scheduleCalendarRebuild(
@@ -711,15 +786,19 @@ class _CalendarScreenState extends State<CalendarScreen>
       workspaceId: effectiveWorkspaceId,
     );
     final monthLabel = CalendarUiCopy.monthHeader(_focusedMonth);
-    final weekStart = _selectedDay.subtract(
-      Duration(days: _selectedDay.weekday - 1),
+    final weekSlots = CalendarDateNavigation.weekDays(
+      _selectedDay,
+      firstDayOfWeek: firstDayOfWeek,
     );
-    final weekEnd = weekStart.add(const Duration(days: 6));
-    final weekLabel =
-        '${I18nDateFormat.monthDay(weekStart)} - ${I18nDateFormat.monthDay(weekEnd)}';
-    final threeDayEnd = _selectedDay.add(const Duration(days: 2));
-    final threeDayLabel =
-        '${I18nDateFormat.monthDay(_selectedDay)} - ${I18nDateFormat.monthDay(threeDayEnd)}';
+    final nonNullWeekSlots = weekSlots.whereType<DateTime>().toList();
+    final weekLabel = nonNullWeekSlots.isEmpty
+        ? CalendarUiCopy.unavailable
+        : '${I18nDateFormat.monthDay(nonNullWeekSlots.first)} - ${I18nDateFormat.monthDay(nonNullWeekSlots.last)}';
+    final threeDaySlots = CalendarDateNavigation.daysFrom(_selectedDay, 3);
+    final nonNullThreeDaySlots = threeDaySlots.whereType<DateTime>().toList();
+    final threeDayLabel = nonNullThreeDaySlots.isEmpty
+        ? CalendarUiCopy.unavailable
+        : '${I18nDateFormat.monthDay(nonNullThreeDaySlots.first)} - ${I18nDateFormat.monthDay(nonNullThreeDaySlots.last)}';
     final yearLabel = CalendarUiCopy.yearHeader(_focusedMonth.year);
     final routeBackground = Theme.of(context).brightness == Brightness.dark
         ? Theme.of(context).colorScheme.surface
@@ -737,6 +816,20 @@ class _CalendarScreenState extends State<CalendarScreen>
             : routeBackground.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
         actions: [
+          IconButton(
+            key: const ValueKey('calendar_open_almanac_button'),
+            tooltip: AlmanacUiCopy.openAlmanacLabel,
+            icon: const Icon(Icons.auto_stories_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => BrandRouteSurface(
+                    child: AlmanacScreen(initialDate: _selectedDay),
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             tooltip: MainUiCopy.calendarBackToToday,
             icon: const Icon(Icons.today_outlined),
@@ -770,60 +863,35 @@ class _CalendarScreenState extends State<CalendarScreen>
                 _tabController.animateTo(3);
               } else if (value == 'year') {
                 _tabController.animateTo(4);
+              } else if (value == 'configure') {
+                _showCalendarMenuConfigSheet();
               }
             },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'today',
-                height: 38,
-                child: _LocaleAwareSecondaryMenuText(
-                  () => MainUiCopy.calendarBackToToday,
-                ),
-              ),
-              PopupMenuItem(
-                value: 'pick',
-                height: 38,
-                child: _LocaleAwareSecondaryMenuText(
-                  () => MainUiCopy.calendarPickDate,
-                ),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem(
-                value: 'month',
-                height: 38,
-                child: _LocaleAwareSecondaryMenuText(
-                  () => MainUiCopy.calendarViewMonth,
-                ),
-              ),
-              PopupMenuItem(
-                value: 'week',
-                height: 38,
-                child: _LocaleAwareSecondaryMenuText(
-                  () => MainUiCopy.calendarViewWeek,
-                ),
-              ),
-              PopupMenuItem(
-                value: 'day',
-                height: 38,
-                child: _LocaleAwareSecondaryMenuText(
-                  () => MainUiCopy.calendarViewDay,
-                ),
-              ),
-              PopupMenuItem(
-                value: 'three_day',
-                height: 38,
-                child: _LocaleAwareSecondaryMenuText(
-                  () => MainUiCopy.calendarViewThreeDay,
-                ),
-              ),
-              PopupMenuItem(
-                value: 'year',
-                height: 38,
-                child: _LocaleAwareSecondaryMenuText(
-                  () => MainUiCopy.calendarViewYear,
-                ),
-              ),
-            ],
+            itemBuilder: (context) {
+              final visibleItems = calendarMenuOrder
+                  .where((item) => !calendarMenuHidden.contains(item))
+                  .toList(growable: false);
+              final entries = <PopupMenuEntry<String>>[];
+              for (var i = 0; i < visibleItems.length; i++) {
+                final item = visibleItems[i];
+                if (i > 0 &&
+                    (item == 'month' ||
+                        item == 'week' ||
+                        item == 'day' ||
+                        item == 'three_day' ||
+                        item == 'year') &&
+                    (visibleItems[i - 1] == 'today' ||
+                        visibleItems[i - 1] == 'pick')) {
+                  entries.add(const PopupMenuDivider());
+                }
+                entries.add(_buildCalendarMenuEntry(item));
+              }
+              if (entries.isNotEmpty) {
+                entries.add(const PopupMenuDivider());
+              }
+              entries.add(_buildCalendarMenuEntry('configure'));
+              return entries;
+            },
           ),
         ],
       ),
@@ -833,23 +901,70 @@ class _CalendarScreenState extends State<CalendarScreen>
             tabIndex: _tabController.index,
             monthLabel: monthLabel,
             weekLabel: weekLabel,
-            dayLabel: I18nDateFormat.date(_selectedDay),
+            dayLabel: AppDateFormat.date(context, _selectedDay),
             threeDayLabel: threeDayLabel,
             yearLabel: yearLabel,
-            onPreviousMonth: _previousMonth,
-            onNextMonth: _nextMonth,
-            onPreviousWeek: _previousWeek,
-            onNextWeek: _nextWeek,
-            onPreviousDay: _previousDay,
-            onNextDay: _nextDay,
-            onPreviousThreeDays: _previousThreeDays,
-            onNextThreeDays: _nextThreeDays,
-            onPreviousYear: _previousYear,
-            onNextYear: _nextYear,
+            onPreviousMonth:
+                CalendarDateNavigation.tryShiftMonths(_focusedMonth, -1) !=
+                        null &&
+                    CalendarDateNavigation.tryShiftMonths(_selectedDay, -1) !=
+                        null
+                ? _previousMonth
+                : null,
+            onNextMonth:
+                CalendarDateNavigation.tryShiftMonths(_focusedMonth, 1) !=
+                        null &&
+                    CalendarDateNavigation.tryShiftMonths(_selectedDay, 1) !=
+                        null
+                ? _nextMonth
+                : null,
+            onPreviousWeek:
+                CalendarDateNavigation.tryShiftDays(_selectedDay, -7) != null
+                ? _previousWeek
+                : null,
+            onNextWeek:
+                CalendarDateNavigation.tryShiftDays(_selectedDay, 7) != null
+                ? _nextWeek
+                : null,
+            onPreviousDay:
+                CalendarDateNavigation.tryShiftDays(_selectedDay, -1) != null
+                ? _previousDay
+                : null,
+            onNextDay:
+                CalendarDateNavigation.tryShiftDays(_selectedDay, 1) != null
+                ? _nextDay
+                : null,
+            onPreviousThreeDays:
+                CalendarDateNavigation.tryShiftDays(_selectedDay, -3) != null
+                ? _previousThreeDays
+                : null,
+            onNextThreeDays:
+                CalendarDateNavigation.tryShiftDays(_selectedDay, 3) != null
+                ? _nextThreeDays
+                : null,
+            onPreviousYear:
+                CalendarDateNavigation.tryShiftYears(_focusedMonth, -1) !=
+                        null &&
+                    CalendarDateNavigation.tryShiftYears(_selectedDay, -1) !=
+                        null
+                ? _previousYear
+                : null,
+            onNextYear:
+                CalendarDateNavigation.tryShiftYears(_focusedMonth, 1) !=
+                        null &&
+                    CalendarDateNavigation.tryShiftYears(_selectedDay, 1) !=
+                        null
+                ? _nextYear
+                : null,
             onPickDate: _pickDate,
           ),
           Material(
-            color: cs.surface,
+            type: appSurfaceStyleOf(context) == AppSurfaceStyle.liquidGlass
+                ? MaterialType.transparency
+                : MaterialType.canvas,
+            color: appSurfaceStyleOf(context) == AppSurfaceStyle.liquidGlass
+                ? null
+                : cs.surface,
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
@@ -872,7 +987,10 @@ class _CalendarScreenState extends State<CalendarScreen>
                   cs.primary.withValues(alpha: 0.10),
                   cs.surface,
                 ),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(
+                  appSurfaceStyleOf(context)?.smallTileRadius ??
+                      DesignTokens.radiusControl,
+                ),
                 border: Border.all(
                   color: cs.primary.withValues(alpha: 0.20),
                   width: 0.45,
@@ -896,14 +1014,79 @@ class _CalendarScreenState extends State<CalendarScreen>
                 // Month
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final monthRows = _monthGridRows(_focusedMonth);
-                    final monthGridHeight = _monthGridHeightFor(
+                    final isWideMonth = constraints.maxWidth >= 900;
+                    final monthRows = _monthGridRows(
+                      _focusedMonth,
+                      firstDayOfWeek,
+                    );
+                    final baseMonthGridHeight = _monthGridHeightFor(
+                      context,
                       constraints.maxHeight,
                       monthRows,
                     );
-                    final showLunar = _monthGridShowsLunar(
-                      monthGridHeight,
-                      monthRows,
+                    final wideTargetHeight = constraints.maxHeight.isFinite
+                        ? (constraints.maxHeight * 0.78)
+                              .clamp(320.0, 480.0)
+                              .toDouble()
+                        : 420.0;
+                    final monthGridHeight =
+                        isWideMonth && wideTargetHeight > baseMonthGridHeight
+                        ? wideTargetHeight
+                        : baseMonthGridHeight;
+                    final showLunar =
+                        showLunarPref &&
+                        _monthGridShowsLunar(
+                          monthGridHeight,
+                          monthRows,
+                        );
+                    final monthGridCard = AppSurfaceCard(
+                      key: const ValueKey('calendar_month_grid_skin_card'),
+                      margin: EdgeInsets.zero,
+                      padding: EdgeInsets.zero,
+                      child: SizedBox(
+                        key: const ValueKey('calendar_fixed_month_grid'),
+                        height: monthGridHeight,
+                        child: CalendarMonthGrid(
+                          firstDayOfWeek: firstDayOfWeek,
+                          focusedMonth: _focusedMonth,
+                          selectedDay: _selectedDay,
+                          dateEventTypes: dateTypes,
+                          dateEventCounts: dateCounts,
+                          showLunar: showLunar,
+                          onDaySelected: (d) => setState(() {
+                            _selectedDay = d;
+                            _focusedMonth = DateTime(d.year, d.month);
+                          }),
+                        ),
+                      ),
+                    );
+                    final metaStrip = _CalendarMetaStrip(
+                      selectedDay: _selectedDay,
+                      onOpenAlmanac: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => BrandRouteSurface(
+                              child: AlmanacScreen(initialDate: _selectedDay),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                    final detailAgendaCard = AppSurfaceCard(
+                      key: const ValueKey('calendar_month_detail_agenda'),
+                      margin: EdgeInsets.zero,
+                      padding: EdgeInsets.zero,
+                      child: CalendarDayAgenda(
+                        date: _selectedDay,
+                        calendarProvider: calendarProvider,
+                        activeTypes: _activeTypes,
+                        projectKey: effectiveProjectKey,
+                        workspaceId: effectiveWorkspaceId,
+                        hasActiveFilters: hasActiveCalendarFilters,
+                        horizontalPadding: 8,
+                        scrollable: false,
+                        previewLimit: 8,
+                      ),
                     );
                     return Scrollbar(
                       key: const ValueKey('calendar_month_global_scrollbar'),
@@ -912,59 +1095,55 @@ class _CalendarScreenState extends State<CalendarScreen>
                           'calendar_month_global_scroll_view',
                         ),
                         primary: false,
-                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
-                        children: [
-                          AppSurfaceCard(
-                            key: const ValueKey(
-                              'calendar_month_grid_skin_card',
-                            ),
-                            padding: EdgeInsets.zero,
-                            borderRadius: BorderRadius.circular(12),
-                            child: SizedBox(
-                              key: const ValueKey('calendar_fixed_month_grid'),
-                              height: monthGridHeight,
-                              child: CalendarMonthGrid(
-                                focusedMonth: _focusedMonth,
-                                selectedDay: _selectedDay,
-                                dateEventTypes: dateTypes,
-                                dateEventCounts: dateCounts,
-                                showLunar: showLunar,
-                                onDaySelected: (d) => setState(() {
-                                  _selectedDay = d;
-                                  _focusedMonth = DateTime(d.year, d.month);
-                                }),
-                              ),
-                            ),
-                          ),
-                          Divider(
-                            height: 8,
-                            thickness: 0.5,
-                            color: Theme.of(context).colorScheme.outlineVariant
-                                .withValues(alpha: 0.18),
-                          ),
-                          AppSurfaceCard(
-                            key: const ValueKey('calendar_month_detail_agenda'),
-                            padding: EdgeInsets.zero,
-                            borderRadius: BorderRadius.circular(12),
-                            child: CalendarDayAgenda(
-                              date: _selectedDay,
-                              calendarProvider: calendarProvider,
-                              activeTypes: _activeTypes,
-                              projectKey: effectiveProjectKey,
-                              workspaceId: effectiveWorkspaceId,
-                              hasActiveFilters: hasActiveCalendarFilters,
-                              horizontalPadding: 8,
-                              scrollable: false,
-                              previewLimit: 8,
-                            ),
-                          ),
-                        ],
+                        padding: EdgeInsets.fromLTRB(
+                          isWideMonth ? 16 : 8,
+                          8,
+                          isWideMonth ? 16 : 8,
+                          16,
+                        ),
+                        children: isWideMonth
+                            ? [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      flex: 6,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          monthGridCard,
+                                          const SizedBox(height: 8),
+                                          metaStrip,
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(flex: 5, child: detailAgendaCard),
+                                  ],
+                                ),
+                              ]
+                            : [
+                                monthGridCard,
+                                const SizedBox(height: 6),
+                                metaStrip,
+                                Divider(
+                                  height: 8,
+                                  thickness: 0.5,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .outlineVariant
+                                      .withValues(alpha: 0.18),
+                                ),
+                                detailAgendaCard,
+                              ],
                       ),
                     );
                   },
                 ),
                 // Week
                 CalendarWeekStrip(
+                  firstDayOfWeek: firstDayOfWeek,
                   selectedDay: _selectedDay,
                   dateEventTypes: dateTypes,
                   calendarProvider: calendarProvider,
@@ -978,13 +1157,17 @@ class _CalendarScreenState extends State<CalendarScreen>
                   hasActiveFilters: hasActiveCalendarFilters,
                 ),
                 // Day
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
-                  child: AppSurfaceCard(
-                    key: const ValueKey('calendar_day_agenda_skin_card'),
-                    padding: EdgeInsets.zero,
-                    borderRadius: BorderRadius.circular(12),
-                    child: CalendarDayAgenda(
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: DesktopTokens.reportMaxContentWidth,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                      child: AppSurfaceCard(
+                        key: const ValueKey('calendar_day_agenda_skin_card'),
+                        padding: EdgeInsets.zero,
+                        child: CalendarDayAgenda(
                       date: _selectedDay,
                       calendarProvider: calendarProvider,
                       activeTypes: _activeTypes,
@@ -992,6 +1175,8 @@ class _CalendarScreenState extends State<CalendarScreen>
                       workspaceId: effectiveWorkspaceId,
                       hasActiveFilters: hasActiveCalendarFilters,
                       horizontalPadding: 8,
+                    ),
+                      ),
                     ),
                   ),
                 ),
@@ -1009,12 +1194,20 @@ class _CalendarScreenState extends State<CalendarScreen>
                 _CalendarYearOverview(
                   key: const ValueKey('calendar_year_overview'),
                   year: _focusedMonth.year,
+                  firstDayOfWeek: firstDayOfWeek,
                   selectedDay: _selectedDay,
                   dateEventTypes: dateTypes,
                   onMonthTap: (month) {
                     setState(() {
                       _focusedMonth = DateTime(_focusedMonth.year, month);
                       _selectedDay = DateTime(_focusedMonth.year, month, 1);
+                      _tabController.animateTo(0);
+                    });
+                  },
+                  onDayTap: (day) {
+                    setState(() {
+                      _focusedMonth = DateTime(day.year, day.month);
+                      _selectedDay = day;
                       _tabController.animateTo(0);
                     });
                   },
@@ -1025,6 +1218,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'calendar_quick_add_fab',
         tooltip: CalendarUiCopy.quickAddTooltip,
         onPressed: () => _showQuickAddMenu(context),
         child: const Icon(Icons.add),
@@ -1220,8 +1414,86 @@ class _CalendarScreenState extends State<CalendarScreen>
           if (!origin.isValid) return;
           _showQuickAddTimeEntry(origin: origin);
         },
+        onNewGoal: () {
+          if (!origin.isValid) return;
+          Navigator.push(
+            routeContext,
+            MaterialPageRoute(
+              builder: (_) => const BrandRouteSurface(child: GoalEditScreen()),
+            ),
+          );
+        },
       ),
     );
+  }
+
+  void _showCalendarMenuConfigSheet() {
+    final origin = _createOriginScope();
+    showAppModalSheet<void>(
+      context: context,
+      builder: (_) => _CalendarMenuConfigSheet(origin: origin),
+    );
+  }
+
+  PopupMenuEntry<String> _buildCalendarMenuEntry(String id) {
+    return switch (id) {
+      'today' => PopupMenuItem(
+        value: 'today',
+        height: 38,
+        child: _LocaleAwareSecondaryMenuText(
+          () => MainUiCopy.calendarBackToToday,
+        ),
+      ),
+      'pick' => PopupMenuItem(
+        value: 'pick',
+        height: 38,
+        child: _LocaleAwareSecondaryMenuText(
+          () => MainUiCopy.calendarPickDate,
+        ),
+      ),
+      'month' => PopupMenuItem(
+        value: 'month',
+        height: 38,
+        child: _LocaleAwareSecondaryMenuText(
+          () => MainUiCopy.calendarViewMonth,
+        ),
+      ),
+      'week' => PopupMenuItem(
+        value: 'week',
+        height: 38,
+        child: _LocaleAwareSecondaryMenuText(
+          () => MainUiCopy.calendarViewWeek,
+        ),
+      ),
+      'day' => PopupMenuItem(
+        value: 'day',
+        height: 38,
+        child: _LocaleAwareSecondaryMenuText(
+          () => MainUiCopy.calendarViewDay,
+        ),
+      ),
+      'three_day' => PopupMenuItem(
+        value: 'three_day',
+        height: 38,
+        child: _LocaleAwareSecondaryMenuText(
+          () => MainUiCopy.calendarViewThreeDay,
+        ),
+      ),
+      'year' => PopupMenuItem(
+        value: 'year',
+        height: 38,
+        child: _LocaleAwareSecondaryMenuText(
+          () => MainUiCopy.calendarViewYear,
+        ),
+      ),
+      _ => PopupMenuItem(
+        value: 'configure',
+        height: 38,
+        child: _LocaleAwareSecondaryMenuText(
+          () => CalendarUiCopy.isEn ? 'Configure menu' : '配置菜单',
+        ),
+      ),
+    };
   }
 
   Future<void> _showQuickAddTimeEntry({_CalendarOriginScope? origin}) async {
@@ -1777,6 +2049,7 @@ class _QuickAddMenuSheet extends StatefulWidget {
   final VoidCallback onNewEvent;
   final VoidCallback onNewTodo;
   final VoidCallback onQuickAddTimeEntry;
+  final VoidCallback onNewGoal;
 
   const _QuickAddMenuSheet({
     required this.origin,
@@ -1784,6 +2057,7 @@ class _QuickAddMenuSheet extends StatefulWidget {
     required this.onNewEvent,
     required this.onNewTodo,
     required this.onQuickAddTimeEntry,
+    required this.onNewGoal,
   });
 
   @override
@@ -1865,6 +2139,163 @@ class _QuickAddMenuSheetState extends State<_QuickAddMenuSheet> {
             leading: const Icon(Icons.timelapse_outlined),
             title: Text(CalendarUiCopy.quickAddTimeEntryTitle),
             onTap: () => _handleAction(widget.onQuickAddTimeEntry),
+          ),
+          ListTile(
+            leading: const Icon(Icons.flag_circle_outlined),
+            title: Text(CalendarUiCopy.isEn ? 'New goal' : '新建目标'),
+            onTap: () => _handleAction(widget.onNewGoal),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarMenuConfigSheet extends StatefulWidget {
+  final _CalendarOriginScope origin;
+
+  const _CalendarMenuConfigSheet({required this.origin});
+
+  @override
+  State<_CalendarMenuConfigSheet> createState() =>
+      _CalendarMenuConfigSheetState();
+}
+
+class _CalendarMenuConfigSheetState extends State<_CalendarMenuConfigSheet> {
+  @override
+  void initState() {
+    super.initState();
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  String _labelFor(String item) {
+    return switch (item) {
+      'today' => MainUiCopy.calendarBackToToday,
+      'pick' => MainUiCopy.calendarPickDate,
+      'month' => MainUiCopy.calendarViewMonth,
+      'week' => MainUiCopy.calendarViewWeek,
+      'day' => MainUiCopy.calendarViewDay,
+      'three_day' => MainUiCopy.calendarViewThreeDay,
+      'year' => MainUiCopy.calendarViewYear,
+      _ => item,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEn = CalendarUiCopy.isEn;
+    final prefs = context.watch<PreferencesProvider?>();
+    final order =
+        prefs?.calendarMenuOrder ??
+        PreferencesProvider.defaultCalendarMenuOrder;
+    final hidden = prefs?.calendarMenuHidden ?? const <String>{};
+    final visibleCount = order.where((item) => !hidden.contains(item)).length;
+    final cs = Theme.of(context).colorScheme;
+
+    return AppModalSheet(
+      title: isEn ? 'Configure menu' : '配置菜单',
+      subtitle: isEn
+          ? 'Show, hide, or reorder calendar menu items'
+          : '显示、隐藏或调整日历菜单项顺序',
+      maxWidth: 520,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < order.length; i++) ...[
+            Builder(
+              builder: (context) {
+                final item = order[i];
+                final isVisible = !hidden.contains(item);
+                final canHide = !(isVisible && visibleCount <= 1);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        key: ValueKey('calendar_menu_toggle_$item'),
+                        value: isVisible,
+                        onChanged: prefs == null || !canHide
+                            ? null
+                            : (value) {
+                                if (!widget.origin.isValid || value == null) {
+                                  return;
+                                }
+                                prefs.setCalendarMenuItemVisible(item, value);
+                              },
+                      ),
+                      Expanded(
+                        child: Text(
+                          _labelFor(item),
+                          softWrap: true,
+                          style: appSecondaryMenuItemTextStyle(context),
+                        ),
+                      ),
+                      IconButton(
+                        key: ValueKey('calendar_menu_up_$item'),
+                        tooltip: isEn ? 'Move up' : '上移',
+                        icon: const Icon(Icons.arrow_upward, size: 18),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: prefs == null || i == 0
+                            ? null
+                            : () {
+                                if (!widget.origin.isValid) return;
+                                prefs.moveCalendarMenuItem(item, -1);
+                              },
+                      ),
+                      IconButton(
+                        key: ValueKey('calendar_menu_down_$item'),
+                        tooltip: isEn ? 'Move down' : '下移',
+                        icon: const Icon(Icons.arrow_downward, size: 18),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: prefs == null || i == order.length - 1
+                            ? null
+                            : () {
+                                if (!widget.origin.isValid) return;
+                                prefs.moveCalendarMenuItem(item, 1);
+                              },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            if (i < order.length - 1)
+              Divider(
+                height: 1,
+                color: cs.outlineVariant.withValues(alpha: 0.14),
+              ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                key: const ValueKey('calendar_menu_reset_button'),
+                onPressed: prefs == null
+                    ? null
+                    : () {
+                        if (!widget.origin.isValid) return;
+                        prefs.resetCalendarMenuConfig();
+                      },
+                child: Text(isEn ? 'Reset' : '恢复默认'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                style: appSecondaryFilledButtonStyle(context),
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(isEn ? 'Done' : '完成'),
+              ),
+            ],
           ),
         ],
       ),
@@ -2115,10 +2546,13 @@ class _ProjectStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
     return AppSurfaceCard(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(
+        surfaceStyle?.smallTileRadius ?? DesignTokens.radiusControl,
+      ),
       child: Column(
         children: [
           Text(
@@ -2126,6 +2560,7 @@ class _ProjectStat extends StatelessWidget {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.normal,
+              fontFeatures: const [FontFeature.tabularFigures()],
               color: cs.primary,
             ),
           ),
@@ -2147,16 +2582,16 @@ class _CalendarNavigationHeader extends StatelessWidget {
   final String dayLabel;
   final String threeDayLabel;
   final String yearLabel;
-  final VoidCallback onPreviousMonth;
-  final VoidCallback onNextMonth;
-  final VoidCallback onPreviousWeek;
-  final VoidCallback onNextWeek;
-  final VoidCallback onPreviousDay;
-  final VoidCallback onNextDay;
-  final VoidCallback onPreviousThreeDays;
-  final VoidCallback onNextThreeDays;
-  final VoidCallback onPreviousYear;
-  final VoidCallback onNextYear;
+  final VoidCallback? onPreviousMonth;
+  final VoidCallback? onNextMonth;
+  final VoidCallback? onPreviousWeek;
+  final VoidCallback? onNextWeek;
+  final VoidCallback? onPreviousDay;
+  final VoidCallback? onNextDay;
+  final VoidCallback? onPreviousThreeDays;
+  final VoidCallback? onNextThreeDays;
+  final VoidCallback? onPreviousYear;
+  final VoidCallback? onNextYear;
   final VoidCallback onPickDate;
 
   const _CalendarNavigationHeader({
@@ -2166,16 +2601,16 @@ class _CalendarNavigationHeader extends StatelessWidget {
     required this.dayLabel,
     required this.threeDayLabel,
     required this.yearLabel,
-    required this.onPreviousMonth,
-    required this.onNextMonth,
-    required this.onPreviousWeek,
-    required this.onNextWeek,
-    required this.onPreviousDay,
-    required this.onNextDay,
-    required this.onPreviousThreeDays,
-    required this.onNextThreeDays,
-    required this.onPreviousYear,
-    required this.onNextYear,
+    this.onPreviousMonth,
+    this.onNextMonth,
+    this.onPreviousWeek,
+    this.onNextWeek,
+    this.onPreviousDay,
+    this.onNextDay,
+    this.onPreviousThreeDays,
+    this.onNextThreeDays,
+    this.onPreviousYear,
+    this.onNextYear,
     required this.onPickDate,
   });
 
@@ -2223,8 +2658,11 @@ class _CalendarNavigationHeader extends StatelessWidget {
       _ => MainUiCopy.calendarNextDay,
     };
 
+    final isLiquidGlass =
+        appSurfaceStyleOf(context) == AppSurfaceStyle.liquidGlass;
     return Material(
-      color: cs.surface,
+      type: isLiquidGlass ? MaterialType.transparency : MaterialType.canvas,
+      color: isLiquidGlass ? null : cs.surface,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 390;
@@ -2235,13 +2673,16 @@ class _CalendarNavigationHeader extends StatelessWidget {
               compact ? 5 : 8,
               6,
             ),
-            child: SizedBox(
-              height: compact ? 62 : 68,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: compact ? 62 : 68),
               child: DecoratedBox(
                 key: const ValueKey('calendar_navigation_header_bar'),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
-                  borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
+                  borderRadius: BorderRadius.circular(
+                    appSurfaceStyleOf(context)?.cardRadius ??
+                        DesignTokens.radiusCard,
+                  ),
                   border: Border.all(
                     color: cs.outlineVariant.withValues(alpha: 0.10),
                     width: 0.45,
@@ -2275,9 +2716,13 @@ class _CalendarNavigationHeader extends StatelessWidget {
                                 : const Size(double.infinity, 56),
                             padding: EdgeInsets.symmetric(
                               horizontal: compact ? 8 : 14,
+                              vertical: 4,
                             ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(
+                                appSurfaceStyleOf(context)?.smallTileRadius ??
+                                    DesignTokens.radiusControl,
+                              ),
                               side: BorderSide(
                                 color: cs.primary.withValues(alpha: 0.10),
                                 width: 0.45,
@@ -2287,6 +2732,9 @@ class _CalendarNavigationHeader extends StatelessWidget {
                                 ?.copyWith(
                                   fontSize: compact ? 12.5 : 13.5,
                                   fontWeight: FontWeight.normal,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
                                   height: 1.15,
                                 ),
                           ),
@@ -2302,12 +2750,7 @@ class _CalendarNavigationHeader extends StatelessWidget {
                                 const SizedBox(width: 6),
                               ],
                               Flexible(
-                                child: Text(
-                                  label,
-                                  textAlign: TextAlign.center,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 2,
-                                ),
+                                child: Text(label, textAlign: TextAlign.center),
                               ),
                             ],
                           ),
@@ -2386,10 +2829,7 @@ class _CalendarThreeDayView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final days = List.generate(
-      3,
-      (index) => startDate.add(Duration(days: index)),
-    );
+    final days = CalendarDateNavigation.daysFrom(startDate, 3);
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= 900) {
@@ -2447,7 +2887,7 @@ class _CalendarThreeDayView extends StatelessWidget {
 }
 
 class _ThreeDayLane extends StatelessWidget {
-  final DateTime date;
+  final DateTime? date;
   final CalendarProvider calendarProvider;
   final Set<CalendarEventType>? activeTypes;
   final String? projectKey;
@@ -2466,29 +2906,89 @@ class _ThreeDayLane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final targetDate = date;
+    if (targetDate == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppSurfaceCard(
+            key: const ValueKey('calendar_three_day_lane_unavailable_header'),
+            margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            borderRadius: BorderRadius.circular(
+              appSurfaceStyleOf(context)?.cardRadius ?? DesignTokens.radiusCard,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.view_column_outlined,
+                  size: 16,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.38),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    CalendarUiCopy.unavailable,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.normal,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.38),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: AppSurfaceCard(
+              key: const ValueKey('calendar_three_day_lane_unavailable_body'),
+              margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              padding: EdgeInsets.zero,
+              borderRadius: BorderRadius.circular(
+                appSurfaceStyleOf(context)?.cardRadius ??
+                    DesignTokens.radiusCard,
+              ),
+              child: Center(
+                child: Text(
+                  CalendarUiCopy.unavailable,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.38),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     final events = calendarProvider.getEventsForDate(
-      date,
+      targetDate,
       activeTypes: activeTypes,
       projectKey: projectKey,
       workspaceId: workspaceId,
+    );
+    final cardRadius = BorderRadius.circular(
+      appSurfaceStyleOf(context)?.cardRadius ?? DesignTokens.radiusCard,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AppSurfaceCard(
           key: ValueKey(
-            'calendar_three_day_lane_skin_${date.toIso8601String()}',
+            'calendar_three_day_lane_skin_${targetDate.toIso8601String()}',
           ),
           margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: cardRadius,
           child: Row(
             children: [
               Icon(Icons.view_column_outlined, size: 16, color: cs.primary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  CalendarUiCopy.threeDayLaneHeader(date),
+                  CalendarUiCopy.threeDayLaneHeader(targetDate),
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 13,
@@ -2499,7 +2999,11 @@ class _ThreeDayLane extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 CalendarUiCopy.laneItemCount(events.length),
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: cs.onSurfaceVariant,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ],
           ),
@@ -2508,9 +3012,9 @@ class _ThreeDayLane extends StatelessWidget {
           child: AppSurfaceCard(
             margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             padding: EdgeInsets.zero,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: cardRadius,
             child: CalendarDayAgenda(
-              date: date,
+              date: targetDate,
               calendarProvider: calendarProvider,
               activeTypes: activeTypes,
               projectKey: projectKey,
@@ -2525,137 +3029,697 @@ class _ThreeDayLane extends StatelessWidget {
   }
 }
 
-class _CalendarYearOverview extends StatelessWidget {
-  final int year;
-  final DateTime selectedDay;
-  final Map<String, List<CalendarEventType>> dateEventTypes;
-  final void Function(int month) onMonthTap;
+enum _CalendarSemanticTone {
+  holiday,
+  makeup,
+  event,
+  anniversary,
+  course,
+  diary,
+  countdown,
+  goal,
+  timeEntry,
+}
 
-  const _CalendarYearOverview({
-    super.key,
-    required this.year,
+Color _calendarToneColor(
+  ColorScheme cs,
+  bool isDark,
+  _CalendarSemanticTone tone,
+) {
+  return switch (tone) {
+    _CalendarSemanticTone.holiday =>
+      isDark ? const Color(0xFF4DB6AC) : DesignTokens.defaultAccent,
+    _CalendarSemanticTone.makeup =>
+      isDark ? const Color(0xFFB39DDB) : const Color(0xFF5E35B1),
+    _CalendarSemanticTone.event =>
+      isDark ? const Color(0xFF8C9EFF) : const Color(0xFF4B5ED7),
+    _CalendarSemanticTone.anniversary =>
+      isDark ? const Color(0xFFF48FB1) : const Color(0xFFD81B60),
+    _CalendarSemanticTone.course =>
+      isDark ? const Color(0xFF64B5F6) : DesignTokens.defaultInfo,
+    _CalendarSemanticTone.diary =>
+      isDark ? const Color(0xFF4DB6AC) : DesignTokens.defaultAccent,
+    _CalendarSemanticTone.countdown =>
+      isDark ? const Color(0xFFFFB74D) : DesignTokens.defaultWarning,
+    _CalendarSemanticTone.goal =>
+      isDark ? const Color(0xFFFFCC80) : DesignTokens.defaultWarning,
+    _CalendarSemanticTone.timeEntry => cs.onSurfaceVariant,
+  };
+}
+
+class _CalendarMetaStrip extends StatelessWidget {
+  final DateTime selectedDay;
+  final VoidCallback onOpenAlmanac;
+
+  const _CalendarMetaStrip({
     required this.selectedDay,
-    required this.dateEventTypes,
-    required this.onMonthTap,
+    required this.onOpenAlmanac,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final months = List.generate(12, (i) => i + 1);
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      itemCount: months.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 1.28,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isoWeek = LunarCalendar.isoWeekNumber(selectedDay);
+    var xingZuo = '';
+    try {
+      xingZuo = AlmanacLocaleFormat.formatXingZuo(
+        LunarCalendar.xingZuo(selectedDay),
+      );
+    } catch (_) {}
+    final isHoliday = HolidayCalendar.isHoliday(selectedDay);
+    final isMakeup = HolidayCalendar.isWorkMakeupDay(selectedDay);
+    final holidayName = isHoliday ? HolidayCalendar.holidayName(selectedDay) : null;
+    final fillColor = Color.alphaBlend(
+      cs.primary.withValues(alpha: isDark ? 0.08 : 0.045),
+      cs.surface,
+    );
+
+    return AppSurfaceCard(
+      key: const ValueKey('calendar_month_meta_strip'),
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      borderRadius: BorderRadius.circular(
+        surfaceStyle?.cardRadius ?? DesignTokens.radiusCard,
       ),
-      itemBuilder: (context, index) {
-        final month = months[index];
-        final monthDays = _monthDays(year, month);
-        final eventCount = monthDays.fold<int>(0, (sum, d) {
-          final key =
-              '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-          return sum + (dateEventTypes[key]?.length ?? 0);
-        });
-        final isSelected =
-            selectedDay.year == year && selectedDay.month == month;
-        final selectedFill = Color.alphaBlend(
-          cs.primary.withValues(
-            alpha: Theme.of(context).brightness == Brightness.dark
-                ? 0.20
-                : 0.13,
+      color: fillColor,
+      border: Border.all(
+        color: cs.outlineVariant.withValues(alpha: 0.16),
+        width: 0.45,
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _metaPill(
+                context,
+                text: AlmanacUiCopy.isoWeekBadge(isoWeek),
+                color: cs.primary,
+                surfaceBg: fillColor,
+              ),
+              if (xingZuo.isNotEmpty)
+                _metaPill(
+                  context,
+                  text: xingZuo,
+                  color: cs.secondary,
+                  surfaceBg: fillColor,
+                ),
+              if (isHoliday)
+                _metaPill(
+                  context,
+                  text: holidayName != null && holidayName.isNotEmpty
+                      ? '${AlmanacUiCopy.holidayTag} · $holidayName'
+                      : AlmanacUiCopy.holidayBadge,
+                  color: _calendarToneColor(
+                    cs,
+                    isDark,
+                    _CalendarSemanticTone.holiday,
+                  ),
+                  surfaceBg: fillColor,
+                ),
+              if (isMakeup)
+                _metaPill(
+                  context,
+                  text: AlmanacUiCopy.makeupWorkdayBadge,
+                  color: _calendarToneColor(
+                    cs,
+                    isDark,
+                    _CalendarSemanticTone.makeup,
+                  ),
+                  surfaceBg: fillColor,
+                ),
+            ],
           ),
+          InkWell(
+            key: const ValueKey('calendar_meta_open_almanac_chip'),
+            borderRadius: BorderRadius.circular(999),
+            onTap: onOpenAlmanac,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.11),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: cs.primary.withValues(alpha: 0.24),
+                  width: 0.45,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.auto_stories_outlined,
+                    size: 13,
+                    color: cs.primary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    AlmanacUiCopy.fullAlmanacAndAuspiciousAction,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: cs.primary,
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metaPill(
+    BuildContext context, {
+    required String text,
+    required Color color,
+    required Color surfaceBg,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final pillBg = Color.alphaBlend(color.withValues(alpha: 0.10), surfaceBg);
+    final readableColor = appReadableForeground(
+      pillBg,
+      Color.lerp(color, cs.onSurface, 0.22) ?? color,
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusPill),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          color: readableColor,
+          fontWeight: FontWeight.normal,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+}
+
+class _YearOverviewMonthData {
+  final int month;
+  final int firstWeekday;
+  final List<DateTime> days;
+  final List<String> dateKeys;
+  final List<bool> isHoliday;
+  final List<bool> isMakeup;
+  final List<bool> isWeekend;
+
+  const _YearOverviewMonthData({
+    required this.month,
+    required this.firstWeekday,
+    required this.days,
+    required this.dateKeys,
+    required this.isHoliday,
+    required this.isMakeup,
+    required this.isWeekend,
+  });
+}
+
+class _CalendarYearOverview extends StatelessWidget {
+  static const int _maxYearCacheEntries = 8;
+  static final LinkedHashMap<(int, int), List<_YearOverviewMonthData>>
+  _yearCache = LinkedHashMap<(int, int), List<_YearOverviewMonthData>>();
+
+  static List<_YearOverviewMonthData> _yearDataFor(int year) {
+    final key = (year, HolidayCalendar.cacheVersion);
+    final existing = _yearCache.remove(key);
+    if (existing != null) {
+      _yearCache[key] = existing;
+      return existing;
+    }
+    final months = List<_YearOverviewMonthData>.generate(12, (idx) {
+      final month = idx + 1;
+      final count = DateTime(year, month + 1, 0).day;
+      final days = List<DateTime>.generate(
+        count,
+        (i) => DateTime(year, month, i + 1),
+        growable: false,
+      );
+      final monthPad = month.toString().padLeft(2, '0');
+      final dateKeys = List<String>.generate(
+        count,
+        (i) => '$year-$monthPad-${(i + 1).toString().padLeft(2, '0')}',
+        growable: false,
+      );
+      final isHoliday = List<bool>.generate(
+        count,
+        (i) => HolidayCalendar.isHoliday(days[i]),
+        growable: false,
+      );
+      final isMakeup = List<bool>.generate(
+        count,
+        (i) => HolidayCalendar.isWorkMakeupDay(days[i]),
+        growable: false,
+      );
+      final isWeekend = List<bool>.generate(
+        count,
+        (i) =>
+            days[i].weekday == DateTime.saturday ||
+            days[i].weekday == DateTime.sunday,
+        growable: false,
+      );
+      return _YearOverviewMonthData(
+        month: month,
+        firstWeekday: days.first.weekday,
+        days: days,
+        dateKeys: dateKeys,
+        isHoliday: isHoliday,
+        isMakeup: isMakeup,
+        isWeekend: isWeekend,
+      );
+    }, growable: false);
+    final immutable = List<_YearOverviewMonthData>.unmodifiable(months);
+    if (_yearCache.length >= _maxYearCacheEntries) {
+      _yearCache.remove(_yearCache.keys.first);
+    }
+    _yearCache[key] = immutable;
+    return immutable;
+  }
+
+  final int year;
+  final int firstDayOfWeek;
+  final DateTime selectedDay;
+  final Map<String, List<CalendarEventType>> dateEventTypes;
+  final void Function(int month) onMonthTap;
+  final ValueChanged<DateTime>? onDayTap;
+
+  const _CalendarYearOverview({
+    super.key,
+    required this.year,
+    required this.firstDayOfWeek,
+    required this.selectedDay,
+    required this.dateEventTypes,
+    required this.onMonthTap,
+    this.onDayTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final yearMonths = _yearDataFor(year);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final scale = textScaler.scale(14) / 14;
+    final now = DateTime.now();
+    final weekdayInitials = AlmanacUiCopy.weekdayInitials;
+    final orderedWeekdays = CalendarDateNavigation.orderedWeekdays(
+      firstDayOfWeek,
+    ).map((weekday) => weekdayInitials[weekday - 1]).toList(growable: false);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isEnlargedNarrow = constraints.maxWidth < 360 && scale > 1.25;
+        final crossAxisCount = isEnlargedNarrow
+            ? 1
+            : (constraints.maxWidth >= 920
+                  ? 3
+                  : (constraints.maxWidth >= 360 ? 2 : 1));
+        final cardInnerWidth =
+            ((constraints.maxWidth -
+                        24.0 -
+                        (crossAxisCount - 1) * 10.0) /
+                    crossAxisCount -
+                20.0)
+                .clamp(40.0, double.infinity);
+        final textDirection = Directionality.of(context);
+        final locale = Localizations.maybeLocaleOf(context);
+        double measureHeaderWidth(String text, double fontSize) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: text,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.normal,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            textScaler: textScaler,
+            textDirection: textDirection,
+            locale: locale,
+            maxLines: 1,
+          )..layout();
+          final width = painter.width;
+          painter.dispose();
+          return width;
+        }
+
+        var maxMonthTitleWidth = 0.0;
+        for (var m = 1; m <= 12; m++) {
+          final w = measureHeaderWidth(CalendarUiCopy.yearMonthTitle(m), 15);
+          if (w > maxMonthTitleWidth) maxMonthTitleWidth = w;
+        }
+        final emptyCountWidth = measureHeaderWidth(
+          CalendarUiCopy.yearMonthEventCount(0),
+          10.5,
+        );
+        final needsSecondHeaderLine =
+            isEnlargedNarrow ||
+            (maxMonthTitleWidth + 6.0 + emptyCountWidth) > cardInnerWidth;
+        final headerHeight = textScaler.scale(15) * 1.3 + 4.0;
+        final countHeight = textScaler.scale(10.5) * 1.3 + 2.0;
+        final weekdayRowHeight = textScaler.scale(9.5) * 1.25 + 4.0;
+        final dayRowHeight =
+            (textScaler.scale(10) * 1.25 + 7.0).clamp(18.0, 28.0).toDouble();
+        final mainAxisExtent =
+            (22.0 +
+                    headerHeight +
+                    (needsSecondHeaderLine ? (countHeight + 2.0) : 0.0) +
+                    4.0 +
+                    weekdayRowHeight +
+                    4.0 +
+                    dayRowHeight * 6.0 +
+                    8.0)
+                .clamp(192.0, 368.0)
+                .toDouble();
+
+        final surfaceStyle = appSurfaceStyleOf(context);
+        final selectedFill = Color.alphaBlend(
+          cs.primary.withValues(alpha: isDark ? 0.20 : 0.13),
           cs.surface,
         );
         final selectedText = cs.onSurface;
+        final holidayTone = _calendarToneColor(
+          cs,
+          isDark,
+          _CalendarSemanticTone.holiday,
+        );
+        final makeupTone = _calendarToneColor(
+          cs,
+          isDark,
+          _CalendarSemanticTone.makeup,
+        );
 
-        return AppSurfaceCard(
-          padding: EdgeInsets.zero,
-          borderRadius: BorderRadius.circular(16),
-          color: isSelected ? selectedFill : null,
-          border: Border.all(
-            color: isSelected
-                ? cs.primary.withValues(alpha: 0.34)
-                : cs.outlineVariant.withValues(alpha: 0.10),
-            width: 0.45,
+        return GridView.builder(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+          itemCount: yearMonths.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            mainAxisExtent: mainAxisExtent,
           ),
-          onTap: () => onMonthTap(month),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  CalendarUiCopy.yearMonthTitle(month),
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.normal,
-                    color: isSelected ? selectedText : cs.onSurface,
-                  ),
+          itemBuilder: (context, index) {
+            final monthData = yearMonths[index];
+            final month = monthData.month;
+            final monthDays = monthData.days;
+            final monthKeys = monthData.dateKeys;
+            var eventCount = 0;
+            for (final key in monthKeys) {
+              eventCount += dateEventTypes[key]?.length ?? 0;
+            }
+            final isSelected =
+                selectedDay.year == year && selectedDay.month == month;
+            final leadingOffset =
+                (monthData.firstWeekday - firstDayOfWeek + 7) % 7;
+
+            final cardFill = isSelected
+                ? selectedFill
+                : Color.alphaBlend(
+                    surfaceStyle?.cardFillColor ?? cs.surface,
+                    cs.surface,
+                  );
+
+            return RepaintBoundary(
+              child: AppSurfaceCard(
+                padding: EdgeInsets.zero,
+                borderRadius: BorderRadius.circular(
+                  surfaceStyle?.cardRadius ?? DesignTokens.radiusCard,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  CalendarUiCopy.yearMonthEventCount(eventCount),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isSelected
-                        ? selectedText.withValues(alpha: 0.70)
-                        : cs.onSurfaceVariant,
-                  ),
+                color: isSelected ? selectedFill : null,
+                border: Border.all(
+                  color: isSelected
+                      ? cs.primary.withValues(alpha: 0.34)
+                      : cs.outlineVariant.withValues(alpha: 0.14),
+                  width: 0.45,
                 ),
-                const Spacer(),
-                Row(
-                  children: [
-                    for (final t in CalendarEventType.values.take(4))
-                      Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: _MonthDot(
-                          color: _colorFor(t, cs),
-                          filled: eventCount > 0,
+                onTap: () => onMonthTap(month),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 6,
+                          runSpacing: 2,
+                          children: [
+                            Text(
+                              CalendarUiCopy.yearMonthTitle(month),
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.normal,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                                color: isSelected ? selectedText : cs.onSurface,
+                              ),
+                            ),
+                            Text(
+                              CalendarUiCopy.yearMonthEventCount(eventCount),
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                                color: isSelected
+                                    ? selectedText.withValues(alpha: 0.72)
+                                    : cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                  ],
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          for (final wd in orderedWeekdays)
+                            Expanded(
+                              child: Center(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    wd,
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: cs.onSurfaceVariant.withValues(
+                                        alpha: 0.70,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Expanded(
+                        child: Column(
+                          children: List.generate(6, (row) {
+                            return Expanded(
+                              child: Row(
+                                children: List.generate(7, (col) {
+                                  final slot = row * 7 + col;
+                                  final dayNum = slot - leadingOffset + 1;
+                                  if (dayNum < 1 || dayNum > monthDays.length) {
+                                    return const Expanded(
+                                      child: SizedBox.shrink(),
+                                    );
+                                  }
+                                  final dayIdx = dayNum - 1;
+                                  final day = monthDays[dayIdx];
+                                  final key = monthKeys[dayIdx];
+                                  final dayTypes =
+                                      dateEventTypes[key] ??
+                                      const <CalendarEventType>[];
+                                  final isToday =
+                                      day.year == now.year &&
+                                      day.month == now.month &&
+                                      day.day == now.day;
+                                  final isSelectedDay =
+                                      day.year == selectedDay.year &&
+                                      day.month == selectedDay.month &&
+                                      day.day == selectedDay.day;
+                                  final isHoliday =
+                                      monthData.isHoliday[dayIdx];
+                                  final isMakeup = monthData.isMakeup[dayIdx];
+                                  final isWeekend =
+                                      monthData.isWeekend[dayIdx];
+                                  final dotColor = dayTypes.isNotEmpty
+                                      ? _colorFor(
+                                          dayTypes.first,
+                                          cs,
+                                          isDark: isDark,
+                                        )
+                                      : null;
+                                  Color textColor = cs.onSurface.withValues(
+                                    alpha: isWeekend ? 0.62 : 0.88,
+                                  );
+                                  BoxDecoration? cellDeco;
+                                  if (isToday) {
+                                    cellDeco = BoxDecoration(
+                                      color: cs.primary,
+                                      shape: BoxShape.circle,
+                                    );
+                                    textColor = cs.onPrimary;
+                                  } else if (isSelectedDay) {
+                                    cellDeco = BoxDecoration(
+                                      color: cs.primary.withValues(alpha: 0.16),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: cs.primary.withValues(
+                                          alpha: 0.50,
+                                        ),
+                                        width: 0.45,
+                                      ),
+                                    );
+                                    textColor = selectedText;
+                                  } else if (isHoliday) {
+                                    final fill = holidayTone.withValues(
+                                      alpha: 0.13,
+                                    );
+                                    cellDeco = BoxDecoration(
+                                      color: fill,
+                                      borderRadius: BorderRadius.circular(
+                                        DesignTokens.radiusXs,
+                                      ),
+                                    );
+                                    textColor = appReadableForeground(
+                                      Color.alphaBlend(fill, cardFill),
+                                      holidayTone,
+                                    );
+                                  } else if (isMakeup) {
+                                    final fill = makeupTone.withValues(
+                                      alpha: 0.12,
+                                    );
+                                    cellDeco = BoxDecoration(
+                                      color: fill,
+                                      borderRadius: BorderRadius.circular(
+                                        DesignTokens.radiusXs,
+                                      ),
+                                    );
+                                    textColor = appReadableForeground(
+                                      Color.alphaBlend(fill, cardFill),
+                                      makeupTone,
+                                    );
+                                  }
+
+                                  return Expanded(
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(
+                                        DesignTokens.radiusSm,
+                                      ),
+                                      onTap: () {
+                                        if (onDayTap != null) {
+                                          onDayTap!(day);
+                                        } else {
+                                          onMonthTap(month);
+                                        }
+                                      },
+                                      child: Container(
+                                        margin: const EdgeInsets.all(0.5),
+                                        decoration: cellDeco,
+                                        alignment: Alignment.center,
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              child: Text(
+                                                '$dayNum',
+                                                maxLines: 1,
+                                                style: TextStyle(
+                                                  fontSize: 9.5,
+                                                  color: textColor,
+                                                  fontWeight: FontWeight.normal,
+                                                  fontFeatures: const [
+                                                    FontFeature.tabularFigures(),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                            if (dotColor != null && !isToday)
+                                              Positioned(
+                                                bottom: 1,
+                                                child: _MonthDot(
+                                                  color: dotColor,
+                                                  filled: true,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
   }
 
-  List<DateTime> _monthDays(int year, int month) {
-    final count = DateTime(year, month + 1, 0).day;
-    return List.generate(count, (i) => DateTime(year, month, i + 1));
-  }
-
-  Color _colorFor(CalendarEventType t, ColorScheme cs) {
+  Color _colorFor(CalendarEventType t, ColorScheme cs, {required bool isDark}) {
     switch (t) {
       case CalendarEventType.event:
-        return const Color(0xFF5B6EE1);
+        return _calendarToneColor(cs, isDark, _CalendarSemanticTone.event);
       case CalendarEventType.todo:
         return cs.primary;
       case CalendarEventType.habit:
         return cs.tertiary;
       case CalendarEventType.pomodoro:
-        return Colors.red;
+        return DesignTokens.defaultError;
       case CalendarEventType.anniversary:
-        return const Color(0xFFE91E63);
+        return _calendarToneColor(
+          cs,
+          isDark,
+          _CalendarSemanticTone.anniversary,
+        );
       case CalendarEventType.course:
-        return const Color(0xFF42A5F5);
+        return _calendarToneColor(cs, isDark, _CalendarSemanticTone.course);
       case CalendarEventType.diary:
-        return const Color(0xFF26A69A);
+        return _calendarToneColor(cs, isDark, _CalendarSemanticTone.diary);
       case CalendarEventType.countdown:
-        return Colors.orange;
+        return _calendarToneColor(
+          cs,
+          isDark,
+          _CalendarSemanticTone.countdown,
+        );
       case CalendarEventType.goal:
-        return const Color(0xFFFFA726);
+        return _calendarToneColor(cs, isDark, _CalendarSemanticTone.goal);
       case CalendarEventType.timeEntry:
-        return const Color(0xFF78909C);
+        return _calendarToneColor(
+          cs,
+          isDark,
+          _CalendarSemanticTone.timeEntry,
+        );
     }
   }
 }
@@ -2669,11 +3733,11 @@ class _MonthDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 8,
-      height: 8,
+      width: 3,
+      height: 3,
       decoration: BoxDecoration(
         color: filled
-            ? color.withValues(alpha: 0.7)
+            ? color.withValues(alpha: 0.78)
             : color.withValues(alpha: 0.25),
         shape: BoxShape.circle,
       ),

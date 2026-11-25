@@ -53,12 +53,12 @@ void main() {
       expect(screen, contains('class _ReportReminderSection'));
       expect(screen, contains('class _ReportReminderTile'));
       expect(screen, contains('enum _ReportReminderCadence'));
-      expect(screen, contains('报告推送'));
-      expect(screen, contains('按你的节奏提醒查看每日复盘、周报、月报和年报'));
-      expect(screen, contains('每日效率复盘'));
-      expect(screen, contains('每周效率周报'));
-      expect(screen, contains('每月成长月报'));
-      expect(screen, contains('每年成长年报'));
+      expect(screen, contains('NotificationUiCopy.reportRemindersTitle'));
+      expect(screen, contains('NotificationUiCopy.reportRemindersSubtitle'));
+      expect(screen, contains('NotificationUiCopy.reportDailyTitle'));
+      expect(screen, contains('NotificationUiCopy.reportWeeklyTitle'));
+      expect(screen, contains('NotificationUiCopy.reportMonthlyTitle'));
+      expect(screen, contains('NotificationUiCopy.reportYearlyTitle'));
       expect(screen, contains('setDailyReportReminderConfig'));
       expect(screen, contains('setWeeklyReportReminderConfig'));
       expect(screen, contains('setMonthlyReportReminderConfig'));

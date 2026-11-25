@@ -9,6 +9,38 @@ class TodayUiCopy {
   static bool get isEn => I18n.current == AppLocale.en;
   static bool get isZh => I18n.current == AppLocale.zh;
 
+  static String detailTitle(String section) => switch (section) {
+    'todos' => isZh ? '待办' : 'Tasks',
+    'courses' => isZh ? '课程' : 'Courses',
+    'anniversaries' => isZh ? '纪念日' : 'Anniversaries',
+    'goals' => isZh ? '目标' : 'Goals',
+    'habits' => isZh ? '习惯' : 'Habits',
+    'notes' => isZh ? '随手记' : 'Notes',
+    'diary' => isZh ? '日记' : 'Diary',
+    _ => isZh ? '详情' : 'Details',
+  };
+
+  static String detailMissing(String section) => switch (section) {
+    'todos' => isZh ? '这个待办不存在或已被删除' : 'This task is no longer available.',
+    'courses' => isZh ? '这节课程不存在或已被删除' : 'This course is no longer available.',
+    'anniversaries' =>
+      isZh ? '这个纪念日不存在或已被删除' : 'This anniversary is no longer available.',
+    'goals' => isZh ? '这个目标不存在或已被删除' : 'This goal is no longer available.',
+    'habits' => isZh ? '这个习惯不存在或已被删除' : 'This habit is no longer available.',
+    'notes' => isZh ? '这条随手记不存在或已被删除' : 'This note is no longer available.',
+    'diary' =>
+      isZh ? '这篇日记不存在或已被删除' : 'This diary entry is no longer available.',
+    _ => isZh ? '内容不存在或已被删除' : 'This item is no longer available.',
+  };
+
+  static String get detailOpenFailed => isZh
+      ? '暂时无法打开，请重试或返回上一页。'
+      : 'Could not open this item. Try again or go back.';
+  static String get detailSourceChanged => isZh
+      ? '账号或页面内容已变化，请返回后重新打开。'
+      : 'Your account or page content has changed. Go back and open it again.';
+  static String get detailOpenList => isZh ? '查看列表' : 'View list';
+
   // ---------------------------------------------------------------------------
   // Quick Access Panel (快捷入口)
   // ---------------------------------------------------------------------------
@@ -109,9 +141,11 @@ class TodayUiCopy {
           ? '$total 项提醒 · 今日待提醒 > 即将开始 > 逾期优先处理 > 今日建议'
           : '$total 项 · 今日待提醒 > 即将开始 > 逾期优先处理';
     }
+    final reminderLabel = total == 1 ? '1 reminder' : '$total reminders';
+    final itemLabel = total == 1 ? '1 item' : '$total items';
     return hasSuggestions
-        ? '$total reminders · Due today > Starting soon > Overdue prioritized > Suggestions'
-        : '$total items · Due today > Starting soon > Overdue prioritized';
+        ? '$reminderLabel · Due today > Starting soon > Overdue prioritized > Suggestions'
+        : '$itemLabel · Due today > Starting soon > Overdue prioritized';
   }
 
   static String get reminderGroupDueToday => isEn ? 'Due today' : '今日待提醒事项';

@@ -157,6 +157,145 @@ android_runtime\tmissing\ttwo
     );
   });
 
+  for (final scenario in [
+    (
+      name: 'pretty Android',
+      json: '[\n  {"targetPlatform": "android-arm64"}\n]\n',
+      android: 'ready',
+      ios: 'missing',
+    ),
+    (
+      name: 'pretty iOS',
+      json: '[\n  {"targetPlatform": "ios"}\n]\n',
+      android: 'missing',
+      ios: 'ready',
+    ),
+    (
+      name: 'compact mobile devices',
+      json: '[{"targetPlatform":"android-x64"},{"targetPlatform":"ios"}]',
+      android: 'ready',
+      ios: 'ready',
+    ),
+    (
+      name: 'platform names in unrelated fields',
+      json: '[{"name":"android-arm64 ios","targetPlatform":"linux-arm64"}]',
+      android: 'missing',
+      ios: 'missing',
+    ),
+    (
+      name: 'invalid root object',
+      json: '{"targetPlatform":"android-arm64"}',
+      android: 'missing',
+      ios: 'missing',
+    ),
+    (
+      name: 'malformed device JSON',
+      json: '[{"targetPlatform":"android-arm64"}',
+      android: 'missing',
+      ios: 'missing',
+    ),
+  ]) {
+    test('device readiness parses ${scenario.name}', () async {
+      final fixture = File('${tempDir.path}/devices.json')
+        ..writeAsStringSync(scenario.json);
+      final flutter = _writeExecutable(
+        '${binDir.path}/flutter',
+        _deviceFixtureFlutter,
+      );
+      final adb = _writeExecutable('${binDir.path}/adb', '''#!/usr/bin/env bash
+printf 'List of devices attached\\n\\n'
+''');
+      final result = await Process.run(
+        'bash',
+        ['scripts/generate_device_readiness_report.sh'],
+        workingDirectory: Directory.current.path,
+        environment: bashEnvironment(
+          {
+            'FLUTTER_BIN': flutter.path,
+            'ADB_BIN': adb.path,
+            'ANDROID_SDK_ROOT': sdkDir.path,
+            'OUTPUT_DIR': outputDir.path,
+            'DEVICE_FIXTURE_JSON': fixture.path,
+            'KVM_DEVICE': '${tempDir.path}/missing-kvm',
+          },
+          pathVariables: {
+            'FLUTTER_BIN',
+            'ADB_BIN',
+            'ANDROID_SDK_ROOT',
+            'OUTPUT_DIR',
+            'DEVICE_FIXTURE_JSON',
+            'KVM_DEVICE',
+          },
+        ),
+      );
+      expect(result.exitCode, 0, reason: _combinedOutput(result));
+      final status = _readStatus(outputDir);
+      expect(status['android_runtime'], scenario.android);
+      expect(status['ios_runtime'], scenario.ios);
+      final validation = await _runValidator(outputDir);
+      expect(validation.exitCode, 0, reason: _combinedOutput(validation));
+    });
+  }
+
+  for (final platform in ['android-arm64', 'ios', 'linux-arm64']) {
+    test('device gate routes pretty $platform discovery', () async {
+      final fixture = File('${tempDir.path}/devices.json')
+        ..writeAsStringSync('[\n  {"targetPlatform": "$platform"}\n]\n');
+      final flutter = _writeExecutable(
+        '${binDir.path}/flutter',
+        _deviceFixtureFlutter,
+      );
+      final adb = _writeExecutable('${binDir.path}/adb', '''#!/usr/bin/env bash
+printf 'List of devices attached\\n\\n'
+''');
+      final apk = File('${tempDir.path}/fixture.apk')
+        ..writeAsStringSync('Synthetic smoke-phase sentinel; never installed');
+      final result = await Process.run(
+        'bash',
+        ['scripts/device_regression_check.sh'],
+        workingDirectory: Directory.current.path,
+        environment: bashEnvironment(
+          {
+            'FLUTTER_BIN': flutter.path,
+            'ADB_BIN': adb.path,
+            'ANDROID_SDK_ROOT': sdkDir.path,
+            'READINESS_DIR': outputDir.path,
+            'DEVICE_FIXTURE_JSON': fixture.path,
+            'APK_PATH': apk.path,
+            'KVM_DEVICE': '${tempDir.path}/missing-kvm',
+          },
+          pathVariables: {
+            'FLUTTER_BIN',
+            'ADB_BIN',
+            'ANDROID_SDK_ROOT',
+            'READINESS_DIR',
+            'DEVICE_FIXTURE_JSON',
+            'APK_PATH',
+            'KVM_DEVICE',
+          },
+        ),
+      );
+      if (platform == 'linux-arm64') {
+        expect(result.exitCode, 2, reason: _combinedOutput(result));
+        expect(
+          _combinedOutput(result),
+          isNot(contains('fixture integration phase')),
+        );
+        expect(
+          _combinedOutput(result),
+          contains('No Android or iOS device/emulator is attached'),
+        );
+      } else {
+        expect(result.exitCode, 37, reason: _combinedOutput(result));
+        expect(_combinedOutput(result), contains('fixture integration phase'));
+        expect(
+          _combinedOutput(result),
+          isNot(contains('No Android or iOS device/emulator is attached')),
+        );
+      }
+    });
+  }
+
   test('missing readiness summary extracts only missing rows', () async {
     outputDir.createSync(recursive: true);
     File('${outputDir.path}/summary.tsv').writeAsStringSync(
@@ -210,6 +349,17 @@ kvm\tavailable\t/dev/kvm exists
     expect(validation.exitCode, 0, reason: _combinedOutput(validation));
   });
 }
+
+const _deviceFixtureFlutter = r'''#!/usr/bin/env bash
+if [[ "$1" == "devices" && "${2:-}" == "--machine" ]]; then
+  cat "$DEVICE_FIXTURE_JSON"
+elif [[ "$1" == "test" ]]; then
+  printf 'fixture integration phase\n'
+  exit 37
+else
+  printf 'Synthetic Flutter device fixture\n'
+fi
+''';
 
 File _writeExecutable(String path, String content) {
   final file = File(path)..writeAsStringSync(content);

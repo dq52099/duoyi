@@ -14,6 +14,9 @@ void main() {
     ).readAsStringSync();
     final export = File('lib/screens/export_screen.dart').readAsStringSync();
     final main = File('lib/main.dart').readAsStringSync();
+    final widgetProjection = File(
+      'lib/services/widget_schedule_projection.dart',
+    ).readAsStringSync();
     final provider = File(
       'lib/providers/countdown_provider.dart',
     ).readAsStringSync();
@@ -47,7 +50,11 @@ void main() {
     );
     expect(countdownScreen, isNot(contains('Dismissible(')));
     expect(countdownScreen, isNot(contains('onDismissed:')));
-    expect(countdownScreen, contains("I18n.tr('anniversary.delete.title')"));
+    expect(countdownScreen, contains('confirmDateItemDeletion('));
+    final feedback = File(
+      'lib/widgets/date_item_feedback.dart',
+    ).readAsStringSync();
+    expect(feedback, contains("I18n.tr('anniversary.delete.title')"));
 
     expect(search, contains('CountdownProvider'));
     expect(search, contains('CountdownScreen(initialCountdownId: h.sourceId)'));
@@ -73,13 +80,21 @@ void main() {
     expect(main, contains("uri.host == 'countdown'"));
     expect(
       main,
+      contains("import 'services/widget_schedule_projection.dart';"),
+    );
+    expect(main, contains('homeWidgetScheduleEventDeepLink(event)'));
+    expect(
+      widgetProjection,
       contains("CalendarEventType.countdown => 'duoyi://countdown/\$id'"),
     );
     expect(main, contains('countdowns.items'));
-    expect(main, isNot(contains('CalendarEventType.countdown => \'\'')));
+    expect(
+      widgetProjection,
+      isNot(contains('CalendarEventType.countdown => \'\'')),
+    );
 
     final addItemStart = provider.indexOf(
-      'Future<String?> addItem(CountdownItem item) async',
+      'Future<String?> addItem(CountdownItem item,',
     );
     final addItemEnd = provider.indexOf(
       'Future<CountdownImportSummary> importCountdowns',
@@ -88,10 +103,21 @@ void main() {
     expect(addItemStart, greaterThanOrEqualTo(0));
     expect(addItemEnd, greaterThan(addItemStart));
     final addItem = provider.substring(addItemStart, addItemEnd);
-    expect(addItem, contains('_items.add(item)'));
-    expect(addItem, contains('final saved = await _save();'));
-    expect(addItem, contains('if (!saved) return null;'));
-    expect(addItem, contains('return _syncRemindersNow();'));
+    expect(addItem, contains('return _upsert(candidate, canWrite: canWrite)'));
+    expect(addItem, contains('_enqueueStorage((token, isCurrent) async'));
+    expect(addItem, contains('snapshot.add(candidate)'));
+    expect(
+      addItem,
+      contains('await _persist(prefs, snapshot, token, isCurrent)'),
+    );
+    expect(
+      addItem,
+      contains('return _afterCommit(token, generation, accountGeneration)'),
+    );
+    expect(
+      addItem.indexOf('await _persist('),
+      lessThan(addItem.indexOf('return _afterCommit(')),
+    );
   });
 
   test('倒数日可见主流程文档禁止回退为旧兼容模式', () {
@@ -156,15 +182,19 @@ void main() {
       contains('crossAxisAlignment: WrapCrossAlignment.center'),
     );
 
-    final countdownPillIndex = countdownCard.indexOf(
-      '_StatusPill(label: status, color: color)',
-    );
+    final countdownPillIndex =
+        RegExp(
+          r'_StatusPill\(\s*label:\s*status,\s*color:\s*color,?\s*\)',
+        ).firstMatch(countdownCard)?.start ??
+        -1;
     final countdownTargetIndex = countdownCard.indexOf(
       "I18n.tr('countdown.target.prefix')",
     );
-    final anniversaryPillIndex = anniversaryCard.indexOf(
-      '_AnniversaryPill(label: _typeLabel(), color: color)',
-    );
+    final anniversaryPillIndex =
+        RegExp(
+          r'_AnniversaryPill\(\s*label:\s*_typeLabel\(\),\s*color:\s*color,?\s*\)',
+        ).firstMatch(anniversaryCard)?.start ??
+        -1;
     final anniversaryNextIndex = anniversaryCard.indexOf(
       "I18n.tr('anniversary.next.prefix')",
     );
@@ -207,10 +237,18 @@ void main() {
     );
 
     expect(editSheet, contains('Future<void> _delete() async'));
-    expect(editSheet, contains('showDialog<bool>'));
-    expect(editSheet, contains("I18n.tr('anniversary.delete.title')"));
-    expect(editSheet, contains("I18n.tr('anniversary.delete.content_suffix')"));
-    expect(leadingDelete, contains('onPressed: _delete'));
+    expect(
+      editSheet,
+      contains('confirmDateItemDeletion(operation, editing.title)'),
+    );
+    expect(editSheet, contains('canWrite: operation.isCurrent'));
+    final feedback = File(
+      'lib/widgets/date_item_feedback.dart',
+    ).readAsStringSync();
+    expect(feedback, contains('operation.showDialog<bool>'));
+    expect(feedback, contains("I18n.tr('anniversary.delete.title')"));
+    expect(feedback, contains("I18n.tr('anniversary.delete.content_suffix')"));
+    expect(leadingDelete, contains('onPressed: _saving ? null : _delete'));
     expect(
       leadingDelete,
       isNot(contains('context.read<AnniversaryProvider>().delete')),

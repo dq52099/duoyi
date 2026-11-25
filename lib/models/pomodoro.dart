@@ -12,6 +12,7 @@ class PomodoroConfig {
   static const int _maxStoredDurationSeconds = 12 * 60 * 60;
 
   int focusDuration; // seconds, default 1500 (25min)
+  bool focusDurationUsesDefault;
   int shortBreakDuration; // seconds, default 300 (5min)
   int longBreakDuration; // seconds, default 900 (15min)
   int sessionsPerLongBreak; // default 4
@@ -31,7 +32,8 @@ class PomodoroConfig {
   bool playSoundInBreak;
 
   PomodoroConfig({
-    this.focusDuration = defaultFocusDuration,
+    int? focusDuration,
+    bool? focusDurationUsesDefault,
     this.shortBreakDuration = defaultShortBreakDuration,
     this.longBreakDuration = defaultLongBreakDuration,
     this.sessionsPerLongBreak = 4,
@@ -46,8 +48,34 @@ class PomodoroConfig {
     this.focusSoundVolume = defaultFocusSoundVolume,
     this.playSoundInBreak = false,
     DateTime? updatedAt,
-  }) : distractingAppPackages = distractingAppPackages ?? const <String>[],
+  }) : focusDuration = focusDuration ?? defaultFocusDuration,
+       focusDurationUsesDefault =
+           focusDurationUsesDefault ?? focusDuration == null,
+       distractingAppPackages = distractingAppPackages ?? const <String>[],
        updatedAt = updatedAt ?? DateTime.now();
+
+  PomodoroConfig copyWith({
+    int? focusDuration,
+    bool? focusDurationUsesDefault,
+  }) => PomodoroConfig(
+    focusDuration: focusDuration ?? this.focusDuration,
+    focusDurationUsesDefault:
+        focusDurationUsesDefault ?? this.focusDurationUsesDefault,
+    shortBreakDuration: shortBreakDuration,
+    longBreakDuration: longBreakDuration,
+    sessionsPerLongBreak: sessionsPerLongBreak,
+    whiteNoiseSound: whiteNoiseSound,
+    autoStartBreaks: autoStartBreaks,
+    autoStartFocus: autoStartFocus,
+    autoEnableDnd: autoEnableDnd,
+    strictFocusMode: strictFocusMode,
+    monitorDistractingApps: monitorDistractingApps,
+    distractingAppPackages: List.of(distractingAppPackages),
+    focusRoomId: focusRoomId,
+    focusSoundVolume: focusSoundVolume,
+    playSoundInBreak: playSoundInBreak,
+    updatedAt: updatedAt,
+  );
 
   void touch() {
     updatedAt = DateTime.now();
@@ -55,6 +83,7 @@ class PomodoroConfig {
 
   Map<String, dynamic> toJson() => {
     'focusDuration': focusDuration,
+    'focusDurationUsesDefault': focusDurationUsesDefault,
     'shortBreakDuration': shortBreakDuration,
     'longBreakDuration': longBreakDuration,
     'sessionsPerLongBreak': sessionsPerLongBreak,
@@ -80,6 +109,10 @@ class PomodoroConfig {
     }
 
     return PomodoroConfig(
+      // Older valid values have no provenance; preserve explicit 25 minutes.
+      focusDurationUsesDefault: json['focusDurationUsesDefault'] is bool
+          ? json['focusDurationUsesDefault'] as bool
+          : _storedDuration(json['focusDuration'], 0) == 0,
       focusDuration: _storedDuration(
         json['focusDuration'],
         defaultFocusDuration,

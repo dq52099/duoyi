@@ -136,6 +136,10 @@ class CalendarUiCopy {
   // ---------------------------------------------------------------------------
   // Private date helpers
   // ---------------------------------------------------------------------------
+  static String get unavailable => isEn ? 'Unavailable' : '不可用';
+  static String get lunarUnavailable =>
+      isEn ? 'Lunar unavailable' : '农历不可用';
+
   static String _weekdayLabel(int weekday) {
     return switch (weekday) {
       DateTime.monday => '一',

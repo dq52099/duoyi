@@ -48,7 +48,7 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getStringList('todos'), isNull);
       expect(prefs.getString('user_profile'), isNull);
-    expect(store.setKeys, isNot(contains('flutter.user_profile')));
+      expect(store.setKeys, isNot(contains('flutter.user_profile')));
 
       await prefs.setString('user_profile', 'new profile');
       await Future<void>.delayed(Duration.zero);
@@ -209,6 +209,52 @@ void main() {
       expect(prefs.getStringList('todos'), ['{"id":"one"}', '{"id":"two"}']);
     },
   );
+
+  for (final rejectFirst in [false, true]) {
+    test(
+      'export waits for newest queued import after rejection=$rejectFirst',
+      () async {
+        final store = _BackupStore()..holdSetKey = 'flutter.todos';
+        if (rejectFirst) store.rejectSetOnce = 'flutter.todos';
+        SharedPreferencesStorePlatform.instance = store;
+        final first = BackupService.importAll(
+          _backup({
+            'todos': {
+              'type': 'stringList',
+              'value': ['{"id":"one"}'],
+            },
+          }),
+        );
+        final firstCheck = rejectFirst
+            ? expectLater(first, throwsStateError)
+            : expectLater(first, completion(1));
+        await store.started.future;
+        final second = BackupService.importAll(
+          _backup({
+            'todos': {
+              'type': 'stringList',
+              'value': ['{"id":"two"}'],
+            },
+          }),
+          merge: true,
+        );
+        var exported = false;
+        final export = BackupService.exportAll().then((raw) {
+          exported = true;
+          return jsonDecode(raw) as Map<String, dynamic>;
+        });
+        await Future<void>.delayed(Duration.zero);
+        expect(exported, isFalse);
+        store.release.complete();
+        await firstCheck;
+        expect(await second, 1);
+        final expected = [if (!rejectFirst) '{"id":"one"}', '{"id":"two"}'];
+        expect((await export)['data']['todos']['value'], expected);
+        final subsequent = jsonDecode(await BackupService.exportAll());
+        expect(subsequent['data']['todos']['value'], expected);
+      },
+    );
+  }
 }
 
 String _backup(Map<String, Object> data) =>

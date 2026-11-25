@@ -238,9 +238,75 @@ void main() {
       expect(prefs.getKeys().where((key) => key.startsWith('sync_')), isEmpty);
     },
   );
+
+  for (final responseKind in ['private', 'workspace', 'both']) {
+    test(
+      'auth boundary accepts $responseKind tombstone acknowledgement before cleanup',
+      () async {
+        const stamp = '2026-10-11T03:00:00.000Z';
+        final responseExtras = <String, Object>{
+          if (responseKind != 'workspace')
+            'deleted_items': {
+              'todos': {'remote-private': stamp},
+            },
+          if (responseKind != 'private')
+            'workspace_payloads': {
+              'synthetic-space': {
+                'deleted_items': {
+                  'todos': {'remote-shared': stamp},
+                },
+              },
+            },
+        };
+        final provider = _syncProvider(
+          Completer<void>(),
+          responseExtras: responseExtras,
+        );
+        addTearDown(provider.dispose);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('pref_show_lunar', false);
+        provider.markUserPreferencesChanged(['pref_show_lunar']);
+        await AccountPreferenceWrites.drain();
+
+        await AccountLocalDataCleaner.runPreferenceBoundary(() async {
+          final accepted = await provider
+              .flushPendingLocalChangesBeforeAccountChange();
+          expect(accepted, isTrue);
+          expect(provider.lastError, isNull);
+          expect(provider.hasPendingChanges, isFalse);
+          expect(prefs.getBool('sync_pending_local_changes'), isFalse);
+          if (responseKind != 'workspace') {
+            expect(
+              jsonDecode(prefs.getString('sync_deleted_items')!),
+              responseExtras['deleted_items'],
+            );
+          }
+          if (responseKind != 'private') {
+            expect(
+              jsonDecode(prefs.getString('sync_workspace_deleted_items')!),
+              {
+                'synthetic-space': {
+                  'todos': {'remote-shared': stamp},
+                },
+              },
+            );
+          }
+          await provider.suspendForAccountChange();
+          await AccountLocalDataCleaner.clearSharedPreferences();
+        }).timeout(const Duration(seconds: 10));
+        expect(
+          prefs.getKeys().where((key) => key.startsWith('sync_')),
+          isEmpty,
+        );
+      },
+    );
+  }
 }
 
-CloudSyncProvider _syncProvider(Completer<void> requestStarted) {
+CloudSyncProvider _syncProvider(
+  Completer<void> requestStarted, {
+  Map<String, Object> responseExtras = const {},
+}) {
   final client = ApiClient(
     baseUrl: 'https://duoyi.test',
     token: 'synthetic-token',
@@ -255,6 +321,7 @@ CloudSyncProvider _syncProvider(Completer<void> requestStarted) {
             for (final key in sent.keys) key: 'confirmed-$key',
           },
           'preferences': sent['preferences'],
+          ...responseExtras,
         }),
         200,
         headers: {'content-type': 'application/json'},

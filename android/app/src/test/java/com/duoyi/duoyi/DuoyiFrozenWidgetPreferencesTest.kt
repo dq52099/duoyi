@@ -407,7 +407,7 @@ class DuoyiFrozenWidgetPreferencesTest {
     fun publishedStaleVsPublishedFreshVsUnpublishedDistinction() {
         listOf("zh" to true, "en" to false).forEach { (language, isZh) ->
             val neutralPrompt = if (isZh) "打开多仪以更新小组件" else "Open Duoyi to update this widget"
-            val normalEmptyFocus = if (isZh) "今日还未专注" else "No focus sessions today"
+            val normalEmptyFocus = if (isZh) "今日还未专注" else "No focus today yet"
             val staleFocus = if (isZh) "今日数据待刷新" else "Today’s data pending refresh"
 
             // A. Published Fresh: retains real content; ordinary empty content is NOT treated as unpublished

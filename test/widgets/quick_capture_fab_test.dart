@@ -71,7 +71,7 @@ void main() {
       'lib/widgets/quick_capture_fab.dart',
     ).readAsStringSync();
     final start = source.indexOf('Future<void> _quickTodo');
-    final end = source.indexOf('String _formatParsed', start);
+    final end = source.indexOf('Future<void> _quickAiTodo', start);
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
     final method = source.substring(start, end);

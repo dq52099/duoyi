@@ -1,14 +1,155 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:duoyi/desktop_web/desktop_embedded_scope.dart';
+
+import '../core/design_tokens.dart';
+import '../core/feedback_ui_copy.dart';
 import '../core/i18n.dart';
 import '../providers/auth_provider.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../services/api_client.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/surface_components.dart';
+import '../widgets/brand_background.dart'
+    show BrandBackground, BrandRouteSurface, LocaleStatePreservingRoute;
 import 'login_screen.dart';
 
-class FeedbackScreen extends StatefulWidget {
+Color _statusColor(BuildContext context, String value) {
+  return switch (value) {
+    'resolved' => DesignTokens.defaultSuccess,
+    'closed' => Theme.of(context).colorScheme.onSurfaceVariant,
+    'in_progress' => DesignTokens.defaultWarning,
+    _ => Theme.of(context).colorScheme.primary,
+  };
+}
+
+Color _resolveAccessibleForeground(
+  Color background,
+  Color preferred, {
+  required bool isDark,
+  double minContrast = 4.5,
+}) {
+  final effectivePreferred = Color.alphaBlend(preferred, background);
+  if (appContrastRatio(background, effectivePreferred) >= minContrast) {
+    return preferred;
+  }
+  final target = isDark ? Colors.white : const Color(0xFF111827);
+  for (var t = 0.05; t <= 0.90; t += 0.05) {
+    final candidate = Color.lerp(preferred, target, t)!;
+    final effectiveCandidate = Color.alphaBlend(candidate, background);
+    if (appContrastRatio(background, effectiveCandidate) >= minContrast) {
+      return candidate;
+    }
+  }
+  return appReadableForeground(background, preferred);
+}
+
+Color _resolveAccessibleErrorColor(
+  BuildContext context,
+  Color background,
+  Color errorColor,
+) {
+  final surfaceStyle = appSurfaceStyleOf(context);
+  final isLiquidGlass =
+      surfaceStyle != null && (surfaceStyle.cardFillColor?.a ?? 1.0) < 0.8;
+  final effectiveError = isLiquidGlass ? const Color(0xFFA23535) : errorColor;
+  final effectiveBg = isLiquidGlass
+      ? Color.alphaBlend(
+          surfaceStyle.cardFillColor ?? background,
+          Theme.of(context).scaffoldBackgroundColor,
+        )
+      : background;
+
+  if (appContrastRatio(effectiveBg, effectiveError) >= 4.5) {
+    return effectiveError;
+  }
+  const dark = Color(0xFF111827);
+  for (var t = 0.05; t <= 0.60; t += 0.05) {
+    final candidate = Color.lerp(effectiveError, dark, t)!;
+    if (appContrastRatio(effectiveBg, candidate) >= 4.5) {
+      return candidate;
+    }
+  }
+  return appReadableForeground(effectiveBg, effectiveError);
+}
+
+Color _resolveSubmitFloatingLabelColor(
+  BuildContext context,
+  Color cardSurface,
+) {
+  final cs = Theme.of(context).colorScheme;
+  final surfaceStyle = appSurfaceStyleOf(context);
+  final isLiquidGlass =
+      surfaceStyle != null && (surfaceStyle.cardFillColor?.a ?? 1.0) < 0.8;
+  if (isLiquidGlass) {
+    return const Color(0xFF0864CC);
+  }
+  if (appContrastRatio(cardSurface, cs.primary) >= 4.5) {
+    return cs.primary;
+  }
+  const dark = Color(0xFF111827);
+  for (var t = 0.05; t <= 0.60; t += 0.05) {
+    final candidate = Color.lerp(cs.primary, dark, t)!;
+    if (appContrastRatio(cardSurface, candidate) >= 4.5) {
+      return candidate;
+    }
+  }
+  return appReadableForeground(cardSurface, cs.primary);
+}
+
+Color _feedbackCardBackground(BuildContext context) {
+  final theme = Theme.of(context);
+  final cs = theme.colorScheme;
+  final isDark = theme.brightness == Brightness.dark;
+  final surfaceStyle = appSurfaceStyleOf(context);
+  final cardBackdrop = isDark ? cs.surface : theme.scaffoldBackgroundColor;
+  return surfaceStyle?.cardFillColor != null
+      ? Color.alphaBlend(surfaceStyle!.cardFillColor!, cardBackdrop)
+      : cs.surface;
+}
+
+class _FeedbackLocaleText extends StatelessWidget {
+  final String Function(AppLocale locale) copyBuilder;
+
+  const _FeedbackLocaleText(this.copyBuilder);
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) => Text(copyBuilder(locale)),
+    );
+  }
+}
+
+Widget _wrapFeedbackScaffold(
+  BuildContext context, {
+  required Widget scaffold,
+  required Color routeBackground,
+  required bool isLiquidGlass,
+}) {
+  if (!isLiquidGlass) {
+    return scaffold;
+  }
+
+  final hasBrandSurface =
+      DesktopEmbeddedHostScope.isHosted(context) ||
+      context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+      context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+  if (hasBrandSurface) {
+    return scaffold;
+  }
+  return Material(
+    color: routeBackground,
+    child: BrandBackground(child: scaffold),
+  );
+}
+
+class FeedbackScreen extends StatefulWidget
+    implements LocaleStatePreservingRoute {
   final String initialCategory;
 
   const FeedbackScreen({super.key, this.initialCategory = 'feature'});
@@ -22,48 +163,129 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
   final List<Map<String, dynamic>> _items = [];
   bool _loading = false;
-  String? _error;
+  Object? _loadError;
   int _page = 1;
   int _totalPages = 1;
   int _total = 0;
   int _loadSerial = 0;
 
+  bool _initialized = false;
+  String? _currentUserId;
+  String? _currentToken;
+  int _currentAccountGeneration = 0;
+  Route<void>? _activeDetailRoute;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    I18n.localeListenable.addListener(_handleLocaleChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
   }
 
-  String _categoryLabel(String value) => feedbackCategoryLabel(value);
-
-  String _statusLabel(String value) => switch (value) {
-    'resolved' => I18n.tr('feedback.status.resolved'),
-    'closed' => I18n.tr('feedback.status.closed'),
-    'in_progress' => I18n.tr('feedback.status.in_progress'),
-    _ => I18n.tr('feedback.status.open'),
-  };
-
-  Color _statusColor(BuildContext context, String value) {
-    return switch (value) {
-      'resolved' => Colors.green,
-      'closed' => Theme.of(context).colorScheme.onSurfaceVariant,
-      'in_progress' => Colors.orange,
-      _ => Theme.of(context).colorScheme.primary,
-    };
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final auth = context.watch<AuthProvider>();
+    final currentUserId = auth.state.userId;
+    final currentToken = auth.state.token;
+    final currentGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    if (_initialized) {
+      if (_currentUserId != currentUserId ||
+          _currentToken != currentToken ||
+          _currentAccountGeneration != currentGeneration) {
+        _currentUserId = currentUserId;
+        _currentToken = currentToken;
+        _currentAccountGeneration = currentGeneration;
+        _onAccountChanged(auth);
+      }
+    } else {
+      _initialized = true;
+      _currentUserId = currentUserId;
+      _currentToken = currentToken;
+      _currentAccountGeneration = currentGeneration;
+    }
   }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_handleLocaleChanged);
+    _dismissActiveDetailRoute();
+    super.dispose();
+  }
+
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _dismissActiveDetailRoute() {
+    final route = _activeDetailRoute;
+    _activeDetailRoute = null;
+    if (route != null && route.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (route.isActive) {
+          route.navigator?.removeRoute(route);
+        }
+      });
+    }
+  }
+
+  void _onAccountChanged(AuthProvider auth) {
+    _loadSerial++;
+    _dismissActiveDetailRoute();
+    setState(() {
+      _items.clear();
+      _page = 1;
+      _totalPages = 1;
+      _total = 0;
+      _loadError = null;
+      _loading = false;
+    });
+    if (auth.state.isLoggedIn) {
+      _load(page: 1);
+    }
+  }
+
+  String _categoryLabel(String value) => FeedbackUiCopy.categoryLabel(value);
+
+  String _statusLabel(String value) => FeedbackUiCopy.statusLabel(value);
 
   Future<void> _load({int? page}) async {
     final auth = context.read<AuthProvider>();
     if (!auth.state.isLoggedIn) return;
+
+    AuthSessionLease? lease;
+    try {
+      lease = auth.captureSessionLease();
+    } catch (_) {
+      return;
+    }
+
+    final originClient = auth.client;
+    final originUserId = auth.state.userId;
+    final originGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final loadSerial = ++_loadSerial;
     final nextPage = page ?? _page;
+
     setState(() {
       _loading = true;
-      _error = null;
+      _loadError = null;
     });
+
     try {
       final path = '/api/feedback/me?page=$nextPage&page_size=$_pageSize';
-      final raw = await auth.client.getRaw(path);
+      final raw = await originClient.getRaw(path);
+
+      if (!mounted || loadSerial != _loadSerial) return;
+      if (!auth.isSessionLeaseCurrent(lease) ||
+          auth.state.userId != originUserId ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            originGeneration,
+          )) {
+        return;
+      }
+
       final res = raw is Map<String, dynamic> ? raw : <String, dynamic>{};
       final list = raw is List<dynamic>
           ? raw
@@ -72,7 +294,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-      if (!mounted || loadSerial != _loadSerial) return;
+
       setState(() {
         _items
           ..clear()
@@ -86,12 +308,24 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             : rawItems.length;
       });
     } on ApiException catch (e) {
-      if (mounted && loadSerial == _loadSerial) {
-        setState(() => _error = userVisibleApiError(e));
+      if (mounted &&
+          loadSerial == _loadSerial &&
+          auth.isSessionLeaseCurrent(lease) &&
+          auth.state.userId == originUserId &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            originGeneration,
+          )) {
+        setState(() => _loadError = e);
       }
     } catch (e) {
-      if (mounted && loadSerial == _loadSerial) {
-        setState(() => _error = e.toString());
+      if (mounted &&
+          loadSerial == _loadSerial &&
+          auth.isSessionLeaseCurrent(lease) &&
+          auth.state.userId == originUserId &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            originGeneration,
+          )) {
+        setState(() => _loadError = e);
       }
     } finally {
       if (mounted && loadSerial == _loadSerial) {
@@ -117,75 +351,32 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       ),
     );
     if (submitted == true && mounted) {
-      await _load(page: 1);
+      final currentAuth = context.read<AuthProvider>();
+      if (currentAuth.state.isLoggedIn &&
+          currentAuth.state.userId == _currentUserId &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            _currentAccountGeneration,
+          )) {
+        await _load(page: 1);
+      }
     }
   }
 
-  void _showFeedbackDetail(Map<String, dynamic> item) {
-    final category = (item['category'] ?? 'feature').toString();
-    final status = (item['status'] ?? 'open').toString();
-    final content = (item['content'] ?? '').toString();
-    final reply = (item['admin_reply'] ?? '').toString();
-    final createdAt = (item['created_at'] ?? '').toString();
-    final updatedAt = (item['updated_at'] ?? '').toString();
-    showDialog<void>(
+  Future<void> _showFeedbackDetail(Map<String, dynamic> item) async {
+    final auth = context.read<AuthProvider>();
+    final route = DialogRoute<void>(
       context: context,
-      builder: (ctx) => AppDialog(
-        maxWidth: 620,
-        icon: const Icon(Icons.feedback_outlined),
-        title: const Text('反馈详情'),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 540, maxHeight: 520),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _FeedbackDetailBadge(
-                      label: _categoryLabel(category),
-                      icon: Icons.category_outlined,
-                      color: Theme.of(ctx).colorScheme.primary,
-                    ),
-                    _FeedbackDetailBadge(
-                      label: _statusLabel(status),
-                      icon: Icons.radio_button_checked,
-                      color: _statusColor(ctx, status),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                if (createdAt.isNotEmpty)
-                  _FeedbackDetailField(label: '提交', value: createdAt),
-                if (updatedAt.isNotEmpty)
-                  _FeedbackDetailField(label: '更新', value: updatedAt),
-                _FeedbackDetailField(
-                  label: '内容',
-                  value: content.trim().isEmpty ? '暂无内容' : content,
-                  multiline: true,
-                ),
-                if (reply.trim().isNotEmpty)
-                  _FeedbackDetailField(
-                    label: I18n.tr('feedback.admin_reply'),
-                    value: reply,
-                    multiline: true,
-                    tint: Theme.of(ctx).colorScheme.primary,
-                  ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
-          ),
-        ],
+      builder: (ctx) => _FeedbackDetailDialog(
+        item: item,
+        originUserId: auth.state.userId,
+        originGeneration: AccountLocalDataCleaner.accountDataGeneration,
       ),
     );
+    _activeDetailRoute = route;
+    await Navigator.of(context).push(route);
+    if (_activeDetailRoute == route) {
+      _activeDetailRoute = null;
+    }
   }
 
   @override
@@ -196,19 +387,26 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     final routeBackground = Theme.of(context).brightness == Brightness.dark
         ? cs.surface
         : cs.surfaceContainerLowest;
-    return Scaffold(
-      backgroundColor: routeBackground,
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+    final errorMessage = _loadError != null
+        ? FeedbackUiCopy.formatError(_loadError)
+        : null;
+
+    final scaffold = Scaffold(
+      backgroundColor: isLiquidGlass ? Colors.transparent : routeBackground,
       appBar: AppBar(
-        title: const Text('许愿与反馈'),
+        title: Text(FeedbackUiCopy.screenTitle()),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
         backgroundColor: routeBackground.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
       ),
       floatingActionButton: FloatingActionButton.extended(
         key: const ValueKey('feedback_submit_fab'),
+        heroTag: 'feedback_submit_fab',
         onPressed: () => _openSubmit(widget.initialCategory),
         icon: const Icon(Icons.add_comment_outlined),
-        label: Text(I18n.tr('feedback.submit.button')),
+        label: Text(FeedbackUiCopy.submitButton()),
       ),
       body: AppSecondaryControlTheme(
         child: RefreshIndicator(
@@ -235,14 +433,18 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           AppSectionHeader(
-                            title: '反馈记录',
+                            title:
+                                FeedbackUiCopy.historySectionTitle(), // title: '反馈记录'
                             padding: EdgeInsets.zero,
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            loggedIn
-                                ? '共 $_total 条，当前第 $_page/$_totalPages 页'
-                                : I18n.tr('feedback.login.records_required'),
+                            FeedbackUiCopy.historySummary(
+                              total: _total,
+                              page: _page,
+                              totalPages: _totalPages,
+                              loggedIn: loggedIn,
+                            ),
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
                                   color: cs.onSurface.withValues(alpha: 0.64),
@@ -258,9 +460,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
               if (!loggedIn)
                 EmptyState(
                   icon: Icons.login_outlined,
-                  message: I18n.tr('feedback.login.records_required'),
-                  actionLabel:
-                      '${I18n.tr('feedback.submit.login_prefix')}${_categoryLabel(widget.initialCategory)}',
+                  message: FeedbackUiCopy.loginRecordsRequired(),
+                  actionLabel: FeedbackUiCopy.loginSubmitPrefix(
+                    widget.initialCategory,
+                  ),
                   onAction: () => _openSubmit(widget.initialCategory),
                 )
               else if (_loading && _items.isEmpty)
@@ -270,18 +473,18 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                     child: CircularProgressIndicator(),
                   ),
                 )
-              else if (_error != null && _items.isEmpty)
+              else if (errorMessage != null && _items.isEmpty)
                 EmptyState(
                   icon: Icons.error_outline,
-                  message: _error!,
-                  actionLabel: I18n.tr('feedback.refresh'),
+                  message: errorMessage,
+                  actionLabel: FeedbackUiCopy.refresh(),
                   onAction: () => _load(page: _page),
                 )
               else if (_items.isEmpty)
                 EmptyState(
                   icon: Icons.feedback_outlined,
-                  message: I18n.tr('feedback.empty'),
-                  actionLabel: I18n.tr('feedback.submit.button'),
+                  message: FeedbackUiCopy.emptyHistory(),
+                  actionLabel: FeedbackUiCopy.submitButton(),
                   onAction: () => _openSubmit(widget.initialCategory),
                 )
               else ...[
@@ -317,6 +520,150 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           ),
         ),
       ),
+    );
+
+    return _wrapFeedbackScaffold(
+      context,
+      scaffold: scaffold,
+      routeBackground: routeBackground,
+      isLiquidGlass: isLiquidGlass,
+    );
+  }
+}
+
+class _FeedbackDetailDialog extends StatefulWidget {
+  final Map<String, dynamic> item;
+  final String? originUserId;
+  final int originGeneration;
+
+  const _FeedbackDetailDialog({
+    required this.item,
+    required this.originUserId,
+    required this.originGeneration,
+  });
+
+  @override
+  State<_FeedbackDetailDialog> createState() => _FeedbackDetailDialogState();
+}
+
+class _FeedbackDetailDialogState extends State<_FeedbackDetailDialog> {
+  @override
+  void initState() {
+    super.initState();
+    I18n.localeListenable.addListener(_handleLocaleChanged);
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_handleLocaleChanged);
+    super.dispose();
+  }
+
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _safeClose() {
+    final route = ModalRoute.of(context);
+    if (route != null && route.isActive) {
+      route.navigator?.removeRoute(route);
+    }
+  }
+
+  void _closeDialogByUser() {
+    final route = ModalRoute.of(context);
+    if (route != null && route.isActive) {
+      if (route.isCurrent) {
+        Navigator.of(context).pop();
+      } else {
+        route.navigator?.removeRoute(route);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final currentGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    if (auth.state.userId != widget.originUserId ||
+        currentGeneration != widget.originGeneration) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _safeClose();
+      });
+      return const SizedBox.shrink();
+    }
+
+    final item = widget.item;
+    final category = (item['category'] ?? 'feature').toString();
+    final status = (item['status'] ?? 'open').toString();
+    final content = (item['content'] ?? '').toString();
+    final reply = (item['admin_reply'] ?? '').toString();
+    final createdAt = (item['created_at'] ?? '').toString();
+    final updatedAt = (item['updated_at'] ?? '').toString();
+    final cs = Theme.of(context).colorScheme;
+
+    return AppDialog(
+      maxWidth: 620,
+      icon: const Icon(Icons.feedback_outlined),
+      title: Text(FeedbackUiCopy.detailTitle()),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 540, maxHeight: 520),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _FeedbackDetailBadge(
+                    label: FeedbackUiCopy.categoryLabel(category),
+                    icon: Icons.category_outlined,
+                    color: cs.primary,
+                  ),
+                  _FeedbackDetailBadge(
+                    label: FeedbackUiCopy.statusLabel(status),
+                    icon: Icons.radio_button_checked,
+                    color: _statusColor(context, status),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              if (createdAt.isNotEmpty)
+                _FeedbackDetailField(
+                  label: FeedbackUiCopy.detailSubmittedAt(),
+                  value: createdAt,
+                ),
+              if (updatedAt.isNotEmpty)
+                _FeedbackDetailField(
+                  label: FeedbackUiCopy.detailUpdatedAt(),
+                  value: updatedAt,
+                ),
+              _FeedbackDetailField(
+                label: FeedbackUiCopy.detailContent(),
+                value: content.trim().isEmpty
+                    ? FeedbackUiCopy.detailEmptyContent()
+                    : content,
+                multiline: true,
+              ),
+              if (reply.trim().isNotEmpty)
+                _FeedbackDetailField(
+                  label: FeedbackUiCopy.detailReply(),
+                  value: reply,
+                  multiline: true,
+                  tint: cs.primary,
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _closeDialogByUser,
+          child: Text(FeedbackUiCopy.actionClose()),
+        ),
+      ],
     );
   }
 }
@@ -355,7 +702,18 @@ class _FeedbackDetailField extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final accent = tint ?? cs.outlineVariant;
+    final dialogBg = theme.dialogTheme.backgroundColor ?? cs.surface;
+    final fieldBg = Color.alphaBlend(
+      accent.withValues(alpha: tint == null ? 0.06 : 0.08),
+      dialogBg,
+    );
+    final labelColor = _resolveAccessibleForeground(
+      fieldBg,
+      cs.onSurface.withValues(alpha: 0.75),
+      isDark: isDark,
+    );
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 10),
@@ -375,7 +733,7 @@ class _FeedbackDetailField extends StatelessWidget {
             label,
             style: appSecondaryControlLabelStyle(
               context,
-            ).copyWith(color: cs.onSurface.withValues(alpha: 0.58)),
+            ).copyWith(color: labelColor),
           ),
           const SizedBox(height: 4),
           SelectableText(
@@ -398,6 +756,13 @@ class _FeedbackDetailField extends StatelessWidget {
   }
 }
 
+enum _FeedbackSubmitErrorType {
+  emptyContent,
+  accountChanged,
+  loginRequired,
+  transitionInProgress,
+}
+
 class FeedbackSubmitScreen extends StatefulWidget {
   final String initialCategory;
 
@@ -411,70 +776,214 @@ class _FeedbackSubmitScreenState extends State<FeedbackSubmitScreen> {
   late String _category;
   final _contentCtrl = TextEditingController();
   bool _submitting = false;
-  String? _submitError;
+
+  _FeedbackSubmitErrorType? _submitErrorType;
+  Object? _rawSubmitError;
+
+  late final AuthProvider _auth;
+  late final bool _originIsLoggedIn;
+  late final String? _originUserId;
+  late final int _originGeneration;
+  late final ApiClient _originClient;
+  AuthSessionLease? _originSessionLease;
+  bool _leaseCaptureFailed = false;
 
   @override
   void initState() {
     super.initState();
     _category = normalizeFeedbackCategory(widget.initialCategory);
+    I18n.localeListenable.addListener(_handleLocaleChanged);
+    _auth = context.read<AuthProvider>();
+    _originIsLoggedIn = _auth.state.isLoggedIn;
+    _originUserId = _auth.state.userId;
+    _originGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    _originClient = _auth.client;
+
+    if (_originIsLoggedIn) {
+      try {
+        _originSessionLease = _auth.captureSessionLease();
+      } catch (_) {
+        _originSessionLease = null;
+        _leaseCaptureFailed = true;
+      }
+    } else {
+      _originSessionLease = null;
+    }
   }
 
   @override
   void dispose() {
+    I18n.localeListenable.removeListener(_handleLocaleChanged);
     _contentCtrl.dispose();
     super.dispose();
   }
 
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool _isCurrentSession() {
+    if (!mounted) return false;
+    if (!_originIsLoggedIn ||
+        _originSessionLease == null ||
+        _leaseCaptureFailed) {
+      return false;
+    }
+    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+      _originGeneration,
+    )) {
+      return false;
+    }
+    final currentAuth = context.read<AuthProvider>();
+    if (!identical(currentAuth, _auth)) return false;
+    if (!currentAuth.state.isLoggedIn) return false;
+    if (currentAuth.state.userId != _originUserId) return false;
+    if (!currentAuth.isSessionLeaseCurrent(_originSessionLease!)) {
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _submit() async {
-    final auth = context.read<AuthProvider>();
-    if (!auth.state.isLoggedIn) {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+    if (_submitting) return;
+
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final ownerRoute = ModalRoute.of(context);
+
+    if (_leaseCaptureFailed) {
+      setState(() {
+        _submitErrorType = _FeedbackSubmitErrorType.transitionInProgress;
+        _rawSubmitError = null;
+      });
       return;
     }
+
+    if (!_originIsLoggedIn || _originSessionLease == null) {
+      setState(() {
+        _submitErrorType = _FeedbackSubmitErrorType.loginRequired;
+        _rawSubmitError = null;
+      });
+      return;
+    }
+
+    if (!_isCurrentSession()) {
+      setState(() {
+        _submitErrorType = _FeedbackSubmitErrorType.accountChanged;
+        _rawSubmitError = null;
+      });
+      return;
+    }
+
     final content = _contentCtrl.text.trim();
     if (content.isEmpty) {
-      setState(() => _submitError = I18n.tr('feedback.content.empty'));
+      setState(() {
+        _submitErrorType = _FeedbackSubmitErrorType.emptyContent;
+        _rawSubmitError = null;
+      });
       return;
     }
+
     setState(() {
       _submitting = true;
-      _submitError = null;
+      _submitErrorType = null;
+      _rawSubmitError = null;
     });
+
     try {
-      await auth.client.post('/api/feedback', {
+      await _originClient.post('/api/feedback', {
         'category': _category,
         'content': content,
       });
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(I18n.tr('feedback.submitted'))));
-      Navigator.pop(context, true);
+
+      if (!mounted || (ownerRoute != null && !ownerRoute.isCurrent)) return;
+      if (!_isCurrentSession()) return;
+
+      if (navigator.canPop()) {
+        navigator.pop(true);
+      }
+      messenger?.showSnackBar(
+        SnackBar(
+          content: _FeedbackLocaleText(
+            (locale) => FeedbackUiCopy.submitted(locale),
+          ),
+        ),
+      );
     } on ApiException catch (e) {
-      if (mounted) setState(() => _submitError = userVisibleApiError(e));
+      if (mounted && _isCurrentSession()) {
+        setState(() {
+          _submitErrorType = null;
+          _rawSubmitError = e;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() => _submitError = e.toString());
+      if (mounted && _isCurrentSession()) {
+        setState(() {
+          _submitErrorType = null;
+          _rawSubmitError = e;
+        });
+      }
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
     }
+  }
+
+  String? _getSubmitErrorMessage() {
+    if (_leaseCaptureFailed) {
+      return FeedbackUiCopy.accountTransitionInProgress();
+    }
+    if (_submitErrorType != null) {
+      return switch (_submitErrorType!) {
+        _FeedbackSubmitErrorType.emptyContent => FeedbackUiCopy.contentEmpty(),
+        _FeedbackSubmitErrorType.accountChanged =>
+          FeedbackUiCopy.accountChangedReopen(),
+        _FeedbackSubmitErrorType.loginRequired =>
+          FeedbackUiCopy.loginRequiredReopen(),
+        _FeedbackSubmitErrorType.transitionInProgress =>
+          FeedbackUiCopy.accountTransitionInProgress(),
+      };
+    }
+    if (_rawSubmitError != null) {
+      return FeedbackUiCopy.formatError(_rawSubmitError);
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final loggedIn = auth.state.isLoggedIn;
-    final cs = Theme.of(context).colorScheme;
-    final categoryLabel = feedbackCategoryLabel(_category);
-    final routeBackground = Theme.of(context).brightness == Brightness.dark
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final cardBg = _feedbackCardBackground(context);
+    final routeBackground = isDark
         ? cs.surface
         : cs.surfaceContainerLowest;
-    return Scaffold(
-      backgroundColor: routeBackground,
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+    final errorMessage = _getSubmitErrorMessage();
+    final canSubmit = loggedIn && !_submitting && !_leaseCaptureFailed;
+    final textScaler = MediaQuery.textScalerOf(context);
+    final labelStyle = appSecondaryControlLabelStyle(context);
+    final floatingColor = _resolveSubmitFloatingLabelColor(
+      context,
+      cardBg,
+    );
+    final helperColor = _resolveAccessibleForeground(
+      cardBg,
+      cs.onSurfaceVariant,
+      isDark: isDark,
+    );
+    final topPadding = math.max(14.0, textScaler.scale(18.0));
+    final bottomPadding = math.max(10.0, textScaler.scale(12.0));
+
+    final scaffold = Scaffold(
+      backgroundColor: isLiquidGlass ? Colors.transparent : routeBackground,
       appBar: AppBar(
-        title: const Text('提交许愿与反馈'),
+        title: Text(FeedbackUiCopy.submitTitle()),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
         backgroundColor: routeBackground.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
@@ -490,22 +999,24 @@ class _FeedbackSubmitScreenState extends State<FeedbackSubmitScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   AppSectionHeader(
-                    title: '提交许愿与反馈',
+                    title: FeedbackUiCopy.submitHeaderTitle(),
                     subtitle: loggedIn
-                        ? '选择反馈类型后提交，处理进度会回到记录列表'
-                        : I18n.tr('feedback.login.submit_required'),
+                        ? FeedbackUiCopy.submitHeaderSubtitle()
+                        : FeedbackUiCopy.loginSubmitRequired(),
                     padding: EdgeInsets.zero,
+                    wrapText: true,
                   ),
                   const SizedBox(height: 12),
                   _FeedbackCategoryMenu(
                     selected: _category,
-                    labelFor: feedbackCategoryLabel,
-                    onSelected: loggedIn && !_submitting
-                        ? (value) => setState(() {
-                            _category = normalizeFeedbackCategory(value);
-                            _submitError = null;
-                          })
-                        : (_) {},
+                    enabled: loggedIn && !_submitting,
+                    labelFor: (cat, [loc]) =>
+                        FeedbackUiCopy.categoryLabel(cat, loc),
+                    onSelected: (value) => setState(() {
+                      _category = normalizeFeedbackCategory(value);
+                      _submitErrorType = null;
+                      _rawSubmitError = null;
+                    }),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -515,22 +1026,52 @@ class _FeedbackSubmitScreenState extends State<FeedbackSubmitScreen> {
                     minLines: 5,
                     maxLines: 9,
                     decoration: InputDecoration(
-                      labelText:
-                          '${I18n.tr('feedback.content.label_prefix')}$categoryLabel',
-                      helperText: feedbackCategoryHelp(_category),
+                      isDense: true,
+                      contentPadding: EdgeInsets.fromLTRB(
+                        10,
+                        topPadding,
+                        10,
+                        bottomPadding,
+                      ),
+                      label: Text(FeedbackUiCopy.contentLabel(_category)),
+                      floatingLabelStyle: labelStyle.copyWith(
+                        color: floatingColor,
+                        fontWeight: FontWeight.normal,
+                      ),
+                      helper: Text(
+                        FeedbackUiCopy.categoryHelp(_category),
+                        style: theme.inputDecorationTheme.helperStyle ??
+                            labelStyle.copyWith(color: helperColor),
+                      ),
                       alignLabelWithHint: true,
                     ),
                   ),
-                  if (_submitError != null) ...[
+                  if (errorMessage != null) ...[
                     const SizedBox(height: 10),
-                    Text(_submitError!, style: TextStyle(color: cs.error)),
+                    Text(
+                      errorMessage,
+                      style: TextStyle(
+                        color: _resolveAccessibleErrorColor(
+                          context,
+                          cardBg,
+                          cs.error,
+                        ),
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 14),
                   Align(
                     alignment: Alignment.centerRight,
                     child: FilledButton.icon(
                       key: const ValueKey('feedback_submit_page_button'),
-                      onPressed: loggedIn && !_submitting ? _submit : null,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                      ),
+                      onPressed: canSubmit ? _submit : null,
                       icon: _submitting
                           ? const SizedBox(
                               width: 16,
@@ -540,8 +1081,8 @@ class _FeedbackSubmitScreenState extends State<FeedbackSubmitScreen> {
                           : const Icon(Icons.send_outlined),
                       label: Text(
                         _submitting
-                            ? I18n.tr('feedback.submitting')
-                            : I18n.tr('feedback.submit.button'),
+                            ? FeedbackUiCopy.submitting()
+                            : FeedbackUiCopy.submitButton(),
                       ),
                     ),
                   ),
@@ -552,16 +1093,25 @@ class _FeedbackSubmitScreenState extends State<FeedbackSubmitScreen> {
         ),
       ),
     );
+
+    return _wrapFeedbackScaffold(
+      context,
+      scaffold: scaffold,
+      routeBackground: routeBackground,
+      isLiquidGlass: isLiquidGlass,
+    );
   }
 }
 
 class _FeedbackCategoryMenu extends StatelessWidget {
   final String selected;
-  final String Function(String) labelFor;
+  final bool enabled;
+  final String Function(String, [AppLocale?]) labelFor;
   final ValueChanged<String> onSelected;
 
   const _FeedbackCategoryMenu({
     required this.selected,
+    this.enabled = true,
     required this.labelFor,
     required this.onSelected,
   });
@@ -569,67 +1119,131 @@ class _FeedbackCategoryMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final selectedBg = cs.primary.withValues(alpha: 0.1);
-    final selectedBorder = cs.primary.withValues(alpha: 0.28);
-    final selectedFg = cs.onSurface;
-    return Row(
-      key: const ValueKey('feedback_three_level_menu'),
-      children: [
-        Text(
-          '类型',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: cs.onSurface.withValues(alpha: 0.54),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Listener(
-          onPointerDown: (_) {
-            FocusScope.of(context, createDependency: false).unfocus();
-            FocusManager.instance.primaryFocus?.unfocus();
-          },
-          child: PopupMenuButton<String>(
-            tooltip: I18n.tr('feedback.category.label'),
-            initialValue: selected,
-            onSelected: onSelected,
-            itemBuilder: (_) => [
-              for (final category in const ['feature', 'bug', 'wish'])
-                PopupMenuItem(
-                  value: category,
+    final selectedBg = enabled
+        ? cs.primary.withValues(alpha: 0.1)
+        : cs.onSurface.withValues(alpha: 0.04);
+    final selectedBorder = enabled
+        ? cs.primary.withValues(alpha: 0.28)
+        : cs.outlineVariant.withValues(alpha: 0.14);
+    final selectedFg = enabled
+        ? cs.onSurface
+        : cs.onSurface.withValues(alpha: 0.38);
+    final iconColor = enabled
+        ? cs.primary
+        : cs.onSurface.withValues(alpha: 0.38);
+
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+            final isNarrow = constraints.maxWidth < 360 || textScale > 1.2;
+
+            final theme = Theme.of(context);
+            final isDark = theme.brightness == Brightness.dark;
+            final cardBg = _feedbackCardBackground(context);
+            final categoryLabelColor = _resolveAccessibleForeground(
+              cardBg,
+              cs.onSurface.withValues(alpha: enabled ? 0.75 : 0.38),
+              isDark: isDark,
+            );
+
+            final labelWidget = Text(
+              FeedbackUiCopy.categoryMenuLabel(locale),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: categoryLabelColor,
+              ),
+            );
+
+            final buttonWidget = Listener(
+              onPointerDown: enabled
+                  ? (_) {
+                      FocusScope.of(context, createDependency: false).unfocus();
+                      FocusManager.instance.primaryFocus?.unfocus();
+                    }
+                  : null,
+              child: PopupMenuButton<String>(
+                enabled: enabled,
+                tooltip: FeedbackUiCopy.categoryLabelTooltip(locale),
+                initialValue: selected,
+                onSelected: onSelected,
+                itemBuilder: (context) => [
+                  for (final category in const ['feature', 'bug', 'wish'])
+                    PopupMenuItem<String>(
+                      value: category,
+                      child: ValueListenableBuilder<AppLocale>(
+                        valueListenable: I18n.localeListenable,
+                        builder: (context, currentLocale, _) {
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: AppSecondaryMenuText(
+                                  labelFor(category, currentLocale),
+                                ),
+                              ),
+                              if (selected == category)
+                                Icon(Icons.check, size: 16, color: cs.primary),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                ],
+                child: Container(
+                  constraints: BoxConstraints(
+                    minHeight: 44,
+                    maxWidth: constraints.maxWidth,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selectedBg,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: selectedBorder, width: 0.45),
+                  ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(child: AppSecondaryMenuText(labelFor(category))),
-                      if (selected == category)
-                        Icon(Icons.check, size: 16, color: cs.primary),
+                      Flexible(
+                        child: Text(
+                          labelFor(selected, locale),
+                          style: appSecondaryControlTextStyle(context).copyWith(
+                            color: selectedFg,
+                            fontWeight: FontWeight.normal,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.arrow_drop_down, color: iconColor, size: 18),
                     ],
                   ),
                 ),
-            ],
-            child: Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: selectedBg,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: selectedBorder, width: 0.45),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+            );
+
+            if (isNarrow) {
+              return Column(
+                key: const ValueKey('feedback_three_level_menu'),
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    labelFor(selected),
-                    style: appSecondaryControlTextStyle(context).copyWith(
-                      color: selectedFg,
-                      fontWeight: FontWeight.normal,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.arrow_drop_down, color: cs.primary, size: 18),
+                  labelWidget,
+                  const SizedBox(height: 6),
+                  buttonWidget,
                 ],
-              ),
-            ),
-          ),
-        ),
-      ],
+              );
+            }
+
+            return Row(
+              key: const ValueKey('feedback_three_level_menu'),
+              children: [labelWidget, const SizedBox(width: 8), buttonWidget],
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -657,7 +1271,23 @@ class _FeedbackRecordCard extends StatelessWidget {
     final reply = (item['admin_reply'] ?? '').toString();
     final createdAt = (item['created_at'] ?? '').toString();
     final color = statusColor(status);
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final cardBg = _feedbackCardBackground(context);
+    final timestampColor = _resolveAccessibleForeground(
+      cardBg,
+      cs.onSurface.withValues(alpha: 0.75),
+      isDark: isDark,
+    );
+    final replyBoxBg = Color.alphaBlend(
+      cs.primaryContainer.withValues(alpha: 0.42),
+      cardBg,
+    );
+    final replyHeadingColor = appReadableForeground(
+      replyBoxBg,
+      cs.onSurface,
+    );
     return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: 8),
       padding: EdgeInsets.zero,
@@ -675,7 +1305,9 @@ class _FeedbackRecordCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       categoryLabel(category),
-                      style: Theme.of(context).textTheme.titleSmall,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.normal,
+                      ),
                     ),
                   ),
                   AppStatusBadge(label: statusLabel(status), color: color),
@@ -686,7 +1318,7 @@ class _FeedbackRecordCard extends StatelessWidget {
                 Text(
                   createdAt,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurface.withValues(alpha: 0.52),
+                    color: timestampColor,
                   ),
                 ),
               ],
@@ -705,9 +1337,11 @@ class _FeedbackRecordCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        I18n.tr('feedback.admin_reply'),
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(color: cs.onPrimaryContainer),
+                        FeedbackUiCopy.detailReply(),
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: replyHeadingColor,
+                              fontWeight: FontWeight.normal,
+                            ),
                       ),
                       const SizedBox(height: 4),
                       Text(reply, maxLines: 3, overflow: TextOverflow.ellipsis),
@@ -742,7 +1376,7 @@ class _FeedbackRecordSwipeActions extends StatefulWidget {
 
 class _FeedbackRecordSwipeActionsState
     extends State<_FeedbackRecordSwipeActions> {
-  static const double _actionRailWidth = 58;
+  static const double _actionRailWidth = 64;
   static const double _dragOpenThreshold = 40;
   double _dragDistance = 0;
   bool _open = false;
@@ -807,22 +1441,22 @@ class _FeedbackRecordSwipeActionsState
                       ),
                       child: SizedBox(
                         width: _actionRailWidth,
-                        height: 42,
+                        height: 48,
                         child: Center(
                           child: IconButton(
                             key: const ValueKey(
                               'feedback_record_detail_action',
                             ),
-                            tooltip: '查看反馈详情',
+                            tooltip: FeedbackUiCopy.detailTooltip(),
                             constraints: const BoxConstraints.tightFor(
-                              width: 36,
-                              height: 36,
+                              width: 44,
+                              height: 44,
                             ),
                             padding: EdgeInsets.zero,
                             icon: Icon(
                               Icons.visibility_outlined,
                               color: cs.primary,
-                              size: 18,
+                              size: 20,
                             ),
                             onPressed: _showDetail,
                           ),
@@ -876,9 +1510,11 @@ class _FeedbackPagination extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pageLabel = Text(
-      '第 $page/$totalPages 页',
+      FeedbackUiCopy.paginationPage(page, totalPages),
       textAlign: TextAlign.center,
-      style: appSecondaryControlLabelStyle(context),
+      style: appSecondaryControlLabelStyle(
+        context,
+      ).copyWith(fontWeight: FontWeight.w400),
     );
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -887,16 +1523,30 @@ class _FeedbackPagination extends StatelessWidget {
           Expanded(
             child: OutlinedButton.icon(
               onPressed: loading ? null : onPrevious,
-              icon: const Icon(Icons.chevron_left),
-              label: const Text('上一页'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              ),
+              icon: const Icon(Icons.chevron_left, size: 18),
+              label: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(FeedbackUiCopy.paginationPrevious()),
+              ),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: FilledButton.tonalIcon(
               onPressed: loading ? null : onNext,
-              icon: const Icon(Icons.chevron_right),
-              label: const Text('下一页'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              ),
+              icon: const Icon(Icons.chevron_right, size: 18),
+              label: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(FeedbackUiCopy.paginationNext()),
+              ),
             ),
           ),
         ];
@@ -905,7 +1555,7 @@ class _FeedbackPagination extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               pageLabel,
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Row(children: controls),
             ],
           );
@@ -925,25 +1575,11 @@ class _FeedbackPagination extends StatelessWidget {
   }
 }
 
-String normalizeFeedbackCategory(String value) {
-  return switch (value) {
-    'bug' => 'bug',
-    'wish' => 'wish',
-    'other' => 'other',
-    _ => 'feature',
-  };
-}
+String normalizeFeedbackCategory(String value) =>
+    FeedbackUiCopy.normalizeCategory(value);
 
-String feedbackCategoryLabel(String value) => switch (value) {
-  'bug' => I18n.tr('feedback.category.bug'),
-  'wish' => I18n.tr('feedback.category.wish'),
-  'other' => I18n.tr('feedback.category.other'),
-  _ => I18n.tr('feedback.category.feature'),
-};
+String feedbackCategoryLabel(String value, [AppLocale? locale]) =>
+    FeedbackUiCopy.categoryLabel(value, locale);
 
-String feedbackCategoryHelp(String value) => switch (value) {
-  'bug' => I18n.tr('feedback.help.bug'),
-  'wish' => I18n.tr('feedback.help.wish'),
-  'other' => I18n.tr('feedback.help.other'),
-  _ => I18n.tr('feedback.help.feature'),
-};
+String feedbackCategoryHelp(String value, [AppLocale? locale]) =>
+    FeedbackUiCopy.categoryHelp(value, locale);

@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:duoyi/core/app_brand.dart';
 import 'package:duoyi/core/design_tokens.dart';
 import 'package:duoyi/widgets/stats_overview_cards.dart';
@@ -91,11 +93,15 @@ void main() {
           children: [
             IconButton(
               tooltip: '上移',
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              visualDensity: VisualDensity.standard,
               icon: const Icon(Icons.keyboard_arrow_up),
               onPressed: () {},
             ),
             IconButton(
               tooltip: '下移',
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              visualDensity: VisualDensity.standard,
               icon: const Icon(Icons.keyboard_arrow_down),
               onPressed: () {},
             ),
@@ -113,8 +119,21 @@ void main() {
     final actionRect = tester.getRect(find.byType(Switch));
     final textCenterDy = _textBlockCenterDy(titleRect, subtitleRect);
     expect((iconRect.center.dy - textCenterDy).abs(), lessThan(5));
-    expect((actionRect.center.dy - textCenterDy).abs(), lessThan(5));
+    expect(actionRect.top, greaterThan(subtitleRect.bottom));
     expect(actionRect.left, greaterThan(titleRect.left));
+    expect(titleRect.width, greaterThan(200));
+    for (final control in [
+      find.byTooltip('上移'),
+      find.byTooltip('下移'),
+      find.byType(Switch),
+    ]) {
+      expect(tester.getSize(control).width, greaterThanOrEqualTo(44));
+      expect(tester.getSize(control).height, greaterThanOrEqualTo(44));
+      expect(
+        find.ancestor(of: control, matching: find.byType(FittedBox)),
+        findsNothing,
+      );
+    }
     expect(subtitleRect.top, greaterThan(titleRect.bottom));
     expect(tester.takeException(), isNull);
   });
@@ -144,6 +163,105 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('settings trailing actions remain reachable after reflow', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    try {
+      var calls = 0;
+      for (final width in [280.0, 600.0]) {
+        await _pumpNarrow(
+          tester,
+          width: width,
+          child: AppSettingsTile(
+            icon: Icons.tune,
+            title: 'Navigation',
+            subtitle: 'Choose and reorder tabs',
+            color: Colors.teal,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final direction in ['Move up', 'Move down'])
+                  IconButton(
+                    tooltip: direction,
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 44,
+                    ),
+                    visualDensity: VisualDensity.standard,
+                    icon: Icon(
+                      direction == 'Move up'
+                          ? Icons.arrow_upward
+                          : Icons.arrow_downward,
+                    ),
+                    onPressed: () => calls++,
+                  ),
+                Switch(value: true, onChanged: (_) => calls++),
+              ],
+            ),
+          ),
+        );
+        for (final action in [
+          find.byTooltip('Move up'),
+          find.byTooltip('Move down'),
+          find.byType(Switch),
+        ]) {
+          final node = tester.getSemantics(action);
+          expect(node.rect.width, greaterThanOrEqualTo(44));
+          expect(node.rect.height, greaterThanOrEqualTo(44));
+          expect(
+            node.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+            isTrue,
+          );
+          final before = calls;
+          await tester.tap(action);
+          await tester.pumpAndSettle();
+          expect(calls, before + 1);
+        }
+        expect(tester.takeException(), isNull);
+      }
+      expect(calls, 6);
+      await tester.pumpWidget(const SizedBox.shrink());
+    } finally {
+      handle.dispose();
+    }
+  });
+
+  testWidgets('large text keeps settings actions below intact labels', (
+    tester,
+  ) async {
+    await _pumpNarrow(
+      tester,
+      width: 280,
+      child: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.6)),
+        child: AppSettingsTile(
+          icon: Icons.schedule,
+          title: 'Notification Time',
+          subtitle: 'Review the previous year at the scheduled time',
+          color: Colors.teal,
+          trailing: TextButton(onPressed: () {}, child: const Text('9:00 AM')),
+        ),
+      ),
+    );
+    final title = find.text('Notification Time');
+    final subtitle = find.text(
+      'Review the previous year at the scheduled time',
+    );
+    final action = find.byType(TextButton);
+    expect(
+      tester.getRect(action).top,
+      greaterThan(tester.getRect(subtitle).bottom),
+    );
+    expect(tester.getSize(action).height, greaterThanOrEqualTo(44));
+    expect(tester.getSize(title).width, greaterThan(200));
+    expect(
+      find.ancestor(of: action, matching: find.byType(FittedBox)),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('AppSettingsTile aligns daily reminder time row', (tester) async {
     await _pumpNarrow(
       tester,
@@ -161,10 +279,115 @@ void main() {
     final titleRect = tester.getRect(find.text('提醒时间'));
     final subtitleRect = tester.getRect(find.text('到点发送带声音和震动的提醒'));
     final actionRect = tester.getRect(find.text('08:30'));
+    expect(
+      tester.getSize(find.byType(TextButton)).height,
+      greaterThanOrEqualTo(44),
+    );
     final textCenterDy = _textBlockCenterDy(titleRect, subtitleRect);
     expect((iconRect.center.dy - textCenterDy).abs(), lessThan(4));
     expect((actionRect.center.dy - textCenterDy).abs(), lessThan(4));
     expect(subtitleRect.top, greaterThan(titleRect.bottom));
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final emptyTrailing in [false, true]) {
+    testWidgets(
+      'large text adds no empty settings action row: $emptyTrailing',
+      (tester) async {
+        await _pumpNarrow(
+          tester,
+          width: 320,
+          child: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.6)),
+            child: AppSettingsTile(
+              icon: Icons.settings,
+              title: 'Settings',
+              subtitle: 'Review preferences',
+              color: Colors.teal,
+              trailing: emptyTrailing ? const SizedBox.shrink() : null,
+            ),
+          ),
+        );
+        final title = tester.getRect(find.text('Settings'));
+        final subtitle = tester.getRect(find.text('Review preferences'));
+        final tile = tester.getRect(find.byType(AppSettingsTile));
+        expect(
+          tile.height,
+          lessThanOrEqualTo(subtitle.bottom - title.top + 32),
+        );
+        if (!emptyTrailing) {
+          final chevron = tester.getRect(find.byIcon(Icons.chevron_right));
+          expect(
+            (chevron.center.dy - _textBlockCenterDy(title, subtitle)).abs(),
+            lessThan(4),
+          );
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('wide settings row keeps enlarged action inline', (tester) async {
+    await _pumpNarrow(
+      tester,
+      width: 600,
+      child: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.6)),
+        child: AppSettingsTile(
+          icon: Icons.schedule,
+          title: 'Daily reminder',
+          subtitle: 'Choose a time',
+          color: Colors.teal,
+          trailing: TextButton(onPressed: () {}, child: const Text('08:30')),
+        ),
+      ),
+    );
+    final textCenter = _textBlockCenterDy(
+      tester.getRect(find.text('Daily reminder')),
+      tester.getRect(find.text('Choose a time')),
+    );
+    expect(
+      (tester.getRect(find.byType(TextButton)).center.dy - textCenter).abs(),
+      lessThan(4),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings tile reports natural height to intrinsic parents', (
+    tester,
+  ) async {
+    await _pumpNarrow(
+      tester,
+      width: 280,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: AppSettingsTile(
+                icon: Icons.schedule,
+                title: 'Long settings title that must wrap without clipping',
+                subtitle:
+                    'A detailed explanation that takes several lines in a narrow row',
+                color: Colors.teal,
+                trailing: TextButton(
+                  onPressed: () {},
+                  child: const Text('Choose a reminder time'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    final tile = tester.getRect(find.byType(AppSettingsTile));
+    final action = tester.getRect(find.byType(TextButton));
+    expect(action.bottom, lessThanOrEqualTo(tile.bottom));
+    final render = tester.renderObject<RenderBox>(find.byType(AppSettingsTile));
+    expect(
+      render.getDryLayout(BoxConstraints.tightFor(width: tile.width)).height,
+      closeTo(tile.height, 0.01),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -337,7 +560,10 @@ Future<void> _pumpNarrow(
     MaterialApp(
       home: Scaffold(
         body: Center(
-          child: SizedBox(width: width, child: child),
+          child: SizedBox(
+            width: width,
+            child: AppSecondaryControlTheme(child: child),
+          ),
         ),
       ),
     ),

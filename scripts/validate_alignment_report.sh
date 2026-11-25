@@ -44,19 +44,37 @@ if [[ -f "$SUMMARY_TSV" ]]; then
     '8/8 device-only notification alarm widget regression'
   )
 
-  data_count=$(( $(wc -l < "$SUMMARY_TSV") - 1 ))
-  if [[ "$data_count" -ne 8 ]]; then
-    fail "summary.tsv must contain exactly 8 group rows, found $data_count"
-  fi
+  optional_groups=(
+    'default iOS visual acceptance'
+    'global localization acceptance'
+    'settings flow acceptance'
+    'mobile performance acceptance'
+  )
 
   for group in "${expected_groups[@]}"; do
-    if ! awk -F '\t' -v group="$group" 'NR > 1 && $1 == group { found = 1 } END { exit found ? 0 : 1 }' "$SUMMARY_TSV"; then
+    count="$(awk -F '\t' -v group="$group" 'NR > 1 && $1 == group { count++ } END { print count + 0 }' "$SUMMARY_TSV")"
+    if [[ "$count" -eq 0 ]]; then
       fail "summary.tsv missing group: $group"
     fi
   done
 
-  while IFS=$'\t' read -r group status duration log_path; do
-    [[ "$group" == "group" ]] && continue
+  while IFS= read -r duplicate; do
+    [[ -z "$duplicate" ]] || fail "summary.tsv duplicate group: $duplicate"
+  done < <(awk -F '\t' 'NR > 1 { count[$1]++ } END { for (group in count) if (count[group] > 1) print group }' "$SUMMARY_TSV")
+
+  if ! awk -F '\t' 'NR > 1 && NF != 4 { bad = 1 } END { exit bad ? 1 : 0 }' "$SUMMARY_TSV"; then
+    fail "summary.tsv rows must have exactly four columns"
+  fi
+
+  row_number=0
+  while IFS=$'\t' read -r group status duration log_path || [[ -n "$group$status$duration$log_path" ]]; do
+    row_number=$((row_number + 1))
+    [[ "$row_number" -eq 1 ]] && continue
+    known=0
+    for allowed in "${expected_groups[@]}" "${optional_groups[@]}"; do
+      [[ "$group" != "$allowed" ]] || known=1
+    done
+    [[ "$known" -eq 1 ]] || fail "summary.tsv unknown group: $group"
     if [[ ! "$status" =~ ^(passed|failed\([0-9]+\))$ ]]; then
       fail "invalid status for $group: $status"
     fi

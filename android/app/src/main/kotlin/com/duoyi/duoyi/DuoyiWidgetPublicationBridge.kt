@@ -44,8 +44,9 @@ class DuoyiWidgetPublicationBridge : FlutterPlugin, MethodChannel.MethodCallHand
         try {
             worker.execute {
                 val response = try {
-                    if (call.method == READ) {
+                    if (call.method == READ || call.method == INSPECT) {
                         if (call.arguments != null && call.arguments != emptyMap<String, Any>()) mapOf("status" to "invalid")
+                        else if (call.method == INSPECT) capturedStore.inspectRecovery()
                         else capturedStore.read().metadata()
                     } else {
                         val request = DuoyiWidgetPublicationRequest.tryFromMap(call.method, call.arguments)
@@ -65,7 +66,8 @@ class DuoyiWidgetPublicationBridge : FlutterPlugin, MethodChannel.MethodCallHand
     companion object {
         const val CHANNEL = "duoyi/widget-publication"
         private const val READ = "readWidgetStore"
-        private val METHODS = setOf(READ, DuoyiWidgetPublicationRequest.OPEN,
+        private const val INSPECT = "inspectWidgetStoreRecovery"
+        private val METHODS = setOf(READ, INSPECT, DuoyiWidgetPublicationRequest.RECOVER, DuoyiWidgetPublicationRequest.OPEN,
             DuoyiWidgetPublicationRequest.INVALIDATE, DuoyiWidgetPublicationRequest.ADVANCE,
             DuoyiWidgetPublicationRequest.PUBLISH)
         private val worker = ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,

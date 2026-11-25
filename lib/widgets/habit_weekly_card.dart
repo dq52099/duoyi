@@ -104,7 +104,7 @@ class HabitWeeklyCard extends StatelessWidget {
       ),
       border: Border.all(
         color: primaryColor.withValues(alpha: isDark ? 0.22 : 0.16),
-        width: 0.65,
+        width: 0.55,
       ),
       elevation: 1,
       child: Column(
@@ -178,6 +178,7 @@ class HabitWeeklyCard extends StatelessWidget {
                         fontSize: 15,
                         height: 1.0,
                         fontWeight: DesignTokens.fontWeightRegular,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -247,11 +248,15 @@ class HabitWeeklyCard extends StatelessWidget {
                 textColor = cs.onSurface.withValues(alpha: 0.36);
                 borderColor = cs.outlineVariant.withValues(alpha: 0.12);
               } else if (val >= 1.0 || allCompletedOnDay) {
-                bg = const Color(0xFF2E7D32);
-                textColor = Colors.white;
+                bg = isDark
+                    ? DesignTokens.todoCompletedDark
+                    : DesignTokens.defaultSuccess;
+                textColor = isDark ? const Color(0xFF0B2917) : Colors.white;
               } else if (val > 0) {
-                bg = const Color(0xFFFFB74D);
-                textColor = const Color(0xFF2D1F0F);
+                bg = isDark
+                    ? DesignTokens.todoDueSoonDark
+                    : DesignTokens.todoDueSoon;
+                textColor = isDark ? const Color(0xFF2D1F0F) : Colors.white;
               } else {
                 bg = cs.surface.withValues(alpha: isDark ? 0.28 : 0.70);
                 textColor = cs.onSurface.withValues(alpha: 0.52);
@@ -276,33 +281,36 @@ class HabitWeeklyCard extends StatelessWidget {
 
               if (hasNoHabits) {
                 dayValueText = '—';
-                tooltipMessage = MainUiCopy.isEn
-                    ? '$weekdayName (${isFuture ? "Not scheduled" : (isToday ? "Today, no schedule" : "Not scheduled")})'
-                    : '$weekdayName (${isFuture ? "未安排" : (isToday ? "今天未安排" : "未安排")})';
+                final status = isToday
+                    ? (MainUiCopy.isEn ? 'Today, no schedule' : '今天未安排')
+                    : MainUiCopy.habitNotScheduled;
+                tooltipMessage = '$weekdayName ($status)';
                 semanticsLabel = MainUiCopy.isEn
-                    ? '$dateSemantics $weekdayName, not scheduled${isToday ? ", today" : ""}'
-                    : '$dateSemantics $weekdayName，未安排${isToday ? "，今天" : ""}';
+                    ? '$dateSemantics $weekdayName, $status'
+                    : '$dateSemantics $weekdayName，$status';
               } else if (isFuture) {
                 dayValueText = '-';
-                tooltipMessage = MainUiCopy.isEn
-                    ? '$weekdayName (Upcoming)'
-                    : '$weekdayName (未开始)';
+                tooltipMessage = '$weekdayName (${MainUiCopy.habitUpcoming})';
                 semanticsLabel = MainUiCopy.isEn
-                    ? '$dateSemantics $weekdayName, upcoming'
-                    : '$dateSemantics $weekdayName，未开始';
+                    ? '$dateSemantics $weekdayName, ${MainUiCopy.habitUpcoming}'
+                    : '$dateSemantics $weekdayName，${MainUiCopy.habitUpcoming}';
               } else if (allCompletedOnDay || val >= 1.0) {
                 dayValueText = '100%';
-                tooltipMessage = MainUiCopy.isEn
-                    ? '$weekdayName 100% (Completed)${isToday ? " (Today)" : ""}'
-                    : '$weekdayName 100% (全部完成)${isToday ? " (今天)" : ""}';
+                final todaySuffix = isToday
+                    ? (MainUiCopy.isEn ? ' (Today)' : '（今天）')
+                    : '';
+                tooltipMessage =
+                    '$weekdayName 100% (${MainUiCopy.habitCompleted})$todaySuffix';
                 semanticsLabel = MainUiCopy.isEn
-                    ? '$dateSemantics $weekdayName, 100% completed${isToday ? ", today" : ""}'
-                    : '$dateSemantics $weekdayName，全部完成 100%${isToday ? "，今天" : ""}';
+                    ? '$dateSemantics $weekdayName, 100% ${MainUiCopy.habitCompleted.toLowerCase()}${isToday ? ", today" : ""}'
+                    : '$dateSemantics $weekdayName，${MainUiCopy.habitCompleted} 100%${isToday ? "，今天" : ""}';
               } else {
                 dayValueText = '${(val * 100).round()}%';
-                tooltipMessage = MainUiCopy.isEn
-                    ? '$weekdayName ${(val * 100).round()}%${isToday ? " (Today)" : ""}'
-                    : '$weekdayName ${(val * 100).round()}%${isToday ? " (今天)" : ""}';
+                final todaySuffix = isToday
+                    ? (MainUiCopy.isEn ? ' (Today)' : '（今天）')
+                    : '';
+                tooltipMessage =
+                    '$weekdayName ${(val * 100).round()}%$todaySuffix';
                 semanticsLabel = MainUiCopy.isEn
                     ? '$dateSemantics $weekdayName, ${(val * 100).round()}% done${isToday ? ", today" : ""}'
                     : '$dateSemantics $weekdayName，完成率 ${(val * 100).round()}%${isToday ? "，今天" : ""}';
@@ -314,7 +322,11 @@ class HabitWeeklyCard extends StatelessWidget {
                   button: true,
                   enabled: !isFuture,
                   label: semanticsLabel,
-                  hint: isFuture ? null : '点击查看习惯明细',
+                  hint: isFuture
+                      ? null
+                      : (MainUiCopy.isEn
+                            ? 'Tap to view habit details'
+                            : '点击查看习惯明细'),
                   child: InkResponse(
                     containedInkWell: true,
                     highlightShape: BoxShape.rectangle,
@@ -360,7 +372,7 @@ class HabitWeeklyCard extends StatelessWidget {
                                 color: isToday
                                     ? primaryColor.withValues(alpha: 0.46)
                                     : borderColor,
-                                width: isToday ? 1.05 : 0.55,
+                                width: isToday ? 0.6 : 0.55,
                               ),
                               boxShadow: isToday && val > 0
                                   ? [
@@ -386,6 +398,9 @@ class HabitWeeklyCard extends StatelessWidget {
                                       color: textColor,
                                       fontWeight:
                                           DesignTokens.fontWeightRegular,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -613,30 +628,40 @@ class _HabitWeeklyDayDetailSheetState
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isCompleted
-                      ? const Color(
-                          0xFF2E7D32,
-                        ).withValues(alpha: isDark ? 0.25 : 0.12)
-                      : cs.surfaceContainerHighest.withValues(
-                          alpha: isDark ? 0.25 : 0.45,
-                        ),
-                  borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
-                ),
-                child: Text(
-                  isCompleted ? MainUiCopy.habitDone : MainUiCopy.habitNotDone,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: DesignTokens.fontWeightRegular,
-                    color: isCompleted
-                        ? (isDark
-                              ? const Color(0xFF81C784)
-                              : const Color(0xFF2E7D32))
-                        : cs.onSurface.withValues(alpha: 0.6),
-                  ),
-                ),
+              Builder(
+                builder: (context) {
+                  final completedColor = isDark
+                      ? DesignTokens.todoCompletedDark
+                      : DesignTokens.defaultSuccess;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isCompleted
+                          ? completedColor.withValues(
+                              alpha: isDark ? 0.22 : 0.12,
+                            )
+                          : cs.surfaceContainerHighest.withValues(
+                              alpha: isDark ? 0.25 : 0.45,
+                            ),
+                      borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
+                    ),
+                    child: Text(
+                      isCompleted
+                          ? MainUiCopy.habitDone
+                          : MainUiCopy.habitNotDone,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: DesignTokens.fontWeightRegular,
+                        color: isCompleted
+                            ? completedColor
+                            : cs.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -652,7 +677,11 @@ class _HabitWeeklyDayDetailSheetState
                     backgroundColor: cs.surfaceContainerHighest.withValues(
                       alpha: isDark ? 0.20 : 0.42,
                     ),
-                    color: isCompleted ? const Color(0xFF2E7D32) : habitColor,
+                    color: isCompleted
+                        ? (isDark
+                              ? DesignTokens.todoCompletedDark
+                              : DesignTokens.defaultSuccess)
+                        : habitColor,
                   ),
                 ),
               ),
@@ -663,6 +692,7 @@ class _HabitWeeklyDayDetailSheetState
                   fontSize: 12,
                   fontWeight: DesignTokens.fontWeightRegular,
                   color: cs.onSurface.withValues(alpha: 0.7),
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ],

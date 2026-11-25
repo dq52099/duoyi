@@ -117,14 +117,18 @@ class RecurrenceRule {
     return DateTime(value.year, value.month, value.day);
   }
 
-  String get label => ReminderEditorUiCopy.recurrenceRuleLabel(
-    frequencyIndex: frequency.index,
-    interval: interval,
-    byWeekdays: byWeekdays,
-    byMonthDay: byMonthDay,
-    endDate: endDate,
-    maxOccurrences: maxOccurrences,
-  );
+  String get label => displayLabel();
+
+  String displayLabel({String? datePattern}) =>
+      ReminderEditorUiCopy.recurrenceRuleLabel(
+        datePattern: datePattern,
+        frequencyIndex: frequency.index,
+        interval: interval,
+        byWeekdays: byWeekdays,
+        byMonthDay: byMonthDay,
+        endDate: endDate,
+        maxOccurrences: maxOccurrences,
+      );
 
   Map<String, dynamic> toJson() => {
     'frequency': frequency.index,

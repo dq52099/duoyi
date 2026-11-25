@@ -13,25 +13,43 @@ void main() {
     expect(end, greaterThan(start));
     final method = source.substring(start, end);
 
-    expect(method, contains('_history.clear();'));
-    expect(method, contains('_historyLastSeenAt = DateTime.now();'));
-    expect(method, isNot(contains('_pendingNotifications = 0;')));
-    expect(method, contains('await _saveHistory();'));
-    expect(method, contains('await _saveHistorySeen();'));
+    expect(method, contains('await _queueHistoryWrite<bool>'));
+    expect(method, contains('_readHistoryIfNeeded(p)'));
+    expect(method, contains('_applyHistoryLimitSnapshot('));
     expect(
       method,
-      anyOf(
-        contains('notifyListeners();'),
-        contains('_notifyListenersBatched();'),
-      ),
+      contains('removedRecords: _history.map(_historyRecordKey).toSet()'),
+    );
+    expect(method, contains('markSeenAt: DateTime.now()'));
+    expect(method, isNot(contains('_pendingNotifications = 0;')));
+    expect(method, isNot(contains('LocalNotifications.instance.cancel')));
+    final snapshotStart = source.indexOf(
+      'Future<bool> _applyHistoryLimitSnapshot(',
+    );
+    final snapshotEnd = source.indexOf(
+      '_NotificationHistoryKey _historyRecordKey',
+      snapshotStart,
+    );
+    expect(snapshotStart, greaterThanOrEqualTo(0));
+    expect(snapshotEnd, greaterThan(snapshotStart));
+    final snapshot = source.substring(snapshotStart, snapshotEnd);
+    expect(snapshot, contains('await transaction.setStringList('));
+    expect(snapshot, contains('await transaction.setString('));
+    expect(snapshot, contains('_historyLastSeenAt = markSeenAt'));
+    expect(snapshot, contains('_notifyListenersBatched()'));
+    expect(snapshot, contains('await transaction.rollback()'));
+    expect(snapshot, isNot(contains('_pendingNotifications = 0;')));
+    expect(
+      snapshot.indexOf('await transaction.setStringList('),
+      lessThan(snapshot.indexOf('transaction.commit()')),
     );
     expect(
-      method.indexOf('_history.clear();'),
-      lessThan(method.indexOf('await _saveHistory();')),
+      snapshot.indexOf('transaction.commit()'),
+      lessThan(snapshot.indexOf('..clear()')),
     );
     expect(
-      method.indexOf('await _saveHistory();'),
-      lessThan(method.indexOf('notifyListeners();')),
+      snapshot.indexOf('..clear()'),
+      lessThan(snapshot.indexOf('_notifyListenersBatched()')),
     );
   });
 
@@ -121,7 +139,10 @@ void main() {
         contains('_recentVisibleNotificationContentSignatures.clear();'),
       );
       expect(cancelAll, contains('await _plugin.cancelAll();'));
-      expect(cancelAll, contains('await NativeReminderRingtone.cancelAll();'));
+      expect(
+        cancelAll,
+        contains('await NativeReminderRingtone.cancelAllOrThrow();'),
+      );
       expect(cancelAll, contains('cancelAll native failed'));
     },
   );
@@ -535,7 +556,10 @@ void main() {
 
     expect(screen, contains('class NotificationHistoryScreen'));
     expect(screen, contains('class _NotificationHistoryScreenState'));
-    expect(screen, contains("title: const Text('通知记录')"));
+    expect(
+      screen,
+      contains('title: Text(NotificationUiCopy.notificationHistoryTitle)'),
+    );
     expect(screen, contains('this.markReadOnOpen = false'));
     expect(screen, isNot(contains('service.markHistorySeen()')));
     final settingsStart = screen.indexOf(
@@ -553,7 +577,7 @@ void main() {
       reason: '打开通知设置不能把通知记录红点清成已读。',
     );
     expect(screen, contains('TextField('));
-    expect(screen, contains("hintText: '搜索标题、内容或关联 ID'"));
+    expect(screen, contains('NotificationUiCopy.searchHint'));
     expect(screen, contains('NotificationType? _typeFilter'));
     expect(screen, contains('_NotificationReadFilter _readFilter'));
     expect(screen, contains('List<NotificationItem> _filteredHistory'));
@@ -564,21 +588,38 @@ void main() {
     expect(screen, contains('static const _pageSize = 50;'));
     expect(screen, contains('final visibleHistory = filteredHistory.sublist'));
     expect(screen, contains('itemCount: visibleHistory.length'));
-    expect(screen, contains("tooltip: '上一页'"));
-    expect(screen, contains("tooltip: '下一页'"));
+    expect(screen, contains('tooltip: NotificationUiCopy.pagerPrevTooltip'));
+    expect(screen, contains('tooltip: NotificationUiCopy.pagerNextTooltip'));
     expect(screen, contains('setState(_resetPaging)'));
     expect(screen, contains('ListView.separated'));
     expect(screen, contains('clearHistory()'));
     expect(screen, contains('markHistoryItemRead'));
     expect(screen, contains('markAllHistoryRead'));
     expect(screen, contains('service.unreadCount'));
-    expect(screen, contains("label: item.isRead ? '已读' : '未读'"));
+    expect(screen, contains('NotificationUiCopy.badgeRead'));
+    expect(screen, contains(RegExp(r'NotificationUiCopy\s*\.badgeUnread')));
     expect(screen, contains('Future<void> _confirmClearHistory(int count)'));
-    expect(screen, contains("title: const Text('清空通知记录？')"));
-    expect(screen, contains('已调度的提醒不会被取消'));
-    expect(screen, contains("const Center(child: Text('暂无通知记录'))"));
-    expect(screen, contains("message: '没有匹配的通知记录'"));
-    expect(screen, contains('支持搜索、筛选和分页浏览'));
+    expect(screen, contains('createControllerDialogRoute<bool>'));
+    expect(screen, contains('Navigator.of('));
+    expect(screen, contains('rootNavigator: true'));
+    expect(screen, contains('.push<bool>(route)'));
+    expect(
+      screen,
+      contains('title: Text(NotificationUiCopy.confirmClearDialogTitle)'),
+    );
+    expect(screen, contains('NotificationUiCopy.confirmClearDialogContent('));
+    expect(
+      screen,
+      contains('Center(child: Text(NotificationUiCopy.emptyHistory))'),
+    );
+    expect(
+      screen,
+      contains('message: NotificationUiCopy.emptyHistoryFiltered'),
+    );
+    expect(screen, contains('NotificationUiCopy.formatHistorySummary('));
+    final copy = File('lib/core/notification_ui_copy.dart').readAsStringSync();
+    expect(copy, contains('已调度的提醒不会被取消'));
+    expect(copy, contains('支持搜索、筛选和分页浏览'));
     expect(screen, isNot(contains('take(10)')));
   });
 
@@ -591,7 +632,7 @@ void main() {
     ).readAsStringSync();
 
     expect(screen, contains('class NotificationSettingsScreen'));
-    expect(screen, contains("title: const Text('通知设置')"));
+    expect(screen, contains('title: Text(NotificationUiCopy.settingsTitle)'));
     expect(screen, contains('backgroundColor: routeBackground'));
     expect(screen, contains('surfaceTintColor: Colors.transparent'));
     final settingsClassStart = screen.indexOf(
@@ -619,12 +660,13 @@ void main() {
     expect(preferences, isNot(contains('setDailyReminderSlot')));
     expect(preferences, isNot(contains('setNotificationQuickAdd')));
     expect(preferences, isNot(contains('_sendStrongTest')));
-    expect(screen, contains("title: '系统通知'"));
-    expect(screen, contains("title: '提醒入口'"));
+    expect(screen, contains('title: NotificationUiCopy.sectionSystem'));
+    expect(screen, contains('title: NotificationUiCopy.sectionShortcuts'));
     expect(screen, contains("preferences.section.daily_reminder"));
-    expect(screen, contains("title: '通知记录保留'"));
+    expect(screen, contains('title: NotificationUiCopy.historyRetentionTitle'));
     expect(screen, contains('NotificationHistoryPolicy.options'));
-    expect(screen, contains('setNotificationHistoryLimit'));
+    expect(screen, contains('origin.preferences.saveNotificationHistoryLimit'));
+    expect(screen, contains('origin.notifications.applyHistoryLimit'));
     expect(screen, contains('setHistoryLimit'));
     expect(screen, contains('setNotificationQuickAdd'));
     expect(screen, contains('_setNotificationStatusBarPreference'));
@@ -672,15 +714,21 @@ void main() {
       contains('_history.removeRange(_historyLimit, _history.length)'),
     );
     expect(source, contains('_history'));
-    expect(source, contains('.take(_historyLimit)'));
+    expect(source, contains('.take(next)'));
     expect(source, isNot(contains('_history.take(50)')));
     expect(source, isNot(contains('_history.length > 50')));
     expect(source, isNot(contains('static const _maxHistoryItems = 500;')));
     expect(preferences, contains('int get notificationHistoryLimit'));
     expect(preferences, contains('setNotificationHistoryLimit'));
-    expect(notificationScreen, contains("title: '通知记录保留'"));
+    expect(
+      notificationScreen,
+      contains('title: NotificationUiCopy.historyRetentionTitle'),
+    );
     expect(notificationScreen, contains('prefs.notificationHistoryLimit'));
-    expect(notificationScreen, contains('notif.setHistoryLimit'));
+    expect(
+      notificationScreen,
+      contains('origin.notifications.applyHistoryLimit'),
+    );
   });
 
   test('all normal notification paths are recorded in history', () {
@@ -780,29 +828,59 @@ void main() {
     ).readAsStringSync();
 
     expect(notificationScreen, contains('class NotificationSettingsScreen'));
-    expect(notificationScreen, contains("title: const Text('通知设置')"));
+    expect(
+      notificationScreen,
+      contains('title: Text(NotificationUiCopy.settingsTitle)'),
+    );
     expect(notificationScreen, contains('backgroundColor: routeBackground'));
     expect(
       notificationScreen,
       contains('surfaceTintColor: Colors.transparent'),
     );
-    expect(notificationScreen, contains("title: '系统通知'"));
-    expect(notificationScreen, contains("title: '普通提醒渠道'"));
-    expect(notificationScreen, contains("title: '强提醒渠道'"));
-    expect(notificationScreen, contains("title: '闹钟降级兜底'"));
-    expect(notificationScreen, contains('强提醒或内置铃声注册失败时会改用普通提醒'));
-    expect(notificationScreen, contains('普通提醒渠道静音，兜底也可能无声'));
-    expect(notificationScreen, contains("title: '内置铃声状态渠道'"));
-    expect(notificationScreen, contains("title: '1 分钟后普通定时'"));
-    expect(notificationScreen, contains("title: '1 分钟后弹出测试'"));
-    expect(notificationScreen, contains('仅验证应用前台弹窗；后台和锁屏不触发兜底通知'));
-    expect(notificationScreen, contains("title: '1 分钟后弹出+通知兜底'"));
-    expect(notificationScreen, contains('模拟真实弹出提醒；前台弹框，后台或锁屏走普通通知'));
-    expect(notificationScreen, isNot(contains('后台或锁屏用系统通知兜底')));
-    expect(notificationScreen, contains("title: '1 分钟后闹钟测试'"));
-    expect(notificationScreen, contains("title: '1 分钟后全屏闹钟'"));
-    expect(notificationScreen, contains("title: '1 分钟后默认方式'"));
-    expect(notificationScreen, contains("title: '提醒注册状态'"));
+    final normalizedScreen = notificationScreen.replaceAll(RegExp(r'\s+'), ' ');
+    for (final title in const [
+      'sectionSystem',
+      'channelGeneralTitle',
+      'channelAlarmTitle',
+      'channelFallbackTitle',
+      'channelStatusTitle',
+      'testScheduledPushTitle',
+      'testScheduledPopupTitle',
+      'testScheduledPopupFallbackTitle',
+      'testScheduledAlarmTitle',
+      'testScheduledFullScreenTitle',
+      'testScheduledDefaultTitle',
+      'registeredRemindersTitle',
+    ]) {
+      expect(
+        normalizedScreen,
+        contains(RegExp('title: NotificationUiCopy\\s*\\.$title\\b')),
+        reason: 'notification settings must display the localized $title',
+      );
+    }
+    final copy = File('lib/core/notification_ui_copy.dart').readAsStringSync();
+    for (final subtitle in const [
+      'testScheduledPopupSubtitle',
+      'testScheduledPopupFallbackSubtitle',
+    ]) {
+      expect(
+        normalizedScreen,
+        contains(RegExp('subtitle: NotificationUiCopy\\s*\\.$subtitle\\b')),
+      );
+    }
+    expect(
+      normalizedScreen,
+      contains(
+        RegExp(
+          r'subtitle: _channelSubtitle\( NotificationUiCopy\.channelFallbackSubtitle,',
+        ),
+      ),
+    );
+    expect(copy, contains('强提醒或内置铃声注册失败时会改用普通提醒'));
+    expect(copy, contains('普通提醒渠道静音，兜底也可能无声'));
+    expect(copy, contains('仅验证应用前台弹窗；后台和锁屏不触发兜底通知'));
+    expect(copy, contains('模拟真实弹出提醒；前台弹框，后台或锁屏走普通通知'));
+    expect(copy, isNot(contains('后台或锁屏用系统通知兜底')));
     expect(notificationScreen, contains('registeredRemindersSnapshot()'));
     expect(notificationScreen, contains('_RegisteredReminderDetailRow'));
     expect(
@@ -826,14 +904,31 @@ void main() {
     );
     expect(notificationScreen, contains('_channelStatusLabel'));
     expect(notificationScreen, contains('_channelStatusTrailing'));
-    expect(notificationScreen, contains("'声音正常'"));
-    expect(notificationScreen, contains("'已静音'"));
-    expect(notificationScreen, contains("'已关闭'"));
-    expect(notificationScreen, contains("'未创建'"));
-    expect(notificationScreen, contains("title: '提醒入口'"));
+    expect(
+      notificationScreen,
+      contains('NotificationUiCopy.channelStatusLabel('),
+    );
+    expect(copy, contains("'声音正常'"));
+    expect(copy, contains("'已静音'"));
+    expect(copy, contains("'已关闭'"));
+    expect(copy, contains("'未创建'"));
+    expect(
+      notificationScreen,
+      contains('title: NotificationUiCopy.sectionShortcuts'),
+    );
     expect(notificationScreen, contains("preferences.section.daily_reminder"));
-    expect(notificationScreen, contains("title: '通知记录保留'"));
-    expect(notificationScreen, contains('setNotificationHistoryLimit'));
+    expect(
+      notificationScreen,
+      contains('title: NotificationUiCopy.historyRetentionTitle'),
+    );
+    expect(
+      notificationScreen,
+      contains('origin.preferences.saveNotificationHistoryLimit'),
+    );
+    expect(
+      notificationScreen,
+      contains('origin.notifications.applyHistoryLimit'),
+    );
     expect(notificationScreen, contains('setHistoryLimit'));
     expect(notificationScreen, contains('setNotificationQuickAdd'));
     expect(notificationScreen, contains('_setNotificationStatusBarPreference'));
@@ -1150,7 +1245,7 @@ void main() {
 
       final initStart = service.indexOf('Future<void> init() async');
       final requestPermissionStart = service.indexOf(
-        'Future<bool> requestPermission()',
+        'Future<bool> requestPermission(',
         initStart,
       );
       expect(initStart, greaterThanOrEqualTo(0));
@@ -1644,11 +1739,16 @@ void main() {
       expect(strongTest, contains('requestFullScreenIntentPermission()'));
       expect(strongTest, contains('_strongTestMessage('));
       expect(prefs, contains('String _strongTestMessage({'));
-      expect(prefs, contains('全屏提醒权限'));
+      expect(prefs, contains('NotificationUiCopy.formatStrongTestMessage('));
+      final copy = File(
+        'lib/core/notification_ui_copy.dart',
+      ).readAsStringSync();
+      expect(copy, contains('全屏提醒权限'));
       expect(prefs, contains('onTap: _busy ? null : _sendStrongTest'));
       expect(preferences, isNot(contains('_sendStrongTest')));
       expect(preferences, isNot(contains('showFullScreenTest')));
-      expect(card, contains('测试强提醒铃声'));
+      expect(card, contains('title: NotificationUiCopy.strongTestTitle'));
+      expect(copy, contains('测试强提醒铃声'));
       expect(card, contains('onSendStrongTest'));
     },
   );
@@ -1945,7 +2045,10 @@ void main() {
       expect(cancelAll, contains('await _plugin.cancelAll();'));
       expect(cancelAll, contains('_lastQuickAddOngoingSignature = null;'));
       expect(cancelAll, contains('_recentVisibleNotificationIds.clear();'));
-      expect(cancelAll, contains('await NativeReminderRingtone.cancelAll();'));
+      expect(
+        cancelAll,
+        contains('await NativeReminderRingtone.cancelAllOrThrow();'),
+      );
       expect(cancelAll, contains('cancelAll native failed'));
       expect(cancelAll, contains('Error.throwWithStackTrace'));
     },
@@ -1959,7 +2062,12 @@ void main() {
     expect(end, greaterThan(start));
     final branch = source.substring(start, end);
 
-    expect(branch, contains('navigateTo(6, allowHidden: true)'));
+    expect(branch, contains('_navigateWidgetSection(state, ctx, 6)'));
+    expect(source, contains('state.navigateTo(index, allowHidden: true)'));
+    expect(
+      source,
+      contains('_widgetCalendarRoutes.showSection(Navigator.of(context))'),
+    );
     expect(
       branch,
       contains('const BrandRouteSurface(child: IntegrationsScreen())'),
@@ -1976,9 +2084,10 @@ void main() {
 
     expect(
       branch,
-      contains('_completeTodoFromWidgetAction(ctx, todos, target)'),
+      contains('_completeTodoFromWidgetAction(ctx, todos, target, access)'),
     );
-    expect(branch, contains('navigateTo(1, allowHidden: true)'));
+    expect(branch, contains('_navigateWidgetSection(state, ctx, 1)'));
+    expect(branch, contains('access.run('));
     expect(source, contains('todos.completeTodos([target.id])'));
     expect(
       source,
@@ -1991,97 +2100,117 @@ void main() {
     expect(branch, isNot(contains('todos.toggleTodo(id);')));
   });
 
-  test(
-    'snooze deep link and todo action path reuse the same reminder payload',
-    () {
-      final notificationService = File(
-        'lib/providers/notification_service.dart',
-      ).readAsStringSync();
-      final localNotifications = File(
-        'lib/services/local_notifications_io.dart',
-      ).readAsStringSync();
-      final main = File('lib/main.dart').readAsStringSync();
+  test('snooze deep link and todo action path reuse the same reminder payload', () {
+    final notificationService = File(
+      'lib/providers/notification_service.dart',
+    ).readAsStringSync();
+    final localNotifications = File(
+      'lib/services/local_notifications_io.dart',
+    ).readAsStringSync();
+    final main = File('lib/main.dart').readAsStringSync();
 
-      final snoozeStart = notificationService.indexOf('Future<void> snooze({');
-      final snoozeEnd = notificationService.indexOf(
-        '/// 通过 deep-link `duoyi://snooze/{id}?delay={minutes}` 触发的快捷路径。',
-        snoozeStart,
-      );
-      expect(snoozeStart, greaterThanOrEqualTo(0));
-      expect(snoozeEnd, greaterThan(snoozeStart));
-      final snoozeMethod = notificationService.substring(
-        snoozeStart,
-        snoozeEnd,
-      );
-      expect(snoozeMethod, contains('LocalNotifications.instance.cancel(id);'));
-      expect(snoozeMethod, contains('DateTime.now().add(delay)'));
-      expect(snoozeMethod, contains('_scheduleOnceOrRecord('));
-      expect(snoozeMethod, contains('payload: payload,'));
-      expect(snoozeMethod, contains("issueTitle: '稍后提醒注册失败'"));
+    final snoozeStart = notificationService.indexOf('Future<void> snooze({');
+    final snoozeEnd = notificationService.indexOf(
+      '/// 通过 deep-link `duoyi://snooze/{id}?delay={minutes}` 触发的快捷路径。',
+      snoozeStart,
+    );
+    expect(snoozeStart, greaterThanOrEqualTo(0));
+    expect(snoozeEnd, greaterThan(snoozeStart));
+    final snoozeMethod = notificationService.substring(snoozeStart, snoozeEnd);
+    expect(snoozeMethod, contains('LocalNotifications.instance.cancel(id);'));
+    expect(snoozeMethod, contains('DateTime.now().add(delay)'));
+    expect(snoozeMethod, contains('_scheduleOnceOrRecord('));
+    expect(snoozeMethod, contains('payload: payload,'));
+    expect(snoozeMethod, contains("issueTitle: '稍后提醒注册失败'"));
 
-      final handleStart = notificationService.indexOf(
-        'Future<void> handleSnoozeDeepLink(Uri uri)',
-      );
-      final handleEnd = notificationService.indexOf(
-        '/// 上层（通知中心、深链处理或通知 action）调用此通用方法重新调度提醒。',
-        handleStart,
-      );
-      expect(handleStart, greaterThan(snoozeEnd));
-      expect(handleEnd, greaterThan(handleStart));
-      final handleMethod = notificationService.substring(
-        handleStart,
-        handleEnd,
-      );
-      expect(handleMethod, contains("if (uri.host != 'snooze') return;"));
-      expect(
-        handleMethod,
-        contains(
-          "final minutes = int.tryParse(uri.queryParameters['delay'] ?? '5') ?? 5;",
-        ),
-      );
-      expect(
-        handleMethod,
-        contains("final payload = uri.queryParameters['payload'];"),
-      );
-      expect(handleMethod, contains('await snooze('));
-      expect(handleMethod, contains('Duration(minutes: minutes)'));
+    final handleStart = notificationService.indexOf(
+      'Future<void> handleSnoozeDeepLink(Uri uri)',
+    );
+    final handleEnd = notificationService.indexOf(
+      '/// 上层（通知中心、深链处理或通知 action）调用此通用方法重新调度提醒。',
+      handleStart,
+    );
+    expect(handleStart, greaterThan(snoozeEnd));
+    expect(handleEnd, greaterThan(handleStart));
+    final handleMethod = notificationService.substring(handleStart, handleEnd);
+    expect(handleMethod, contains("if (uri.host != 'snooze') return;"));
+    expect(
+      handleMethod,
+      contains(
+        "final minutes = int.tryParse(uri.queryParameters['delay'] ?? '5') ?? 5;",
+      ),
+    );
+    expect(
+      handleMethod,
+      contains("final payload = uri.queryParameters['payload'];"),
+    );
+    expect(handleMethod, contains('await snooze('));
+    expect(handleMethod, contains('Duration(minutes: minutes)'));
 
-      expect(
-        localNotifications,
-        contains("if (actionId.startsWith('todo_snooze_'))"),
-      );
-      expect(localNotifications, contains(r"duoyi://snooze/${resp.id ?? 0}"));
-      expect(
-        localNotifications,
-        contains(r'?delay=5&payload=${Uri.encodeComponent(originalPayload)}'),
-      );
-      expect(localNotifications, contains(r'todo_snooze_$id'));
-      expect(localNotifications, contains("I18n.tr('reminder.snooze_5min')"));
-      expect(
-        localNotifications,
-        contains('String? _payloadForResponse(NotificationResponse resp)'),
-      );
-      expect(
-        localNotifications,
-        contains('final launchPayload = response == null'),
-      );
-      expect(localNotifications, contains(': _payloadForResponse(response);'));
+    expect(
+      localNotifications,
+      contains("if (actionId.startsWith('todo_snooze_'))"),
+    );
+    expect(localNotifications, contains(r"duoyi://snooze/${resp.id ?? 0}"));
+    expect(
+      localNotifications,
+      contains(r'?delay=5&payload=${Uri.encodeComponent(originalPayload)}'),
+    );
+    expect(localNotifications, contains(r'todo_snooze_$id'));
+    expect(localNotifications, contains("I18n.tr('reminder.snooze_5min')"));
+    expect(
+      localNotifications,
+      contains('String? _payloadForResponse(NotificationResponse resp)'),
+    );
+    expect(
+      localNotifications,
+      contains('final launchPayload = response == null'),
+    );
+    expect(
+      localNotifications,
+      contains(': await payloadForNotificationResponse(response);'),
+    );
+    final verifiedPayloadStart = localNotifications.indexOf(
+      'Future<String?> payloadForNotificationResponse(',
+    );
+    final verifiedPayloadEnd = localNotifications.indexOf(
+      'Future<void> _probeLaunchPayload()',
+      verifiedPayloadStart,
+    );
+    expect(verifiedPayloadStart, greaterThanOrEqualTo(0));
+    expect(verifiedPayloadEnd, greaterThan(verifiedPayloadStart));
+    final verifiedPayload = localNotifications.substring(
+      verifiedPayloadStart,
+      verifiedPayloadEnd,
+    );
+    expect(
+      verifiedPayload,
+      contains(
+        'final verified = await NotificationActionEnvelope.verifyResponse(response);',
+      ),
+    );
+    expect(
+      verifiedPayload,
+      contains(
+        'return verified == null ? null : _payloadForResponse(verified);',
+      ),
+    );
+    expect(verifiedPayload, isNot(contains('_payloadForResponse(response)')));
 
-      final snoozeBranchStart = main.indexOf("uri.host == 'snooze'");
-      final snoozeBranchEnd = main.indexOf(
-        "uri.host == 'action'",
-        snoozeBranchStart,
-      );
-      expect(snoozeBranchStart, greaterThanOrEqualTo(0));
-      expect(snoozeBranchEnd, greaterThan(snoozeBranchStart));
-      final snoozeBranch = main.substring(snoozeBranchStart, snoozeBranchEnd);
-      expect(
-        snoozeBranch,
-        contains('Provider.of<NotificationService>(ctx, listen: false)'),
-      );
-      expect(snoozeBranch, contains('ns.handleSnoozeDeepLink(uri)'));
-    },
-  );
+    final snoozeBranchStart = main.indexOf("uri.host == 'snooze'");
+    final snoozeBranchEnd = main.indexOf(
+      "uri.host == 'action'",
+      snoozeBranchStart,
+    );
+    expect(snoozeBranchStart, greaterThanOrEqualTo(0));
+    expect(snoozeBranchEnd, greaterThan(snoozeBranchStart));
+    final snoozeBranch = main.substring(snoozeBranchStart, snoozeBranchEnd);
+    expect(
+      snoozeBranch,
+      contains('Provider.of<NotificationService>(ctx, listen: false)'),
+    );
+    expect(snoozeBranch, contains('ns.handleSnoozeDeepLink(uri)'));
+  });
 
   test(
     'scheduled notifications keep registering when Android reminder channel is muted',
@@ -2359,5 +2488,40 @@ void main() {
     );
     expect(source, contains('if (issue.id != alarmId) return false;'));
     expect(source, contains('_lastScheduleIssueRecordedAt = now;'));
+  });
+
+  test('todo system notification copy follows the scheduling locale', () {
+    final source = File(
+      'lib/providers/notification_service.dart',
+    ).readAsStringSync();
+    final helperStart = source.indexOf('String _notificationBodyForPayload(');
+    final helperEnd = source.indexOf(
+      'bool _isAlarmPushFallbackPayload',
+      helperStart,
+    );
+    expect(helperStart, greaterThanOrEqualTo(0));
+    expect(helperEnd, greaterThan(helperStart));
+    final helper = source.substring(helperStart, helperEnd);
+    expect(helper, contains('AppLocale? locale'));
+    expect(helper, contains('locale ?? I18n.current'));
+    expect(helper, contains('Open task details'));
+    expect(helper, contains('Task: \$title'));
+
+    final scheduleStart = source.indexOf('Future<void> scheduleTodoReminder({');
+    final scheduleEnd = source.indexOf(
+      'Future<void> cancelTodoReminder',
+      scheduleStart,
+    );
+    expect(scheduleStart, greaterThanOrEqualTo(0));
+    expect(scheduleEnd, greaterThan(scheduleStart));
+    final schedule = source.substring(scheduleStart, scheduleEnd);
+    expect(schedule, contains('final locale = I18n.current;'));
+    expect(schedule, contains('ReminderDeliveryCopy.todo('));
+    expect(schedule, contains('locale: locale'));
+    expect(schedule, contains('strings: _strings'));
+    expect(
+      schedule.indexOf('final locale = I18n.current;'),
+      lessThan(schedule.indexOf('_scheduleOnceOrRecord(')),
+    );
   });
 }

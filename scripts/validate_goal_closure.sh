@@ -40,14 +40,51 @@ run_check() {
   return "$exit_code"
 }
 
+check_alignment_gates_passed() {
+  if [[ ! -f "$SUMMARY_TSV" ]]; then
+    echo "alignment summary is missing: $SUMMARY_TSV" >&2
+    return 1
+  fi
+  awk -F '\t' 'NR > 1 && $2 != "passed" {
+    printf "%s is not closed: %s\n", $1, $2
+    failed = 1
+  } END { exit failed ? 1 : 0 }' "$SUMMARY_TSV"
+}
+
 check_alignment_report_freshness() {
   if [[ ! -f "$SUMMARY_TSV" ]]; then
     echo "alignment summary is missing: $SUMMARY_TSV" >&2
     return 1
   fi
 
+  # Appending expanded gates must not renew the eight original gate results.
+  # Keep the oldest existing bound; optional logs do not define legacy freshness.
+  local freshness_reference="$SUMMARY_TSV" legacy_log group
+  local legacy_groups=(
+    '1/8 404 and route contracts'
+    '2/8 style layout and readable selection'
+    '3/8 notification ringtone and status progress'
+    '4/8 widgets Android and iOS static contracts'
+    '5/8 admin groups default coins and permissions'
+    '6/8 Flutter analyzer'
+    '7/8 debug APK build'
+    '8/8 device-only notification alarm widget regression'
+  )
+  for group in "${legacy_groups[@]}"; do
+    if ! legacy_log="$(awk -F '\t' -v group="$group" '
+      NR > 1 && $1 == group { count++; path = $4 }
+      END { if (count != 1) exit 1; print path }
+    ' "$SUMMARY_TSV")" || [[ ! -f "$legacy_log" || ! -r "$legacy_log" || ! -s "$legacy_log" ]]; then
+      echo "alignment report freshness could not be verified: missing or invalid legacy log for $group" >&2
+      return 1
+    fi
+    if [[ "$legacy_log" -ot "$freshness_reference" ]]; then
+      freshness_reference="$legacy_log"
+    fi
+  done
+
   local stale_files
-  stale_files="$(
+  if ! stale_files="$(
     find \
       "$ROOT_DIR/android" \
       "$ROOT_DIR/backend" \
@@ -58,7 +95,17 @@ check_alignment_report_freshness() {
       "$ROOT_DIR/test" \
       "$ROOT_DIR/pubspec.yaml" \
       "$ROOT_DIR/pubspec.lock" \
-      -type f -newer "$SUMMARY_TSV" \
+      \( -path "$ROOT_DIR/backend/backups" \
+         -o -path "$ROOT_DIR/backend/uploads" \) -prune -o \
+      -type f -newer "$freshness_reference" \
+      ! -path "$ROOT_DIR/backend/duoyi.db" \
+      ! -path "$ROOT_DIR/backend/duoyi.db-wal" \
+      ! -path "$ROOT_DIR/backend/duoyi.db-shm" \
+      ! -path "$ROOT_DIR/backend/duoyi.db-journal" \
+      ! -path "$ROOT_DIR/backend/fingertip_time.db" \
+      ! -path "$ROOT_DIR/backend/fingertip_time.db-wal" \
+      ! -path "$ROOT_DIR/backend/fingertip_time.db-shm" \
+      ! -path "$ROOT_DIR/backend/fingertip_time.db-journal" \
       ! -path "$ROOT_DIR/build/*" \
       ! -path "$ROOT_DIR/.dart_tool/*" \
       ! -path "$ROOT_DIR/.git/*" \
@@ -67,18 +114,52 @@ check_alignment_report_freshness() {
       ! -path "$ROOT_DIR/android/app/build/*" \
       ! -path '*/__pycache__/*' \
       ! -name '*.pyc' \
-      2>/dev/null \
+      -print \
       | sort \
       | sed -n '1,20p'
-  )"
+  )"; then
+    echo "alignment report freshness could not be verified: source scan failed" >&2
+    return 1
+  fi
   if [[ -n "$stale_files" ]]; then
     {
       echo "alignment regression report is stale; rerun scripts/alignment_regression_gate.sh first"
-      echo "files newer than $SUMMARY_TSV:"
+      echo "files newer than legacy freshness reference $freshness_reference:"
       printf '%s\n' "$stale_files"
     } >&2
     return 1
   fi
+}
+
+# A well-formed status report can legitimately contain open requirements. It
+# proves completion only when every requirement is closed, including the four
+# expanded acceptance groups that are separate from the eight legacy gates.
+check_all_requirements_closed() {
+  local status_file="$STATUS_DIR/status.tsv"
+  if [[ ! -s "$status_file" ]]; then
+    echo "requirement status is missing: $status_file" >&2
+    return 1
+  fi
+  awk -F '\t' '
+    NR == 1 {
+      if ($0 != "id\tstatus\treason\tgroups\trequirement") {
+        print "requirement status header is invalid"
+        failed = 1
+      }
+      next
+    }
+    $2 != "closed" {
+      printf "%s is not closed: %s (%s)\n", $1, $2, $3
+      failed = 1
+    }
+    END {
+      if (NR != 15) {
+        print "requirement status must contain exactly 14 requirement rows"
+        failed = 1
+      }
+      exit failed ? 1 : 0
+    }
+  ' "$status_file"
 }
 
 rm -rf "$GOAL_REPORT_DIR"
@@ -93,6 +174,10 @@ MSG
 
 if ! run_check 'alignment_report' 'alignment_report.log' env REPORT_DIR="$REPORT_DIR" "$TOOL_ROOT_DIR/scripts/validate_alignment_report.sh"; then
   fail "alignment regression report is incomplete or malformed"
+fi
+
+if ! run_check 'alignment_gates_passed' 'alignment_gates_passed.log' check_alignment_gates_passed; then
+  fail "one or more alignment regression gates are not closed"
 fi
 
 if ! run_check 'alignment_report_freshness' 'alignment_report_freshness.log' check_alignment_report_freshness; then
@@ -144,6 +229,10 @@ fi
 
 if ! run_check 'goal_requirement_status_validation' 'goal_requirement_status_validation.log' env REPORT_DIR="$REPORT_DIR" GOAL_REPORT_DIR="$GOAL_REPORT_DIR" STATUS_DIR="$STATUS_DIR" "$TOOL_ROOT_DIR/scripts/validate_goal_requirement_status.sh"; then
   fail "goal requirement status report is incomplete or malformed"
+fi
+
+if ! run_check 'all_requirements_closed' 'all_requirements_closed.log' check_all_requirements_closed; then
+  fail "goal requirements remain open; a valid status report is not proof of completion"
 fi
 
 if [[ "$failures" -gt 0 ]]; then

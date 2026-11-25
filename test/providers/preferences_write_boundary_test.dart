@@ -314,6 +314,9 @@ void main() {
   });
 
   test('old timezone reload cannot overwrite a new account location', () async {
+    final store = _ControlledStore()
+      ..holdKey = 'flutter.${LocalTimezoneResolver.modePreferenceKey}';
+    SharedPreferencesStorePlatform.instance = store;
     final oldSystemZone = Completer<String?>();
     final started = Completer<void>();
     LocalTimezoneResolver.debugSystemTimeZoneReader = () {
@@ -321,15 +324,46 @@ void main() {
       return oldSystemZone.future;
     };
     final provider = PreferencesProvider();
+    addTearDown(provider.dispose);
     final oldLoad = provider.loadFromStorage();
-    await started.future;
-    provider.resetLocalState();
-    await AccountLocalDataCleaner.clearSharedPreferences();
-    await provider.setAppTimeZone('Asia/Tokyo');
-    oldSystemZone.complete('America/Mexico_City');
-    await oldLoad;
-    expect(provider.appTimeZone, 'Asia/Tokyo');
-    expect(tz.local.name, 'Asia/Tokyo');
+    Future<void>? newSetter;
+    try {
+      await started.future;
+      provider.resetLocalState();
+      final resetZone = tz.local.name;
+      await AccountLocalDataCleaner.clearSharedPreferences();
+      var setterFinished = false;
+      newSetter = provider.setAppTimeZone('Asia/Tokyo').then((_) {
+        setterFinished = true;
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(setterFinished, isFalse);
+      expect(store.started.isCompleted, isFalse);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(LocalTimezoneResolver.preferenceKey), isNull);
+
+      // Reads and setters share a queue. Let the canceled read settle before
+      // waiting for the new setter; hold its platform ACK to inspect recovery.
+      oldSystemZone.complete('America/Mexico_City');
+      await oldLoad;
+      await store.started.future;
+      expect(provider.isStorageLoaded, isFalse);
+      expect(tz.local.name, resetZone);
+      expect(LocalTimezoneResolver.currentIana, isNot('America/Mexico_City'));
+      store.release.complete();
+      await newSetter;
+      expect(provider.appTimeZone, 'Asia/Tokyo');
+      expect(tz.local.name, 'Asia/Tokyo');
+      expect(
+        prefs.getString(LocalTimezoneResolver.preferenceKey),
+        'Asia/Tokyo',
+      );
+    } finally {
+      if (!oldSystemZone.isCompleted) oldSystemZone.complete('Asia/Shanghai');
+      if (!store.release.isCompleted) store.release.complete();
+      await oldLoad;
+      if (newSetter != null) await newSetter;
+    }
   });
 }
 

@@ -1,4 +1,5 @@
 import 'package:duoyi/core/app_version.dart';
+import 'package:duoyi/core/i18n_date_format.dart';
 import 'package:duoyi/providers/achievement_provider.dart';
 import 'package:duoyi/providers/anniversary_provider.dart';
 import 'package:duoyi/providers/app_lock_provider.dart';
@@ -135,8 +136,16 @@ void main() {
   testWidgets('CalendarScreen day navigation moves by one day', (tester) async {
     final today = DateTime.now();
     final tomorrow = today.add(const Duration(days: 1));
-    final todayLabel = '${today.year}年${today.month}月${today.day}日';
-    final tomorrowLabel = '${tomorrow.year}年${tomorrow.month}月${tomorrow.day}日';
+    final todayLabel = I18nDateFormat.date(
+      today,
+      pattern: 'yyyy-MM-dd',
+      locale: AppLocale.zh,
+    );
+    final tomorrowLabel = I18nDateFormat.date(
+      tomorrow,
+      pattern: 'yyyy-MM-dd',
+      locale: AppLocale.zh,
+    );
 
     await tester.pumpWidget(_wrapCalendar());
     await tester.pumpAndSettle();

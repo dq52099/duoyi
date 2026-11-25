@@ -38,7 +38,7 @@ void main() {
     expect(source, contains('Tab(height: 34'));
     expect(source, contains('fontSize: compact ? 12.5 : 13.5'));
     expect(source, contains("'calendar_navigation_date_button'"));
-    expect(source, contains('height: compact ? 62 : 68'));
+    expect(source, contains('minHeight: compact ? 62 : 68'));
     expect(
       source,
       contains("key: const ValueKey('calendar_navigation_header_bar')"),

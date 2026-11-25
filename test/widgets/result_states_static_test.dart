@@ -23,7 +23,7 @@ void main() {
     expect(source, contains('AnimationController'));
     expect(source, contains('ShaderMask'));
     expect(source, contains('FilledButton.tonalIcon'));
-    expect(source, contains("title = '出错了'"));
+    expect(source, contains('final String? title;'));
 
     expect(emptyState, contains('class EmptyState extends StatelessWidget'));
     expect(auditor, contains("file: 'lib/widgets/result_states.dart'"));

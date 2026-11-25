@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/account_ui_copy.dart';
+import 'surface_components.dart';
 
 enum AccountDisplayStatus {
   notLoggedIn,
@@ -15,16 +16,23 @@ enum AccountDisplayStatus {
 class AccountStatusChip extends StatelessWidget {
   final AccountDisplayStatus status;
   final VoidCallback? onTap;
+  final bool wrapLabel;
 
-  const AccountStatusChip({super.key, required this.status, this.onTap});
+  const AccountStatusChip({
+    super.key,
+    required this.status,
+    this.onTap,
+    this.wrapLabel = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     final String label;
     final IconData icon;
-    final Color color;
+    Color color;
     final Color bg;
 
     switch (status) {
@@ -60,8 +68,22 @@ class AccountStatusChip extends StatelessWidget {
         break;
     }
 
+    final surfaceStyle = appSurfaceStyleOf(context);
+    if (surfaceStyle != null && status != AccountDisplayStatus.notLoggedIn) {
+      final cardFill = surfaceStyle.cardFillColor ?? cs.surface;
+      final cardBackground = Color.alphaBlend(
+        cardFill,
+        Color.alphaBlend(theme.scaffoldBackgroundColor, cs.surface),
+      );
+      final compositedBackground = Color.alphaBlend(bg, cardBackground);
+      color = appReadableForeground(compositedBackground, color);
+    }
+
     final chip = Container(
-      constraints: const BoxConstraints(minHeight: 20, maxWidth: 140),
+      constraints: BoxConstraints(
+        minHeight: 20,
+        maxWidth: wrapLabel ? double.infinity : 140,
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: bg,
@@ -75,8 +97,10 @@ class AccountStatusChip extends StatelessWidget {
           Flexible(
             child: Text(
               label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              maxLines: wrapLabel ? null : 1,
+              overflow: wrapLabel
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 10.5,
                 color: color,

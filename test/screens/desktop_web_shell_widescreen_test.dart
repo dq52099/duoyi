@@ -1,7 +1,11 @@
+import '../support/habit_public_text_bounds.dart';
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:duoyi/core/app_brand.dart';
 import 'package:duoyi/core/app_version.dart';
 import 'package:duoyi/core/design_tokens.dart';
-import 'package:duoyi/core/i18n.dart' show LocaleProvider;
+import 'package:duoyi/core/i18n.dart' show LocaleProvider, I18n, AppLocale;
 import 'package:duoyi/core/desktop_tokens.dart';
 import 'package:duoyi/core/web_target.dart';
 import 'package:duoyi/l10n/generated/app_localizations.dart';
@@ -32,14 +36,18 @@ import 'package:duoyi/providers/user_provider.dart';
 import 'package:duoyi/screens/habit_screen.dart';
 import 'package:duoyi/screens/todo_screen.dart';
 import 'package:duoyi/screens/today_screen.dart';
+import 'package:duoyi/screens/mine_screen.dart';
 import 'package:duoyi/services/ai_service.dart';
 import 'package:duoyi/services/app_update_service.dart';
 import 'package:duoyi/services/calendar_sync_service.dart';
 import 'package:duoyi/widgets/eisenhower_matrix.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/widget_polish_screenshot_font.dart';
 
 /// 宽屏外壳（NavigationRail）冒烟：
 ///
@@ -54,6 +62,8 @@ Widget _wrapShell(
   ThemeData theme, {
   HabitProvider? habitProvider,
   TodoProvider? todoProvider,
+  ThemeProvider? themeProvider,
+  GlobalKey? captureKey,
   double textScaleFactor = 1,
 }) {
   return MultiProvider(
@@ -61,7 +71,10 @@ Widget _wrapShell(
       ChangeNotifierProvider(create: (_) => todoProvider ?? TodoProvider()),
       ChangeNotifierProvider(create: (_) => habitProvider ?? HabitProvider()),
       ChangeNotifierProvider(create: (_) => PomodoroProvider()),
-      ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      if (themeProvider == null)
+        ChangeNotifierProvider(create: (_) => ThemeProvider())
+      else
+        ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
       ChangeNotifierProvider(create: (_) => CloudSyncProvider()),
       ChangeNotifierProvider(create: (_) => CalendarProvider()),
       ChangeNotifierProvider(create: (_) => UserProvider()),
@@ -92,13 +105,15 @@ Widget _wrapShell(
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      locale: const Locale('zh'),
+      locale: Locale(I18n.current == AppLocale.en ? 'en' : 'zh'),
       theme: theme,
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(
           context,
         ).copyWith(textScaler: TextScaler.linear(textScaleFactor)),
-        child: child!,
+        child: captureKey == null
+            ? child!
+            : RepaintBoundary(key: captureKey, child: child!),
       ),
       home: MainShell(),
     ),
@@ -127,6 +142,107 @@ Future<void> _pumpShellAt(
   await tester.pumpAndSettle();
 }
 
+Finder _habitCheckinCard(String id) =>
+    find.byKey(ValueKey('habit_checkin_card_$id'));
+
+Finder _habitTodayScrollable() => find.descendant(
+  of: find.byKey(const ValueKey('habit_today_scroll_view')),
+  matching: find.byType(Scrollable),
+).first;
+
+void _expectHabitContained(Rect inner, Rect outer, String reason) {
+  expect(inner.width, greaterThan(0), reason: reason);
+  expect(inner.height, greaterThan(0), reason: reason);
+  expect(inner.left, greaterThanOrEqualTo(outer.left - .5), reason: reason);
+  expect(inner.top, greaterThanOrEqualTo(outer.top - .5), reason: reason);
+  expect(inner.right, lessThanOrEqualTo(outer.right + .5), reason: reason);
+  expect(inner.bottom, lessThanOrEqualTo(outer.bottom + .5), reason: reason);
+}
+
+// Public layout contract: a/b occupy the first row and c starts the next row.
+// No sliver type, private card height or grid delegate is part of this oracle.
+Future<void> _expectHabitPairGeometry(WidgetTester tester) async {
+  final semantics = tester.ensureSemantics();
+  try {
+    await tester.scrollUntilVisible(
+      _habitCheckinCard('a'), 160, scrollable: _habitTodayScrollable(),
+    );
+    await tester.pumpAndSettle();
+    final cards = <String, Rect>{};
+    for (final id in ['a', 'b', 'c']) {
+      final card = _habitCheckinCard(id);
+      expect(card, findsOneWidget);
+      final rect = tester.getRect(card);
+      final viewport = RenderAbstractViewport.maybeOf(
+        tester.renderObject<RenderBox>(card),
+      );
+      if (viewport is! RenderBox) {
+        throw TestFailure('Habit card $id must have a box viewport');
+      }
+      final viewportBox = viewport as RenderBox;
+      final viewportRect = MatrixUtils.transformRect(
+        viewportBox.getTransformTo(null), Offset.zero & viewportBox.size,
+      );
+      _expectHabitContained(rect, viewportRect, '$id: complete visible card');
+      cards[id] = rect;
+
+      final title = find.descendant(of: card, matching: find.text('习惯$id'));
+      expect(title, findsOneWidget);
+      expect(
+        tester.getSemantics(title).getSemanticsData().label,
+        contains('习惯$id'),
+      );
+      final paragraphs = find.descendant(
+        of: card, matching: find.byType(Text),
+      );
+      expect(paragraphs.evaluate(), isNotEmpty);
+      for (final element in paragraphs.evaluate()) {
+        final paragraph = element.findRenderObject()! as RenderParagraph;
+        final text = paragraph.text.toPlainText();
+        expect(paragraph.didExceedMaxLines, isFalse, reason: text);
+        expect(paragraph.overflow, isNot(TextOverflow.ellipsis), reason: text);
+        expect(paragraph.maxLines, isNull, reason: text);
+        final paragraphRect = MatrixUtils.transformRect(
+          paragraph.getTransformTo(null), Offset.zero & paragraph.size,
+        );
+        _expectHabitContained(paragraphRect, rect, '$id: $text');
+        expectHabitTextPaintBounds(
+          paragraph, cardRect: rect, reason: '$id: full visible text $text',
+        );
+        expect(
+          (paragraph.localToGlobal(const Offset(1, 0)) -
+                  paragraph.localToGlobal(Offset.zero)).distance,
+          closeTo(1, .001), reason: '$id: text must not shrink',
+        );
+      }
+      final checkIn = find.descendant(
+        of: card, matching: find.byType(FilledButton),
+      );
+      expect(checkIn, findsOneWidget);
+      final buttonRect = tester.getRect(checkIn);
+      expect(buttonRect.width, greaterThanOrEqualTo(44));
+      expect(buttonRect.height, greaterThanOrEqualTo(44));
+      _expectHabitContained(buttonRect, rect, '$id: check-in target');
+      final node = tester.getSemantics(checkIn);
+      expect(node.rect.width, greaterThanOrEqualTo(44));
+      expect(node.rect.height, greaterThanOrEqualTo(44));
+      expect(node.getSemanticsData().label, contains('打卡'));
+      expect(node.getSemanticsData().hasAction(ui.SemanticsAction.tap), isTrue);
+    }
+    final a = cards['a']!, b = cards['b']!, c = cards['c']!;
+    expect(a.top, closeTo(b.top, .5));
+    expect(a.right, lessThan(b.left));
+    expect(a.width, closeTo(b.width, .5));
+    expect(c.left, closeTo(a.left, .5));
+    expect(c.width, closeTo(a.width, .5));
+    expect(c.top, greaterThanOrEqualTo(a.bottom));
+    expect(c.top, greaterThanOrEqualTo(b.bottom));
+    expect(tester.takeException(), isNull);
+  } finally {
+    semantics.dispose();
+  }
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -134,6 +250,107 @@ void main() {
   });
   tearDown(() {
     WebTarget.debugDesktopWebBuild = null;
+    I18n.setLocale(AppLocale.zh);
+  });
+
+  testWidgets('priority paired shell screenshots', (tester) async {
+    final directory =
+        Platform.environment['DUOYI_PRIORITY_THEME_SCREENSHOT_DIR'];
+    if (directory == null || directory.isEmpty) return;
+    WebTarget.debugDesktopWebBuild = null;
+    addTearDown(tester.view.reset);
+    final previousDisableShadows = debugDisableShadows;
+    debugDisableShadows = false;
+    addTearDown(() => debugDisableShadows = previousDisableShadows);
+    try {
+      await tester.runAsync(loadWidgetPolishScreenshotFonts);
+      for (final brand in [AppBrands.defaultBrand, AppBrands.liquidGlass]) {
+        for (final locale in AppLocale.values) {
+          I18n.setLocale(locale);
+          SharedPreferences.setMockInitialValues({'active_brand': brand.id});
+          final provider = ThemeProvider();
+          await provider.loadFromStorage();
+          expect(provider.brand.id, brand.id);
+          final base = brand.theme;
+          final theme = base.copyWith(
+            navigationBarTheme: base.navigationBarTheme.copyWith(
+              labelTextStyle: WidgetStateProperty.resolveWith(
+                (states) => base.navigationBarTheme.labelTextStyle
+                    ?.resolve(states)
+                    ?.copyWith(
+                      fontFamily: 'DuoyiScreenshotLatin',
+                      fontFamilyFallback: const ['DuoyiScreenshot'],
+                    ),
+              ),
+            ),
+            textTheme: base.textTheme.apply(
+              fontFamily: 'DuoyiScreenshotLatin',
+              fontFamilyFallback: const ['DuoyiScreenshot'],
+            ),
+            appBarTheme: base.appBarTheme.copyWith(
+              titleTextStyle: base.appBarTheme.titleTextStyle?.copyWith(
+                fontFamily: 'DuoyiScreenshotLatin',
+                fontFamilyFallback: const ['DuoyiScreenshot'],
+              ),
+            ),
+          );
+          for (final width in [390.0, 899.0, 900.0, 1280.0]) {
+            final key = GlobalKey();
+            tester.view.physicalSize = Size(width, 900);
+            tester.view.devicePixelRatio = 1;
+            await tester.pumpWidget(
+              _wrapShell(
+                theme,
+                themeProvider: provider,
+                captureKey: key,
+                textScaleFactor: width == 390 ? 1.6 : 1,
+              ),
+            );
+            await tester.pumpAndSettle();
+            expect(find.byType(TodayScreen), findsOneWidget);
+            expect(
+              find.byType(NavigationRail),
+              width >= 900 ? findsOneWidget : findsNothing,
+            );
+            expect(
+              find.byType(NavigationBar),
+              width < 900 ? findsOneWidget : findsNothing,
+            );
+            expect(
+              tester.takeException(),
+              isNull,
+              reason: '${brand.id}/${locale.name}/$width',
+            );
+            Future<void> capture(String suffix) => tester.runAsync(() async {
+              final boundary =
+                  key.currentContext!.findRenderObject()!
+                      as RenderRepaintBoundary;
+              final image = await boundary.toImage();
+              final bytes = await image.toByteData(
+                format: ui.ImageByteFormat.png,
+              );
+              image.dispose();
+              final file = File(
+                '$directory/${brand.id}-shell$suffix-${locale.name}-${width.toInt()}.png',
+              );
+              file.parent.createSync(recursive: true);
+              file.writeAsBytesSync(bytes!.buffer.asUint8List());
+            });
+            await capture('');
+            tester.state<MainShellState>(find.byType(MainShell)).navigateTo(6);
+            await tester.pumpAndSettle();
+            expect(find.byType(MineScreen), findsOneWidget);
+            expect(tester.takeException(), isNull);
+            await capture('-mine');
+            await tester.pumpWidget(const SizedBox.shrink());
+            await tester.pumpAndSettle();
+          }
+          provider.dispose();
+        }
+      }
+    } finally {
+      debugDisableShadows = previousDisableShadows;
+    }
   });
 
   testWidgets('1280x800 默认主题：桌面壳渲染今日主 tab，无溢出且内容限宽', (tester) async {
@@ -234,7 +451,7 @@ void main() {
       find.byKey(const ValueKey('habit_today_checkin_sliver')),
       findsOneWidget,
     );
-    expect(find.byType(SliverGrid), findsOneWidget);
+    await _expectHabitPairGeometry(tester);
     expect(find.byKey(const ValueKey('habit_checkin_card_a')), findsOneWidget);
     expect(find.byKey(const ValueKey('habit_checkin_card_c')), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -266,23 +483,9 @@ void main() {
       tester.state<MainShellState>(find.byType(MainShell)).navigateTo(2);
       await tester.pumpAndSettle();
 
-      final gridFinder = find.byKey(
-        const ValueKey('habit_today_checkin_sliver'),
-      );
-      expect(gridFinder, findsOneWidget);
-      final grid = tester.widget<SliverGrid>(gridFinder);
-      final delegate =
-          grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
-      final textScaler = TextScaler.linear(textScaleFactor);
-      final scaledTextFactor = (textScaler.scale(13) / 13)
-          .clamp(1.0, double.infinity)
-          .toDouble();
-      final scaledCardBodyHeight = 38 * scaledTextFactor;
       expect(
-        delegate.mainAxisExtent,
-        closeTo(scaledCardBodyHeight + 6, 0.001),
-        reason:
-            'the grid row must fit its scaled 38px card body and 6px spacing',
+        find.byKey(const ValueKey('habit_today_checkin_sliver')),
+        findsOneWidget,
       );
 
       final card = find.byKey(const ValueKey('habit_checkin_card_a'));
@@ -296,16 +499,7 @@ void main() {
             )
             .first,
       );
-      expect(
-        find.descendant(
-          of: card,
-          matching: find.byWidgetPredicate(
-            (widget) =>
-                widget is SizedBox && widget.height == scaledCardBodyHeight,
-          ),
-        ),
-        findsOneWidget,
-      );
+      await _expectHabitPairGeometry(tester);
       expect(
         tester.takeException(),
         isNull,

@@ -159,6 +159,10 @@ if [[ -f "$MATRIX_FILE" ]]; then
     REQ-NOTIFY
     REQ-WIDGET
     REQ-DEVICE
+    REQ-DEFAULT-IOS
+    REQ-I18N
+    REQ-SETTINGS
+    REQ-FLUENCY
   )
   for id in "${expected_ids[@]}"; do
     if [[ "$(grep -Foc "| $id |" "$MATRIX_FILE")" -ne 1 ]]; then

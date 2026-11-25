@@ -98,7 +98,8 @@ void main() {
     );
     expect(headerSource, contains('? const Size(0, 52)'));
     expect(headerSource, contains(': const Size(double.infinity, 56)'));
-    expect(headerSource, contains('height: compact ? 62 : 68'));
+    // Actual scaled header fitting is checked by
+    // calendar_navigation_theme_layout_test.dart; a fixed height truncates ranges.
     expect(
       headerSource,
       contains("key: const ValueKey('calendar_navigation_header_bar')"),
@@ -108,7 +109,6 @@ void main() {
     expect(headerSource, contains('if (!compact) ...['));
     expect(headerSource, contains('child: Text('));
     expect(headerSource, contains('textAlign: TextAlign.center'));
-    expect(headerSource, contains('TextOverflow.ellipsis'));
     expect(headerSource, isNot(contains('minWidth: 180')));
   });
 
@@ -176,7 +176,7 @@ void main() {
     expect(source, contains('maxWidth: 860'));
     expect(
       source,
-      contains('maxHeight: MediaQuery.sizeOf(context).height * 0.68'),
+      matches(RegExp(r'Flexible\(\s*child: SingleChildScrollView\(')),
     );
     expect(source, contains('scrollable: false'));
     expect(

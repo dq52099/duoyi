@@ -7,6 +7,7 @@ import 'package:duoyi/models/goal.dart' show ReminderKind;
 import 'package:duoyi/services/reminder_scheduler.dart';
 import 'package:duoyi/widgets/surface_components.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -106,6 +107,7 @@ void main() {
       key: const ValueKey('notification_history_limit_tile'),
       title: '通知记录保留',
       actionKey: const ValueKey('notification_history_limit_dropdown'),
+      stacked: true,
     );
     _expectNoLayoutException(tester);
 
@@ -401,6 +403,7 @@ void _expectSettingsTileReadable(
   String? title,
   Key? actionKey,
   String? actionText,
+  bool stacked = false,
 }) {
   assert(key != null || title != null);
 
@@ -443,9 +446,32 @@ void _expectSettingsTileReadable(
 
   _expectRectOnScreen(tester, tile);
   expect(titleRect.left, greaterThan(tileRect.left));
-  expect(titleRect.right, lessThan(actionRect.left));
   expect(actionRect.right, lessThanOrEqualTo(tileRect.right + 0.5));
-  expect((actionRect.center.dy - textCenterDy).abs(), lessThan(9));
+  if (stacked) {
+    final subtitle = find.descendant(
+      of: tile,
+      matching: find.text(tester.widget<AppSettingsTile>(tile).subtitle!),
+    );
+    final subtitleRect = tester.getRect(subtitle);
+    expect(actionRect.top, greaterThan(subtitleRect.bottom));
+    expect(actionRect.left, greaterThanOrEqualTo(tileRect.left));
+    expect(actionRect.bottom, lessThanOrEqualTo(tileRect.bottom));
+    expect(subtitleRect.top, greaterThan(titleRect.bottom));
+    for (final text in [titleFinder, subtitle]) {
+      final rect = tester.getRect(text);
+      expect(tileRect.inflate(0.1).contains(rect.topLeft), isTrue);
+      expect(tileRect.inflate(0.1).contains(rect.bottomRight), isTrue);
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.descendant(of: text, matching: find.byType(RichText)),
+      );
+      expect(paragraph.didExceedMaxLines, isFalse);
+      expect(paragraph.textSize.width, lessThanOrEqualTo(rect.width + 0.1));
+      expect(paragraph.textSize.height, lessThanOrEqualTo(rect.height + 0.1));
+    }
+  } else {
+    expect(titleRect.right, lessThan(actionRect.left));
+    expect((actionRect.center.dy - textCenterDy).abs(), lessThan(9));
+  }
 }
 
 void _expectHistoryEntryReadable(WidgetTester tester) {
@@ -542,8 +568,22 @@ void _expectReminderKindSelectorReadable(WidgetTester tester) {
   }
 
   final rects = buttons.map(tester.getRect).toList(growable: false);
-  for (var i = 1; i < rects.length; i++) {
-    expect(rects[i].left, greaterThan(rects[i - 1].right - 0.5));
+  for (var i = 0; i < rects.length; i++) {
+    for (final earlier in rects.take(i)) {
+      expect(rects[i].overlaps(earlier), isFalse);
+    }
+    final paragraph = tester.renderObject<RenderParagraph>(
+      find.descendant(of: buttons[i], matching: find.byType(RichText)),
+    );
+    expect(paragraph.didExceedMaxLines, isFalse);
+    expect(
+      paragraph.textSize.width,
+      lessThanOrEqualTo(paragraph.size.width + 0.1),
+    );
+    expect(
+      paragraph.textSize.height,
+      lessThanOrEqualTo(paragraph.size.height + 0.1),
+    );
   }
   expect(rects.last.right, lessThanOrEqualTo(320));
 }

@@ -37,7 +37,7 @@ void main() {
     expect(provider, contains('deleteTemplate'));
 
     expect(main, contains('QuickCaptureTemplateProvider()'));
-    expect(main, contains('quick capture templates storage'));
+    expect(main, contains('quickCaptureTemplateProvider.loadFromStorage()'));
     expect(
       main,
       contains(
@@ -55,7 +55,7 @@ void main() {
     expect(fab, contains('String? reminderSyncIssue'));
     expect(fab, contains('outcome.reminderSyncIssue != null'));
     expect(fab, contains('habitProvider.lastReminderSyncIssue'));
-    expect(fab, contains('习惯已创建，但提醒未注册'));
+    expect(fab, contains('QuickCaptureUiCopy.habitReminderFailed'));
     expect(fab, contains('GestureDetector'));
     expect(fab, contains('onLongPress: _showTemplateSheet'));
 

@@ -1,4 +1,6 @@
 import 'package:duoyi/providers/preferences_provider.dart';
+import 'package:duoyi/core/settings_ui_copy.dart';
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/core/local_timezone_resolver.dart';
 import 'package:duoyi/core/report_reminder_config.dart';
 import 'package:duoyi/models/goal.dart';
@@ -10,9 +12,53 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   tearDown(() {
+    I18n.setLocale(AppLocale.zh);
     LocalTimezoneResolver.debugSystemTimeZoneReader = null;
     LocalTimezoneResolver.debugNativeSystemTimeZoneReader = null;
   });
+
+  test(
+    'stored weekdays Tuesday through Saturday use their actual settings label',
+    () {
+      for (final locale in AppLocale.values) {
+        I18n.setLocale(locale);
+        final keys = [
+          'weekday.mon',
+          'weekday.tue',
+          'weekday.wed',
+          'weekday.thu',
+          'weekday.fri',
+          'weekday.sat',
+          'weekday.sun',
+        ];
+        for (var first = 1; first <= 7; first++) {
+          expect(
+            SettingsUiCopy.firstWeekdayLabel(first),
+            I18n.tr(keys[first - 1]),
+          );
+          expect(
+            SettingsUiCopy.currentFirstWeekday(first),
+            contains(I18n.tr(keys[first - 1])),
+          );
+        }
+      }
+    },
+  );
+
+  test(
+    'stored week starts keep valid ISO values and default invalid values to Monday',
+    () async {
+      for (final value in [-10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 100]) {
+        SharedPreferences.setMockInitialValues({
+          'pref_first_day_of_week': value,
+        });
+        final provider = PreferencesProvider();
+        await provider.loadFromStorage();
+        expect(provider.firstDayOfWeek, value >= 1 && value <= 7 ? value : 1);
+        provider.dispose();
+      }
+    },
+  );
 
   test('旧版底部导航偏好升级后保留我的并限制 5 个', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
@@ -427,11 +473,16 @@ void main() {
 
     expect(source, contains('class NotificationSettingsScreen'));
     expect(source, contains('NotificationHistoryPolicy.options'));
-    expect(source, contains("title: '通知记录保留'"));
+    expect(source, contains('title: NotificationUiCopy.historyRetentionTitle'));
+    expect(source, contains('NotificationUiCopy.historyRetentionSubtitle'));
+    expect(source, contains('NotificationUiCopy.historyRetentionItem'));
     expect(source, contains('prefs.notificationHistoryLimit'));
-    expect(source, contains('setNotificationHistoryLimit'));
-    expect(source, contains('notif.setHistoryLimit'));
-    expect(preferences, isNot(contains("title: '通知记录保留'")));
+    expect(source, contains('origin.preferences.saveNotificationHistoryLimit'));
+    expect(source, contains('origin.notifications.applyHistoryLimit'));
+    expect(
+      preferences,
+      isNot(contains('NotificationUiCopy.historyRetentionTitle')),
+    );
   });
 
   test('应用时区默认跟随手机，切换固定时区后触发提醒重同步回调', () async {

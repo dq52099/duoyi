@@ -21,10 +21,36 @@ class SyncStatusCard extends StatelessWidget {
   const SyncStatusCard({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ValueListenableBuilder<AppLocale>(
+    valueListenable: I18n.localeListenable,
+    builder: (context, _, _) => _buildContent(context),
+  );
+
+  Widget _buildContent(BuildContext context) {
     final controller = context.watch<SyncStatusController?>();
     if (controller == null) return const SizedBox.shrink();
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final surface = appSurfaceStyleOf(context);
+    final cardBackground = Color.alphaBlend(
+      surface?.cardFillColor ?? cs.surface,
+      theme.scaffoldBackgroundColor,
+    );
+    Color readable(Color preferred, {Color? background}) {
+      if (surface == null) return preferred;
+      final fill = background ?? cardBackground;
+      // Glass can expose the route surface beneath its translucent fill.
+      final beneath = Color.alphaBlend(
+        theme.scaffoldBackgroundColor,
+        cs.surface,
+      );
+      final lowestContrastBackground =
+          appContrastRatio(Color.alphaBlend(preferred, fill), fill) <=
+              appContrastRatio(Color.alphaBlend(preferred, beneath), beneath)
+          ? fill
+          : beneath;
+      return appReadableForeground(lowestContrastBackground, preferred);
+    }
 
     final String stateLabel;
     final Color stateColor;
@@ -33,6 +59,7 @@ class SyncStatusCard extends StatelessWidget {
     Color? detailColor;
     String? autoRetryHint;
     Widget? trailing;
+    Widget? pendingBadge;
 
     if (controller.lastError != null) {
       stateLabel = I18n.tr('sync.state.failed');
@@ -64,7 +91,7 @@ class SyncStatusCard extends StatelessWidget {
           '${I18n.tr('sync.last_sync_prefix')}'
           '${I18nDateFormat.shortDateTime(controller.lastSync)}';
       if (controller.hasPendingChanges) {
-        trailing = Container(
+        pendingBadge = Container(
           key: const ValueKey('sync_status_card_pending_badge'),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
@@ -79,7 +106,13 @@ class SyncStatusCard extends StatelessWidget {
             I18n.tr('sync.pending_badge'),
             style: TextStyle(
               fontSize: DesignTokens.fontSizeCaption,
-              color: cs.tertiary,
+              color: readable(
+                cs.tertiary,
+                background: Color.alphaBlend(
+                  cs.tertiary.withValues(alpha: 0.12),
+                  cardBackground,
+                ),
+              ),
               fontWeight: DesignTokens.fontWeightRegular,
             ),
           ),
@@ -93,7 +126,7 @@ class SyncStatusCard extends StatelessWidget {
         key: const ValueKey('sync_status_card'),
         padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(stateIcon, size: 18, color: stateColor),
             const SizedBox(width: DesignTokens.spaceSm),
@@ -103,8 +136,6 @@ class SyncStatusCard extends StatelessWidget {
                 children: [
                   Text(
                     I18n.tr('sync.status.title'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 13,
                       height: 1.2,
@@ -115,12 +146,10 @@ class SyncStatusCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     stateLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: DesignTokens.fontSizeSm,
                       height: 1.2,
-                      color: stateColor,
+                      color: readable(stateColor),
                       fontWeight: DesignTokens.fontWeightRegular,
                     ),
                   ),
@@ -128,12 +157,10 @@ class SyncStatusCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       detail,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: DesignTokens.fontSizeXs,
                         height: 1.3,
-                        color: detailColor ?? cs.onSurfaceVariant,
+                        color: readable(detailColor ?? cs.onSurfaceVariant),
                       ),
                     ),
                   ],
@@ -141,8 +168,6 @@ class SyncStatusCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       autoRetryHint,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: DesignTokens.fontSizeXs,
                         height: 1.3,
@@ -150,6 +175,11 @@ class SyncStatusCard extends StatelessWidget {
                       ),
                     ),
                   ],
+                  if (pendingBadge != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: pendingBadge,
+                    ),
                 ],
               ),
             ),

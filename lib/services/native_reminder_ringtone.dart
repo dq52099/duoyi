@@ -137,6 +137,12 @@ class NativeReminderRingtone {
     await _tryInvoke('cancelAll');
   }
 
+  /// Critical cleanup must receive a reported native cancellation failure.
+  static Future<void> cancelAllOrThrow() async {
+    if (!_isAndroid) return;
+    await _invoke('cancelAll');
+  }
+
   static Future<void> stopActive() async {
     if (!_isAndroid) return;
     await _tryInvoke('stopActive');

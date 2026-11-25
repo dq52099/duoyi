@@ -21,6 +21,55 @@ class ValidatedWidgetWorkspace {
   final bool Function() isCurrent;
 }
 
+/// One still-current account cleanup intent, before local model deletion.
+/// The host predicate must also fence its session and cleanup generation.
+class ValidatedWidgetCleanup {
+  ValidatedWidgetCleanup({
+    required this.accountGeneration,
+    required this.isCurrent,
+  });
+
+  final int accountGeneration;
+  final bool Function() isCurrent;
+}
+
+/// Validate the frozen widget link against a current, host-validated workspace.
+/// Storage alone cannot establish the app's currently authenticated account.
+Future<bool> isCurrentWidgetPublicationAction({
+  required Uri uri,
+  required ValidatedWidgetWorkspace workspace,
+  WidgetPublicationClient? client,
+  DateTime Function()? clock,
+}) async {
+  bool isCurrent() =>
+      workspace.isCurrent() &&
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        workspace.accountGeneration,
+      );
+  if (uri.queryParameters['source'] != 'widget' || !isCurrent()) return false;
+  final read = await (client ?? WidgetPublicationClient()).read();
+  if (!isCurrent()) return false;
+  final snapshot = read.snapshot;
+  final document = snapshot?.document;
+  if (snapshot?.active != true ||
+      snapshot?.binding?.kind != workspace.binding.kind ||
+      snapshot?.binding?.key != workspace.binding.key ||
+      document?.state != WidgetPublicationState.published) {
+    return false;
+  }
+  final now = (clock?.call() ?? DateTime.now()).toLocal();
+  final day =
+      '${now.year.toString().padLeft(4, '0')}-'
+      '${now.month.toString().padLeft(2, '0')}-'
+      '${now.day.toString().padLeft(2, '0')}';
+  return document!.snapshotDay == day &&
+      document.snapshotUtcOffsetMinutes == now.timeZoneOffset.inMinutes &&
+      uri.queryParameters['widget_day'] == day &&
+      uri.queryParameters['widget_offset'] ==
+          now.timeZoneOffset.inMinutes.toString() &&
+      uri.queryParameters['widget_account'] == snapshot!.ownerEpoch;
+}
+
 /// One synchronous capture of all device locale, brand and theme values.
 /// Business fields are discarded; this object cannot carry account content.
 class WidgetDevicePresentation {
@@ -108,7 +157,8 @@ class _PendingPublication {
 ///
 /// Native reads must share the application-wide FIFO with mutations. A healthy
 /// read after an uncertain call drains that call; it never grants a writer lease.
-/// Auth/HomeWidgetService integration and platform readers are separate work.
+/// Quarantined durability instead requires explicit seal-only recovery under
+/// current host intent, followed by a separate validated open and fresh capture.
 class WidgetPublicationController {
   WidgetPublicationController({WidgetPublicationClient? client})
     : _client = client ?? WidgetPublicationClient();
@@ -121,6 +171,7 @@ class WidgetPublicationController {
   WidgetStoreSnapshot? _known;
   String? _lease;
   _PendingPublication? _pending;
+  WidgetStoreRequest? _pendingRecovery;
   int _scope = 0;
   int _selection = 0;
   int _acceptedSelection = -1;
@@ -143,7 +194,8 @@ class WidgetPublicationController {
       _known!.desiredRevision == _presentationRevision &&
       _known!.desiredLocale == _presentation?.locale;
 
-  bool get hasPendingOperation => _pending != null;
+  bool get hasPendingOperation => _pending != null || _pendingRecovery != null;
+  bool get requiresDurabilityRecovery => _quarantined;
 
   /// Revocation happens before an await and before any model/owner deletion.
   /// It does not claim a durable cleanup barrier; await [invalidate] for that.
@@ -282,6 +334,108 @@ class WidgetPublicationController {
           presentation: presentation,
           revision: revision,
         ),
+      );
+    });
+  }
+
+  /// Seal a quarantined store under the current validated workspace intent.
+  /// Success leaves this controller without a lease. Open separately and
+  /// hydrate/capture fresh business values before publishing again.
+  Future<WidgetPublicationOutcome> recoverWorkspace(
+    ValidatedWidgetWorkspace workspace,
+  ) => _beginRecovery(workspace: workspace);
+
+  /// A recovery barrier is valid only for this still-current cleanup intent.
+  Future<WidgetPublicationOutcome> recoverCleanup(
+    ValidatedWidgetCleanup cleanup,
+  ) => _beginRecovery(cleanup: cleanup);
+
+  Future<WidgetPublicationOutcome> _beginRecovery({
+    ValidatedWidgetWorkspace? workspace,
+    ValidatedWidgetCleanup? cleanup,
+  }) {
+    if (!_quarantined || _disposed) {
+      return Future.value(const WidgetPublicationOutcome('blocked'));
+    }
+    // Revoke captures synchronously, before the queued inspection can await.
+    _revoke(requireBarrier: true);
+    _workspace = workspace;
+    final scope = _scope;
+    final selection = _selection;
+    final presentation = _presentation;
+    final scopeToken = _operationId();
+    bool current() =>
+        _current(scope, selection, workspace) &&
+        (workspace != null
+            ? _validatedWorkspace(workspace)
+            : cleanup != null && _validatedCleanup(cleanup));
+
+    return _enqueue(() async {
+      if (presentation == null || !current()) return _superseded;
+      _lease = null;
+      _known = null;
+      _pending = null;
+      _pendingRecovery = null;
+      _acceptedSelection = -1;
+      final inspection = await _client.inspectRecovery();
+      if (!current()) return _superseded;
+      final facts = inspection.facts;
+      if (facts == null) return WidgetPublicationOutcome(inspection.status);
+      if (facts.desiredRevision > _floor) _floor = facts.desiredRevision;
+      // Inspection cannot compare the old complete presentation. Use a fresh
+      // higher floor instead of guessing that a same-version theme matches.
+      if (_floor >= WidgetPublication.maxExactJsonInteger ||
+          facts.storeRevision >= WidgetPublication.maxExactJsonInteger) {
+        return const WidgetPublicationOutcome('revisionExhausted');
+      }
+      final revision = _nextRevision();
+      var operation = _operationId();
+      while (operation == facts.lastOperationId) {
+        operation = _operationId();
+      }
+      final request = WidgetStoreRequest.recover(
+        operationId: operation,
+        expected: facts,
+        context: workspace != null
+            ? WidgetRecoveryContext.workspace(
+                scopeToken: scopeToken,
+                workspaceBinding: workspace.binding,
+              )
+            : WidgetRecoveryContext.cleanup(scopeToken: scopeToken),
+        presentation: presentation.document(revision: revision),
+      );
+      _pendingRecovery = request;
+      final ack = await _client.submit(request);
+      if (!current()) return _superseded;
+      if (!ack.committed) return WidgetPublicationOutcome(ack.status);
+      // An applied recovery proves native commit/readback, not current host
+      // authority. Confirm its exact sealed result and recheck every scope.
+      final read = await _client.read();
+      if (!current()) return _superseded;
+      final snapshot = read.snapshot;
+      if (snapshot == null ||
+          snapshot.active ||
+          snapshot.binding != null ||
+          snapshot.storeRevision != ack.metadata!['committedStoreRevision'] ||
+          snapshot.ownerEpoch != ack.metadata!['ownerEpoch'] ||
+          snapshot.lastOperationId != request.operationId ||
+          snapshot.document.publicationRevision != 0 ||
+          snapshot.document.state != WidgetPublicationState.cleared ||
+          snapshot.document.localeRevision != revision ||
+          snapshot.desiredRevision != revision ||
+          snapshot.desiredLocale != presentation.locale ||
+          !_sameValues(snapshot.document.values, presentation.clearedValues)) {
+        return const WidgetPublicationOutcome('confirmationUnavailable');
+      }
+      _known = snapshot;
+      _floor = revision;
+      _pendingRecovery = null;
+      _quarantined = false;
+      _requiresBarrier = false;
+      return const WidgetPublicationOutcome(
+        'applied',
+        storeCommitted: true,
+        barrierConfirmed: true,
       );
     });
   }
@@ -631,6 +785,19 @@ bool _validatedWorkspace(ValidatedWidgetWorkspace? workspace) {
   }
   try {
     return workspace.isCurrent();
+  } catch (_) {
+    return false;
+  }
+}
+
+bool _validatedCleanup(ValidatedWidgetCleanup cleanup) {
+  if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+    cleanup.accountGeneration,
+  )) {
+    return false;
+  }
+  try {
+    return cleanup.isCurrent();
   } catch (_) {
     return false;
   }

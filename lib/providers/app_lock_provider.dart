@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/account_preference_writes.dart';
+
 /// 应用锁：本地 PIN(4-8 位数字) + 可选自动锁定超时。
 /// 使用 SHA-256 + 固定 salt 的单向哈希存储；无法重置需清应用数据。
 class AppLockProvider extends ChangeNotifier {
@@ -16,24 +18,34 @@ class AppLockProvider extends ChangeNotifier {
   int _autoLockMinutes = 5;
   bool _isLocked = false;
   DateTime _lastActive = DateTime.now();
+  int _accessGeneration = 0;
+  bool _disposed = false;
+  int _settingsGeneration = 0;
+  Future<void> _settingsWrites = Future<void>.value();
 
   bool get enabled => _enabled;
   bool get isLocked => _enabled && _isLocked;
+  int get accessGeneration => _accessGeneration;
   int get autoLockMinutes => _autoLockMinutes;
 
   bool _validPin(String pin) => RegExp(r'^\d{4,8}$').hasMatch(pin);
 
-  Future<void> loadFromStorage() async {
-    final p = await SharedPreferences.getInstance();
-    _enabled = p.getBool(_kEnabled) ?? false;
-    _autoLockMinutes = p.getInt(_kAutoLockMinutes) ?? 5;
-    final lastStr = p.getString(_kLastActive);
-    _lastActive = lastStr != null
-        ? (DateTime.tryParse(lastStr) ?? DateTime.now())
-        : DateTime.now();
-    // 启动时如果启用了锁，就立即处于锁定态
-    _isLocked = _enabled;
-    notifyListeners();
+  Future<void> loadFromStorage() {
+    _accessGeneration++;
+    final generation = ++_settingsGeneration;
+    return _enqueueSettings(() async {
+      final p = await SharedPreferences.getInstance();
+      if (_disposed || generation != _settingsGeneration) return;
+      _enabled = p.getBool(_kEnabled) ?? false;
+      _autoLockMinutes = (p.getInt(_kAutoLockMinutes) ?? 5).clamp(0, 240);
+      final lastStr = p.getString(_kLastActive);
+      _lastActive = lastStr != null
+          ? (DateTime.tryParse(lastStr) ?? DateTime.now())
+          : DateTime.now();
+      // 启动时如果启用了锁，就立即处于锁定态
+      _isLocked = _enabled;
+      notifyListeners();
+    });
   }
 
   String _hash(String pin) {
@@ -43,52 +55,120 @@ class AppLockProvider extends ChangeNotifier {
 
   Future<bool> setPin(String pin) async {
     if (!_validPin(pin)) return false;
-    final p = await SharedPreferences.getInstance();
-    await p.setString(_kHash, _hash(pin));
-    await p.setBool(_kEnabled, true);
-    _enabled = true;
-    _isLocked = false;
-    notifyListeners();
-    return true;
+    _accessGeneration++;
+    return _writeSettings<bool>(
+      (transaction, _) async {
+        await transaction.setString(_kHash, _hash(pin));
+        await transaction.setBool(_kEnabled, true);
+        return true;
+      },
+      onCommitted: (_) {
+        // Updating a credential must not unlock a lock raised during saving.
+        _enabled = true;
+        notifyListeners();
+      },
+    );
   }
 
-  Future<void> disable(String currentPin) async {
-    if (!await verify(currentPin)) return;
-    final p = await SharedPreferences.getInstance();
-    await p.remove(_kHash);
-    await p.setBool(_kEnabled, false);
-    _enabled = false;
-    _isLocked = false;
-    notifyListeners();
+  Future<bool> disable(String currentPin) async {
+    _accessGeneration++;
+    return _writeSettings<bool>(
+      (transaction, preferences) async {
+        if (!_matchesPin(currentPin, preferences)) return false;
+        // Disable first. A failed second write is restored by the transaction.
+        await transaction.setBool(_kEnabled, false);
+        await transaction.remove(_kHash);
+        return true;
+      },
+      onCommitted: (changed) {
+        if (!changed) return;
+        _enabled = false;
+        _isLocked = false;
+        notifyListeners();
+      },
+    );
   }
 
   Future<bool> verify(String pin) async {
     if (!_validPin(pin)) return false;
+    // Never read a partially written credential pair.
+    await _settingsWrites;
     final p = await SharedPreferences.getInstance();
-    final stored = p.getString(_kHash);
-    if (stored == null) return false;
-    return stored == _hash(pin);
+    return !_disposed && _matchesPin(pin, p);
   }
 
-  Future<void> unlockWith(String pin) async {
-    if (await verify(pin)) {
-      _isLocked = false;
-      _lastActive = DateTime.now();
-      notifyListeners();
+  bool _matchesPin(String pin, SharedPreferences preferences) =>
+      _validPin(pin) && preferences.getString(_kHash) == _hash(pin);
+
+  Future<T> _enqueueSettings<T>(Future<T> Function() operation) {
+    final result = _settingsWrites.then((_) => operation());
+    _settingsWrites = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  Future<T> _writeSettings<T>(
+    Future<T> Function(AccountPreferenceTransaction, SharedPreferences)
+    operation, {
+    required void Function(T) onCommitted,
+  }) {
+    final generation = _settingsGeneration;
+    bool isCurrent() => !_disposed && generation == _settingsGeneration;
+    return _enqueueSettings(() async {
+      if (!isCurrent()) throw const AccountPreferenceWriteCanceled();
+      final preferences = await SharedPreferences.getInstance();
+      final transaction = AccountPreferenceTransaction(preferences, isCurrent);
+      try {
+        final result = await operation(transaction, preferences);
+        transaction.commit();
+        onCommitted(result);
+        return result;
+      } catch (_) {
+        // This device setting queue serializes reloads and other saves too, so
+        // a canceled operation can restore its snapshot before the next one.
+        await transaction.rollback(canceledBeforeCleanup: true);
+        rethrow;
+      }
+    });
+  }
+
+  /// The initiating screen and lock state must still be current after checking
+  /// the PIN. A late result must not unlock a new lock or a dismissed screen.
+  Future<void> unlockWith(String pin, {bool Function()? isCurrent}) async {
+    if (_disposed || !(isCurrent?.call() ?? true)) return;
+    final generation = _accessGeneration;
+    final verified = await verify(pin);
+    if (_disposed ||
+        generation != _accessGeneration ||
+        !verified ||
+        !(isCurrent?.call() ?? true)) {
+      return;
     }
+    _isLocked = false;
+    _lastActive = DateTime.now();
+    notifyListeners();
   }
 
   void lock() {
     if (!_enabled) return;
+    _accessGeneration++;
     _isLocked = true;
     notifyListeners();
   }
 
-  Future<void> setAutoLockMinutes(int m) async {
-    _autoLockMinutes = m.clamp(0, 240);
-    final p = await SharedPreferences.getInstance();
-    await p.setInt(_kAutoLockMinutes, _autoLockMinutes);
-    notifyListeners();
+  Future<void> setAutoLockMinutes(int m) {
+    final minutes = m.clamp(0, 240);
+    return _writeSettings<void>(
+      (transaction, _) async {
+        await transaction.setInt(_kAutoLockMinutes, minutes);
+      },
+      onCommitted: (_) {
+        _autoLockMinutes = minutes;
+        notifyListeners();
+      },
+    );
   }
 
   /// 应用退到后台/恢复前台时由外部调用以决定是否锁。
@@ -102,14 +182,20 @@ class AppLockProvider extends ChangeNotifier {
     if (!_enabled) return;
     if (_autoLockMinutes == 0) {
       // 0 = 每次切回立刻锁
-      _isLocked = true;
-      notifyListeners();
+      lock();
       return;
     }
     final diff = DateTime.now().difference(_lastActive);
     if (diff.inMinutes >= _autoLockMinutes) {
-      _isLocked = true;
-      notifyListeners();
+      lock();
     }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _accessGeneration++;
+    _settingsGeneration++;
+    super.dispose();
   }
 }

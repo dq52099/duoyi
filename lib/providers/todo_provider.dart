@@ -92,6 +92,15 @@ class TodoProvider extends ChangeNotifier {
 
   List<TodoItem> _todos = [];
   bool _storageLoaded = false;
+  int? _loadedAccountGeneration;
+  int get storageGeneration => _storageGeneration;
+  bool get isStorageHydrated =>
+      !_disposed &&
+      _storageLoaded &&
+      _loadedAccountGeneration != null &&
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        _loadedAccountGeneration!,
+      );
   bool _disposed = false;
   Future<void>? _storageLoadFuture;
   Future<void> _storageWriteQueue = Future<void>.value();
@@ -101,11 +110,17 @@ class TodoProvider extends ChangeNotifier {
       _externalStorageUpdateGeneration ?? _storageGeneration;
   final Set<String> _inFlightCreateKeys = {};
   final Set<String> _inFlightTodoMutationIds = {};
+  final _todoMutationReleaseRevision = ValueNotifier<int>(0);
+  ValueListenable<int> get todoMutationReleaseListenable =>
+      _todoMutationReleaseRevision;
   final Set<String> _inFlightUpdateTodoIds = {};
   final Set<String> _inFlightCompleteTodoIds = {};
   final Set<String> _inFlightDeleteTodoIds = {};
   final Set<String> _inFlightQuadrantTodoIds = {};
   final Set<String> _inFlightPriorityTodoIds = {};
+  final Set<String> _inFlightDueDateTodoIds = {};
+  final Set<String> _inFlightListGroupTodoIds = {};
+  final Set<String> _inFlightTagTodoIds = {};
   final Set<String> _inFlightKanbanTodoIds = {};
   final Set<String> _inFlightScheduleTodayTodoIds = {};
   final Set<String> _inFlightReorderKeys = {};
@@ -124,7 +139,15 @@ class TodoProvider extends ChangeNotifier {
   /// 队列及时注册或取消；`main.dart` 的监听重同步仍作为兜底。
   ReminderScheduler? _scheduler;
   TimeAuditProvider? _timeAudit;
+  bool Function(String workspaceId)? canEditWorkspace;
+  final Map<String, (TodoItem, int, int)> _pendingCompletionTimeRecords = {};
+  final Map<String, _TodoTimeCleanup> _pendingTodoTimeCleanups = {};
+  Future<void> _completionTimeWriteQueue = Future<void>.value();
   FutureOr<void> Function()? onLocalMutationPersisted;
+  Future<bool> Function()? onArchiveMutationPersisted;
+  Future<T> Function<T>(Future<T> Function() operation)?
+  authoritativeStorageUpdate;
+  (int, int)? _pendingArchiveDirtyOwner;
   String? _lastReminderSyncIssue;
   ReminderSyncIssue? _lastReminderSyncIssueCopy;
   String? _lastReminderScheduleIssue;
@@ -375,6 +398,18 @@ class TodoProvider extends ChangeNotifier {
     Future<T> Function() operation, {
     int? expectedAccountDataGeneration,
   }) {
+    final runner = authoritativeStorageUpdate;
+    Future<T> apply() => _runExternalStorageUpdate(
+      operation,
+      expectedAccountDataGeneration: expectedAccountDataGeneration,
+    );
+    return runner == null ? apply() : runner(apply);
+  }
+
+  Future<T> _runExternalStorageUpdate<T>(
+    Future<T> Function() operation, {
+    int? expectedAccountDataGeneration,
+  }) {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (_disposed ||
@@ -454,10 +489,14 @@ class TodoProvider extends ChangeNotifier {
   void resetLocalState() {
     if (_disposed) return;
     _storageGeneration++;
+    _pendingCompletionTimeRecords.clear();
+    _pendingTodoTimeCleanups.clear();
     _externalStorageUpdateGeneration = null;
     _nextReminderSyncGeneration++;
     _todos = [];
     _storageLoaded = false;
+    _loadedAccountGeneration = null;
+    _pendingArchiveDirtyOwner = null;
     _storageLoadFuture = null;
     _lastReminderSyncIssue = null;
     _lastReminderSyncIssueCopy = null;
@@ -470,6 +509,9 @@ class TodoProvider extends ChangeNotifier {
   }
 
   Future<void> _loadFromStorage(int generation) async {
+    if (_disposed || generation != _storageGeneration) return;
+    _storageLoaded = false;
+    _loadedAccountGeneration = null;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final prefs = await SharedPreferences.getInstance();
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
@@ -551,6 +593,7 @@ class TodoProvider extends ChangeNotifier {
     }
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
     _storageLoaded = true;
+    _loadedAccountGeneration = accountGeneration;
     _notify();
   }
 
@@ -610,31 +653,81 @@ class TodoProvider extends ChangeNotifier {
   /// - `_loadFromStorage` 的损坏重写分支（加载流程已与队列串行：
   ///   pending 写入先于加载执行，加载期间新提交的写入链在加载完成之后；
   ///   若此处再走队列，强制重读会链到自身导致循环等待死锁）。
-  Future<void> _writeTodosSnapshot() async {
-    if (_disposed) return;
+  Future<bool> _writeTodosSnapshot({
+    List<TodoItem>? snapshot,
+    bool Function()? canWrite,
+    bool notifyPersisted = true,
+    Map<String, List<String>> deletedByWorkspace = const {},
+  }) {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
-    // 大列表的 JSON 编码会阻塞主 isolate 数十毫秒（2000 条 ≈ 20ms），
-    // 挪到后台 isolate 执行；模型对象图在发送时自动快照拷贝，
-    // 因此这里直接传列表，不需要在主 isolate 先做 toJson。
-    final data = _todos.length >= _isolateEncodeMinItems
-        ? await compute(_encodeTodoStoragePayload, List<TodoItem>.of(_todos))
-        : json.encode(_todos.map((e) => e.toJson()).toList());
-    final prefs = await SharedPreferences.getInstance();
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
-      return;
-    }
-    await prefs.setString('todos', data);
-    if (_isCurrentStorageGeneration(generation, accountGeneration)) {
-      await _notifyLocalMutationPersisted();
-    }
+    final items = snapshot ?? List<TodoItem>.of(_todos);
+    return AccountPreferenceWrites.runResult<bool>((token) async {
+      bool isCurrent() =>
+          token.isCurrent &&
+          _isCurrentStorageGeneration(generation, accountGeneration) &&
+          canWrite?.call() != false;
+      if (!isCurrent()) return false;
+      // 大列表的 JSON 编码会阻塞主 isolate 数十毫秒（2000 条 ≈ 20ms），
+      // 挪到后台 isolate 执行；模型对象图在发送时自动快照拷贝，
+      // 因此这里直接传列表，不需要在主 isolate 先做 toJson。
+      final data = items.length >= _isolateEncodeMinItems
+          ? await compute(_encodeTodoStoragePayload, items)
+          : json.encode(items.map((e) => e.toJson()).toList());
+      final prefs = await SharedPreferences.getInstance();
+      if (!isCurrent()) return false;
+      var committed = false;
+      Future<bool> persist({DeletedItemsWriteLease? lease}) async {
+        bool ownsWrite() => isCurrent() && (lease?.isCurrent ?? true);
+        final transaction = AccountPreferenceTransaction(prefs, ownsWrite);
+        try {
+          for (final entry in deletedByWorkspace.entries) {
+            await CloudSyncProvider.recordDeletedItems(
+              'todos',
+              entry.value,
+              workspaceId: entry.key,
+              transaction: transaction,
+              lease: lease,
+            );
+          }
+          await transaction.setString('todos', data);
+          transaction.commit();
+          committed = true;
+          return true;
+        } catch (error) {
+          // Tombstones and the selected Todo snapshot roll back under their
+          // owning leases; account cleanup drains this whole issued write.
+          await transaction.rollback(canceledBeforeCleanup: true);
+          if (error is AccountPreferenceWriteCanceled) return false;
+          rethrow;
+        }
+      }
+
+      final bool saved;
+      if (deletedByWorkspace.isEmpty) {
+        saved = await persist();
+      } else {
+        try {
+          saved = await CloudSyncProvider.withDeletedItemsLock<bool>(
+            (lease) => persist(lease: lease),
+          );
+        } on AccountPreferenceWriteCanceled {
+          return committed;
+        }
+      }
+      if (!saved) return false;
+      if (notifyPersisted && isCurrent()) {
+        await _notifyLocalMutationPersisted();
+      }
+      return true;
+    }, canceledResult: () => false);
   }
 
   Future<void> _writeToStorage({bool Function()? canWrite}) async {
     if (_disposed || canWrite?.call() == false) return;
     final write = _storageWriteQueue.then((_) async {
       if (_disposed || canWrite?.call() == false) return;
-      await _writeTodosSnapshot();
+      await _writeTodosSnapshot(canWrite: canWrite);
     });
     _storageWriteQueue = write.catchError((Object e, StackTrace st) {
       debugPrint('[TodoProvider] queued local todo write failed: $e\n$st');
@@ -655,8 +748,9 @@ class TodoProvider extends ChangeNotifier {
 
   Future<TodoReminderSyncResult> _syncTodoRemindersNow({
     String? reportTodoId,
+    bool Function()? canWrite,
   }) async {
-    if (_disposed) {
+    if (_disposed || canWrite?.call() == false) {
       return TodoReminderSyncResult(
         generation: _nextReminderSyncGeneration,
         issue: null,
@@ -669,7 +763,8 @@ class TodoProvider extends ChangeNotifier {
     final attemptedAt = DateTime.now();
     bool isCurrent() =>
         _isCurrentStorageGeneration(storageGeneration, accountGeneration) &&
-        generation == _nextReminderSyncGeneration;
+        generation == _nextReminderSyncGeneration &&
+        canWrite?.call() != false;
     void apply(TodoReminderSyncResult result) {
       if (!isCurrent()) return;
       if (reportTodoId != null) {
@@ -807,11 +902,13 @@ class TodoProvider extends ChangeNotifier {
     TodoItem todo, {
     bool waitForReminderSync = true,
     bool reportReminderScheduleFailure = false,
+    bool Function()? canWrite,
   }) async {
     await addTodoWithResult(
       todo,
       waitForReminderSync: waitForReminderSync,
       reportReminderScheduleFailure: reportReminderScheduleFailure,
+      canWrite: canWrite,
     );
   }
 
@@ -819,13 +916,15 @@ class TodoProvider extends ChangeNotifier {
     TodoItem todo, {
     bool waitForReminderSync = true,
     bool reportReminderScheduleFailure = false,
+    bool Function()? canWrite,
   }) async {
     final generation = _mutationStorageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    bool isCurrent() =>
+        _isCurrentStorageGeneration(generation, accountGeneration) &&
+        canWrite?.call() != false;
     if (!await _ensureStorageLoaded() || _disposed) return null;
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
-      return null;
-    }
+    if (!isCurrent()) return null;
     final createKey = _createInFlightDuplicateKey(todo);
     final claimed = _claimInFlightKeys(
       _inFlightCreateKeys,
@@ -834,15 +933,39 @@ class TodoProvider extends ChangeNotifier {
       duplicateMessage: '待办正在创建中，请勿重复提交',
     );
     try {
-      _todos.add(todo);
-      DomainEventBus.instance.publish(
-        DomainEvent(type: DomainEventType.todoCreated, objectId: todo.id),
+      // Stage only this insertion on the shared write queue. Failed creates
+      // never enter memory or another operation's persisted snapshot.
+      final write = _storageWriteQueue.then<bool>((_) async {
+        if (!isCurrent()) return false;
+        final next = List<TodoItem>.of(_todos)..add(todo);
+        if (!await _writeTodosSnapshot(
+          snapshot: next,
+          canWrite: isCurrent,
+          notifyPersisted: false,
+        )) {
+          return false;
+        }
+        if (!isCurrent()) return false;
+        // Other mutations may have updated memory while the platform wrote.
+        // Publish only our item, preserving those changes for their own write.
+        _todos.add(todo);
+        DomainEventBus.instance.publish(
+          DomainEvent(type: DomainEventType.todoCreated, objectId: todo.id),
+        );
+        if (!isCurrent()) return false;
+        // Backup restore and later writes must also wait for the durable
+        // pending-sync marker associated with this acknowledged insertion.
+        await _notifyLocalMutationPersisted();
+        if (!isCurrent()) return false;
+        return true;
+      });
+      _storageWriteQueue = write.then<void>(
+        (_) {},
+        onError: (Object _, StackTrace _) {},
       );
-      await _saveToStorage();
-      if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
-        return null;
-      }
+      if (!await write || !isCurrent()) return null;
       _notify();
+      if (!isCurrent()) return null;
       if (waitForReminderSync) {
         return await _syncTodoRemindersNow(
           reportTodoId: reportReminderScheduleFailure ? todo.id : null,
@@ -946,7 +1069,7 @@ class TodoProvider extends ChangeNotifier {
       );
     } finally {
       _inFlightUpdateTodoIds.removeAll(claimed);
-      _inFlightTodoMutationIds.removeAll(mutationClaimed);
+      _releaseTodoMutationIds(mutationClaimed);
     }
   }
 
@@ -969,6 +1092,9 @@ class TodoProvider extends ChangeNotifier {
       var next = updated.isCompleted && updated.completedAt == null
           ? updated.copyWith(completedAt: DateTime.now())
           : updated;
+      if (!next.isCompleted && next.isArchivedAfterRollover) {
+        next = next.copyWith(isArchivedAfterRollover: false);
+      }
       if (!prev.isCompleted && next.isCompleted) {
         next = next.copyWith(kanbanColumnId: defaultKanbanDoneColumnId);
       } else if (prev.isCompleted &&
@@ -1062,7 +1188,7 @@ class TodoProvider extends ChangeNotifier {
       );
     } finally {
       _inFlightCompleteTodoIds.removeAll(mutationSelected);
-      _inFlightTodoMutationIds.removeAll(mutationSelected);
+      _releaseTodoMutationIds(mutationSelected);
     }
   }
 
@@ -1073,54 +1199,289 @@ class TodoProvider extends ChangeNotifier {
     final generation = _mutationStorageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!await _ensureStorageLoaded() || _disposed) return 0;
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-    final completed = <TodoItem>[];
-    var changed = 0;
-    for (var i = 0; i < _todos.length; i++) {
-      final prev = _todos[i];
-      if (!selected.contains(prev.id) || prev.isCompleted) continue;
-
-      final next = prev.copyWith(
-        isCompleted: true,
-        completedAt: DateTime.now(),
-        kanbanColumnId: defaultKanbanDoneColumnId,
-      );
-      _todos[i] = next;
-      completed.add(next);
-      changed++;
-      DomainEventBus.instance.publish(
-        DomainEvent(type: DomainEventType.todoCompleted, objectId: next.id),
-      );
-      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-
-      if (prev.recurrence.isActive) {
-        final recurring = _nextRecurringTodo(prev);
-        if (recurring != null) _todos.add(recurring);
-      }
+    bool isCurrent() =>
+        _isCurrentStorageGeneration(generation, accountGeneration);
+    if (!isCurrent()) return 0;
+    bool canComplete(TodoItem todo) =>
+        canEditWorkspace?.call(todo.workspaceId) ?? true;
+    if (_todos.any(
+      (todo) => selected.contains(todo.id) && !canComplete(todo),
+    )) {
+      throw StateError('Shared workspace is read-only');
     }
+    final completed = <TodoItem>[];
+    // Persist a candidate on the common queue before exposing completion,
+    // recurring successors or events. A rejected write leaves a retryable task.
+    final write = _storageWriteQueue.then<bool>((_) async {
+      if (!isCurrent()) return false;
+      final original = <String, TodoItem>{
+        for (final todo in _todos)
+          if (selected.contains(todo.id) && !todo.isCompleted) todo.id: todo,
+      };
+      if (original.isEmpty) return false;
+      if (!original.values.every(canComplete)) {
+        throw StateError('Shared workspace is read-only');
+      }
+      final versions = original.map(
+        (id, todo) => MapEntry(id, json.encode(todo.toJson())),
+      );
+      bool canPersist() =>
+          isCurrent() &&
+          original.values.every(canComplete) &&
+          original.entries.every((entry) {
+            final current = _todos
+                .where((todo) => todo.id == entry.key)
+                .firstOrNull;
+            return identical(current, entry.value) &&
+                json.encode(current!.toJson()) == versions[entry.key];
+          });
+      final patches = <String, TodoItem>{
+        for (final todo in original.values)
+          todo.id: todo.copyWith(
+            isCompleted: true,
+            completedAt: DateTime.now(),
+            kanbanColumnId: defaultKanbanDoneColumnId,
+          ),
+      };
+      final successors = <TodoItem>[];
+      for (final todo in original.values) {
+        if (!todo.recurrence.isActive) continue;
+        final recurring = _nextRecurringTodo(todo);
+        if (recurring != null) successors.add(recurring);
+      }
+      final candidate = [
+        for (final todo in _todos) patches[todo.id] ?? todo,
+        ...successors,
+      ];
+      if (!await _writeTodosSnapshot(
+            snapshot: candidate,
+            canWrite: canPersist,
+            notifyPersisted: false,
+          ) ||
+          !canPersist()) {
+        return false;
+      }
+      // Apply only owned IDs; unrelated edits made during the platform write
+      // keep their live state and their own queued persistence.
+      for (var i = 0; i < _todos.length; i++) {
+        final patch = patches[_todos[i].id];
+        if (patch != null) _todos[i] = patch;
+      }
+      _todos.addAll(successors);
+      completed.addAll(patches.values);
+      if (recordCompletionTime && _timeAudit != null) {
+        for (final todo in completed) {
+          _pendingCompletionTimeRecords[todo.id] = (
+            todo,
+            generation,
+            accountGeneration,
+          );
+        }
+      }
+      await _notifyLocalMutationPersisted();
+      if (!isCurrent()) return false;
+      for (final todo in completed) {
+        DomainEventBus.instance.publish(
+          DomainEvent(type: DomainEventType.todoCompleted, objectId: todo.id),
+        );
+        if (!isCurrent()) return false;
+      }
+      return true;
+    });
+    _storageWriteQueue = write.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
 
-    if (changed == 0) return 0;
-    await _saveToStorage();
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
+    if (!await write || !isCurrent()) return 0;
     _notify();
+    if (!isCurrent()) return 0;
 
     if (recordCompletionTime) {
-      for (final todo in completed) {
-        if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
-          return 0;
-        }
-        await _timeAudit?.recordTodoCompletion(
-          todo,
-          completedAt: todo.completedAt,
-        );
-        if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
-          return 0;
-        }
-      }
+      await _retryTodoTimeCleanups(alreadyClaimed: selected);
+      await _retryCompletionTimeRecords(alreadyClaimed: selected);
     }
+    if (!isCurrent()) return 0;
     await _syncTodoRemindersNow();
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-    return changed;
+    return completed.length;
+  }
+
+  /// Completion is already durable. Retry its secondary time record without
+  /// repeating completion, publishing another event or creating a successor.
+  Future<bool> retryPendingCompletionTimeRecords() async {
+    final cleaned = await _retryTodoTimeCleanups();
+    final recorded = await _retryCompletionTimeRecords();
+    return cleaned && recorded;
+  }
+
+  Future<Map<String, _TodoTimeCleanup>> _captureTimeCleanups(
+    Iterable<TodoItem> todos,
+    int generation,
+    int account, {
+    required bool allSourceEntries,
+  }) async {
+    final audit = _timeAudit;
+    if (audit == null) return const {};
+    final auditGeneration = audit.storageGeneration;
+    final records = await audit.readStoredEntries();
+    if (!identical(audit, _timeAudit) ||
+        audit.isDisposed ||
+        audit.storageGeneration != auditGeneration ||
+        !_isCurrentStorageGeneration(generation, account)) {
+      throw const AccountPreferenceWriteCanceled();
+    }
+    final captured = <String, _TodoTimeCleanup>{};
+    for (final todo in todos) {
+      final entries = records
+          .where(
+            (entry) =>
+                entry.source == TimeEntrySource.todo &&
+                entry.sourceId == todo.id &&
+                (allSourceEntries ||
+                    (todo.completedAt != null &&
+                        entry.dedupeKey ==
+                            TimeAuditProvider.todoCompletionDedupeKey(
+                              todo.id,
+                              todo.completedAt!,
+                            ))),
+          )
+          .toList();
+      if (entries.isEmpty) continue;
+      captured['${todo.id}:${todo.completedAt}:$allSourceEntries'] =
+          _TodoTimeCleanup(todo.id, generation, account, {
+            for (final entry in entries) entry.id: jsonEncode(entry.toJson()),
+          });
+    }
+    return captured;
+  }
+
+  Future<bool> _retryTodoTimeCleanups({Set<String> alreadyClaimed = const {}}) {
+    final result = _completionTimeWriteQueue.then<bool>((_) async {
+      if (_disposed) return false;
+      var complete = true;
+      for (final entry in _pendingTodoTimeCleanups.entries.toList()) {
+        final cleanup = entry.value;
+        if (!_isCurrentStorageGeneration(cleanup.generation, cleanup.account)) {
+          if (identical(_pendingTodoTimeCleanups[entry.key], cleanup)) {
+            _pendingTodoTimeCleanups.remove(entry.key);
+          }
+          continue;
+        }
+        final claimed = alreadyClaimed.contains(cleanup.todoId)
+            ? <String>{}
+            : _claimTodoMutationIds([
+                cleanup.todoId,
+              ], label: 'todo time cleanup');
+        if (claimed.isEmpty && !alreadyClaimed.contains(cleanup.todoId)) {
+          complete = false;
+          continue;
+        }
+        try {
+          final audit = _timeAudit;
+          if (audit == null || audit.isDisposed) {
+            complete = false;
+            continue;
+          }
+          final auditGeneration = audit.storageGeneration;
+          try {
+            // Delete only the captured record identities. A subsequently
+            // imported/recompleted Todo with the same ID owns new records.
+            await audit.deleteStoredEntries(cleanup.originalPayloads);
+          } catch (e, st) {
+            debugPrint('[TodoProvider] time cleanup pending: $e\n$st');
+            complete = false;
+            continue;
+          }
+          if (!_isCurrentStorageGeneration(
+                cleanup.generation,
+                cleanup.account,
+              ) ||
+              !identical(audit, _timeAudit) ||
+              audit.isDisposed ||
+              audit.storageGeneration != auditGeneration) {
+            complete = false;
+            continue;
+          }
+          if (identical(_pendingTodoTimeCleanups[entry.key], cleanup)) {
+            _pendingTodoTimeCleanups.remove(entry.key);
+          }
+        } finally {
+          _releaseTodoMutationIds(claimed);
+        }
+      }
+      return complete && !_disposed;
+    });
+    _completionTimeWriteQueue = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  Future<bool> _retryCompletionTimeRecords({
+    Set<String> alreadyClaimed = const {},
+  }) {
+    final write = _completionTimeWriteQueue.then<bool>((_) async {
+      if (_disposed) return false;
+      for (final entry in _pendingCompletionTimeRecords.entries.toList()) {
+        final (todo, generation, accountGeneration) = entry.value;
+        if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+          _pendingCompletionTimeRecords.remove(entry.key);
+          continue;
+        }
+        final claimed = alreadyClaimed.contains(todo.id)
+            ? <String>{}
+            : _claimTodoMutationIds([todo.id], label: 'completion time retry');
+        if (claimed.isEmpty && !alreadyClaimed.contains(todo.id)) return false;
+        try {
+          final current = _todos
+              .where((item) => item.id == todo.id)
+              .firstOrNull;
+          if (current == null ||
+              !current.isCompleted ||
+              current.completedAt != todo.completedAt) {
+            if (_pendingCompletionTimeRecords[entry.key] == entry.value) {
+              _pendingCompletionTimeRecords.remove(entry.key);
+            }
+            continue;
+          }
+          final audit = _timeAudit;
+          if (audit == null || audit.isDisposed) return false;
+          final auditGeneration = audit.storageGeneration;
+          try {
+            await audit.recordTodoCompletion(
+              todo,
+              completedAt: todo.completedAt,
+            );
+          } catch (error, stack) {
+            debugPrint(
+              '[TodoProvider] completion time record pending: $error\n$stack',
+            );
+            return false;
+          }
+          if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+            return false;
+          }
+          if (!identical(audit, _timeAudit) ||
+              audit.isDisposed ||
+              audit.storageGeneration != auditGeneration) {
+            return false;
+          }
+          if (_pendingCompletionTimeRecords[entry.key] == entry.value) {
+            _pendingCompletionTimeRecords.remove(entry.key);
+          }
+        } finally {
+          _releaseTodoMutationIds(claimed);
+        }
+      }
+      return !_disposed;
+    });
+    _completionTimeWriteQueue = write.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return write;
   }
 
   Future<int> reopenTodos(Iterable<String> ids) async {
@@ -1149,7 +1510,7 @@ class TodoProvider extends ChangeNotifier {
       return await _reopenTodosLocked(mutationSelected);
     } finally {
       _inFlightCompleteTodoIds.removeAll(mutationSelected);
-      _inFlightTodoMutationIds.removeAll(mutationSelected);
+      _releaseTodoMutationIds(mutationSelected);
     }
   }
 
@@ -1159,37 +1520,75 @@ class TodoProvider extends ChangeNotifier {
     if (!await _ensureStorageLoaded() || _disposed) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     final reopened = <TodoItem>[];
-    var changed = 0;
-    for (var i = 0; i < _todos.length; i++) {
-      final prev = _todos[i];
-      if (!selected.contains(prev.id) || !prev.isCompleted) continue;
-      _todos[i] = prev.copyWith(
-        isCompleted: false,
-        completedAt: null,
-        kanbanColumnId: prev.kanbanColumnId == defaultKanbanDoneColumnId
-            ? defaultKanbanPendingColumnId
-            : prev.kanbanColumnId,
+    bool isCurrent() =>
+        _isCurrentStorageGeneration(generation, accountGeneration);
+    final write = _storageWriteQueue.then<bool>((_) async {
+      if (!isCurrent()) return false;
+      final original = <String, TodoItem>{
+        for (final todo in _todos)
+          if (selected.contains(todo.id) && todo.isCompleted) todo.id: todo,
+      };
+      if (original.isEmpty) return false;
+      final versions = original.map(
+        (id, todo) => MapEntry(id, json.encode(todo.toJson())),
       );
-      reopened.add(prev);
-      changed++;
-    }
-
-    if (changed == 0) return 0;
-    await _saveToStorage();
+      bool canPersist() =>
+          isCurrent() &&
+          original.entries.every((entry) {
+            final current = _todos.where((t) => t.id == entry.key).firstOrNull;
+            return identical(current, entry.value) &&
+                json.encode(current!.toJson()) == versions[entry.key];
+          });
+      final patches = <String, TodoItem>{
+        for (final todo in original.values)
+          todo.id: todo.copyWith(
+            isCompleted: false,
+            completedAt: null,
+            isArchivedAfterRollover: false,
+            kanbanColumnId: todo.kanbanColumnId == defaultKanbanDoneColumnId
+                ? defaultKanbanPendingColumnId
+                : todo.kanbanColumnId,
+          ),
+      };
+      final cleanups = await _captureTimeCleanups(
+        original.values,
+        generation,
+        accountGeneration,
+        allSourceEntries: false,
+      );
+      if (!await _writeTodosSnapshot(
+            snapshot: [for (final todo in _todos) patches[todo.id] ?? todo],
+            canWrite: canPersist,
+            notifyPersisted: false,
+          ) ||
+          !canPersist()) {
+        return false;
+      }
+      for (var i = 0; i < _todos.length; i++) {
+        final patch = patches[_todos[i].id];
+        if (patch != null) _todos[i] = patch;
+      }
+      for (final id in patches.keys) {
+        _pendingCompletionTimeRecords.remove(id);
+      }
+      _pendingTodoTimeCleanups.addAll(cleanups);
+      reopened.addAll(original.values);
+      await _notifyLocalMutationPersisted();
+      return true;
+    });
+    _storageWriteQueue = write.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    if (!await write) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     _notify();
 
-    for (final todo in reopened) {
-      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-      await _timeAudit?.removeTodoCompletion(
-        todo,
-        completedAt: todo.completedAt,
-      );
-      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-    }
+    await _retryTodoTimeCleanups(alreadyClaimed: selected);
+    if (!isCurrent()) return 0;
     await _syncTodoRemindersNow();
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-    return changed;
+    return reopened.length;
   }
 
   /// 切换完成状态。若任务带有重复规则并且本次变为已完成，自动克隆一条下次的任务。
@@ -1214,7 +1613,7 @@ class TodoProvider extends ChangeNotifier {
       await _toggleTodoLocked(id, recordCompletionTime: recordCompletionTime);
     } finally {
       _inFlightCompleteTodoIds.removeAll(claimed);
-      _inFlightTodoMutationIds.removeAll(mutationClaimed);
+      _releaseTodoMutationIds(mutationClaimed);
     }
   }
 
@@ -1233,6 +1632,7 @@ class TodoProvider extends ChangeNotifier {
     _todos[idx] = prev.copyWith(
       isCompleted: nowCompleted,
       completedAt: nowCompleted ? DateTime.now() : null,
+      isArchivedAfterRollover: false,
       kanbanColumnId: nowCompleted
           ? defaultKanbanDoneColumnId
           : prev.kanbanColumnId == defaultKanbanDoneColumnId
@@ -1303,7 +1703,7 @@ class TodoProvider extends ChangeNotifier {
       return await _deleteTodosLocked(mutationSelected);
     } finally {
       _inFlightDeleteTodoIds.removeAll(mutationSelected);
-      _inFlightTodoMutationIds.removeAll(mutationSelected);
+      _releaseTodoMutationIds(mutationSelected);
     }
   }
 
@@ -1312,35 +1712,64 @@ class TodoProvider extends ChangeNotifier {
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!await _ensureStorageLoaded() || _disposed) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-    final existing = _todos.where((t) => selected.contains(t.id)).toList();
-    if (existing.isEmpty) return 0;
-
-    final idsByWorkspace = <String, List<String>>{};
-    for (final todo in existing) {
-      idsByWorkspace
-          .putIfAbsent(todo.workspaceId, () => <String>[])
-          .add(todo.id);
-    }
-    for (final entry in idsByWorkspace.entries) {
-      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-      await CloudSyncProvider.recordDeletedItems(
-        'todos',
-        entry.value,
-        workspaceId: entry.key,
+    final existing = <TodoItem>[];
+    bool isCurrent() =>
+        _isCurrentStorageGeneration(generation, accountGeneration);
+    final write = _storageWriteQueue.then<bool>((_) async {
+      if (!isCurrent()) return false;
+      final original = <String, TodoItem>{
+        for (final todo in _todos)
+          if (selected.contains(todo.id)) todo.id: todo,
+      };
+      if (original.isEmpty) return false;
+      final versions = original.map(
+        (id, todo) => MapEntry(id, json.encode(todo.toJson())),
       );
-      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-    }
-    for (final todo in existing) {
-      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-      await _timeAudit?.deleteBySource(TimeEntrySource.todo, todo.id);
-      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-    }
-    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
-    _todos.removeWhere((t) => selected.contains(t.id));
-    await _saveToStorage();
+      bool canPersist() =>
+          isCurrent() &&
+          original.entries.every((entry) {
+            final current = _todos.where((t) => t.id == entry.key).firstOrNull;
+            return identical(current, entry.value) &&
+                json.encode(current!.toJson()) == versions[entry.key];
+          });
+      final idsByWorkspace = <String, List<String>>{};
+      for (final todo in original.values) {
+        idsByWorkspace.putIfAbsent(todo.workspaceId, () => []).add(todo.id);
+      }
+      final cleanups = await _captureTimeCleanups(
+        original.values,
+        generation,
+        accountGeneration,
+        allSourceEntries: true,
+      );
+      if (!await _writeTodosSnapshot(
+            snapshot: _todos.where((t) => !original.containsKey(t.id)).toList(),
+            canWrite: canPersist,
+            notifyPersisted: false,
+            deletedByWorkspace: idsByWorkspace,
+          ) ||
+          !canPersist()) {
+        return false;
+      }
+      _todos.removeWhere((t) => original.containsKey(t.id));
+      for (final id in original.keys) {
+        _pendingCompletionTimeRecords.remove(id);
+      }
+      _pendingTodoTimeCleanups.addAll(cleanups);
+      existing.addAll(original.values);
+      await _notifyLocalMutationPersisted();
+      return true;
+    });
+    _storageWriteQueue = write.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    if (!await write) return 0;
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     _notify();
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
+    await _retryTodoTimeCleanups(alreadyClaimed: selected);
+    if (!isCurrent()) return 0;
     await _syncTodoRemindersNow();
     if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
     return existing.length;
@@ -1375,7 +1804,7 @@ class TodoProvider extends ChangeNotifier {
       return await _updateTodosQuadrantLocked(mutationSelected, quadrant);
     } finally {
       _inFlightQuadrantTodoIds.removeAll(mutationSelected);
-      _inFlightTodoMutationIds.removeAll(mutationSelected);
+      _releaseTodoMutationIds(mutationSelected);
     }
   }
 
@@ -1426,7 +1855,7 @@ class TodoProvider extends ChangeNotifier {
       return await _updateTodosPriorityLocked(mutationSelected, priority);
     } finally {
       _inFlightPriorityTodoIds.removeAll(mutationSelected);
-      _inFlightTodoMutationIds.removeAll(mutationSelected);
+      _releaseTodoMutationIds(mutationSelected);
     }
   }
 
@@ -1440,6 +1869,236 @@ class TodoProvider extends ChangeNotifier {
       final todo = _todos[i];
       if (!selected.contains(todo.id) || todo.priority == priority) continue;
       _todos[i] = todo.copyWith(priority: priority);
+      changed++;
+    }
+    if (changed == 0) return 0;
+    await _saveToStorage();
+    _notify();
+    return changed;
+  }
+
+  /// 批量调整多个待办的截止日期；传入 `null` 即清空截止日期。
+  Future<int> rescheduleTodosDueDate(
+    Iterable<String> ids,
+    DateTime? dueDate, {
+    String reason = 'batch_reschedule',
+  }) async {
+    final requested = ids.toSet();
+    if (requested.isEmpty) return 0;
+    final selected = _claimInFlightKeys(
+      _inFlightDueDateTodoIds,
+      requested,
+      label: 'todo dueDate reschedule',
+      duplicateMessage: '待办截止日期更新正在进行中，请勿重复提交',
+      allowPartial: true,
+      throwWhenDuplicate: false,
+    );
+    if (selected.isEmpty) return 0;
+    final mutationSelected = _claimTodoMutationIds(
+      selected,
+      label: 'todo dueDate reschedule',
+      allowPartial: true,
+    );
+    if (mutationSelected.isEmpty) {
+      _inFlightDueDateTodoIds.removeAll(selected);
+      return 0;
+    }
+    _inFlightDueDateTodoIds.removeAll(selected.difference(mutationSelected));
+    try {
+      return await _rescheduleTodosDueDateLocked(
+        mutationSelected,
+        dueDate,
+        reason: reason,
+      );
+    } finally {
+      _inFlightDueDateTodoIds.removeAll(mutationSelected);
+      _releaseTodoMutationIds(mutationSelected);
+    }
+  }
+
+  Future<int> _rescheduleTodosDueDateLocked(
+    Set<String> selected,
+    DateTime? dueDate, {
+    required String reason,
+  }) async {
+    final generation = _mutationStorageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    if (!await _ensureStorageLoaded() || _disposed) return 0;
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
+    final now = DateTime.now();
+    var changed = 0;
+    for (var i = 0; i < _todos.length; i++) {
+      final todo = _todos[i];
+      if (!selected.contains(todo.id) || todo.dueDate == dueDate) continue;
+      final prevDue = todo.dueDate;
+      final nextHistory =
+          prevDue != null && dueDate != null && prevDue != dueDate
+              ? [
+                  ...todo.postponeHistory,
+                  PostponeRecord(
+                    from: prevDue,
+                    to: dueDate,
+                    reason: reason,
+                    at: now,
+                  ),
+                ]
+              : todo.postponeHistory;
+      _todos[i] = todo.copyWith(
+        dueDate: dueDate,
+        isArchivedAfterRollover:
+            dueDate != null ? false : todo.isArchivedAfterRollover,
+        postponeHistory: nextHistory,
+      );
+      changed++;
+    }
+    if (changed == 0) return 0;
+    await _saveToStorage();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
+    _notify();
+    await _syncTodoRemindersNow();
+    if (!_isCurrentStorageGeneration(generation, accountGeneration)) return 0;
+    return changed;
+  }
+
+  /// 批量为多个待办分配所属清单；传入空值或 `null` 时移回未分组。
+  Future<int> assignTodosListGroup(
+    Iterable<String> ids,
+    String? listGroupName,
+  ) async {
+    final requested = ids.toSet();
+    if (requested.isEmpty) return 0;
+    final normalized = listGroupName?.trim();
+    final targetName =
+        (normalized == null || normalized.isEmpty) ? null : normalized;
+    final selected = _claimInFlightKeys(
+      _inFlightListGroupTodoIds,
+      requested,
+      label: 'todo list group update',
+      duplicateMessage: '待办所属清单更新正在进行中，请勿重复提交',
+      allowPartial: true,
+      throwWhenDuplicate: false,
+    );
+    if (selected.isEmpty) return 0;
+    final mutationSelected = _claimTodoMutationIds(
+      selected,
+      label: 'todo list group update',
+      allowPartial: true,
+    );
+    if (mutationSelected.isEmpty) {
+      _inFlightListGroupTodoIds.removeAll(selected);
+      return 0;
+    }
+    _inFlightListGroupTodoIds.removeAll(selected.difference(mutationSelected));
+    try {
+      return await _assignTodosListGroupLocked(mutationSelected, targetName);
+    } finally {
+      _inFlightListGroupTodoIds.removeAll(mutationSelected);
+      _releaseTodoMutationIds(mutationSelected);
+    }
+  }
+
+  Future<int> _assignTodosListGroupLocked(
+    Set<String> selected,
+    String? targetName,
+  ) async {
+    if (!await _ensureStorageLoaded() || _disposed) return 0;
+    var changed = 0;
+    for (var i = 0; i < _todos.length; i++) {
+      final todo = _todos[i];
+      if (!selected.contains(todo.id)) continue;
+      final current = todo.listGroupName?.trim();
+      final normalizedCurrent =
+          (current == null || current.isEmpty) ? null : current;
+      if (normalizedCurrent == targetName) continue;
+      _todos[i] = todo.copyWith(
+        listGroupName: targetName,
+        listGroupId: targetName == null ? null : todo.listGroupId,
+      );
+      changed++;
+    }
+    if (changed == 0) return 0;
+    await _saveToStorage();
+    _notify();
+    return changed;
+  }
+
+  /// 批量为多个待办追加或移除标签。
+  Future<int> assignTagsToTodos(
+    Iterable<String> ids,
+    Iterable<String> tags,
+  ) => updateTodosTags(ids, addTags: tags);
+
+  Future<int> updateTodosTags(
+    Iterable<String> ids, {
+    Iterable<String> addTags = const [],
+    Iterable<String> removeTags = const [],
+  }) async {
+    final requested = ids.toSet();
+    final toAdd = [
+      for (final raw in addTags)
+        if (raw.trim().isNotEmpty) raw.trim(),
+    ];
+    final toRemove = {
+      for (final raw in removeTags)
+        if (raw.trim().isNotEmpty) raw.trim(),
+    };
+    if (requested.isEmpty || (toAdd.isEmpty && toRemove.isEmpty)) return 0;
+    final selected = _claimInFlightKeys(
+      _inFlightTagTodoIds,
+      requested,
+      label: 'todo tag update',
+      duplicateMessage: '待办标签更新正在进行中，请勿重复提交',
+      allowPartial: true,
+      throwWhenDuplicate: false,
+    );
+    if (selected.isEmpty) return 0;
+    final mutationSelected = _claimTodoMutationIds(
+      selected,
+      label: 'todo tag update',
+      allowPartial: true,
+    );
+    if (mutationSelected.isEmpty) {
+      _inFlightTagTodoIds.removeAll(selected);
+      return 0;
+    }
+    _inFlightTagTodoIds.removeAll(selected.difference(mutationSelected));
+    try {
+      return await _updateTodosTagsLocked(
+        mutationSelected,
+        addTags: toAdd,
+        removeTags: toRemove,
+      );
+    } finally {
+      _inFlightTagTodoIds.removeAll(mutationSelected);
+      _releaseTodoMutationIds(mutationSelected);
+    }
+  }
+
+  Future<int> _updateTodosTagsLocked(
+    Set<String> selected, {
+    required List<String> addTags,
+    required Set<String> removeTags,
+  }) async {
+    if (!await _ensureStorageLoaded() || _disposed) return 0;
+    var changed = 0;
+    for (var i = 0; i < _todos.length; i++) {
+      final todo = _todos[i];
+      if (!selected.contains(todo.id)) continue;
+      final next = <String>[
+        for (final existing in todo.tags)
+          if (!removeTags.contains(existing.trim())) existing.trim(),
+      ];
+      for (final tag in addTags) {
+        if (!next.contains(tag)) next.add(tag);
+      }
+      if (next.length == todo.tags.length &&
+          List.generate(
+            next.length,
+            (idx) => next[idx] == todo.tags[idx],
+          ).every((eq) => eq)) {
+        continue;
+      }
+      _todos[i] = todo.copyWith(tags: next);
       changed++;
     }
     if (changed == 0) return 0;
@@ -1490,7 +2149,7 @@ class TodoProvider extends ChangeNotifier {
       return await _updateTodosKanbanColumnLocked(mutationSelectedIds, target);
     } finally {
       _inFlightKanbanTodoIds.removeAll(selected);
-      _inFlightTodoMutationIds.removeAll(mutationSelectedIds);
+      _releaseTodoMutationIds(mutationSelectedIds);
     }
   }
 
@@ -1510,14 +2169,18 @@ class TodoProvider extends ChangeNotifier {
       if (!selected.contains(todo.id) || todo.kanbanColumnId == target) {
         continue;
       }
+      final nextCompleted = target == defaultKanbanDoneColumnId
+          ? true
+          : target != defaultKanbanDoneColumnId &&
+                todo.kanbanColumnId == defaultKanbanDoneColumnId
+          ? false
+          : todo.isCompleted;
       final next = todo.copyWith(
         kanbanColumnId: target,
-        isCompleted: target == defaultKanbanDoneColumnId
-            ? true
-            : target != defaultKanbanDoneColumnId &&
-                  todo.kanbanColumnId == defaultKanbanDoneColumnId
-            ? false
-            : todo.isCompleted,
+        isCompleted: nextCompleted,
+        isArchivedAfterRollover: nextCompleted
+            ? todo.isArchivedAfterRollover
+            : false,
         completedAt: target == defaultKanbanDoneColumnId && !todo.isCompleted
             ? DateTime.now()
             : target != defaultKanbanDoneColumnId &&
@@ -1606,7 +2269,7 @@ class TodoProvider extends ChangeNotifier {
       );
     } finally {
       _inFlightScheduleTodayTodoIds.removeAll(claimed);
-      _inFlightTodoMutationIds.removeAll(mutationClaimed);
+      _releaseTodoMutationIds(mutationClaimed);
     }
   }
 
@@ -1863,12 +2526,35 @@ class TodoProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> updateListGroupWorkspace(
+  /// Returns true only after the originating group's change is acknowledged.
+  Future<bool> updateListGroupWorkspace(
     String groupName,
     String workspaceId, {
     String? userId,
+    int? expectedAccountDataGeneration,
+    bool Function()? canWrite,
+    Map<String, TodoItem>? expectedGroupMembers,
   }) async {
-    final key = '${groupName.trim()}:$workspaceId';
+    final generation = _mutationStorageGeneration;
+    final accountGeneration =
+        expectedAccountDataGeneration ??
+        AccountLocalDataCleaner.accountDataGeneration;
+    bool isCurrent() =>
+        _isCurrentStorageGeneration(generation, accountGeneration) &&
+        canWrite?.call() != false;
+    if (!_canStartStorageMutation(generation, accountGeneration) ||
+        canWrite?.call() == false) {
+      return false;
+    }
+    // Keep the raw group key: translated labels and trimmed names can alias
+    // independent authored groups.
+    final expectedMembers = expectedGroupMembers == null
+        ? null
+        : Map<String, TodoItem>.of(expectedGroupMembers);
+    final expectedVersions = expectedMembers?.map(
+      (id, item) => MapEntry(id, json.encode(item.toJson())),
+    );
+    final key = json.encode([groupName, workspaceId]);
     final claimed = _claimInFlightKeys(
       _inFlightListGroupWorkspaceKeys,
       [key],
@@ -1876,52 +2562,92 @@ class TodoProvider extends ChangeNotifier {
       duplicateMessage: '清单共享状态正在保存中，请勿重复提交',
       throwWhenDuplicate: false,
     );
-    if (claimed.isEmpty) return;
+    if (claimed.isEmpty) return false;
+    Set<String> mutationSelected = {};
     try {
-      await _updateListGroupWorkspaceLocked(
-        groupName,
-        workspaceId,
-        userId: userId,
-      );
-    } finally {
-      _inFlightListGroupWorkspaceKeys.removeAll(claimed);
-    }
-  }
-
-  Future<void> _updateListGroupWorkspaceLocked(
-    String groupName,
-    String workspaceId, {
-    String? userId,
-  }) async {
-    if (!await _ensureStorageLoaded() || _disposed) return;
-    final affectedIds = _todos
-        .where((todo) => (todo.listGroupName ?? '未分组') == groupName)
-        .map((todo) => todo.id)
-        .toSet();
-    final mutationSelected = _claimTodoMutationIds(
-      affectedIds,
-      label: 'todo list workspace update',
-      allowPartial: true,
-    );
-    if (mutationSelected.isEmpty) return;
-    var mutated = false;
-    try {
-      for (var i = 0; i < _todos.length; i++) {
-        final todo = _todos[i];
-        if (!mutationSelected.contains(todo.id)) continue;
-        _todos[i] = todo.copyWith(
-          workspaceId: workspaceId,
-          updatedBy: userId,
-          createdBy: todo.createdBy ?? userId,
-        );
-        mutated = true;
+      if (!await _ensureStorageLoaded() || !isCurrent()) return false;
+      final original = <String, TodoItem>{
+        for (final todo in _todos)
+          if ((todo.listGroupName ?? '未分组') == groupName) todo.id: todo,
+      };
+      if (expectedMembers != null &&
+          (original.length != expectedMembers.length ||
+              original.entries.any(
+                (entry) =>
+                    !identical(entry.value, expectedMembers[entry.key]) ||
+                    json.encode(entry.value.toJson()) !=
+                        expectedVersions![entry.key],
+              ))) {
+        return false;
       }
-      if (!mutated) return;
-      await _saveToStorage();
+      final versions = original.map(
+        (id, item) => MapEntry(id, json.encode(item.toJson())),
+      );
+      if (original.isEmpty ||
+          original.values.every((todo) => todo.workspaceId == workspaceId)) {
+        return false;
+      }
+      mutationSelected = _claimTodoMutationIds(
+        original.keys,
+        label: 'todo list workspace update',
+      );
+      if (mutationSelected.length != original.length) return false;
+      bool ownsGroup() {
+        final current = _todos.where(
+          (todo) => (todo.listGroupName ?? '未分组') == groupName,
+        );
+        return current.length == original.length &&
+            current.every(
+              (todo) =>
+                  identical(todo, original[todo.id]) &&
+                  json.encode(todo.toJson()) == versions[todo.id],
+            );
+      }
+
+      bool canPersist() => isCurrent() && ownsGroup();
+      // Stage the patch on the same queue used by all Todo storage writes.
+      // Failed or revoked writes never leak optimistic fields into live data.
+      final write = _storageWriteQueue.then<bool>((_) async {
+        if (!canPersist()) return false;
+        final patches = <String, TodoItem>{
+          for (final todo in original.values)
+            if (todo.workspaceId != workspaceId)
+              todo.id: todo.copyWith(
+                workspaceId: workspaceId,
+                updatedBy: userId,
+                createdBy: todo.createdBy ?? userId,
+              ),
+        };
+        final candidate = [for (final todo in _todos) patches[todo.id] ?? todo];
+        if (!await _writeTodosSnapshot(
+              snapshot: candidate,
+              canWrite: canPersist,
+              notifyPersisted: false,
+            ) ||
+            !canPersist()) {
+          return false;
+        }
+        for (var i = 0; i < _todos.length; i++) {
+          final todo = _todos[i];
+          final patch = patches[todo.id];
+          if (patch == null) continue;
+          _todos[i] = patch;
+        }
+        await _notifyLocalMutationPersisted();
+        return isCurrent();
+      });
+      _storageWriteQueue = write.then<void>(
+        (_) {},
+        onError: (Object _, StackTrace _) {},
+      );
+      if (!await write || !isCurrent()) return false;
       _notify();
-      await _syncTodoRemindersNow();
+      if (!isCurrent()) return false;
+      await _syncTodoRemindersNow(canWrite: isCurrent);
+      return isCurrent();
     } finally {
-      _inFlightTodoMutationIds.removeAll(mutationSelected);
+      _releaseTodoMutationIds(mutationSelected);
+      _inFlightListGroupWorkspaceKeys.removeAll(claimed);
     }
   }
 
@@ -1960,7 +2686,7 @@ class TodoProvider extends ChangeNotifier {
       );
     } finally {
       _inFlightSubtaskCreateKeys.remove(key);
-      _inFlightTodoMutationIds.removeAll(mutationClaimed);
+      _releaseTodoMutationIds(mutationClaimed);
     }
   }
 
@@ -2014,7 +2740,7 @@ class TodoProvider extends ChangeNotifier {
       );
     } finally {
       _inFlightSubtaskToggleKeys.remove(key);
-      _inFlightTodoMutationIds.removeAll(mutationClaimed);
+      _releaseTodoMutationIds(mutationClaimed);
     }
   }
 
@@ -2083,7 +2809,11 @@ class TodoProvider extends ChangeNotifier {
         completedTodo = next;
       } else if (!allDone && t.isCompleted) {
         removedCompletedAt = t.completedAt;
-        _todos[idx] = t.copyWith(isCompleted: false, completedAt: null);
+        _todos[idx] = t.copyWith(
+          isCompleted: false,
+          completedAt: null,
+          isArchivedAfterRollover: false,
+        );
       }
     }
 
@@ -2141,7 +2871,7 @@ class TodoProvider extends ChangeNotifier {
       );
     } finally {
       _inFlightSubtaskDeleteKeys.remove(key);
-      _inFlightTodoMutationIds.removeAll(mutationClaimed);
+      _releaseTodoMutationIds(mutationClaimed);
     }
   }
 
@@ -2214,7 +2944,7 @@ class TodoProvider extends ChangeNotifier {
       );
     } finally {
       _inFlightSubtaskReorderKeys.removeAll(claimed);
-      _inFlightTodoMutationIds.removeAll(mutationClaimed);
+      _releaseTodoMutationIds(mutationClaimed);
     }
   }
 
@@ -2250,61 +2980,162 @@ class TodoProvider extends ChangeNotifier {
 
   // --- Daily rollover ---
 
-  /// 归档"昨天及更早"的已完成 todos（P5 / Requirement 3.4, 3.5）。
-  ///
-  /// 对每个满足 `t.isCompleted ∧ t.completedAt != null ∧
-  /// dateOnly(completedAt) < todayDay ∧ !t.isArchivedAfterRollover` 的任务，
-  /// 置 `isArchivedAfterRollover = true` 并刷新 `updatedAt`。
-  ///
-  /// 幂等性：若没有任务满足条件（例如二次调用），方法不会写入存储也不会通知
-  /// 监听器。`todayDay` 会先裁剪到本地"日"起点，避免在调用方未对齐时误判。
-  ///
-  /// 注意：本方法只处理"已完成 → 归档"的迁移；对"昨日未完成且已过期"的任务
-  /// 由 [postponeOverdue] 负责顺延。两者在 `CompletionVisibilityPolicy
-  /// .runDailyRollover` 中组合使用。
-  Future<void> archivePastCompletions(DateTime todayDay) async {
-    final todayStart = DateTime(todayDay.year, todayDay.month, todayDay.day);
+  /// Archives completions after [completedDays] local calendar days.
+  /// Zero disables new archives; existing history is retained. The default
+  /// keeps legacy next-day callers compatible. False means canceled or busy.
+  Future<bool> archivePastCompletions(
+    DateTime todayDay, {
+    int completedDays = 1,
+    bool Function()? canWrite,
+    VoidCallback? onBusy,
+  }) async {
+    final generation = _mutationStorageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    bool ownsData() =>
+        _isCurrentStorageGeneration(generation, accountGeneration);
+    bool isCurrent() => ownsData() && canWrite?.call() != false;
+    if (!_canStartStorageMutation(generation, accountGeneration)) return false;
+    if (!await _ensureStorageLoaded() || !isCurrent()) return false;
+    final days = completedDays.clamp(0, 365);
+    final cutoff = DateTime.utc(
+      todayDay.year,
+      todayDay.month,
+      todayDay.day - days,
+    );
+    final archiveKey =
+        '$generation|$accountGeneration|${_dateKey(todayDay)}|$days';
     final claimed = _claimInFlightKeys(
       _inFlightArchiveKeys,
-      [_dateKey(todayStart)],
+      [archiveKey],
       label: 'todo archive rollover',
       duplicateMessage: '待办归档正在执行中，请勿重复提交',
       throwWhenDuplicate: false,
     );
-    if (claimed.isEmpty) return;
+    if (claimed.isEmpty) {
+      onBusy?.call();
+      return false;
+    }
     try {
-      await _archivePastCompletionsLocked(todayStart);
+      final write = _storageWriteQueue.then<bool>((_) async {
+        if (!isCurrent()) return false;
+        if (!await _confirmArchiveDirtyOwner()) return false;
+        if (!isCurrent()) return false;
+        final targets = <String, TodoItem>{};
+        if (days > 0) {
+          for (final todo in _todos) {
+            final completed = todo.completedAt;
+            if (!todo.isCompleted ||
+                todo.isArchivedAfterRollover ||
+                completed == null) {
+              continue;
+            }
+            // UTC here represents civil slots, not instants or 24-hour ages.
+            final completedDay = DateTime.utc(
+              completed.year,
+              completed.month,
+              completed.day,
+            );
+            if (!completedDay.isAfter(cutoff)) targets[todo.id] = todo;
+          }
+        }
+        if (targets.isEmpty) return true;
+        final ids = _claimTodoMutationIds(targets.keys, label: 'todo archive');
+        if (ids.length != targets.length) {
+          onBusy?.call();
+          return false;
+        }
+        try {
+          final versions = {
+            for (final entry in targets.entries)
+              entry.key: json.encode(entry.value.toJson()),
+          };
+          bool targetsCurrent() =>
+              isCurrent() && _archiveTargetsCurrent(targets, versions);
+          final deltas = {
+            for (final entry in targets.entries)
+              entry.key: entry.value.copyWith(isArchivedAfterRollover: true),
+          };
+          final next = [for (final todo in _todos) deltas[todo.id] ?? todo];
+          if (!await _writeTodosSnapshot(
+            snapshot: next,
+            canWrite: targetsCurrent,
+            notifyPersisted: false,
+          )) {
+            return false;
+          }
+          // The snapshot is committed. Policy changes after this point keep
+          // that acknowledged history; only an account/storage reset discards it.
+          if (!ownsData()) return false;
+          for (var i = 0; i < _todos.length; i++) {
+            final delta = deltas[_todos[i].id];
+            if (delta != null && identical(_todos[i], targets[delta.id])) {
+              _todos[i] = delta;
+            }
+          }
+          _pendingArchiveDirtyOwner = (generation, accountGeneration);
+          try {
+            return await _confirmArchiveDirtyOwner();
+          } finally {
+            if (ownsData()) _notify();
+          }
+        } finally {
+          _releaseTodoMutationIds(ids);
+        }
+      });
+      _storageWriteQueue = write.then<void>(
+        (_) {},
+        onError: (Object _, StackTrace _) {},
+      );
+      return await write;
     } finally {
       _inFlightArchiveKeys.removeAll(claimed);
     }
   }
 
-  Future<void> _archivePastCompletionsLocked(DateTime todayStart) async {
-    if (!await _ensureStorageLoaded() || _disposed) return;
-    var mutated = false;
-
-    for (final t in _todos) {
-      if (!t.isCompleted) continue;
-      if (t.isArchivedAfterRollover) continue;
-      final completedAt = t.completedAt;
-      if (completedAt == null) continue;
-
-      final completedDay = DateTime(
-        completedAt.year,
-        completedAt.month,
-        completedAt.day,
-      );
-      if (!completedDay.isBefore(todayStart)) continue;
-
-      t.isArchivedAfterRollover = true;
-      t.updatedAt = DateTime.now();
-      mutated = true;
+  /// Snapshot persistence and its pending-sync marker are separate receipts.
+  /// A refused marker remains retryable even when there are no new archives.
+  Future<bool> _confirmArchiveDirtyOwner() async {
+    final owner = _pendingArchiveDirtyOwner;
+    if (owner == null) return true;
+    bool isCurrent() => _isCurrentStorageGeneration(owner.$1, owner.$2);
+    if (!isCurrent()) return false;
+    final acknowledge = onArchiveMutationPersisted;
+    if (acknowledge != null) {
+      if (!await acknowledge()) return false;
+    } else {
+      await onLocalMutationPersisted?.call();
     }
+    if (!isCurrent()) return false;
+    if (_pendingArchiveDirtyOwner == owner) _pendingArchiveDirtyOwner = null;
+    return true;
+  }
 
-    if (!mutated) return;
+  bool _archiveTargetsCurrent(
+    Map<String, TodoItem> targets,
+    Map<String, String> versions,
+  ) {
+    final current = {for (final todo in _todos) todo.id: todo};
+    return targets.entries.every(
+      (entry) =>
+          identical(current[entry.key], entry.value) &&
+          json.encode(entry.value.toJson()) == versions[entry.key],
+    );
+  }
 
-    await _saveToStorage();
-    _notify();
+  Future<bool> retryPendingArchiveMutationMarker() {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final retry = _storageWriteQueue.then<bool>((_) {
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) {
+        return false;
+      }
+      return _confirmArchiveDirtyOwner();
+    });
+    _storageWriteQueue = retry.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return retry;
   }
 
   /// 把所有"未完成且已过期"的 todo 顺延到 [today] 同一时刻。
@@ -2450,11 +3281,23 @@ class TodoProvider extends ChangeNotifier {
     );
   }
 
+  void _releaseTodoMutationIds(Iterable<String> ids) {
+    final before = _inFlightTodoMutationIds.length;
+    _inFlightTodoMutationIds.removeAll(ids);
+    if (!_disposed && _inFlightTodoMutationIds.length != before) {
+      _todoMutationReleaseRevision.value++;
+    }
+  }
+
   @override
   void dispose() {
     _disposed = true;
+    canEditWorkspace = null;
+    _pendingCompletionTimeRecords.clear();
+    _pendingTodoTimeCleanups.clear();
     _storageGeneration++;
     _nextReminderSyncGeneration++;
+    _todoMutationReleaseRevision.dispose();
     super.dispose();
   }
 
@@ -2503,6 +3346,19 @@ class TodoProvider extends ChangeNotifier {
 
 /// 在后台 isolate 中编码待办存储载荷（供 `compute` 调用，必须是顶层函数）。
 /// 传入的是模型对象图的拷贝，与发送时刻的内存状态一致。
+class _TodoTimeCleanup {
+  final String todoId;
+  final int generation;
+  final int account;
+  final Map<String, String> originalPayloads;
+  _TodoTimeCleanup(
+    this.todoId,
+    this.generation,
+    this.account,
+    Map<String, String> payloads,
+  ) : originalPayloads = Map.unmodifiable(payloads);
+}
+
 String _encodeTodoStoragePayload(List<TodoItem> todos) =>
     json.encode(todos.map((e) => e.toJson()).toList());
 

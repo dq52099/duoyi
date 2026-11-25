@@ -137,12 +137,13 @@ void main() {
     ).readAsStringSync();
     final model = File('lib/models/pomodoro.dart').readAsStringSync();
     final screen = File('lib/screens/pomodoro_screen.dart').readAsStringSync();
+    final copy = File('lib/core/focus_room_ui_copy.dart').readAsStringSync();
 
     expect(model, contains('double focusSoundVolume'));
     expect(model, contains("'focusSoundVolume': focusSoundVolume"));
     expect(model, contains("json['focusSoundVolume']"));
     expect(provider, contains('Future<bool> setFocusSoundVolume('));
-    expect(provider, contains('_config.focusSoundVolume = normalized'));
+    expect(provider, contains('(next) => next.focusSoundVolume = normalized,'));
     expect(provider, contains('await _sound.setVolume(normalized)'));
     expect(
       provider,
@@ -154,7 +155,14 @@ void main() {
       contains('const volumeOptions = <double>[0.4, 0.6, 0.8, 1.0]'),
     );
     expect(screen, contains('.setFocusSoundVolume(value)'));
-    expect(screen, contains('专注音量预览启动失败'));
+    expect(screen, contains('FocusRoomUiCopy.soundVolumePreviewFailed('));
+    expect(
+      copy,
+      contains(
+        'Focus volume preview failed. Check system volume or audio resources.',
+      ),
+    );
+    expect(copy, contains('专注音量预览启动失败，请检查系统音量或音频资源'));
   });
 
   test('foreground notification stop is routed back to Dart audio state', () {
@@ -176,12 +184,31 @@ void main() {
     expect(service, contains('onForegroundStopRequested'));
     expect(service, contains('await stop();'));
     expect(provider, contains('handleFocusForegroundStopRequested'));
+    final callbackStart = provider.indexOf(
+      'Future<void> handleFocusForegroundStopRequested() async {',
+    );
+    final callbackEnd = provider.indexOf('\n  @override', callbackStart);
+    expect(callbackStart, greaterThanOrEqualTo(0));
+    expect(callbackEnd, greaterThan(callbackStart));
+    final callback = provider.substring(callbackStart, callbackEnd);
     expect(
-      provider,
+      callback,
       contains(
-        'await setWhiteNoiseSound(FocusSoundCatalog.none, preview: false);',
+        'final ownsEffect = _captureEffectOwner(runtime: true, config: true);',
       ),
     );
+    expect(
+      callback,
+      contains('(next) => next.whiteNoiseSound = FocusSoundCatalog.none,'),
+    );
+    expect(callback, contains('guard: ownsEffect,'));
+    expect(
+      callback,
+      contains('if (!_isCurrentConfigReceipt(receipt)) return;'),
+    );
+    expect(callback, contains('await _syncSoundToState();'));
+    expect(callback, isNot(contains('await _sound.stop();')));
+    expect(callback, isNot(contains('setWhiteNoiseSound(')));
     expect(
       mainActivity,
       contains('FocusSoundForegroundService.stopRequestCallback'),

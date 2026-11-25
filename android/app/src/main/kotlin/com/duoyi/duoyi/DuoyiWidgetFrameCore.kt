@@ -47,6 +47,8 @@ class DuoyiWidgetFrameCore(
     val fresh: Boolean = sessionTrusted && day == clock.day && offset == clock.offsetMinutes
     val language: String = language(rawValues["widget_locale"] as? String)
         ?: language(systemLocaleTag) ?: "zh"
+    val requestedMode: String = normalizeMode(rawValues["widget_display_mode_$widgetId"] as? String)
+        ?: normalizeMode(rawValues["widget_display_mode"] as? String) ?: "standard"
     val effectiveMode: String = effectiveMode()
 
     /** Compare raw values, never the display projection's placeholders. */
@@ -79,9 +81,7 @@ class DuoyiWidgetFrameCore(
     }
 
     private fun effectiveMode(): String {
-        val instance = rawValues["widget_display_mode_$widgetId"] as? String
-        val global = rawValues["widget_display_mode"] as? String
-        val preferred = normalizeMode(instance) ?: normalizeMode(global) ?: "standard"
+        val preferred = requestedMode
         if (options.minWidth <= 0 || options.minHeight <= 0) return preferred
         if (options.minWidth < 180 || options.minHeight < 100 || preferred == "compact") return "compact"
         if (preferred == "detailed" && options.minWidth >= 250 && options.minHeight >= 170) return "detailed"
@@ -142,20 +142,26 @@ class DuoyiWidgetFrameCore(
 object DuoyiWidgetFrameAttempts {
     fun <F, V> run(
         capture: () -> F,
+        canBuild: (F) -> Boolean = { true },
         build: (F) -> V,
-        rejectionReason: (F) -> String?,
-        commit: (V) -> Unit,
+        rejectionReason: (F, V) -> String?,
+        commit: (F, V) -> Boolean,
         acceptedEffect: (F, V) -> Unit,
         rejected: (String) -> Unit,
     ): Boolean {
         repeat(2) {
             val frame = capture()
+            if (!canBuild(frame)) {
+                rejected("busy")
+                return@repeat
+            }
             val views = build(frame)
-            val reason = rejectionReason(frame)
+            val reason = rejectionReason(frame, views)
             if (reason != null) {
                 rejected(reason)
+            } else if (!commit(frame, views)) {
+                rejected("commit_rejected")
             } else {
-                commit(views)
                 acceptedEffect(frame, views)
                 return true
             }

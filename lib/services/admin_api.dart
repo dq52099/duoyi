@@ -1,6 +1,15 @@
 import 'api_client.dart';
 import 'admin_response_error.dart';
 
+/// An obsolete interaction cannot start or retry an Admin request.
+class AdminActionExpired implements Exception {
+  const AdminActionExpired();
+}
+
+void _requireCurrentAdminAction(bool Function()? isCurrent) {
+  if (isCurrent != null && !isCurrent()) throw const AdminActionExpired();
+}
+
 class AdminPage {
   final List<Map<String, dynamic>> items;
   final int total;
@@ -107,6 +116,7 @@ class AdminApi {
     Map<String, Object?> params = const {},
     int limit = 20,
     int offset = 0,
+    bool Function()? isCurrent,
   }) async {
     final pageParams = <String, Object?>{
       ...params,
@@ -114,7 +124,13 @@ class AdminApi {
       'offset': offset,
     };
     final path = _path(base, pageParams);
-    final raw = await client.getRaw(path);
+    _requireCurrentAdminAction(isCurrent);
+    final Object? raw;
+    try {
+      raw = await client.getRaw(path, diagnoseMissingRoute: isCurrent == null);
+    } finally {
+      _requireCurrentAdminAction(isCurrent);
+    }
     if (raw is Map<String, dynamic>) {
       if (raw.containsKey('items')) {
         return AdminPage.fromJson(
@@ -272,15 +288,25 @@ class AdminApi {
     String? sort,
     int limit = 20,
     int offset = 0,
+    bool Function()? isCurrent,
   }) => _getPage(
     '/api/admin/users',
     params: {'q': query, 'status': status, 'online': online, 'sort': sort},
     limit: limit,
     offset: offset,
+    isCurrent: isCurrent,
   );
 
-  Future<List<Map<String, dynamic>>> listUsers({String? query}) async {
-    return (await listUsersPage(query: query, limit: 100, offset: 0)).items;
+  Future<List<Map<String, dynamic>>> listUsers({
+    String? query,
+    bool Function()? isCurrent,
+  }) async {
+    return (await listUsersPage(
+      query: query,
+      limit: 100,
+      offset: 0,
+      isCurrent: isCurrent,
+    )).items;
   }
 
   Future<Map<String, dynamic>> createUser({
@@ -293,6 +319,7 @@ class AdminApi {
     bool isAdmin = false,
     bool isDisabled = false,
     List<String>? adminPermissions,
+    bool Function()? isCurrent,
   }) {
     final body = <String, dynamic>{
       'username': username,
@@ -317,7 +344,12 @@ class AdminApi {
     if (adminPermissions != null) {
       body['admin_permissions'] = adminPermissions;
     }
-    return client.post('/api/admin/users', body);
+    return _sendUserAction(
+      'POST',
+      '/api/admin/users',
+      body,
+      isCurrent: isCurrent,
+    );
   }
 
   Future<Map<String, dynamic>> updateUser(
@@ -328,6 +360,7 @@ class AdminApi {
     String? groupId,
     String? roleId,
     List<String>? adminPermissions,
+    bool Function()? isCurrent,
   }) async {
     final body = <String, dynamic>{};
     if (isAdmin != null) body['is_admin'] = isAdmin;
@@ -340,26 +373,42 @@ class AdminApi {
     if (adminPermissions != null) {
       body['admin_permissions'] = adminPermissions;
     }
-    return client.patch('/api/admin/users/$userId', body);
+    return _sendUserAction(
+      'PATCH',
+      '/api/admin/users/$userId',
+      body,
+      isCurrent: isCurrent,
+    );
   }
 
   Future<void> setUserAdminPermissions(
     String userId, {
     required List<String> permissions,
+    bool Function()? isCurrent,
   }) async {
-    await updateUser(userId, adminPermissions: permissions);
+    await updateUser(
+      userId,
+      adminPermissions: permissions,
+      isCurrent: isCurrent,
+    );
   }
 
   Future<Map<String, dynamic>> adjustUserCoins(
     String userId, {
     required int delta,
     String? reason,
+    bool Function()? isCurrent,
   }) async {
     final body = <String, dynamic>{'delta': delta};
     if (reason != null && reason.trim().isNotEmpty) {
       body['reason'] = reason.trim();
     }
-    final response = await client.post('/api/admin/users/$userId/coins', body);
+    final response = await _sendUserAction(
+      'POST',
+      '/api/admin/users/$userId/coins',
+      body,
+      isCurrent: isCurrent,
+    );
     return _validateCoinAdjustmentResponse(response);
   }
 
@@ -383,39 +432,79 @@ class AdminApi {
     bool? online,
     String? sort,
     int limit = 5000,
-  }) => client.getText(
-    _path('/api/admin/users/export.csv', {
-      'q': query,
-      'status': status,
-      'online': online,
-      'sort': sort,
-      'limit': limit,
-    }),
-  );
+    bool Function()? isCurrent,
+  }) async {
+    _requireCurrentAdminAction(isCurrent);
+    try {
+      return await client.getText(
+        _path('/api/admin/users/export.csv', {
+          'q': query,
+          'status': status,
+          'online': online,
+          'sort': sort,
+          'limit': limit,
+        }),
+        diagnoseMissingRoute: isCurrent == null,
+      );
+    } finally {
+      _requireCurrentAdminAction(isCurrent);
+    }
+  }
 
   Future<void> bulkUpdateUserStatus({
     required List<String> userIds,
     required bool isDisabled,
-  }) => client.post('/api/admin/users/bulk-status', {
+    bool Function()? isCurrent,
+  }) => _sendUserAction('POST', '/api/admin/users/bulk-status', {
     'user_ids': userIds,
     'is_disabled': isDisabled,
-  });
+  }, isCurrent: isCurrent);
 
-  Future<AdminPage> listGroupsPage({int limit = 20, int offset = 0}) async {
+  Future<Map<String, dynamic>> _sendUserAction(
+    String method,
+    String path,
+    Object? body, {
+    bool Function()? isCurrent,
+  }) async {
+    _requireCurrentAdminAction(isCurrent);
     try {
-      return await _getPage('/api/admin/groups', limit: limit, offset: offset);
-    } on ApiException catch (e) {
-      if (!_isRouteMissing(e)) rethrow;
+      if (isCurrent != null) {
+        return await client.requestWithoutRouteDiagnosis(method, path, body);
+      }
+      return await switch (method) {
+        'PATCH' => client.patch(path, body),
+        'DELETE' => client.delete(path),
+        _ => client.post(path, body),
+      };
+    } finally {
+      _requireCurrentAdminAction(isCurrent);
     }
+  }
+
+  Future<AdminPage> listGroupsPage({
+    int limit = 20,
+    int offset = 0,
+    bool Function()? isCurrent,
+  }) async {
     ApiException? last404;
     for (final path in const [
+      '/api/admin/groups',
       '/api/admin/user-groups',
       '/api/admin/user_groups',
       '/api/admin/userGroups',
     ]) {
       try {
-        return await _getPage(path, limit: limit, offset: offset);
+        _requireCurrentAdminAction(isCurrent);
+        final page = await _getPage(
+          path,
+          limit: limit,
+          offset: offset,
+          isCurrent: isCurrent,
+        );
+        _requireCurrentAdminAction(isCurrent);
+        return page;
       } on ApiException catch (e) {
+        _requireCurrentAdminAction(isCurrent);
         if (!_isRouteMissing(e)) rethrow;
         last404 = e;
       }
@@ -424,17 +513,28 @@ class AdminApi {
         const AdminResponseException(AdminResponseFailure.routeMissing);
   }
 
-  Future<List<Map<String, dynamic>>> listGroups() async {
+  Future<List<Map<String, dynamic>>> listGroups({
+    bool Function()? isCurrent,
+  }) async {
     Object? raw;
     try {
-      raw = await client.getRaw('/api/admin/groups?limit=500&offset=0');
+      _requireCurrentAdminAction(isCurrent);
+      try {
+        raw = await client.getRaw(
+          '/api/admin/groups?limit=500&offset=0',
+          diagnoseMissingRoute: isCurrent == null,
+        );
+      } finally {
+        _requireCurrentAdminAction(isCurrent);
+      }
     } on ApiException catch (e) {
+      _requireCurrentAdminAction(isCurrent);
       if (!_isRouteMissing(e)) rethrow;
       raw = await _getRawFirstAvailable(const [
         '/api/admin/user-groups?limit=500&offset=0',
         '/api/admin/user_groups?limit=500&offset=0',
         '/api/admin/userGroups?limit=500&offset=0',
-      ]);
+      ], isCurrent: isCurrent);
     }
     final items = raw is Map<String, dynamic> && raw['items'] is List
         ? raw['items']
@@ -456,6 +556,7 @@ class AdminApi {
     String description = '',
     int defaultTimeCoins = 100,
     bool isActive = true,
+    bool Function()? isCurrent,
   }) {
     final body = <String, dynamic>{
       'name': name,
@@ -474,6 +575,7 @@ class AdminApi {
           '/api/admin/userGroups',
         ],
         body,
+        isCurrent: isCurrent,
       );
     }
     return _sendFirstAvailable(
@@ -485,10 +587,14 @@ class AdminApi {
         '/api/admin/userGroups/$groupId',
       ],
       body,
+      isCurrent: isCurrent,
     );
   }
 
-  Future<Map<String, dynamic>> deleteGroup(String groupId) {
+  Future<Map<String, dynamic>> deleteGroup(
+    String groupId, {
+    bool Function()? isCurrent,
+  }) {
     final id = groupId.trim();
     return _sendFirstAvailable(
       const ['DELETE'],
@@ -500,11 +606,23 @@ class AdminApi {
       ],
       null,
       featureName: '管理员用户组删除',
+      isCurrent: isCurrent,
     );
   }
 
-  Future<List<Map<String, dynamic>>> listRoles() async {
-    final raw = await client.getRaw('/api/admin/roles');
+  Future<List<Map<String, dynamic>>> listRoles({
+    bool Function()? isCurrent,
+  }) async {
+    _requireCurrentAdminAction(isCurrent);
+    final Object? raw;
+    try {
+      raw = await client.getRaw(
+        '/api/admin/roles',
+        diagnoseMissingRoute: isCurrent == null,
+      );
+    } finally {
+      _requireCurrentAdminAction(isCurrent);
+    }
     if (raw is! List) {
       throw const AdminResponseException(AdminResponseFailure.rolesNotList);
     }
@@ -537,20 +655,27 @@ class AdminApi {
     return client.patch('/api/admin/roles/$roleId', body);
   }
 
-  Future<void> deleteUser(String userId) =>
-      client.delete('/api/admin/users/$userId');
+  Future<void> deleteUser(String userId, {bool Function()? isCurrent}) =>
+      _sendUserAction(
+        'DELETE',
+        '/api/admin/users/$userId',
+        null,
+        isCurrent: isCurrent,
+      );
 
   Future<Map<String, dynamic>> _sendFirstAvailable(
     List<String> methods,
     List<String> paths,
     Object? body, {
     String featureName = '管理员',
+    bool Function()? isCurrent,
   }) async {
     ApiException? last404;
     for (final path in paths) {
       for (final method in methods) {
+        _requireCurrentAdminAction(isCurrent);
         try {
-          return switch (method) {
+          final result = switch (method) {
             'PATCH' => await client.requestWithoutRouteDiagnosis(
               'PATCH',
               path,
@@ -568,25 +693,43 @@ class AdminApi {
             ),
             _ => await client.requestWithoutRouteDiagnosis('POST', path, body),
           };
+          _requireCurrentAdminAction(isCurrent);
+          return result;
         } on ApiException catch (e) {
+          _requireCurrentAdminAction(isCurrent);
           if (!_isRouteMissing(e)) rethrow;
           last404 = e;
         }
       }
     }
-    throw await client.missingRoutesException(
+    _requireCurrentAdminAction(isCurrent);
+    final error = await client.missingRoutesException(
       featureName: featureName,
       paths: paths,
       fallback: last404,
     );
+    _requireCurrentAdminAction(isCurrent);
+    throw error;
   }
 
-  Future<Object?> _getRawFirstAvailable(List<String> paths) async {
+  Future<Object?> _getRawFirstAvailable(
+    List<String> paths, {
+    bool Function()? isCurrent,
+  }) async {
     ApiException? last404;
     for (final path in paths) {
       try {
-        return await client.getRaw(path);
+        _requireCurrentAdminAction(isCurrent);
+        try {
+          return await client.getRaw(
+            path,
+            diagnoseMissingRoute: isCurrent == null,
+          );
+        } finally {
+          _requireCurrentAdminAction(isCurrent);
+        }
       } on ApiException catch (e) {
+        _requireCurrentAdminAction(isCurrent);
         if (!_isRouteMissing(e)) rethrow;
         last404 = e;
       }
@@ -603,11 +746,13 @@ class AdminApi {
     String? sort,
     int limit = 20,
     int offset = 0,
+    bool Function()? isCurrent,
   }) => _getPage(
     '/api/admin/announcements',
     params: {'q': query, 'status': status, 'level': level, 'sort': sort},
     limit: limit,
     offset: offset,
+    isCurrent: isCurrent,
   );
 
   Future<List<Map<String, dynamic>>> listAnnouncements() async {
@@ -619,13 +764,14 @@ class AdminApi {
     required String body,
     String level = 'info',
     bool published = true,
+    bool Function()? isCurrent,
   }) async {
-    final res = await client.post('/api/admin/announcements', {
-      'title': title,
-      'body': body,
-      'level': level,
-      'published': published,
-    });
+    final res = await _sendAnnouncementAction(
+      'POST',
+      '/api/admin/announcements',
+      {'title': title, 'body': body, 'level': level, 'published': published},
+      isCurrent: isCurrent,
+    );
     return (res['id'] as num?)?.toInt() ?? 0;
   }
 
@@ -635,17 +781,45 @@ class AdminApi {
     String? body,
     String? level,
     bool? published,
+    bool Function()? isCurrent,
   }) async {
     final payload = <String, dynamic>{};
     if (title != null) payload['title'] = title;
     if (body != null) payload['body'] = body;
     if (level != null) payload['level'] = level;
     if (published != null) payload['published'] = published;
-    await client.patch('/api/admin/announcements/$id', payload);
+    await _sendAnnouncementAction(
+      'PATCH',
+      '/api/admin/announcements/$id',
+      payload,
+      isCurrent: isCurrent,
+    );
   }
 
-  Future<void> deleteAnnouncement(int id) =>
-      client.delete('/api/admin/announcements/$id');
+  Future<void> deleteAnnouncement(int id, {bool Function()? isCurrent}) async {
+    await _sendAnnouncementAction(
+      'DELETE',
+      '/api/admin/announcements/$id',
+      null,
+      isCurrent: isCurrent,
+    );
+  }
+
+  Future<Map<String, dynamic>> _sendAnnouncementAction(
+    String method,
+    String path,
+    Object? body, {
+    bool Function()? isCurrent,
+  }) async {
+    _requireCurrentAdminAction(isCurrent);
+    try {
+      return await (isCurrent == null
+          ? client.request(method, path, body)
+          : client.requestWithoutRouteDiagnosis(method, path, body));
+    } finally {
+      _requireCurrentAdminAction(isCurrent);
+    }
+  }
 
   // ---- Feedback ----
   Future<AdminPage> listFeedbackPage({
@@ -655,50 +829,69 @@ class AdminApi {
     String? sort,
     int limit = 20,
     int offset = 0,
+    bool Function()? isCurrent,
   }) => _getPage(
     '/api/admin/feedback',
     params: {'status': status, 'q': query, 'category': category, 'sort': sort},
     limit: limit,
     offset: offset,
+    isCurrent: isCurrent,
   );
 
-  Future<List<Map<String, dynamic>>> listFeedback({String? status}) async {
+  Future<List<Map<String, dynamic>>> listFeedback({
+    String? status,
+    bool Function()? isCurrent,
+  }) async {
     return (await listFeedbackPage(
       status: status,
       limit: 100,
       offset: 0,
+      isCurrent: isCurrent,
     )).items;
   }
 
-  Future<Map<String, dynamic>> getFeedbackDetail(int id) =>
-      client.get('/api/admin/feedback/$id');
+  Future<Map<String, dynamic>> getFeedbackDetail(
+    int id, {
+    bool Function()? isCurrent,
+  }) => _sendFeedbackAction(
+    'GET',
+    '/api/admin/feedback/$id',
+    null,
+    isCurrent: isCurrent,
+  );
 
   Future<void> replyFeedback({
     required int feedbackId,
     required String reply,
     String status = 'resolved',
-  }) => client.post('/api/admin/feedback/reply', {
+    bool Function()? isCurrent,
+  }) => _sendFeedbackAction('POST', '/api/admin/feedback/reply', {
     'feedback_id': feedbackId,
     'reply': reply,
     'status': status,
-  });
+  }, isCurrent: isCurrent);
 
   Future<void> bulkUpdateFeedbackStatus({
     required List<int> feedbackIds,
     required String reply,
     String status = 'in_progress',
-  }) => client.post('/api/admin/feedback/bulk-status', {
+    bool Function()? isCurrent,
+  }) => _sendFeedbackAction('POST', '/api/admin/feedback/bulk-status', {
     'feedback_ids': feedbackIds,
     'reply': reply,
     'status': status,
-  });
+  }, isCurrent: isCurrent);
 
-  Future<void> closeFeedback(int id, {String reply = '已关闭。'}) =>
-      bulkUpdateFeedbackStatus(
-        feedbackIds: [id],
-        reply: reply,
-        status: 'closed',
-      );
+  Future<void> closeFeedback(
+    int id, {
+    String reply = '已关闭。',
+    bool Function()? isCurrent,
+  }) => bulkUpdateFeedbackStatus(
+    feedbackIds: [id],
+    reply: reply,
+    status: 'closed',
+    isCurrent: isCurrent,
+  );
 
   Future<String> exportFeedbackCsv({
     String? status,
@@ -706,18 +899,48 @@ class AdminApi {
     String? category,
     String? sort,
     int limit = 5000,
-  }) => client.getText(
-    _path('/api/admin/feedback/export.csv', {
-      'status': status,
-      'q': query,
-      'category': category,
-      'sort': sort,
-      'limit': limit,
-    }),
-  );
+    bool Function()? isCurrent,
+  }) async {
+    _requireCurrentAdminAction(isCurrent);
+    try {
+      return await client.getText(
+        _path('/api/admin/feedback/export.csv', {
+          'status': status,
+          'q': query,
+          'category': category,
+          'sort': sort,
+          'limit': limit,
+        }),
+        diagnoseMissingRoute: isCurrent == null,
+      );
+    } finally {
+      _requireCurrentAdminAction(isCurrent);
+    }
+  }
 
-  Future<void> deleteFeedback(int id) =>
-      client.delete('/api/admin/feedback/$id');
+  Future<void> deleteFeedback(int id, {bool Function()? isCurrent}) =>
+      _sendFeedbackAction(
+        'DELETE',
+        '/api/admin/feedback/$id',
+        null,
+        isCurrent: isCurrent,
+      );
+
+  Future<Map<String, dynamic>> _sendFeedbackAction(
+    String method,
+    String path,
+    Object? body, {
+    bool Function()? isCurrent,
+  }) async {
+    _requireCurrentAdminAction(isCurrent);
+    try {
+      return await (isCurrent == null
+          ? client.request(method, path, body)
+          : client.requestWithoutRouteDiagnosis(method, path, body));
+    } finally {
+      _requireCurrentAdminAction(isCurrent);
+    }
+  }
 
   // ---- Invite codes ----
   Future<AdminPage> listInviteCodesPage({
@@ -726,11 +949,13 @@ class AdminApi {
     String? sort,
     int limit = 20,
     int offset = 0,
+    bool Function()? isCurrent,
   }) => _getPage(
     '/api/admin/invite-codes',
     params: {'q': query, 'status': status, 'sort': sort},
     limit: limit,
     offset: offset,
+    isCurrent: isCurrent,
   );
 
   Future<List<Map<String, dynamic>>> listInviteCodes() async {
@@ -740,16 +965,43 @@ class AdminApi {
   Future<List<String>> createInviteCodes({
     int count = 1,
     String note = '',
+    bool Function()? isCurrent,
   }) async {
-    final res = await client.post('/api/admin/invite-codes', {
-      'count': count,
-      'note': note,
-    });
+    _requireCurrentAdminAction(isCurrent);
+    final payload = {'count': count, 'note': note};
+    final Map<String, dynamic> res;
+    try {
+      res = await (isCurrent == null
+          ? client.post('/api/admin/invite-codes', payload)
+          : client.requestWithoutRouteDiagnosis(
+              'POST',
+              '/api/admin/invite-codes',
+              payload,
+            ));
+    } finally {
+      _requireCurrentAdminAction(isCurrent);
+    }
     return (res['codes'] as List<dynamic>? ?? const []).cast<String>();
   }
 
-  Future<void> deleteInviteCode(String code) =>
-      client.delete('/api/admin/invite-codes/$code');
+  Future<void> deleteInviteCode(
+    String code, {
+    bool Function()? isCurrent,
+  }) async {
+    _requireCurrentAdminAction(isCurrent);
+    try {
+      if (isCurrent == null) {
+        await client.delete('/api/admin/invite-codes/$code');
+      } else {
+        await client.requestWithoutRouteDiagnosis(
+          'DELETE',
+          '/api/admin/invite-codes/$code',
+        );
+      }
+    } finally {
+      _requireCurrentAdminAction(isCurrent);
+    }
+  }
 
   // ---- Audit log ----
   Future<AdminPage> auditLogPage({
@@ -758,15 +1010,25 @@ class AdminApi {
     String? sort,
     int limit = 20,
     int offset = 0,
+    bool Function()? isCurrent,
   }) => _getPage(
     '/api/admin/audit-log',
     params: {'action': action, 'q': query, 'sort': sort},
     limit: limit,
     offset: offset,
+    isCurrent: isCurrent,
   );
 
-  Future<List<Map<String, dynamic>>> auditLog({String? action}) async {
-    return (await auditLogPage(action: action, limit: 100, offset: 0)).items;
+  Future<List<Map<String, dynamic>>> auditLog({
+    String? action,
+    bool Function()? isCurrent,
+  }) async {
+    return (await auditLogPage(
+      action: action,
+      limit: 100,
+      offset: 0,
+      isCurrent: isCurrent,
+    )).items;
   }
 
   // ---- AI diagnostic ----

@@ -179,26 +179,39 @@ void main() {
     },
   );
 
-  test('alignment report validator enforces eight group summary and logs', () {
-    final script = File('scripts/validate_alignment_report.sh');
-    expect(script.existsSync(), isTrue);
-    final source = script.readAsStringSync();
+  test(
+    'alignment report validator enforces mandatory groups and allowed extensions',
+    () {
+      final script = File('scripts/validate_alignment_report.sh');
+      expect(script.existsSync(), isTrue);
+      final source = script.readAsStringSync();
 
-    expect(source, contains('REPORT_DIR'));
-    expect(source, contains('summary.tsv'));
-    expect(source, contains('summary.md'));
-    expect(source, contains(r"group\tstatus\tduration_seconds\tlog"));
-    expect(source, contains('summary.tsv must contain exactly 8 group rows'));
-    expect(source, contains('1/8 404 and route contracts'));
-    expect(
-      source,
-      contains('8/8 device-only notification alarm widget regression'),
-    );
-    expect(source, contains('invalid status'));
-    expect(source, contains('invalid duration'));
-    expect(source, contains(r'require_file "$log_path"'));
-    expect(source, contains('Alignment report validation failed'));
-  });
+      expect(source, contains('REPORT_DIR'));
+      expect(source, contains('summary.tsv'));
+      expect(source, contains('summary.md'));
+      expect(source, contains(r"group\tstatus\tduration_seconds\tlog"));
+      expect(source, contains('summary.tsv missing group:'));
+      expect(source, contains('summary.tsv duplicate group:'));
+      expect(source, contains('summary.tsv unknown group:'));
+      for (final group in [
+        'default iOS visual acceptance',
+        'global localization acceptance',
+        'settings flow acceptance',
+        'mobile performance acceptance',
+      ]) {
+        expect(source, contains(group));
+      }
+      expect(source, contains('1/8 404 and route contracts'));
+      expect(
+        source,
+        contains('8/8 device-only notification alarm widget regression'),
+      );
+      expect(source, contains('invalid status'));
+      expect(source, contains('invalid duration'));
+      expect(source, contains(r'require_file "$log_path"'));
+      expect(source, contains('Alignment report validation failed'));
+    },
+  );
 
   test('android device evidence script captures runtime proof points', () {
     final script = File('scripts/android_device_evidence.sh');
@@ -396,7 +409,7 @@ void main() {
       expect(source, contains('readable/writable'));
       expect(source, contains('accelerated Android emulator is not available'));
       expect(source, contains('devices --machine'));
-      expect(source, contains('"targetPlatform":"(android|ios)'));
+      expect(source, contains('scripts/flutter_device_platform.py'));
       expect(source, contains('No Android or iOS device/emulator is attached'));
       expect(source, contains('ANDROID_EVIDENCE_SCRIPT'));
       expect(source, contains('scripts/android_device_evidence.sh'));
@@ -441,10 +454,7 @@ void main() {
         ),
       );
       expect(source, contains(r'EXPLICIT_APK_PATH="${APK_PATH:-}"'));
-      expect(
-        source,
-        contains(r'APK_PATH="$EXPLICIT_APK_PATH"'),
-      );
+      expect(source, contains(r'APK_PATH="$EXPLICIT_APK_PATH"'));
       expect(
         source,
         contains(r'build/app/outputs/flutter-apk/app-${BUILD_MODE}.apk'),

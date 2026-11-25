@@ -14,5 +14,6 @@
     android:previewLayout="@layout/duoyi_widget_preview_standard"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
+    android:widgetFeatures="hide_from_picker"
     android:configure="com.duoyi.duoyi.DuoyiWidgetConfigActivity"
     android:description="@string/widget_description" />

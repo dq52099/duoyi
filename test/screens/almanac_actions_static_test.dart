@@ -17,33 +17,109 @@ void main() {
     expect(source, contains('class _SelectedDateSummaryCard'));
     expect(source, contains('class _AlmanacDetailPage'));
     expect(source, contains('class _ClassicalAlmanacCard'));
-    expect(source, contains('Navigator.of(context).push<DateTime>('));
+    expect(source, contains('Navigator.of(context).push<DateTime?>('));
     expect(source, isNot(contains('showModalBottomSheet<void>')));
     expect(source, isNot(contains('Widget _denseAlmanacCard({')));
-    expect(source, contains('LunarCalendar.almanacDetail(selectedDate)'));
+    expect(source, contains('LunarCalendar.tryAlmanacDetail(selectedDate)'));
     expect(source, contains('final selectedDate = _date'));
-    expect(source, contains('final lunar = almanacDetail.lunarDate'));
-    expect(source, contains('final Map<int, LunarAlmanacDetail> _detailCache'));
-    expect(source, contains('LunarAlmanacDetail _detailFor(DateTime date)'));
-    expect(source, contains('() => LunarCalendar.almanacDetail(day)'));
-    expect(source, contains('final detail = _detailFor(_date)'));
+    expect(
+      source,
+      contains(
+        'almanacDetail?.lunarDate ?? LunarCalendar.tryFromSolar(selectedDate)',
+      ),
+    );
+    expect(
+      source,
+      contains('final Map<int, LunarAlmanacDetail?> _detailCache'),
+    );
+    expect(source, contains('LunarAlmanacDetail? _detailFor(DateTime date)'));
+    expect(source, contains('() => LunarCalendar.tryAlmanacDetail(day)'));
+    final pageBuilderStart = source.indexOf('itemBuilder: (context, page) {');
+    final pageDetailMatch = RegExp(
+      r'final\s+pageDetail\s*=\s*_detailFor\(\s*pageDate\s*\)\s*;',
+    ).firstMatch(source);
+    expect(pageBuilderStart, greaterThanOrEqualTo(0));
+    expect(pageDetailMatch, isNotNull);
+    final pageDetail = pageDetailMatch!;
+    expect(pageDetail.start, greaterThan(pageBuilderStart));
+    final skippedCivilBranch = source.substring(
+      pageBuilderStart,
+      pageDetail.start,
+    );
+    expect(
+      skippedCivilBranch,
+      matches(
+        RegExp(
+          r'final\s+pageDate\s*=\s*_dateForPage\(\s*page\s*\)\s*;'
+          r'\s*if\s*\(\s*pageDate\s*==\s*null\s*\)\s*\{',
+        ),
+      ),
+    );
+    expect(skippedCivilBranch, contains('return Scrollbar('));
+    expect(skippedCivilBranch, contains('child: _SkippedCivilDayCard('));
+    expect(skippedCivilBranch, contains('_gregorianDateForPage(page)'));
+    expect(skippedCivilBranch, contains('year: utcCivil.year'));
+    expect(skippedCivilBranch, contains('month: utcCivil.month'));
+    expect(skippedCivilBranch, contains('day: utcCivil.day'));
+    expect(skippedCivilBranch, isNot(contains('_detailFor(')));
+    final pageBuilderEnd = source.indexOf(
+      'class _AlmanacDetailNavBar',
+      pageDetail.end,
+    );
+    expect(pageBuilderEnd, greaterThan(pageDetail.end));
+    final normalCivilBranch = source.substring(pageDetail.end, pageBuilderEnd);
+    expect(normalCivilBranch, contains('_ClassicalAlmanacCard('));
+    expect(normalCivilBranch, contains('detail: pageDetail'));
+    expect(normalCivilBranch, contains('date: pageDate'));
+    expect(normalCivilBranch, contains('_AlmanacExtendedDetailsSection('));
     final calendarIndex = source.indexOf('monthCalendar,');
     final summaryIndex = source.indexOf('summary,');
     final highlightsIndex = source.indexOf('highlights,');
     expect(calendarIndex, greaterThanOrEqualTo(0));
     expect(summaryIndex, greaterThan(calendarIndex));
     expect(highlightsIndex, greaterThan(summaryIndex));
-    expect(source, contains("'\${date.year}年\${date.month}月\${date.day}日星期"));
+    final copy = File('lib/core/almanac_ui_copy.dart').readAsStringSync();
+    final fullDateCopyStart = copy.indexOf('static String fullDateTitle(');
+    final fullDateCopyEnd = copy.indexOf('static String skippedCivilDayTitle(');
+    expect(fullDateCopyStart, greaterThanOrEqualTo(0));
+    expect(fullDateCopyEnd, greaterThan(fullDateCopyStart));
+    final fullDateCopy = copy.substring(fullDateCopyStart, fullDateCopyEnd);
+    expect(fullDateCopy, contains('(locale ?? I18n.current) == AppLocale.en'));
+    expect(fullDateCopy, contains('if (!isEnglish)'));
+    expect(
+      fullDateCopy,
+      matches(
+        RegExp(
+          r'I18nDateFormat\.date\(\s*date\s*,\s*pattern:\s*pattern\s*,'
+          r'\s*locale:\s*locale\s*,?\s*\)',
+        ),
+      ),
+    );
+    expect(fullDateCopy, contains(r'星期${weekNames[date.weekday - 1]}'));
+    expect(fullDateCopy, contains(r' · ${_enWeekday(date.weekday)}'));
+    expect(
+      source,
+      matches(
+        RegExp(
+          r'final\s+title\s*=\s*_selectedDate\s*!=\s*null\s*'
+          r'\?\s*AlmanacUiCopy\.fullDateTitle\(\s*_selectedDate!\s*,\s*'
+          r'null\s*,\s*AppDateFormat\.patternOf\(\s*context\s*\)\s*,?\s*\)',
+        ),
+      ),
+    );
     expect(source, contains("title: '胎神'"));
-    expect(source, contains('value: detail.fetalGod'));
+    expect(source, contains('detail?.fetalGod ?? AlmanacUiCopy.unavailable'));
     expect(source, contains("title: '彭祖'"));
-    expect(source, contains('value: detail.pengZu'));
+    expect(source, contains('detail?.pengZu ?? AlmanacUiCopy.unavailable'));
     expect(source, contains("title: '五行'"));
-    expect(source, contains('value: detail.fiveElements'));
+    expect(
+      source,
+      contains('detail?.fiveElements ?? AlmanacUiCopy.unavailable'),
+    );
     expect(source, contains("title: '星宿'"));
-    expect(source, contains('value: detail.mansion'));
+    expect(source, contains('detail?.mansion ?? AlmanacUiCopy.unavailable'));
     expect(source, contains("title: '冲煞'"));
-    expect(source, contains('value: detail.clash'));
+    expect(source, contains('detail?.clash ?? AlmanacUiCopy.unavailable'));
     expect(source, contains('class _ClassicalHourRow'));
     expect(source, contains('class _ClassicalHourCell'));
     expect(source, isNot(contains('Widget _aboutCard()')));
@@ -76,7 +152,11 @@ void main() {
     expect(source, contains('_splitAlmanacTerms('));
     expect(
       source,
-      contains(').take(_visibleTermLimit).toList(growable: false)'),
+      matches(
+        RegExp(
+          r'\.take\(_visibleTermLimit\)\.toList\(\s*growable: false,?\s*\)',
+        ),
+      ),
     );
     expect(source, contains("ValueKey('almanac_vertical_suitable_column')"));
     expect(
@@ -92,10 +172,26 @@ void main() {
       ),
     );
     expect(source, isNot(contains('constraints.maxWidth < 520')));
-    expect(source, contains("Text(alreadyToday ? '已经是今天' : '已回到今天')"));
+    final goTodayStart = source.indexOf('void _goToday()');
+    expect(goTodayStart, greaterThanOrEqualTo(0));
+    final goTodayEnd = source.indexOf('void _shiftMonth(', goTodayStart);
+    expect(goTodayEnd, greaterThan(goTodayStart));
+    final goToday = source.substring(goTodayStart, goTodayEnd);
+    expect(
+      goToday,
+      matches(
+        RegExp(
+          r'ValueListenableBuilder<AppLocale>\(\s*'
+          r'valueListenable:\s*I18n\.localeListenable\s*,\s*'
+          r'builder:\s*\(\s*context\s*,\s*locale\s*,\s*_\s*\)\s*=>\s*'
+          r'Text\(\s*AlmanacUiCopy\.goTodayFeedback\(\s*'
+          r'alreadyToday:\s*alreadyToday\s*,\s*locale:\s*locale\s*,?\s*\)',
+        ),
+      ),
+    );
     expect(source, contains('messenger.hideCurrentSnackBar()'));
     expect(source, contains('behavior: SnackBarBehavior.floating'));
-    expect(source, contains("tooltip: '回到今天'"));
+    expect(source, contains("tooltip: AlmanacUiCopy.todayTooltip"));
     expect(source, isNot(contains('class _SeasonalWeatherCard')));
     expect(source, isNot(contains('class _SeasonalWeatherInfo')));
     expect(source, isNot(contains('_seasonalWeatherInfo(DateTime date)')));

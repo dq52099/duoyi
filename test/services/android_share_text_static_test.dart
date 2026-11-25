@@ -14,6 +14,9 @@ void main() {
       'lib/services/deep_link_service.dart',
     ).readAsStringSync();
     final main = File('lib/main.dart').readAsStringSync();
+    final sheet = File(
+      'lib/widgets/shared_text_import_sheet.dart',
+    ).readAsStringSync();
 
     expect(manifest, contains('android.intent.action.SEND'));
     expect(manifest, contains('android.intent.category.DEFAULT'));
@@ -44,28 +47,23 @@ void main() {
     expect(deepLinkService, contains('takeInitialSharedText'));
     expect(deepLinkService, contains("'takeInitialSharedText'"));
 
-    expect(main, contains('DeepLinkService.onSharedText = handleSharedText'));
+    expect(main, contains('DeepLinkService.onSharedText = receiveSharedText'));
     expect(main, contains('DeepLinkService.takeInitialSharedText()'));
     expect(main, contains('_showSharedTextImportSheet'));
-    expect(main, contains('导入分享文本'));
-    expect(main, contains('创建待办'));
-    expect(main, contains('保存笔记'));
-    expect(main, contains('SmartTodoDraftBuilder.fromText(text)'));
-    expect(main, contains('final todos = latestContext.read<TodoProvider>()'));
+    expect(sheet, contains('导入分享文本'));
+    expect(sheet, contains('创建待办'));
+    expect(sheet, contains('保存笔记'));
+    expect(main, contains('SmartTodoDraftBuilder.fromText(request.text)'));
+    expect(main, contains('final todos = context.read<TodoProvider>()'));
     expect(main, contains('await todos.addTodoWithResult('));
     expect(main, contains('waitForReminderSync: waitForReminderSync'));
-    expect(main, contains('待办已保存到本机，但提醒未注册'));
+    expect(main, contains('WidgetActionNotice.savedReminderIssue'));
     expect(main, contains('NoteItem('));
-    expect(
-      main,
-      contains('latestContext.read<NoteProvider>().addOrUpdateNote'),
-    );
-    expect(
-      main,
-      contains(
-        'MaterialPageRoute(\n        builder: (_) => const BrandRouteSurface(child: NoteScreen()),',
-      ),
-    );
+    expect(main, contains('await notes.addOrUpdateNotePersisted('));
+    expect(main, contains('const BrandRouteSurface(child: NoteScreen())'));
+    expect(main, contains('receivedAccountGeneration: launchAccount'));
+    expect(main, contains('request.defer()'));
+    expect(main, contains('canChoose: isAvailable'));
     expect(
       main,
       contains('mainShellKey.currentState?.navigateTo(1, allowHidden: true)'),

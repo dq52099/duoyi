@@ -63,6 +63,8 @@ open class DuoyiCourseWidgetProvider : DuoyiStyledWidgetProvider() {
                         R.id.widget_course_nav_habit,
                         R.id.widget_course_nav_focus,
                     ),
+                    context = context,
+                    appWidgetId = id,
                 )
 
                 val isZh = DuoyiWidgetCopy.isZh(prefs)

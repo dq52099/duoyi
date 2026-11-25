@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
@@ -20,6 +21,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 
 class ReminderRingtoneService : Service() {
     private var player: MediaPlayer? = null
@@ -27,6 +29,9 @@ class ReminderRingtoneService : Service() {
     private var toneRunnable: Runnable? = null
     private val handler = Handler(Looper.getMainLooper())
     private var stopRunnable: Runnable? = null
+    private var currentShouldVibrate: Boolean = true
+    private var currentSnoozeMinutes: Int = 0
+    private var currentRepeatRemaining: Int = 0
     private data class ReminderAudioRoute(
         val attributes: AudioAttributes,
         val toneStream: Int,
@@ -54,6 +59,9 @@ class ReminderRingtoneService : Service() {
         val snoozeMinutes = intent?.getIntExtra("snoozeMinutes", 0)?.coerceIn(0, 120) ?: 0
         val repeatRemaining = intent?.getIntExtra("repeatRemaining", 0)?.coerceIn(0, 10) ?: 0
         val rootId = intent?.getIntExtra("rootId", id) ?: id
+        currentShouldVibrate = shouldVibrate
+        currentSnoozeMinutes = snoozeMinutes
+        currentRepeatRemaining = repeatRemaining
         if (intent?.action == actionSnooze) {
             cancelPendingAutoRepeat(rootId)
             val delayMinutes = intent.getIntExtra("delayMinutes", 5).coerceIn(1, 120)
@@ -71,6 +79,7 @@ class ReminderRingtoneService : Service() {
                 repeatCount = repeatRemaining,
                 locale = locale,
             )
+            id.takeIf { it != 0 }?.let { cancelStatusNotification(it) }
             stopSelf()
             return START_NOT_STICKY
         }
@@ -357,7 +366,10 @@ class ReminderRingtoneService : Service() {
         val fullScreenIntent = PendingIntent.getActivity(
             this,
             id + 3_000_000,
-            ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload, locale),
+            ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload, locale)
+                .putExtra(ReminderFullScreenActivity.extraVibrate, shouldVibrate)
+                .putExtra(ReminderFullScreenActivity.extraSnoozeMinutes, snoozeMinutes)
+                .putExtra(ReminderFullScreenActivity.extraRepeatCount, repeatRemaining),
             flags,
         )
         val stopIntent = PendingIntent.getService(
@@ -417,8 +429,28 @@ class ReminderRingtoneService : Service() {
         rootId: Int,
         locale: String,
     ): Boolean {
+        if (!ReminderFullScreenActivity.canDirectLaunchFromBackground(this)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                if (!manager.canUseFullScreenIntent()) {
+                    ReminderRingtoneScheduler.recordDeliveryIssue(
+                        this,
+                        id = id,
+                        reason = "full_screen_permission_denied",
+                        message = "系统未授予全屏闹钟权限，仅以高优先级通知提醒；请在系统设置中允许全屏通知。",
+                    )
+                }
+            }
+            // Rely on NotificationCompat.Builder.setFullScreenIntent(fullScreenIntent, true)
+            // instead of throwing a Background Activity Launch exception on Android 10-16.
+            return true
+        }
         return runCatching {
-            startActivity(ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload, locale))
+            val activityIntent = ReminderFullScreenActivity.intent(this, id, rootId, title, body, payload, locale)
+                .putExtra(ReminderFullScreenActivity.extraVibrate, currentShouldVibrate)
+                .putExtra(ReminderFullScreenActivity.extraSnoozeMinutes, currentSnoozeMinutes)
+                .putExtra(ReminderFullScreenActivity.extraRepeatCount, currentRepeatRemaining)
+            startActivity(activityIntent)
             true
         }.onFailure { error ->
             Log.w("ReminderRingtoneService", "full-screen reminder launch failed", error)
@@ -503,8 +535,9 @@ class ReminderRingtoneService : Service() {
         private const val soundKey = "flutter.pref_reminder_ringtone_sound"
         private const val legacyAlarmMigrationKey = "flutter.pref_reminder_ringtone_alarm_migrated_to_soft"
         private const val minAudibleRawBytes = 4096L
+        private const val maxInProcessRaceCleanupDelayMillis = 750L
         private val flutterPluginRaceCleanupDelays = longArrayOf(0L, 30L, 80L, 120L, 750L, 2_500L, 5_000L, 10_000L)
-        private val previewHandler = Handler(Looper.getMainLooper())
+        private val previewHandler by lazy { Handler(Looper.getMainLooper()) }
         private var previewPlayer: MediaPlayer? = null
         private var previewToneGenerator: ToneGenerator? = null
         private var previewToneRunnable: Runnable? = null
@@ -549,16 +582,38 @@ class ReminderRingtoneService : Service() {
             manager.cancel(id)
         }
 
+        internal fun usesAlarmCleanupForRaceDelay(delayMillis: Long): Boolean {
+            return delayMillis > maxInProcessRaceCleanupDelayMillis
+        }
+
+        fun cancelFlutterPluginNotificationTree(context: Context, id: Int) {
+            val appContext = context.applicationContext
+            flutterPluginNotificationIds(id).forEach { pluginId ->
+                cancelFlutterPluginNotification(appContext, pluginId)
+            }
+        }
+
         fun cancelFlutterPluginNotificationSoon(context: Context, id: Int) {
             val appContext = context.applicationContext
             val mainHandler = Handler(Looper.getMainLooper())
             val pluginIds = flutterPluginNotificationIds(id)
+            var slot = 0
             flutterPluginRaceCleanupDelays.forEach { delayMillis ->
-                mainHandler.postDelayed({
-                    pluginIds.forEach { pluginId ->
-                        cancelFlutterPluginNotification(appContext, pluginId)
-                    }
-                }, delayMillis)
+                val currentSlot = slot++
+                if (delayMillis <= maxInProcessRaceCleanupDelayMillis) {
+                    mainHandler.postDelayed({
+                        pluginIds.forEach { pluginId ->
+                            cancelFlutterPluginNotification(appContext, pluginId)
+                        }
+                    }, delayMillis)
+                } else {
+                    ReminderRingtoneScheduler.schedulePluginNotificationCleanupAlarm(
+                        context = appContext,
+                        id = id,
+                        slot = currentSlot,
+                        delayMillis = delayMillis,
+                    )
+                }
             }
         }
 

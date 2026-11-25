@@ -555,7 +555,7 @@ void main() {
   );
 
   test(
-    'synchronous completion event disposal prevents recurring successor',
+    'durable completion event disposal suppresses later notifications and sync',
     () async {
       final recurring = TodoItem(
         id: 'complete-event-recurring',
@@ -595,20 +595,25 @@ void main() {
 
         expect(changed, 0);
         expect(publishedIds, [recurring.id]);
-        expect(disposedTodos, [recurring.id]);
-        expect(provider.todos, hasLength(1));
-        expect(provider.todos.single.id, recurring.id);
-        expect(provider.todos.single.isCompleted, isTrue);
-        expect(provider.todos.single.recurrence.isActive, isTrue);
+        expect(disposedTodos, hasLength(2));
+        expect(disposedTodos!.first, recurring.id);
+        expect(provider.todos, hasLength(2));
+        expect(provider.todos.first.id, recurring.id);
+        expect(provider.todos.first.isCompleted, isTrue);
+        expect(provider.todos.first.recurrence.isActive, isTrue);
+        expect(provider.todos.last.isCompleted, isFalse);
         expect(provider.revision, revisionAtDispose);
         expect(revisionAtDispose, revisionBeforeCompletion);
         expect(notifications, 0);
         expect(scheduler.todoSyncs, isEmpty);
         expect(
           (await SharedPreferences.getInstance()).getString('todos'),
-          storedJson,
+          jsonEncode(provider.todos.map((todo) => todo.toJson()).toList()),
         );
-        expect(prefs.getString('todos'), storedJson);
+        expect(
+          prefs.getString('todos'),
+          jsonEncode(provider.todos.map((todo) => todo.toJson()).toList()),
+        );
       } finally {
         await subscription.cancel();
         if (disposedTodos == null) provider.dispose();

@@ -1,25 +1,32 @@
+import '../widgets/app_date_format.dart';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../core/account_preference_writes.dart';
 import '../core/design_tokens.dart';
 import '../core/focus_sound_catalog.dart';
 import '../core/goal_icons.dart';
 import '../core/goal_validation.dart';
+import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
+import '../desktop_web/desktop_embedded_scope.dart';
 import '../models/goal.dart';
 import '../models/recurrence.dart';
 import '../models/workspace.dart';
 import '../providers/custom_focus_sound_provider.dart';
-import '../providers/goal_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/pomodoro_provider.dart';
 import '../providers/share_provider.dart';
 import '../services/alarm_service.dart';
 import '../services/focus_sound_service.dart';
+import '../services/goal_editor_origin.dart';
 import '../services/recurrence_engine.dart';
 import '../widgets/app_date_picker.dart';
+import '../widgets/brand_background.dart';
 import '../widgets/recurrence_picker.dart';
 import '../widgets/reminder_health_hint.dart';
 import '../widgets/reminder_plan_editor.dart';
@@ -34,11 +41,10 @@ const List<int> _presetColors = <int>[
   0xFF26A69A,
 ];
 
-const List<String> _weekdayNames = <String>['一', '二', '三', '四', '五', '六', '日'];
-
 const List<int> _focusMinutePresets = <int>[15, 25, 30, 45, 60, 90];
 
-class GoalEditScreen extends StatefulWidget {
+class GoalEditScreen extends StatefulWidget
+    implements LocaleStatePreservingRoute {
   final GoalItem? goal;
   const GoalEditScreen({super.key, this.goal});
 
@@ -97,13 +103,18 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
   String _workspaceId = 'private';
 
   bool _persisting = false;
+  GoalEditorOrigin? _origin;
+  String? _acknowledgedDraft;
 
   bool get _isExisting => _editingId != null;
 
   @override
   void initState() {
     super.initState();
-    final g = widget.goal;
+    I18n.localeListenable.addListener(_onLocaleChanged);
+    final g = widget.goal == null
+        ? null
+        : GoalItem.fromJson(jsonDecode(jsonEncode(widget.goal!.toJson())));
     _editingId = g?.id;
     _createdAt = g?.createdAt;
     _workspaceId = _normalizeWorkspaceId(g?.workspaceId);
@@ -153,7 +164,44 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _origin ??= GoalEditorOrigin.capture(context);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool _canAct() => mounted && _origin?.isCurrent(context) == true;
+
+  Future<void> _openIconPicker() async {
+    final origin = _origin;
+    final workspace = _workspaceId;
+    if (origin == null || !_canAct() || !origin.canEdit(workspace)) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    final picked = await _showGoalIconPicker(
+      context,
+      _iconName,
+      canAct: (sheetContext) =>
+          mounted &&
+          sheetContext.mounted &&
+          origin.isCurrent(context, checkRoute: false) &&
+          origin.canEdit(workspace) &&
+          ModalRoute.of(sheetContext)?.isCurrent == true,
+    );
+    if (picked == null || !_canAct() || !origin.canEdit(workspace)) return;
+    setState(() => _iconName = picked);
+  }
+
+  String _draftFingerprint(GoalItem item) {
+    final data = item.toJson()..remove('updatedAt');
+    return jsonEncode(data);
+  }
+
+  @override
   void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _minGapCtrl.dispose();
@@ -201,41 +249,88 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
   }
 
   Future<bool> _persist({required bool pop}) async {
-    if (_persisting) return false;
+    final origin = _origin;
+    if (_persisting || origin == null || !_canAct()) return false;
     setState(() => _persisting = true);
     try {
       if (_titleCtrl.text.trim().isEmpty) {
-        _showError('请填写目标标题');
+        _showFeedback(
+          (locale) => _goalText('请填写目标标题', 'Enter a goal title', locale),
+          error: true,
+        );
         return false;
       }
       final item = _composeItem();
       final issues = validateGoal(item);
       if (issues.isNotEmpty) {
-        _showError(issues.first.message);
+        _showFeedback(
+          (locale) =>
+              issues.first.localizedMessage(isEnglish: locale == AppLocale.en),
+          error: true,
+        );
         return false;
       }
       if (!_canEditWorkspace(_workspaceId)) {
-        _showError('你在这个共享空间中只有查看权限');
+        _showFeedback(
+          (locale) => _goalText(
+            '你在这个共享空间中只有查看权限',
+            'You have view-only access to this shared space',
+            locale,
+          ),
+          error: true,
+        );
         return false;
       }
-      final provider = context.read<GoalProvider>();
-      if (!_isExisting) {
-        await provider.add(item);
-        if (!mounted) return true;
-        setState(() {
-          _editingId = item.id;
-          _createdAt = item.createdAt;
-        });
-      } else {
-        await provider.update(item);
+      final provider = origin.provider;
+      // The live form can change while storage is pending. Remember exactly
+      // what was submitted so later edits still require their own save.
+      final submittedFingerprint = _draftFingerprint(item);
+      if (_acknowledgedDraft != submittedFingerprint) {
+        bool canWrite() =>
+            mounted &&
+            origin.isCurrent(context, checkRoute: false, checkAccess: false) &&
+            origin.canEdit(item.workspaceId);
+        if (!_isExisting) {
+          await provider.add(item, canWrite: canWrite);
+        } else {
+          await provider.update(item, canWrite: canWrite);
+        }
+        if (!mounted ||
+            !origin.isCurrent(context, checkRoute: false, checkAccess: false)) {
+          return true;
+        }
+        // ACK bookkeeping precedes navigation/access checks. A covered or
+        // locked successful save must keep its ID rather than create again.
+        _editingId = item.id;
+        _createdAt = item.createdAt;
+        _acknowledgedDraft = submittedFingerprint;
       }
-      if (!mounted) return true;
-      if (pop) {
+      if (!_canAct()) return true;
+      if (pop && _acknowledgedDraft != _draftFingerprint(_composeItem())) {
+        _showFeedback(
+          (locale) => _goalText(
+            '已保存提交内容，新修改还需保存',
+            'Submitted changes saved. Save your latest edits.',
+            locale,
+          ),
+        );
+      } else if (pop) {
         Navigator.pop(context);
       } else {
         _showSaved();
       }
       return true;
+    } on AccountPreferenceWriteCanceled {
+      return false;
+    } catch (_) {
+      if (_canAct()) {
+        _showFeedback(
+          (locale) =>
+              _goalText('保存失败，请重试', 'Could not save. Try again.', locale),
+          error: true,
+        );
+      }
+      return false;
     } finally {
       if (mounted) {
         setState(() => _persisting = false);
@@ -244,6 +339,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
   }
 
   Future<void> _pickFocusNoise(String id) async {
+    if (!_canAct()) return;
     setState(() => _focus = _focus.copyWith(whiteNoise: id));
     if (id == FocusSoundCatalog.none) {
       await FocusSoundService.instance.stop();
@@ -253,36 +349,35 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
         context.read<PomodoroProvider?>()?.config.focusSoundVolume ??
         FocusSoundService.defaultVolume;
     await FocusSoundService.instance.setVolume(volume);
+    if (!_canAct()) return;
     final started = await FocusSoundService.instance.preview(id);
-    if (!mounted || started) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('专注声音预览启动失败，请检查系统音量或音频资源'),
-        behavior: SnackBarBehavior.floating,
+    if (!_canAct() || started) return;
+    _showFeedback(
+      (locale) => _goalText(
+        '专注声音预览启动失败，请检查系统音量或音频资源',
+        'Could not preview the sound. Check volume and audio files.',
+        locale,
       ),
+      error: true,
     );
   }
 
   void _showSaved() {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('已保存'),
-          duration: Duration(milliseconds: 1200),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    _showFeedback((locale) => _goalText('已保存', 'Saved', locale));
   }
 
-  void _showError(String msg) {
+  void _showFeedback(String Function(AppLocale) message, {bool error = false}) {
+    if (!_canAct()) return;
     ScaffoldMessenger.of(context)
-      ..clearSnackBars()
+      ..removeCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(msg),
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (_, locale, _) => Text(message(locale)),
+          ),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: DesignTokens.resultError,
+          backgroundColor: error ? DesignTokens.resultError : null,
           duration: const Duration(seconds: 2),
         ),
       );
@@ -293,14 +388,46 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
   }
 
   Future<void> _deleteCurrentGoal() async {
-    if (!_canEditWorkspace(_workspaceId)) {
-      _showError('你在这个共享空间中只有查看权限');
+    final origin = _origin;
+    if (_persisting || _editingId == null || origin == null || !_canAct()) {
       return;
     }
-    final navigator = Navigator.of(context);
-    await context.read<GoalProvider>().delete(_editingId!);
-    if (!mounted) return;
-    navigator.pop();
+    if (!_canEditWorkspace(_workspaceId)) {
+      _showFeedback(
+        (locale) => _goalText(
+          '你在这个共享空间中只有查看权限',
+          'You have view-only access to this shared space',
+          locale,
+        ),
+        error: true,
+      );
+      return;
+    }
+    setState(() => _persisting = true);
+    final id = _editingId!;
+    final workspace = _workspaceId;
+    try {
+      await origin.provider.delete(
+        id,
+        canWrite: () =>
+            mounted &&
+            origin.isCurrent(context, checkRoute: false, checkAccess: false) &&
+            origin.canEdit(workspace),
+      );
+      if (mounted && _canAct()) Navigator.of(context).pop();
+    } on AccountPreferenceWriteCanceled {
+      return;
+    } catch (_) {
+      if (_canAct()) {
+        _showFeedback(
+          (locale) =>
+              _goalText('删除失败，请重试', 'Could not delete. Try again.', locale),
+          error: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _persisting = false);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -311,19 +438,32 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
   Widget build(BuildContext context) {
     final shareProvider = context.watch<ShareProvider?>();
     final canEditCurrentWorkspace =
-        shareProvider?.canEdit(_workspaceId) ?? true;
-    return Scaffold(
+        (shareProvider?.canEdit(_workspaceId) ?? true) && _canAct();
+    final cs = Theme.of(context).colorScheme;
+    final routeBackground = Theme.of(context).brightness == Brightness.dark
+        ? cs.surface
+        : cs.surfaceContainerLowest;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+    final scaffold = Scaffold(
+      backgroundColor: isLiquidGlass ? Colors.transparent : null,
       appBar: AppBar(
-        title: Text(_isExisting ? '编辑目标' : '新建目标'),
+        title: Text(
+          _isExisting
+              ? _goalText('编辑目标', 'Edit goal')
+              : _goalText('新建目标', 'New goal'),
+        ),
         actions: [
           if (_isExisting)
             IconButton(
-              tooltip: '删除',
+              tooltip: _goalText('删除', 'Delete'),
               icon: const Icon(Icons.delete_outline),
-              onPressed: canEditCurrentWorkspace ? _deleteCurrentGoal : null,
+              onPressed: canEditCurrentWorkspace && !_persisting
+                  ? _deleteCurrentGoal
+                  : null,
             ),
           IconButton(
-            tooltip: '保存并返回',
+            tooltip: _goalText('保存并返回', 'Save and return'),
             icon: _persisting
                 ? const SizedBox(
                     width: 20,
@@ -357,7 +497,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
             onPickTarget: (d) => setState(() => _targetDate = d),
             onStatus: (s) => setState(() => _status = s),
             onColor: (v) => setState(() => _colorValue = v),
-            onIcon: (v) => setState(() => _iconName = v),
+            onIcon: _openIconPicker,
             onSave: () => _persist(pop: false),
           ),
           _WorkspaceSection(
@@ -370,14 +510,19 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
           ),
           _RecurrenceSection(
             rule: _recurrence,
-            nextDispatchLabel: _nextDispatchLabel(),
+            nextDispatchLabel: _nextDispatchLabel(
+              AppDateFormat.patternOf(context),
+            ),
             onPick: () async {
+              if (!_canAct()) return;
               final r = await RecurrencePicker.show(
                 context,
                 initial: _recurrence,
                 supportMaxOccurrences: false,
               );
-              if (r != null) setState(() => _recurrence = r);
+              if (mounted && _canAct() && r != null) {
+                setState(() => _recurrence = r);
+              }
             },
             onSave: () => _persist(pop: false),
           ),
@@ -469,7 +614,7 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
             onSave: () => _persist(pop: false),
           ),
           _SectionCard(
-            title: '提醒',
+            title: _goalText('提醒', 'Reminders'),
             icon: Icons.notifications_active_outlined,
             subtitle: reminderPlanSummary(_reminderPlan),
             onSave: () => _persist(pop: false),
@@ -496,16 +641,21 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
                       _reminderPlan.primaryRule?.kind ?? _reminder.kind;
                   return ReminderHealthHint(
                     reminderKind: kind,
-                    onOpenSystemSettings: () => openAppSettings(),
+                    onOpenSystemSettings: () async {
+                      if (_canAct()) await openAppSettings();
+                    },
                     onRequestNotificationPermission: () async {
+                      if (!_canAct()) return;
                       await context
                           .read<NotificationService>()
                           .requestPermission();
                     },
                     onRequestExactAlarmPermission: () async {
+                      if (!_canAct()) return;
                       await AlarmService.instance.requestExactAlarmPermission();
                     },
                     onRequestFullScreenIntentPermission: () async {
+                      if (!_canAct()) return;
                       await AlarmService.instance
                           .requestFullScreenIntentPermission();
                     },
@@ -568,6 +718,22 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
         ],
       ),
     );
+
+    if (!isLiquidGlass) {
+      return scaffold;
+    }
+
+    final hasBrandSurface =
+        DesktopEmbeddedHostScope.isHosted(context) ||
+        context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+        context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+    if (hasBrandSurface) {
+      return scaffold;
+    }
+    return Material(
+      color: routeBackground,
+      child: BrandBackground(child: scaffold),
+    );
   }
 
   double _currentAutoProgress() {
@@ -578,8 +744,10 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
     return (done / _milestones.length).clamp(0.0, 1.0);
   }
 
-  String _nextDispatchLabel() {
-    if (_recurrence.frequency == RecurrenceFrequency.none) return '不重复';
+  String _nextDispatchLabel(String? pattern) {
+    if (_recurrence.frequency == RecurrenceFrequency.none) {
+      return _goalText('不重复', 'Does not repeat');
+    }
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final effectiveStart = _goalEffectiveStartDay(
@@ -596,8 +764,8 @@ class _GoalEditScreenState extends State<GoalEditScreen> {
       anchor: anchor,
       goalId: _editingId,
     );
-    if (next == null) return '无（已到终止日）';
-    return _formatDate(next);
+    if (next == null) return _goalText('无（已到终止日）', 'None (end date reached)');
+    return I18nDateFormat.date(next, pattern: pattern);
   }
 }
 
@@ -617,7 +785,7 @@ class _BasicSection extends StatelessWidget {
   final ValueChanged<DateTime?> onPickTarget;
   final ValueChanged<GoalStatus> onStatus;
   final ValueChanged<int> onColor;
-  final ValueChanged<String> onIcon;
+  final VoidCallback onIcon;
   final VoidCallback onSave;
 
   const _BasicSection({
@@ -639,24 +807,27 @@ class _BasicSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: '基础信息',
+      title: _goalText('基础信息', 'Basics'),
       icon: Icons.flag_outlined,
       initiallyExpanded: true,
       onSave: onSave,
       children: [
         TextField(
           controller: titleCtrl,
-          decoration: const InputDecoration(
-            labelText: '目标',
-            hintText: '如：今年读 24 本书',
+          decoration: InputDecoration(
+            labelText: _goalText('目标', 'Goal'),
+            hintText: _goalText(
+              '如：今年读 24 本书',
+              'For example: read 24 books this year',
+            ),
           ),
         ),
         const SizedBox(height: DesignTokens.spaceMd),
         TextField(
           controller: descCtrl,
           maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: '描述 (可选)',
+          decoration: InputDecoration(
+            labelText: _goalText('描述 (可选)', 'Description (optional)'),
             alignLabelWithHint: true,
           ),
         ),
@@ -668,7 +839,7 @@ class _BasicSection extends StatelessWidget {
           onPickTarget: onPickTarget,
         ),
         const SizedBox(height: DesignTokens.spaceLg),
-        Text('颜色', style: _subtleLabel(context)),
+        Text(_goalText('颜色', 'Color'), style: _subtleLabel(context)),
         const SizedBox(height: DesignTokens.spaceXs),
         Wrap(
           spacing: DesignTokens.spaceSm,
@@ -696,7 +867,7 @@ class _BasicSection extends StatelessWidget {
           }).toList(),
         ),
         const SizedBox(height: DesignTokens.spaceLg),
-        Text('图标', style: _subtleLabel(context)),
+        Text(_goalText('图标', 'Icon'), style: _subtleLabel(context)),
         const SizedBox(height: DesignTokens.spaceXs),
         _GoalIconField(
           iconName: iconName,
@@ -704,16 +875,16 @@ class _BasicSection extends StatelessWidget {
           onPick: onIcon,
         ),
         const SizedBox(height: DesignTokens.spaceLg),
-        Text('状态', style: _subtleLabel(context)),
+        Text(_goalText('状态', 'Status'), style: _subtleLabel(context)),
         const SizedBox(height: DesignTokens.spaceXs),
         Wrap(
           spacing: DesignTokens.spaceXs,
           children: GoalStatus.values.map((s) {
             final label = switch (s) {
-              GoalStatus.active => '进行中',
-              GoalStatus.paused => '暂停',
-              GoalStatus.achieved => '已达成',
-              GoalStatus.abandoned => '放弃',
+              GoalStatus.active => _goalText('进行中', 'Active'),
+              GoalStatus.paused => _goalText('暂停', 'Paused'),
+              GoalStatus.achieved => _goalText('已达成', 'Achieved'),
+              GoalStatus.abandoned => _goalText('放弃', 'Abandoned'),
             };
             return ChoiceChip(
               label: Text(label),
@@ -749,11 +920,11 @@ class _WorkspaceSection extends StatelessWidget {
     final role = shareProvider?.roleFor(current) ?? WorkspaceRole.owner;
     final canEdit = shareProvider?.canEdit(current) ?? true;
     final subtitle = current == 'private'
-        ? '个人空间'
+        ? _goalText('个人空间', 'Personal space')
         : '${_workspaceLabel(options, current)} · ${role.label}';
 
     return _SectionCard(
-      title: '空间归属',
+      title: _goalText('空间归属', 'Workspace'),
       icon: Icons.groups_2_outlined,
       subtitle: subtitle,
       onSave: canEdit ? onSave : null,
@@ -761,8 +932,8 @@ class _WorkspaceSection extends StatelessWidget {
         AppSecondaryControlTheme(
           child: AppDropdownField<String>(
             initialValue: current,
-            decoration: const InputDecoration(
-              labelText: '保存到',
+            decoration: InputDecoration(
+              labelText: _goalText('保存到', 'Save to'),
               floatingLabelBehavior: FloatingLabelBehavior.always,
               isDense: true,
               contentPadding: EdgeInsets.fromLTRB(12, 16, 8, 10),
@@ -793,7 +964,10 @@ class _WorkspaceSection extends StatelessWidget {
         if (!canEdit) ...[
           const SizedBox(height: DesignTokens.spaceSm),
           Text(
-            '你在这个共享空间中只有查看权限',
+            _goalText(
+              '你在这个共享空间中只有查看权限',
+              'You have view-only access to this shared space',
+            ),
             style: TextStyle(
               fontSize: DesignTokens.fontSizeSm,
               color: Theme.of(context).colorScheme.error,
@@ -861,7 +1035,7 @@ class _WorkspaceOptionLabel extends StatelessWidget {
 class _GoalIconField extends StatelessWidget {
   final String iconName;
   final int colorValue;
-  final ValueChanged<String> onPick;
+  final VoidCallback onPick;
 
   const _GoalIconField({
     required this.iconName,
@@ -878,10 +1052,7 @@ class _GoalIconField extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: DesignTokens.borderRadiusSm,
-        onTap: () async {
-          final picked = await _showGoalIconPicker(context, iconName);
-          if (picked != null) onPick(picked);
-        },
+        onTap: onPick,
         child: Ink(
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
@@ -921,7 +1092,7 @@ class _GoalIconField extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '点击更换',
+                        _goalText('点击更换', 'Change icon'),
                         style: TextStyle(
                           fontSize: DesignTokens.fontSizeSm,
                           color: cs.onSurface.withValues(alpha: 0.62),
@@ -962,13 +1133,14 @@ class _GoalDateFields extends StatelessWidget {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 460;
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _DateField(
                 key: const ValueKey('goal_start_date_field'),
-                label: '开始日期',
+                label: _goalText('开始日期', 'Start date'),
                 date: startDate,
-                emptyText: '创建即开启',
+                emptyText: _goalText('创建即开启', 'On creation'),
                 compact: compact,
                 onPick: onPickStart,
               ),
@@ -977,9 +1149,9 @@ class _GoalDateFields extends StatelessWidget {
             Expanded(
               child: _DateField(
                 key: const ValueKey('goal_target_date_field'),
-                label: '目标日期',
+                label: _goalText('目标日期', 'Target date'),
                 date: targetDate,
-                emptyText: '无期限',
+                emptyText: _goalText('无期限', 'No deadline'),
                 compact: compact,
                 onPick: onPickTarget,
               ),
@@ -991,92 +1163,115 @@ class _GoalDateFields extends StatelessWidget {
   }
 }
 
-Future<String?> _showGoalIconPicker(BuildContext context, String selected) {
+Future<String?> _showGoalIconPicker(
+  BuildContext context,
+  String selected, {
+  required bool Function(BuildContext) canAct,
+}) {
   return showAppModalSheet<String>(
     context: context,
-    builder: (context) {
-      final cs = Theme.of(context).colorScheme;
-      return AppModalSheet(
-        title: '选择图标',
-        scrollable: false,
-        child: SizedBox(
-          height: 420,
-          child: GridView.builder(
-            padding: EdgeInsets.zero,
-            itemCount: goalIconChoices.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              mainAxisSpacing: DesignTokens.spaceSm,
-              crossAxisSpacing: DesignTokens.spaceSm,
-              childAspectRatio: 0.92,
+    builder: (context) => ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, locale, _) {
+        final cs = Theme.of(context).colorScheme;
+        final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.8);
+        return AppModalSheet(
+          title: _goalText('选择图标', 'Choose an icon', locale),
+          scrollable: false,
+          child: SizedBox(
+            height: (MediaQuery.sizeOf(context).height * 0.5).clamp(
+              120.0,
+              420.0,
             ),
-            itemBuilder: (context, index) {
-              final choice = goalIconChoices[index];
-              final isSelected = choice.name == selected;
-              return Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: DesignTokens.borderRadiusMd,
-                  onTap: () => Navigator.pop(context, choice.name),
-                  child: Ink(
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? choice.color.withValues(alpha: 0.14)
-                          : cs.surfaceContainerHighest.withValues(alpha: 0.36),
-                      borderRadius: DesignTokens.borderRadiusMd,
-                      border: Border.all(
+            child: GridView.builder(
+              padding: EdgeInsets.zero,
+              itemCount: goalIconChoices.length,
+              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 140 * scale,
+                mainAxisExtent: 82 * scale,
+                mainAxisSpacing: DesignTokens.spaceSm,
+                crossAxisSpacing: DesignTokens.spaceSm,
+              ),
+              itemBuilder: (context, index) {
+                final choice = goalIconChoices[index];
+                final isSelected = choice.name == selected;
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: DesignTokens.borderRadiusMd,
+                    onTap: () {
+                      if (canAct(context)) Navigator.pop(context, choice.name);
+                    },
+                    child: Ink(
+                      decoration: BoxDecoration(
                         color: isSelected
-                            ? choice.color
-                            : cs.outline.withValues(alpha: 0.16),
-                        width: 0.45,
+                            ? choice.color.withValues(alpha: 0.14)
+                            : cs.surfaceContainerHighest.withValues(
+                                alpha: 0.36,
+                              ),
+                        borderRadius: DesignTokens.borderRadiusMd,
+                        border: Border.all(
+                          color: isSelected
+                              ? choice.color
+                              : cs.outline.withValues(alpha: 0.16),
+                          width: 0.45,
+                        ),
                       ),
-                    ),
-                    child: Stack(
-                      children: [
-                        Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(choice.icon, color: choice.color, size: 24),
-                              const SizedBox(height: 6),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
+                      child: Stack(
+                        children: [
+                          Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  choice.icon,
+                                  color: choice.color,
+                                  size: 24,
                                 ),
-                                child: Text(
-                                  choice.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: DesignTokens.fontSizeXs,
-                                    fontWeight: DesignTokens.fontWeightRegular,
-                                    color: cs.onSurface.withValues(alpha: 0.76),
+                                const SizedBox(height: 6),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  child: Text(
+                                    choice.localizedLabel(locale),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: DesignTokens.fontSizeXs,
+                                      fontWeight:
+                                          DesignTokens.fontWeightRegular,
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.76,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (isSelected)
-                          Positioned(
-                            top: 6,
-                            right: 6,
-                            child: Icon(
-                              Icons.check_circle,
-                              size: 16,
-                              color: choice.color,
+                              ],
                             ),
                           ),
-                      ],
+                          if (isSelected)
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: Icon(
+                                Icons.check_circle,
+                                size: 16,
+                                color: choice.color,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
-      );
-    },
+        );
+      },
+    ),
   );
 }
 
@@ -1100,16 +1295,20 @@ class _RecurrenceSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: '重复规则',
+      title: _goalText('重复规则', 'Repeat rule'),
       icon: Icons.repeat,
-      subtitle: rule.label,
+      subtitle: rule.displayLabel(
+        datePattern: AppDateFormat.patternOf(context),
+      ),
       onSave: onSave,
       children: [
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.tune),
-          title: const Text('编辑重复规则'),
-          subtitle: Text(rule.label),
+          title: Text(_goalText('编辑重复规则', 'Edit repeat rule')),
+          subtitle: Text(
+            rule.displayLabel(datePattern: AppDateFormat.patternOf(context)),
+          ),
           trailing: const Icon(Icons.chevron_right),
           onTap: onPick,
         ),
@@ -1123,6 +1322,7 @@ class _RecurrenceSection extends StatelessWidget {
             borderRadius: DesignTokens.borderRadiusSm,
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
                 Icons.event_available,
@@ -1130,24 +1330,28 @@ class _RecurrenceSection extends StatelessWidget {
                 color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: DesignTokens.spaceSm),
-              Text(
-                '下一次派发日：',
-                style: TextStyle(
-                  fontSize: DesignTokens.fontSizeSm,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-              ),
-              const SizedBox(width: DesignTokens.spaceXs),
               Expanded(
-                child: Text(
-                  nextDispatchLabel,
-                  style: TextStyle(
-                    fontSize: DesignTokens.fontSizeBase,
-                    fontWeight: DesignTokens.fontWeightRegular,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: DesignTokens.spaceXs,
+                  runSpacing: DesignTokens.spaceXs,
+                  children: [
+                    Text(
+                      _goalText('下一次派发日：', 'Next scheduled date: '),
+                      style: TextStyle(
+                        fontSize: DesignTokens.fontSizeSm,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    Text(
+                      nextDispatchLabel,
+                      style: TextStyle(
+                        fontSize: DesignTokens.fontSizeBase,
+                        fontWeight: DesignTokens.fontWeightRegular,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1188,41 +1392,42 @@ class _SchedulingSection extends StatelessWidget {
   });
 
   String _subtitle() {
-    if (scheduling.mode == SchedulingMode.random) return '随机派发';
+    if (scheduling.mode == SchedulingMode.random) {
+      return _goalText('随机派发', 'Random schedule');
+    }
     if (recurrence.frequency == RecurrenceFrequency.weekly &&
         (scheduling.fixedWeekdays?.isNotEmpty ?? false)) {
-      final days = ([...scheduling.fixedWeekdays!]..sort())
-          .where((d) => d >= 0 && d < 7)
-          .map((d) => '周${_weekdayNames[d]}')
-          .join('/');
-      return '固定 · $days';
+      final days = ([
+        ...scheduling.fixedWeekdays!,
+      ]..sort()).where((d) => d >= 0 && d < 7).map(_goalWeekday).join('/');
+      return _goalText('固定 · $days', 'Fixed · $days');
     }
     if (recurrence.frequency == RecurrenceFrequency.monthly &&
         (scheduling.fixedMonthDays?.isNotEmpty ?? false)) {
       final days = ([...scheduling.fixedMonthDays!]..sort()).join('/');
-      return '固定 · 每月 $days 号';
+      return _goalText('固定 · 每月 $days 号', 'Fixed · Month days $days');
     }
-    return '固定派发';
+    return _goalText('固定派发', 'Fixed schedule');
   }
 
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: '调度模式',
+      title: _goalText('调度模式', 'Scheduling'),
       icon: Icons.tune,
       subtitle: _subtitle(),
       onSave: onSave,
       children: [
         SegmentedButton<SchedulingMode>(
-          segments: const [
+          segments: [
             ButtonSegment(
               value: SchedulingMode.fixed,
-              label: Text('固定'),
+              label: Text(_goalText('固定', 'Fixed')),
               icon: Icon(Icons.calendar_view_week),
             ),
             ButtonSegment(
               value: SchedulingMode.random,
-              label: Text('随机'),
+              label: Text(_goalText('随机', 'Random')),
               icon: Icon(Icons.shuffle),
             ),
           ],
@@ -1269,14 +1474,17 @@ class _FixedScheduling extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('每周派发日', style: _subtleLabel(context)),
+          Text(
+            _goalText('每周派发日', 'Days of the week'),
+            style: _subtleLabel(context),
+          ),
           const SizedBox(height: DesignTokens.spaceXs),
           Wrap(
             spacing: DesignTokens.spaceXs,
             children: List.generate(7, (i) {
               final isSel = selected.contains(i);
               return FilterChip(
-                label: Text('周${_weekdayNames[i]}'),
+                label: Text(_goalWeekday(i)),
                 selected: isSel,
                 showCheckmark: false,
                 onSelected: (_) {
@@ -1299,7 +1507,10 @@ class _FixedScheduling extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('每月派发日（1~31）', style: _subtleLabel(context)),
+          Text(
+            _goalText('每月派发日（1~31）', 'Days of the month (1–31)'),
+            style: _subtleLabel(context),
+          ),
           const SizedBox(height: DesignTokens.spaceXs),
           Wrap(
             spacing: DesignTokens.spaceXs,
@@ -1327,7 +1538,10 @@ class _FixedScheduling extends StatelessWidget {
       );
     }
     return Text(
-      '当前重复规则下无需额外配置固定派发日。',
+      _goalText(
+        '当前重复规则下无需额外配置固定派发日。',
+        'This repeat rule needs no extra scheduled days.',
+      ),
       style: TextStyle(
         fontSize: DesignTokens.fontSizeSm,
         color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
@@ -1355,22 +1569,22 @@ class _RandomScheduling extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _RandomRow(
-          label: '最小间隔天数',
+          label: _goalText('最小间隔天数', 'Minimum interval (days)'),
           hint: '≥ 1',
           controller: minGapCtrl,
           onChanged: onChanged,
         ),
         const SizedBox(height: DesignTokens.spaceSm),
         _RandomRow(
-          label: '每周最多派发次数',
-          hint: '留空 = 不限',
+          label: _goalText('每周最多派发次数', 'Weekly limit'),
+          hint: _goalText('留空 = 不限', 'Blank = unlimited'),
           controller: maxPerWeekCtrl,
           onChanged: onChanged,
         ),
         const SizedBox(height: DesignTokens.spaceSm),
         _RandomRow(
-          label: '每月最多派发次数',
-          hint: '留空 = 不限',
+          label: _goalText('每月最多派发次数', 'Monthly limit'),
+          hint: _goalText('留空 = 不限', 'Blank = unlimited'),
           controller: maxPerMonthCtrl,
           onChanged: onChanged,
         ),
@@ -1431,16 +1645,21 @@ class _SkipHolidaysSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: '跳过节假日',
+      title: _goalText('跳过节假日', 'Skip holidays'),
       icon: Icons.beach_access,
-      subtitle: enabled ? '已开启' : '已关闭',
+      subtitle: enabled ? _goalText('已开启', 'On') : _goalText('已关闭', 'Off'),
       onSave: onSave,
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: enabled,
-          title: const Text('遇法定节假日顺延'),
-          subtitle: const Text('派发日遇节假日时自动跳到下一个工作日'),
+          title: Text(_goalText('遇法定节假日顺延', 'Move past public holidays')),
+          subtitle: Text(
+            _goalText(
+              '派发日遇节假日时自动跳到下一个工作日',
+              'Schedule on the next working day after a holiday',
+            ),
+          ),
           onChanged: onChange,
         ),
       ],
@@ -1472,21 +1691,21 @@ class _FocusSection extends StatelessWidget {
   });
 
   String _subtitle(BuildContext context) {
-    if (!focus.enabled) return '已关闭';
+    if (!focus.enabled) return _goalText('已关闭', 'Off');
     final sec = focus.focusSeconds;
     final min = (sec == null || sec <= 0) ? null : sec ~/ 60;
     final custom = context.watch<CustomFocusSoundProvider>();
     final noise = custom.isCustomSound(focus.whiteNoise)
         ? custom.labelFor(focus.whiteNoise)
         : FocusSoundCatalog.labelFor(focus.whiteNoise);
-    if (min == null) return '已开启 · $noise';
-    return '$min 分钟 · $noise';
+    if (min == null) return _goalText('已开启 · $noise', 'On · $noise');
+    return _goalText('$min 分钟 · $noise', '$min min · $noise');
   }
 
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: '专注联动',
+      title: _goalText('专注联动', 'Focus integration'),
       icon: Icons.timer_outlined,
       subtitle: _subtitle(context),
       onSave: onSave,
@@ -1494,20 +1713,28 @@ class _FocusSection extends StatelessWidget {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: focus.enabled,
-          title: const Text('开启专注联动'),
-          subtitle: const Text('派发时自动跳转番茄钟,并播放白噪音'),
+          title: Text(_goalText('开启专注联动', 'Enable focus integration')),
+          subtitle: Text(
+            _goalText(
+              '派发时自动跳转番茄钟,并播放白噪音',
+              'Open the focus timer and play white noise when scheduled',
+            ),
+          ),
           onChanged: onToggle,
         ),
         if (focus.enabled) ...[
           const SizedBox(height: DesignTokens.spaceSm),
-          Text('专注时长', style: _subtleLabel(context)),
+          Text(
+            _goalText('专注时长', 'Focus duration'),
+            style: _subtleLabel(context),
+          ),
           const SizedBox(height: DesignTokens.spaceXs),
           Wrap(
             spacing: DesignTokens.spaceXs,
             children: _focusMinutePresets.map((m) {
               final selected = focus.focusSeconds == m * 60;
               return ChoiceChip(
-                label: Text('$m 分钟'),
+                label: Text(_goalText('$m 分钟', '$m min')),
                 selected: selected,
                 onSelected: (_) => onPickPreset(m),
               );
@@ -1518,7 +1745,10 @@ class _FocusSection extends StatelessWidget {
             children: [
               Expanded(
                 flex: 3,
-                child: Text('自定义分钟', style: _subtleLabel(context)),
+                child: Text(
+                  _goalText('自定义分钟', 'Custom minutes'),
+                  style: _subtleLabel(context),
+                ),
               ),
               Expanded(
                 flex: 2,
@@ -1527,9 +1757,9 @@ class _FocusSection extends StatelessWidget {
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.center,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     isDense: true,
-                    hintText: '留空 = 未设定',
+                    hintText: _goalText('留空 = 未设定', 'Blank = unset'),
                   ),
                   onChanged: onMinutesChange,
                 ),
@@ -1537,7 +1767,7 @@ class _FocusSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: DesignTokens.spaceMd),
-          Text('白噪音', style: _subtleLabel(context)),
+          Text(_goalText('白噪音', 'White noise'), style: _subtleLabel(context)),
           const SizedBox(height: DesignTokens.spaceXs),
           Wrap(
             spacing: DesignTokens.spaceXs,
@@ -1583,9 +1813,11 @@ class _TimeTargetSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final min = int.tryParse(controller.text.trim());
-    final subtitle = (min == null || min <= 0) ? '未设置' : '$min 分钟 / 每次';
+    final subtitle = (min == null || min <= 0)
+        ? _goalText('未设置', 'Not set')
+        : _goalText('$min 分钟 / 每次', '$min min / session');
     return _SectionCard(
-      title: '目标时长',
+      title: _goalText('目标时长', 'Target duration'),
       icon: Icons.hourglass_bottom,
       subtitle: subtitle,
       onSave: onSave,
@@ -1594,7 +1826,10 @@ class _TimeTargetSection extends StatelessWidget {
           children: [
             Expanded(
               flex: 3,
-              child: Text('每次时长（分钟）', style: _subtleLabel(context)),
+              child: Text(
+                _goalText('每次时长（分钟）', 'Minutes per session'),
+                style: _subtleLabel(context),
+              ),
             ),
             Expanded(
               flex: 2,
@@ -1603,14 +1838,14 @@ class _TimeTargetSection extends StatelessWidget {
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   isDense: true,
-                  hintText: '0 或留空 = 清除',
+                  hintText: _goalText('0 或留空 = 清除', '0 or blank = clear'),
                 ),
               ),
             ),
             IconButton(
-              tooltip: '清除',
+              tooltip: _goalText('清除', 'Clear'),
               icon: const Icon(Icons.clear),
               onPressed: onClear,
             ),
@@ -1643,9 +1878,11 @@ class _DailyCountSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final n = int.tryParse(controller.text.trim());
-    final subtitle = (n == null || n <= 0) ? '未设置' : '每日 $n 次';
+    final subtitle = (n == null || n <= 0)
+        ? _goalText('未设置', 'Not set')
+        : _goalText('每日 $n 次', '$n per day');
     return _SectionCard(
-      title: '每日次数',
+      title: _goalText('每日次数', 'Daily count'),
       icon: Icons.format_list_numbered,
       subtitle: subtitle,
       onSave: onSave,
@@ -1654,7 +1891,10 @@ class _DailyCountSection extends StatelessWidget {
           children: [
             Expanded(
               flex: 3,
-              child: Text('每日目标次数', style: _subtleLabel(context)),
+              child: Text(
+                _goalText('每日目标次数', 'Daily target count'),
+                style: _subtleLabel(context),
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.remove_circle_outline),
@@ -1667,7 +1907,7 @@ class _DailyCountSection extends StatelessWidget {
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(isDense: true, hintText: '0'),
+                decoration: InputDecoration(isDense: true, hintText: '0'),
                 onChanged: onChanged,
               ),
             ),
@@ -1713,23 +1953,32 @@ class _MilestonesSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final completed = milestones.where((m) => m.isCompleted).length;
     return _SectionCard(
-      title: '里程碑与进度',
+      title: _goalText('里程碑与进度', 'Milestones and progress'),
       icon: Icons.flag_circle_outlined,
       subtitle:
           '$completed/${milestones.length} · '
-          '${autoProgress ? '自动' : '手动 ${(manualProgress * 100).toInt()}%'}',
+          '${autoProgress ? _goalText('自动', 'Automatic') : _goalText('手动 ${(manualProgress * 100).toInt()}%', 'Manual ${(manualProgress * 100).toInt()}%')}',
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: autoProgress,
-          title: const Text('按里程碑自动计算进度'),
-          subtitle: Text(autoProgress ? '完成度 = 已完成里程碑 / 总里程碑' : '手动设置当前进度'),
+          title: Text(
+            _goalText('按里程碑自动计算进度', 'Calculate progress from milestones'),
+          ),
+          subtitle: Text(
+            autoProgress
+                ? _goalText(
+                    '完成度 = 已完成里程碑 / 总里程碑',
+                    'Completed milestones / all milestones',
+                  )
+                : _goalText('手动设置当前进度', 'Set current progress manually'),
+          ),
           onChanged: onAutoChange,
         ),
         if (!autoProgress)
           Row(
             children: [
-              const Text('进度:'),
+              Text(_goalText('进度:', 'Progress:')),
               Expanded(
                 child: Slider(
                   value: manualProgress,
@@ -1738,7 +1987,12 @@ class _MilestonesSection extends StatelessWidget {
                   divisions: 100,
                 ),
               ),
-              Text('${(manualProgress * 100).toInt()}%'),
+              Text(
+                '${(manualProgress * 100).toInt()}%',
+                style: const TextStyle(
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
             ],
           ),
         const SizedBox(height: DesignTokens.spaceSm),
@@ -1762,7 +2016,9 @@ class _MilestonesSection extends StatelessWidget {
                   decoration: e.value.isCompleted
                       ? TextDecoration.lineThrough
                       : null,
-                  color: e.value.isCompleted ? Colors.grey : null,
+                  color: e.value.isCompleted
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
+                      : null,
                 ),
               ),
               dense: true,
@@ -1775,8 +2031,8 @@ class _MilestonesSection extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: controller,
-                decoration: const InputDecoration(
-                  hintText: '添加里程碑',
+                decoration: InputDecoration(
+                  hintText: _goalText('添加里程碑', 'Add a milestone'),
                   prefixIcon: Icon(Icons.flag_outlined),
                 ),
                 onSubmitted: (v) {
@@ -1822,20 +2078,28 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
+    final surface = appSurfaceStyleOf(context);
+    final radius = BorderRadius.circular(
+      surface?.cardRadius ?? DesignTokens.radiusLg,
+    );
+    final titleStyle =
+        (Theme.of(context).textTheme.titleMedium ??
+                DefaultTextStyle.of(context).style)
+            .copyWith(
+              fontSize: DesignTokens.fontSizeMd,
+              fontWeight: FontWeight.normal,
+              color: cs.onSurface,
+            );
+    return AppSurfaceCard(
       margin: const EdgeInsets.only(bottom: DesignTokens.spaceMd),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: DesignTokens.borderRadiusLg,
-        border: Border.all(
-          color: cs.outline.withValues(alpha: 0.15),
-          width: 0.45,
-        ),
-        boxShadow: DesignTokens.shadowXs,
-      ),
+      padding: EdgeInsets.zero,
+      borderRadius: radius,
+      border:
+          surface?.cardBorder ??
+          Border.all(color: cs.outline.withValues(alpha: 0.15), width: 0.45),
       child: Material(
         color: Colors.transparent,
-        borderRadius: DesignTokens.borderRadiusLg,
+        borderRadius: radius,
         clipBehavior: Clip.antiAlias,
         child: Theme(
           data: Theme.of(context).copyWith(
@@ -1843,44 +2107,65 @@ class _SectionCard extends StatelessWidget {
             splashColor: Colors.transparent,
             highlightColor: Colors.transparent,
           ),
-          child: ExpansionTile(
-            initiallyExpanded: initiallyExpanded,
-            tilePadding: const EdgeInsets.symmetric(
-              horizontal: DesignTokens.spaceLg,
-            ),
-            childrenPadding: const EdgeInsets.fromLTRB(
-              DesignTokens.spaceLg,
-              DesignTokens.spaceSm,
-              DesignTokens.spaceLg,
-              DesignTokens.spaceLg,
-            ),
-            leading: Icon(icon, color: cs.primary),
-            title: Text(
-              title,
-              style: const TextStyle(
-                fontSize: DesignTokens.fontSizeMd,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-            subtitle: subtitle == null
-                ? null
-                : Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: DesignTokens.fontSizeSm,
-                      color: cs.onSurface.withValues(alpha: 0.65),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final titlePainter = TextPainter(
+                text: TextSpan(text: title, style: titleStyle),
+                textDirection: Directionality.of(context),
+                textScaler: MediaQuery.textScalerOf(context),
+                locale: Localizations.localeOf(context),
+                maxLines: 1,
+              )..layout();
+              // Reserve the header's two affordances and its horizontal padding.
+              final inlineWidth =
+                  constraints.maxWidth -
+                  2 * (DesignTokens.spaceLg + kMinInteractiveDimension);
+              final stackedTitle = titlePainter.width > inlineWidth;
+              titlePainter.dispose();
+              final heading = Text(title, style: titleStyle);
+              return ExpansionTile(
+                initiallyExpanded: initiallyExpanded,
+                tilePadding: const EdgeInsets.symmetric(
+                  horizontal: DesignTokens.spaceLg,
+                ),
+                childrenPadding: const EdgeInsets.fromLTRB(
+                  DesignTokens.spaceLg,
+                  DesignTokens.spaceSm,
+                  DesignTokens.spaceLg,
+                  DesignTokens.spaceLg,
+                ),
+                leading: stackedTitle ? null : Icon(icon, color: cs.primary),
+                title: stackedTitle
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(icon, color: cs.primary),
+                          const SizedBox(height: DesignTokens.spaceXs),
+                          heading,
+                        ],
+                      )
+                    : heading,
+                subtitle: subtitle == null
+                    ? null
+                    : Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: DesignTokens.fontSizeSm,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                children: [
+                  AppSecondaryControlTheme(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: children,
                     ),
                   ),
-            children: [
-              AppSecondaryControlTheme(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: children,
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -1911,8 +2196,29 @@ class _DateField extends StatelessWidget {
     final labelText = compact ? _compactDateFieldLabel(label) : label;
     final valueText = date == null
         ? emptyText
-        : _formatGoalDateFieldValue(date!);
+        : AppDateFormat.date(context, date!);
     final leadingIconSize = compact ? (hasDate ? 14.0 : 12.0) : 18.0;
+    final valueFontSize = compact ? 11.0 : DesignTokens.fontSizeSm;
+    final stacked =
+        compact ||
+        MediaQuery.textScalerOf(context).scale(valueFontSize) >
+            valueFontSize * 1.25;
+    final labelWidget = Text(
+      labelText,
+      style: TextStyle(
+        fontSize: compact ? 11 : DesignTokens.fontSizeXs,
+        color: cs.onSurface.withValues(alpha: 0.55),
+      ),
+    );
+    final valueWidget = Text(
+      valueText,
+      textAlign: stacked ? TextAlign.start : TextAlign.end,
+      style: TextStyle(
+        fontSize: valueFontSize,
+        fontWeight: FontWeight.normal,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
     return GestureDetector(
       onTap: () async {
         final picked = await AppDatePicker.pickSolar(
@@ -1942,7 +2248,7 @@ class _DateField extends StatelessWidget {
           children: [
             if (compact && hasDate)
               Tooltip(
-                message: '清除日期',
+                message: _goalText('清除日期', 'Clear date'),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => onPick(null),
@@ -1964,32 +2270,22 @@ class _DateField extends StatelessWidget {
               ),
             SizedBox(width: compact ? 3 : DesignTokens.spaceXs),
             Expanded(
-              child: Row(
-                children: [
-                  Text(
-                    labelText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: compact ? 11 : DesignTokens.fontSizeXs,
-                      color: cs.onSurface.withValues(alpha: 0.55),
+              child: stacked
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        labelWidget,
+                        const SizedBox(height: 2),
+                        valueWidget,
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        labelWidget,
+                        SizedBox(width: compact ? 2 : DesignTokens.spaceXs),
+                        Expanded(child: valueWidget),
+                      ],
                     ),
-                  ),
-                  SizedBox(width: compact ? 2 : DesignTokens.spaceXs),
-                  Expanded(
-                    child: Text(
-                      valueText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                      style: TextStyle(
-                        fontSize: compact ? 11 : DesignTokens.fontSizeSm,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
             ),
             if (date != null && !compact)
               IconButton(
@@ -2013,18 +2309,31 @@ class _DateField extends StatelessWidget {
 // Helpers
 // ---------------------------------------------------------------------------
 
+String _goalText(String chinese, String english, [AppLocale? locale]) =>
+    (locale ?? I18n.current) == AppLocale.en ? english : chinese;
+
+String _goalWeekday(int day) => I18n.tr(
+  [
+    'weekday.mon',
+    'weekday.tue',
+    'weekday.wed',
+    'weekday.thu',
+    'weekday.fri',
+    'weekday.sat',
+    'weekday.sun',
+  ][day],
+);
+
 TextStyle _subtleLabel(BuildContext context) => TextStyle(
   fontSize: DesignTokens.fontSizeSm,
   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
 );
 
-String _formatDate(DateTime d) => I18nDateFormat.date(d);
-
-String _formatGoalDateFieldValue(DateTime d) => '${d.year}/${d.month}/${d.day}';
-
 String _compactDateFieldLabel(String label) {
-  if (label.startsWith('开始')) return '开始';
-  if (label.startsWith('目标')) return '目标';
+  if (label == _goalText('开始日期', 'Start date')) return _goalText('开始', 'Start');
+  if (label == _goalText('目标日期', 'Target date')) {
+    return _goalText('目标', 'Target');
+  }
   return label;
 }
 
@@ -2047,7 +2356,7 @@ List<_WorkspaceChoice> _workspaceOptions(
   String currentWorkspaceId,
 ) {
   final options = <_WorkspaceChoice>[
-    const _WorkspaceChoice(id: 'private', name: '个人空间'),
+    _WorkspaceChoice(id: 'private', name: _goalText('个人空间', 'Personal space')),
   ];
   final known = <String>{'private'};
   for (final workspace in shareProvider?.workspaces ?? const <Workspace>[]) {
@@ -2056,7 +2365,12 @@ List<_WorkspaceChoice> _workspaceOptions(
     options.add(_WorkspaceChoice(id: workspace.id, name: workspace.name));
   }
   if (!known.contains(currentWorkspaceId) && currentWorkspaceId != 'private') {
-    options.add(_WorkspaceChoice(id: currentWorkspaceId, name: '共享空间'));
+    options.add(
+      _WorkspaceChoice(
+        id: currentWorkspaceId,
+        name: _goalText('共享空间', 'Shared space'),
+      ),
+    );
   }
   return options;
 }
@@ -2065,7 +2379,7 @@ String _workspaceLabel(List<_WorkspaceChoice> options, String workspaceId) {
   for (final option in options) {
     if (option.id == workspaceId) return option.name;
   }
-  return '共享空间';
+  return _goalText('共享空间', 'Shared space');
 }
 
 /// 解析正整数输入；空串或非正整数返回 null。

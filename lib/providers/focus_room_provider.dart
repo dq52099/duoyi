@@ -396,16 +396,19 @@ class FocusRoomProvider extends ChangeNotifier {
   }
 
   Future<void> joinRoom(String id) async {
+    final generation = _storageGeneration;
     if (roomById(id) == null) return;
     if (_joinedRoomIds.contains(id) && _activeRoomId == id) return;
     _joinedRoomIds.add(id);
     _activeRoomId = id;
     await _save();
+    if (generation != _storageGeneration) return;
     _notifyLocalChanged();
     notifyListeners();
   }
 
   Future<void> leaveRoom(String id) async {
+    final generation = _storageGeneration;
     if (id == defaultRoomId) return;
     _cancelRealtimeRanking(id);
     _joinedRoomIds.remove(id);
@@ -414,16 +417,20 @@ class FocusRoomProvider extends ChangeNotifier {
     }
     _remoteRankings.remove(id);
     await _leaveRemoteRoom(id);
+    if (generation != _storageGeneration) return;
     await _save();
+    if (generation != _storageGeneration) return;
     _notifyLocalChanged();
     notifyListeners();
   }
 
   Future<void> setActiveRoom(String? id) async {
+    final generation = _storageGeneration;
     if (id != null && !_joinedRoomIds.contains(id)) return;
     if (_activeRoomId == id) return;
     _activeRoomId = id;
     await _save();
+    if (generation != _storageGeneration) return;
     _notifyLocalChanged();
     notifyListeners();
   }
@@ -434,6 +441,7 @@ class FocusRoomProvider extends ChangeNotifier {
     required int weeklyTargetMinutes,
     int accentColor = 0xFF3949AB,
   }) async {
+    final generation = _storageGeneration;
     final id = 'local_room_${DateTime.now().microsecondsSinceEpoch}';
     final room = FocusRoom(
       id: id,
@@ -448,6 +456,7 @@ class FocusRoomProvider extends ChangeNotifier {
     _joinedRoomIds.add(id);
     _activeRoomId = id;
     await _save();
+    if (generation != _storageGeneration) return room;
     _notifyLocalChanged();
     notifyListeners();
     return room;
@@ -458,6 +467,7 @@ class FocusRoomProvider extends ChangeNotifier {
     DateTime? expiresAt,
     int? maxUses,
   }) async {
+    final generation = _storageGeneration;
     final client = apiClientGetter?.call();
     final room = roomById(roomId);
     if (client == null || client.token == null || client.token!.isEmpty) {
@@ -473,6 +483,7 @@ class FocusRoomProvider extends ChangeNotifier {
       final invite = await FocusRoomApi(
         client,
       ).createInvite(room: room, expiresAt: expiresAt, maxUses: maxUses);
+      if (generation != _storageGeneration) return invite;
       _inviteCache[room.id] = [
         invite,
         ...(_inviteCache[room.id] ?? const <FocusRoomInvite>[]).where(
@@ -481,14 +492,17 @@ class FocusRoomProvider extends ChangeNotifier {
       ];
       return invite;
     } catch (e) {
+      if (generation != _storageGeneration) rethrow;
       _lastRemoteError = _focusRoomRemoteError(
         e,
         fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
       );
       rethrow;
     } finally {
-      _remoteLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _remoteLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -510,6 +524,7 @@ class FocusRoomProvider extends ChangeNotifier {
       _inviteCache[roomId] = invites;
       return invites;
     } catch (e) {
+      if (generation != _storageGeneration) rethrow;
       _lastRemoteError = _focusRoomRemoteError(
         e,
         fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
@@ -524,6 +539,7 @@ class FocusRoomProvider extends ChangeNotifier {
   }
 
   Future<void> revokeInviteForRoom(String roomId, String inviteId) async {
+    final generation = _storageGeneration;
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       throw const ApiException('请先登录后再撤销自习室邀请码');
@@ -536,20 +552,24 @@ class FocusRoomProvider extends ChangeNotifier {
     notifyListeners();
     try {
       await FocusRoomApi(client).revokeInvite(inviteId);
+      if (generation != _storageGeneration) return;
       final existing = _inviteCache[roomId] ?? const <FocusRoomInvite>[];
       _inviteCache[roomId] = existing.map((invite) {
         if (invite.id != inviteId) return invite;
         return invite.copyWith(revoked: true);
       }).toList();
     } catch (e) {
+      if (generation != _storageGeneration) rethrow;
       _lastRemoteError = _focusRoomRemoteError(
         e,
         fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
       );
       rethrow;
     } finally {
-      _remoteLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _remoteLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -557,6 +577,7 @@ class FocusRoomProvider extends ChangeNotifier {
     String code, {
     String displayName = '我',
   }) async {
+    final generation = _storageGeneration;
     final clean = code.trim();
     if (clean.isEmpty) {
       throw const ApiException('请输入自习室邀请码');
@@ -572,6 +593,7 @@ class FocusRoomProvider extends ChangeNotifier {
       final result = await FocusRoomApi(
         client,
       ).acceptInvite(code: clean, displayName: displayName);
+      if (generation != _storageGeneration) return result.room;
       _upsertRoom(result.room);
       _joinedRoomIds.add(result.room.id);
       _activeRoomId = result.room.id;
@@ -583,17 +605,21 @@ class FocusRoomProvider extends ChangeNotifier {
         );
       }
       await _save();
+      if (generation != _storageGeneration) return result.room;
       _notifyLocalChanged();
       return result.room;
     } catch (e) {
+      if (generation != _storageGeneration) rethrow;
       _lastRemoteError = _focusRoomRemoteError(
         e,
         fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
       );
       rethrow;
     } finally {
-      _remoteLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _remoteLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -644,6 +670,7 @@ class FocusRoomProvider extends ChangeNotifier {
     bool active = true,
     bool force = false,
   }) async {
+    final generation = _storageGeneration;
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       _lastRemoteError = null;
@@ -681,17 +708,22 @@ class FocusRoomProvider extends ChangeNotifier {
           active: active,
           startedAt: active ? now : null,
         );
+        if (generation != _storageGeneration) return;
         _remoteRankings[room.id] = _rankingFromRemote(remote, room, now);
       }
       if (!_globalLoading) {
         await _refreshGlobalRanking(api);
       }
+      if (generation != _storageGeneration) return;
       _markRemoteRankingSuccess();
     } catch (e) {
+      if (generation != _storageGeneration) return;
       _markRemoteRankingFailure(e, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
     } finally {
-      _remoteLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _remoteLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -863,6 +895,7 @@ class FocusRoomProvider extends ChangeNotifier {
       _lastRemoteSyncAt = DateTime.now();
       _markRemoteRankingSuccess();
     } catch (e) {
+      if (generation != _storageGeneration) return;
       _markRemoteRankingFailure(e, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
     } finally {
       if (generation == _storageGeneration) {
@@ -895,6 +928,7 @@ class FocusRoomProvider extends ChangeNotifier {
       if (generation != _storageGeneration) return;
       _markRemoteRankingSuccess();
     } catch (e) {
+      if (generation != _storageGeneration) return;
       _markRemoteRankingFailure(e, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
     } finally {
       if (generation == _storageGeneration) {
@@ -927,6 +961,7 @@ class FocusRoomProvider extends ChangeNotifier {
       if (generation != _storageGeneration) return;
       _markRemoteRankingSuccess();
     } catch (e) {
+      if (generation != _storageGeneration) return;
       _markRemoteRankingFailure(e, fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。');
     } finally {
       if (generation == _storageGeneration) {
@@ -937,6 +972,7 @@ class FocusRoomProvider extends ChangeNotifier {
   }
 
   Future<FocusFriend> addFocusFriend(String username) async {
+    final generation = _storageGeneration;
     final clean = username.trim();
     if (clean.isEmpty) {
       throw const ApiException('请输入好友用户名');
@@ -951,21 +987,26 @@ class FocusRoomProvider extends ChangeNotifier {
     try {
       final api = FocusRoomApi(client);
       final friend = await api.addFriend(username: clean);
+      if (generation != _storageGeneration) return friend;
       await _refreshFocusFriendsAndRanking(api);
       return friend;
     } catch (e) {
+      if (generation != _storageGeneration) rethrow;
       _lastRemoteError = _focusRoomRemoteError(
         e,
         fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
       );
       rethrow;
     } finally {
-      _friendLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _friendLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<FocusFriend> acceptFocusFriendRequest(String requesterUserId) async {
+    final generation = _storageGeneration;
     final clean = requesterUserId.trim();
     if (clean.isEmpty) {
       throw const ApiException('好友申请不存在');
@@ -980,21 +1021,26 @@ class FocusRoomProvider extends ChangeNotifier {
     try {
       final api = FocusRoomApi(client);
       final friend = await api.acceptFriendRequest(clean);
+      if (generation != _storageGeneration) return friend;
       await _refreshFocusFriendsAndRanking(api);
       return friend;
     } catch (e) {
+      if (generation != _storageGeneration) rethrow;
       _lastRemoteError = _focusRoomRemoteError(
         e,
         fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
       );
       rethrow;
     } finally {
-      _friendLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _friendLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> rejectFocusFriendRequest(String requesterUserId) async {
+    final generation = _storageGeneration;
     final clean = requesterUserId.trim();
     if (clean.isEmpty) {
       throw const ApiException('好友申请不存在');
@@ -1009,20 +1055,25 @@ class FocusRoomProvider extends ChangeNotifier {
     try {
       final api = FocusRoomApi(client);
       await api.rejectFriendRequest(clean);
+      if (generation != _storageGeneration) return;
       await _refreshFocusFriendsAndRanking(api);
     } catch (e) {
+      if (generation != _storageGeneration) rethrow;
       _lastRemoteError = _focusRoomRemoteError(
         e,
         fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
       );
       rethrow;
     } finally {
-      _friendLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _friendLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> cancelFocusFriendRequest(String friendUserId) async {
+    final generation = _storageGeneration;
     final clean = friendUserId.trim();
     if (clean.isEmpty) {
       throw const ApiException('好友申请不存在');
@@ -1037,20 +1088,25 @@ class FocusRoomProvider extends ChangeNotifier {
     try {
       final api = FocusRoomApi(client);
       await api.cancelFriendRequest(clean);
+      if (generation != _storageGeneration) return;
       await _refreshFocusFriendsAndRanking(api);
     } catch (e) {
+      if (generation != _storageGeneration) rethrow;
       _lastRemoteError = _focusRoomRemoteError(
         e,
         fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
       );
       rethrow;
     } finally {
-      _friendLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _friendLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> removeFocusFriend(String friendUserId) async {
+    final generation = _storageGeneration;
     final clean = friendUserId.trim();
     if (clean.isEmpty) {
       throw const ApiException('好友不存在');
@@ -1065,16 +1121,20 @@ class FocusRoomProvider extends ChangeNotifier {
     try {
       final api = FocusRoomApi(client);
       await api.removeFriend(clean);
+      if (generation != _storageGeneration) return;
       await _refreshFocusFriendsAndRanking(api);
     } catch (e) {
+      if (generation != _storageGeneration) rethrow;
       _lastRemoteError = _focusRoomRemoteError(
         e,
         fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
       );
       rethrow;
     } finally {
-      _friendLoading = false;
-      notifyListeners();
+      if (generation == _storageGeneration) {
+        _friendLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -1107,7 +1167,9 @@ class FocusRoomProvider extends ChangeNotifier {
   }
 
   Future<void> _save() async {
+    final generation = _storageGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (generation != _storageGeneration) return;
     await prefs.setString(
       storageKey,
       json.encode({
@@ -1156,6 +1218,7 @@ class FocusRoomProvider extends ChangeNotifier {
   }
 
   Future<void> _leaveRemoteRoom(String roomId) async {
+    final generation = _storageGeneration;
     final client = apiClientGetter?.call();
     if (client == null || client.token == null || client.token!.isEmpty) {
       return;
@@ -1163,6 +1226,7 @@ class FocusRoomProvider extends ChangeNotifier {
     try {
       final room = roomById(roomId);
       final remote = await FocusRoomApi(client).leave(roomId);
+      if (generation != _storageGeneration) return;
       if (room != null) {
         _remoteRankings[roomId] = _rankingFromRemote(
           remote,
@@ -1171,6 +1235,7 @@ class FocusRoomProvider extends ChangeNotifier {
         );
       }
     } catch (e) {
+      if (generation != _storageGeneration) return;
       _lastRemoteError = _focusRoomRemoteError(
         e,
         fallbackMessage: '自习室服务暂不可用，请稍后重试或联系管理员。',
@@ -1298,9 +1363,13 @@ class FocusRoomProvider extends ChangeNotifier {
   }
 
   Future<void> _refreshFocusFriendsAndRanking(FocusRoomApi api) async {
+    final generation = _storageGeneration;
     final friends = await api.listFriends();
+    if (generation != _storageGeneration) return;
     final requests = await api.listFriendRequests();
+    if (generation != _storageGeneration) return;
     final ranking = await api.friendRanking();
+    if (generation != _storageGeneration) return;
     _focusFriends = friends;
     _incomingFriendRequests = requests.incoming;
     _outgoingFriendRequests = requests.outgoing;
@@ -1313,7 +1382,9 @@ class FocusRoomProvider extends ChangeNotifier {
   }
 
   Future<void> _refreshGlobalRanking(FocusRoomApi api) async {
+    final generation = _storageGeneration;
     final ranking = await api.globalRanking();
+    if (generation != _storageGeneration) return;
     _remoteGlobalRanking = _socialRankingFromRemote(
       FocusLeaderboardScope.global,
       ranking,
@@ -1324,6 +1395,7 @@ class FocusRoomProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _storageGeneration++;
     _cancelAllRealtimeRankings(notify: false);
     _realtimeNotifyDebounce?.cancel();
     super.dispose();

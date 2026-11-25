@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:test/test.dart';
@@ -14,26 +15,36 @@ void main() {
       'lib/widgets/quick_capture_fab.dart',
     ).readAsStringSync();
     final aiService = File('lib/services/ai_service.dart').readAsStringSync();
+    final copy = File('lib/core/ai_schedule_ui_copy.dart').readAsStringSync();
 
     expect(screen, contains('class AiScheduleScreen'));
     expect(screen, contains('createScheduleDraft('));
-    expect(screen, contains('确认创建内容'));
-    expect(screen, contains('已生成确认草稿'));
-    expect(screen, contains('AI 识别未完成'));
-    expect(screen, contains('AI 识别结果不完整'));
-    expect(screen, contains('当前不是完整 AI 识别结果'));
-    expect(screen, contains('确认创建'));
+    expect(screen, contains('AiScheduleUiCopy.confirmCardTitle'));
+    expect(screen, contains('AiScheduleUiCopy.draftTitle'));
+    expect(screen, contains('AiScheduleUiCopy.warningTitle'));
+    expect(screen, contains('AiScheduleUiCopy.warningMessage'));
+    expect(screen, contains('AiScheduleUiCopy.sourceLabel'));
+    expect(screen, contains('AiScheduleUiCopy.create'));
     expect(screen, contains('var reminderFailed = false;'));
-    expect(screen, contains("'\${draft.isCalendar ? '日程' : '待办'}已创建'"));
-    expect(screen, contains("'\${draft.isCalendar ? '日程' : '待办'}已创建，但提醒未注册'"));
+    expect(screen, contains('AiScheduleUiCopy.createdItemSummary'));
+    expect(screen, contains('AiScheduleUiCopy.dialogTitle'));
     expect(screen, contains('Icons.notification_important_outlined'));
-    expect(screen, contains('AI 未启用'));
-    expect(screen, contains('请输入要创建的日程或待办内容'));
+    expect(screen, contains('AiScheduleUiCopy.aiDisabledTitle'));
+    expect(screen, contains('AiScheduleUiCopy.emptyInput'));
     expect(
       screen,
       contains('final calendarProvider = context.read<CalendarProvider>()'),
     );
-    expect(screen, contains('await calendarProvider.addLocalEvent(event)'));
+    expect(
+      screen,
+      contains(
+        RegExp(
+          r'await calendarProvider\.addLocalEvent\(\s*event,\s*canWrite: originGuard,?\s*\)',
+        ),
+      ),
+    );
+    expect(screen, isNot(contains('as dynamic')));
+    expect(screen, isNot(contains('on NoSuchMethodError')));
     expect(
       screen,
       contains('final todoProvider = context.read<TodoProvider>()'),
@@ -41,10 +52,10 @@ void main() {
     expect(screen, contains('final todo = draft.toTodo()'));
     expect(screen, contains('await todoProvider.addTodoWithResult('));
     expect(screen, contains('waitForReminderSync: true'));
-    expect(screen, contains('waitForReminderSync: false'));
+    expect(screen, isNot(contains('waitForReminderSync: false')));
     expect(screen, contains('preflightTodoReminderPlan(todo)'));
     expect(screen, contains("import '../models/goal.dart' show ReminderKind;"));
-    expect(screen, contains('AI 待办提醒注册失败'));
+    expect(screen, contains('AiScheduleUiCopy.taskReminderIssueTitle'));
     expect(
       screen,
       contains('final usesPush = preflight.kinds.contains(ReminderKind.push);'),
@@ -64,8 +75,11 @@ void main() {
     expect(screen, contains('if (usesPush || usesPopup)'));
     expect(screen, contains('final usesAlarmOnly ='));
     expect(screen, contains('usesAlarm && !usesPush && !usesPopup'));
-    expect(screen, contains('LocalNotifications.instance.ensurePermission()'));
-    expect(screen, contains('系统通知权限未开启，闹钟提醒未注册'));
+    final alarmPermissionCall = RegExp(
+      r'await\s+LocalNotifications\.instance\s*\.ensurePermission\(\)',
+    );
+    expect(screen, contains(alarmPermissionCall));
+    expect(screen, contains('AiScheduleUiCopy.alarmPermissionRequired'));
     expect(
       screen.indexOf('preflightTodoReminderPlan(todo)'),
       lessThan(screen.indexOf('await todoProvider.addTodoWithResult(')),
@@ -79,43 +93,43 @@ void main() {
     final todoBranch = screen.substring(todoBranchStart, todoAddIndex);
     expect(todoBranch, contains('if (usesPush || usesPopup)'));
     expect(todoBranch, contains('notificationService.ensureReadyForReminder'));
-    expect(
-      todoBranch,
-      contains('LocalNotifications.instance.ensurePermission()'),
-    );
+    expect(todoBranch, contains('if (usesAlarmOnly)'));
+    expect(todoBranch, contains(alarmPermissionCall));
+    expect(todoBranch, contains('if (!hasPermission)'));
+    expect(todoBranch, contains('AiScheduleUiCopy.alarmPermissionRequired'));
     expect(screen, contains('notificationService.scheduleCalendarReminder'));
     expect(screen, contains('notificationService.clearScheduleIssue();'));
-    expect(screen, contains('final syncIssue = reminderSyncResult?.issue;'));
+    expect(screen, contains('reminderSyncResult.hasIssue'));
     expect(screen, contains("import '../providers/cloud_sync_provider.dart';"));
-    expect(screen, contains('String? _localSaveSyncMessage'));
+    expect(screen, contains('String? _syncStatus()'));
     expect(screen, contains('.localSaveSyncMessage('));
-    expect(screen, contains('localSavedText: localSavedText'));
-    expect(
-      screen,
-      contains("localSavedText: '\${draft.isCalendar ? '日程' : '待办'}已保存到本机'"),
-    );
+    expect(screen, contains('localSavedText: AiScheduleUiCopy.localSavedItem'));
     expect(
       screen,
       isNot(contains('final scheduleCheckStartedAt = DateTime.now();')),
     );
     expect(screen, isNot(contains('_currentTodoScheduleIssue(')));
     expect(screen, isNot(contains('notificationService.lastScheduleIssue,')));
-    expect(screen, contains('Theme.of(context).colorScheme.error'));
+    expect(screen, contains('cs.error'));
     expect(screen, isNot(contains('notificationService.scheduleOnce')));
     expect(screen, contains('notificationService.ensureReadyForReminder'));
-    expect(screen, contains('if (_saving) return;'));
-    expect(screen, contains('AI 日程提醒注册失败'));
+    expect(screen, contains('if (_saving || _loading) return;'));
+    expect(screen, contains('AiScheduleUiCopy.eventReminderIssueTitle'));
     expect(
       screen.indexOf('notificationService.ensureReadyForReminder'),
-      lessThan(screen.indexOf('await calendarProvider.addLocalEvent(event)')),
+      lessThan(screen.indexOf('await calendarProvider.addLocalEvent(')),
     );
-    expect(screen, contains('NotificationPermissionDeniedException'));
-    expect(screen, contains('提醒注册失败'));
-    expect(screen, contains('AI 创建失败'));
-    expect(screen, contains('保存失败'));
+    expect(
+      RegExp('canContinue: canContinuePreflight').allMatches(screen),
+      hasLength(2),
+    );
+    expect(screen, contains('AiScheduleUiCopy.renderReminderIssue'));
+    expect(screen, contains('AiScheduleUiCopy.renderReminderIssue'));
+    expect(screen, contains('AiScheduleUiCopy.recognizeError'));
+    expect(screen, contains('AiScheduleUiCopy.saveError'));
 
     expect(calendar, contains("import 'ai_schedule_screen.dart';"));
-    expect(screen, contains("title: const Text('AI 创建日程')"));
+    expect(screen, contains('title: Text(AiScheduleUiCopy.screenTitle)'));
     expect(
       calendar,
       contains('AiScheduleScreen(initialDate: origin.selectedDay)'),
@@ -133,13 +147,22 @@ void main() {
     expect(aiService, contains('AI 识别失败，已用本地时间解析生成草稿'));
     expect(aiService, contains('AI 没有返回可用草稿'));
     expect(aiService, contains('AI 上游服务不可达'));
+    expect(aiService, contains('AiScheduleWarningKind.missingReminderTime'));
+    expect(copy, contains('_l10n().aiScheduleWarningMissingReminderTime'));
+    final englishCopy =
+        jsonDecode(File('lib/l10n/app_en.arb').readAsStringSync())
+            as Map<String, dynamic>;
+    expect(
+      englishCopy['aiScheduleWarningMissingReminderTime'],
+      contains('Specific reminder time was not recognized'),
+    );
     expect(screen, contains('int _recognizeRequestId = 0;'));
     expect(screen, contains('String? _draftSourceInput;'));
-    expect(screen, contains('if (_loading) return;'));
+    expect(screen, contains('if (_loading || _saving) return;'));
     expect(screen, contains('final requestId = ++_recognizeRequestId;'));
     expect(screen, contains('requestId != _recognizeRequestId'));
     expect(screen, contains('_draftSourceInput != _inputCtrl.text.trim()'));
-    expect(screen, contains('输入内容已变更，请重新识别后再创建。'));
+    expect(screen, contains('AiScheduleUiCopy.inputChanged'));
   });
 
   test(
@@ -194,7 +217,10 @@ void main() {
         'lib/screens/ai_schedule_screen.dart',
       ).readAsStringSync();
       final todoStart = screen.indexOf('final todo = draft.toTodo()');
-      final dialogStart = screen.indexOf('await showDialog<void>', todoStart);
+      final dialogStart = screen.indexOf(
+        'await _showCompletionDialog(outcome)',
+        todoStart,
+      );
       expect(todoStart, greaterThanOrEqualTo(0));
       expect(dialogStart, greaterThan(todoStart));
       final todoBranch = screen.substring(todoStart, dialogStart);
@@ -203,7 +229,7 @@ void main() {
         todoStart,
       );
       final syncStatusStart = screen.indexOf(
-        'final syncStatus = _localSaveSyncMessage',
+        'final syncStatus = _syncStatus()',
         saveStart,
       );
       expect(saveStart, greaterThan(todoStart));
@@ -218,11 +244,8 @@ void main() {
         ),
       );
       expect(todoBranch, contains('waitForReminderSync: true'));
-      expect(
-        todoBranch,
-        contains('final syncIssue = reminderSyncResult?.issue;'),
-      );
-      expect(todoBranch, contains("reminderStatus = '待办提醒同步失败：\$syncIssue';"));
+      expect(todoBranch, contains('reminderSyncResult.hasIssue'));
+      expect(todoBranch, contains('AiScheduleUiCopy.renderReminderIssue'));
       expect(
         saveAndSyncStatus,
         isNot(contains('notificationService.lastScheduleIssue')),

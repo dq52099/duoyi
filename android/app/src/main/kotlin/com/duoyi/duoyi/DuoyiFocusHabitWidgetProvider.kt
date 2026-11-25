@@ -58,6 +58,7 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                         R.id.widget_focus_count,
                         R.id.widget_focus_habit_progress,
                         R.id.widget_focus_streak_count,
+                        R.id.widget_focus_stop_btn,
                         R.id.widget_focus_nav_focus,
                     ),
                     bodyIds = intArrayOf(
@@ -75,11 +76,16 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                         R.id.widget_focus_nav_calendar,
                     ),
                     onPrimaryIds = intArrayOf(R.id.widget_focus_quick_start),
+                    context = context,
+                    appWidgetId = id,
                 )
                 DuoyiWidgetTheme.applyButtonSurfaces(
                     views,
                     prefs,
                     primaryIds = intArrayOf(R.id.widget_focus_quick_start),
+                    secondaryIds = intArrayOf(R.id.widget_focus_stop_btn),
+                    context = context,
+                    appWidgetId = id,
                 )
                 val isZh = DuoyiWidgetCopy.isZh(prefs)
                 val appLocale = DuoyiWidgetCopy.resolveLocale(prefs)
@@ -170,15 +176,41 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                     isZh = isZh,
                     timeZone = java.util.TimeZone.getTimeZone(frame.core.clock.zone)
                 )
-                val quickStartText = DuoyiWidgetCopy.focusQuickStartText(
-                    sessionTrusted = sessionTrusted,
-                    expired = expired,
-                    paused = paused,
-                    timerRunning = timerRunning,
-                    countUp = countUp,
-                    nextFocusLabel = nextFocusLabel,
-                    isZh = isZh
-                )
+                val quickStartText = if (sessionTrusted && !expired && timerRunning) {
+                    DuoyiWidgetCopy.focusControlText(
+                        sessionTrusted = true,
+                        expired = false,
+                        paused = paused,
+                        timerRunning = true,
+                        countUp = countUp,
+                        nextFocusLabel = nextFocusLabel,
+                        isZh = isZh
+                    )
+                } else {
+                    DuoyiWidgetCopy.focusQuickStartText(
+                        sessionTrusted = sessionTrusted && (frame.fresh || timerRunning),
+                        expired = expired,
+                        paused = paused,
+                        timerRunning = timerRunning,
+                        countUp = countUp,
+                        nextFocusLabel = nextFocusLabel,
+                        isZh = isZh
+                    )
+                }
+                val focusProgressPercent: Int? = if (sessionTrusted && !expired && totalSeconds > 0 &&
+                    (timerRunning || paused)
+                ) {
+                    if (countUp) {
+                        ((timerRemainingSeconds.coerceIn(0, totalSeconds) * 100f) / totalSeconds)
+                            .toInt()
+                            .coerceIn(0, 100)
+                    } else {
+                        val elapsed = (totalSeconds - timerRemainingSeconds).coerceIn(0, totalSeconds)
+                        ((elapsed * 100f) / totalSeconds).toInt().coerceIn(0, 100)
+                    }
+                } else {
+                    null
+                }
                 views.setTextViewText(
                     R.id.widget_focus_count,
                     pomodoroToday.toString()
@@ -196,7 +228,7 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 val live = sessionTrusted && timerRunning && liveSupported && !showEndTime
                 views.setViewVisibility(R.id.widget_focus_live_timer, if (live) View.VISIBLE else View.GONE)
                 views.setViewVisibility(R.id.widget_focus_streak_count, if (live) View.GONE else View.VISIBLE)
-                views.setTextColor(R.id.widget_focus_live_timer, DuoyiWidgetTheme.read(prefs).primary)
+                views.setTextColor(R.id.widget_focus_live_timer, DuoyiWidgetTheme.read(prefs, context, id).readablePrimary)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     views.setChronometerCountDown(R.id.widget_focus_live_timer, !countUp)
                 }
@@ -255,13 +287,7 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                         }
                     }
                 } else null
-                val timerOnly = DuoyiWidgetDisplayMode.isCompact(prefs, id) || timerRunning || paused || expired
-                views.setViewVisibility(R.id.widget_focus_count_column, if (timerOnly) View.GONE else View.VISIBLE)
-                views.setViewVisibility(R.id.widget_focus_minutes_column, if (timerOnly) View.GONE else View.VISIBLE)
-                views.setTextViewText(
-                    R.id.widget_focus_timer_caption,
-                    timerCaption
-                )
+                val timerOnly = frame.core.requestedMode == "compact" || timerRunning || paused || expired
                 views.setTextViewText(
                     R.id.widget_focus_summary,
                     DuoyiWidgetCopy.focusSummary(prefs.getString("focus_summary", null), isZh)
@@ -274,26 +300,6 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                     R.id.widget_focus_streak_summary,
                     timerHint
                 )
-                views.setTextViewText(
-                    R.id.widget_focus_quick_start,
-                    quickStartText
-                )
-                views.setViewVisibility(
-                    R.id.widget_focus_quick_start,
-                    DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
-                )
-                views.setViewVisibility(
-                    R.id.widget_focus_habit_summary,
-                    DuoyiWidgetDisplayMode.standardOrDetailedVisibility(prefs, id)
-                )
-                views.setViewVisibility(
-                    R.id.widget_focus_streak_summary,
-                    DuoyiWidgetDisplayMode.detailedVisibility(prefs, id)
-                )
-                views.setViewVisibility(
-                    R.id.widget_focus_habit_bottom_nav,
-                    DuoyiWidgetDisplayMode.bottomNavVisibility(prefs, id)
-                )
 
                 val tabTodo = DuoyiWidgetCopy.navTodo(prefs, isZh)
                 val tabHabit = DuoyiWidgetCopy.navHabit(prefs, isZh)
@@ -303,6 +309,137 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 views.setTextViewText(R.id.widget_focus_nav_habit, tabHabit)
                 views.setTextViewText(R.id.widget_focus_nav_calendar, tabCalendar)
                 views.setTextViewText(R.id.widget_focus_nav_focus, tabFocus)
+
+                // Match XML's natural font sizes; reduce content instead of shrinking text.
+                val measure = DuoyiWidgetTextMetrics(context.resources.displayMetrics)
+                val width = frame.core.options.minWidth.takeIf { it > 0 } ?: 140
+                val contentWidth = (width - 16).coerceAtLeast(1)
+                val actionText = if (measure.width(quickStartText, 12f) <= contentWidth - 8) {
+                    quickStartText
+                } else DuoyiWidgetCopy.focusControlShort(
+                    frame.fresh && !storedRunning, paused, timerRunning, isZh)
+                views.setTextViewText(R.id.widget_focus_quick_start, actionText)
+                views.setContentDescription(R.id.widget_focus_quick_start, quickStartText)
+                views.setTextViewText(R.id.widget_focus_stop_btn, DuoyiWidgetCopy.focusFinishLabel(isZh))
+                views.setContentDescription(R.id.widget_focus_stop_btn, DuoyiWidgetCopy.focusFinishLabel(isZh))
+                val caption = if (!timerRunning && !paused && !expired &&
+                    measure.width(timerCaption, 10f) > contentWidth) {
+                    DuoyiWidgetCopy.focusTimerUnit(isZh)
+                } else timerCaption
+                views.setTextViewText(R.id.widget_focus_timer_caption, caption)
+                val timerWidth = maxOf(measure.width(timerText, 20f),
+                    if (live) measure.width(DuoyiWidgetLayoutPolicy.timerWidthSample(
+                        countUp, timerRemainingSeconds), 20f) else 0,
+                    measure.width(caption, 10f))
+                val refresh = width >= 140 && measure.line(14f) <= 36 &&
+                    measure.width("↻", 14f) <= 36
+                views.setViewVisibility(R.id.widget_refresh, if (refresh) View.VISIBLE else View.GONE)
+                // The date is decorative; it must not take the title's remaining space.
+                views.setViewVisibility(R.id.widget_focus_habit_date,
+                    if (measure.width(today, 11f) <= 56 &&
+                        measure.width(today, 11f) + measure.width(DuoyiWidgetCopy.focusTitle(isZh), 14f) +
+                        (if (refresh) 40 else 0) <= contentWidth) View.VISIBLE else View.GONE)
+                val allMetricsFit = !timerOnly && listOf(
+                    maxOf(measure.width(pomodoroToday.toString(), 22f),
+                        measure.width(DuoyiWidgetCopy.focusMetricSessions(isZh), 10f)),
+                    maxOf(measure.width(focusMinutesToday.toString(), 22f),
+                        measure.width(DuoyiWidgetCopy.focusMetricDuration(isZh), 10f)),
+                    timerWidth,
+                ).all { it + 2 <= contentWidth / 3 }
+                val headerHeightMeasured = maxOf(if (refresh) 36 else 0, measure.line(14f), measure.line(11f))
+                val baseActionHeight = maxOf(36, measure.wrapped(actionText, 12f, contentWidth - 8) + 8)
+                val timerHeightMeasured = measure.line(20f) + measure.line(10f)
+                val allMetricsHeightMeasured = maxOf(measure.line(22f), measure.line(20f)) + measure.line(10f)
+                val navHeightMeasured = maxOf(30, measure.line(10f))
+                val navFitsMeasured = listOf(tabTodo, tabHabit, tabCalendar, tabFocus)
+                    .all { measure.width(it, 10f) + 2 <= (contentWidth - 8) / 4 }
+                val basePlan = DuoyiWidgetLayoutPolicy.focus(
+                    mode = frame.core.requestedMode,
+                    height = frame.core.options.minHeight,
+                    headerHeight = headerHeightMeasured,
+                    actionHeight = baseActionHeight,
+                    timerHeight = timerHeightMeasured,
+                    allMetricsHeight = allMetricsHeightMeasured,
+                    timerFitsWidth = timerWidth + 2 <= contentWidth,
+                    allMetricsFitWidth = allMetricsFit,
+                    smallLineHeight = measure.line(11f),
+                    navigationHeight = navHeightMeasured,
+                    navigationFitsWidth = navFitsMeasured,
+                )
+                val candidateProgress = focusProgressPercent != null &&
+                    frame.core.requestedMode != "compact" &&
+                    basePlan.showAction
+                val progressPlan = if (candidateProgress) {
+                    DuoyiWidgetLayoutPolicy.focus(
+                        mode = frame.core.requestedMode,
+                        height = frame.core.options.minHeight,
+                        headerHeight = headerHeightMeasured,
+                        actionHeight = baseActionHeight + 8,
+                        timerHeight = timerHeightMeasured,
+                        allMetricsHeight = allMetricsHeightMeasured,
+                        timerFitsWidth = timerWidth + 2 <= contentWidth,
+                        allMetricsFitWidth = allMetricsFit,
+                        smallLineHeight = measure.line(11f),
+                        navigationHeight = navHeightMeasured,
+                        navigationFitsWidth = navFitsMeasured,
+                    )
+                } else null
+                val showProgressBar = progressPlan != null &&
+                    progressPlan.showAction &&
+                    progressPlan.showMetrics == basePlan.showMetrics
+                var plan = if (showProgressBar && progressPlan != null) progressPlan else basePlan
+                val candidateStop = frame.fresh && timerRunning && !expired && sessionTrusted &&
+                    frame.core.requestedMode == "detailed" && plan.showAction
+                val stopPlan = if (candidateStop) {
+                    DuoyiWidgetLayoutPolicy.focus(
+                        mode = frame.core.requestedMode,
+                        height = frame.core.options.minHeight,
+                        headerHeight = headerHeightMeasured,
+                        actionHeight = baseActionHeight + (if (showProgressBar) 8 else 0) + 34,
+                        timerHeight = timerHeightMeasured,
+                        allMetricsHeight = allMetricsHeightMeasured,
+                        timerFitsWidth = timerWidth + 2 <= contentWidth,
+                        allMetricsFitWidth = allMetricsFit,
+                        smallLineHeight = measure.line(11f),
+                        navigationHeight = navHeightMeasured,
+                        navigationFitsWidth = navFitsMeasured,
+                    )
+                } else null
+                val showStopButton = stopPlan != null &&
+                    stopPlan.showAction &&
+                    stopPlan.showMetrics == plan.showMetrics
+                if (showStopButton && stopPlan != null) {
+                    plan = stopPlan
+                }
+                fun visible(shown: Boolean) = if (shown) View.VISIBLE else View.GONE
+                views.setViewVisibility(R.id.widget_focus_header, visible(plan.showHeader))
+                views.setViewVisibility(R.id.widget_focus_quick_start, visible(plan.showAction))
+                views.setViewVisibility(R.id.widget_focus_progress_bar, visible(showProgressBar))
+                if (showProgressBar && focusProgressPercent != null) {
+                    DuoyiWidgetTheme.applyProgressBar(
+                        views = views,
+                        progressBarId = R.id.widget_focus_progress_bar,
+                        progress = focusProgressPercent,
+                        prefs = prefs,
+                        context = context,
+                        appWidgetId = id,
+                    )
+                }
+                views.setViewVisibility(R.id.widget_focus_stop_btn, visible(showStopButton))
+                views.setViewVisibility(R.id.widget_focus_metrics_row, visible(plan.showMetrics))
+                views.setViewVisibility(R.id.widget_focus_count_column, visible(plan.showAllMetrics))
+                views.setViewVisibility(R.id.widget_focus_minutes_column, visible(plan.showAllMetrics))
+                intArrayOf(R.id.widget_focus_summary, R.id.widget_focus_habit_summary,
+                    R.id.widget_focus_streak_summary).forEachIndexed { slot, viewId ->
+                    views.setViewVisibility(viewId, visible(plan.summaries[slot]))
+                }
+                views.setViewVisibility(
+                    R.id.widget_focus_habit_bottom_nav,
+                    visible(plan.showNavigation),
+                )
+                if (!DuoyiWidgetTheme.isBottomNavEnabled(context, prefs, id)) {
+                    views.setViewVisibility(R.id.widget_focus_habit_bottom_nav, View.GONE)
+                }
 
                 val openFocus = HomeWidgetLaunchIntent.getActivity(
                     context, MainActivity::class.java, Uri.parse("duoyi://tab/focus")
@@ -320,6 +457,15 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                     context,
                     MainActivity::class.java,
                     DuoyiWidgetSnapshot.actionUri(frame, Uri.parse("duoyi://action/start_pomodoro"))
+                ) else if (frame.fresh && timerRunning) HomeWidgetLaunchIntent.getActivity(
+                    context,
+                    MainActivity::class.java,
+                    DuoyiWidgetSnapshot.actionUri(frame, Uri.parse("duoyi://action/toggle_pomodoro"))
+                ) else openFocus
+                val stopFocus: PendingIntent = if (frame.fresh && timerRunning) HomeWidgetLaunchIntent.getActivity(
+                    context,
+                    MainActivity::class.java,
+                    DuoyiWidgetSnapshot.actionUri(frame, Uri.parse("duoyi://action/stop_pomodoro"))
                 ) else openFocus
 
                 views.setOnClickPendingIntent(R.id.widget_focus_habit_root, openFocus)
@@ -328,6 +474,7 @@ open class DuoyiFocusHabitWidgetProvider : DuoyiStyledWidgetProvider() {
                 views.setOnClickPendingIntent(R.id.widget_focus_count, openFocus)
                 views.setOnClickPendingIntent(R.id.widget_focus_summary, openFocus)
                 views.setOnClickPendingIntent(R.id.widget_focus_quick_start, startFocus)
+                views.setOnClickPendingIntent(R.id.widget_focus_stop_btn, stopFocus)
                 views.setOnClickPendingIntent(R.id.widget_focus_habit_progress, openFocus)
                 views.setOnClickPendingIntent(R.id.widget_focus_streak_count, openFocus)
                 views.setOnClickPendingIntent(R.id.widget_focus_live_timer, openFocus)

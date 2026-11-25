@@ -6,12 +6,16 @@ import '../core/i18n.dart';
 import '../core/settings_ui_copy.dart';
 import '../core/web_target.dart';
 import '../providers/preferences_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/account_local_data_cleaner.dart';
+import '../services/settings_action_origin.dart';
+import '../widgets/brand_background.dart';
 import '../widgets/settings_picker_tile.dart';
 import '../widgets/surface_components.dart';
 
 /// 个性设置入口页。这里只做二级入口，不直接承载具体设置项。
-class PreferencesScreen extends StatelessWidget {
+class PreferencesScreen extends StatelessWidget
+    implements LocaleStatePreservingRoute {
   const PreferencesScreen({super.key});
 
   @override
@@ -23,8 +27,10 @@ class PreferencesScreen extends StatelessWidget {
         final routeBackground = Theme.of(context).brightness == Brightness.dark
             ? cs.surface
             : cs.surfaceContainerLowest;
-        return Scaffold(
-          backgroundColor: routeBackground,
+        final surfaceStyle = appSurfaceStyleOf(context);
+        final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+        final scaffold = Scaffold(
+          backgroundColor: isLiquidGlass ? Colors.transparent : routeBackground,
           appBar: AppBar(
             title: Text(SettingsUiCopy.preferencesTitle),
             titleTextStyle: appSecondaryRouteTitleTextStyle(context),
@@ -36,7 +42,7 @@ class PreferencesScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
               children: [
                 AppSurfaceCard(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                   gradient: LinearGradient(
                     colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
                     begin: Alignment.topLeft,
@@ -60,9 +66,11 @@ class PreferencesScreen extends StatelessWidget {
                           children: [
                             Text(
                               I18n.tr('preferences.local.title'),
-                              style: appSecondaryMenuItemTextStyle(
-                                context,
-                              ).copyWith(color: cs.onSurface),
+                              style: appSecondaryMenuItemTextStyle(context)
+                                  .copyWith(
+                                    color: cs.onSurface,
+                                    fontWeight: FontWeight.normal,
+                                  ),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -70,7 +78,10 @@ class PreferencesScreen extends StatelessWidget {
                               softWrap: true,
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
-                                    color: cs.onSurface.withValues(alpha: 0.66),
+                                    color: appSecondaryDescriptionColor(
+                                      context,
+                                      isHero: true,
+                                    ),
                                   ),
                             ),
                           ],
@@ -114,6 +125,21 @@ class PreferencesScreen extends StatelessWidget {
             ),
           ),
         );
+
+        if (!isLiquidGlass) {
+          return scaffold;
+        }
+
+        final hasBrandSurface =
+            context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+            context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+        if (hasBrandSurface) {
+          return scaffold;
+        }
+        return Material(
+          color: routeBackground,
+          child: BrandBackground(child: scaffold),
+        );
       },
     );
   }
@@ -152,9 +178,9 @@ class _PreferencesEntryTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: controlBorderRadius,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
+          constraints: const BoxConstraints(minHeight: 48),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -187,7 +213,7 @@ class _PreferencesEntryTile extends StatelessWidget {
                         subtitle,
                         softWrap: true,
                         style: appSecondaryControlLabelStyle(context).copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.62),
+                          color: appSecondaryDescriptionColor(context),
                           height: 1.35,
                           fontWeight: FontWeight.normal,
                         ),
@@ -199,7 +225,7 @@ class _PreferencesEntryTile extends StatelessWidget {
                 Icon(
                   Icons.chevron_right,
                   size: 20,
-                  color: cs.onSurface.withValues(alpha: 0.38),
+                  color: cs.onSurface.withValues(alpha: 0.34),
                 ),
               ],
             ),
@@ -212,18 +238,16 @@ class _PreferencesEntryTile extends StatelessWidget {
 
 Future<void> _handlePreferenceWrite(
   BuildContext context,
+  SettingsActionOrigin origin,
   Future<void> Function() write,
 ) async {
-  final generation = AccountLocalDataCleaner.accountDataGeneration;
-  if (!context.mounted ||
-      !AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+  if (!context.mounted || !origin.isCurrent()) {
     return;
   }
   try {
     await write();
   } catch (_) {
-    if (context.mounted &&
-        AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+    if (context.mounted && origin.isCurrent()) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: ValueListenableBuilder<AppLocale>(
@@ -268,31 +292,39 @@ class _PersonalizationSettingsScreenState
     if (mounted) setState(() {});
   }
 
-  void _scrollToContext(BuildContext target) {
+  void _scrollToMenuTarget(GlobalKey key, SettingsActionOrigin origin) {
+    if (!mounted || !origin.isCurrent()) return;
+    final target = key.currentContext;
+    if (target == null) return;
+    final position = Scrollable.maybeOf(target)?.position;
+    if (position == null || !position.hasPixels) return;
+    // Cancel the previous destination even when this one is already visible.
+    if (position.isScrollingNotifier.value) {
+      position.jumpTo(position.pixels);
+    }
     Scrollable.ensureVisible(
       target,
-      duration: const Duration(milliseconds: 260),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
       alignment: 0.04,
     );
   }
 
-  void _scrollToMenuTarget(GlobalKey key) {
-    final target = key.currentContext;
-    if (target == null) return;
-    _scrollToContext(target);
-  }
-
   @override
   Widget build(BuildContext context) {
     final p = context.watch<PreferencesProvider>();
+    final actionOrigin = SettingsActionOrigin(context);
     final cs = Theme.of(context).colorScheme;
     final routeBackground = Theme.of(context).brightness == Brightness.dark
         ? cs.surface
         : cs.surfaceContainerLowest;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
 
-    return Scaffold(
-      backgroundColor: routeBackground,
+    final scaffold = Scaffold(
+      backgroundColor: isLiquidGlass ? Colors.transparent : routeBackground,
       appBar: AppBar(
         title: Text(SettingsUiCopy.displayAndBehaviorTitle),
         titleTextStyle: appSecondaryRouteTitleTextStyle(context),
@@ -303,325 +335,368 @@ class _PersonalizationSettingsScreenState
         child: ListView(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
           children: [
-            AppSurfaceCard(
-              padding: const EdgeInsets.all(16),
-              gradient: LinearGradient(
-                colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(Icons.tune, color: cs.primary, size: 26),
+            // These four fixed sections must be laid out for shortcut anchors.
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AppSurfaceCard(
+                  padding: const EdgeInsets.all(16),
+                  gradient: LinearGradient(
+                    colors: [cs.primary.withValues(alpha: 0.12), cs.surface],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          I18n.tr('preferences.local.title'),
-                          style: appSecondaryMenuItemTextStyle(
-                            context,
-                          ).copyWith(color: cs.onSurface),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: cs.primary.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          SettingsUiCopy.displayAndBehaviorHeroSubtitle,
-                          softWrap: true,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.66),
-                              ),
+                        child: Icon(Icons.tune, color: cs.primary, size: 26),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              I18n.tr('preferences.local.title'),
+                              style: appSecondaryMenuItemTextStyle(
+                                context,
+                              ).copyWith(color: cs.onSurface),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              SettingsUiCopy.displayAndBehaviorHeroSubtitle,
+                              softWrap: true,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: appSecondaryDescriptionColor(
+                                      context,
+                                      isHero: true,
+                                    ),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _PreferenceSectionMenu(
+                  groups: [
+                    _PreferenceMenuGroup(
+                      title: SettingsUiCopy.jumpToMenuTitle,
+                      items: [
+                        _PreferenceMenuItem(
+                          icon: Icons.calendar_month_outlined,
+                          label: SettingsUiCopy.jumpToDate,
+                          onTap: () => _scrollToMenuTarget(
+                            _dateSectionKey,
+                            actionOrigin,
+                          ),
+                        ),
+                        _PreferenceMenuItem(
+                          icon: Icons.tune_outlined,
+                          label: SettingsUiCopy.jumpToDefaults,
+                          onTap: () => _scrollToMenuTarget(
+                            _defaultsSectionKey,
+                            actionOrigin,
+                          ),
+                        ),
+                        _PreferenceMenuItem(
+                          icon: Icons.touch_app_outlined,
+                          label: SettingsUiCopy.jumpToInteraction,
+                          onTap: () => _scrollToMenuTarget(
+                            _interactionSectionKey,
+                            actionOrigin,
+                          ),
                         ),
                       ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            _PreferenceSectionMenu(
-              groups: [
-                _PreferenceMenuGroup(
-                  title: SettingsUiCopy.jumpToMenuTitle,
-                  items: [
-                    _PreferenceMenuItem(
-                      icon: Icons.calendar_month_outlined,
-                      label: SettingsUiCopy.jumpToDate,
-                      onTap: () => _scrollToMenuTarget(_dateSectionKey),
-                    ),
-                    _PreferenceMenuItem(
-                      icon: Icons.tune_outlined,
-                      label: SettingsUiCopy.jumpToDefaults,
-                      onTap: () => _scrollToMenuTarget(_defaultsSectionKey),
-                    ),
-                    _PreferenceMenuItem(
-                      icon: Icons.touch_app_outlined,
-                      label: SettingsUiCopy.jumpToInteraction,
-                      onTap: () => _scrollToMenuTarget(_interactionSectionKey),
                     ),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            KeyedSubtree(
-              key: _dateSectionKey,
-              child: AppSettingsSection(
-                title: I18n.tr('preferences.section.date'),
-                subtitle: I18n.tr('preferences.section.date.subtitle'),
-                children: [
-                  SettingsPickerTile<int>(
-                    icon: Icons.calendar_view_week_outlined,
-                    color: cs.primary,
-                    titleBuilder: () => I18n.tr('preferences.first_day.title'),
-                    subtitleBuilder: () => p.firstDayOfWeek == 1
-                        ? I18n.tr('preferences.first_day.current_monday')
-                        : I18n.tr('preferences.first_day.current_sunday'),
-                    pickerTitleBuilder: () => SettingsUiCopy.selectFirstDay,
-                    currentValue: p.firstDayOfWeek,
-                    displayLabelBuilder: () => p.firstDayOfWeek == 1
-                        ? I18n.tr('weekday.mon')
-                        : I18n.tr('weekday.sun'),
-                    optionsBuilder: () => [
-                      SettingsPickerOption<int>(
-                        value: 1,
-                        title: I18n.tr('weekday.mon'),
-                        subtitle: I18n.tr(
-                          'preferences.first_day.current_monday',
-                        ),
-                      ),
-                      SettingsPickerOption<int>(
-                        value: 7,
-                        title: I18n.tr('weekday.sun'),
-                        subtitle: I18n.tr(
-                          'preferences.first_day.current_sunday',
-                        ),
-                      ),
-                    ],
-                    onSelected: (v) => _handlePreferenceWrite(
-                      context,
-                      () => context
-                          .read<PreferencesProvider>()
-                          .setFirstDayOfWeek(v),
-                    ),
-                  ),
-                  SettingsPickerTile<String>(
-                    icon: Icons.date_range_outlined,
-                    color: Colors.teal,
-                    titleBuilder: () =>
-                        I18n.tr('preferences.date_format.title'),
-                    subtitleBuilder: () =>
-                        SettingsUiCopy.dateFormatSample(p.dateFormat),
-                    pickerTitleBuilder: () => SettingsUiCopy.selectDateFormat,
-                    currentValue: p.dateFormat,
-                    displayLabelBuilder: () =>
-                        SettingsUiCopy.dateFormatSample(p.dateFormat),
-                    optionsBuilder: () => [
-                      for (final pattern
-                          in SettingsUiCopy.supportedDateFormatPatterns)
-                        SettingsPickerOption<String>(
-                          value: pattern,
-                          title: SettingsUiCopy.dateFormatLabel(pattern),
-                          subtitle: SettingsUiCopy.dateFormatSample(pattern),
-                        ),
-                    ],
-                    onSelected: (v) => _handlePreferenceWrite(
-                      context,
-                      () => context
-                          .read<PreferencesProvider>()
-                          .setDateFormat(v),
-                    ),
-                  ),
-                  SettingsPickerTile<String>(
-                    icon: Icons.public_outlined,
-                    color: Colors.deepOrange,
-                    titleBuilder: () => I18n.tr('preferences.timezone.title'),
-                    subtitleBuilder: () => p.followSystemTimeZone
-                        ? '${I18n.tr('preferences.timezone.follow_system')}：${SettingsUiCopy.timeZoneDisplayName(p.appTimeZone)}'
-                        : SettingsUiCopy.timeZoneDisplayName(p.appTimeZone),
-                    pickerTitleBuilder: () => SettingsUiCopy.selectTimeZone,
-                    currentValue: p.appTimeZoneSelection,
-                    displayLabelBuilder: () =>
-                        SettingsUiCopy.timeZoneDisplayName(
-                          p.appTimeZoneSelection,
-                        ),
-                    optionsBuilder: () => [
-                      for (final id in SettingsUiCopy.supportedTimeZoneIds)
-                        SettingsPickerOption<String>(
-                          value: id,
-                          title: SettingsUiCopy.timeZoneDisplayName(id),
-                          subtitle: id == 'system'
-                              ? I18n.tr('preferences.timezone.follow_system')
-                              : id,
-                        ),
-                    ],
-                    onSelected: (v) => _handlePreferenceWrite(
-                      context,
-                      () => context
-                          .read<PreferencesProvider>()
-                          .setAppTimeZone(v),
-                    ),
-                  ),
-                  AppSwitchTile(
-                    icon: Icons.brightness_2_outlined,
-                    color: Colors.indigo,
-                    value: p.showLunar,
-                    title: I18n.tr('preferences.lunar.title'),
-                    subtitle: I18n.tr('preferences.lunar.subtitle'),
-                    onChanged: (v) => _handlePreferenceWrite(
-                      context,
-                      () => context
-                          .read<PreferencesProvider>()
-                          .setShowLunar(v),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            KeyedSubtree(
-              key: _defaultsSectionKey,
-              child: AppSettingsSection(
-                title: I18n.tr('preferences.section.defaults'),
-                subtitle: I18n.tr('preferences.section.defaults.subtitle'),
-                children: [
-                  SettingsPickerTile<int>(
-                    icon: Icons.open_in_new,
-                    color: Colors.blue,
-                    titleBuilder: () =>
-                        I18n.tr('preferences.default_tab.title'),
-                    subtitleBuilder: () => _tabLabel(p.defaultTab),
-                    pickerTitleBuilder: () => SettingsUiCopy.selectDefaultTab,
-                    currentValue: p.defaultTab,
-                    displayLabelBuilder: () => _tabLabel(p.defaultTab),
-                    optionsBuilder: () => [
-                      for (var tab = 0; tab <= 6; tab++)
-                        if (PreferencesProvider.isBottomNavTabSupported(tab))
-                          SettingsPickerOption<int>(
-                            value: tab,
-                            title: _tabLabel(tab),
-                          ),
-                    ],
-                    onSelected: (v) => _handlePreferenceWrite(
-                      context,
-                      () => context
-                          .read<PreferencesProvider>()
-                          .setDefaultTab(v),
-                    ),
-                  ),
-                  AppSwitchTile(
-                    icon: Icons.add_circle_outline,
-                    color: cs.primary,
-                    value: p.quickCaptureFab,
-                    title: I18n.tr('preferences.quick_capture.title'),
-                    subtitle: I18n.tr('preferences.quick_capture.subtitle'),
-                    onChanged: (v) => _handlePreferenceWrite(
-                      context,
-                      () => context
-                          .read<PreferencesProvider>()
-                          .setQuickCaptureFab(v),
-                    ),
-                  ),
-                  AppSwitchTile(
-                    icon: Icons.done_all,
-                    color: Colors.green,
-                    value: p.showCompletedTodos,
-                    title: I18n.tr('preferences.show_completed.title'),
-                    subtitle: I18n.tr('preferences.show_completed.subtitle'),
-                    onChanged: (v) => _handlePreferenceWrite(
-                      context,
-                      () => context
-                          .read<PreferencesProvider>()
-                          .setShowCompletedTodos(v),
-                    ),
-                  ),
-                  _SliderSetting(
-                    icon: Icons.timer_outlined,
-                    color: Colors.red,
-                    title: I18n.tr('preferences.pomodoro_length.title'),
-                    subtitleBuilder: (value) =>
-                        '${value.round()} ${I18n.tr('unit.minute')}',
-                    value: p.defaultPomodoroMinutes.toDouble(),
-                    min: 5,
-                    max: 180,
-                    divisions: 35,
-                    labelBuilder: (value) =>
-                        '${value.round()} ${I18n.tr('unit.min')}',
-                    onChanged: (v) => p.setDefaultPomodoroMinutes(v.round()),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            KeyedSubtree(
-              key: _interactionSectionKey,
-              child: Column(
-                children: [
-                  AppSettingsSection(
-                    title: I18n.tr('preferences.section.interaction'),
-                    subtitle: I18n.tr(
-                      'preferences.section.interaction.subtitle',
-                    ),
+                const SizedBox(height: 12),
+                KeyedSubtree(
+                  key: _dateSectionKey,
+                  child: AppSettingsSection(
+                    title: I18n.tr('preferences.section.date'),
+                    subtitle: I18n.tr('preferences.section.date.subtitle'),
                     children: [
+                      SettingsPickerTile<int>(
+                        actionOrigin: actionOrigin,
+                        icon: Icons.calendar_view_week_outlined,
+                        color: cs.primary,
+                        titleBuilder: () =>
+                            I18n.tr('preferences.first_day.title'),
+                        subtitleBuilder: () =>
+                            SettingsUiCopy.currentFirstWeekday(
+                              p.firstDayOfWeek,
+                            ),
+                        pickerTitleBuilder: () => SettingsUiCopy.selectFirstDay,
+                        currentValue: p.firstDayOfWeek,
+                        displayLabelBuilder: () =>
+                            SettingsUiCopy.firstWeekdayLabel(p.firstDayOfWeek),
+                        optionsBuilder: () => [
+                          SettingsPickerOption<int>(
+                            value: 1,
+                            title: I18n.tr('weekday.mon'),
+                            subtitle: I18n.tr(
+                              'preferences.first_day.current_monday',
+                            ),
+                          ),
+                          SettingsPickerOption<int>(
+                            value: 7,
+                            title: I18n.tr('weekday.sun'),
+                            subtitle: I18n.tr(
+                              'preferences.first_day.current_sunday',
+                            ),
+                          ),
+                        ],
+                        onSelected: (v) => _handlePreferenceWrite(
+                          context,
+                          actionOrigin,
+                          () => p.setFirstDayOfWeek(v),
+                        ),
+                      ),
+                      SettingsPickerTile<String>(
+                        actionOrigin: actionOrigin,
+                        icon: Icons.date_range_outlined,
+                        color: Colors.teal,
+                        titleBuilder: () =>
+                            I18n.tr('preferences.date_format.title'),
+                        subtitleBuilder: () =>
+                            SettingsUiCopy.dateFormatSample(p.dateFormat),
+                        pickerTitleBuilder: () =>
+                            SettingsUiCopy.selectDateFormat,
+                        currentValue: p.dateFormat,
+                        displayLabelBuilder: () =>
+                            SettingsUiCopy.dateFormatSample(p.dateFormat),
+                        optionsBuilder: () => [
+                          for (final pattern
+                              in SettingsUiCopy.supportedDateFormatPatterns)
+                            SettingsPickerOption<String>(
+                              value: pattern,
+                              title: SettingsUiCopy.dateFormatLabel(pattern),
+                              subtitle: SettingsUiCopy.dateFormatSample(
+                                pattern,
+                              ),
+                            ),
+                        ],
+                        onSelected: (v) => _handlePreferenceWrite(
+                          context,
+                          actionOrigin,
+                          () => p.setDateFormat(v),
+                        ),
+                      ),
+                      SettingsPickerTile<String>(
+                        actionOrigin: actionOrigin,
+                        icon: Icons.public_outlined,
+                        color: Colors.deepOrange,
+                        titleBuilder: () =>
+                            I18n.tr('preferences.timezone.title'),
+                        subtitleBuilder: () => p.followSystemTimeZone
+                            ? SettingsUiCopy.followSystemTimeZoneSubtitle(p.appTimeZone)
+                            : SettingsUiCopy.timeZoneDisplayName(p.appTimeZone),
+                        pickerTitleBuilder: () => SettingsUiCopy.selectTimeZone,
+                        currentValue: p.appTimeZoneSelection,
+                        displayLabelBuilder: () =>
+                            SettingsUiCopy.timeZoneDisplayName(
+                              p.appTimeZoneSelection,
+                            ),
+                        optionsBuilder: () => [
+                          for (final id in SettingsUiCopy.supportedTimeZoneIds)
+                            SettingsPickerOption<String>(
+                              value: id,
+                              title: SettingsUiCopy.timeZoneDisplayName(id),
+                              subtitle: id == 'system'
+                                  ? I18n.tr(
+                                      'preferences.timezone.follow_system',
+                                    )
+                                  : id,
+                            ),
+                        ],
+                        onSelected: (v) => _handlePreferenceWrite(
+                          context,
+                          actionOrigin,
+                          () => p.setAppTimeZone(v),
+                        ),
+                      ),
                       AppSwitchTile(
-                        icon: Icons.vibration,
-                        color: Colors.purple,
-                        value: p.haptic,
-                        title: I18n.tr('preferences.haptic.title'),
-                        subtitle: I18n.tr('preferences.haptic.subtitle'),
+                        icon: Icons.brightness_2_outlined,
+                        color: Colors.indigo,
+                        value: p.showLunar,
+                        title: I18n.tr('preferences.lunar.title'),
+                        subtitle: I18n.tr('preferences.lunar.subtitle'),
                         onChanged: (v) => _handlePreferenceWrite(
                           context,
-                          () => context
-                              .read<PreferencesProvider>()
-                              .setHaptic(v),
+                          actionOrigin,
+                          () => p.setShowLunar(v),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  KeyedSubtree(
-                    key: _archiveSectionKey,
-                    child: AppSettingsSection(
-                      title: I18n.tr('preferences.section.auto_archive'),
-                      subtitle: I18n.tr(
-                        'preferences.section.auto_archive.subtitle',
-                      ),
-                      children: [
-                        _SliderSetting(
-                          icon: Icons.inventory_2_outlined,
-                          color: Colors.brown,
-                          title: I18n.tr('preferences.auto_archive.title'),
-                          subtitleBuilder: (value) => value.round() == 0
-                              ? I18n.tr('preferences.auto_archive.never')
-                              : '${value.round()} ${I18n.tr('preferences.auto_archive.after_days')}',
-                          value: p.autoArchiveCompletedDays.toDouble(),
-                          min: 0,
-                          max: 365,
-                          divisions: 365,
-                          labelBuilder: (value) => value.round() == 0
-                              ? I18n.tr('action.off')
-                              : '${value.round()} ${I18n.tr('unit.day')}',
-                          onChanged: (v) =>
-                              p.setAutoArchiveCompletedDays(v.round()),
+                ),
+                const SizedBox(height: 12),
+                KeyedSubtree(
+                  key: _defaultsSectionKey,
+                  child: AppSettingsSection(
+                    title: I18n.tr('preferences.section.defaults'),
+                    subtitle: I18n.tr('preferences.section.defaults.subtitle'),
+                    children: [
+                      SettingsPickerTile<int>(
+                        actionOrigin: actionOrigin,
+                        icon: Icons.open_in_new,
+                        color: Colors.blue,
+                        titleBuilder: () =>
+                            I18n.tr('preferences.default_tab.title'),
+                        subtitleBuilder: () => _tabLabel(p.defaultTab),
+                        pickerTitleBuilder: () =>
+                            SettingsUiCopy.selectDefaultTab,
+                        currentValue: p.defaultTab,
+                        displayLabelBuilder: () => _tabLabel(p.defaultTab),
+                        optionsBuilder: () => [
+                          for (var tab = 0; tab <= 6; tab++)
+                            if (PreferencesProvider.isBottomNavTabSupported(
+                              tab,
+                            ))
+                              SettingsPickerOption<int>(
+                                value: tab,
+                                title: _tabLabel(tab),
+                              ),
+                        ],
+                        onSelected: (v) => _handlePreferenceWrite(
+                          context,
+                          actionOrigin,
+                          () => p.setDefaultTab(v),
                         ),
-                      ],
-                    ),
+                      ),
+                      AppSwitchTile(
+                        icon: Icons.add_circle_outline,
+                        color: cs.primary,
+                        value: p.quickCaptureFab,
+                        title: I18n.tr('preferences.quick_capture.title'),
+                        subtitle: I18n.tr('preferences.quick_capture.subtitle'),
+                        onChanged: (v) => _handlePreferenceWrite(
+                          context,
+                          actionOrigin,
+                          () => p.setQuickCaptureFab(v),
+                        ),
+                      ),
+                      AppSwitchTile(
+                        icon: Icons.done_all,
+                        color: Colors.green,
+                        value: p.showCompletedTodos,
+                        title: I18n.tr('preferences.show_completed.title'),
+                        subtitle: I18n.tr(
+                          'preferences.show_completed.subtitle',
+                        ),
+                        onChanged: (v) => _handlePreferenceWrite(
+                          context,
+                          actionOrigin,
+                          () => p.setShowCompletedTodos(v),
+                        ),
+                      ),
+                      _SliderSetting(
+                        actionOrigin: actionOrigin,
+                        icon: Icons.timer_outlined,
+                        color: Colors.red,
+                        title: I18n.tr('preferences.pomodoro_length.title'),
+                        subtitleBuilder: (value) =>
+                            '${value.round()} ${I18n.tr('unit.minute')} · ${I18n.tr('preferences.pomodoro_length.subtitle')}',
+                        value: p.defaultPomodoroMinutes.toDouble(),
+                        min: 5,
+                        max: 180,
+                        divisions: 35,
+                        labelBuilder: (value) =>
+                            '${value.round()} ${I18n.tr('unit.min')}',
+                        onChanged: (v) =>
+                            p.setDefaultPomodoroMinutes(v.round()),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 12),
+                KeyedSubtree(
+                  key: _interactionSectionKey,
+                  child: Column(
+                    children: [
+                      AppSettingsSection(
+                        title: I18n.tr('preferences.section.interaction'),
+                        subtitle: I18n.tr(
+                          'preferences.section.interaction.subtitle',
+                        ),
+                        children: [
+                          AppSwitchTile(
+                            icon: Icons.vibration,
+                            color: Colors.purple,
+                            value: p.haptic,
+                            title: I18n.tr('preferences.haptic.title'),
+                            subtitle: I18n.tr('preferences.haptic.subtitle'),
+                            onChanged: (v) => _handlePreferenceWrite(
+                              context,
+                              actionOrigin,
+                              () => p.setHaptic(v),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      KeyedSubtree(
+                        key: _archiveSectionKey,
+                        child: AppSettingsSection(
+                          title: I18n.tr('preferences.section.auto_archive'),
+                          subtitle: I18n.tr(
+                            'preferences.section.auto_archive.subtitle',
+                          ),
+                          children: [
+                            _SliderSetting(
+                              actionOrigin: actionOrigin,
+                              icon: Icons.inventory_2_outlined,
+                              color: Colors.brown,
+                              title: I18n.tr('preferences.auto_archive.title'),
+                              subtitleBuilder: (value) =>
+                                  SettingsUiCopy.autoArchiveSubtitle(value.round()),
+                              value: p.autoArchiveCompletedDays.toDouble(),
+                              min: 0,
+                              max: 365,
+                              divisions: 365,
+                              labelBuilder: (value) =>
+                                  SettingsUiCopy.autoArchiveValueLabel(value.round()),
+                              onChanged: (v) =>
+                                  p.setAutoArchiveCompletedDays(v.round()),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
+    );
+
+    if (!isLiquidGlass) {
+      return scaffold;
+    }
+
+    final hasBrandSurface =
+        context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+        context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+    if (hasBrandSurface) {
+      return scaffold;
+    }
+    return Material(
+      color: routeBackground,
+      child: BrandBackground(child: scaffold),
     );
   }
 }
@@ -638,8 +713,10 @@ class BottomNavSettingsScreen extends StatelessWidget {
         final routeBackground = Theme.of(context).brightness == Brightness.dark
             ? cs.surface
             : cs.surfaceContainerLowest;
-        return Scaffold(
-          backgroundColor: routeBackground,
+        final surfaceStyle = appSurfaceStyleOf(context);
+        final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
+        final scaffold = Scaffold(
+          backgroundColor: isLiquidGlass ? Colors.transparent : routeBackground,
           appBar: AppBar(
             title: Text(I18n.tr('preferences.section.bottom_nav')),
             titleTextStyle: appSecondaryRouteTitleTextStyle(context),
@@ -663,6 +740,21 @@ class BottomNavSettingsScreen extends StatelessWidget {
             ),
           ),
         );
+
+        if (!isLiquidGlass) {
+          return scaffold;
+        }
+
+        final hasBrandSurface =
+            context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+            context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+        if (hasBrandSurface) {
+          return scaffold;
+        }
+        return Material(
+          color: routeBackground,
+          child: BrandBackground(child: scaffold),
+        );
       },
     );
   }
@@ -673,26 +765,33 @@ class _BottomNavSettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.watch<PreferencesProvider>();
-    final tabs = WebTarget.isDesktopWebBuild
-        ? p.bottomNavOrder
-              .where(PreferencesProvider.isBottomNavTabSupported)
-              .toList(growable: false)
-        : p.bottomNavOrder;
-    return AppSettingsSection(
-      title: I18n.tr('preferences.section.bottom_nav'),
-      subtitle: I18n.tr('preferences.section.bottom_nav.subtitle'),
-      children: [
-        for (final tab in tabs)
-          _NavConfigTile(
-            tab: tab,
-            label: _tabLabel(tab),
-            visible: p.bottomNavVisible.contains(tab),
-            canMoveUp: p.bottomNavOrder.indexOf(tab) > 0,
-            canMoveDown:
-                p.bottomNavOrder.indexOf(tab) < p.bottomNavOrder.length - 1,
-          ),
-      ],
+    return ValueListenableBuilder<AppLocale>(
+      valueListenable: I18n.localeListenable,
+      builder: (context, _, _) {
+        final p = context.watch<PreferencesProvider>();
+        final tabs = WebTarget.isDesktopWebBuild
+            ? p.bottomNavOrder
+                  .where(PreferencesProvider.isBottomNavTabSupported)
+                  .toList(growable: false)
+            : p.bottomNavOrder;
+        final visibleCount = p.bottomNavVisible.length;
+        return AppSettingsSection(
+          title: I18n.tr('preferences.section.bottom_nav'),
+          subtitle: I18n.tr('preferences.section.bottom_nav.subtitle'),
+          children: [
+            for (final tab in tabs)
+              _NavConfigTile(
+                tab: tab,
+                label: _tabLabel(tab),
+                visible: p.bottomNavVisible.contains(tab),
+                visibleCount: visibleCount,
+                canMoveUp: p.bottomNavOrder.indexOf(tab) > 0,
+                canMoveDown:
+                    p.bottomNavOrder.indexOf(tab) < p.bottomNavOrder.length - 1,
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -776,7 +875,6 @@ class _PreferenceSectionMenu extends StatelessWidget {
                       ),
                     ),
                     onPressed: item.onTap,
-                    visualDensity: VisualDensity.compact,
                   ),
               ],
             ),
@@ -792,6 +890,7 @@ class _NavConfigTile extends StatelessWidget {
   final int tab;
   final String label;
   final bool visible;
+  final int visibleCount;
   final bool canMoveUp;
   final bool canMoveDown;
 
@@ -799,6 +898,7 @@ class _NavConfigTile extends StatelessWidget {
     required this.tab,
     required this.label,
     required this.visible,
+    required this.visibleCount,
     required this.canMoveUp,
     required this.canMoveDown,
   });
@@ -816,16 +916,14 @@ class _NavConfigTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lockedVisible = PreferencesProvider.fixedBottomNavTabs.contains(tab);
-    final p = context.watch<PreferencesProvider>();
-    final visibleCount = p.bottomNavVisible.length;
     final reachedLimit =
         !visible && visibleCount >= PreferencesProvider.maxBottomNavTabs;
     final subtitle = lockedVisible
         ? I18n.tr('preferences.nav.fixed')
-        : reachedLimit
-        ? SettingsUiCopy.maxTabsConstraint(PreferencesProvider.maxBottomNavTabs)
         : visible
         ? I18n.tr('preferences.nav.visible')
+        : reachedLimit
+        ? SettingsUiCopy.navigationHiddenAtLimit
         : I18n.tr('preferences.nav.hidden');
 
     final cs = Theme.of(context).colorScheme;
@@ -867,7 +965,7 @@ class _NavConfigTile extends StatelessWidget {
               subtitle,
               softWrap: true,
               style: appSecondaryControlLabelStyle(context).copyWith(
-                color: cs.onSurface.withValues(alpha: 0.62),
+                color: appSecondaryDescriptionColor(context),
                 fontWeight: FontWeight.normal,
               ),
             ),
@@ -876,6 +974,7 @@ class _NavConfigTile extends StatelessWidget {
 
         final actionsWidget = _NavConfigActions(
           tab: tab,
+          label: label,
           visible: visible,
           lockedVisible: lockedVisible,
           reachedLimit: reachedLimit,
@@ -931,6 +1030,7 @@ class _NavConfigTile extends StatelessWidget {
 
 class _NavConfigActions extends StatelessWidget {
   final int tab;
+  final String? label;
   final bool visible;
   final bool lockedVisible;
   final bool reachedLimit;
@@ -939,6 +1039,7 @@ class _NavConfigActions extends StatelessWidget {
 
   const _NavConfigActions({
     required this.tab,
+    this.label,
     required this.visible,
     required this.lockedVisible,
     required this.reachedLimit,
@@ -948,6 +1049,9 @@ class _NavConfigActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.read<PreferencesProvider>();
+    final actionOrigin = SettingsActionOrigin(context);
+    final tabLabel = label ?? _tabLabel(tab);
     Widget compactIconButton({
       required String tooltip,
       required VoidCallback? onPressed,
@@ -957,7 +1061,7 @@ class _NavConfigActions extends StatelessWidget {
         tooltip: tooltip,
         onPressed: onPressed,
         icon: Icon(icon, size: 20),
-        visualDensity: VisualDensity.compact,
+        visualDensity: VisualDensity.standard,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints.tightFor(width: 44, height: 44),
       );
@@ -968,25 +1072,23 @@ class _NavConfigActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         compactIconButton(
-          tooltip: I18n.tr('action.move_up'),
+          tooltip: SettingsUiCopy.navigationMoveUp(tabLabel),
           onPressed: canMoveUp
               ? () => _handlePreferenceWrite(
                   context,
-                  () => context
-                      .read<PreferencesProvider>()
-                      .moveBottomNavTab(tab, -1),
+                  actionOrigin,
+                  () => p.moveBottomNavTab(tab, -1),
                 )
               : null,
           icon: Icons.keyboard_arrow_up_rounded,
         ),
         compactIconButton(
-          tooltip: I18n.tr('action.move_down'),
+          tooltip: SettingsUiCopy.navigationMoveDown(tabLabel),
           onPressed: canMoveDown
               ? () => _handlePreferenceWrite(
                   context,
-                  () => context
-                      .read<PreferencesProvider>()
-                      .moveBottomNavTab(tab, 1),
+                  actionOrigin,
+                  () => p.moveBottomNavTab(tab, 1),
                 )
               : null,
           icon: Icons.keyboard_arrow_down_rounded,
@@ -996,16 +1098,23 @@ class _NavConfigActions extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 44),
           child: Align(
             alignment: Alignment.centerRight,
-            child: Switch(
-              value: visible,
-              onChanged: lockedVisible || reachedLimit
-                  ? null
-                  : (v) => _handlePreferenceWrite(
-                      context,
-                      () => context
-                          .read<PreferencesProvider>()
-                          .setBottomNavVisible(tab, v),
-                    ),
+            child: Semantics(
+              label: tabLabel,
+              hint: lockedVisible
+                  ? I18n.tr('preferences.nav.fixed')
+                  : reachedLimit
+                  ? SettingsUiCopy.navigationHiddenAtLimit
+                  : null,
+              child: Switch(
+                value: visible,
+                onChanged: lockedVisible || reachedLimit
+                    ? null
+                    : (v) => _handlePreferenceWrite(
+                        context,
+                        actionOrigin,
+                        () => p.setBottomNavVisible(tab, v),
+                      ),
+              ),
             ),
           ),
         ),
@@ -1015,6 +1124,7 @@ class _NavConfigActions extends StatelessWidget {
 }
 
 class _SliderSetting extends StatefulWidget {
+  final SettingsActionOrigin actionOrigin;
   final IconData icon;
   final Color color;
   final String title;
@@ -1027,6 +1137,7 @@ class _SliderSetting extends StatefulWidget {
   final Future<void> Function(double) onChanged;
 
   const _SliderSetting({
+    required this.actionOrigin,
     required this.icon,
     required this.color,
     required this.title,
@@ -1048,7 +1159,8 @@ class _SliderSettingState extends State<_SliderSetting> {
   bool _dragging = false;
   bool _saving = false;
   int _interactionGeneration = AccountLocalDataCleaner.accountDataGeneration;
-  int? _dragGeneration;
+  SettingsActionOrigin? _dragOrigin;
+  int _writeSeq = 0;
 
   double get _value =>
       (_draftValue ?? widget.value).clamp(widget.min, widget.max);
@@ -1057,11 +1169,14 @@ class _SliderSettingState extends State<_SliderSetting> {
   void didUpdateWidget(covariant _SliderSetting oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_interactionGeneration !=
-        AccountLocalDataCleaner.accountDataGeneration) {
+            AccountLocalDataCleaner.accountDataGeneration ||
+        !oldWidget.actionOrigin.isCurrent(checkRoute: false)) {
       _interactionGeneration = AccountLocalDataCleaner.accountDataGeneration;
       _draftValue = null;
       _dragging = false;
       _saving = false;
+      _dragOrigin = null;
+      _writeSeq++;
     } else if (!_dragging &&
         !_saving &&
         (oldWidget.value != widget.value ||
@@ -1071,27 +1186,23 @@ class _SliderSettingState extends State<_SliderSetting> {
     }
   }
 
-  Future<void> _finishDrag(double value) async {
-    final generation = _dragGeneration ?? _interactionGeneration;
-    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
-      setState(() {
-        _draftValue = null;
-        _dragging = false;
-        _dragGeneration = null;
-      });
-      return;
-    }
+  Future<void> _finishDrag(
+    double value,
+    SettingsActionOrigin origin,
+    Future<void> Function(double) write,
+  ) async {
+    if (!mounted || _saving || !origin.isCurrent()) return;
+    final seq = ++_writeSeq;
     setState(() {
       _dragging = false;
-      _dragGeneration = null;
+      _dragOrigin = null;
       _draftValue = value;
       _saving = true;
     });
     try {
-      await widget.onChanged(value);
+      await write(value);
     } catch (_) {
-      if (mounted &&
-          AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      if (mounted && seq == _writeSeq && origin.isCurrent()) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: ValueListenableBuilder<AppLocale>(
@@ -1102,8 +1213,7 @@ class _SliderSettingState extends State<_SliderSetting> {
         );
       }
     } finally {
-      if (mounted &&
-          AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+      if (mounted && seq == _writeSeq) {
         setState(() {
           _saving = false;
           _draftValue = null;
@@ -1116,6 +1226,38 @@ class _SliderSettingState extends State<_SliderSetting> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final origin = widget.actionOrigin;
+    final write = widget.onChanged;
+
+    Color badgeForeground = widget.color;
+    if (!isDark && surfaceStyle != null) {
+      try {
+        final themeProvider = Provider.of<ThemeProvider>(
+          context,
+          listen: false,
+        );
+        final brandId = themeProvider.brand.id;
+        final isDefaultOrLiquid =
+            brandId == 'defaultBrand' || brandId == 'liquidGlass';
+        final isPlainSkin =
+            themeProvider.activeCardSkin.id == ThemeProvider.defaultCardSkinId;
+        if (isDefaultOrLiquid && isPlainSkin) {
+          final cardBase = Color.alphaBlend(
+            surfaceStyle.cardFillColor ?? cs.surface,
+            cs.surfaceContainerLowest,
+          );
+          final badgeBg = Color.alphaBlend(
+            widget.color.withValues(alpha: 0.1),
+            cardBase,
+          );
+          badgeForeground = appReadableForeground(badgeBg, widget.color);
+        }
+      } catch (_) {
+        // 无 provider 或未知皮肤时保留原有 widget.color
+      }
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
       child: Column(
@@ -1149,7 +1291,7 @@ class _SliderSettingState extends State<_SliderSetting> {
                       widget.subtitleBuilder(_value),
                       softWrap: true,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.62),
+                        color: appSecondaryDescriptionColor(context),
                       ),
                     ),
                   ],
@@ -1164,7 +1306,7 @@ class _SliderSettingState extends State<_SliderSetting> {
                 child: Text(
                   widget.labelBuilder(_value),
                   style: TextStyle(
-                    color: widget.color,
+                    color: badgeForeground,
                     fontSize: 11,
                     fontWeight: FontWeight.normal,
                   ),
@@ -1173,53 +1315,74 @@ class _SliderSettingState extends State<_SliderSetting> {
             ],
           ),
           const SizedBox(height: 4),
-          Slider(
-            value: _value,
-            min: widget.min,
-            max: widget.max,
-            divisions: widget.divisions,
-            label: widget.labelBuilder(_value),
-            onChangeStart: (_) {
-              _dragGeneration = AccountLocalDataCleaner.accountDataGeneration;
-            },
-            onChanged: _saving
-                ? null
-                : (value) {
-                    if (_dragGeneration != null &&
-                        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-                          _dragGeneration!,
-                        )) {
-                      return;
-                    }
-                    setState(() {
-                      _dragging = true;
-                      _draftValue = value;
-                    });
-                  },
-            onChangeEnd: _finishDrag,
+          MergeSemantics(
+            child: Semantics(
+              label: widget.title,
+              child: Slider(
+                value: _value,
+                min: widget.min,
+                max: widget.max,
+                divisions: widget.divisions,
+                label: widget.labelBuilder(_value),
+                semanticFormatterCallback: widget.labelBuilder,
+                onChangeStart: (_) {
+                  if (!mounted || _saving || !origin.isCurrent()) return;
+                  _dragOrigin = origin;
+                },
+                onChanged: _saving
+                    ? null
+                    : (value) {
+                        if (!mounted ||
+                            !origin.isCurrent() ||
+                            (_dragOrigin != null &&
+                                !_dragOrigin!.isCurrent())) {
+                          return;
+                        }
+                        setState(() {
+                          _dragOrigin ??= origin;
+                          _dragging = true;
+                          _draftValue = value;
+                        });
+                      },
+                onChangeEnd: (value) {
+                  if (!origin.isCurrent() ||
+                      !_dragging ||
+                      _dragOrigin == null) {
+                    return;
+                  }
+                  _finishDrag(value, _dragOrigin!, write);
+                },
+              ),
+            ),
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               IconButton(
-                tooltip: SettingsUiCopy.decreaseValue,
+                tooltip: SettingsUiCopy.decreaseSetting(widget.title),
+                visualDensity: VisualDensity.standard,
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 onPressed: _saving || _dragging || _value <= widget.min
                     ? null
                     : () => _finishDrag(
                         (_value - (widget.max - widget.min) / widget.divisions)
                             .clamp(widget.min, widget.max),
+                        origin,
+                        write,
                       ),
                 icon: const Icon(Icons.remove_rounded, size: 20),
               ),
               IconButton(
-                tooltip: SettingsUiCopy.increaseValue,
+                tooltip: SettingsUiCopy.increaseSetting(widget.title),
+                visualDensity: VisualDensity.standard,
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 onPressed: _saving || _dragging || _value >= widget.max
                     ? null
                     : () => _finishDrag(
                         (_value + (widget.max - widget.min) / widget.divisions)
                             .clamp(widget.min, widget.max),
+                        origin,
+                        write,
                       ),
                 icon: const Icon(Icons.add_rounded, size: 20),
               ),

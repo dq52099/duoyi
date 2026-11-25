@@ -15,15 +15,18 @@ class NoteAttachment {
   bool get isImage {
     final lowerName = name.toLowerCase();
     final lowerUri = uri.toLowerCase();
-    return mimeType.startsWith('image/') ||
+    return mimeType.toLowerCase().startsWith('image/') ||
+        lowerUri.startsWith('data:image/') ||
         lowerName.endsWith('.png') ||
         lowerName.endsWith('.jpg') ||
         lowerName.endsWith('.jpeg') ||
         lowerName.endsWith('.webp') ||
+        lowerName.endsWith('.gif') ||
         lowerUri.endsWith('.png') ||
         lowerUri.endsWith('.jpg') ||
         lowerUri.endsWith('.jpeg') ||
-        lowerUri.endsWith('.webp');
+        lowerUri.endsWith('.webp') ||
+        lowerUri.endsWith('.gif');
   }
 
   Map<String, dynamic> toJson() => {
@@ -132,11 +135,13 @@ class NoteBlock {
         text: trimmed.substring(2),
       );
     }
-    if (trimmed.startsWith('- [ ] ') || trimmed.startsWith('- [x] ')) {
+    if (trimmed.startsWith('- [ ] ') ||
+        trimmed.startsWith('- [x] ') ||
+        trimmed.startsWith('- [X] ')) {
       return NoteBlock(
         id: id,
         type: NoteBlockType.checklist,
-        checked: trimmed.startsWith('- [x] '),
+        checked: trimmed.startsWith('- [x] ') || trimmed.startsWith('- [X] '),
         text: trimmed.substring(6),
       );
     }
@@ -158,6 +163,24 @@ class NoteBlock {
     }
     return NoteBlock(id: id, type: NoteBlockType.paragraph, text: line);
   }
+
+  /// Toggles a Markdown checklist item (`- [ ] ` <-> `- [x] `) at [lineIndex].
+  static String toggleChecklistLine(String content, int lineIndex) {
+    final lines = content.split('\n');
+    if (lineIndex < 0 || lineIndex >= lines.length) return content;
+    final line = lines[lineIndex];
+    final trimmed = line.trimLeft();
+    final indent = line.substring(0, line.length - trimmed.length);
+    if (trimmed.startsWith('- [ ] ')) {
+      lines[lineIndex] = '$indent- [x] ${trimmed.substring(6)}';
+      return lines.join('\n');
+    }
+    if (trimmed.startsWith('- [x] ') || trimmed.startsWith('- [X] ')) {
+      lines[lineIndex] = '$indent- [ ] ${trimmed.substring(6)}';
+      return lines.join('\n');
+    }
+    return content;
+  }
 }
 
 class NoteItem {
@@ -166,6 +189,8 @@ class NoteItem {
   final String format;
   final List<NoteBlock> blocks;
   final List<NoteAttachment> attachments;
+  final List<String> tags;
+  final String? folder;
   final bool pinned;
   final bool archived;
   final DateTime createdAt;
@@ -177,13 +202,34 @@ class NoteItem {
     this.format = 'markdown',
     List<NoteBlock>? blocks,
     this.attachments = const [],
+    List<String> tags = const [],
+    String? folder,
     this.pinned = false,
     this.archived = false,
     required this.createdAt,
     required this.updatedAt,
   }) : blocks = List<NoteBlock>.unmodifiable(
          blocks ?? NoteBlock.fromMarkdown(content),
-       );
+       ),
+       tags = normalizeTags(tags),
+       folder = normalizeFolder(folder);
+
+  static List<String> normalizeTags(Iterable<String> raw) {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final item in raw) {
+      final cleaned = item.trim();
+      if (cleaned.isNotEmpty && seen.add(cleaned)) {
+        out.add(cleaned);
+      }
+    }
+    return List<String>.unmodifiable(out);
+  }
+
+  static String? normalizeFolder(String? raw) {
+    final cleaned = raw?.trim();
+    return cleaned == null || cleaned.isEmpty ? null : cleaned;
+  }
 
   String get title => titleFor(I18n.current);
 
@@ -202,12 +248,45 @@ class NoteItem {
     return '';
   }
 
+  String toMarkdownDocument([AppLocale? locale]) {
+    final buffer = StringBuffer();
+    final body = content.trimRight();
+    if (body.isNotEmpty) {
+      buffer.write(body);
+    } else {
+      buffer.write('# ${titleFor(locale ?? I18n.current)}');
+    }
+    final cleanFolder = normalizeFolder(folder);
+    final hasMeta =
+        cleanFolder != null || tags.isNotEmpty || attachments.isNotEmpty;
+    if (hasMeta) {
+      buffer.writeln();
+      buffer.writeln();
+      buffer.writeln('---');
+      if (cleanFolder != null) {
+        buffer.writeln('Folder: $cleanFolder');
+      }
+      if (tags.isNotEmpty) {
+        buffer.writeln('Tags: ${tags.map((t) => '#$t').join(' ')}');
+      }
+      if (attachments.isNotEmpty) {
+        buffer.writeln('Attachments:');
+        for (final attachment in attachments) {
+          buffer.writeln('- [${attachment.name}](${attachment.uri})');
+        }
+      }
+    }
+    return '${buffer.toString().trimRight()}\n';
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'content': content,
     'format': format,
     'blocks': blocks.map((e) => e.toJson()).toList(),
     'attachments': attachments.map((e) => e.toJson()).toList(),
+    if (tags.isNotEmpty) 'tags': tags,
+    if (folder != null) 'folder': folder,
     'pinned': pinned,
     'archived': archived,
     'createdAt': createdAt.toIso8601String(),
@@ -230,6 +309,13 @@ class NoteItem {
             .where((e) => e.uri.isNotEmpty)
             .toList() ??
         const [],
+    tags:
+        (json['tags'] as List?)
+            ?.map((e) => e?.toString() ?? '')
+            .where((e) => e.trim().isNotEmpty)
+            .toList() ??
+        const [],
+    folder: normalizeFolder(json['folder']?.toString()),
     pinned: json['pinned'] == true,
     archived: json['archived'] == true,
     createdAt: DateTime.parse(json['createdAt']),
@@ -242,6 +328,9 @@ class NoteItem {
     String? format,
     List<NoteBlock>? blocks,
     List<NoteAttachment>? attachments,
+    List<String>? tags,
+    String? folder,
+    bool clearFolder = false,
     bool? pinned,
     bool? archived,
     DateTime? createdAt,
@@ -253,6 +342,8 @@ class NoteItem {
       format: format ?? this.format,
       blocks: blocks ?? this.blocks,
       attachments: attachments ?? this.attachments,
+      tags: tags ?? this.tags,
+      folder: clearFolder ? null : (folder ?? this.folder),
       pinned: pinned ?? this.pinned,
       archived: archived ?? this.archived,
       createdAt: createdAt ?? this.createdAt,

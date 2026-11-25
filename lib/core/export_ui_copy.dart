@@ -19,6 +19,31 @@ class ExportUiCopy {
   String get anniversariesCalendarName =>
       _isEn ? 'Duoyi · Anniversaries' : '多仪 · 纪念日';
 
+  String get anniversaryRangeHint =>
+      _isEn ? 'Preserve dates and recurrence rules' : '保留日期和重复规则';
+
+  String get chooseRange => _isEn
+      ? 'Choose at least one range to generate an export.'
+      : '请至少选择一个范围后生成导出。';
+  String get accountChanging => _isEn
+      ? 'Export will be available when the account is ready.'
+      : '账号准备就绪后即可导出。';
+  String get snapshotHint => _isEn
+      ? 'Preview is a snapshot. Changing the range or source data clears it; generate again to refresh.'
+      : '预览是生成时的快照。范围或源数据变更后，请重新生成。';
+  String get calDavScope => _isEn
+      ? 'CalDAV sync uses the entire calendar, independently of the export range.'
+      : 'CalDAV 同步完整日历，不受导出范围影响。';
+  String get copyFailed =>
+      _isEn ? 'Could not copy. Please try again.' : '复制失败，请重试。';
+  String get pushFailed => _isEn
+      ? 'CalDAV sync did not finish. Some events may already have synced; check the remote calendar before retrying.'
+      : 'CalDAV 同步未完成，部分事件可能已同步，请先检查远端日历再重试。';
+
+  String get configurationFailed => _isEn
+      ? 'Could not save the calendar configuration. Please try again.'
+      : '日历配置保存失败，请重试。';
+
   String get todosHeading => _isEn ? 'Todo List' : '待办清单';
   String get ungroupedTodo => _isEn ? 'Ungrouped' : '未分组';
   String get attachment => _isEn ? 'Attachment' : '附件';

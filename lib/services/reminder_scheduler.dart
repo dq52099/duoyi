@@ -6,10 +6,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/brand_strings.dart';
 import '../core/i18n.dart';
 import '../models/anniversary.dart';
+import '../models/calendar_event.dart';
 import '../models/countdown.dart';
+import '../models/course_schedule.dart';
 import '../models/goal.dart';
 import '../models/habit.dart';
 import '../models/todo.dart';
+import '../providers/preferences_provider.dart' show QuietHoursPolicy;
 import 'account_local_data_cleaner.dart';
 import 'alarm_service.dart';
 import 'notification_permission_exception.dart';
@@ -1219,6 +1222,7 @@ class _ResolvedRule {
   final int? minute;
   final List<int> weekdays;
   final String scope;
+  final String quietHoursDigest;
 
   const _ResolvedRule({
     required this.objectType,
@@ -1235,6 +1239,7 @@ class _ResolvedRule {
     required this.snoozeMinutes,
     required this.repeatCount,
     required this.scope,
+    this.quietHoursDigest = '',
     this.when,
     this.hour,
     this.minute,
@@ -1253,6 +1258,7 @@ class _ResolvedRule {
     mode.name,
     ruleType.name,
     scope,
+    quietHoursDigest,
     body,
     payload,
     fullScreen,
@@ -1275,6 +1281,7 @@ class _ResolvedRule {
       mode.name,
       ruleType.index,
       scope,
+      quietHoursDigest,
       title,
       body,
       payload,
@@ -1298,6 +1305,7 @@ class _ResolvedRule {
       kind.index,
       mode.name,
       scope,
+      quietHoursDigest,
       body,
       payload,
       fullScreen ? 'fs1' : 'fs0',
@@ -1342,12 +1350,16 @@ class _ResolvedRule {
 /// R4.1 / R4.4 / R4.5 / R4.7 / R4.8：本类是协调器，职责严格与
 /// `NotificationService` 和 `AlarmService` 分离；两者互不直接通话。
 class ReminderScheduler {
+  static const int maxActiveAlarms = 380;
+
   static const List<String> _registryObjectTypes = <String>[
     'todo',
     'goal',
     'habit',
     'anniversary',
     'countdown',
+    'course',
+    'calendar_event',
   ];
   static const List<String> _blockingAlarmScheduleIssuePhrases = <String>[
     '闹钟提醒已降级注册',
@@ -1377,15 +1389,32 @@ class ReminderScheduler {
   final Map<String, String> _scheduledHabitScopes = {};
   final Map<String, String> _scheduledAnniversaryScopes = {};
   final Map<String, String> _scheduledCountdownScopes = {};
+  final Map<String, String> _scheduledCourseScopes = {};
+  final Map<String, String> _scheduledCalendarEventScopes = {};
   final Map<String, ReminderScheduleDisplayInfo> _registeredReminderDisplay =
       {};
   final Map<String, ReminderSyncIssueEntry> _todoScheduleFailures = {};
+  final Map<int, DateTime> _budgetedAlarmTimes = <int, DateTime>{};
+  final Map<int, ({String objectType, String objectId})> _budgetedAlarmOwners =
+      <int, ({String objectType, String objectId})>{};
+  QuietHoursPolicy _quietHours = const QuietHoursPolicy();
   Future<void> _syncQueue = Future<void>.value();
   ReminderReconciliationBatch? _activeBatch;
+  Map<ReminderPendingSink, Future<Set<int>>>? _ephemeralPendingIds;
   ReminderReconciliationBatchMetrics? _lastBatchMetrics;
   int _accountChangeGeneration = 0;
   bool _schedulingSuspendedForAccountChange = false;
   final Map<String, Map<String, Set<int>>> _interruptedBatchIds = {};
+
+  QuietHoursPolicy get quietHours => _quietHours;
+
+  @visibleForTesting
+  int get debugActiveBudgetCount => _budgetedAlarmTimes.length;
+
+  void updateQuietHours(QuietHoursPolicy policy) {
+    if (_quietHours == policy) return;
+    _quietHours = policy;
+  }
 
   /// [notif] 必传；[alarm] 默认取 `AlarmService.instance` 单例，便于测试时
   /// 注入 fake。[popup] 未注入时默认落到 [notif] 作为系统通知兜底，避免
@@ -1509,7 +1538,18 @@ class ReminderScheduler {
     if (!_canRunAccountGeneration(generation)) return Future<void>.value();
     return _runSerialized(() async {
       if (!_canRunAccountGeneration(generation)) return;
-      await action();
+      final createdCache =
+          _activeBatch == null && _ephemeralPendingIds == null;
+      if (createdCache) {
+        _ephemeralPendingIds = <ReminderPendingSink, Future<Set<int>>>{};
+      }
+      try {
+        await action();
+      } finally {
+        if (createdCache) {
+          _ephemeralPendingIds = null;
+        }
+      }
     });
   }
 
@@ -1585,13 +1625,25 @@ class ReminderScheduler {
       );
     }
     final typeLabel = _objectTypeLabel(objectType);
+    final subject = _subjectForType(objectType);
     return ReminderScheduleDisplayInfo(
       title: '$typeLabel提醒',
       subtitle: '$typeLabel · 已登记到系统提醒队列',
-      displayCopy: ReminderScheduleDisplayCopy.registered(
-        ReminderScheduleSubject.values.byName(objectType),
-      ),
+      displayCopy: subject == null
+          ? null
+          : ReminderScheduleDisplayCopy.registered(subject),
     );
+  }
+
+  ReminderScheduleSubject? _subjectForType(String objectType) {
+    return switch (objectType) {
+      'todo' => ReminderScheduleSubject.todo,
+      'goal' => ReminderScheduleSubject.goal,
+      'habit' => ReminderScheduleSubject.habit,
+      'anniversary' => ReminderScheduleSubject.anniversary,
+      'countdown' => ReminderScheduleSubject.countdown,
+      _ => null,
+    };
   }
 
   ReminderScheduleDisplayInfo _displayFromScheduledRules(
@@ -1601,6 +1653,7 @@ class ReminderScheduler {
   ) {
     final list = rules.toList(growable: false);
     final typeLabel = _objectTypeLabel(objectType);
+    final subject = _subjectForType(objectType);
     final userTitle = list
         .map((rule) => rule.body)
         .firstWhere((value) => value.trim().isNotEmpty, orElse: () => '');
@@ -1615,12 +1668,14 @@ class ReminderScheduler {
           '$typeLabel · $cadence · ${kindLabel.isEmpty ? '系统提醒' : kindLabel} · ${list.length} 条规则',
       kinds: kinds,
       acceptedIdSets: _normalizedAcceptedIdSets(acceptedIdSets),
-      displayCopy: ReminderScheduleDisplayCopy.rules(
-        ReminderScheduleSubject.values.byName(objectType),
-        defaultTitle: userTitle.isEmpty,
-        repeating: repeating,
-        ruleCount: list.length,
-      ),
+      displayCopy: subject == null
+          ? null
+          : ReminderScheduleDisplayCopy.rules(
+              subject,
+              defaultTitle: userTitle.isEmpty,
+              repeating: repeating,
+              ruleCount: list.length,
+            ),
     );
   }
 
@@ -1681,13 +1736,14 @@ class ReminderScheduler {
       );
     }
     if (acceptedIdSets.isEmpty) return null;
+    final subject = _subjectForType(objectType);
     return ReminderScheduleDisplayInfo(
       title: '${_objectTypeLabel(objectType)}提醒',
       subtitle: '${_objectTypeLabel(objectType)} · 已登记到系统提醒队列',
       acceptedIdSets: _normalizedAcceptedIdSets(acceptedIdSets),
-      displayCopy: ReminderScheduleDisplayCopy.registered(
-        ReminderScheduleSubject.values.byName(objectType),
-      ),
+      displayCopy: subject == null
+          ? null
+          : ReminderScheduleDisplayCopy.registered(subject),
     );
   }
 
@@ -1698,6 +1754,7 @@ class ReminderScheduler {
   ) {
     final list = rules.toList(growable: false);
     final typeLabel = _objectTypeLabel(objectType);
+    final subject = _subjectForType(objectType);
     final userTitle = list
         .map((rule) => rule.body)
         .firstWhere((value) => value.trim().isNotEmpty, orElse: () => '');
@@ -1712,12 +1769,14 @@ class ReminderScheduler {
           '$typeLabel · $cadence · ${kindLabel.isEmpty ? '系统提醒' : kindLabel} · ${list.length} 条规则',
       kinds: kinds,
       acceptedIdSets: _normalizedAcceptedIdSets(acceptedIdSets),
-      displayCopy: ReminderScheduleDisplayCopy.rules(
-        ReminderScheduleSubject.values.byName(objectType),
-        defaultTitle: userTitle.isEmpty,
-        repeating: repeating,
-        ruleCount: list.length,
-      ),
+      displayCopy: subject == null
+          ? null
+          : ReminderScheduleDisplayCopy.rules(
+              subject,
+              defaultTitle: userTitle.isEmpty,
+              repeating: repeating,
+              ruleCount: list.length,
+            ),
     );
   }
 
@@ -1868,6 +1927,8 @@ class ReminderScheduler {
       'habit' => '日常',
       'anniversary' => '纪念日',
       'countdown' => '倒数日',
+      'course' => '课程',
+      'calendar_event' => '日程',
       _ => '事项',
     };
   }
@@ -2074,6 +2135,12 @@ class ReminderScheduler {
           case 'countdown':
             ids.add(_idFor('countdown:$objectId:due'));
             break;
+          case 'course':
+            ids.add(_idFor('course:$objectId:next'));
+            break;
+          case 'calendar_event':
+            ids.add(_idFor('calendar_event:$objectId'));
+            break;
         }
 
         var cancelled = await _cancelIds(objectType, objectId, ids);
@@ -2083,6 +2150,8 @@ class ReminderScheduler {
           'habit' => await _cancelHabit(objectId) && cancelled,
           'anniversary' => await _cancelAnniversary(objectId) && cancelled,
           'countdown' => await _cancelCountdown(objectId) && cancelled,
+          'course' => await _cancelCourse(objectId) && cancelled,
+          'calendar_event' => await _cancelCalendarEvent(objectId) && cancelled,
           _ => cancelled,
         };
         if (!cancelled) {
@@ -2127,6 +2196,12 @@ class ReminderScheduler {
           case 'countdown':
             _scheduledCountdownScopes.remove(objectId);
             break;
+          case 'course':
+            _scheduledCourseScopes.remove(objectId);
+            break;
+          case 'calendar_event':
+            _scheduledCalendarEventScopes.remove(objectId);
+            break;
         }
       }
     }
@@ -2136,10 +2211,14 @@ class ReminderScheduler {
     await cancelObjects('habit', _scheduledHabitScopes.keys);
     await cancelObjects('anniversary', _scheduledAnniversaryScopes.keys);
     await cancelObjects('countdown', _scheduledCountdownScopes.keys);
+    await cancelObjects('course', _scheduledCourseScopes.keys);
+    await cancelObjects('calendar_event', _scheduledCalendarEventScopes.keys);
 
     _registeredReminderDisplay.removeWhere(
       (objectKey, _) => !failedObjectKeys.contains(objectKey),
     );
+    _budgetedAlarmTimes.clear();
+    _budgetedAlarmOwners.clear();
     if (failures.isNotEmpty) {
       throw ReminderSchedulerResetException(
         List<String>.unmodifiable(failures),
@@ -2180,6 +2259,146 @@ class ReminderScheduler {
       return;
     }
     await _runSerializedForAccountGeneration(generation, action);
+  }
+
+  Future<void> syncSingleTodo(
+    TodoItem todo, {
+    bool allowJustMissedOneShotReminders = true,
+  }) async {
+    final generation = _accountChangeGeneration;
+    if (!_canRunAccountGeneration(generation)) return;
+    await _runSerializedForAccountGeneration(generation, () async {
+      _todoScheduleFailures.remove(todo.id);
+      final persisted =
+          (await registry.idsByObject('todo'))[todo.id] ?? const <int>{};
+      if (todo.isCompleted) {
+        final prior = _scheduledTodoRules[todo.id];
+        final cancelledPrior = prior == null
+            ? true
+            : await _cancelRuleObjects('todo', todo.id, prior.keys);
+        final legacyOk = await _cancelTodoLegacy(todo.id);
+        final staleCancelled = persisted.isEmpty
+            ? true
+            : await _cancelIds('todo', todo.id, persisted, blocking: false);
+        if (cancelledPrior && legacyOk && staleCancelled) {
+          _scheduledTodoRules.remove(todo.id);
+          _forgetReminderDisplay('todo', todo.id);
+          await registry.removeObject('todo', todo.id);
+        }
+        return;
+      }
+
+      final resolved = _resolveTodoRules(
+        todo,
+        allowJustMissedOneShotReminders: allowJustMissedOneShotReminders,
+      );
+      if (resolved.isEmpty) {
+        _recordUnresolvedTodoReminderIssue(todo);
+        final failure = _unresolvedTodoReminderFailureSummary(todo);
+        final cancelled = await _cancelCurrentTodoPlan(todo);
+        if (cancelled) {
+          _scheduledTodoRules.remove(todo.id);
+          _forgetReminderDisplay('todo', todo.id);
+        }
+        if (failure != null) {
+          throw ReminderScheduleSyncException(
+            [failure.raw],
+            issueCopy: ReminderSyncIssue([failure]),
+          );
+        }
+        return;
+      }
+
+      final nextRules = <String, _ResolvedRule>{
+        for (final rule in resolved) rule.ruleId: rule,
+      };
+      final wantedIds = {
+        for (final rule in nextRules.values) ..._registryIdsForRule(rule),
+      };
+      final staleIds = persisted.difference(wantedIds);
+      final blockedRegistryIds = <int>{};
+      if (staleIds.isNotEmpty) {
+        final ok = await _cancelIds('todo', todo.id, staleIds, blocking: false);
+        if (!ok) blockedRegistryIds.addAll(staleIds);
+      }
+
+      final priorRules =
+          _scheduledTodoRules[todo.id] ?? const <String, _ScheduledRule>{};
+      final kept = <String, _ScheduledRule>{};
+      final failures = <ReminderSyncIssueEntry>[];
+      await _cancelTodoLegacy(todo.id, blocking: false);
+
+      for (final priorEntry in priorRules.entries) {
+        if (!nextRules.containsKey(priorEntry.key)) {
+          final cancelled = await _cancelRule('todo', todo.id, priorEntry.key);
+          if (!cancelled) kept[priorEntry.key] = priorEntry.value;
+        }
+      }
+      for (final nextRule in nextRules.values) {
+        final prior = priorRules[nextRule.ruleId];
+        final changed = prior != null && !_sameScheduledRule(prior, nextRule);
+        if (changed) {
+          await _cancelRule(
+            'todo',
+            todo.id,
+            nextRule.ruleId,
+            blocking: false,
+            includeEmail: !_isLocalPresentationChange(prior, nextRule),
+          );
+        } else if (prior != null && await _scheduledRuleStillPending(nextRule)) {
+          _recordRuleBudget(nextRule);
+          kept[nextRule.ruleId] = prior;
+          continue;
+        } else if (prior != null) {
+          final cancelled = await _cancelRule('todo', todo.id, nextRule.ruleId);
+          if (!cancelled) {
+            kept[nextRule.ruleId] = prior;
+            continue;
+          }
+        }
+        final budgetResult = await _prepareRuleDispatchForBudget(nextRule);
+        if (budgetResult == _BudgetDecision.skip) continue;
+        final ok = await _dispatchRule(nextRule);
+        if (ok) {
+          kept[nextRule.ruleId] = _scheduledFromResolved(nextRule);
+        } else {
+          _releaseBudgetIds(_registryIdsForRule(nextRule));
+          _recordTodoRuleDispatchFailure(nextRule);
+          _recordRuleScheduleFailure(nextRule);
+          failures.add(_ruleScheduleFailureEntry(nextRule));
+        }
+      }
+
+      if (kept.isNotEmpty) {
+        _scheduledTodoRules[todo.id] = kept;
+        await _replaceRegistryObject(
+          'todo',
+          todo.id,
+          {
+            ...blockedRegistryIds,
+            ..._registryIdsForScheduledRules('todo', todo.id, kept),
+          },
+          scheduledRules: kept.values,
+          acceptedIdSets: _acceptedPendingIdSetsForScheduledRules(
+            'todo',
+            todo.id,
+            kept,
+          ),
+        );
+      } else {
+        _scheduledTodoRules.remove(todo.id);
+        _forgetReminderDisplay('todo', todo.id);
+        if (blockedRegistryIds.isEmpty) {
+          await registry.removeObject('todo', todo.id);
+        }
+      }
+      if (failures.isNotEmpty) {
+        throw ReminderScheduleSyncException(
+          failures.map((e) => e.raw).toList(growable: false),
+          issueCopy: ReminderSyncIssue(failures),
+        );
+      }
+    });
   }
 
   Future<String?> syncTodosAndGetTodoFailure(
@@ -2567,6 +2786,92 @@ class ReminderScheduler {
     await _runSerializedForAccountGeneration(generation, action);
   }
 
+  /// Incrementally updates reminder scheduling for one [habit] without scanning
+  /// or cancelling unrelated habits.
+  Future<void> syncSingleHabit(Habit habit) async {
+    final generation = _accountChangeGeneration;
+    if (!_canRunAccountGeneration(generation)) return;
+    await _runSerializedForAccountGeneration(generation, () async {
+      final plan = _effectiveHabitPlan(habit);
+      final rule = plan.primaryRule;
+      if (!plan.enabled ||
+          rule == null ||
+          !rule.enabled ||
+          rule.kind == ReminderKind.off) {
+        final baseId = _idFor('habit_${habit.id}');
+        final storedIds =
+            (await registry.idsByObject('habit'))[habit.id] ?? const <int>{};
+        final extraIds = storedIds.where((id) => id != baseId).toSet();
+        final cancelled = await _cancelHabit(habit.id);
+        final extraCancelled = extraIds.isEmpty
+            ? true
+            : await _cancelIds('habit', habit.id, extraIds, blocking: false);
+        if (cancelled && extraCancelled) {
+          _scheduledHabitScopes.remove(habit.id);
+          _forgetReminderDisplay('habit', habit.id);
+          await registry.removeObject('habit', habit.id);
+        }
+        return;
+      }
+
+      final wantedIds = _habitRegistryIds(habit);
+      final storedIds =
+          (await registry.idsByObject('habit'))[habit.id] ?? const <int>{};
+      final staleIds = storedIds.difference(wantedIds);
+      final blockedRegistryIds = <int>{};
+      if (staleIds.isNotEmpty) {
+        final ok = await _cancelIds(
+          'habit',
+          habit.id,
+          staleIds,
+          blocking: false,
+        );
+        if (!ok) blockedRegistryIds.addAll(staleIds);
+      }
+
+      final scope = _habitScopeWithQuietHours(habit);
+      if (!_scheduledHabitScopes.containsKey(habit.id)) {
+        final swept = await _cancelHabit(habit.id);
+        if (!swept) return;
+      } else if (_scheduledHabitScopes[habit.id] == scope) {
+        if (await _habitStillPending(habit)) {
+          _recordHabitBudget(habit);
+          _rememberHabitReminderDisplay(habit);
+          await _replaceRegistryObject('habit', habit.id, {
+            ...blockedRegistryIds,
+            ...wantedIds,
+          }, acceptedIdSets: _habitAcceptedPendingIdSets(habit));
+          return;
+        }
+        final cancelled = await _cancelHabit(habit.id);
+        if (!cancelled) return;
+        _scheduledHabitScopes.remove(habit.id);
+        _forgetReminderDisplay('habit', habit.id);
+        await registry.removeObject('habit', habit.id);
+      } else {
+        final cancelled = await _cancelHabit(habit.id);
+        if (!cancelled) return;
+        _scheduledHabitScopes.remove(habit.id);
+      }
+
+      final budgetOk = await _reserveHabitBudget(habit);
+      if (!budgetOk) return;
+      final scheduled = await _scheduleHabit(habit);
+      if (scheduled) {
+        _rememberHabitReminderDisplay(habit);
+        _scheduledHabitScopes[habit.id] = scope;
+        await _replaceRegistryObject('habit', habit.id, {
+          ...blockedRegistryIds,
+          ...wantedIds,
+        }, acceptedIdSets: _habitAcceptedPendingIdSets(habit));
+      } else {
+        _releaseBudgetIds(wantedIds);
+        _recordHabitScheduleFailure(habit);
+        throw ReminderScheduleSyncException([_habitScheduleFailureSummary(habit)]);
+      }
+    });
+  }
+
   Future<void> _syncHabitsLocked(Iterable<Habit> habits) async {
     final wanted = <String, Habit>{};
     final handledInactiveHabitIds = <String>{};
@@ -2600,7 +2905,7 @@ class ReminderScheduler {
     }
     final scopes = <String, String>{};
     for (final h in wanted.values) {
-      scopes[h.id] = _habitScope(h);
+      scopes[h.id] = _habitScopeWithQuietHours(h);
       _rememberHabitReminderDisplay(h);
     }
     final blockedHabitIdsFromRegistry = await _sweepSingleRegistry(
@@ -2636,6 +2941,7 @@ class ReminderScheduler {
           blockedHabitIdsFromRegistry[h.id] ?? const <int>{};
       if (_scheduledHabitScopes[h.id] == scope) {
         if (await _habitStillPending(h)) {
+          _recordHabitBudget(h);
           _rememberHabitReminderDisplay(h);
           await _replaceRegistryObject('habit', h.id, {
             ...blockedRegistryIds,
@@ -2649,11 +2955,15 @@ class ReminderScheduler {
         _forgetReminderDisplay('habit', h.id);
         await registry.removeObject('habit', h.id);
       }
+      if (!await _reserveHabitBudget(h)) {
+        continue;
+      }
       final scheduled = await _scheduleHabit(h);
       if (scheduled) {
         _rememberHabitReminderDisplay(h);
         _scheduledHabitScopes[h.id] = scope;
       } else {
+        _releaseBudgetIds(_habitRegistryIds(h));
         _recordHabitScheduleFailure(h);
         scheduleFailures.add(_habitScheduleFailureSummary(h));
       }
@@ -2725,10 +3035,19 @@ class ReminderScheduler {
     int id, {
     required bool isPrimary,
   }) async {
-    final hour = rule.hour;
-    final minute = rule.minute;
-    if (hour == null || minute == null) return false;
-    final weekdays = _habitWeekdays(habit, rule);
+    final rawHour = rule.hour;
+    final rawMinute = rule.minute;
+    if (rawHour == null || rawMinute == null) return false;
+    final rawWeekdays = _habitWeekdays(habit, rule);
+    final adjusted = _applyQuietHoursToRepeating(
+      rawHour,
+      rawMinute,
+      rawWeekdays,
+      rule.kind,
+    );
+    final hour = adjusted.hour;
+    final minute = adjusted.minute;
+    final weekdays = adjusted.weekdays;
     final payload = 'duoyi://habit/${habit.id}?confirm=1';
     final title = _habitTitle();
     final body = ReminderDeliveryCopy.habit(
@@ -2955,6 +3274,7 @@ class ReminderScheduler {
         await _cancelSafely('habit popup:$habitId', () => popup.cancel(id)) &&
         ok;
     ok = await _cancelEmail(id, 'habit:$habitId') && ok;
+    if (ok) _releaseBudgetIds(<int>{id});
     return ok;
   }
 
@@ -3035,10 +3355,14 @@ class ReminderScheduler {
     }
     final scopes = <String, String>{};
     for (final a in wanted.values) {
-      final remindAt = _anniversaryReminderAt(a);
+      final remindAt = rollAnniversaryRemindAtForward(
+        _anniversaryReminderAt(a),
+        DateTime.now(),
+      );
       if (!remindAt.isAfter(DateTime.now())) continue;
-      scopes[a.id] = _anniversaryScope(a, remindAt);
-      _rememberAnniversaryReminderDisplay(a, remindAt);
+      final effectiveAt = _applyQuietHoursToOnceTime(remindAt, a.reminderKind);
+      scopes[a.id] = _anniversaryScope(a, effectiveAt);
+      _rememberAnniversaryReminderDisplay(a, effectiveAt);
     }
     final blockedAnniversaryIdsFromRegistry = await _sweepSingleRegistry(
       objectType: 'anniversary',
@@ -3077,12 +3401,19 @@ class ReminderScheduler {
       if (!remindAt.isAfter(DateTime.now())) {
         continue;
       }
+      final effectiveAt = _applyQuietHoursToOnceTime(remindAt, a.reminderKind);
       final scope = scopes[a.id]!;
       final blockedRegistryIds =
           blockedAnniversaryIdsFromRegistry[a.id] ?? const <int>{};
       if (_scheduledAnniversaryScopes[a.id] == scope) {
         if (await _anniversaryStillPending(a)) {
-          _rememberAnniversaryReminderDisplay(a, remindAt);
+          _recordBudgetIds(
+            _anniversaryRegistryIds(a),
+            effectiveAt,
+            objectType: 'anniversary',
+            objectId: a.id,
+          );
+          _rememberAnniversaryReminderDisplay(a, effectiveAt);
           await _replaceRegistryObject(
             'anniversary',
             a.id,
@@ -3098,20 +3429,29 @@ class ReminderScheduler {
         await registry.removeObject('anniversary', a.id);
       }
 
+      if (!await _tryReserveBudgetIds(
+        _anniversaryRegistryIds(a),
+        effectiveAt,
+        objectType: 'anniversary',
+        objectId: a.id,
+      )) {
+        continue;
+      }
       final scheduled = await _dispatchAnniversary(a, remindAt);
       if (scheduled) {
-        _rememberAnniversaryReminderDisplay(a, remindAt);
+        _rememberAnniversaryReminderDisplay(a, effectiveAt);
         _scheduledAnniversaryScopes[a.id] = scope;
         await _replaceRegistryObject('anniversary', a.id, {
           ...blockedRegistryIds,
           ..._anniversaryRegistryIds(a),
         }, acceptedIdSets: _anniversaryAcceptedPendingIdSets(a));
       } else {
+        _releaseBudgetIds(_anniversaryRegistryIds(a));
         _recordSingleScheduleFailure(
           title: '纪念日提醒注册失败',
           target: a.title,
           kind: a.reminderKind,
-          scheduledTime: remindAt,
+          scheduledTime: effectiveAt,
           relatedId: a.id,
         );
         scheduleFailures.add(
@@ -3173,8 +3513,9 @@ class ReminderScheduler {
         continue;
       }
       wanted[item.id] = item;
-      scopes[item.id] = _countdownScope(item, when);
-      _rememberCountdownReminderDisplay(item, when);
+      final adjustedWhen = _applyQuietHoursToOnceTime(when, item.reminderKind);
+      scopes[item.id] = _countdownScope(item, adjustedWhen);
+      _rememberCountdownReminderDisplay(item, adjustedWhen);
     }
     final blockedCountdownIdsFromRegistry = await _sweepSingleRegistry(
       objectType: 'countdown',
@@ -3198,18 +3539,37 @@ class ReminderScheduler {
       }
     }
 
-    for (final item in wanted.values) {
+    final sortedCountdowns = wanted.values.toList(growable: false)
+      ..sort(
+        (a, b) => _applyQuietHoursToOnceTime(
+          _countdownReminderAt(a),
+          a.reminderKind,
+        ).compareTo(
+          _applyQuietHoursToOnceTime(_countdownReminderAt(b), b.reminderKind),
+        ),
+      );
+    for (final item in sortedCountdowns) {
       if (blockedCountdownIds.contains(item.id)) continue;
       if (!_scheduledCountdownScopes.containsKey(item.id)) {
         final swept = await _cancelCountdown(item.id);
         if (!swept) continue;
       }
+      final when = _applyQuietHoursToOnceTime(
+        _countdownReminderAt(item),
+        item.reminderKind,
+      );
       final scope = scopes[item.id]!;
       final blockedRegistryIds =
           blockedCountdownIdsFromRegistry[item.id] ?? const <int>{};
       if (_scheduledCountdownScopes[item.id] == scope) {
         if (await _countdownStillPending(item)) {
-          _rememberCountdownReminderDisplay(item, _countdownReminderAt(item));
+          _recordBudgetIds(
+            _countdownRegistryIds(item),
+            when,
+            objectType: 'countdown',
+            objectId: item.id,
+          );
+          _rememberCountdownReminderDisplay(item, when);
           await _replaceRegistryObject(
             'countdown',
             item.id,
@@ -3224,7 +3584,14 @@ class ReminderScheduler {
         _forgetReminderDisplay('countdown', item.id);
         await registry.removeObject('countdown', item.id);
       }
-      final when = _countdownReminderAt(item);
+      if (!await _tryReserveBudgetIds(
+        _countdownRegistryIds(item),
+        when,
+        objectType: 'countdown',
+        objectId: item.id,
+      )) {
+        continue;
+      }
       final copy =
           ReminderDeliveryCopy.countdown(item.title, item.daysRemaining).render(
             locale: item.reminderKind == ReminderKind.email
@@ -3253,6 +3620,7 @@ class ReminderScheduler {
           acceptedIdSets: _countdownAcceptedPendingIdSets(item),
         );
       } else {
+        _releaseBudgetIds(_countdownRegistryIds(item));
         _recordSingleScheduleFailure(
           title: '倒数日提醒注册失败',
           target: item.title,
@@ -3265,6 +3633,415 @@ class ReminderScheduler {
             title: '倒数日提醒注册失败',
             target: item.title,
             kind: item.reminderKind,
+          ),
+        );
+      }
+    }
+    if (scheduleFailures.isNotEmpty) {
+      throw ReminderScheduleSyncException(
+        List<String>.unmodifiable(scheduleFailures),
+      );
+    }
+  }
+
+  /// Syncs upcoming class reminders for [courses] under [settings].
+  Future<void> syncCourses(
+    Iterable<CourseItem> courses, {
+    required ScheduleSettings settings,
+    ReminderReconciliationBatch? batch,
+    DateTime? now,
+  }) async {
+    final generation = _accountChangeGeneration;
+    if (!_canRunAccountGeneration(generation)) return;
+    final snapshot = courses.toList(growable: false);
+    Future<void> action() =>
+        _syncCoursesLocked(snapshot, settings: settings, now: now);
+    if (batch != null) {
+      if (!identical(batch, _activeBatch)) {
+        throw StateError('Reminder reconciliation batch is not active');
+      }
+      if (batch.accountChangeGeneration != generation ||
+          !_canRunAccountGeneration(generation)) {
+        return;
+      }
+      await action();
+      return;
+    }
+    await _runSerializedForAccountGeneration(generation, action);
+  }
+
+  Future<void> _syncCoursesLocked(
+    Iterable<CourseItem> courses, {
+    required ScheduleSettings settings,
+    DateTime? now,
+  }) async {
+    final effectiveNow = now ?? DateTime.now();
+    final wanted = <String, ({CourseItem course, DateTime remindAt, DateTime classStart})>{};
+    final handledInactiveIds = <String>{};
+    final scheduleFailures = <String>[];
+
+    for (final course in courses) {
+      if (course.reminderMinutes <= 0) {
+        handledInactiveIds.add(course.id);
+        if (await _cancelCourse(course.id)) {
+          _scheduledCourseScopes.remove(course.id);
+          _forgetReminderDisplay('course', course.id);
+          await registry.removeObject('course', course.id);
+        }
+        continue;
+      }
+      final occurrence = _nextCourseOccurrence(course, settings, effectiveNow);
+      if (occurrence == null) {
+        handledInactiveIds.add(course.id);
+        if (await _cancelCourse(course.id)) {
+          _scheduledCourseScopes.remove(course.id);
+          _forgetReminderDisplay('course', course.id);
+          await registry.removeObject('course', course.id);
+        }
+        continue;
+      }
+      final remindAt = _applyQuietHoursToOnceTime(
+        occurrence.remindAt,
+        ReminderKind.push,
+      );
+      if (!remindAt.isAfter(effectiveNow)) {
+        handledInactiveIds.add(course.id);
+        if (await _cancelCourse(course.id)) {
+          _scheduledCourseScopes.remove(course.id);
+          _forgetReminderDisplay('course', course.id);
+          await registry.removeObject('course', course.id);
+        }
+        continue;
+      }
+      wanted[course.id] = (
+        course: course,
+        remindAt: remindAt,
+        classStart: occurrence.classStart,
+      );
+    }
+
+    final quietHoursTag = _quietHours.enabled ? '|qh:${_quietHours.digest}' : '';
+    final scopes = <String, String>{};
+    for (final entry in wanted.values) {
+      final id = _idFor('course:${entry.course.id}:next');
+      scopes[entry.course.id] =
+          '$id|${entry.remindAt.millisecondsSinceEpoch}|${entry.course.name}|${entry.course.location}|${entry.course.reminderMinutes}$quietHoursTag';
+      _rememberCourseReminderDisplay(entry.course, entry.remindAt);
+    }
+
+    final blockedFromRegistry = await _sweepSingleRegistry(
+      objectType: 'course',
+      wantedIdsByObject: {
+        for (final course in wanted.values.map((e) => e.course))
+          course.id: <int>{_idFor('course:${course.id}:next')},
+      },
+    );
+
+    final blockedIds = <String>{};
+    for (final id in _scheduledCourseScopes.keys.toList()) {
+      if (handledInactiveIds.contains(id)) continue;
+      final nextScope = scopes[id];
+      if (nextScope == null || _scheduledCourseScopes[id] != nextScope) {
+        if (await _cancelCourse(id)) {
+          _scheduledCourseScopes.remove(id);
+          _forgetReminderDisplay('course', id);
+          await registry.removeObject('course', id);
+        } else {
+          blockedIds.add(id);
+        }
+      }
+    }
+
+    final ordered = wanted.values.toList(growable: false)
+      ..sort((a, b) => a.remindAt.compareTo(b.remindAt));
+    for (final entry in ordered) {
+      final course = entry.course;
+      if (blockedIds.contains(course.id)) continue;
+      final id = _idFor('course:${course.id}:next');
+      if (!_scheduledCourseScopes.containsKey(course.id)) {
+        final swept = await _cancelCourse(course.id);
+        if (!swept) continue;
+      }
+      final scope = scopes[course.id]!;
+      final blockedRegistryIds =
+          blockedFromRegistry[course.id] ?? const <int>{};
+      if (_scheduledCourseScopes[course.id] == scope) {
+        if (await _sinkStillPending(
+          label: 'course:${course.id}',
+          kind: ReminderKind.push,
+          expected: <int>{id},
+          relatedId: course.id,
+        )) {
+          _recordBudgetIds(
+            <int>{id},
+            entry.remindAt,
+            objectType: 'course',
+            objectId: course.id,
+          );
+          _rememberCourseReminderDisplay(course, entry.remindAt);
+          await _replaceRegistryObject('course', course.id, {
+            ...blockedRegistryIds,
+            id,
+          });
+          continue;
+        }
+        final cancelled = await _cancelCourse(course.id);
+        if (!cancelled) continue;
+        _scheduledCourseScopes.remove(course.id);
+        _forgetReminderDisplay('course', course.id);
+        await registry.removeObject('course', course.id);
+      }
+
+      if (!await _tryReserveBudgetIds(
+        <int>{id},
+        entry.remindAt,
+        objectType: 'course',
+        objectId: course.id,
+      )) {
+        continue;
+      }
+
+      final title = I18n.current == AppLocale.en
+          ? 'Course · ${course.name}'
+          : '课程提醒 · ${course.name}';
+      final timeText = _timeLabel(
+        entry.classStart.hour,
+        entry.classStart.minute,
+      );
+      final loc = course.location.trim();
+      final body = loc.isNotEmpty ? '$timeText · $loc' : '${course.name} · $timeText';
+      final scheduled = await _dispatch(
+        kind: ReminderKind.push,
+        payload: _DispatchPayload(
+          id: id,
+          title: title,
+          body: body,
+          when: entry.remindAt,
+          payload: 'duoyi://course/${course.id}',
+        ),
+      );
+      if (scheduled) {
+        _rememberCourseReminderDisplay(course, entry.remindAt);
+        _scheduledCourseScopes[course.id] = scope;
+        await _replaceRegistryObject('course', course.id, {
+          ...blockedRegistryIds,
+          id,
+        });
+      } else {
+        _releaseBudgetIds(<int>{id});
+        _recordSingleScheduleFailure(
+          title: '课程提醒注册失败',
+          target: course.name,
+          kind: ReminderKind.push,
+          scheduledTime: entry.remindAt,
+          relatedId: course.id,
+        );
+        scheduleFailures.add(
+          _singleScheduleFailureSummary(
+            title: '课程提醒注册失败',
+            target: course.name,
+            kind: ReminderKind.push,
+          ),
+        );
+      }
+    }
+    if (scheduleFailures.isNotEmpty) {
+      throw ReminderScheduleSyncException(
+        List<String>.unmodifiable(scheduleFailures),
+      );
+    }
+  }
+
+  /// Syncs upcoming reminders for local [CalendarEvent]s.
+  Future<void> syncCalendarEvents(
+    Iterable<CalendarEvent> events, {
+    ReminderReconciliationBatch? batch,
+    DateTime? now,
+  }) async {
+    final generation = _accountChangeGeneration;
+    if (!_canRunAccountGeneration(generation)) return;
+    final snapshot = events.toList(growable: false);
+    Future<void> action() => _syncCalendarEventsLocked(snapshot, now: now);
+    if (batch != null) {
+      if (!identical(batch, _activeBatch)) {
+        throw StateError('Reminder reconciliation batch is not active');
+      }
+      if (batch.accountChangeGeneration != generation ||
+          !_canRunAccountGeneration(generation)) {
+        return;
+      }
+      await action();
+      return;
+    }
+    await _runSerializedForAccountGeneration(generation, action);
+  }
+
+  Future<void> _syncCalendarEventsLocked(
+    Iterable<CalendarEvent> events, {
+    DateTime? now,
+  }) async {
+    final effectiveNow = now ?? DateTime.now();
+    final wanted = <String, ({CalendarEvent event, DateTime remindAt})>{};
+    final handledInactiveIds = <String>{};
+    final scheduleFailures = <String>[];
+
+    for (final event in events) {
+      final mins = event.reminderMinutes;
+      if (mins == null || mins < 0) {
+        handledInactiveIds.add(event.id);
+        if (await _cancelCalendarEvent(event.id)) {
+          _scheduledCalendarEventScopes.remove(event.id);
+          _forgetReminderDisplay('calendar_event', event.id);
+          await registry.removeObject('calendar_event', event.id);
+        }
+        continue;
+      }
+      final eventStart = _calendarEventStartAt(event);
+      final rawRemindAt = eventStart.subtract(Duration(minutes: mins));
+      final remindAt = _applyQuietHoursToOnceTime(
+        rawRemindAt,
+        ReminderKind.push,
+      );
+      if (!remindAt.isAfter(effectiveNow)) {
+        handledInactiveIds.add(event.id);
+        if (await _cancelCalendarEvent(event.id)) {
+          _scheduledCalendarEventScopes.remove(event.id);
+          _forgetReminderDisplay('calendar_event', event.id);
+          await registry.removeObject('calendar_event', event.id);
+        }
+        continue;
+      }
+      wanted[event.id] = (event: event, remindAt: remindAt);
+    }
+
+    final quietHoursTag = _quietHours.enabled ? '|qh:${_quietHours.digest}' : '';
+    final scopes = <String, String>{};
+    for (final entry in wanted.values) {
+      final event = entry.event;
+      final id = _idFor('calendar_event:${event.id}');
+      final detail = (event.note ?? event.subtitle ?? '').trim();
+      scopes[event.id] =
+          '$id|${entry.remindAt.millisecondsSinceEpoch}|${event.title}|$detail|${event.reminderMinutes}$quietHoursTag';
+      _rememberCalendarEventReminderDisplay(event, entry.remindAt);
+    }
+
+    final blockedFromRegistry = await _sweepSingleRegistry(
+      objectType: 'calendar_event',
+      wantedIdsByObject: {
+        for (final entry in wanted.values)
+          entry.event.id: <int>{_idFor('calendar_event:${entry.event.id}')},
+      },
+    );
+
+    final blockedIds = <String>{};
+    for (final id in _scheduledCalendarEventScopes.keys.toList()) {
+      if (handledInactiveIds.contains(id)) continue;
+      final nextScope = scopes[id];
+      if (nextScope == null || _scheduledCalendarEventScopes[id] != nextScope) {
+        if (await _cancelCalendarEvent(id)) {
+          _scheduledCalendarEventScopes.remove(id);
+          _forgetReminderDisplay('calendar_event', id);
+          await registry.removeObject('calendar_event', id);
+        } else {
+          blockedIds.add(id);
+        }
+      }
+    }
+
+    final ordered = wanted.values.toList(growable: false)
+      ..sort((a, b) => a.remindAt.compareTo(b.remindAt));
+    for (final entry in ordered) {
+      final event = entry.event;
+      if (blockedIds.contains(event.id)) continue;
+      final id = _idFor('calendar_event:${event.id}');
+      if (!_scheduledCalendarEventScopes.containsKey(event.id)) {
+        final swept = await _cancelCalendarEvent(event.id);
+        if (!swept) continue;
+      }
+      final scope = scopes[event.id]!;
+      final blockedRegistryIds =
+          blockedFromRegistry[event.id] ?? const <int>{};
+      if (_scheduledCalendarEventScopes[event.id] == scope) {
+        if (await _sinkStillPending(
+          label: 'calendar_event:${event.id}',
+          kind: ReminderKind.push,
+          expected: <int>{id},
+          relatedId: event.id,
+        )) {
+          _recordBudgetIds(
+            <int>{id},
+            entry.remindAt,
+            objectType: 'calendar_event',
+            objectId: event.id,
+          );
+          _rememberCalendarEventReminderDisplay(event, entry.remindAt);
+          await _replaceRegistryObject('calendar_event', event.id, {
+            ...blockedRegistryIds,
+            id,
+          });
+          continue;
+        }
+        final cancelled = await _cancelCalendarEvent(event.id);
+        if (!cancelled) continue;
+        _scheduledCalendarEventScopes.remove(event.id);
+        _forgetReminderDisplay('calendar_event', event.id);
+        await registry.removeObject('calendar_event', event.id);
+      }
+
+      if (!await _tryReserveBudgetIds(
+        <int>{id},
+        entry.remindAt,
+        objectType: 'calendar_event',
+        objectId: event.id,
+      )) {
+        continue;
+      }
+
+      final eventStart = _calendarEventStartAt(event);
+      final dateParam =
+          '${eventStart.year}-${eventStart.month.toString().padLeft(2, '0')}-${eventStart.day.toString().padLeft(2, '0')}';
+      final title = I18n.current == AppLocale.en
+          ? 'Schedule · ${event.title}'
+          : '日程提醒 · ${event.title}';
+      final noteText = event.note?.trim() ?? '';
+      final subtitleText = event.subtitle?.trim() ?? '';
+      final body = noteText.isNotEmpty
+          ? noteText
+          : subtitleText.isNotEmpty
+          ? subtitleText
+          : _timeLabel(eventStart.hour, eventStart.minute);
+      final scheduled = await _dispatch(
+        kind: ReminderKind.push,
+        payload: _DispatchPayload(
+          id: id,
+          title: title,
+          body: body,
+          when: entry.remindAt,
+          payload:
+              'duoyi://calendar?date=$dateParam&eventId=${Uri.encodeComponent(event.id)}',
+        ),
+      );
+      if (scheduled) {
+        _rememberCalendarEventReminderDisplay(event, entry.remindAt);
+        _scheduledCalendarEventScopes[event.id] = scope;
+        await _replaceRegistryObject('calendar_event', event.id, {
+          ...blockedRegistryIds,
+          id,
+        });
+      } else {
+        _releaseBudgetIds(<int>{id});
+        _recordSingleScheduleFailure(
+          title: '日程提醒注册失败',
+          target: event.title,
+          kind: ReminderKind.push,
+          scheduledTime: entry.remindAt,
+          relatedId: event.id,
+        );
+        scheduleFailures.add(
+          _singleScheduleFailureSummary(
+            title: '日程提醒注册失败',
+            target: event.title,
+            kind: ReminderKind.push,
           ),
         );
       }
@@ -3333,12 +4110,17 @@ class ReminderScheduler {
     required Iterable<Anniversary> annis,
     required Iterable<GoalItem> goals,
     Iterable<CountdownItem> countdowns = const <CountdownItem>[],
+    Iterable<CourseItem>? courses,
+    ScheduleSettings? courseSettings,
+    Iterable<CalendarEvent>? calendarEvents,
   }) async {
     final todoSnapshot = todos.toList(growable: false);
     final habitSnapshot = habits.toList(growable: false);
     final anniversarySnapshot = annis.toList(growable: false);
     final goalSnapshot = goals.toList(growable: false);
     final countdownSnapshot = countdowns.toList(growable: false);
+    final courseSnapshot = courses?.toList(growable: false);
+    final calendarSnapshot = calendarEvents?.toList(growable: false);
     await runReconciliationBatch(
       (_) => _resyncAllLocked(
         todos: todoSnapshot,
@@ -3346,6 +4128,9 @@ class ReminderScheduler {
         annis: anniversarySnapshot,
         goals: goalSnapshot,
         countdowns: countdownSnapshot,
+        courses: courseSnapshot,
+        courseSettings: courseSettings,
+        calendarEvents: calendarSnapshot,
       ),
     );
   }
@@ -3356,6 +4141,9 @@ class ReminderScheduler {
     required Iterable<Anniversary> annis,
     required Iterable<GoalItem> goals,
     required Iterable<CountdownItem> countdowns,
+    Iterable<CourseItem>? courses,
+    ScheduleSettings? courseSettings,
+    Iterable<CalendarEvent>? calendarEvents,
   }) async {
     for (final id in _scheduledTodoRules.keys.toList()) {
       final rulesCancelled = await _cancelRuleObjects(
@@ -3399,12 +4187,34 @@ class ReminderScheduler {
         await registry.removeObject('countdown', id);
       }
     }
+    if (courses != null && courseSettings != null) {
+      for (final id in _scheduledCourseScopes.keys.toList()) {
+        if (await _cancelCourse(id)) {
+          _scheduledCourseScopes.remove(id);
+          await registry.removeObject('course', id);
+        }
+      }
+    }
+    if (calendarEvents != null) {
+      for (final id in _scheduledCalendarEventScopes.keys.toList()) {
+        if (await _cancelCalendarEvent(id)) {
+          _scheduledCalendarEventScopes.remove(id);
+          await registry.removeObject('calendar_event', id);
+        }
+      }
+    }
 
     await _syncTodosLocked(todos, allowJustMissedOneShotReminders: false);
     await _syncHabitsLocked(habits);
     await _syncAnniversariesLocked(annis);
     await _syncGoalsLocked(goals);
     await _syncCountdownsLocked(countdowns);
+    if (courses != null && courseSettings != null) {
+      await _syncCoursesLocked(courses, settings: courseSettings);
+    }
+    if (calendarEvents != null) {
+      await _syncCalendarEventsLocked(calendarEvents);
+    }
   }
 
   Future<T> _runSerialized<T>(Future<T> Function() action) {
@@ -3624,7 +4434,15 @@ class ReminderScheduler {
     required ReminderKind kind,
     required _DispatchPayload payload,
   }) async {
-    switch (kind) {
+    final effectiveKind =
+        (kind == ReminderKind.alarm &&
+            _quietHours.enabled &&
+            !_quietHours.allowAlarms &&
+            !_quietHours.deferUntilEnd &&
+            _quietHours.isWithinQuietHours(payload.when))
+        ? ReminderKind.push
+        : kind;
+    switch (effectiveKind) {
       case ReminderKind.popup:
         try {
           await popup.scheduleOnce(
@@ -3846,7 +4664,17 @@ class ReminderScheduler {
   }
 
   Future<bool> _dispatchRepeating(_ResolvedRule rule) async {
-    switch (rule.kind) {
+    final effectiveKind =
+        (rule.kind == ReminderKind.alarm &&
+            _quietHours.enabled &&
+            !_quietHours.allowAlarms &&
+            !_quietHours.deferUntilEnd &&
+            rule.hour != null &&
+            rule.minute != null &&
+            _quietHours.isMinutesInQuietWindow(rule.hour! * 60 + rule.minute!))
+        ? ReminderKind.push
+        : rule.kind;
+    switch (effectiveKind) {
       case ReminderKind.popup:
         try {
           await popup.scheduleRepeating(
@@ -4134,6 +4962,12 @@ class ReminderScheduler {
         ) &&
         ok;
     ok = await _cancelEmail(_idFor('anni_$annId'), 'anniversary:$annId') && ok;
+    if (ok) {
+      _releaseBudgetIds(<int>{
+        _idFor('anni_$annId'),
+        _idFor('anni_alarm_$annId'),
+      });
+    }
     return ok;
   }
 
@@ -4159,6 +4993,57 @@ class ReminderScheduler {
         ) &&
         ok;
     ok = await _cancelEmail(id, 'countdown:$countdownId') && ok;
+    if (ok) _releaseBudgetIds(<int>{id});
+    return ok;
+  }
+
+  Future<bool> _cancelCourse(String courseId) async {
+    final id = _idFor('course:$courseId:next');
+    var ok = true;
+    ok =
+        await _cancelSafely(
+          'course notification:$courseId',
+          () => notif.cancel(id),
+        ) &&
+        ok;
+    ok =
+        await _cancelSafely(
+          'course alarm:$courseId',
+          () => alarm.cancel(id),
+        ) &&
+        ok;
+    ok =
+        await _cancelSafely(
+          'course popup:$courseId',
+          () => popup.cancel(id),
+        ) &&
+        ok;
+    if (ok) _releaseBudgetIds(<int>{id});
+    return ok;
+  }
+
+  Future<bool> _cancelCalendarEvent(String eventId) async {
+    final id = _idFor('calendar_event:$eventId');
+    var ok = true;
+    ok =
+        await _cancelSafely(
+          'calendar_event notification:$eventId',
+          () => notif.cancel(id),
+        ) &&
+        ok;
+    ok =
+        await _cancelSafely(
+          'calendar_event alarm:$eventId',
+          () => alarm.cancel(id),
+        ) &&
+        ok;
+    ok =
+        await _cancelSafely(
+          'calendar_event popup:$eventId',
+          () => popup.cancel(id),
+        ) &&
+        ok;
+    if (ok) _releaseBudgetIds(<int>{id});
     return ok;
   }
 
@@ -4290,8 +5175,9 @@ class ReminderScheduler {
     Iterable<int> ids, {
     bool blocking = true,
   }) async {
+    final uniqueIds = ids.where((id) => id != 0).toSet();
     var ok = true;
-    for (final id in ids.where((id) => id != 0).toSet()) {
+    for (final id in uniqueIds) {
       ok =
           await _cancelSafely(
             '$objectType notification registry:$objectId ($id)',
@@ -4320,6 +5206,9 @@ class ReminderScheduler {
             blocking: blocking,
           ) &&
           ok;
+    }
+    if (ok) {
+      _releaseBudgetIds(uniqueIds);
     }
     return ok;
   }
@@ -4363,6 +5252,9 @@ class ReminderScheduler {
           blocking: blocking,
         ) &&
         ok;
+    if (ok) {
+      _releaseBudgetIds(<int>{intId});
+    }
     return ok;
   }
 
@@ -4514,6 +5406,7 @@ class ReminderScheduler {
         final prior = priorRules[nextRule.ruleId];
         if (prior != null && _sameScheduledRule(prior, nextRule)) {
           if (await _scheduledRuleStillPending(nextRule)) {
+            _recordRuleBudget(nextRule);
             kept[nextRule.ruleId] = prior;
             continue;
           }
@@ -4529,6 +5422,10 @@ class ReminderScheduler {
           }
         }
         await cancelLegacyOnce();
+        final budgetResult = await _prepareRuleDispatchForBudget(nextRule);
+        if (budgetResult == _BudgetDecision.skip) {
+          continue;
+        }
         // 强制注册新规则，即使旧规则清理失败
         // 系统通知 ID 相同时会自动覆盖
         final ok = await _dispatchRule(nextRule);
@@ -4537,11 +5434,13 @@ class ReminderScheduler {
           kept[nextRule.ruleId] = _scheduledFromResolved(nextRule);
           registered = true;
         } else {
+          _releaseBudgetIds(_registryIdsForRule(nextRule));
           _recordTodoRuleDispatchFailure(nextRule);
           final prior = priorRules[nextRule.ruleId];
           if (prior != null &&
               _sameScheduledRule(prior, nextRule) &&
               await _scheduledRuleStillPending(nextRule)) {
+            _recordRuleBudget(nextRule);
             kept[nextRule.ruleId] = prior;
             registered = true;
           }
@@ -4583,9 +5482,17 @@ class ReminderScheduler {
       }
     }
 
-    for (final entry in wanted.entries) {
+    final sortedNewEntries = wanted.entries
+        .where((entry) => !scheduled.containsKey(entry.key))
+        .toList(growable: false)
+      ..sort(
+        (a, b) => _earliestRuleFireTime(
+          a.value.values,
+        ).compareTo(_earliestRuleFireTime(b.value.values)),
+      );
+
+    for (final entry in sortedNewEntries) {
       final objectId = entry.key;
-      if (scheduled.containsKey(objectId)) continue;
 
       final nextRules = entry.value;
       final kept = <String, _ScheduledRule>{};
@@ -4609,10 +5516,15 @@ class ReminderScheduler {
         if (!cancelled && hadPersistedRuleIds) {
           blockedRegistryIds.addAll(nextRuleRegistryIds);
         }
+        final budgetResult = await _prepareRuleDispatchForBudget(nextRule);
+        if (budgetResult == _BudgetDecision.skip) {
+          continue;
+        }
         final ok = await _dispatchRule(nextRule);
         if (ok) {
           kept[nextRule.ruleId] = _scheduledFromResolved(nextRule);
         } else {
+          _releaseBudgetIds(_registryIdsForRule(nextRule));
           _recordRuleScheduleFailure(nextRule);
           scheduleFailures.add(_ruleScheduleFailureEntry(nextRule));
           _recordTodoRuleDispatchFailure(nextRule);
@@ -4688,7 +5600,22 @@ class ReminderScheduler {
 
   Future<Set<int>> _pendingIdsFor(ReminderPendingSink sink) async {
     final batch = _activeBatch;
-    if (batch == null) return (await sink.pendingIds()).toSet();
+    if (batch == null) {
+      final cache = _ephemeralPendingIds;
+      if (cache != null) {
+        final future = cache.putIfAbsent(
+          sink,
+          () async => Set<int>.unmodifiable((await sink.pendingIds()).toSet()),
+        );
+        try {
+          return await future;
+        } catch (_) {
+          cache.remove(sink);
+          rethrow;
+        }
+      }
+      return (await sink.pendingIds()).toSet();
+    }
     if (batch.snapshotFailed(sink)) {
       return batch.fallbackPendingIds(sink);
     }
@@ -4708,17 +5635,22 @@ class ReminderScheduler {
     if (rules.length == 1) {
       final rule = rules.single;
       final baseId = _idFor('habit_${habit.id}');
+      final weekdays = (rule.hour != null && rule.minute != null)
+          ? _applyQuietHoursToRepeating(
+              rule.hour!,
+              rule.minute!,
+              _habitWeekdays(habit, rule),
+              rule.kind,
+            ).weekdays
+          : _habitWeekdays(habit, rule);
       return _sinkStillPending(
         label: 'habit:${habit.id}',
         kind: rule.kind,
-        expected: _expectedRepeatingPendingIds(
-          baseId,
-          _habitWeekdays(habit, rule),
-        ),
+        expected: _expectedRepeatingPendingIds(baseId, weekdays),
         acceptedExpectedSets: _acceptedRepeatingPendingIdSets(
           kind: rule.kind,
           base: baseId,
-          weekdays: _habitWeekdays(habit, rule),
+          weekdays: weekdays,
         ),
         stalePeerIds: _habitRegistryIds(habit),
         relatedId: habit.id,
@@ -4729,7 +5661,14 @@ class ReminderScheduler {
     for (var i = 0; i < rules.length; i++) {
       final rule = rules[i];
       final baseId = _habitRuleId(habit.id, rule, i);
-      final weekdays = _habitWeekdays(habit, rule);
+      final weekdays = (rule.hour != null && rule.minute != null)
+          ? _applyQuietHoursToRepeating(
+              rule.hour!,
+              rule.minute!,
+              _habitWeekdays(habit, rule),
+              rule.kind,
+            ).weekdays
+          : _habitWeekdays(habit, rule);
       final stillPending = await _sinkStillPending(
         label: 'habit:${habit.id}#${rule.id}',
         kind: rule.kind,
@@ -5502,6 +6441,7 @@ class ReminderScheduler {
       minute: rule.minute,
       weekdays: normalized.length == 7 ? const <int>[] : normalized,
       scope: scope,
+      quietHoursDigest: rule.quietHoursDigest,
     );
   }
 
@@ -5599,6 +6539,7 @@ class ReminderScheduler {
     required String payload,
     required DateTime when,
   }) {
+    final effectiveWhen = _applyQuietHoursToOnceTime(when, rule.kind);
     return _ResolvedRule(
       objectType: objectType,
       objectId: objectId,
@@ -5613,8 +6554,9 @@ class ReminderScheduler {
       vibrate: rule.vibrate,
       snoozeMinutes: rule.snoozeMinutes,
       repeatCount: rule.repeatCount,
-      when: when,
+      when: effectiveWhen,
       scope: 'once',
+      quietHoursDigest: _quietHours.enabled ? _quietHours.digest : '',
     );
   }
 
@@ -5629,7 +6571,14 @@ class ReminderScheduler {
     required int minute,
     required List<int> weekdays,
   }) {
-    final normalized = weekdays.isEmpty ? const <int>[] : weekdays;
+    final rawNormalized = weekdays.isEmpty ? const <int>[] : weekdays;
+    final adjusted = _applyQuietHoursToRepeating(
+      hour,
+      minute,
+      rawNormalized,
+      rule.kind,
+    );
+    final normalized = adjusted.weekdays;
     final scope = normalized.isEmpty
         ? 'daily'
         : 'weekly:${normalized.join(',')}';
@@ -5647,10 +6596,11 @@ class ReminderScheduler {
       vibrate: rule.vibrate,
       snoozeMinutes: rule.snoozeMinutes,
       repeatCount: rule.repeatCount,
-      hour: hour,
-      minute: minute,
+      hour: adjusted.hour,
+      minute: adjusted.minute,
       weekdays: normalized,
       scope: scope,
+      quietHoursDigest: _quietHours.enabled ? _quietHours.digest : '',
     );
   }
 
@@ -5704,7 +6654,10 @@ class ReminderScheduler {
   }
 
   String _countdownScope(CountdownItem item, DateTime when) {
-    return '${when.millisecondsSinceEpoch}:${item.title}:${item.remindDaysBefore}:${item.remindHour}:${item.remindMinute}:${item.reminderKind.name}';
+    final base =
+        '${when.millisecondsSinceEpoch}:${item.title}:${item.remindDaysBefore}:${item.remindHour}:${item.remindMinute}:${item.reminderKind.name}';
+    if (!_quietHours.enabled) return base;
+    return '$base|qh:${_quietHours.digest}';
   }
 
   String _habitScope(Habit habit) {
@@ -5855,6 +6808,7 @@ class ReminderScheduler {
   }
 
   Future<bool> _dispatchAnniversary(Anniversary item, DateTime remindAt) async {
+    final effectiveWhen = _applyQuietHoursToOnceTime(remindAt, item.reminderKind);
     final copy = ReminderDeliveryCopy.anniversary(
       item.title,
       item.remindDaysBefore,
@@ -5868,8 +6822,8 @@ class ReminderScheduler {
             title: item.title,
             whenDate: item.nextOccurrence,
             daysBefore: item.remindDaysBefore,
-            hour: item.remindHour,
-            minute: item.remindMinute,
+            hour: effectiveWhen.hour,
+            minute: effectiveWhen.minute,
           );
           return true;
         } on NotificationPermissionDeniedException catch (e) {
@@ -5889,7 +6843,7 @@ class ReminderScheduler {
             id: _idFor('anni_${item.id}'),
             title: copy.title,
             body: copy.body,
-            when: remindAt,
+            when: effectiveWhen,
             payload: 'duoyi://anniversary/${item.id}',
           );
           return true;
@@ -5907,12 +6861,12 @@ class ReminderScheduler {
             id: alarmId,
             title: copy.title,
             body: copy.body,
-            when: remindAt,
+            when: effectiveWhen,
             payload: 'duoyi://anniversary/${item.id}',
           );
           return !_recordAlarmScheduleIssue(
             relatedId: item.id,
-            scheduledTime: remindAt,
+            scheduledTime: effectiveWhen,
             alarmIds: alarmIds,
           );
         } on AlarmPermissionDeniedException catch (e) {
@@ -6086,7 +7040,7 @@ class ReminderScheduler {
   }
 
   String _anniversaryScope(Anniversary item, DateTime when) {
-    return [
+    final base = [
       item.reminderKind.index,
       item.title,
       item.remindDaysBefore,
@@ -6094,8 +7048,402 @@ class ReminderScheduler {
       item.remindMinute,
       when.toIso8601String(),
     ].join('|');
+    if (!_quietHours.enabled) return base;
+    return '$base|qh:${_quietHours.digest}';
+  }
+
+  DateTime _applyQuietHoursToOnceTime(DateTime when, ReminderKind kind) {
+    if (!_quietHours.enabled) return when;
+    if (kind == ReminderKind.alarm && _quietHours.allowAlarms) return when;
+    if (!_quietHours.deferUntilEnd) return when;
+    if (!_quietHours.isWithinQuietHours(when)) return when;
+    return _quietHours.nextQuietEndLocal(when);
+  }
+
+  ({int hour, int minute, List<int> weekdays, bool silent})
+  _applyQuietHoursToRepeating(
+    int hour,
+    int minute,
+    List<int> weekdays,
+    ReminderKind kind,
+  ) {
+    if (!_quietHours.enabled) {
+      return (hour: hour, minute: minute, weekdays: weekdays, silent: false);
+    }
+    if (kind == ReminderKind.alarm && _quietHours.allowAlarms) {
+      return (hour: hour, minute: minute, weekdays: weekdays, silent: false);
+    }
+    final minutesOfDay = hour * 60 + minute;
+    if (!_quietHours.isMinutesInQuietWindow(minutesOfDay)) {
+      return (hour: hour, minute: minute, weekdays: weekdays, silent: false);
+    }
+    if (!_quietHours.deferUntilEnd) {
+      return (hour: hour, minute: minute, weekdays: weekdays, silent: true);
+    }
+    var adjustedWeekdays = weekdays;
+    final wrapsMidnight =
+        _quietHours.startMinutes > _quietHours.endMinutes &&
+        minutesOfDay >= _quietHours.startMinutes;
+    if (wrapsMidnight && weekdays.isNotEmpty && weekdays.length < 7) {
+      adjustedWeekdays =
+          weekdays.map((day) => (day % 7) + 1).toSet().toList()..sort();
+    }
+    return (
+      hour: _quietHours.endHour,
+      minute: _quietHours.endMinute,
+      weekdays: adjustedWeekdays,
+      silent: false,
+    );
+  }
+
+  String _habitScopeWithQuietHours(Habit habit) {
+    final base = _habitScope(habit);
+    if (!_quietHours.enabled) return base;
+    return '$base|qh:${_quietHours.digest}';
+  }
+
+  DateTime _nextRepeatingFireAt(
+    int hour,
+    int minute,
+    List<int> weekdays, {
+    DateTime? now,
+  }) {
+    final effectiveNow = now ?? DateTime.now();
+    for (var offset = 0; offset <= 7; offset++) {
+      final candidate = DateTime(
+        effectiveNow.year,
+        effectiveNow.month,
+        effectiveNow.day + offset,
+        hour,
+        minute,
+      );
+      if (!candidate.isAfter(effectiveNow)) continue;
+      if (weekdays.isEmpty || weekdays.contains(candidate.weekday)) {
+        return candidate;
+      }
+    }
+    return DateTime(
+      effectiveNow.year,
+      effectiveNow.month,
+      effectiveNow.day + 1,
+      hour,
+      minute,
+    );
+  }
+
+  DateTime _ruleNextFireTime(_ResolvedRule rule, {DateTime? now}) {
+    if (rule.mode == _DispatchMode.once && rule.when != null) {
+      return rule.when!;
+    }
+    if (rule.hour != null && rule.minute != null) {
+      return _nextRepeatingFireAt(
+        rule.hour!,
+        rule.minute!,
+        rule.weekdays,
+        now: now,
+      );
+    }
+    return (now ?? DateTime.now()).add(const Duration(days: 3650));
+  }
+
+  DateTime _earliestRuleFireTime(
+    Iterable<_ResolvedRule> rules, {
+    DateTime? now,
+  }) {
+    DateTime? best;
+    for (final rule in rules) {
+      final fire = _ruleNextFireTime(rule, now: now);
+      if (best == null || fire.isBefore(best)) best = fire;
+    }
+    return best ?? (now ?? DateTime.now()).add(const Duration(days: 3650));
+  }
+
+  Future<_BudgetDecision> _prepareRuleDispatchForBudget(
+    _ResolvedRule rule,
+  ) async {
+    final ids = _registryIdsForRule(rule);
+    final reserved = await _tryReserveBudgetIds(
+      ids,
+      _ruleNextFireTime(rule),
+      objectType: rule.objectType,
+      objectId: rule.objectId,
+    );
+    return reserved ? _BudgetDecision.proceed : _BudgetDecision.skip;
+  }
+
+  void _recordRuleBudget(_ResolvedRule rule) {
+    _recordBudgetIds(
+      _registryIdsForRule(rule),
+      _ruleNextFireTime(rule),
+      objectType: rule.objectType,
+      objectId: rule.objectId,
+    );
+  }
+
+  DateTime _habitBudgetFireTime(Habit habit, {DateTime? now}) {
+    final rules = _enabledHabitRules(habit);
+    DateTime? earliest;
+    for (final rule in rules) {
+      if (rule.hour == null || rule.minute == null) continue;
+      final adjusted = _applyQuietHoursToRepeating(
+        rule.hour!,
+        rule.minute!,
+        _habitWeekdays(habit, rule),
+        rule.kind,
+      );
+      final candidate = _nextRepeatingFireAt(
+        adjusted.hour,
+        adjusted.minute,
+        adjusted.weekdays,
+        now: now,
+      );
+      if (earliest == null || candidate.isBefore(earliest)) {
+        earliest = candidate;
+      }
+    }
+    return earliest ?? (now ?? DateTime.now()).add(const Duration(days: 3650));
+  }
+
+  Future<bool> _reserveHabitBudget(Habit habit) {
+    return _tryReserveBudgetIds(
+      _habitRegistryIds(habit),
+      _habitBudgetFireTime(habit),
+      objectType: 'habit',
+      objectId: habit.id,
+    );
+  }
+
+  void _recordHabitBudget(Habit habit) {
+    _recordBudgetIds(
+      _habitRegistryIds(habit),
+      _habitBudgetFireTime(habit),
+      objectType: 'habit',
+      objectId: habit.id,
+    );
+  }
+
+  void _recordBudgetIds(
+    Set<int> ids,
+    DateTime fireAt, {
+    required String objectType,
+    required String objectId,
+  }) {
+    for (final id in ids) {
+      if (id == 0) continue;
+      _budgetedAlarmTimes[id] = fireAt;
+      _budgetedAlarmOwners[id] = (objectType: objectType, objectId: objectId);
+    }
+  }
+
+  void _releaseBudgetIds(Iterable<int> ids) {
+    for (final id in ids) {
+      _budgetedAlarmTimes.remove(id);
+      _budgetedAlarmOwners.remove(id);
+    }
+  }
+
+  Future<bool> _tryReserveBudgetIds(
+    Set<int> ids,
+    DateTime fireAt, {
+    required String objectType,
+    required String objectId,
+  }) async {
+    final cleanIds = ids.where((id) => id != 0).toSet();
+    if (cleanIds.isEmpty) return true;
+    final missingCount = cleanIds
+        .where((id) => !_budgetedAlarmTimes.containsKey(id))
+        .length;
+    while (_budgetedAlarmTimes.length + missingCount > maxActiveAlarms) {
+      MapEntry<int, DateTime>? farthest;
+      for (final entry in _budgetedAlarmTimes.entries) {
+        if (cleanIds.contains(entry.key)) continue;
+        if (farthest == null || entry.value.isAfter(farthest.value)) {
+          farthest = entry;
+        }
+      }
+      if (farthest == null || !fireAt.isBefore(farthest.value)) {
+        return false;
+      }
+      await _evictBudgetOwnerId(farthest.key);
+    }
+    _recordBudgetIds(
+      cleanIds,
+      fireAt,
+      objectType: objectType,
+      objectId: objectId,
+    );
+    return true;
+  }
+
+  Future<void> _evictBudgetOwnerId(int evictedId) async {
+    final owner = _budgetedAlarmOwners.remove(evictedId);
+    _budgetedAlarmTimes.remove(evictedId);
+    await _cancelSafely(
+      'budget evict notif:$evictedId',
+      () => notif.cancel(evictedId),
+      blocking: false,
+    );
+    await _cancelSafely(
+      'budget evict alarm:$evictedId',
+      () => alarm.cancel(evictedId),
+      blocking: false,
+    );
+    await _cancelSafely(
+      'budget evict popup:$evictedId',
+      () => popup.cancel(evictedId),
+      blocking: false,
+    );
+    await _cancelEmail(evictedId, 'budget_evict:$evictedId', blocking: false);
+    if (owner == null) return;
+    final objectType = owner.objectType;
+    final objectId = owner.objectId;
+    switch (objectType) {
+      case 'todo':
+        final rules = _scheduledTodoRules[objectId];
+        if (rules != null) {
+          rules.removeWhere(
+            (ruleId, _) => _idFor('todo:$objectId:$ruleId') == evictedId,
+          );
+          if (rules.isEmpty) {
+            _scheduledTodoRules.remove(objectId);
+            _forgetReminderDisplay('todo', objectId);
+          }
+        }
+        break;
+      case 'goal':
+        final rules = _scheduledGoalRules[objectId];
+        if (rules != null) {
+          rules.removeWhere(
+            (ruleId, _) => _idFor('goal:$objectId:$ruleId') == evictedId,
+          );
+          if (rules.isEmpty) {
+            _scheduledGoalRules.remove(objectId);
+            _forgetReminderDisplay('goal', objectId);
+          }
+        }
+        break;
+      case 'habit':
+        _scheduledHabitScopes.remove(objectId);
+        _forgetReminderDisplay('habit', objectId);
+        break;
+      case 'anniversary':
+        _scheduledAnniversaryScopes.remove(objectId);
+        _forgetReminderDisplay('anniversary', objectId);
+        break;
+      case 'countdown':
+        _scheduledCountdownScopes.remove(objectId);
+        _forgetReminderDisplay('countdown', objectId);
+        break;
+      case 'course':
+        _scheduledCourseScopes.remove(objectId);
+        _forgetReminderDisplay('course', objectId);
+        break;
+      case 'calendar_event':
+        _scheduledCalendarEventScopes.remove(objectId);
+        _forgetReminderDisplay('calendar_event', objectId);
+        break;
+    }
+    try {
+      final persisted = await registry.idsByObject(objectType);
+      final current = Set<int>.from(persisted[objectId] ?? const <int>{})
+        ..remove(evictedId);
+      if (current.isEmpty) {
+        await registry.removeObject(objectType, objectId);
+      } else {
+        await registry.replaceObject(
+          objectType,
+          objectId,
+          current,
+          display: _registeredReminderDisplay['$objectType:$objectId'],
+        );
+      }
+    } catch (_) {}
+  }
+
+  ({DateTime classStart, DateTime remindAt})? _nextCourseOccurrence(
+    CourseItem course,
+    ScheduleSettings settings,
+    DateTime now,
+  ) {
+    if (course.reminderMinutes <= 0) return null;
+    final weeks =
+        course.weeks
+            .where((w) => w >= 1 && w <= settings.totalWeeks)
+            .toSet()
+            .toList()
+          ..sort();
+    if (weeks.isEmpty) return null;
+    final termDay = DateTime(
+      settings.termStart.year,
+      settings.termStart.month,
+      settings.termStart.day,
+    );
+    for (final week in weeks) {
+      final weekBase = DateTime(
+        termDay.year,
+        termDay.month,
+        termDay.day + (week - 1) * 7,
+      );
+      final dayOffset = (course.weekday - weekBase.weekday + 7) % 7;
+      final classDate = DateTime(
+        weekBase.year,
+        weekBase.month,
+        weekBase.day + dayOffset,
+      );
+      final classStart = settings.sectionStart(classDate, course.startSection);
+      final remindAt = classStart.subtract(
+        Duration(minutes: course.reminderMinutes),
+      );
+      if (remindAt.isAfter(now)) {
+        return (classStart: classStart, remindAt: remindAt);
+      }
+    }
+    return null;
+  }
+
+  void _rememberCourseReminderDisplay(CourseItem course, DateTime remindAt) {
+    final name = course.name.trim();
+    final timeStr = _timeLabel(remindAt.hour, remindAt.minute);
+    _rememberReminderDisplay(
+      'course',
+      course.id,
+      title: name.isEmpty ? '课程提醒' : name,
+      subtitle: '课程 · ${remindAt.month}/${remindAt.day} $timeStr · 普通通知',
+      kinds: const <ReminderKind>{ReminderKind.push},
+    );
+  }
+
+  DateTime _calendarEventStartAt(CalendarEvent event) {
+    final t = event.time;
+    if (t == null) {
+      return DateTime(event.date.year, event.date.month, event.date.day, 9, 0);
+    }
+    return DateTime(
+      event.date.year,
+      event.date.month,
+      event.date.day,
+      t.hour,
+      t.minute,
+    );
+  }
+
+  void _rememberCalendarEventReminderDisplay(
+    CalendarEvent event,
+    DateTime remindAt,
+  ) {
+    final title = event.title.trim();
+    final timeStr = _timeLabel(remindAt.hour, remindAt.minute);
+    _rememberReminderDisplay(
+      'calendar_event',
+      event.id,
+      title: title.isEmpty ? '日程提醒' : title,
+      subtitle: '日程 · ${remindAt.month}/${remindAt.day} $timeStr · 普通通知',
+      kinds: const <ReminderKind>{ReminderKind.push},
+    );
   }
 }
+
+enum _BudgetDecision { proceed, skip }
 
 /// 周年提醒时刻已过（如打开 app 时当天的提醒时刻已经过去）时，
 /// 推进到下一年同一时刻，避免该周年被跳过后整年漏提醒；

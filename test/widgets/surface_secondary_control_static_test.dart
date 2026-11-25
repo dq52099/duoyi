@@ -98,7 +98,7 @@ void main() {
     expect(source, contains('_appReadableForeground('));
     expect(
       source,
-      contains('if (_appContrastRatio(background, preferred) >= 4.5)'),
+      contains('if (appContrastRatio(background, effectivePreferred) >= 4.5)'),
     );
     expect(source, contains('return selectedControlForeground;'));
     expect(
@@ -147,7 +147,7 @@ void main() {
         'final menuRight = (activeOverlay.size.width - fieldBottomRight.dx).clamp',
       ),
     );
-    expect(source, contains('return showMenu<T>('));
+    expect(source, contains('final picked = await showMenu<T>('));
     expect(
       source,
       contains(
@@ -155,8 +155,9 @@ void main() {
       ),
     );
     expect(source, contains('constraints: BoxConstraints('));
-    expect(source, contains('minWidth: fieldBox.size.width'));
-    expect(source, contains('PopupMenuItem<T>('));
+    expect(source, contains('minWidth: menuWidth'));
+    expect(source, contains('_AnchoredDropdownMenuItem<T>('));
+    expect(source, contains('await selectedMenuRoute?.completed'));
     expect(
       source,
       contains('FocusScope.of(context, createDependency: false).unfocus()'),
@@ -278,59 +279,87 @@ void main() {
 
   test('共享卡片、弹框和底部面板有样式回归护栏', () {
     final source = _readSource('lib/widgets/surface_components.dart');
+    final dialogStart = source.indexOf('class AppDialog extends StatelessWidget {');
+    expect(dialogStart, isNonNegative);
+    final sheetStart = source.indexOf('class AppModalSheet extends StatelessWidget {');
+    expect(sheetStart, greaterThan(dialogStart));
+    final pickerStart = source.indexOf('class AppPickerOption<T>', sheetStart);
+    expect(pickerStart, greaterThan(sheetStart));
+    final dialogSource = source.substring(dialogStart, sheetStart);
+    final dialogTokens = dialogSource.replaceAll(RegExp(r'\s+'), '');
+    final sheetSource = source.substring(sheetStart, pickerStart);
 
     expect(source, contains('class AppSurfaceCard'));
     expect(source, contains('border ??'));
     expect(source, contains('Border.all('));
     expect(source, contains('width: 0.45'));
-    expect(source, contains('class AppDialog'));
-    expect(source, contains('final bool shiftForKeyboard'));
-    expect(source, contains('MediaQuery.viewInsetsOf(context)'));
+    expect(dialogSource, contains('class AppDialog'));
+    expect(dialogSource, contains('final bool shiftForKeyboard'));
+    expect(dialogSource, contains('MediaQuery.viewInsetsOf(context)'));
+    expect(dialogTokens, contains('finalmediaHeight=media.size.height;'));
+    expect(dialogTokens, contains('finalviewInsets=MediaQuery.viewInsetsOf(context);'));
+    expect(dialogTokens, contains(
+      'finalrawBottomInset=viewInsets.bottom.isFinite&&viewInsets.bottom>0'
+      '?viewInsets.bottom:0.0;',
+    ));
+    expect(dialogTokens, contains(
+      'finalbottomInset=mediaHeight.isFinite?rawBottomInset'
+      '.clamp(0.0,mediaHeight>0?mediaHeight:0.0).toDouble():rawBottomInset;',
+    ));
+    expect(dialogTokens, contains(
+      'finalavailableHeight=mediaHeight.isFinite?(mediaHeight>0'
+      '?(mediaHeight-bottomInset).clamp(0.0,mediaHeight).toDouble():0.0)'
+      ':double.infinity;',
+    ));
+    expect(dialogSource, contains('maxHeight: availableHeight * 0.86'));
+    expect(dialogSource, contains('final horizontalInset = media.size.width < 360'));
+    expect(dialogSource, contains('final effectiveMaxWidth'));
+    expect(dialogSource, contains('final effectiveMinWidth'));
+    expect(dialogSource, contains('minWidth: effectiveMinWidth'));
+    expect(dialogSource, contains('maxWidth: effectiveMaxWidth'));
+    expect(dialogSource, isNot(contains('minWidth: 320,')));
+    expect(dialogSource, isNot(contains('maxWidth: maxWidth,\n        maxHeight')));
+    expect(dialogSource, contains('scrollable: true'));
+    expect(dialogSource, contains('fontSize: 16'));
+    expect(dialogSource, isNot(contains('fontSize: 22')));
+    expect(dialogSource, isNot(contains('theme.textTheme.titleLarge')));
+    expect(dialogTokens, contains('maxHeight:availableHeight*0.86'));
+    expect(dialogTokens, contains('finalkeyboardLift=bottomInset;'));
+    expect(dialogTokens, contains('padding:EdgeInsets.only(bottom:keyboardLift)'));
+    expect(dialogTokens, contains(
+      'insetPadding:EdgeInsets.symmetric(horizontal:horizontalInset,vertical:24,)',
+    ));
+    expect(dialogTokens, contains('child:dialog,'));
+    expect(dialogTokens, contains('if(!shiftForKeyboard)returnscopedDialog;'));
+    expect(dialogTokens, contains('child:scopedDialog,'));
+    expect(dialogSource, contains('MediaQuery.removeViewInsets('));
+    expect(dialogSource, contains('removeBottom: true'));
+    expect(dialogSource, contains('AnimatedPadding('));
+    expect(dialogTokens, contains(
+      'alignment:bottomInset>0?constAlignment(0,-0.18):Alignment.center,',
+    ));
+    expect(dialogSource, contains('AppSecondaryControlTheme(child: content!)'));
+    expect(dialogSource, contains('actions: actions.isEmpty'));
+    expect(dialogSource, contains('children: actions'));
+    expect(sheetSource, contains('class AppModalSheet'));
     expect(
-      source,
-      contains(
-        'final availableHeight = (media.size.height - viewInsets.bottom)',
-      ),
-    );
-    expect(source, contains('maxHeight: availableHeight * 0.86'));
-    expect(source, contains('final horizontalInset = media.size.width < 360'));
-    expect(source, contains('final effectiveMaxWidth'));
-    expect(source, contains('final effectiveMinWidth'));
-    expect(source, contains('minWidth: effectiveMinWidth'));
-    expect(source, contains('maxWidth: effectiveMaxWidth'));
-    expect(source, isNot(contains('minWidth: 320,')));
-    expect(source, isNot(contains('maxWidth: maxWidth,\n        maxHeight')));
-    expect(source, contains('scrollable: true'));
-    expect(source, contains('fontSize: 16'));
-    expect(source, isNot(contains('fontSize: 22')));
-    expect(source, isNot(contains('theme.textTheme.titleLarge')));
-    expect(source, contains('(viewInsets.bottom * 0.42).clamp(56.0, 128.0)'));
-    expect(source, contains('MediaQuery.removeViewInsets('));
-    expect(source, contains('removeBottom: true'));
-    expect(source, contains('AnimatedPadding('));
-    expect(source, contains('alignment: viewInsets.bottom > 0'));
-    expect(source, contains('AppSecondaryControlTheme(child: content!)'));
-    expect(source, contains('actions: actions.isEmpty'));
-    expect(source, contains('children: actions'));
-    expect(source, contains('class AppModalSheet'));
-    expect(
-      source,
+      sheetSource,
       contains('final viewInsets = shiftForKeyboard ? media.viewInsets'),
     );
     expect(
-      source,
+      sheetSource,
       contains('padding: EdgeInsets.only(bottom: viewInsets.bottom)'),
     );
     expect(
-      source,
+      sheetSource,
       contains(
         'final availableHeight = (media.size.height - viewInsets.bottom)',
       ),
     );
-    expect(source, contains('maxHeight: availableHeight * 0.88'));
-    expect(source, contains('AppSecondaryControlTheme(child: child)'));
-    expect(source, contains('...leadingActions'));
-    expect(source, contains('...actions'));
+    expect(sheetSource, contains('maxHeight: availableHeight * 0.88'));
+    expect(sheetSource, contains('AppSecondaryControlTheme(child: child)'));
+    expect(sheetSource, contains('...leadingActions'));
+    expect(sheetSource, contains('...actions'));
     expect(source, contains('backgroundColor: Colors.transparent'));
     expect(
       source,
@@ -376,10 +405,26 @@ void main() {
     expect(calendar, isNot(contains('backgroundColor: Colors.transparent')));
     expect(calendar, contains('appSecondaryControlLabelStyle(context)'));
     expect(calendar, contains('AppSecondaryMenuText('));
-    expect(feedback, contains('AppSecondaryMenuText(labelFor(category))'));
+    expect(
+      feedback,
+      matches(
+        RegExp(
+          r'AppSecondaryMenuText\(\s*labelFor\(category, currentLocale\),?\s*\)',
+        ),
+      ),
+    );
+    expect(feedback, contains('valueListenable: I18n.localeListenable'));
     expect(todo, contains('AppSecondaryMenuText(_quadrantLabel(quadrant))'));
     expect(todo, contains('AppSecondaryMenuText(priority.label)'));
-    expect(todo, contains('AppSecondaryMenuText(column.title)'));
+    expect(
+      todo,
+      matches(
+        RegExp(
+          r'AppSecondaryMenuText\(\s*TodoBoardUiCopy.columnTitle\(column\),?\s*\)',
+        ),
+      ),
+    );
+    expect(todo, isNot(contains('AppSecondaryMenuText(column.title)')));
     expect(todo, isNot(contains('child: Text(_quadrantLabel(quadrant))')));
     expect(todo, isNot(contains('child: Text(priority.label)')));
     expect(todo, isNot(contains('child: Text(column.title)')));
@@ -407,7 +452,6 @@ void main() {
     expect(widgetScreen, isNot(contains('fontSize: 20')));
     expect(admin, contains('AppSecondaryControlTheme('));
     expect(admin, contains('AppSecondaryMenuText('));
-    expect(admin, contains("AppSecondaryMenuText('删除账号与数据'"));
     expect(admin, contains('color: cs.error'));
     expect(admin, isNot(contains('Colors.red')));
     final adminUserActionMenu = admin.substring(
@@ -415,6 +459,16 @@ void main() {
       admin.indexOf('Widget _buildUserListItem'),
     );
     expect(adminUserActionMenu, contains('AppSecondaryMenuText('));
+    expect(
+      adminUserActionMenu,
+      contains('AppSecondaryMenuText(_userText(zh, en, locale), color: color)'),
+    );
+    expect(adminUserActionMenu, contains("'删除账号与数据'"));
+    expect(adminUserActionMenu, contains("'Delete account and data'"));
+    expect(
+      adminUserActionMenu,
+      contains('color: Theme.of(ctx).colorScheme.error'),
+    );
     expect(adminUserActionMenu, isNot(contains('child: Text(')));
     expect(adminUserActionMenu, isNot(contains('Colors.red')));
 

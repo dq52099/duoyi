@@ -111,6 +111,26 @@ void main() {
         '闹钟提醒注册失败，请检查通知权限、精准闹钟权限和强提醒渠道设置。',
         'The alarm reminder could not be registered. Check notification permission, exact alarm permission and strong alert channel settings.',
       ),
+      NotificationIssueNotice.dailyCancellationFailed: (
+        '旧提醒取消不完整，已暂停本次重新注册以避免重复提醒。请稍后重试，或重启应用后重新保存提醒。',
+        'Some previous reminders could not be canceled. Rescheduling was paused to avoid duplicates. Retry later, or restart the app and save the reminder again.',
+      ),
+      NotificationIssueNotice.dailyScheduleFailed: (
+        '系统调度失败，提醒未确认注册成功。请检查通知、精准闹钟和后台运行权限后重新保存提醒。',
+        'Scheduling failed and reminder registration is unconfirmed. Check notification, exact alarm and background permissions, then save the reminder again.',
+      ),
+      NotificationIssueNotice.dailyChannelFallback: (
+        '你选择的是所选通道提醒，但该通道没有确认注册成功，已改用普通通知兜底；到点不会按所选通道形式弹出。请在已注册提醒详情确认状态，检查通知、精准闹钟、全屏提醒和后台限制后重新保存。',
+        'The selected channel reminder was not confirmed, so it now uses a regular notification. It will not appear as a selected channel when due. Review its registration details and notification, exact alarm, full-screen and background permissions, then save it again.',
+      ),
+      NotificationIssueNotice.dailyAlarmHandoffFailed: (
+        '闹钟提醒交接失败，已跳过普通通知兜底以避免重复提醒。请在已注册提醒中确认，或重新保存该提醒。',
+        'Alarm handoff failed. The regular notification fallback was skipped to avoid duplicates. Check registered reminders, or save this reminder again.',
+      ),
+      NotificationIssueNotice.dailyAlarmQueueUnconfirmed: (
+        '闹钟待触发队列读取失败，无法确认锁屏闹钟是否已注册；为避免重复提醒已跳过普通通知兜底。请在系统权限正常后重新保存提醒。',
+        'The pending alarm queue could not be read, so lock-screen alarm registration is unconfirmed. The regular notification fallback was skipped to avoid duplicates. Check system permissions, then save the reminder again.',
+      ),
     };
 
     expect(expected.keys.toSet(), NotificationIssueNotice.values.toSet());
@@ -190,6 +210,18 @@ void main() {
       NotificationIssueTitle.alarmDegraded: (
         '闹钟提醒已降级为普通通知',
         'Alarm now uses a regular notification',
+      ),
+      NotificationIssueTitle.dailyRegistrationFailed: (
+        '每日提醒注册失败',
+        'Daily reminder not scheduled',
+      ),
+      NotificationIssueTitle.dailyFallback: (
+        '每日提醒已退回普通通知',
+        'Daily reminder uses a regular notification',
+      ),
+      NotificationIssueTitle.dailyAlarmUnconfirmed: (
+        '每日闹钟注册状态未确认',
+        'Daily alarm registration unconfirmed',
       ),
       NotificationIssueTitle.registrationDegraded: (
         '提醒注册降级',

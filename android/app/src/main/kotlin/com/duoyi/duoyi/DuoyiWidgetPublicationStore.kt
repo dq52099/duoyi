@@ -1,23 +1,23 @@
 package com.duoyi.duoyi
 
 import android.content.Context
+import android.database.Cursor
 import android.database.DatabaseErrorHandler
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteDatabaseCorruptException
-import org.json.JSONObject
+import android.database.sqlite.SQLiteDatabaseLockedException
+import android.database.sqlite.SQLiteTableLockedException
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
+import android.system.StructStat
 import java.io.File
-import java.io.RandomAccessFile
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.nio.channels.OverlappingFileLockException
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
-
-/** Explicit read state. A failed decoder is never permission to initialize. */
-class DuoyiWidgetPublicationRead(val status: String, val envelope: DuoyiWidgetPublicationEnvelope? = null) {
-    fun metadata(): Map<String, Any?> = linkedMapOf<String, Any?>("status" to status).apply {
-        envelope?.let { putAll(it.readMetadata()) }
-    }
-}
 
 /**
  * Canonical store only. No preference cache/mirror participates in acceptance.
@@ -28,6 +28,8 @@ class DuoyiWidgetPublicationStore private constructor(private val directory: Fil
     private val lockFile = File(directory, "duoyi_widget_store_v1.lock")
     private val gate = ReentrantLock()
     @Volatile private var quarantined = false
+    private data class FileIdentity(val device: Long, val inode: Long)
+    private var observedLock: FileIdentity? = null // accessed under gate
 
     fun read(nonBlocking: Boolean = false): DuoyiWidgetPublicationRead {
         if (quarantined) return DuoyiWidgetPublicationRead("durabilityUnknown")
@@ -38,7 +40,9 @@ class DuoyiWidgetPublicationStore private constructor(private val directory: Fil
         } ?: DuoyiWidgetPublicationRead("busy")
         } catch (error: StoreFailure) { DuoyiWidgetPublicationRead(error.status) }
         catch (_: SQLiteDatabaseCorruptException) { DuoyiWidgetPublicationRead("corrupt") }
-        catch (_: Exception) { DuoyiWidgetPublicationRead("unavailable") }
+        catch (error: Exception) {
+            DuoyiWidgetPublicationRead(if (error is SQLiteDatabaseLockedException || error is SQLiteTableLockedException) "busy" else "unavailable")
+        }
     }
 
     /** The callback must not call store mutation; the lock spans final UI acceptance. */
@@ -50,63 +54,103 @@ class DuoyiWidgetPublicationStore private constructor(private val directory: Fil
             accept()
         } ?: false } catch (_: Exception) { false }
 
+    /** Facts only, including while quarantined. This never grants readiness or a lease. */
+    fun inspectRecovery(): Map<String, Any?> = try {
+        locked(exclusive = true, nonBlocking = false) {
+            if (kind(databaseFile) != 1) throw StoreFailure("unavailable")
+            // Existing READWRITE permits SQLite's own journal recovery. Do not
+            // change journal policy or create authority merely to inspect it.
+            open(writable = true, configureWriter = false).use { db ->
+                db.beginTransaction()
+                try {
+                    val read = readEnvelope(db)
+                    val envelope = read.envelope ?: throw StoreFailure(read.status)
+                    val result = linkedMapOf<String, Any?>("status" to "inspected", "facts" to linkedMapOf(
+                        "storeRevision" to envelope.storeRevision, "ownerEpoch" to envelope.ownerEpoch,
+                        "binding" to envelope.binding?.toMap(), "desiredPresentation" to envelope.desiredPresentation.toMap(),
+                        "appliedPresentationRevision" to envelope.document.presentationRevision,
+                        "lastOperationId" to envelope.lastReceipt.operationId, "lastRequestDigest" to envelope.lastReceipt.requestDigest))
+                    db.setTransactionSuccessful()
+                    result
+                } finally { db.endTransaction() }
+            }
+        } ?: mapOf("status" to "busy")
+    } catch (error: Exception) { mapOf("status" to failureStatus(error)) }
+
     /** Call on a worker queue. Plans acquire applied status only after commit + fresh readback. */
     fun mutate(request: DuoyiWidgetPublicationRequest): Map<String, Any?> {
-        if (quarantined) return failure(request, "durabilityUnknown")
+        val recovering = request.method == DuoyiWidgetPublicationRequest.RECOVER
+        if (quarantined && !recovering) return failure(request, "durabilityUnknown")
         val initialize = request.method == DuoyiWidgetPublicationRequest.OPEN && request.mode == "initialize"
-        return try { locked(exclusive = true, nonBlocking = false, permitCreate = initialize) {
-            if (quarantined) return@locked failure(request, "durabilityUnknown")
-            val absent = !databaseFile.exists()
-            if (absent && (!initialize || request.expectedStoreRevision != null)) return@locked failure(request, "revisionConflict")
+        return try { withGate(nonBlocking = false) {
+            if (quarantined && !recovering) return@withGate failure(request, "durabilityUnknown")
+            if (recovering) quarantined = true
             var attemptedCommit = false
             try {
-                var planned: DuoyiWidgetPublicationPlan? = null
-                open(writable = true, create = absent).use { db ->
-                    db.beginTransaction()
-                    try {
-                        val current = if (absent) null else {
-                            val read = readEnvelope(db)
-                            if (read.envelope == null) return@locked failure(request, read.status)
-                            read.envelope
-                        }
-                        val plan = DuoyiWidgetPublicationTransition.plan(current, request, System.currentTimeMillis(), ZoneId.systemDefault())
-                        if (plan.status == "alreadyApplied") return@locked receiptAck(request, plan.replay!!, "alreadyApplied")
-                        if (plan.replacement == null) return@locked failure(request, plan.status)
-                        if (absent) {
-                            db.execSQL("CREATE TABLE publication (id INTEGER PRIMARY KEY CHECK(id = 1), envelope TEXT NOT NULL)")
-                            db.version = DATABASE_VERSION
-                        }
-                        val encoded = DuoyiWidgetPublicationJson.encode(plan.replacement.toMap())
-                        db.execSQL("INSERT OR REPLACE INTO publication (id, envelope) VALUES (1, ?)", arrayOf(encoded))
-                        planned = plan
-                        db.setTransactionSuccessful()
-                        // endTransaction performs COMMIT; marking successful is not an acknowledgement.
-                        attemptedCommit = true
-                    } finally {
-                        db.endTransaction()
+                val acknowledgement = withFileLock(exclusive = true, nonBlocking = false, permitCreate = initialize,
+                    requireDatabaseAfter = { attemptedCommit }) {
+                    val absent = kind(databaseFile) == 0
+                    if (absent && (!initialize || request.expectedStoreRevision != null)) return@withFileLock failure(request, "revisionConflict")
+                    if (absent) {
+                        // Observe the entry itself, including dangling links.
+                        val artifacts = directory.list() ?: return@withFileLock failure(request, "unavailable")
+                        if ("${databaseFile.name}-journal" in artifacts) return@withFileLock failure(request, "unavailable")
                     }
-                }
-                val replacement = planned!!.replacement!!
-                // Close the committed connection; retain gate/exclusive file lock throughout.
-                val persisted = open(writable = false).use { readEnvelope(it) }
-                if (persisted.envelope?.toMap() != replacement.toMap()) {
+                    // Reject an absent plan before CREATE can leave an empty DB.
+                    val initialPlan = if (absent) DuoyiWidgetPublicationTransition.plan(null, request, System.currentTimeMillis(), ZoneId.systemDefault()) else null
+                    if (initialPlan != null && initialPlan.replacement == null) return@withFileLock failure(request, initialPlan.status)
+                    var planned: DuoyiWidgetPublicationPlan? = null
+                    open(writable = true, create = absent).use { db ->
+                        db.beginTransaction()
+                        try {
+                            val current = if (absent) null else {
+                                val read = readEnvelope(db)
+                                if (read.envelope == null) return@withFileLock failure(request, read.status)
+                                read.envelope
+                            }
+                            val plan = initialPlan ?: DuoyiWidgetPublicationTransition.plan(current, request, System.currentTimeMillis(), ZoneId.systemDefault())
+                            if (plan.status == "alreadyApplied") return@withFileLock receiptAck(request, plan.replay!!, "alreadyApplied")
+                            if (plan.replacement == null) return@withFileLock failure(request, plan.status)
+                            if (absent) {
+                                db.execSQL("CREATE TABLE publication (id INTEGER PRIMARY KEY CHECK(id = 1), envelope TEXT NOT NULL)")
+                                db.version = DATABASE_VERSION
+                            }
+                            val encoded = DuoyiWidgetPublicationJson.encode(plan.replacement.toMap())
+                            db.execSQL("INSERT OR REPLACE INTO publication (id, envelope) VALUES (1, ?)", arrayOf(encoded))
+                            planned = plan
+                            db.setTransactionSuccessful()
+                            // endTransaction performs COMMIT; marking successful is not an acknowledgement.
+                            attemptedCommit = true
+                        } finally { db.endTransaction() }
+                    }
+                    val replacement = planned!!.replacement!!
+                    // Close the committed connection; retain gate/exclusive file lock throughout.
+                    val persisted = open(writable = false).use { readEnvelope(it) }
+                    if (persisted.envelope?.toMap() != replacement.toMap()) {
+                        quarantined = true
+                        return@withFileLock failure(request, "durabilityUnknown")
+                    }
+                    receiptAck(request, persisted.envelope.lastReceipt, "applied")
+                } ?: failure(request, "busy")
+                // withFileLock has completed its final name/inode validation.
+                // Keep the gate until quarantine release and result construction.
+                if (recovering && acknowledgement["status"] == "applied") quarantined = false
+                acknowledgement
+            } catch (error: Exception) {
+                if (attemptedCommit) {
                     quarantined = true
-                    return@locked failure(request, "durabilityUnknown")
-                }
-                receiptAck(request, persisted.envelope.lastReceipt, "applied")
-            } catch (error: StoreFailure) {
-                if (attemptedCommit) { quarantined = true; failure(request, "durabilityUnknown") }
-                else failure(request, error.status)
-            } catch (_: SQLiteDatabaseCorruptException) {
-                if (attemptedCommit) { quarantined = true; failure(request, "durabilityUnknown") }
-                else failure(request, "corrupt")
-            } catch (_: RuntimeException) {
-                if (attemptedCommit) { quarantined = true; failure(request, "durabilityUnknown") }
-                else failure(request, "unavailable")
+                    failure(request, "durabilityUnknown")
+                } else failure(request, failureStatus(error))
             }
         } ?: failure(request, "busy")
-        } catch (error: StoreFailure) { failure(request, error.status) }
-        catch (_: Exception) { failure(request, "unavailable") }
+        } catch (error: Exception) { failure(request, failureStatus(error)) }
+    }
+
+    private fun failureStatus(error: Exception): String = when (error) {
+        is StoreFailure -> error.status
+        is SQLiteDatabaseCorruptException -> "corrupt"
+        is SQLiteDatabaseLockedException, is SQLiteTableLockedException -> "busy"
+        else -> "unavailable"
     }
 
     private fun receiptAck(request: DuoyiWidgetPublicationRequest, receipt: DuoyiWidgetPublicationReceipt, status: String): Map<String, Any?> =
@@ -119,7 +163,7 @@ class DuoyiWidgetPublicationStore private constructor(private val directory: Fil
     private fun failure(request: DuoyiWidgetPublicationRequest, status: String): Map<String, Any?> =
         linkedMapOf("operationId" to request.operationId, "status" to status)
 
-    private fun open(writable: Boolean, create: Boolean = false, nonBlocking: Boolean = false): SQLiteDatabase {
+    private fun open(writable: Boolean, create: Boolean = false, nonBlocking: Boolean = false, configureWriter: Boolean = true): SQLiteDatabase {
         val flags = (if (writable) SQLiteDatabase.OPEN_READWRITE else SQLiteDatabase.OPEN_READONLY) or
             SQLiteDatabase.NO_LOCALIZED_COLLATORS
         // Android's default corruption handler may delete the authoritative DB.
@@ -127,8 +171,13 @@ class DuoyiWidgetPublicationStore private constructor(private val directory: Fil
         val db = SQLiteDatabase.openDatabase(databaseFile.path, null,
             flags or (if (create) SQLiteDatabase.CREATE_IF_NECESSARY else 0), DatabaseErrorHandler { })
         try {
-            db.execSQL(if (nonBlocking) "PRAGMA busy_timeout=0" else "PRAGMA busy_timeout=250")
-            if (writable) {
+            val timeout = if (nonBlocking) 0 else 250
+            // This PRAGMA returns the configured timeout even when assigning it.
+            // Android's non-query execution API rejects statements returning rows.
+            db.rawQuery("PRAGMA busy_timeout=$timeout", null).use {
+                if (!it.moveToFirst() || it.getInt(0) != timeout) throw StoreFailure("unavailable")
+            }
+            if (writable && configureWriter) {
                 if (!create) {
                     val previous = readEnvelope(db)
                     if (previous.envelope == null) throw StoreFailure(previous.status)
@@ -149,41 +198,98 @@ class DuoyiWidgetPublicationStore private constructor(private val directory: Fil
         if (db.version > DATABASE_VERSION) return DuoyiWidgetPublicationRead("unsupported")
         if (db.version != DATABASE_VERSION) return DuoyiWidgetPublicationRead("corrupt")
         db.rawQuery("SELECT id, envelope FROM publication", null).use { rows ->
-            if (rows.count != 1 || !rows.moveToFirst() || rows.getInt(0) != 1 || rows.isNull(1)) return DuoyiWidgetPublicationRead("corrupt")
-            val encoded = rows.getString(1)
-            val raw = DuoyiWidgetPublicationJson.decode(encoded) ?: return DuoyiWidgetPublicationRead("corrupt")
-            val schema = DuoyiWidgetPublicationDocument.exactInteger(raw["storeSchemaVersion"])
-            if (schema != null && schema != 1L) return DuoyiWidgetPublicationRead("unsupported")
-            val envelope = DuoyiWidgetPublicationEnvelope.tryFromMap(raw) ?: return DuoyiWidgetPublicationRead("corrupt")
-            // The store emits canonical JSON. Duplicate keys, lossy numbers,
-            // trailing data or alternate encodings are not a healthy stored row.
-            if (encoded != DuoyiWidgetPublicationJson.encode(envelope.toMap())) return DuoyiWidgetPublicationRead("corrupt")
-            return DuoyiWidgetPublicationRead(if (envelope.active) "ready" else "sealed", envelope)
+            // Getter coercion (or Int32 truncation) cannot establish the
+            // singleton row's storage types or full identity.
+            if (rows.count != 1 || !rows.moveToFirst() ||
+                rows.getType(0) != Cursor.FIELD_TYPE_INTEGER || rows.getLong(0) != 1L ||
+                rows.getType(1) != Cursor.FIELD_TYPE_STRING) return DuoyiWidgetPublicationRead("corrupt")
+            return DuoyiWidgetPublicationRow.decode(rows.getString(1))
         }
     }
 
-    private fun <T> locked(exclusive: Boolean, nonBlocking: Boolean, permitCreate: Boolean = false, block: () -> T): T? {
+    private fun stat(file: File): StructStat? = try { Os.lstat(file.path) }
+        catch (error: ErrnoException) { if (error.errno == OsConstants.ENOENT) null else throw StoreFailure("unavailable") }
+
+    private fun kind(file: File): Int = stat(file)?.let {
+        if (OsConstants.S_ISREG(it.st_mode)) 1 else if (OsConstants.S_ISDIR(it.st_mode)) 2 else 3
+    } ?: 0
+
+    private fun identity(stat: StructStat) = FileIdentity(stat.st_dev, stat.st_ino)
+
+    private fun prepareDirectory(permitCreate: Boolean): Boolean {
+        var prefix: File? = directory.absoluteFile
+        while (prefix != null) {
+            val currentKind = kind(prefix)
+            if (currentKind != 0 && currentKind != 2) throw StoreFailure("unavailable")
+            prefix = prefix.parentFile
+        }
+        if (directory.canonicalFile != directory.absoluteFile) throw StoreFailure("unavailable")
+        if (kind(directory) == 0) {
+            if (!permitCreate) return false
+            if (!directory.mkdirs()) throw StoreFailure("unavailable")
+        }
+        if (kind(directory) != 2 || directory.canonicalFile != directory.absoluteFile) throw StoreFailure("unavailable")
+        return true
+    }
+
+    private fun verifyArtifacts(requireDatabase: Boolean) {
+        val databaseKind = kind(databaseFile)
+        if (databaseKind !in 0..1 || requireDatabase && databaseKind != 1 ||
+            kind(File(directory, "${databaseFile.name}-journal")) !in 0..1) throw StoreFailure("unavailable")
+    }
+
+    private fun <T> withGate(nonBlocking: Boolean, block: () -> T): T? {
         if (gate.isHeldByCurrentThread) return null
         val gotGate = if (nonBlocking) gate.tryLock() else gate.tryLock(250, TimeUnit.MILLISECONDS)
         if (!gotGate) return null
+        try { return block() } finally { gate.unlock() }
+    }
+
+    private fun <T> locked(exclusive: Boolean, nonBlocking: Boolean, permitCreate: Boolean = false, block: () -> T): T? =
+        withGate(nonBlocking) { withFileLock(exclusive, nonBlocking, permitCreate, block = block) }
+
+    /** Caller holds the gate. Only explicit initialize may create the fixed lock. */
+    private fun <T> withFileLock(exclusive: Boolean, nonBlocking: Boolean, permitCreate: Boolean = false,
+                               requireDatabaseAfter: () -> Boolean = { false }, block: () -> T): T? {
+        if (!prepareDirectory(permitCreate)) return block()
+        val databaseKind = kind(databaseFile)
+        if (databaseKind != 0 && databaseKind != 1) throw StoreFailure("unavailable")
+        if (databaseKind == 0 && !permitCreate) return block()
+        val before = stat(lockFile)
+        val create = before == null && databaseKind == 0 && permitCreate && observedLock == null
+        if (before == null && !create || before != null && !OsConstants.S_ISREG(before.st_mode)) throw StoreFailure("unavailable")
+        val descriptor = Os.open(lockFile.path, OsConstants.O_RDWR or OsConstants.O_CLOEXEC or OsConstants.O_NOFOLLOW or
+            (if (create) OsConstants.O_CREAT else 0), 0x180)
         try {
-            if (!databaseFile.exists() && !permitCreate) return block()
-            if (!lockFile.exists()) {
-                if (databaseFile.exists() || !permitCreate) throw StoreFailure("unavailable")
-                if (!directory.exists() && !directory.mkdirs()) throw StoreFailure("unavailable")
-                lockFile.createNewFile()
-            }
-            RandomAccessFile(lockFile, "rw").use { file ->
+            val opened = Os.fstat(descriptor)
+            if (!OsConstants.S_ISREG(opened.st_mode) || before != null && identity(before) != identity(opened)) throw StoreFailure("unavailable")
+            // Os.open has no CREATE on recovery/read/mutation of an existing
+            // store; stream wrappers provide the same FileChannel lock protocol.
+            val channel = if (exclusive) FileOutputStream(descriptor).channel else FileInputStream(descriptor).channel
+            channel.use {
+                fun verifyName(requireDatabase: Boolean) {
+                    val named = stat(lockFile) ?: throw StoreFailure("unavailable")
+                    val actual = identity(Os.fstat(descriptor))
+                    if (!OsConstants.S_ISREG(named.st_mode) || identity(named) != actual ||
+                        observedLock != null && observedLock != actual) throw StoreFailure("unavailable")
+                    observedLock = actual
+                    verifyArtifacts(requireDatabase)
+                }
                 val deadline = System.nanoTime() + if (nonBlocking) 0L else 250_000_000L
                 while (true) {
-                    val lock = try { file.channel.tryLock(0L, Long.MAX_VALUE, !exclusive) }
+                    val lock = try { channel.tryLock(0L, Long.MAX_VALUE, !exclusive) }
                     catch (_: OverlappingFileLockException) { null }
-                    if (lock != null) return lock.use { block() }
+                    if (lock != null) return lock.use {
+                        verifyName(requireDatabase = databaseKind == 1)
+                        val result = block()
+                        verifyName(requireDatabase = databaseKind == 1 || requireDatabaseAfter())
+                        result
+                    }
                     if (nonBlocking || System.nanoTime() >= deadline) return null
                     Thread.sleep(5)
                 }
             }
-        } finally { gate.unlock() }
+        } finally { if (descriptor.valid()) Os.close(descriptor) }
     }
 
     private class StoreFailure(val status: String) : RuntimeException()
@@ -198,38 +304,4 @@ class DuoyiWidgetPublicationStore private constructor(private val directory: Fil
             return instances.getOrPut(directory.canonicalPath) { DuoyiWidgetPublicationStore(directory) }
         }
     }
-}
-
-/** ASCII canonical JSON preserves every String UTF-16 code unit and exact integer. */
-object DuoyiWidgetPublicationJson {
-    fun encode(value: Any?): String = when (value) {
-        null -> "null"
-        is Boolean -> value.toString()
-        is Int, is Long -> value.toString()
-        is String -> buildString {
-            append('"')
-            value.forEach { c ->
-                when {
-                    c == '"' -> append("\\\"")
-                    c == '\\' -> append("\\\\")
-                    c.code < 32 || c.code > 126 -> append("\\u%04x".format(c.code))
-                    else -> append(c)
-                }
-            }
-            append('"')
-        }
-        is Map<*, *> -> value.keys.map { it as String }.sorted().joinToString(",", "{", "}") { key -> encode(key) + ":" + encode(value[key]) }
-        else -> error("Unexpected store primitive")
-    }
-
-    fun decode(value: String): Map<String, Any?>? = try {
-        fun convert(value: Any?): Any? = when (value) {
-            JSONObject.NULL, null -> null
-            is JSONObject -> value.keys().asSequence().associateWith { convert(value.get(it)) }
-            is String, is Boolean, is Int, is Long -> value
-            else -> throw IllegalArgumentException("Invalid store primitive")
-        }
-        @Suppress("UNCHECKED_CAST")
-        (convert(JSONObject(value)) as Map<String, Any?>)
-    } catch (_: Exception) { null }
 }

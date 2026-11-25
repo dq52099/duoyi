@@ -56,6 +56,7 @@ class WidgetPublication {
     'nav_habit': _WidgetValueType.string,
     'nav_calendar': _WidgetValueType.string,
     'nav_focus': _WidgetValueType.string,
+    'widget_first_day_of_week': _WidgetValueType.int32,
     'todo_top3_count': _WidgetValueType.int32,
     'todo_top3_1': _WidgetValueType.string,
     'todo_top3_1_id': _WidgetValueType.string,
@@ -140,7 +141,7 @@ class WidgetPublication {
   final String ownerEpoch;
   final int publicationRevision;
 
-  /// Monotonic desired presentation version: locale, brand and theme together.
+  /// Monotonic desired presentation version: locale, theme and calendar layout.
   /// Platform acceptance must compare this with its durable desired floor.
   final int localeRevision;
   final WidgetPublicationState state;
@@ -155,6 +156,7 @@ class WidgetPublication {
 
   static bool _isBusinessValue(String key) =>
       !key.startsWith('widget_theme_') &&
+      key != 'widget_first_day_of_week' &&
       key != 'brand_app_title' &&
       !key.startsWith('nav_');
 
@@ -198,8 +200,18 @@ class WidgetPublication {
         _WidgetValueType.boolean => value is bool,
         _WidgetValueType.int32 =>
           value is int &&
-              value >= (entry.key == 'habit_active_count' ? -1 : 0) &&
-              value <= (entry.key == 'habit_percent' ? 100 : 2147483647),
+              value >=
+                  (entry.key == 'habit_active_count'
+                      ? -1
+                      : entry.key == 'widget_first_day_of_week'
+                      ? 1
+                      : 0) &&
+              value <=
+                  (entry.key == 'habit_percent'
+                      ? 100
+                      : entry.key == 'widget_first_day_of_week'
+                      ? 7
+                      : 2147483647),
         _WidgetValueType.int64 => value is int && _nonnegativeExact(value),
         null => false,
       };
@@ -310,6 +322,14 @@ class WidgetPublication {
         rawValues.values.any((entry) => entry == null)) {
       return null;
     }
+    final normalizedValues = Map<String, Object>.from(rawValues);
+    // Only the exact original v1 manifest is an upgrade-compatible read.
+    // New constructors and captures still require the complete new manifest.
+    if (normalizedValues.length == _valueTypes.length - 1 &&
+        !normalizedValues.containsKey('widget_first_day_of_week') &&
+        normalizedValues.keys.every(_valueTypes.containsKey)) {
+      normalizedValues['widget_first_day_of_week'] = DateTime.monday;
+    }
     try {
       return WidgetPublication(
         ownerEpoch: owner,
@@ -320,7 +340,7 @@ class WidgetPublication {
         snapshotDay: day,
         snapshotUtcOffsetMinutes: offset,
         capturedAtMillis: captured,
-        values: Map<String, Object>.from(rawValues),
+        values: normalizedValues,
       );
     } on FormatException {
       return null;

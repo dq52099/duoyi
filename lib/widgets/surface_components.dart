@@ -1,13 +1,19 @@
+import 'dart:collection';
+import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../core/app_brand.dart';
 import '../core/design_tokens.dart';
+import '../core/i18n.dart';
 import '../providers/theme_provider.dart';
 
 /// 当前主题的表面观感档位。
 ///
-/// 仅默认主题注册了 [AppSurfaceStyle.ios]；re0..botw 未注册，返回 null，
+/// 默认 iOS 与液态玻璃主题注册了各自的表面档位；re0..botw 未注册，返回 null，
 /// 调用点沿用下方 `_standard*` 既有默认值，观感保持不变。
 AppSurfaceStyle? appSurfaceStyleOf(BuildContext context) =>
     Theme.of(context).extension<AppSurfaceStyle>();
@@ -25,6 +31,59 @@ const BorderRadius _standardSettingsSectionRadius = BorderRadius.all(
 );
 
 class AppSurfaceCard extends StatelessWidget {
+  static const int _maxAllocCacheEntries = 32;
+  static final LinkedHashMap<(int, int, bool), LinearGradient>
+  _defaultGradientCache = LinkedHashMap<(int, int, bool), LinearGradient>();
+  static final LinkedHashMap<(int, bool), WidgetStateProperty<Color?>>
+  _overlayColorCache =
+      LinkedHashMap<(int, bool), WidgetStateProperty<Color?>>();
+
+  static LinearGradient _cachedDefaultGradient(Color primary, Color surface, bool isDark) {
+    final key = (primary.toARGB32(), surface.toARGB32(), isDark);
+    final existing = _defaultGradientCache.remove(key);
+    if (existing != null) {
+      _defaultGradientCache[key] = existing;
+      return existing;
+    }
+    final gradient = LinearGradient(
+      colors: [
+        Color.alphaBlend(primary.withValues(alpha: isDark ? 0.045 : 0.025), surface),
+        surface,
+      ],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+    if (_defaultGradientCache.length >= _maxAllocCacheEntries) {
+      _defaultGradientCache.remove(_defaultGradientCache.keys.first);
+    }
+    _defaultGradientCache[key] = gradient;
+    return gradient;
+  }
+
+  static WidgetStateProperty<Color?> _cachedOverlayColor(Color primary, bool isDark) {
+    final key = (primary.toARGB32(), isDark);
+    final existing = _overlayColorCache.remove(key);
+    if (existing != null) {
+      _overlayColorCache[key] = existing;
+      return existing;
+    }
+    final property = WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.pressed)) {
+        return primary.withValues(alpha: isDark ? 0.14 : 0.08);
+      }
+      if (states.contains(WidgetState.hovered) ||
+          states.contains(WidgetState.focused)) {
+        return primary.withValues(alpha: isDark ? 0.08 : 0.045);
+      }
+      return Colors.transparent;
+    });
+    if (_overlayColorCache.length >= _maxAllocCacheEntries) {
+      _overlayColorCache.remove(_overlayColorCache.keys.first);
+    }
+    _overlayColorCache[key] = property;
+    return property;
+  }
+
   final Widget child;
   final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry margin;
@@ -83,17 +142,7 @@ class AppSurfaceCard extends StatelessWidget {
         (color == null ? surfaceStyle?.cardFillColor : null) ?? surfaceColor;
     final defaultGradient =
         color == null && !useCardSkin && surfaceStyle?.cardFillColor == null
-        ? LinearGradient(
-            colors: [
-              Color.alphaBlend(
-                cs.primary.withValues(alpha: isDark ? 0.045 : 0.025),
-                surfaceColor,
-              ),
-              surfaceColor,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          )
+        ? _cachedDefaultGradient(cs.primary, surfaceColor, isDark)
         : null;
     final cardBorderColor = isDark
         ? cs.outlineVariant.withValues(alpha: 0.18)
@@ -158,16 +207,7 @@ class AppSurfaceCard extends StatelessWidget {
             : InkWell(
                 onTap: onTap,
                 borderRadius: effectiveRadius,
-                overlayColor: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.pressed)) {
-                    return cs.primary.withValues(alpha: isDark ? 0.14 : 0.08);
-                  }
-                  if (states.contains(WidgetState.hovered) ||
-                      states.contains(WidgetState.focused)) {
-                    return cs.primary.withValues(alpha: isDark ? 0.08 : 0.045);
-                  }
-                  return Colors.transparent;
-                }),
+                overlayColor: _cachedOverlayColor(cs.primary, isDark),
                 child: content,
               ),
       ),
@@ -213,6 +253,41 @@ TextStyle appSecondaryRouteTitleTextStyle(BuildContext context) {
   );
 }
 
+/// Helper for settings and surface description / subtitle foreground colors.
+///
+/// Ensures descriptions achieve WCAG AA >=4.5:1 contrast on known light
+/// default and liquid glass surfaces with plain card skin (alpha 0.72 for
+/// regular descriptions, alpha 0.74 for hero subtitles), while preserving
+/// legacy alpha (0.62 / 0.66) on dark mode, non-plain skins, or other themes.
+Color appSecondaryDescriptionColor(
+  BuildContext context, {
+  bool isHero = false,
+}) {
+  final theme = Theme.of(context);
+  final isDark = theme.brightness == Brightness.dark;
+  final surfaceStyle = appSurfaceStyleOf(context);
+  final cs = theme.colorScheme;
+  if (isDark || surfaceStyle == null) {
+    return cs.onSurface.withValues(alpha: isHero ? 0.66 : 0.62);
+  }
+
+  try {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final brandId = themeProvider.brand.id;
+    final isSupportedBrand =
+        brandId == 'defaultBrand' || brandId == 'liquidGlass';
+    final isPlainSkin =
+        themeProvider.activeCardSkin.id == ThemeProvider.defaultCardSkinId;
+    if (isSupportedBrand && isPlainSkin) {
+      return cs.onSurface.withValues(alpha: isHero ? 0.74 : 0.72);
+    }
+  } catch (_) {
+    // 无 provider 时安全回退现有路径
+  }
+
+  return cs.onSurface.withValues(alpha: isHero ? 0.66 : 0.62);
+}
+
 Color _appSecondaryActionBackground(ColorScheme cs, {required bool isDark}) {
   final base = cs.primary;
   const darkForeground = Color(0xFF111827);
@@ -235,21 +310,53 @@ Color _appSecondaryActionForeground(Color background) {
   return _appReadableForeground(background, Colors.white);
 }
 
-Color _appReadableForeground(Color background, Color preferred) {
-  if (_appContrastRatio(background, preferred) >= 4.5) return preferred;
-  const dark = Color(0xFF111827);
-  final darkContrast = _appContrastRatio(background, dark);
-  final whiteContrast = _appContrastRatio(background, Colors.white);
-  return darkContrast >= whiteContrast ? dark : Colors.white;
-}
-
-double _appContrastRatio(Color a, Color b) {
+/// Calculates contrast ratio between two already-composited (opaque) colors
+/// according to WCAG 2.1.
+///
+/// Both [a] and [b] must be fully resolved / composited against their underlying
+/// surface before calling this function. For translucent colors, blend them
+/// first via [Color.alphaBlend].
+double appContrastRatio(Color a, Color b) {
   final aLum = a.computeLuminance();
   final bLum = b.computeLuminance();
   final lighter = aLum > bLum ? aLum : bLum;
   final darker = aLum > bLum ? bLum : aLum;
   return (lighter + 0.05) / (darker + 0.05);
 }
+
+/// Chooses a readable foreground color for [background].
+///
+/// 1. Prioritizes [preferred] when its actual composited appearance
+///    ([Color.alphaBlend(preferred, background)]) achieves at least 4.5:1
+///    contrast against [background] (WCAG 2.1 AA normal text).
+/// 2. If [preferred] does not meet 4.5:1, chooses between the legacy high-contrast
+///    dark token (`#111827`) and [Colors.white] if the higher-contrast option
+///    achieves at least 4.5:1.
+/// 3. If neither dark (`#111827`) nor white reaches 4.5:1 (e.g. on mid-tone
+///    backgrounds such as default primary red `#C85656` where white is ~4.267:1
+///    and `#111827` is ~4.157:1), falls back to pure [Colors.black] (~4.921:1 on red).
+Color appReadableForeground(Color background, Color preferred) {
+  final effectivePreferred = Color.alphaBlend(preferred, background);
+  if (appContrastRatio(background, effectivePreferred) >= 4.5) return preferred;
+
+  const dark = Color(0xFF111827);
+  final darkContrast = appContrastRatio(background, dark);
+  final whiteContrast = appContrastRatio(background, Colors.white);
+  final bestContrast = darkContrast >= whiteContrast
+      ? darkContrast
+      : whiteContrast;
+  final bestCandidate = darkContrast >= whiteContrast ? dark : Colors.white;
+
+  if (bestContrast >= 4.5) {
+    return bestCandidate;
+  }
+  return Colors.black;
+}
+
+Color _appReadableForeground(Color background, Color preferred) =>
+    appReadableForeground(background, preferred);
+
+double _appContrastRatio(Color a, Color b) => appContrastRatio(a, b);
 
 ButtonStyle appSecondaryFilledButtonStyle(BuildContext context) {
   final theme = Theme.of(context);
@@ -265,6 +372,12 @@ ButtonStyle appSecondaryFilledButtonStyle(BuildContext context) {
         theme.brightness == Brightness.dark ? 0.22 : 0.18,
       ) ??
       cs.surfaceContainerHighest;
+  final surfaceStyle = appSurfaceStyleOf(context);
+  final shape = surfaceStyle == null
+      ? null
+      : RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(surfaceStyle.smallTileRadius),
+        );
   return FilledButton.styleFrom(
     backgroundColor: background,
     foregroundColor: _appSecondaryActionForeground(background),
@@ -274,11 +387,12 @@ ButtonStyle appSecondaryFilledButtonStyle(BuildContext context) {
       cs.onSurfaceVariant,
     ).withValues(alpha: 0.70),
     side: BorderSide(color: background.withValues(alpha: 0.16), width: 0.45),
-    visualDensity: VisualDensity.compact,
-    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    visualDensity: VisualDensity.standard,
+    tapTargetSize: MaterialTapTargetSize.padded,
     minimumSize: const Size(0, 34),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     textStyle: appSecondaryMenuItemTextStyle(context),
+    shape: shape,
   );
 }
 
@@ -294,9 +408,17 @@ class AppSecondaryControlTheme extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final controlText = appSecondaryControlTextStyle(context);
     final labelText = appSecondaryControlLabelStyle(context);
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final controlRadius =
+        surfaceStyle?.smallTileRadius ?? DesignTokens.radiusControl;
+    final buttonShape = surfaceStyle == null
+        ? null
+        : RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(surfaceStyle.smallTileRadius),
+          );
     OutlineInputBorder inputBorder(Color color, {double width = 0.35}) {
       return OutlineInputBorder(
-        borderRadius: BorderRadius.circular(DesignTokens.radiusControl),
+        borderRadius: BorderRadius.circular(controlRadius),
         borderSide: BorderSide(color: color, width: width),
       );
     }
@@ -320,8 +442,38 @@ class AppSecondaryControlTheme extends StatelessWidget {
       selectedControlRenderedBackground,
       cs.primary,
     );
+    final isPriorityTheme =
+        !isDark &&
+        (surfaceStyle == AppSurfaceStyle.ios ||
+            surfaceStyle == AppSurfaceStyle.liquidGlass);
+    final scaffoldBackground = theme.scaffoldBackgroundColor;
+    final cardFill = surfaceStyle?.cardFillColor;
+    final cardBackground = cardFill != null
+        ? Color.alphaBlend(cardFill, scaffoldBackground)
+        : cs.surface;
+    final candidateBackgrounds = <Color>[scaffoldBackground, cardBackground];
+    final fieldFill = theme.inputDecorationTheme.fillColor;
+    if (fieldFill != null) {
+      candidateBackgrounds.add(Color.alphaBlend(fieldFill, cardBackground));
+    }
+    Color lowestContrastBg = scaffoldBackground;
+    double lowestContrast = double.infinity;
+    for (final bg in candidateBackgrounds) {
+      final ratio = appContrastRatio(bg, cs.primary);
+      if (ratio < lowestContrast) {
+        lowestContrast = ratio;
+        lowestContrastBg = bg;
+      }
+    }
+    final floatingLabelColor = isPriorityTheme
+        ? (lowestContrast >= 4.5
+              ? cs.primary
+              : _appReadableForeground(lowestContrastBg, cs.primary))
+        : cs.primary;
     return Theme(
       data: theme.copyWith(
+        visualDensity: VisualDensity.standard,
+        materialTapTargetSize: MaterialTapTargetSize.padded,
         textTheme: theme.textTheme.copyWith(
           titleMedium: controlText.copyWith(color: cs.onSurface),
           titleSmall: controlText.copyWith(color: cs.onSurface),
@@ -350,7 +502,7 @@ class AppSecondaryControlTheme extends StatelessWidget {
             fontWeight: FontWeight.normal,
           ),
           floatingLabelStyle: labelText.copyWith(
-            color: cs.primary,
+            color: floatingLabelColor,
             fontWeight: FontWeight.normal,
           ),
           hintStyle: controlText.copyWith(
@@ -398,8 +550,9 @@ class AppSecondaryControlTheme extends StatelessWidget {
             textStyle: controlText,
             minimumSize: const Size(0, 34),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.standard,
+            tapTargetSize: MaterialTapTargetSize.padded,
+            shape: buttonShape,
           ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
@@ -407,8 +560,9 @@ class AppSecondaryControlTheme extends StatelessWidget {
             textStyle: controlText,
             minimumSize: const Size(0, 34),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.standard,
+            tapTargetSize: MaterialTapTargetSize.padded,
+            shape: buttonShape,
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
@@ -416,9 +570,10 @@ class AppSecondaryControlTheme extends StatelessWidget {
             textStyle: controlText,
             minimumSize: const Size(0, 34),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.standard,
+            tapTargetSize: MaterialTapTargetSize.padded,
             side: BorderSide(color: subtleBorder, width: 0.4),
+            shape: buttonShape,
           ),
         ),
         filledButtonTheme: FilledButtonThemeData(
@@ -428,6 +583,9 @@ class AppSecondaryControlTheme extends StatelessWidget {
         ),
         segmentedButtonTheme: SegmentedButtonThemeData(
           style: ButtonStyle(
+            shape: buttonShape == null
+                ? null
+                : WidgetStatePropertyAll<OutlinedBorder>(buttonShape),
             textStyle: WidgetStatePropertyAll(controlText),
             foregroundColor: WidgetStateProperty.resolveWith((states) {
               if (states.contains(WidgetState.disabled)) {
@@ -450,8 +608,8 @@ class AppSecondaryControlTheme extends StatelessWidget {
                   : subtleBorder;
               return BorderSide(color: color, width: 0.4);
             }),
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.standard,
+            tapTargetSize: MaterialTapTargetSize.padded,
           ),
         ),
         chipTheme: theme.chipTheme.copyWith(
@@ -510,6 +668,7 @@ class AppSectionHeader extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final TextStyle? titleStyle;
   final TextStyle? actionTextStyle;
+  final bool wrapText;
 
   const AppSectionHeader({
     super.key,
@@ -521,6 +680,7 @@ class AppSectionHeader extends StatelessWidget {
     this.padding = const EdgeInsets.fromLTRB(16, 14, 12, 8),
     this.titleStyle,
     this.actionTextStyle,
+    this.wrapText = false,
   });
 
   @override
@@ -528,12 +688,13 @@ class AppSectionHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final titleColumn = Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+          maxLines: wrapText ? null : 2,
+          overflow: wrapText ? TextOverflow.visible : TextOverflow.ellipsis,
           style:
               titleStyle ??
               appSecondaryMenuItemTextStyle(context).copyWith(
@@ -545,11 +706,11 @@ class AppSectionHeader extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             subtitle!,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+            maxLines: wrapText ? null : 2,
+            overflow: wrapText ? TextOverflow.visible : TextOverflow.ellipsis,
             style: appSecondaryControlLabelStyle(
               context,
-            ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
+            ).copyWith(color: appSecondaryDescriptionColor(context)),
           ),
         ],
       ],
@@ -565,7 +726,6 @@ class AppSectionHeader extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             style: TextButton.styleFrom(
-              visualDensity: VisualDensity.compact,
               foregroundColor: cs.primary,
               textStyle:
                   actionTextStyle ??
@@ -580,7 +740,7 @@ class AppSectionHeader extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           if (action == null) return titleColumn;
-          if (constraints.maxWidth < 340) {
+          if (constraints.maxWidth < 290) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -598,7 +758,9 @@ class AppSectionHeader extends StatelessWidget {
           }
 
           return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: (subtitle == null || subtitle!.isEmpty)
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
             children: [
               Expanded(child: titleColumn),
               const SizedBox(width: 8),
@@ -768,6 +930,7 @@ class AppMetricCard extends StatelessWidget {
   final TextStyle? valueStyle;
   final TextStyle? unitStyle;
   final TextStyle? titleStyle;
+  final int? titleMaxLines;
   final double iconBoxSize;
   final double iconSize;
 
@@ -785,6 +948,7 @@ class AppMetricCard extends StatelessWidget {
     this.valueStyle,
     this.unitStyle,
     this.titleStyle,
+    this.titleMaxLines = 1,
     this.iconBoxSize = 28,
     this.iconSize = 15,
   });
@@ -807,7 +971,10 @@ class AppMetricCard extends StatelessWidget {
     final fill =
         (!isDark ? surfaceStyle?.cardFillColor : null) ??
         (isDark
-            ? cs.surface.withValues(alpha: 0.68)
+            ? Color.alphaBlend(
+                Colors.white.withValues(alpha: 0.05),
+                cs.surface,
+              )
             : cs.surface.withValues(alpha: 0.85));
     // 玻璃体系统一：亮色下小卡描边/阴影与卡面、Material Card 同走
     // AppSurfaceStyle 玻璃档（cardBorder / cardShadow），三类卡面同屏
@@ -848,13 +1015,15 @@ class AppMetricCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    maxLines: titleMaxLines,
+                    overflow: titleMaxLines == null
+                        ? TextOverflow.visible
+                        : TextOverflow.ellipsis,
                     style:
                         titleStyle ??
                         theme.textTheme.bodySmall?.copyWith(
                           fontSize: 11,
-                          color: cs.onSurface.withValues(alpha: 0.62),
+                          color: appSecondaryDescriptionColor(context),
                           fontWeight: FontWeight.normal,
                           height: 1.1,
                         ),
@@ -866,23 +1035,28 @@ class AppMetricCard extends StatelessWidget {
                         TextSpan(
                           text: value,
                           style:
-                              valueStyle ??
-                              theme.textTheme.titleMedium?.copyWith(
-                                fontSize: DesignTokens.fontSizeMd,
-                                fontWeight: FontWeight.normal,
-                                color: cs.onSurface,
-                                height: 1.1,
-                              ),
+                              (valueStyle ??
+                                      theme.textTheme.titleMedium?.copyWith(
+                                        fontSize: DesignTokens.fontSizeMd,
+                                        fontWeight: FontWeight.normal,
+                                        color: cs.onSurface,
+                                        height: 1.1,
+                                      ))
+                                  ?.copyWith(
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
                         ),
                         if (unit != null && unit!.isNotEmpty)
                           TextSpan(
-                            text: ' $unit',
+                            text: unit == '%' ? '%' : ' $unit',
                             style:
                                 unitStyle ??
                                 theme.textTheme.bodySmall?.copyWith(
                                   fontSize: 11,
                                   fontWeight: FontWeight.normal,
-                                  color: cs.onSurface.withValues(alpha: 0.62),
+                                  color: appSecondaryDescriptionColor(context),
                                   height: 1.08,
                                 ),
                           ),
@@ -950,59 +1124,233 @@ class AppActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final cardFill = surfaceStyle?.cardFillColor;
+    final cardBg = cardFill != null
+        ? Color.alphaBlend(cardFill, scaffoldBg)
+        : cs.surface;
+    final candidateSurfaces = <Color>[scaffoldBg, cardBg];
+
+    Color resolveActionForeground(Color base) {
+      bool meetsAll(Color c) {
+        for (final surface in candidateSurfaces) {
+          if (appContrastRatio(surface, c) < 4.5) return false;
+        }
+        return true;
+      }
+
+      if (meetsAll(base)) return base;
+
+      final target = isDark ? Colors.white : Colors.black;
+      for (final amount in const [0.10, 0.16, 0.22, 0.30, 0.38, 0.48]) {
+        final candidate = Color.lerp(base, target, amount) ?? base;
+        if (meetsAll(candidate)) return candidate;
+      }
+
+      Color worstSurface = scaffoldBg;
+      double worstRatio = double.infinity;
+      for (final surface in candidateSurfaces) {
+        final r = appContrastRatio(surface, base);
+        if (r < worstRatio) {
+          worstRatio = r;
+          worstSurface = surface;
+        }
+      }
+      return appReadableForeground(worstSurface, base);
+    }
+
+    final actionForeground = resolveActionForeground(cs.primary);
+
+    final resolvedPadding = padding.resolve(Directionality.maybeOf(context));
+    final hasSubtitle = subtitle != null && subtitle!.isNotEmpty;
+    final titleStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontSize: 13,
+      fontWeight: FontWeight.normal,
+      color: cs.onSurface,
+    );
+    final subtitleStyle = theme.textTheme.bodySmall?.copyWith(
+      color: appSecondaryDescriptionColor(context),
+    );
+
+    final titleText = Text(label, style: titleStyle);
+    final subtitleText = hasSubtitle
+        ? Text(subtitle!, style: subtitleStyle)
+        : null;
+
+    final textColumn = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        titleText,
+        if (subtitleText != null) ...[const SizedBox(height: 2), subtitleText],
+      ],
+    );
+
+    final leading = Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, color: color, size: 20),
+    );
+
+    final defaultChevron = Icon(
+      Icons.chevron_right,
+      size: 18,
+      color: cs.onSurface.withValues(alpha: 0.38),
+    );
+
+    final isActionTrailing = trailing != null && trailing is! Icon;
+    final effectiveTrailing = trailing ?? defaultChevron;
+
+    final existingTheme = TextButtonTheme.of(context).style;
+    final effectiveButtonStyle =
+        (existingTheme ??
+                TextButton.styleFrom(
+                  minimumSize: const Size(44, 44),
+                  tapTargetSize: MaterialTapTargetSize.padded,
+                ))
+            .copyWith(
+              foregroundColor: WidgetStatePropertyAll(actionForeground),
+              minimumSize: WidgetStateProperty.resolveWith((states) {
+                final existing = existingTheme?.minimumSize?.resolve(states);
+                if (existing == null) return const Size(44, 44);
+                return Size(
+                  math.max(existing.width, 44.0),
+                  math.max(existing.height, 44.0),
+                );
+              }),
+              tapTargetSize: MaterialTapTargetSize.padded,
+              visualDensity: VisualDensity.standard,
+            );
+
+    final themedTrailing = isActionTrailing
+        ? TextButtonTheme(
+            data: TextButtonThemeData(style: effectiveButtonStyle),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              child: effectiveTrailing,
+            ),
+          )
+        : effectiveTrailing;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Padding(
           padding: padding,
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontSize: 13,
-                        fontWeight: FontWeight.normal,
-                        color: cs.onSurface,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final textScaler = MediaQuery.textScalerOf(context);
+              final textDirection =
+                  Directionality.maybeOf(context) ?? TextDirection.ltr;
+
+              final totalWidth = constraints.hasBoundedWidth
+                  ? constraints.maxWidth
+                  : 360.0;
+              final availableContentWidth = math.max(
+                0.0,
+                totalWidth - resolvedPadding.horizontal - 52.0,
+              );
+
+              bool shouldStack = false;
+              if (isActionTrailing) {
+                String? buttonText;
+                if (trailing is TextButton &&
+                    (trailing as TextButton).child is Text) {
+                  buttonText = ((trailing as TextButton).child as Text).data;
+                }
+                double trailingWidth = 80.0;
+                final textScale = textScaler.scale(14) / 14;
+                if (buttonText != null && buttonText.isNotEmpty) {
+                  final actionPainter = TextPainter(
+                    text: TextSpan(
+                      text: buttonText,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontSize: 12,
                       ),
                     ),
-                    if (subtitle != null && subtitle!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ],
+                    textDirection: textDirection,
+                    textScaler: textScaler,
+                  )..layout();
+                  trailingWidth = math.max(44.0, actionPainter.width + 24.0);
+                  actionPainter.dispose();
+                } else {
+                  trailingWidth = math.max(44.0, 72.0 * textScale);
+                }
+
+                final availableInlineTextW =
+                    availableContentWidth - trailingWidth - 8.0;
+
+                final titlePainter = TextPainter(
+                  text: TextSpan(text: label, style: titleStyle),
+                  textDirection: textDirection,
+                  textScaler: textScaler,
+                )..layout();
+                final longestTitleWord = titlePainter.minIntrinsicWidth;
+                titlePainter.dispose();
+
+                double longestSubtitleWord = 0.0;
+                if (hasSubtitle) {
+                  final subtitlePainter = TextPainter(
+                    text: TextSpan(text: subtitle!, style: subtitleStyle),
+                    textDirection: textDirection,
+                    textScaler: textScaler,
+                  )..layout();
+                  longestSubtitleWord = subtitlePainter.minIntrinsicWidth;
+                  subtitlePainter.dispose();
+                }
+
+                final longestWordWidth = math.max(
+                  longestTitleWord,
+                  longestSubtitleWord,
+                );
+
+                shouldStack =
+                    availableInlineTextW < longestWordWidth ||
+                    availableInlineTextW < 120.0 ||
+                    (availableContentWidth < 240.0 && textScale > 1.3);
+              }
+
+              if (shouldStack) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        leading,
+                        const SizedBox(width: 12),
+                        Expanded(child: textColumn),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: themedTrailing,
+                    ),
                   ],
-                ),
-              ),
-              trailing ??
-                  Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: cs.onSurface.withValues(alpha: 0.38),
-                  ),
-            ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  leading,
+                  const SizedBox(width: 12),
+                  Expanded(child: textColumn),
+                  const SizedBox(width: 8),
+                  themedTrailing,
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -1018,6 +1366,7 @@ class AppSettingsSection extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final Border? border;
   final double elevation;
+  final bool showDividers;
 
   const AppSettingsSection({
     super.key,
@@ -1028,11 +1377,32 @@ class AppSettingsSection extends StatelessWidget {
     this.padding = const EdgeInsets.all(16),
     this.border,
     this.elevation = 0,
+    this.showDividers = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final surfaceStyle = appSurfaceStyleOf(context);
+    final spacedChildren = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      spacedChildren.add(children[i]);
+      if (showDividers &&
+          i < children.length - 1 &&
+          children[i] is! Divider &&
+          children[i + 1] is! Divider) {
+        spacedChildren.add(
+          Divider(
+            height: 1,
+            thickness: 0.5,
+            indent: 48,
+            color: cs.outlineVariant.withValues(alpha: isDark ? 0.24 : 0.35),
+          ),
+        );
+      }
+    }
     return AppSurfaceCard(
       margin: margin,
       padding: padding,
@@ -1049,9 +1419,10 @@ class AppSettingsSection extends StatelessWidget {
             title: title,
             subtitle: subtitle,
             padding: EdgeInsets.zero,
+            wrapText: true,
           ),
           const SizedBox(height: 10),
-          ...children,
+          ...spacedChildren,
         ],
       ),
     );
@@ -1082,27 +1453,46 @@ class AppSettingsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    Widget trailingWidget(double maxWidth) {
-      final fallback = Icon(
-        Icons.chevron_right,
-        size: 18,
-        color: cs.onSurface.withValues(alpha: 0.38),
-      );
-      return ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: SizedBox(
-          height: 40,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
-              child: trailing ?? fallback,
-            ),
-          ),
-        ),
-      );
-    }
+    final fallback = Icon(
+      Icons.chevron_right,
+      size: 18,
+      color: cs.onSurface.withValues(alpha: 0.38),
+    );
+
+    final hasSubtitle = subtitle != null && subtitle!.isNotEmpty;
+    final rowMinHeight = hasSubtitle ? 54.0 : 42.0;
+    final leading = Container(
+      width: 34,
+      height: 34,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(icon, color: color, size: 18),
+    );
+    final titleText = Text(
+      title,
+      style: appSecondaryMenuItemTextStyle(context).copyWith(
+        color: cs.onSurface,
+        fontWeight: DesignTokens.fontWeightRegular,
+      ),
+    );
+    final subtitleStyle = appSecondaryControlLabelStyle(
+      context,
+    ).copyWith(color: appSecondaryDescriptionColor(context));
+    final subtitleText = Text(subtitle ?? '', style: subtitleStyle);
+    final textBlock = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        titleText,
+        if (hasSubtitle) ...[const SizedBox(height: 2), subtitleText],
+      ],
+    );
+
+    final media = MediaQuery.maybeOf(context);
+    final textScale = media != null ? media.textScaler.scale(14) / 14 : 1.0;
 
     return Material(
       color: Colors.transparent,
@@ -1111,83 +1501,373 @@ class AppSettingsTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: padding,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final contentWidth = (constraints.maxWidth - 44).clamp(
-                0.0,
-                constraints.maxWidth,
-              );
-              final hasSubtitle = subtitle != null && subtitle!.isNotEmpty;
-              final rowMinHeight = hasSubtitle ? 54.0 : 42.0;
-              final leading = Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 18),
-              );
-              final titleText = Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: appSecondaryMenuItemTextStyle(context).copyWith(
-                  color: cs.onSurface,
-                  fontWeight: DesignTokens.fontWeightRegular,
-                ),
-              );
-              final subtitleStyle = appSecondaryControlLabelStyle(
-                context,
-              ).copyWith(color: cs.onSurface.withValues(alpha: 0.62));
-              final subtitleText = Text(
-                subtitle ?? '',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: subtitleStyle,
-              );
-              final trailingMaxWidth = hasSubtitle
-                  ? (contentWidth * 0.40).clamp(48.0, 124.0)
-                  : (contentWidth * 0.50).clamp(56.0, 150.0);
-              final action = trailingWidget(trailingMaxWidth);
-              return ConstrainedBox(
-                constraints: BoxConstraints(minHeight: rowMinHeight),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    SizedBox(width: 34, height: 34, child: leading),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: titleText,
-                          ),
-                          if (hasSubtitle) ...[
-                            const SizedBox(height: 2),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: subtitleText,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    action,
-                  ],
-                ),
-              );
-            },
+          child: _AppSettingsTileLayout(
+            minRowHeight: rowMinHeight,
+            hasTrailing: trailing != null,
+            textScale: textScale,
+            leading: leading,
+            text: textBlock,
+            trailing: trailing ?? fallback,
           ),
         ),
       ),
     );
+  }
+}
+
+enum _SettingsTileSlot { leading, text, trailing }
+
+class _SettingsTileParentData extends ContainerBoxParentData<RenderBox> {
+  _SettingsTileSlot? slot;
+}
+
+class _SettingsTileSlotWidget
+    extends ParentDataWidget<_SettingsTileParentData> {
+  final _SettingsTileSlot slot;
+  const _SettingsTileSlotWidget({required this.slot, required super.child});
+
+  @override
+  void applyParentData(RenderObject renderObject) {
+    final parentData = renderObject.parentData as _SettingsTileParentData;
+    if (parentData.slot != slot) {
+      parentData.slot = slot;
+      final targetParent = renderObject.parent;
+      if (targetParent is RenderObject) {
+        targetParent.markNeedsLayout();
+      }
+    }
+  }
+
+  @override
+  Type get debugTypicalAncestorWidgetClass => _AppSettingsTileLayout;
+}
+
+class _TileLayoutCalculation {
+  final Size size;
+  final Offset leadingOffset;
+  final Offset textOffset;
+  final Offset trailingOffset;
+
+  const _TileLayoutCalculation({
+    required this.size,
+    required this.leadingOffset,
+    required this.textOffset,
+    required this.trailingOffset,
+  });
+}
+
+class _AppSettingsTileLayout extends MultiChildRenderObjectWidget {
+  final double minRowHeight;
+  final bool hasTrailing;
+  final double textScale;
+
+  _AppSettingsTileLayout({
+    required Widget leading,
+    required Widget text,
+    required Widget trailing,
+    required this.minRowHeight,
+    required this.hasTrailing,
+    required this.textScale,
+  }) : super(
+         children: [
+           _SettingsTileSlotWidget(
+             slot: _SettingsTileSlot.leading,
+             child: leading,
+           ),
+           _SettingsTileSlotWidget(slot: _SettingsTileSlot.text, child: text),
+           _SettingsTileSlotWidget(
+             slot: _SettingsTileSlot.trailing,
+             child: trailing,
+           ),
+         ],
+       );
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderAppSettingsTile(
+      minRowHeight: minRowHeight,
+      hasTrailing: hasTrailing,
+      textScale: textScale,
+    );
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderAppSettingsTile renderObject,
+  ) {
+    renderObject
+      ..minRowHeight = minRowHeight
+      ..hasTrailing = hasTrailing
+      ..textScale = textScale;
+  }
+}
+
+class _RenderAppSettingsTile extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _SettingsTileParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _SettingsTileParentData> {
+  double _minRowHeight;
+  bool _hasTrailing;
+  double _textScale;
+
+  _RenderAppSettingsTile({
+    required double minRowHeight,
+    required bool hasTrailing,
+    required double textScale,
+  }) : _minRowHeight = minRowHeight,
+       _hasTrailing = hasTrailing,
+       _textScale = textScale;
+
+  double get minRowHeight => _minRowHeight;
+  set minRowHeight(double value) {
+    if (_minRowHeight == value) return;
+    _minRowHeight = value;
+    markNeedsLayout();
+  }
+
+  bool get hasTrailing => _hasTrailing;
+  set hasTrailing(bool value) {
+    if (_hasTrailing == value) return;
+    _hasTrailing = value;
+    markNeedsLayout();
+  }
+
+  double get textScale => _textScale;
+  set textScale(double value) {
+    if (_textScale == value) return;
+    _textScale = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _SettingsTileParentData) {
+      child.parentData = _SettingsTileParentData();
+    }
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  _TileLayoutCalculation _computeTileLayout(
+    BoxConstraints constraints, {
+    required bool dry,
+  }) {
+    RenderBox? leading;
+    RenderBox? text;
+    RenderBox? trailing;
+
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final childParentData = child.parentData! as _SettingsTileParentData;
+      switch (childParentData.slot) {
+        case _SettingsTileSlot.leading:
+          leading = child;
+        case _SettingsTileSlot.text:
+          text = child;
+        case _SettingsTileSlot.trailing:
+          trailing = child;
+        case null:
+          break;
+      }
+      child = childParentData.nextSibling;
+    }
+
+    if (leading == null || text == null || trailing == null) {
+      return _TileLayoutCalculation(
+        size: constraints.smallest,
+        leadingOffset: Offset.zero,
+        textOffset: Offset.zero,
+        trailingOffset: Offset.zero,
+      );
+    }
+
+    final maxW = constraints.hasBoundedWidth ? constraints.maxWidth : 360.0;
+    if (!dry) {
+      leading.layout(
+        const BoxConstraints.tightFor(width: 34, height: 34),
+        parentUsesSize: true,
+      );
+    }
+
+    final Size trailingSize;
+    if (dry) {
+      trailingSize = trailing.getDryLayout(BoxConstraints(maxWidth: maxW));
+    } else {
+      trailing.layout(BoxConstraints(maxWidth: maxW), parentUsesSize: true);
+      trailingSize = trailing.size;
+    }
+    final trailingW = trailingSize.width;
+    final trailingH = trailingSize.height;
+
+    final spacingBeforeTrailing = trailingW > 0.0 ? 8.0 : 0.0;
+    final availableInlineTextW =
+        maxW - 34.0 - 10.0 - spacingBeforeTrailing - trailingW;
+    final shouldStack =
+        hasTrailing &&
+        trailingW > 0.0 &&
+        ((maxW < 360.0 && textScale > 1.3) ||
+            (availableInlineTextW < 160.0 && trailingW > 90.0) ||
+            availableInlineTextW < 110.0);
+
+    if (shouldStack) {
+      final textW = (maxW - 44.0).clamp(0.0, maxW);
+      final Size textSize;
+      if (dry) {
+        textSize = text.getDryLayout(BoxConstraints(maxWidth: textW));
+      } else {
+        text.layout(BoxConstraints(maxWidth: textW), parentUsesSize: true);
+        textSize = text.size;
+      }
+      final textH = textSize.height;
+
+      final row1H = textH > 34.0 ? textH : 34.0;
+      final leadingTop = (row1H - 34.0) / 2;
+      final textTop = (row1H - textH) / 2;
+
+      final trailingTop = row1H + 4.0;
+      final trailingLeft = (maxW - trailingW).clamp(0.0, maxW);
+
+      final naturalH = trailingTop + trailingH;
+      final totalH = naturalH > minRowHeight ? naturalH : minRowHeight;
+      final constrainedSize = constraints.constrain(Size(maxW, totalH));
+
+      return _TileLayoutCalculation(
+        size: constrainedSize,
+        leadingOffset: Offset(0, leadingTop),
+        textOffset: Offset(44.0, textTop),
+        trailingOffset: Offset(trailingLeft, trailingTop),
+      );
+    } else {
+      final textW = availableInlineTextW.clamp(0.0, maxW);
+      final Size textSize;
+      if (dry) {
+        textSize = text.getDryLayout(BoxConstraints(maxWidth: textW));
+      } else {
+        text.layout(BoxConstraints(maxWidth: textW), parentUsesSize: true);
+        textSize = text.size;
+      }
+      final textH = textSize.height;
+
+      final naturalH = [textH, 34.0, trailingH].reduce((a, b) => a > b ? a : b);
+      final totalH = naturalH > minRowHeight ? naturalH : minRowHeight;
+
+      final textTop = (totalH - textH) / 2;
+      final textCenterDy = textTop + textH / 2;
+
+      final leadingTop = textCenterDy - 17.0;
+      final trailingTop = textCenterDy - trailingH / 2;
+      final trailingLeft = maxW - trailingW;
+
+      final constrainedSize = constraints.constrain(Size(maxW, totalH));
+
+      return _TileLayoutCalculation(
+        size: constrainedSize,
+        leadingOffset: Offset(0, leadingTop),
+        textOffset: Offset(44.0, textTop),
+        trailingOffset: Offset(trailingLeft, trailingTop),
+      );
+    }
+  }
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    return _computeTileLayout(constraints, dry: true).size;
+  }
+
+  @override
+  void performLayout() {
+    final result = _computeTileLayout(constraints, dry: false);
+    size = result.size;
+
+    RenderBox? leading;
+    RenderBox? text;
+    RenderBox? trailing;
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final childParentData = child.parentData! as _SettingsTileParentData;
+      switch (childParentData.slot) {
+        case _SettingsTileSlot.leading:
+          leading = child;
+        case _SettingsTileSlot.text:
+          text = child;
+        case _SettingsTileSlot.trailing:
+          trailing = child;
+        case null:
+          break;
+      }
+      child = childParentData.nextSibling;
+    }
+
+    if (leading != null) {
+      (leading.parentData! as _SettingsTileParentData).offset =
+          result.leadingOffset;
+    }
+    if (text != null) {
+      (text.parentData! as _SettingsTileParentData).offset = result.textOffset;
+    }
+    if (trailing != null) {
+      (trailing.parentData! as _SettingsTileParentData).offset =
+          result.trailingOffset;
+    }
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) {
+    return computeDryLayout(BoxConstraints(maxWidth: width)).height;
+  }
+
+  @override
+  double computeMaxIntrinsicHeight(double width) {
+    return computeDryLayout(BoxConstraints(maxWidth: width)).height;
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) {
+    RenderBox? leading;
+    RenderBox? text;
+    RenderBox? trailing;
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final pData = child.parentData! as _SettingsTileParentData;
+      if (pData.slot == _SettingsTileSlot.leading) leading = child;
+      if (pData.slot == _SettingsTileSlot.text) text = child;
+      if (pData.slot == _SettingsTileSlot.trailing) trailing = child;
+      child = pData.nextSibling;
+    }
+    final leadW = leading?.getMinIntrinsicWidth(height) ?? 34.0;
+    final textW = text?.getMinIntrinsicWidth(height) ?? 0.0;
+    final trailW = trailing?.getMinIntrinsicWidth(height) ?? 0.0;
+    final spacing = trailW > 0.0 ? 8.0 : 0.0;
+    return leadW + 10.0 + textW + spacing + trailW;
+  }
+
+  @override
+  double computeMaxIntrinsicWidth(double height) {
+    RenderBox? leading;
+    RenderBox? text;
+    RenderBox? trailing;
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final pData = child.parentData! as _SettingsTileParentData;
+      if (pData.slot == _SettingsTileSlot.leading) leading = child;
+      if (pData.slot == _SettingsTileSlot.text) text = child;
+      if (pData.slot == _SettingsTileSlot.trailing) trailing = child;
+      child = pData.nextSibling;
+    }
+    final leadW = leading?.getMaxIntrinsicWidth(height) ?? 34.0;
+    final textW = text?.getMaxIntrinsicWidth(height) ?? 0.0;
+    final trailW = trailing?.getMaxIntrinsicWidth(height) ?? 0.0;
+    final spacing = trailW > 0.0 ? 8.0 : 0.0;
+    return leadW + 10.0 + textW + spacing + trailW;
   }
 }
 
@@ -1275,6 +1955,15 @@ class AppSwitchTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final titleStyle = appSecondaryMenuItemTextStyle(
+      context,
+    ).copyWith(color: cs.onSurface);
+    final subtitleStyle = subtitle != null && subtitle!.isNotEmpty
+        ? appSecondaryControlLabelStyle(
+            context,
+          ).copyWith(color: appSecondaryDescriptionColor(context))
+        : null;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1282,49 +1971,675 @@ class AppSwitchTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: padding,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 18),
+          child: _AppSwitchTileLayout(
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+            title: title,
+            titleStyle: titleStyle,
+            subtitle: subtitle,
+            subtitleStyle: subtitleStyle,
+            leading: Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: appSecondaryMenuItemTextStyle(
-                        context,
-                      ).copyWith(color: cs.onSurface),
-                    ),
-                    if (subtitle != null && subtitle!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        style: appSecondaryControlLabelStyle(
-                          context,
-                        ).copyWith(color: cs.onSurface.withValues(alpha: 0.62)),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Switch(value: value, onChanged: onChanged),
-            ],
+              child: Icon(icon, color: color, size: 18),
+            ),
+            text: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: titleStyle),
+                if (subtitle != null && subtitle!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(subtitle!, style: subtitleStyle),
+                ],
+              ],
+            ),
+            trailing: Switch(value: value, onChanged: onChanged),
           ),
         ),
       ),
     );
+  }
+}
+
+enum _SwitchTileSlot { leading, text, trailing }
+
+class _SwitchTileParentData extends ContainerBoxParentData<RenderBox> {
+  _SwitchTileSlot? slot;
+}
+
+class _SwitchTileSlotWidget extends ParentDataWidget<_SwitchTileParentData> {
+  final _SwitchTileSlot slot;
+  const _SwitchTileSlotWidget({required this.slot, required super.child});
+
+  @override
+  void applyParentData(RenderObject renderObject) {
+    final parentData = renderObject.parentData as _SwitchTileParentData;
+    if (parentData.slot != slot) {
+      parentData.slot = slot;
+      final targetParent = renderObject.parent;
+      if (targetParent is RenderObject) {
+        targetParent.markNeedsLayout();
+      }
+    }
+  }
+
+  @override
+  Type get debugTypicalAncestorWidgetClass => _AppSwitchTileLayout;
+}
+
+class _SwitchTileLayoutResult {
+  final Size size;
+  final Offset leadingOffset;
+  final Offset textOffset;
+  final Offset trailingOffset;
+
+  const _SwitchTileLayoutResult({
+    required this.size,
+    required this.leadingOffset,
+    required this.textOffset,
+    required this.trailingOffset,
+  });
+}
+
+class _AppSwitchTileLayout extends MultiChildRenderObjectWidget {
+  final TextDirection textDirection;
+  final TextScaler textScaler;
+  final String title;
+  final TextStyle titleStyle;
+  final String? subtitle;
+  final TextStyle? subtitleStyle;
+
+  _AppSwitchTileLayout({
+    required this.textDirection,
+    required this.textScaler,
+    required this.title,
+    required this.titleStyle,
+    this.subtitle,
+    this.subtitleStyle,
+    required Widget leading,
+    required Widget text,
+    required Widget trailing,
+  }) : super(
+         children: [
+           _SwitchTileSlotWidget(slot: _SwitchTileSlot.leading, child: leading),
+           _SwitchTileSlotWidget(slot: _SwitchTileSlot.text, child: text),
+           _SwitchTileSlotWidget(
+             slot: _SwitchTileSlot.trailing,
+             child: trailing,
+           ),
+         ],
+       );
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderAppSwitchTile(
+      textDirection: textDirection,
+      textScaler: textScaler,
+      title: title,
+      titleStyle: titleStyle,
+      subtitle: subtitle,
+      subtitleStyle: subtitleStyle,
+    );
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderAppSwitchTile renderObject,
+  ) {
+    renderObject
+      ..textDirection = textDirection
+      ..textScaler = textScaler
+      ..title = title
+      ..titleStyle = titleStyle
+      ..subtitle = subtitle
+      ..subtitleStyle = subtitleStyle;
+  }
+}
+
+class _RenderAppSwitchTile extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _SwitchTileParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _SwitchTileParentData> {
+  TextDirection _textDirection;
+  TextScaler _textScaler;
+  String _title;
+  TextStyle _titleStyle;
+  String? _subtitle;
+  TextStyle? _subtitleStyle;
+
+  _RenderAppSwitchTile({
+    required TextDirection textDirection,
+    required TextScaler textScaler,
+    required String title,
+    required TextStyle titleStyle,
+    String? subtitle,
+    TextStyle? subtitleStyle,
+  }) : _textDirection = textDirection,
+       _textScaler = textScaler,
+       _title = title,
+       _titleStyle = titleStyle,
+       _subtitle = subtitle,
+       _subtitleStyle = subtitleStyle;
+
+  TextDirection get textDirection => _textDirection;
+  set textDirection(TextDirection value) {
+    if (_textDirection == value) return;
+    _textDirection = value;
+    markNeedsLayout();
+  }
+
+  TextScaler get textScaler => _textScaler;
+  set textScaler(TextScaler value) {
+    if (_textScaler == value) return;
+    _textScaler = value;
+    markNeedsLayout();
+  }
+
+  String get title => _title;
+  set title(String value) {
+    if (_title == value) return;
+    _title = value;
+    markNeedsLayout();
+  }
+
+  TextStyle get titleStyle => _titleStyle;
+  set titleStyle(TextStyle value) {
+    if (_titleStyle == value) return;
+    _titleStyle = value;
+    markNeedsLayout();
+  }
+
+  String? get subtitle => _subtitle;
+  set subtitle(String? value) {
+    if (_subtitle == value) return;
+    _subtitle = value;
+    markNeedsLayout();
+  }
+
+  TextStyle? get subtitleStyle => _subtitleStyle;
+  set subtitleStyle(TextStyle? value) {
+    if (_subtitleStyle == value) return;
+    _subtitleStyle = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _SwitchTileParentData) {
+      child.parentData = _SwitchTileParentData();
+    }
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  bool _hasUnbrokenWordSplit(double inlineWidth, double stackedWidth) {
+    if (inlineWidth <= 0.0) return true;
+    if (_textSplits(title, titleStyle, inlineWidth, stackedWidth)) {
+      return true;
+    }
+    final sub = subtitle;
+    final subStyle = subtitleStyle;
+    if (sub != null &&
+        sub.isNotEmpty &&
+        subStyle != null &&
+        _textSplits(sub, subStyle, inlineWidth, stackedWidth)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _textSplits(
+    String text,
+    TextStyle style,
+    double inlineWidth,
+    double stackedWidth,
+  ) {
+    if (inlineWidth <= 0.0) return true;
+    final matches = RegExp(r'[A-Za-z]+').allMatches(text);
+    if (matches.isEmpty) return false;
+
+    final inlinePainter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textScaler: textScaler,
+      textDirection: textDirection,
+    );
+    TextPainter? stackedPainter;
+    try {
+      inlinePainter.layout(maxWidth: inlineWidth);
+      for (final match in matches) {
+        final inlineBoxes = inlinePainter.getBoxesForSelection(
+          TextSelection(baseOffset: match.start, extentOffset: match.end),
+        );
+        final inlineLines = inlineBoxes.map((box) => box.top).toSet().length;
+        if (inlineLines > 1) {
+          stackedPainter ??= TextPainter(
+            text: TextSpan(text: text, style: style),
+            textScaler: textScaler,
+            textDirection: textDirection,
+          )..layout(maxWidth: stackedWidth);
+
+          final stackedBoxes = stackedPainter.getBoxesForSelection(
+            TextSelection(baseOffset: match.start, extentOffset: match.end),
+          );
+          final stackedLines = stackedBoxes
+              .map((box) => box.top)
+              .toSet()
+              .length;
+          if (stackedLines == 1 || stackedLines < inlineLines) {
+            return true;
+          }
+        }
+      }
+    } finally {
+      inlinePainter.dispose();
+      stackedPainter?.dispose();
+    }
+    return false;
+  }
+
+  _SwitchTileLayoutResult _computeTileLayout(
+    BoxConstraints constraints, {
+    required bool dry,
+  }) {
+    RenderBox? leading;
+    RenderBox? text;
+    RenderBox? trailing;
+
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final childParentData = child.parentData! as _SwitchTileParentData;
+      switch (childParentData.slot) {
+        case _SwitchTileSlot.leading:
+          leading = child;
+        case _SwitchTileSlot.text:
+          text = child;
+        case _SwitchTileSlot.trailing:
+          trailing = child;
+        case null:
+          break;
+      }
+      child = childParentData.nextSibling;
+    }
+
+    if (leading == null || text == null || trailing == null) {
+      return _SwitchTileLayoutResult(
+        size: constraints.smallest,
+        leadingOffset: Offset.zero,
+        textOffset: Offset.zero,
+        trailingOffset: Offset.zero,
+      );
+    }
+
+    final bool isRtl = textDirection == TextDirection.rtl;
+
+    if (!constraints.hasBoundedWidth) {
+      final Size leadingSize;
+      final Size trailingSize;
+      final Size textSize;
+      if (dry) {
+        leadingSize = leading.getDryLayout(
+          const BoxConstraints.tightFor(width: 34, height: 34),
+        );
+        trailingSize = trailing.getDryLayout(const BoxConstraints());
+        textSize = text.getDryLayout(const BoxConstraints());
+      } else {
+        leading.layout(
+          const BoxConstraints.tightFor(width: 34, height: 34),
+          parentUsesSize: true,
+        );
+        leadingSize = leading.size;
+        trailing.layout(const BoxConstraints(), parentUsesSize: true);
+        trailingSize = trailing.size;
+        text.layout(const BoxConstraints(), parentUsesSize: true);
+        textSize = text.size;
+      }
+      final double totalW =
+          leadingSize.width + 10.0 + textSize.width + trailingSize.width;
+      final double rowH = math.max(
+        34.0,
+        math.max(textSize.height, trailingSize.height),
+      );
+      final double leadingTop = (rowH - 34.0) / 2;
+      final double textTop = (rowH - textSize.height) / 2;
+      final double trailingTop = (rowH - trailingSize.height) / 2;
+      return _SwitchTileLayoutResult(
+        size: constraints.constrain(Size(totalW, rowH)),
+        leadingOffset: Offset(isRtl ? totalW - 34.0 : 0.0, leadingTop),
+        textOffset: Offset(isRtl ? trailingSize.width : 44.0, textTop),
+        trailingOffset: Offset(
+          isRtl ? 0.0 : totalW - trailingSize.width,
+          trailingTop,
+        ),
+      );
+    }
+
+    final double maxW = constraints.maxWidth;
+    if (!dry) {
+      leading.layout(
+        const BoxConstraints.tightFor(width: 34, height: 34),
+        parentUsesSize: true,
+      );
+    }
+
+    final Size trailingSize;
+    if (dry) {
+      trailingSize = trailing.getDryLayout(BoxConstraints(maxWidth: maxW));
+    } else {
+      trailing.layout(BoxConstraints(maxWidth: maxW), parentUsesSize: true);
+      trailingSize = trailing.size;
+    }
+    final double trailingW = trailingSize.width;
+    final double trailingH = trailingSize.height;
+
+    final double availableStackedTextW = math.max(0.0, maxW - 44.0);
+    final double availableInlineTextW = math.max(
+      0.0,
+      availableStackedTextW - trailingW,
+    );
+
+    final bool shouldStack = _hasUnbrokenWordSplit(
+      availableInlineTextW,
+      availableStackedTextW,
+    );
+
+    final double textMaxW = math.max(
+      0.0,
+      shouldStack ? availableStackedTextW : availableInlineTextW,
+    );
+    final textConstraints = BoxConstraints(maxWidth: textMaxW);
+    final Size textSize;
+    if (dry) {
+      textSize = text.getDryLayout(textConstraints);
+    } else {
+      text.layout(textConstraints, parentUsesSize: true);
+      textSize = text.size;
+    }
+    final double textW = textSize.width;
+    final double textH = textSize.height;
+
+    final double leadingLeft = isRtl ? math.max(0.0, maxW - 34.0) : 0.0;
+    final double textLeft = isRtl ? math.max(0.0, maxW - 44.0 - textW) : 44.0;
+    final double trailingLeft = isRtl ? 0.0 : math.max(0.0, maxW - trailingW);
+
+    if (shouldStack) {
+      final double row1H = math.max(34.0, textH);
+      final double leadingTop = (row1H - 34.0) / 2;
+      final double textTop = (row1H - textH) / 2;
+      final double trailingTop = row1H + 4.0;
+      final double totalH = trailingTop + trailingH;
+
+      return _SwitchTileLayoutResult(
+        size: constraints.constrain(Size(maxW, totalH)),
+        leadingOffset: Offset(leadingLeft, leadingTop),
+        textOffset: Offset(textLeft, textTop),
+        trailingOffset: Offset(trailingLeft, trailingTop),
+      );
+    } else {
+      final double rowH = math.max(34.0, math.max(textH, trailingH));
+      final double leadingTop = (rowH - 34.0) / 2;
+      final double textTop = (rowH - textH) / 2;
+      final double trailingTop = (rowH - trailingH) / 2;
+
+      return _SwitchTileLayoutResult(
+        size: constraints.constrain(Size(maxW, rowH)),
+        leadingOffset: Offset(leadingLeft, leadingTop),
+        textOffset: Offset(textLeft, textTop),
+        trailingOffset: Offset(trailingLeft, trailingTop),
+      );
+    }
+  }
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    return _computeTileLayout(constraints, dry: true).size;
+  }
+
+  @override
+  void performLayout() {
+    final result = _computeTileLayout(constraints, dry: false);
+    size = result.size;
+
+    RenderBox? leading;
+    RenderBox? text;
+    RenderBox? trailing;
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final childParentData = child.parentData! as _SwitchTileParentData;
+      switch (childParentData.slot) {
+        case _SwitchTileSlot.leading:
+          leading = child;
+        case _SwitchTileSlot.text:
+          text = child;
+        case _SwitchTileSlot.trailing:
+          trailing = child;
+        case null:
+          break;
+      }
+      child = childParentData.nextSibling;
+    }
+
+    if (leading != null) {
+      (leading.parentData! as _SwitchTileParentData).offset =
+          result.leadingOffset;
+    }
+    if (text != null) {
+      (text.parentData! as _SwitchTileParentData).offset = result.textOffset;
+    }
+    if (trailing != null) {
+      (trailing.parentData! as _SwitchTileParentData).offset =
+          result.trailingOffset;
+    }
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) {
+    final double safeWidth = width.isFinite
+        ? math.max(0.0, width)
+        : double.infinity;
+    return computeDryLayout(BoxConstraints(maxWidth: safeWidth)).height;
+  }
+
+  @override
+  double computeMaxIntrinsicHeight(double width) {
+    final double safeWidth = width.isFinite
+        ? math.max(0.0, width)
+        : double.infinity;
+    return computeDryLayout(BoxConstraints(maxWidth: safeWidth)).height;
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) {
+    RenderBox? leading;
+    RenderBox? text;
+    RenderBox? trailing;
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final pData = child.parentData! as _SwitchTileParentData;
+      if (pData.slot == _SwitchTileSlot.leading) leading = child;
+      if (pData.slot == _SwitchTileSlot.text) text = child;
+      if (pData.slot == _SwitchTileSlot.trailing) trailing = child;
+      child = pData.nextSibling;
+    }
+    final leadW = leading?.getMinIntrinsicWidth(height) ?? 34.0;
+    final textW = text?.getMinIntrinsicWidth(height) ?? 0.0;
+    final trailW = trailing?.getMinIntrinsicWidth(height) ?? 0.0;
+    return leadW + 10.0 + textW + trailW;
+  }
+
+  @override
+  double computeMaxIntrinsicWidth(double height) {
+    RenderBox? leading;
+    RenderBox? text;
+    RenderBox? trailing;
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final pData = child.parentData! as _SwitchTileParentData;
+      if (pData.slot == _SwitchTileSlot.leading) leading = child;
+      if (pData.slot == _SwitchTileSlot.text) text = child;
+      if (pData.slot == _SwitchTileSlot.trailing) trailing = child;
+      child = pData.nextSibling;
+    }
+    final leadW = leading?.getMaxIntrinsicWidth(height) ?? 34.0;
+    final textW = text?.getMaxIntrinsicWidth(height) ?? 0.0;
+    final trailW = trailing?.getMaxIntrinsicWidth(height) ?? 0.0;
+    return leadW + 10.0 + textW + trailW;
+  }
+}
+
+ModalBottomSheetRoute<T> createAppModalSheetRoute<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool isScrollControlled = true,
+  bool useRootNavigator = false,
+  bool isDismissible = true,
+  bool enableDrag = true,
+  bool shiftForKeyboard = true,
+}) {
+  final navigator = Navigator.of(context, rootNavigator: useRootNavigator);
+  final localizations = MaterialLocalizations.of(context);
+  ThemeProvider? themeProvider;
+  try {
+    themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+  } catch (_) {
+    themeProvider = null;
+  }
+  final openingTheme = Theme.of(context);
+  final hasSecondaryControlTheme =
+      context.findAncestorWidgetOfExactType<AppSecondaryControlTheme>() !=
+          null ||
+      (openingTheme.inputDecorationTheme.prefixIconConstraints ==
+          const BoxConstraints.tightFor(width: 34, height: 34));
+  final initialBrandId = themeProvider?.brand.id;
+
+  return ModalBottomSheetRoute<T>(
+    isScrollControlled: isScrollControlled,
+    isDismissible: isDismissible,
+    enableDrag: enableDrag,
+    showDragHandle: false,
+    requestFocus: false,
+    backgroundColor: Colors.transparent,
+    modalBarrierColor: Theme.of(context).bottomSheetTheme.modalBarrierColor,
+    barrierLabel: localizations.scrimLabel,
+    barrierOnTapHint: localizations.scrimOnTapHint(
+      localizations.bottomSheetLabel,
+    ),
+    capturedThemes: InheritedTheme.capture(
+      from: context,
+      to: navigator.context,
+    ),
+    builder: (sheetContext) {
+      Widget sheetBuilder(BuildContext innerContext) {
+        final child = builder(innerContext);
+        if (shiftForKeyboard) return child;
+        return MediaQuery.removeViewInsets(
+          context: innerContext,
+          removeBottom: true,
+          child: child,
+        );
+      }
+
+      if (themeProvider == null || initialBrandId == null) {
+        return sheetBuilder(sheetContext);
+      }
+      return _LiveModalSheetThemeScope(
+        themeProvider: themeProvider,
+        initialBrandId: initialBrandId,
+        openingTheme: openingTheme,
+        hasSecondaryControlTheme: hasSecondaryControlTheme,
+        builder: sheetBuilder,
+      );
+    },
+  );
+}
+
+class _LiveModalSheetThemeScope extends StatefulWidget {
+  final ThemeProvider themeProvider;
+  final String initialBrandId;
+  final ThemeData openingTheme;
+  final bool hasSecondaryControlTheme;
+  final WidgetBuilder builder;
+
+  const _LiveModalSheetThemeScope({
+    required this.themeProvider,
+    required this.initialBrandId,
+    required this.openingTheme,
+    required this.hasSecondaryControlTheme,
+    required this.builder,
+  });
+
+  @override
+  State<_LiveModalSheetThemeScope> createState() =>
+      _LiveModalSheetThemeScopeState();
+}
+
+class _LiveModalSheetThemeScopeState extends State<_LiveModalSheetThemeScope> {
+  late String _lastBrandId;
+  late ThemeData _lastTheme;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastBrandId = widget.themeProvider.brand.id;
+    _lastTheme = widget.themeProvider.brand.theme;
+    widget.themeProvider.addListener(_onThemeChanged);
+  }
+
+  @override
+  void didUpdateWidget(_LiveModalSheetThemeScope oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.themeProvider != widget.themeProvider) {
+      oldWidget.themeProvider.removeListener(_onThemeChanged);
+      widget.themeProvider.addListener(_onThemeChanged);
+      _lastBrandId = widget.themeProvider.brand.id;
+      _lastTheme = widget.themeProvider.brand.theme;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.themeProvider.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    final currentBrand = widget.themeProvider.brand;
+    if (currentBrand.id != _lastBrandId || currentBrand.theme != _lastTheme) {
+      _lastBrandId = currentBrand.id;
+      _lastTheme = currentBrand.theme;
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppBrand currentBrand = widget.themeProvider.brand;
+    final isInitialBrand = currentBrand.id == widget.initialBrandId;
+    final effectiveTheme = isInitialBrand
+        ? widget.openingTheme
+        : currentBrand.theme;
+
+    Widget content = Builder(builder: widget.builder);
+    if (widget.hasSecondaryControlTheme) {
+      content = AppSecondaryControlTheme(child: content);
+    }
+    return Theme(data: effectiveTheme, child: content);
   }
 }
 
@@ -1337,24 +2652,35 @@ Future<T?> showAppModalSheet<T>({
   bool enableDrag = true,
   bool shiftForKeyboard = true,
 }) {
-  return showModalBottomSheet<T>(
+  final route = createAppModalSheetRoute<T>(
     context: context,
+    builder: builder,
     isScrollControlled: isScrollControlled,
     useRootNavigator: useRootNavigator,
     isDismissible: isDismissible,
     enableDrag: enableDrag,
-    requestFocus: false,
-    backgroundColor: Colors.transparent,
-    builder: (sheetContext) {
-      final child = builder(sheetContext);
-      if (shiftForKeyboard) return child;
-      return MediaQuery.removeViewInsets(
-        context: sheetContext,
-        removeBottom: true,
-        child: child,
-      );
-    },
+    shiftForKeyboard: shiftForKeyboard,
   );
+  return Navigator.of(context, rootNavigator: useRootNavigator).push(route);
+}
+
+class _AppDialogScrollBehavior extends MaterialScrollBehavior {
+  const _AppDialogScrollBehavior();
+
+  @override
+  TargetPlatform getPlatform(BuildContext context) => defaultTargetPlatform;
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return Builder(
+      builder: (decorationContext) =>
+          super.buildOverscrollIndicator(decorationContext, child, details),
+    );
+  }
 }
 
 class AppDialog extends StatelessWidget {
@@ -1383,10 +2709,21 @@ class AppDialog extends StatelessWidget {
     final cs = theme.colorScheme;
     final media = MediaQuery.of(context);
     final viewInsets = MediaQuery.viewInsetsOf(context);
-    final availableHeight = (media.size.height - viewInsets.bottom).clamp(
-      280.0,
-      media.size.height,
-    );
+    final mediaHeight = media.size.height;
+    final rawBottomInset =
+        viewInsets.bottom.isFinite && viewInsets.bottom > 0
+            ? viewInsets.bottom
+            : 0.0;
+    final bottomInset = mediaHeight.isFinite
+        ? rawBottomInset
+              .clamp(0.0, mediaHeight > 0 ? mediaHeight : 0.0)
+              .toDouble()
+        : rawBottomInset;
+    final availableHeight = mediaHeight.isFinite
+        ? (mediaHeight > 0
+              ? (mediaHeight - bottomInset).clamp(0.0, mediaHeight).toDouble()
+              : 0.0)
+        : double.infinity;
     final horizontalInset = media.size.width < 360 ? 12.0 : 20.0;
     final availableWidth = media.size.width - horizontalInset * 2;
     final effectiveMaxWidth = availableWidth.isFinite
@@ -1461,13 +2798,14 @@ class AppDialog extends StatelessWidget {
               ),
             ],
     );
-    final keyboardLift = viewInsets.bottom <= 0
-        ? 0.0
-        : (viewInsets.bottom * 0.42).clamp(56.0, 128.0).toDouble();
+    final keyboardLift = bottomInset;
     final scopedDialog = MediaQuery.removeViewInsets(
       context: context,
       removeBottom: true,
-      child: dialog,
+      child: ScrollConfiguration(
+        behavior: const _AppDialogScrollBehavior(),
+        child: dialog,
+      ),
     );
     if (!shiftForKeyboard) return scopedDialog;
 
@@ -1476,7 +2814,7 @@ class AppDialog extends StatelessWidget {
       curve: Curves.easeOutCubic,
       padding: EdgeInsets.only(bottom: keyboardLift),
       child: Align(
-        alignment: viewInsets.bottom > 0
+        alignment: bottomInset > 0
             ? const Alignment(0, -0.18)
             : Alignment.center,
         child: scopedDialog,
@@ -1521,7 +2859,7 @@ class AppModalSheet extends StatelessWidget {
     final media = MediaQuery.of(context);
     final viewInsets = shiftForKeyboard ? media.viewInsets : EdgeInsets.zero;
     final availableHeight = (media.size.height - viewInsets.bottom).clamp(
-      320.0,
+      0.0,
       media.size.height,
     );
     final resolvedPadding = padding.resolve(Directionality.of(context));
@@ -1603,6 +2941,9 @@ class AppModalSheet extends StatelessWidget {
         padding: EdgeInsets.only(bottom: viewInsets.bottom),
         child: Align(
           alignment: Alignment.bottomCenter,
+          // Keep the modal hit area on the visible sheet, leaving the scrim
+          // available for dismissal above short content.
+          heightFactor: 1,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: maxWidth,
@@ -1622,6 +2963,12 @@ class AppModalSheet extends StatelessWidget {
                           _standardSheetTopRadius,
                     ),
                   ),
+                  side: Theme.of(context).brightness == Brightness.dark
+                      ? BorderSide(
+                          color: cs.outlineVariant.withValues(alpha: 0.28),
+                          width: 0.5,
+                        )
+                      : BorderSide.none,
                 ),
                 child: body,
               ),
@@ -1686,7 +3033,7 @@ class AppPickerSheet<T> extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Center(
                         child: Text(
-                          '暂无可选项',
+                          I18n.tr('picker.empty'),
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: cs.onSurface.withValues(alpha: 0.62),
                           ),
@@ -1790,7 +3137,7 @@ String _dropdownItemLabel<T>(DropdownMenuItem<T> item) {
     return widgetText.trim();
   }
   final value = item.value;
-  return value == null ? '未设置' : value.toString();
+  return value == null ? I18n.tr('picker.not_set') : value.toString();
 }
 
 String? _dropdownWidgetText(Widget widget) {
@@ -1969,13 +3316,33 @@ bool _dropdownAnchorIsVisible(BuildContext context) {
   return rect.top >= visibleTop && rect.bottom <= visibleBottom;
 }
 
+String _dropdownItemText<T>(DropdownMenuItem<T> item) {
+  final child = item.child;
+  if (child is AppSecondaryMenuText) {
+    return child.text.trim();
+  }
+  return _dropdownItemLabel(item);
+}
+
+/// Route settings arguments attached to anchored popup menus.
+class AppAnchoredDropdownMenuMetadata {
+  final Object? ownerToken;
+  final void Function(Route<dynamic>)? onRouteCreated;
+
+  const AppAnchoredDropdownMenuMetadata({this.ownerToken, this.onRouteCreated});
+}
+
 Future<T?> _showAnchoredDropdownMenu<T>({
   required BuildContext context,
   required List<DropdownMenuItem<T>> items,
   required T? selectedValue,
   required double? menuMaxHeight,
   required bool shiftForKeyboard,
+  bool Function()? isSelectionAllowed,
+  void Function(Route<dynamic>)? onRouteCreated,
+  Object? menuOwnerToken,
 }) async {
+  if (!context.mounted) return null;
   final fieldBox = context.findRenderObject() as RenderBox?;
   final overlay =
       Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
@@ -1988,7 +3355,63 @@ Future<T?> _showAnchoredDropdownMenu<T>({
     return null;
   }
 
+  final theme = Theme.of(context);
+  final cs = theme.colorScheme;
+  final selectedColor = cs.primary.withValues(alpha: 0.10);
+
+  // Compute required popup width to fit complete numeric choices and selection check,
+  // while preserving normal-width alignment for regular 220 dropdowns and constraining
+  // to the overlay safe viewport.
+  final textScaler = MediaQuery.textScalerOf(context);
+  final textDirection = Directionality.of(context);
+  final baseItemTextStyle = DefaultTextStyle.of(context).style.merge(
+    appSecondaryControlTextStyle(
+      context,
+    ).copyWith(fontWeight: FontWeight.normal),
+  );
+
+  var requiredContentWidth = 0.0;
+  for (final item in items) {
+    final label = _dropdownItemText(item);
+    final isNumeric = RegExp(r'^\s*-?\d+(?:\.\d+)?\s*$').hasMatch(label);
+    final painter = TextPainter(
+      text: TextSpan(text: label, style: baseItemTextStyle),
+      textDirection: textDirection,
+      textScaler: textScaler,
+    )..layout();
+    final textWidth = painter.width;
+    painter.dispose();
+
+    if (isNumeric) {
+      final needed = textWidth + 60.0;
+      if (needed > requiredContentWidth) {
+        requiredContentWidth = needed;
+      }
+    } else {
+      final minSafe = math.min(textWidth, 24.0) + 60.0;
+      if (minSafe > requiredContentWidth) {
+        requiredContentWidth = minSafe;
+      }
+    }
+  }
+
+  final maxAllowedWidth = math.max(
+    fieldBox.size.width,
+    overlay.size.width - 16.0,
+  );
+  final menuWidth = math
+      .max(
+        fieldBox.size.width,
+        math.max(112.0, (requiredContentWidth + 4.0).ceilToDouble()),
+      )
+      .clamp(fieldBox.size.width, maxAllowedWidth)
+      .toDouble();
+
+  _DropdownMenuPosition? lastPosition;
   _DropdownMenuPosition positionForCurrentLayout() {
+    // A caller may replace the field while its menu is still open. Resizing
+    // that menu must not read the render object of the removed anchor.
+    if (!context.mounted || !fieldBox.attached) return lastPosition!;
     final currentFieldBox = context.findRenderObject() as RenderBox?;
     final currentOverlay =
         Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
@@ -2018,9 +3441,35 @@ Future<T?> _showAnchoredDropdownMenu<T>({
     final belowSpace = safeBottom - fieldBottomRight.dy - 6;
     final aboveSpace = fieldTopLeft.dy - safeTop - 6;
     final openAbove = belowSpace < 160 && aboveSpace > belowSpace;
-    final availableHeight = (openAbove ? aboveSpace : belowSpace)
-        .clamp(96.0, preferredMaxHeight)
-        .toDouble();
+
+    final menuPaddingVertical =
+        (theme.popupMenuTheme.menuPadding?.vertical ?? 16.0);
+    var totalItemsHeight = 0.0;
+    for (final item in items) {
+      final label = _dropdownItemText(item);
+      final isSelected = item.value == selectedValue;
+      final availableTextWidth = math.max(
+        0.0,
+        menuWidth - (isSelected ? 60.0 : 36.0),
+      );
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: baseItemTextStyle),
+        textDirection: textDirection,
+        textScaler: textScaler,
+      )..layout(maxWidth: availableTextWidth);
+      final textHeight = painter.height;
+      painter.dispose();
+
+      final rowHeight = math.max(textHeight, isSelected ? 16.0 : 0.0);
+      final itemHeight = math.max(36.0, rowHeight + 14.0);
+      totalItemsHeight += itemHeight;
+    }
+    final renderedContentHeight = totalItemsHeight + menuPaddingVertical;
+
+    final availableHeight =
+        (openAbove ? math.min(aboveSpace, renderedContentHeight) : belowSpace)
+            .clamp(0.0, preferredMaxHeight)
+            .toDouble();
     final unclampedTop = openAbove
         ? fieldTopLeft.dy - availableHeight - 6
         : fieldBottomRight.dy + 6;
@@ -2034,24 +3483,24 @@ Future<T?> _showAnchoredDropdownMenu<T>({
       0.0,
       activeOverlay.size.width,
     );
-    return _DropdownMenuPosition(
+    final position = _DropdownMenuPosition(
       rect: RelativeRect.fromLTRB(menuLeft, menuTop, menuRight, menuBottom),
       height: availableHeight,
     );
+    lastPosition = position;
+    return position;
   }
 
   final initialPosition = positionForCurrentLayout();
-  final theme = Theme.of(context);
-  final cs = theme.colorScheme;
-  final selectedColor = cs.primary.withValues(alpha: 0.10);
 
-  return showMenu<T>(
+  ModalRoute<dynamic>? selectedMenuRoute;
+  final picked = await showMenu<T>(
     context: context,
     requestFocus: false,
     positionBuilder: (_, constraints) => positionForCurrentLayout().rect,
     constraints: BoxConstraints(
-      minWidth: fieldBox.size.width,
-      maxWidth: fieldBox.size.width,
+      minWidth: menuWidth,
+      maxWidth: menuWidth,
       maxHeight: initialPosition.height,
     ),
     color: cs.surface,
@@ -2064,21 +3513,33 @@ Future<T?> _showAnchoredDropdownMenu<T>({
         width: 0.45,
       ),
     ),
+    routeSettings: RouteSettings(
+      name: 'AppAnchoredDropdownMenu',
+      arguments: AppAnchoredDropdownMenuMetadata(
+        ownerToken: menuOwnerToken,
+        onRouteCreated: onRouteCreated,
+      ),
+    ),
     items: [
       for (final item in items)
-        PopupMenuItem<T>(
+        _AnchoredDropdownMenuItem<T>(
+          isSelectionAllowed: isSelectionAllowed,
+          onSelectedRoute: (route) => selectedMenuRoute = route,
+          onRouteCreated: onRouteCreated,
           value: item.value,
           enabled: item.enabled,
           height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: DefaultTextStyle.merge(
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: appSecondaryControlTextStyle(context).copyWith(
-              color: item.enabled
-                  ? cs.onSurface
-                  : cs.onSurface.withValues(alpha: 0.38),
-              fontWeight: FontWeight.normal,
+          // Open choices need their natural height at the requested text scale.
+          child: DefaultTextStyle(
+            overflow: TextOverflow.clip,
+            style: DefaultTextStyle.of(context).style.merge(
+              appSecondaryControlTextStyle(context).copyWith(
+                color: item.enabled
+                    ? cs.onSurface
+                    : cs.onSurface.withValues(alpha: 0.38),
+                fontWeight: FontWeight.normal,
+              ),
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -2104,6 +3565,53 @@ Future<T?> _showAnchoredDropdownMenu<T>({
         ),
     ],
   );
+  // The result arrives before the exit animation has restored the caller route.
+  // Keep its origin checks strict by waiting for the selected menu to disappear.
+  await selectedMenuRoute?.completed;
+  return picked;
+}
+
+class _AnchoredDropdownMenuItem<T> extends PopupMenuItem<T> {
+  const _AnchoredDropdownMenuItem({
+    required super.value,
+    required super.enabled,
+    required super.height,
+    required super.padding,
+    required super.child,
+    required this.isSelectionAllowed,
+    required this.onSelectedRoute,
+    this.onRouteCreated,
+  });
+
+  final bool Function()? isSelectionAllowed;
+  final ValueChanged<ModalRoute<dynamic>> onSelectedRoute;
+  final void Function(Route<dynamic>)? onRouteCreated;
+
+  @override
+  PopupMenuItemState<T, _AnchoredDropdownMenuItem<T>> createState() =>
+      _AnchoredDropdownMenuItemState<T>();
+}
+
+class _AnchoredDropdownMenuItemState<T>
+    extends PopupMenuItemState<T, _AnchoredDropdownMenuItem<T>> {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      widget.onRouteCreated?.call(route);
+    }
+  }
+
+  @override
+  void handleTap() {
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isActive || !route.isCurrent) return;
+    if (widget.isSelectionAllowed?.call() == false) return;
+    widget.onSelectedRoute(route);
+    super.handleTap();
+  }
 }
 
 class _DropdownMenuPosition {
@@ -2118,6 +3626,16 @@ class AppCompactDropdown<T> extends StatelessWidget {
   final List<DropdownMenuItem<T>> items;
   final ValueChanged<T?>? onChanged;
   final double width;
+  final String? selectedLabel;
+
+  /// Rechecked before opening and after each await, before selecting a value.
+  final bool Function()? isInteractionAllowed;
+
+  /// Checks the caller while the menu itself covers its route.
+  final bool Function()? isSelectionAllowed;
+
+  final void Function(Route<dynamic>)? onMenuRouteCreated;
+  final Object? menuOwnerToken;
 
   const AppCompactDropdown({
     super.key,
@@ -2125,6 +3643,11 @@ class AppCompactDropdown<T> extends StatelessWidget {
     required this.items,
     required this.onChanged,
     this.width = 112,
+    this.selectedLabel,
+    this.isInteractionAllowed,
+    this.isSelectionAllowed,
+    this.onMenuRouteCreated,
+    this.menuOwnerToken,
   });
 
   @override
@@ -2143,6 +3666,9 @@ class AppCompactDropdown<T> extends StatelessWidget {
     final textColor = enabled
         ? cs.onSurface
         : cs.onSurface.withValues(alpha: 0.38);
+    final controlRadius =
+        appSurfaceStyleOf(context)?.smallTileRadius ?? DesignTokens.radiusControl;
+    final effectiveRadius = BorderRadius.circular(controlRadius);
     return SizedBox(
       width: width,
       child: Builder(
@@ -2150,16 +3676,19 @@ class AppCompactDropdown<T> extends StatelessWidget {
           return Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: effectiveRadius,
               onTapDown: enabled
-                  ? (_) => _beginDropdownKeyboardDismiss(anchorContext)
+                  ? (_) {
+                      if (isInteractionAllowed?.call() == false) return;
+                      _beginDropdownKeyboardDismiss(anchorContext);
+                    }
                   : null,
               onTap: enabled ? () => _openPicker(anchorContext) : null,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                 decoration: BoxDecoration(
                   color: bg,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: effectiveRadius,
                   border: Border.all(color: borderColor, width: 0.45),
                 ),
                 child: Row(
@@ -2167,9 +3696,10 @@ class AppCompactDropdown<T> extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        selectedItem == null
-                            ? value.toString()
-                            : _dropdownItemLabel(selectedItem),
+                        selectedLabel ??
+                            (selectedItem == null
+                                ? value.toString()
+                                : _dropdownItemLabel(selectedItem)),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: appSecondaryControlTextStyle(context).copyWith(
@@ -2204,8 +3734,10 @@ class AppCompactDropdown<T> extends StatelessWidget {
   }
 
   Future<void> _openPicker(BuildContext anchorContext) async {
+    if (onChanged == null || isInteractionAllowed?.call() == false) return;
     await _hideKeyboardBeforePicker(anchorContext);
     if (!anchorContext.mounted) return;
+    if (isInteractionAllowed?.call() == false) return;
 
     final picked = await _showAnchoredDropdownMenu<T>(
       context: anchorContext,
@@ -2213,8 +3745,15 @@ class AppCompactDropdown<T> extends StatelessWidget {
       selectedValue: value,
       menuMaxHeight: 320,
       shiftForKeyboard: false,
+      isSelectionAllowed: isSelectionAllowed,
+      onRouteCreated: onMenuRouteCreated,
+      menuOwnerToken: menuOwnerToken,
     );
     if (picked == null) return;
+    // A locale/layout change may recycle a sliver anchor while its menu stays
+    // open. An explicit caller-origin guard can still authorize completion.
+    if (!anchorContext.mounted && isInteractionAllowed == null) return;
+    if (isInteractionAllowed?.call() == false) return;
     onChanged?.call(picked);
   }
 }
@@ -2230,6 +3769,9 @@ class AppDropdownField<T> extends StatelessWidget {
   final Widget? icon;
   final bool enabled;
   final bool isExpanded;
+
+  /// Allow the selected label to use as many lines as its width requires.
+  final bool wrapSelectedText;
   final double? menuMaxHeight;
   final BorderRadius? borderRadius;
   final Color? dropdownColor;
@@ -2243,6 +3785,13 @@ class AppDropdownField<T> extends StatelessWidget {
   /// Rechecked at entry and after each await, before changing form state.
   final bool Function()? isInteractionAllowed;
 
+  /// Checks the caller while the menu itself covers its route.
+  final bool Function()? isSelectionAllowed;
+  final void Function(Route<dynamic>)? onMenuRouteCreated;
+
+  /// Specific owner identity attached to the menu's route metadata.
+  final Object? menuOwnerToken;
+
   const AppDropdownField({
     super.key,
     required this.initialValue,
@@ -2255,6 +3804,7 @@ class AppDropdownField<T> extends StatelessWidget {
     this.icon,
     this.enabled = true,
     this.isExpanded = true,
+    this.wrapSelectedText = false,
     this.menuMaxHeight = 320,
     this.borderRadius,
     this.dropdownColor,
@@ -2265,6 +3815,9 @@ class AppDropdownField<T> extends StatelessWidget {
     this.onSaved,
     this.onTap,
     this.isInteractionAllowed,
+    this.isSelectionAllowed,
+    this.onMenuRouteCreated,
+    this.menuOwnerToken,
   });
 
   @override
@@ -2279,7 +3832,10 @@ class AppDropdownField<T> extends StatelessWidget {
           prefixIcon: prefixIcon,
           isDense: true,
         );
-    final effectiveBorderRadius = borderRadius ?? BorderRadius.circular(16);
+    final controlRadius =
+        appSurfaceStyleOf(context)?.smallTileRadius ?? DesignTokens.radiusControl;
+    final effectiveBorderRadius =
+        borderRadius ?? BorderRadius.circular(controlRadius);
     return FormField<T>(
       initialValue: initialValue,
       validator: validator,
@@ -2305,19 +3861,32 @@ class AppDropdownField<T> extends StatelessWidget {
           builder: (anchorContext) {
             final content = selectedItem == null
                 ? const SizedBox.shrink()
-                : DefaultTextStyle.merge(
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: appSecondaryControlTextStyle(context).copyWith(
-                      color: enabled
-                          ? cs.onSurface
-                          : cs.onSurface.withValues(alpha: 0.38),
-                      fontWeight: FontWeight.normal,
-                    ),
-                    child: IconTheme.merge(
-                      data: IconThemeData(color: cs.onSurfaceVariant),
-                      child: selectedItem.child,
-                    ),
+                : Builder(
+                    builder: (textContext) {
+                      final inheritedText = DefaultTextStyle.of(textContext);
+                      return DefaultTextStyle(
+                        maxLines: wrapSelectedText ? null : 1,
+                        overflow: wrapSelectedText
+                            ? TextOverflow.clip
+                            : TextOverflow.ellipsis,
+                        softWrap: wrapSelectedText || inheritedText.softWrap,
+                        textAlign: inheritedText.textAlign,
+                        textWidthBasis: inheritedText.textWidthBasis,
+                        textHeightBehavior: inheritedText.textHeightBehavior,
+                        style: inheritedText.style.merge(
+                          appSecondaryControlTextStyle(context).copyWith(
+                            color: enabled
+                                ? cs.onSurface
+                                : cs.onSurface.withValues(alpha: 0.38),
+                            fontWeight: FontWeight.normal,
+                          ),
+                        ),
+                        child: IconTheme.merge(
+                          data: IconThemeData(color: cs.onSurfaceVariant),
+                          child: selectedItem.child,
+                        ),
+                      );
+                    },
                   );
             return Material(
               color: Colors.transparent,
@@ -2370,6 +3939,9 @@ class AppDropdownField<T> extends StatelessWidget {
       selectedValue: field.value,
       menuMaxHeight: menuMaxHeight,
       shiftForKeyboard: false,
+      isSelectionAllowed: isSelectionAllowed ?? isInteractionAllowed,
+      onRouteCreated: onMenuRouteCreated,
+      menuOwnerToken: menuOwnerToken,
     );
     if (!field.mounted || picked == null) return;
     if (isInteractionAllowed?.call() == false) return;

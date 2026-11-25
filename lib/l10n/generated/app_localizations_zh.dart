@@ -295,10 +295,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get preferencesShowCompletedTitle => '待办页显示已完成';
 
   @override
-  String get preferencesShowCompletedSubtitle => '关闭后只看未完成和进行中的事项';
+  String get preferencesShowCompletedSubtitle =>
+      '默认列表显示已完成事项；关闭后仍可通过“已完成”或“包含归档”查看';
 
   @override
   String get preferencesPomodoroLengthTitle => '默认番茄钟长度';
+
+  @override
+  String get preferencesPomodoroLengthSubtitle => '选择“默认”时生效，当前计时保持不变';
 
   @override
   String get preferencesSectionBottomNav => '底部导航栏';
@@ -384,6 +388,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get preferencesRingtoneSection => '内置提醒铃声';
 
   @override
+  String get preferencesReportReminderDailyTime => '每日复盘推送时间';
+
+  @override
+  String get preferencesReportReminderWeeklyTime => '周报推送时间';
+
+  @override
+  String get preferencesReportReminderMonthlyTime => '月报推送时间';
+
+  @override
+  String get preferencesReportReminderYearlyTime => '年报推送时间';
+
+  @override
+  String get preferencesReportReminderTimeSubtitle => '修改后会重排下一次报告通知';
+
+  @override
   String get preferencesRingtoneSectionSubtitle => '用于 HyperOS 等默认静音通知场景';
 
   @override
@@ -448,6 +467,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get preferencesDailyReminderTimeSuffix => '时间';
+
+  @override
+  String get preferencesDailyReminder1Time => '提醒一时间';
+
+  @override
+  String get preferencesDailyReminder2Time => '提醒二时间';
+
+  @override
+  String get preferencesDailyReminder3Time => '提醒三时间';
 
   @override
   String get preferencesDailyReminderTimePickerSubtitle => '设置提醒触发时间';
@@ -1274,6 +1302,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noteRestore => '恢复';
 
   @override
+  String get noteActionFailed => '操作失败，内容未变更，请重试';
+
+  @override
   String get noteLinkPlaceholder => '链接文字';
 
   @override
@@ -1896,7 +1927,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get diaryRecentRecordsSuffix => ' 篇记录';
 
   @override
+  String get diaryRecentRecordsSuffixSingular => ' 篇记录';
+
+  @override
   String get diaryEntryCountSuffix => ' 篇';
+
+  @override
+  String get diaryEntryCountSuffixSingular => ' 篇';
+
+  @override
+  String get diaryStreakDaySingular => '天';
 
   @override
   String get diaryMoodStatsTitle => '近 30 天心情分布';
@@ -2791,6 +2831,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get habitWeekday7 => '日';
 
   @override
+  String get habitGroupUngrouped => '未分组';
+
+  @override
   String get habitGroupTodaySuffix => ' 今日达标';
 
   @override
@@ -3113,7 +3156,40 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarContentTimePickerStartTime => '开始时间';
 
   @override
+  String get calendarPickerStartDate => '开始日期';
+
+  @override
+  String get calendarPickerEndDate => '结束日期';
+
+  @override
+  String get calendarPickerStartTime => '开始时间';
+
+  @override
+  String get calendarPickerEndTime => '结束时间';
+
+  @override
+  String get calendarPickerRescheduleDate => '调整日期';
+
+  @override
+  String get calendarPickerAdjustStartTime => '调整开始时间';
+
+  @override
+  String get calendarPickerAdjustStartTimeSubtitle => '保留当前日期和时长，自动更新结束时间';
+
+  @override
+  String get calendarPickerAdjustDueTime => '调整时间';
+
+  @override
+  String get calendarPickerAdjustDueTimeSubtitle => '保留当前日期，只调整当天截止时间';
+
+  @override
   String get pickerActionToday => '今天';
+
+  @override
+  String get pickerEmpty => '暂无可选项';
+
+  @override
+  String get pickerNotSet => '未设置';
 
   @override
   String get pickerDateIgnoreYear => '忽略年份';
@@ -3189,4 +3265,1290 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get widgetHabitView => '查看习惯';
+
+  @override
+  String get aiScheduleScreenTitle => 'AI 创建日程';
+
+  @override
+  String get aiScheduleAiDisabledTitle => 'AI 未启用';
+
+  @override
+  String get aiScheduleAiDisabledMessage => '将使用本地时间解析生成草稿，仍可确认创建日程或待办。';
+
+  @override
+  String get aiScheduleInputTitle => '输入安排';
+
+  @override
+  String get aiScheduleInputSubtitle => '例如：明天下午 3 点和产品开会，提前提醒我';
+
+  @override
+  String get aiScheduleInputHint => '输入自然语言安排、待办或提醒';
+
+  @override
+  String get aiScheduleEmptyInput => '请输入要创建的日程或待办内容';
+
+  @override
+  String get aiScheduleRecognize => '识别并生成确认信息';
+
+  @override
+  String get aiScheduleRecognizing => '识别中';
+
+  @override
+  String get aiScheduleErrorTitle => 'AI 创建失败';
+
+  @override
+  String get aiScheduleDraftTitle => '已生成确认草稿';
+
+  @override
+  String get aiScheduleDraftAiMessage => '请核对类型、标题、时间和提醒设置。';
+
+  @override
+  String get aiScheduleDraftFallbackMessage =>
+      '当前不是完整 AI 识别结果，请确认本地兜底草稿无误后再写入。';
+
+  @override
+  String get aiScheduleWarningAiIncomplete => 'AI 识别结果不完整';
+
+  @override
+  String get aiScheduleWarningLocalFallback => 'AI 识别未完成';
+
+  @override
+  String get aiScheduleWarningAppendix => '请核对下方本地草稿后再确认创建。';
+
+  @override
+  String get aiScheduleConfirmCardTitle => '确认创建内容';
+
+  @override
+  String get aiScheduleTypeLabel => '类型';
+
+  @override
+  String get aiScheduleTitleLabel => '标题';
+
+  @override
+  String get aiScheduleStartLabel => '开始';
+
+  @override
+  String get aiScheduleEndLabel => '结束';
+
+  @override
+  String get aiScheduleReminderLabel => '提醒';
+
+  @override
+  String get aiScheduleNotesLabel => '备注';
+
+  @override
+  String get aiScheduleSubtasksLabel => '子任务';
+
+  @override
+  String get aiScheduleCalendarType => '日程';
+
+  @override
+  String get aiScheduleTodoType => '待办';
+
+  @override
+  String get aiScheduleReminderEnabled => '已开启系统推送提醒';
+
+  @override
+  String get aiScheduleReminderDisabled => '未设置提醒';
+
+  @override
+  String get aiScheduleSaving => '保存中';
+
+  @override
+  String get aiScheduleCreate => '确认创建';
+
+  @override
+  String get aiScheduleDone => '完成';
+
+  @override
+  String get aiScheduleViewDetails => '查看详情';
+
+  @override
+  String get aiScheduleCreatedEvent => '日程已创建';
+
+  @override
+  String get aiScheduleCreatedTask => '待办已创建';
+
+  @override
+  String get aiScheduleCreatedEventWithReminderIssue => '日程已创建，但提醒未注册';
+
+  @override
+  String get aiScheduleCreatedTaskWithReminderIssue => '待办已创建，但提醒未注册';
+
+  @override
+  String aiScheduleCreatedItemSummary(String typeLabel, String title) {
+    return '$typeLabel：$title';
+  }
+
+  @override
+  String aiScheduleStartSummaryCalendar(String value) {
+    return '开始时间：$value';
+  }
+
+  @override
+  String aiScheduleStartSummaryTodo(String value) {
+    return '计划时间：$value';
+  }
+
+  @override
+  String get aiScheduleLocalSaved => '已保存到本机';
+
+  @override
+  String get aiScheduleLocalSavedCalendar => '日程已保存到本机';
+
+  @override
+  String get aiScheduleLocalSavedTodo => '待办已保存到本机';
+
+  @override
+  String get aiScheduleReminderRegistered => '提醒已注册到系统通知';
+
+  @override
+  String get aiScheduleTaskReminderSubmitted => '待办提醒已提交系统注册';
+
+  @override
+  String get aiScheduleGenericReminderIssue => '提醒未注册';
+
+  @override
+  String get aiScheduleAccountChanged => '账号已切换，请重新打开页面后再操作。';
+
+  @override
+  String get aiScheduleInputChanged => '输入内容已变更，请重新识别后再创建。';
+
+  @override
+  String get aiScheduleGenericSaveFailed => '保存失败，请重试。';
+
+  @override
+  String get aiScheduleAlarmPermissionRequired =>
+      'AI 待办提醒注册失败：系统通知权限未开启，闹钟提醒未注册。请开启通知权限后重新保存提醒。';
+
+  @override
+  String get aiScheduleEventReminderIssueTitle => 'AI 日程提醒注册失败';
+
+  @override
+  String get aiScheduleTaskReminderIssueTitle => 'AI 待办提醒注册失败';
+
+  @override
+  String get aiScheduleCalendarSubtitle => 'AI 创建';
+
+  @override
+  String get aiScheduleCalendarSubtitleAllDay => 'AI 创建 · 全天';
+
+  @override
+  String get aiScheduleCalendarReminderTitle => '日程提醒';
+
+  @override
+  String get aiScheduleSourceAi => 'AI 已识别输入内容，请确认无误后创建';
+
+  @override
+  String get aiScheduleSourceAiWithLocalFallback => 'AI 返回不完整，已用本地解析补全';
+
+  @override
+  String get aiScheduleSourceLocalParser => '当前使用本地解析结果，请确认时间和类型';
+
+  @override
+  String get aiScheduleWarningReminderNotice => '提醒提示';
+
+  @override
+  String get aiScheduleWarningNotice => '提示';
+
+  @override
+  String get aiScheduleWarningUnavailable => 'AI 服务暂不可用，已准备本地兜底草稿。';
+
+  @override
+  String get aiScheduleWarningNoUsableDraft => 'AI 未返回可用草稿，已准备本地兜底草稿。';
+
+  @override
+  String get aiScheduleWarningInvalidResponse => 'AI 返回内容无法读取，已准备本地兜底草稿。';
+
+  @override
+  String get aiScheduleWarningMissingReminderTime => '未识别到具体提醒时间，提醒已关闭。';
+
+  @override
+  String get aiScheduleWarningReviewDraft => '请核对草稿内容后再确认创建。';
+
+  @override
+  String get aiScheduleWarningGenericFallback => '已准备本地草稿供你核对。';
+
+  @override
+  String get aiScheduleErrorNotEnabled => 'AI 功能未启用，请联系管理员。';
+
+  @override
+  String get aiScheduleErrorQuotaExceeded => '今日 AI 额度已用尽，请明日再试。';
+
+  @override
+  String get aiScheduleErrorRateLimit => '请求过于频繁，请稍候重试。';
+
+  @override
+  String get aiScheduleErrorTimeout => 'AI 服务响应超时，请稍后重试。';
+
+  @override
+  String get aiScheduleErrorGeneric => '创建草稿失败，请重试。';
+
+  @override
+  String get widgetHostSupportIosTitle => '从主屏幕添加小组件';
+
+  @override
+  String get widgetHostSupportWebTitle => '网页版小组件预览';
+
+  @override
+  String get widgetHostSupportMobileTitle => '手机端小组件预览';
+
+  @override
+  String get widgetHostSupportIosMessage => '在主屏幕长按空白处，打开小组件图库，搜索“多仪”并添加。';
+
+  @override
+  String get widgetHostSupportMobileMessage =>
+      '这里可以查看小组件样式；添加到主屏幕需使用 Android 或 iOS 版多仪。';
+
+  @override
+  String get widgetHostAddIosAction => '查看添加步骤';
+
+  @override
+  String get widgetHostAddMobileAction => '手机端使用方式';
+
+  @override
+  String get widgetHostHelpMobileTitle => '在手机端使用小组件';
+
+  @override
+  String get widgetAddDialogTitle => '添加到桌面';
+
+  @override
+  String get widgetHostHelpIosMessage =>
+      '长按主屏幕空白处，点击“编辑”或“+”，进入小组件图库。搜索“多仪”，选择尺寸后点击“添加小组件”。系统提供小、中、大尺寸；支持的 iPad 还可选择超大尺寸。实际尺寸以系统图库为准。\n\niPhone（iOS 16 及以上）或 iPad（iPadOS 17 及以上）：长按锁定屏幕，点“自定”，再点小组件区域并选择多仪。';
+
+  @override
+  String get widgetHostHelpMobileMessage =>
+      '本页展示小组件样式预览。要在手机主屏幕使用，请安装并打开 Android 或 iOS 版多仪。Android 可从 App 内添加，或长按主屏幕空白处选择小组件；iOS 请从主屏幕的小组件图库搜索“多仪”并添加。';
+
+  @override
+  String get widgetHostTipsIosMessage =>
+      '实际尺寸在系统小组件图库中选择。小组件显示最近同步的内容；若内容较旧，打开多仪后刷新。';
+
+  @override
+  String get widgetHostTipsPreviewMessage =>
+      '这里的预览不等同于已添加的桌面小组件。实际添加与使用需在 Android 或 iOS 手机端完成。';
+
+  @override
+  String get widgetTipsBannerMessage =>
+      '紧凑版和详细版为固定尺寸；标准版在桌面支持时可长按调整大小。要更换尺寸版本，请移除后重新添加。添加时需在系统弹窗中确认；若未出现弹窗，请检查多仪的桌面小组件权限。';
+
+  @override
+  String get widgetHostStyleCompactDescription => '紧凑样式，突出核心信息。';
+
+  @override
+  String get widgetHostStyleDetailedDescription => '详细样式，展示更多内容。';
+
+  @override
+  String get widgetHostStyleStandardDescription => '标准样式，平衡信息与留白。';
+
+  @override
+  String widgetHostStyleDescriptionIos(String description) {
+    return '$description 实际尺寸在系统图库中选择。';
+  }
+
+  @override
+  String widgetStyleSyncSuccess(String modeLabel) {
+    return '小组件样式已设为$modeLabel。';
+  }
+
+  @override
+  String widgetPreviewStyleSyncSuccess(String modeLabel) {
+    return '预览样式已设为$modeLabel。';
+  }
+
+  @override
+  String get widgetRefreshTooltip => '刷新小组件';
+
+  @override
+  String get widgetPreviewHeaderTitle => '桌面小组件预览';
+
+  @override
+  String get widgetStylePanelTitle => '小组件样式';
+
+  @override
+  String get widgetCategoryAll => '全部';
+
+  @override
+  String get widgetCategoryProductivity => '效率';
+
+  @override
+  String get widgetCategoryLife => '生活';
+
+  @override
+  String get widgetCatalogTodoTitle => '今日待办';
+
+  @override
+  String get widgetCatalogCalendarTitle => '月历';
+
+  @override
+  String get widgetCatalogScheduleTitle => '今日日程';
+
+  @override
+  String get widgetCatalogGoalTitle => '目标';
+
+  @override
+  String get widgetCatalogNoteTitle => '随手记';
+
+  @override
+  String get widgetCatalogAnniversaryTitle => '纪念日';
+
+  @override
+  String get widgetCatalogTodoSubtitle => '桌面查看与完成待办，支持快速记一笔';
+
+  @override
+  String get widgetCatalogFocusSubtitle => '展示今日专注次数、时长与下一轮计划';
+
+  @override
+  String get widgetCatalogHabitSubtitle => '查看今日完成率、连续记录与快捷打卡';
+
+  @override
+  String get widgetCatalogCalendarSubtitle => '月视图概览与今日标记';
+
+  @override
+  String get widgetCatalogScheduleSubtitle => '查看今日按时间排序的日程安排';
+
+  @override
+  String get widgetCatalogGoalSubtitle => '展示当前目标与推进进度';
+
+  @override
+  String get widgetCatalogCourseSubtitle => '展示今日课程节次、教室与时间';
+
+  @override
+  String get widgetCatalogNoteSubtitle => '查看最近更新的便签与随手记';
+
+  @override
+  String get widgetCatalogAnniversarySubtitle => '倒数重要日子与累计天数';
+
+  @override
+  String get widgetCatalogDiarySubtitle => '回顾最近记录的心情与日记摘要';
+
+  @override
+  String get widgetDisplayModeCompactLabel => '紧凑';
+
+  @override
+  String get widgetDisplayModeDetailedLabel => '详细';
+
+  @override
+  String get widgetDisplayModeStandardLabel => '标准';
+
+  @override
+  String get widgetDisplayModeCompactDescription => '紧凑版，固定尺寸，突出核心信息';
+
+  @override
+  String get widgetDisplayModeDetailedDescription => '详细版，固定尺寸，内容随可用空间调整';
+
+  @override
+  String get widgetDisplayModeStandardDescription =>
+      '标准版，内容随可用空间调整；桌面支持时可长按调整大小';
+
+  @override
+  String get widgetStyleSyncFailed => '桌面小组件样式同步失败，请重试';
+
+  @override
+  String get widgetCannotOpenSettings => '无法打开应用设置，请手动进入系统设置检查多仪权限';
+
+  @override
+  String get widgetRefreshSuccess => '小组件已刷新';
+
+  @override
+  String get widgetRefreshFailed => '刷新失败，请稍后重试';
+
+  @override
+  String get widgetPinSupportCheckingTitle => '正在检查桌面小组件支持';
+
+  @override
+  String get widgetPinSupportCheckingMessage => '正在检测当前桌面是否支持直接添加小组件。';
+
+  @override
+  String get widgetPinSupportSupportedTitle => '当前桌面支持应用内添加';
+
+  @override
+  String get widgetPinSupportSupportedMessage => '可从 App 添加到桌面，请在系统弹窗中确认。';
+
+  @override
+  String get widgetPinSupportUnsupportedPlatformTitle => '当前平台不支持应用内添加';
+
+  @override
+  String get widgetPinSupportUnsupportedLauncherTitle => '当前桌面不支持应用内添加';
+
+  @override
+  String get widgetPinSupportPermissionDeniedTitle => '桌面添加权限未通过';
+
+  @override
+  String get widgetPinSupportConfirmationBlockedTitle => '桌面确认弹窗可能被拦截';
+
+  @override
+  String get widgetPinSupportInvalidKindTitle => '当前小组件类型不可添加';
+
+  @override
+  String get widgetPinSupportFallbackTitle => '当前桌面可能不支持应用内添加';
+
+  @override
+  String get widgetPinSupportUnsupportedPlatformMessage =>
+      '请在 Android 手机上通过系统小组件列表添加多仪。';
+
+  @override
+  String get widgetPinSupportUnsupportedLauncherMessage =>
+      '当前桌面启动器未开放应用内添加，请从系统小组件列表选择添加。';
+
+  @override
+  String get widgetPinSupportPermissionDeniedMessage =>
+      '系统未允许多仪添加桌面小组件，请在系统设置中开启权限后重试。';
+
+  @override
+  String get widgetPinSupportConfirmationBlockedMessage =>
+      '桌面确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。';
+
+  @override
+  String get widgetPinSupportInvalidKindMessage => '请更新应用后重试。';
+
+  @override
+  String get widgetPinSupportFallbackMessage =>
+      '若未弹出确认框，请打开系统设置检查桌面小组件与后台弹窗权限，或从系统小组件列表添加。';
+
+  @override
+  String get widgetActionAppSettings => '应用设置';
+
+  @override
+  String get widgetActionRecheck => '重新检测';
+
+  @override
+  String get widgetActionOpenPermissions => '打开权限设置';
+
+  @override
+  String get widgetActionGotIt => '知道了';
+
+  @override
+  String get widgetPinHelpUnsupportedMessage =>
+      '当前桌面不支持应用内直接添加小组件。请长按桌面空白处，从系统小组件列表添加。';
+
+  @override
+  String get widgetPinHelpUnsupportedPlatformMessage =>
+      '当前平台不支持直接添加 Android 桌面小组件。请在 Android 手机上从系统小组件列表添加多仪。';
+
+  @override
+  String get widgetPinHelpUnsupportedLauncherMessage =>
+      '当前桌面启动器未开放应用内添加，请长按桌面空白处从系统小组件列表添加。';
+
+  @override
+  String get widgetPinHelpPermissionDeniedMessage =>
+      '系统未允许多仪添加桌面小组件。请在系统设置中开启权限后重试，或从系统小组件列表添加。';
+
+  @override
+  String get widgetPinHelpConfirmationBlockedMessage =>
+      '系统确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。';
+
+  @override
+  String get widgetPinHelpInvalidKindMessage => '当前小组件类型暂不支持添加，请更新应用后重试。';
+
+  @override
+  String get widgetPinHelpUnavailableMessage =>
+      '无法发起添加请求，请检查桌面权限后重试，或从系统小组件列表添加。';
+
+  @override
+  String get widgetPinHelpRequestedMessage => '已发起添加请求，请在桌面系统弹窗中确认。';
+
+  @override
+  String get widgetPinConfirmationInvalidWidgetIdTitle => '添加未完成';
+
+  @override
+  String get widgetPinConfirmationInvalidWidgetIdMessage =>
+      '桌面未成功创建小组件，请重试或从系统小组件列表添加。';
+
+  @override
+  String get widgetPinConfirmationTimeoutTitle => '等待桌面确认';
+
+  @override
+  String get widgetPinConfirmationTimeoutMessage =>
+      '已发起添加请求，但尚未收到系统确认。请查看桌面是否有确认弹窗，或在系统设置中检查权限。';
+
+  @override
+  String get widgetPinConfirmationUnavailableTitle => '添加异常';
+
+  @override
+  String get widgetPinConfirmationUnavailableMessage =>
+      '桌面未返回添加结果。请重试或从系统小组件列表添加。';
+
+  @override
+  String get widgetPinConfirmationSuccessTitle => '已添加';
+
+  @override
+  String get widgetPinConfirmationSuccessMessage => '桌面小组件已添加。';
+
+  @override
+  String get widgetCheckingDesktopSupport => '正在检查桌面支持';
+
+  @override
+  String get widgetPinDisabledAndroidOnly => '仅 Android 支持应用内添加';
+
+  @override
+  String get widgetPinDisabledPicker => '请从系统小组件列表添加';
+
+  @override
+  String get widgetPinDisabledHelp => '查看添加帮助';
+
+  @override
+  String get widgetLoadingStyle => '正在读取样式';
+
+  @override
+  String get widgetStyleLoadFailed => '样式读取失败，请重试或重新选择';
+
+  @override
+  String get widgetStyleSyncPending => '已保存所选样式，桌面小组件尚未确认同步。请重试或刷新。';
+
+  @override
+  String get widgetUpdatingStyle => '正在更新样式';
+
+  @override
+  String get widgetRequestingAdd => '正在请求添加';
+
+  @override
+  String widgetAddWidgetButtonLabel(
+    String modeLabel,
+    String launcherRequestLabel,
+  ) {
+    return '添加$modeLabel $launcherRequestLabel';
+  }
+
+  @override
+  String widgetPinInitiatedSnackBar(String modeLabel) {
+    return '已发起添加，请在系统弹窗中确认添加$modeLabel小组件。';
+  }
+
+  @override
+  String widgetPinSuccessSnackBar(String modeLabel) {
+    return '已添加$modeLabel小组件到桌面。';
+  }
+
+  @override
+  String get widgetTipsBannerTitle => '桌面小组件使用提示';
+
+  @override
+  String get widgetDesktopWebTitle => '电脑网页版显示日历';
+
+  @override
+  String get widgetDesktopWebMessage =>
+      '桌面小组件依赖 Android 或 iOS 系统；电脑网页版默认隐藏小组件入口，保留月历预览和日历入口。';
+
+  @override
+  String get widgetDesktopWebTileSubtitle => '电脑网页版默认展示日历，不显示添加桌面小组件按钮';
+
+  @override
+  String get widgetDesktopWebOpenCalendar => '打开日历';
+
+  @override
+  String get widgetPreviewTodoTitle => '今日待办';
+
+  @override
+  String get widgetPreviewScheduleTitle => '今日日程';
+
+  @override
+  String widgetPreviewSampleBadge(String title) {
+    return '示例 · $title';
+  }
+
+  @override
+  String widgetSampleHeaderDate(
+    String cellLabel,
+    String monthLabel,
+    String day,
+  ) {
+    return '$cellLabel · $monthLabel/$day';
+  }
+
+  @override
+  String get widgetRefreshPreviewTooltip => '刷新预览';
+
+  @override
+  String widgetCalendarMonthHeader(String yearText, String monthLabel) {
+    return '$yearText年$monthLabel月';
+  }
+
+  @override
+  String get widgetTodoItem1 => '整理今日计划';
+
+  @override
+  String get widgetTodoItem2 => '项目方案复盘';
+
+  @override
+  String get widgetTodoItem3 => '晚间运动 30 分钟';
+
+  @override
+  String get widgetTodoSummaryCount => '今日待办 · 3 项';
+
+  @override
+  String get widgetTodoQuickAdd => '+ 记一笔';
+
+  @override
+  String get widgetFocusMetricSessions => '今日专注';
+
+  @override
+  String get widgetFocusMetricDuration => '时长(分)';
+
+  @override
+  String get widgetFocusMetricNext => '下一轮(分)';
+
+  @override
+  String get widgetFocusTimerUnit => '分钟';
+
+  @override
+  String get widgetFocusStartButton => '开始 25 分钟专注';
+
+  @override
+  String get widgetFocusLine1 => '今日专注 2 次 · 深度工作 50 分钟';
+
+  @override
+  String get widgetFocusLine2 => '下一轮：25 分钟专注';
+
+  @override
+  String get widgetFocusLine3 => '点击开始专注';
+
+  @override
+  String get widgetHabitTitle => '今日习惯';
+
+  @override
+  String get widgetCalendarCurrentDate => '5月17日 · 周日';
+
+  @override
+  String get widgetCalendarCurrentDay => '5月17日';
+
+  @override
+  String get widgetHabitLine1 => '· 晚间拉伸 · 今日待打卡';
+
+  @override
+  String get widgetHabitLine2 => '· 连续记录 5 天';
+
+  @override
+  String get widgetHabitCheckInButton => '打卡：晚间拉伸';
+
+  @override
+  String get widgetScheduleItem1 => '09:00 今日计划 · 到点提醒';
+
+  @override
+  String get widgetScheduleItem2 => '14:30 团队例会';
+
+  @override
+  String get widgetScheduleItem3 => '19:00 晚间复盘';
+
+  @override
+  String get widgetGoalItem1 => '发版准备 · 68%';
+
+  @override
+  String get widgetGoalItem2 => '本周运动 3/5 次';
+
+  @override
+  String get widgetGoalItem3 => '晚间复盘 · 今日待推进';
+
+  @override
+  String get widgetCourseItem1 => '第 1-2 节 高等数学 · 教 203';
+
+  @override
+  String get widgetCourseItem2 => '第 3-4 节 产品设计 · 线上';
+
+  @override
+  String get widgetCourseItem3 => '第 5-6 节 英语 · 教 305';
+
+  @override
+  String get widgetNoteItem1 => '会议纪要';
+
+  @override
+  String get widgetNoteItem2 => '灵感清单';
+
+  @override
+  String get widgetNoteItem3 => '读书摘录';
+
+  @override
+  String get widgetAnniversaryItem1 => '相识纪念日 · 还有 6 天';
+
+  @override
+  String get widgetAnniversaryItem2 => '入职周年 · 还有 18 天';
+
+  @override
+  String get widgetAnniversaryItem3 => '旅行纪念 · 还有 32 天';
+
+  @override
+  String get widgetDiaryItem1 => '5/17 今天完成了专注复盘';
+
+  @override
+  String get widgetDiaryItem2 => '5/16 记录一次散步';
+
+  @override
+  String get widgetDiaryItem3 => '5/15 睡前整理心情';
+
+  @override
+  String get widgetCalendarMonthJan => '1';
+
+  @override
+  String get widgetCalendarMonthFeb => '2';
+
+  @override
+  String get widgetCalendarMonthMar => '3';
+
+  @override
+  String get widgetCalendarMonthApr => '4';
+
+  @override
+  String get widgetCalendarMonthMay => '5';
+
+  @override
+  String get widgetCalendarMonthJun => '6';
+
+  @override
+  String get widgetCalendarMonthJul => '7';
+
+  @override
+  String get widgetCalendarMonthAug => '8';
+
+  @override
+  String get widgetCalendarMonthSep => '9';
+
+  @override
+  String get widgetCalendarMonthOct => '10';
+
+  @override
+  String get widgetCalendarMonthNov => '11';
+
+  @override
+  String get widgetCalendarMonthDec => '12';
+
+  @override
+  String get dataSettingsThemeSaveFailed => '主题保存失败';
+
+  @override
+  String get dataSettingsRewardShopReason => '奖励商店主题装饰';
+
+  @override
+  String dataSettingsRedeemThemeTitle(String name) {
+    return '兑换主题：$name';
+  }
+
+  @override
+  String dataSettingsRedeemFocusBackdropTitle(String name) {
+    return '兑换专注背景：$name';
+  }
+
+  @override
+  String dataSettingsRedeemAvatarFrameTitle(String name) {
+    return '兑换头像框：$name';
+  }
+
+  @override
+  String dataSettingsRedeemCardSkinTitle(String name) {
+    return '兑换卡片皮肤：$name';
+  }
+
+  @override
+  String dataSettingsInsufficientCoins(int diff) {
+    return '时光币不足，还差 $diff';
+  }
+
+  @override
+  String dataSettingsThemeApplied(String name) {
+    return '已启用 $name';
+  }
+
+  @override
+  String dataSettingsThemeRedeemedAndApplied(String name) {
+    return '已兑换并启用 $name';
+  }
+
+  @override
+  String dataSettingsWidgetBackgroundSwitched(String label) {
+    return '小组件背景已切换为 $label';
+  }
+
+  @override
+  String get dataSettingsUnlockThemeFirst => '请先解锁该主题';
+
+  @override
+  String dataSettingsWidgetCardSkinSwitched(String label) {
+    return '小组件卡片皮肤已切换为 $label';
+  }
+
+  @override
+  String get dataSettingsUnlockCardSkinFirst => '请先解锁该卡片皮肤';
+
+  @override
+  String get dataSettingsWidgetFollowCurrentTheme => '跟随当前主题';
+
+  @override
+  String get dataSettingsWidgetFollowCardSkin => '跟随卡片皮肤';
+
+  @override
+  String get dataSettingsWidgetThemeTitle => '桌面小组件主题';
+
+  @override
+  String get dataSettingsWidgetThemeSubtitle => '单独调整桌面小组件背景和卡片皮肤';
+
+  @override
+  String get dataSettingsWidgetBackgroundLabel => '背景图';
+
+  @override
+  String get dataSettingsWidgetCardSkinLabel => '卡片皮肤';
+
+  @override
+  String dataSettingsCoinCount(int count) {
+    return '时光币 $count';
+  }
+
+  @override
+  String dataSettingsCoinCost(int cost) {
+    return '$cost 币';
+  }
+
+  @override
+  String get dataSettingsFocusBackdropSectionTitle => '专注背景';
+
+  @override
+  String get dataSettingsFocusBackdropSectionSubtitle => '用时光币兑换番茄钟卡片装饰';
+
+  @override
+  String get dataSettingsAvatarFrameSectionTitle => '头像框';
+
+  @override
+  String get dataSettingsAvatarFrameSectionSubtitle => '用时光币兑换我的页头像装饰';
+
+  @override
+  String get dataSettingsCardSkinSectionTitle => '卡片皮肤';
+
+  @override
+  String get dataSettingsCardSkinSectionSubtitle => '用时光币兑换信息卡片质感';
+
+  @override
+  String get dataSettingsWidgetSyncNoticeTitle => '小组件主题';
+
+  @override
+  String get dataSettingsWidgetSyncNoticeSubtitle => '背景图和卡片皮肤会同步到手机桌面小组件';
+
+  @override
+  String get dataSettingsFocusBackdropClassicName => '经典专注';
+
+  @override
+  String get dataSettingsFocusBackdropMorningName => '晨光书桌';
+
+  @override
+  String get dataSettingsFocusBackdropForestName => '林间深呼吸';
+
+  @override
+  String get dataSettingsFocusBackdropOceanName => '海岸静流';
+
+  @override
+  String get dataSettingsFocusBackdropNightName => '夜航模式';
+
+  @override
+  String get dataSettingsFocusBackdropClassicDescription => '简洁的番茄钟渐变背景';
+
+  @override
+  String get dataSettingsFocusBackdropMorningDescription => '适合清晨阅读和学习的暖色背景';
+
+  @override
+  String get dataSettingsFocusBackdropForestDescription => '适合长时间深度工作的自然绿色背景';
+
+  @override
+  String get dataSettingsFocusBackdropOceanDescription => '适合复盘、写作和低压专注的蓝绿色背景';
+
+  @override
+  String get dataSettingsFocusBackdropNightDescription => '适合夜间学习的低亮度深色背景';
+
+  @override
+  String get dataSettingsAvatarFrameSimpleName => '简洁头像';
+
+  @override
+  String get dataSettingsAvatarFrameGoldenName => '金色勋章框';
+
+  @override
+  String get dataSettingsAvatarFrameForestName => '绿叶守护框';
+
+  @override
+  String get dataSettingsAvatarFrameAuroraName => '极光能量框';
+
+  @override
+  String get dataSettingsAvatarFrameSimpleDescription => '默认头像样式';
+
+  @override
+  String get dataSettingsAvatarFrameGoldenDescription => '适合成就达人展示的金色头像框';
+
+  @override
+  String get dataSettingsAvatarFrameForestDescription => '适合习惯连续打卡的自然头像框';
+
+  @override
+  String get dataSettingsAvatarFrameAuroraDescription => '适合高效专注周的流光头像框';
+
+  @override
+  String get dataSettingsCardSkinPlainName => '素净卡片';
+
+  @override
+  String get dataSettingsCardSkinPaperName => '纸感计划卡';
+
+  @override
+  String get dataSettingsCardSkinMintName => '薄荷清单卡';
+
+  @override
+  String get dataSettingsCardSkinStarlightName => '星光玻璃卡';
+
+  @override
+  String get dataSettingsCardSkinPlainDescription => '默认信息卡片样式';
+
+  @override
+  String get dataSettingsCardSkinPaperDescription => '适合日程和待办整理的柔和纸感';
+
+  @override
+  String get dataSettingsCardSkinMintDescription => '适合习惯和专注记录的清爽卡片';
+
+  @override
+  String get dataSettingsCardSkinStarlightDescription => '适合夜间复盘的低亮度玻璃质感';
+
+  @override
+  String get settingsUiSaveFailed => '设置未保存，请重试。';
+
+  @override
+  String get settingsUiDecreaseValue => '减少';
+
+  @override
+  String get settingsUiIncreaseValue => '增加';
+
+  @override
+  String settingsUiDecreaseSetting(String title) {
+    return '减少“$title”';
+  }
+
+  @override
+  String settingsUiIncreaseSetting(String title) {
+    return '增加“$title”';
+  }
+
+  @override
+  String settingsUiCurrentFirstWeekday(String weekday) {
+    return '当前为$weekday';
+  }
+
+  @override
+  String get settingsUiPreferencesHeroExplanation =>
+      '自定义显示与行为偏好，管理底部导航入口与小组件显示。';
+
+  @override
+  String get settingsUiPreferencesCategoriesSectionTitle => '个性入口';
+
+  @override
+  String get settingsUiPreferencesCategoriesSectionSubtitle => '选择要调整的设置类别';
+
+  @override
+  String get settingsUiDisplayAndBehaviorTitle => '显示与行为';
+
+  @override
+  String get settingsUiDisplayAndBehaviorSubtitle => '日期格式、应用时区、启动入口、交互与归档';
+
+  @override
+  String get settingsUiDisplayAndBehaviorHeroSubtitle =>
+      '管理日期格式、应用时区、启动默认项、交互反馈与待办归档。';
+
+  @override
+  String get settingsUiNavigationSectionTitle => '导航入口';
+
+  @override
+  String get settingsUiNavigationSectionSubtitle => '最多 5 个底部入口；“我的”固定，小组件可隐藏';
+
+  @override
+  String get settingsUiJumpToMenuTitle => '快捷定位';
+
+  @override
+  String get settingsUiJumpToDate => '日期日历';
+
+  @override
+  String get settingsUiJumpToDefaults => '默认行为';
+
+  @override
+  String get settingsUiJumpToInteraction => '交互归档';
+
+  @override
+  String settingsUiDateFormatIso(String pattern) {
+    return '标准 ($pattern)';
+  }
+
+  @override
+  String settingsUiDateFormatUs(String pattern) {
+    return '美式 ($pattern)';
+  }
+
+  @override
+  String settingsUiDateFormatEurope(String pattern) {
+    return '欧式 ($pattern)';
+  }
+
+  @override
+  String settingsUiDateFormatEastAsian(String pattern) {
+    return '中文年月日 ($pattern)';
+  }
+
+  @override
+  String get settingsUiTimeZoneShanghai => '中国标准时间 (上海)';
+
+  @override
+  String get settingsUiTimeZoneMexicoCity => '墨西哥城时间';
+
+  @override
+  String get settingsUiTimeZoneTijuana => '蒂华纳时间';
+
+  @override
+  String get settingsUiTimeZoneTokyo => '东京时间 (日本)';
+
+  @override
+  String get settingsUiTimeZoneHongKong => '香港时间';
+
+  @override
+  String get settingsUiTimeZoneSingapore => '新加坡时间';
+
+  @override
+  String get settingsUiTimeZoneNewYork => '纽约时间 (美东)';
+
+  @override
+  String get settingsUiTimeZoneLosAngeles => '洛杉矶时间 (美西)';
+
+  @override
+  String get settingsUiTimeZoneLondon => '伦敦时间';
+
+  @override
+  String get settingsUiTimeZoneParis => '巴黎时间 (中欧)';
+
+  @override
+  String get settingsUiTimeZoneSydney => '悉尼时间 (澳洲东部)';
+
+  @override
+  String get settingsUiNavigationBannerMessage =>
+      '底部导航最多显示 5 个入口，我的固定显示；小组件可隐藏，隐藏入口可在“我的”页面访问。';
+
+  @override
+  String settingsUiMaxTabsConstraint(int max) {
+    return '最多显示 $max 个入口';
+  }
+
+  @override
+  String get settingsUiNavigationHiddenAtLimit => '已达上限，先隐藏其他项';
+
+  @override
+  String settingsUiNavigationMoveUp(String label) {
+    return '上移“$label”';
+  }
+
+  @override
+  String settingsUiNavigationMoveDown(String label) {
+    return '下移“$label”';
+  }
+
+  @override
+  String get settingsUiSelectOption => '选择设置';
+
+  @override
+  String get settingsUiSelectFirstDay => '选择一周第一天';
+
+  @override
+  String get settingsUiSelectDateFormat => '选择日期格式';
+
+  @override
+  String get settingsUiSelectTimeZone => '选择应用时区';
+
+  @override
+  String get settingsUiSelectDefaultTab => '选择启动默认 Tab';
+
+  @override
+  String get settingsUiSelectAutoLock => '选择自动锁定时间';
+
+  @override
+  String settingsUiAutoLockMinutes(int minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String settingsUiAutoLockAfter(int minutes) {
+    return '离开 $minutes 分钟后锁定';
+  }
+
+  @override
+  String habitCopyWeekGoal(int target, String unit) {
+    return '每周目标: $target 次/周';
+  }
+
+  @override
+  String habitCopyMonthGoal(int target, String unit) {
+    return '每月目标: $target 次/月';
+  }
+
+  @override
+  String get habitCopyActionEnd => '结束';
+
+  @override
+  String get habitCopyDeleteConfirmTitle => '删除习惯？';
+
+  @override
+  String habitCopyDeleteConfirmContent(String habitName) {
+    return '会删除“$habitName”和关联记录，不可恢复。';
+  }
+
+  @override
+  String get habitCopyEndConfirmTitle => '结束习惯？';
+
+  @override
+  String habitCopyEndConfirmContent(String habitName) {
+    return '结束“$habitName”？历史记录将保留。';
+  }
+
+  @override
+  String get habitCopyEndHabitAction => '结束习惯';
+
+  @override
+  String get habitCopyDeleteHabitAction => '删除习惯';
+
+  @override
+  String get habitCopyMoreActions => '更多操作';
+
+  @override
+  String get habitCopyEndedFeedback => '习惯已结束，历史记录已保留';
+
+  @override
+  String get habitCopyDeletedFeedback => '习惯已删除';
+
+  @override
+  String get habitCopySaveSuccess => '习惯已保存';
+
+  @override
+  String get habitCopyCheckInFailedWithRetry => '打卡失败，请重试';
+
+  @override
+  String get habitCopyUndoFailedWithRetry => '撤销打卡失败，请重试';
+
+  @override
+  String get habitCopySaveFailedWithRetry => '保存习惯失败，请重试';
+
+  @override
+  String get habitCopyActionFailedWithRetry => '操作失败，请重试';
+
+  @override
+  String get habitCopyNameRequired => '请输入习惯名称';
+
+  @override
+  String get habitCopyDailyTargetInvalid => '每日目标至少为 1';
+
+  @override
+  String get habitCopyReminderSchedulerMissing => '提醒调度器尚未初始化，请重新打开应用后再保存提醒';
+
+  @override
+  String get habitCopyNotificationsNotGranted => '系统通知未授权，习惯提醒不会响铃或弹出';
+
+  @override
+  String get habitCopyReminderPermissionError => '需要系统通知权限以接收提醒';
+
+  @override
+  String get habitCopyReminderRegisterFailed => '提醒注册失败';
+
+  @override
+  String habitCopyReminderSyncWarning(String issueText) {
+    return '习惯已保存，但提醒未同步：$issueText';
+  }
+
+  @override
+  String habitCopyPeriodGoalReached(String habitName, String periodLabel) {
+    return '「$habitName」$periodLabel目标已达标';
+  }
+
+  @override
+  String habitCopySingleSessionGoalReached(String habitName) {
+    return '「$habitName」今日单次目标已完成';
+  }
+
+  @override
+  String habitCopyCheckInSuccessNegative(String habitName) {
+    return '已记录一次「$habitName」';
+  }
+
+  @override
+  String habitCopyDateRecordFeedback(String habitName) {
+    return '已记录「$habitName」';
+  }
+
+  @override
+  String habitCopyDateUndoFeedback(String habitName) {
+    return '已撤销「$habitName」记录';
+  }
+
+  @override
+  String get habitCopyUnitCup => '杯';
+
+  @override
+  String get habitCopyUnitCups => '杯';
+
+  @override
+  String get habitCopyUnitTime => '次';
+
+  @override
+  String habitCopyMeasuredCount(int count, String unit) {
+    return '$count $unit';
+  }
+
+  @override
+  String habitCopyCountWithFlexProgress(
+    String measuredCount,
+    String flexProgressLabel,
+  ) {
+    return '$measuredCount · $flexProgressLabel';
+  }
+
+  @override
+  String habitCopyCountRecorded(String measuredCount) {
+    return '已记录 $measuredCount';
+  }
+
+  @override
+  String habitCopyCountRatio(
+    String measuredCount,
+    int target,
+    String targetUnit,
+  ) {
+    return '$measuredCount / $target $targetUnit';
+  }
+
+  @override
+  String habitCopyCheckInSuccessStandardReached(String habitName) {
+    return '「$habitName」今日已达标';
+  }
+
+  @override
+  String habitCopyCheckInSuccessStandardProgress(
+    String habitName,
+    int count,
+    int target,
+  ) {
+    return '已打卡「$habitName」 $count/$target';
+  }
+
+  @override
+  String get habitCopyPeriodFallback => '本周期';
+
+  @override
+  String habitCopyCheckInSuccessFlexProgress(
+    String habitName,
+    String flexLabel,
+  ) {
+    return '已打卡「$habitName」 $flexLabel';
+  }
+
+  @override
+  String get settingsUiAutoArchiveDayOne => '1 天';
+
+  @override
+  String settingsUiAutoArchiveDayMany(int days) {
+    return '$days 天';
+  }
+
+  @override
+  String get settingsUiAutoArchiveAfterOneDay => '1 天后自动隐藏';
+
+  @override
+  String settingsUiAutoArchiveAfterDays(int days) {
+    return '$days 天后自动隐藏';
+  }
+
+  @override
+  String settingsUiFollowingSystemTimeZone(String timeZoneName) {
+    return '跟随手机：$timeZoneName';
+  }
 }

@@ -12,6 +12,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../core/design_tokens.dart';
+import '../core/i18n.dart';
 export 'empty_state.dart' show EmptyState;
 
 /// 加载中占位：带 shimmer 扫光的骨架条。
@@ -38,7 +39,21 @@ class _LoadingStateState extends State<LoadingState>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final media = MediaQuery.maybeOf(context);
+    final reduceMotion =
+        media?.disableAnimations == true || media?.accessibleNavigation == true;
+    if (reduceMotion) {
+      _controller.stop();
+      _controller.value = 0.5;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
   }
 
   @override
@@ -64,7 +79,7 @@ class _LoadingStateState extends State<LoadingState>
         }
 
         return Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: EdgeInsets.all(padding),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -100,6 +115,7 @@ class _LoadingStateState extends State<LoadingState>
   }
 }
 
+/// 使用 RepaintBoundary + DecoratedBox 渐变直接绘制骨架条，替代 ShaderMask 以消除每帧 GPU saveLayer 开销。
 class _ShimmerBar extends StatelessWidget {
   final AnimationController controller;
   final double width;
@@ -108,32 +124,39 @@ class _ShimmerBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final t = controller.value;
-        return ClipRRect(
-          borderRadius: DesignTokens.borderRadiusSm,
-          child: SizedBox(
-            width: width,
-            height: 12,
-            child: ShaderMask(
-              shaderCallback: (rect) {
-                return LinearGradient(
-                  begin: Alignment(-1.0 + 2.0 * t, 0),
-                  end: Alignment(0.0 + 2.0 * t, 0),
-                  colors: const [
+    return RepaintBoundary(
+      child: SizedBox(
+        width: width,
+        height: 12,
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) {
+            final t = controller.value;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final shimmerColors = isDark
+                ? const [
+                    DesignTokens.resultLoadingShimmerBaseDark,
+                    DesignTokens.resultLoadingShimmerHighlightDark,
+                    DesignTokens.resultLoadingShimmerBaseDark,
+                  ]
+                : const [
                     DesignTokens.resultLoadingShimmerBase,
                     DesignTokens.resultLoadingShimmerHighlight,
                     DesignTokens.resultLoadingShimmerBase,
-                  ],
-                ).createShader(rect);
-              },
-              child: Container(color: DesignTokens.resultLoadingShimmerBase),
-            ),
-          ),
-        );
-      },
+                  ];
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: DesignTokens.borderRadiusSm,
+                gradient: LinearGradient(
+                  begin: Alignment(-1.0 + 2.0 * t, 0),
+                  end: Alignment(0.0 + 2.0 * t, 0),
+                  colors: shimmerColors,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -190,20 +213,17 @@ class ErrorState extends StatelessWidget {
   /// 可选重试回调。为 null 时按钮隐藏。
   final VoidCallback? onRetry;
 
-  /// 可选的标题文案，默认 "出错了"。
-  final String title;
+  /// 可选的自定义标题；省略时随当前语言显示默认标题。
+  final String? title;
 
-  const ErrorState({
-    super.key,
-    required this.error,
-    this.onRetry,
-    this.title = '出错了',
-  });
+  const ErrorState({super.key, required this.error, this.onRetry, this.title});
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
+  Widget build(BuildContext context) => ValueListenableBuilder<AppLocale>(
+    valueListenable: I18n.localeListenable,
+    builder: (context, locale, _) => LayoutBuilder(
       builder: (context, constraints) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         final narrow =
             constraints.maxWidth.isFinite && constraints.maxWidth < 320;
         final padding = narrow ? DesignTokens.spaceMd : DesignTokens.space3xl;
@@ -211,7 +231,7 @@ class ErrorState extends StatelessWidget {
             ? math.max(0.0, constraints.maxWidth - padding * 2)
             : 420.0;
         return Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: EdgeInsets.all(padding),
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: availableWidth),
@@ -221,11 +241,16 @@ class ErrorState extends StatelessWidget {
                   Icon(
                     Icons.error_outline,
                     size: narrow ? 44 : 56,
-                    color: DesignTokens.resultError,
+                    color: isDark
+                        ? DesignTokens.resultErrorDark
+                        : DesignTokens.resultError,
                   ),
                   const SizedBox(height: DesignTokens.spaceMd),
                   Text(
-                    title,
+                    title ??
+                        (locale == AppLocale.en
+                            ? 'Something went wrong'
+                            : '出错了'),
                     textAlign: TextAlign.center,
                     maxLines: narrow ? 2 : null,
                     overflow: narrow ? TextOverflow.ellipsis : null,
@@ -254,7 +279,7 @@ class ErrorState extends StatelessWidget {
                       child: FilledButton.tonalIcon(
                         onPressed: onRetry,
                         icon: const Icon(Icons.refresh),
-                        label: const Text('重试'),
+                        label: Text(I18n.tr('action.retry')),
                       ),
                     ),
                   ],
@@ -264,6 +289,6 @@ class ErrorState extends StatelessWidget {
           ),
         );
       },
-    );
-  }
+    ),
+  );
 }

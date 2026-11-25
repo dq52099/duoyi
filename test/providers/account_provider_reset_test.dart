@@ -107,7 +107,12 @@ void main() {
       contains('_dndStatus = const FocusDndStatus.unavailable();'),
     );
     expect(resetBody, contains('_dndActive = false;'));
-    expect(resetBody, contains('_dndEnableInFlight = false;'));
+    // A pending enable retains its fence until compensating the old device
+    // effect. Reset invalidates its owner instead of allowing a new overlap.
+    expect(resetBody, contains('_storageGeneration++;'));
+    expect(resetBody, contains('_runtimeRevision++;'));
+    expect(resetBody, contains('_restoreFocusDndIfNeeded(notify: false);'));
+    expect(resetBody, isNot(contains('_dndEnableInFlight = false;')));
     expect(
       resetBody,
       contains(

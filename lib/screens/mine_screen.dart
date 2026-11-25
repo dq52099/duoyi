@@ -8,6 +8,7 @@ import '../core/brand_strings.dart';
 import '../core/design_tokens.dart';
 import '../core/desktop_tokens.dart';
 import '../core/i18n.dart';
+import '../core/weekly_review_summary.dart';
 import '../providers/todo_provider.dart';
 import '../providers/habit_provider.dart';
 import '../providers/pomodoro_provider.dart';
@@ -15,6 +16,8 @@ import '../providers/theme_provider.dart';
 import '../providers/user_provider.dart';
 import '../providers/notification_service.dart';
 import '../providers/auth_provider.dart';
+import '../providers/app_lock_provider.dart';
+import '../providers/preferences_provider.dart';
 import '../providers/achievement_provider.dart';
 import '../services/ai_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -24,6 +27,8 @@ import '../services/web_page_reload.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/cached_avatar_image.dart';
 import '../core/account_ui_copy.dart';
+import '../services/account_local_data_cleaner.dart';
+import '../services/settings_action_origin.dart';
 import '../providers/sync_status_presenter.dart';
 import '../widgets/account_status_chip.dart';
 import '../widgets/stats_overview_cards.dart';
@@ -82,7 +87,19 @@ typedef _MineHeaderProfileSlice = ({
 
 typedef _MineStatsProfileSlice = ({int currentStreak, int productivityScore});
 
-class MineScreen extends StatelessWidget {
+class _MineFeedbackText extends StatelessWidget {
+  const _MineFeedbackText(this.message);
+
+  final ValueGetter<String> message;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<AppLocale>(
+    valueListenable: I18n.localeListenable,
+    builder: (context, _, _) => Text(message()),
+  );
+}
+
+class MineScreen extends StatefulWidget implements LocaleStatePreservingRoute {
   final List<int>? visibleBottomNavTabs;
   final bool useShellBackground;
 
@@ -91,6 +108,15 @@ class MineScreen extends StatelessWidget {
     this.visibleBottomNavTabs,
     this.useShellBackground = false,
   });
+
+  @override
+  State<MineScreen> createState() => _MineScreenState();
+}
+
+class _MineScreenState extends State<MineScreen> {
+  List<int>? get visibleBottomNavTabs => widget.visibleBottomNavTabs;
+  bool get useShellBackground => widget.useShellBackground;
+  bool _updateDialogActive = false;
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +142,7 @@ class MineScreen extends StatelessWidget {
             : routeBackground.withValues(alpha: 0.96);
 
         final mineHeader = _MineHeaderSection(
+          actionContext: context,
           onShowAvatarPreview: _showAvatarPreview,
           onPickAndSaveAvatar: _pickAndSaveAvatar,
           onConfirmLogout: _confirmLogout,
@@ -128,6 +155,14 @@ class MineScreen extends StatelessWidget {
         final isWidescreen =
             MediaQuery.widthOf(context) >= DesktopTokens.breakpointTwoColumn;
         final tileColumns = isWidescreen ? 2 : 1;
+        final mineMenuOrderKey = context.select<PreferencesProvider?, String>(
+          (p) => (p?.mineMenuOrder ?? PreferencesProvider.defaultMineMenuOrder)
+              .join(','),
+        );
+        final mineMenuOrder = mineMenuOrderKey
+            .split(',')
+            .map(int.parse)
+            .toList(growable: false);
         Widget capped(Widget child) => isWidescreen
             ? Center(
                 child: ConstrainedBox(
@@ -147,6 +182,12 @@ class MineScreen extends StatelessWidget {
             surfaceTintColor: Colors.transparent,
             actions: [
               IconButton(
+                key: const ValueKey('mine_sort_menu_button'),
+                tooltip: _mineSortMenuLabel(locale),
+                icon: const Icon(Icons.swap_vert),
+                onPressed: () => _showMineMenuSortSheet(context),
+              ),
+              IconButton(
                 tooltip: I18n.tr('quick.menu.search'),
                 icon: const Icon(Icons.search),
                 onPressed: () =>
@@ -159,7 +200,11 @@ class MineScreen extends StatelessWidget {
             restorationId: 'mine_screen_list',
             itemCount: 10,
             itemBuilder: (context, index) {
-              switch (index) {
+              final slotIndex = (index >= 4 && index < 10)
+                  ? mineMenuOrder[index - 4]
+                  : index;
+              Widget buildSlot() {
+                switch (slotIndex) {
                 case 0:
                   return capped(mineHeader);
                 case 1:
@@ -170,298 +215,302 @@ class MineScreen extends StatelessWidget {
                   return const SizedBox(height: 12);
                 case 4:
                   return capped(
-                    _TileGroup(
-                      columns: tileColumns,
-                      title: I18n.tr('mine.group.action_plan'),
-                      icon: Icons.explore_outlined,
-                      children: [
-                        _Tile(
-                          icon: Icons.flag_circle_outlined,
-                          label: I18n.tr('goal.title'),
-                          color: Colors.orange,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  const BrandRouteSurface(child: GoalScreen()),
-                            ),
-                          ),
-                        ),
-                        _Tile(
-                          icon: Icons.timer,
-                          label: I18n.tr('mine.tile.pomodoro'),
-                          color: Colors.red,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BrandRouteSurface(
-                                child: PomodoroScreen(useShellBackground: true),
+                      _TileGroup(
+                        columns: tileColumns,
+                        title: I18n.tr('mine.group.action_plan'),
+                        icon: Icons.explore_outlined,
+                        children: [
+                          _Tile(
+                            icon: Icons.flag_circle_outlined,
+                            label: I18n.tr('goal.title'),
+                            color: DesignTokens.defaultWarning,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const BrandRouteSurface(child: GoalScreen()),
                               ),
                             ),
                           ),
-                        ),
-                        _Tile(
-                          icon: Icons.apps_outlined,
-                          label: I18n.tr('mine.tile.more_apps'),
-                          subtitle: I18n.tr('mine.tile.more_apps.subtitle'),
-                          color: Colors.blueGrey,
-                          onTap: () => _openMoreApplications(context),
-                        ),
-                      ],
-                    ),
+                          _Tile(
+                            icon: Icons.timer,
+                            label: I18n.tr('mine.tile.pomodoro'),
+                            color: DesignTokens.defaultError,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: PomodoroScreen(useShellBackground: true),
+                                ),
+                              ),
+                            ),
+                          ),
+                          _Tile(
+                            icon: Icons.apps_outlined,
+                            label: I18n.tr('mine.tile.more_apps'),
+                            subtitle: I18n.tr('mine.tile.more_apps.subtitle'),
+                            color: cs.primary,
+                            onTap: () => _openMoreApplications(context),
+                          ),
+                        ],
+                      ),
                   );
                 case 5:
                   return capped(_MineRecordReviewGroup(columns: tileColumns));
                 case 6:
                   return capped(
-                    _TileGroup(
-                      columns: tileColumns,
-                      title: I18n.tr('mine.group.schedule'),
-                      icon: Icons.calendar_today_outlined,
-                      children: [
-                        _Tile(
-                          icon: Icons.school_outlined,
-                          label: I18n.tr('mine.tile.courses'),
-                          color: Colors.blue,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BrandRouteSurface(
-                                child: CourseScheduleScreen(),
-                              ),
-                            ),
-                          ),
-                        ),
-                        _Tile(
-                          icon: Icons.calendar_month_outlined,
-                          label: I18n.tr('today.almanac.title'),
-                          color: Colors.green,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BrandRouteSurface(
-                                child: AlmanacScreen(
-                                  initialMode: AlmanacEntryMode.calendar,
+                      _TileGroup(
+                        columns: tileColumns,
+                        title: I18n.tr('mine.group.schedule'),
+                        icon: Icons.calendar_today_outlined,
+                        children: [
+                          _Tile(
+                            icon: Icons.school_outlined,
+                            label: I18n.tr('mine.tile.courses'),
+                            color: cs.primary,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: CourseScheduleScreen(),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        _Tile(
-                          icon: Icons.hourglass_bottom_outlined,
-                          label: I18n.tr('countdown.title'),
-                          color: Colors.deepOrange,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BrandRouteSurface(
-                                child: CountdownScreen(),
+                          _Tile(
+                            icon: Icons.calendar_month_outlined,
+                            label: I18n.tr('today.almanac.title'),
+                            color: DesignTokens.defaultAccent,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: AlmanacScreen(
+                                    initialMode: AlmanacEntryMode.calendar,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        _Tile(
-                          icon: Icons.event_available_outlined,
-                          label: I18n.tr('anniversary.title'),
-                          color: Colors.pink,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BrandRouteSurface(
-                                child: anniversary.MemorialAnniversaryScreen(),
+                          _Tile(
+                            icon: Icons.hourglass_bottom_outlined,
+                            label: I18n.tr('countdown.title'),
+                            color: DesignTokens.defaultWarning,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: CountdownScreen(),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        _Tile(
-                          icon: Icons.cake_outlined,
-                          label: I18n.tr('anniversary.birthday'),
-                          color: Colors.purple,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BrandRouteSurface(
-                                child: anniversary.BirthdayScreen(),
+                          _Tile(
+                            icon: Icons.event_available_outlined,
+                            label: I18n.tr('anniversary.title'),
+                            color: DesignTokens.defaultError,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: anniversary.MemorialAnniversaryScreen(),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                          _Tile(
+                            icon: Icons.cake_outlined,
+                            label: I18n.tr('anniversary.birthday'),
+                            color: cs.tertiary,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: anniversary.BirthdayScreen(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                   );
                 case 7:
                   return capped(
-                    _TileGroup(
-                      columns: tileColumns,
-                      title: I18n.tr('mine.group.personal'),
-                      icon: Icons.tune_outlined,
-                      children: [
-                        _Tile(
-                          icon: Icons.palette,
-                          label: s.mineThemeLabel,
-                          color: cs.primary,
-                          trailing: Text(
-                            theme.brandName,
-                            style: TextStyle(color: cs.primary, fontSize: 11),
-                          ),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BrandRouteSurface(
-                                child: ThemePickerScreen(),
+                      _TileGroup(
+                        columns: tileColumns,
+                        title: I18n.tr('mine.group.personal'),
+                        icon: Icons.tune_outlined,
+                        children: [
+                          _Tile(
+                            icon: Icons.palette,
+                            label: s.mineThemeLabel,
+                            color: cs.primary,
+                            trailing: Text(
+                              theme.brandName,
+                              style: TextStyle(color: cs.primary, fontSize: 11),
+                            ),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: ThemePickerScreen(),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        _Tile(
-                          icon: Icons.tune,
-                          label: I18n.tr('preferences.title'),
-                          color: Colors.indigo,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BrandRouteSurface(
-                                child: PreferencesScreen(),
+                          _Tile(
+                            icon: Icons.tune,
+                            label: I18n.tr('preferences.title'),
+                            color: DesignTokens.defaultAccent,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: PreferencesScreen(),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        _Tile(
-                          icon: Icons.lock_outline,
-                          label: I18n.tr('app_lock.title'),
-                          color: Colors.red.shade400,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BrandRouteSurface(
-                                child: LockSettingsScreen(),
+                          _Tile(
+                            icon: Icons.lock_outline,
+                            label: I18n.tr('app_lock.title'),
+                            color: cs.error,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BrandRouteSurface(
+                                  child: LockSettingsScreen(),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                   );
                 case 8:
                   return capped(
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // 云同步状态卡：上次同步时间 / 进行中 / 未同步角标 / 失败原因
-                        // 与自动重试提示，紧贴"数据协作"分组（含同步冲突记录入口）上方。
-                        const SyncStatusCard(),
-                        _TileGroup(
-                          columns: tileColumns,
-                          title: I18n.tr('mine.group.data'),
-                          icon: Icons.hub_outlined,
-                          children: [
-                            _Tile(
-                              icon: Icons.groups_2_outlined,
-                              label: I18n.tr('share.title'),
-                              color: Colors.cyan,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const BrandRouteSurface(
-                                    child: ShareScreen(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            _Tile(
-                              icon: Icons.extension_outlined,
-                              label: I18n.tr('mine.tile.integrations'),
-                              color: Colors.deepPurple,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const BrandRouteSurface(
-                                    child: IntegrationsScreen(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            _Tile(
-                              icon: Icons.sync_problem_outlined,
-                              label: I18n.tr('sync_conflict.title'),
-                              color: Colors.orange,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const BrandRouteSurface(
-                                    child: SyncConflictLogScreen(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            _Tile(
-                              icon: Icons.event_note_outlined,
-                              label: I18n.tr('export.title'),
-                              color: Colors.lightBlue,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const BrandRouteSurface(
-                                    child: ExportScreen(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            _Tile(
-                              icon: Icons.backup_outlined,
-                              label: I18n.tr('mine.tile.backup'),
-                              color: Colors.brown,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const BrandRouteSurface(
-                                    child: BackupScreen(
-                                      initialMode: BackupEntryMode.backup,
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 云同步状态卡：上次同步时间 / 进行中 / 未同步角标 / 失败原因
+                          // 与自动重试提示，紧贴"数据协作"分组（含同步冲突记录入口）上方。
+                          const SyncStatusCard(),
+                          _TileGroup(
+                            columns: tileColumns,
+                            title: I18n.tr('mine.group.data'),
+                            icon: Icons.hub_outlined,
+                            children: [
+                              _Tile(
+                                icon: Icons.groups_2_outlined,
+                                label: I18n.tr('share.title'),
+                                color: DesignTokens.defaultAccent,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const BrandRouteSurface(
+                                      child: ShareScreen(),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            _Tile(
-                              icon: Icons.restore_outlined,
-                              label: I18n.tr('mine.tile.restore'),
-                              color: Colors.blueGrey,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const BrandRouteSurface(
-                                    child: BackupScreen(
-                                      initialMode: BackupEntryMode.restore,
+                              _Tile(
+                                icon: Icons.extension_outlined,
+                                label: I18n.tr('mine.tile.integrations'),
+                                color: cs.primary,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const BrandRouteSurface(
+                                      child: IntegrationsScreen(),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                              _Tile(
+                                icon: Icons.sync_problem_outlined,
+                                label: I18n.tr('sync_conflict.title'),
+                                color: DesignTokens.defaultWarning,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const BrandRouteSurface(
+                                      child: SyncConflictLogScreen(),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              _Tile(
+                                icon: Icons.event_note_outlined,
+                                label: I18n.tr('export.title'),
+                                color: cs.primary,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const BrandRouteSurface(
+                                      child: ExportScreen(),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              _Tile(
+                                icon: Icons.backup_outlined,
+                                label: I18n.tr('mine.tile.backup'),
+                                color: DesignTokens.defaultWarning,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const BrandRouteSurface(
+                                      child: BackupScreen(
+                                        initialMode: BackupEntryMode.backup,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              _Tile(
+                                icon: Icons.restore_outlined,
+                                label: I18n.tr('mine.tile.restore'),
+                                color: cs.tertiary,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const BrandRouteSurface(
+                                      child: BackupScreen(
+                                        initialMode: BackupEntryMode.restore,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                   );
                 case 9:
                   return capped(
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _MineNotificationSupportGroup(
-                          columns: tileColumns,
-                          aboutLabel: s.mineAboutLabel,
-                          onOpenNotificationHistory: _openNotificationHistory,
-                          onOpenNotificationSettings: _openNotificationSettings,
-                          onOpenFeedback: _openFeedback,
-                          onShowUpdateDialog: _showUpdateDialog,
-                          onAbout: _aboutDialog,
-                        ),
-                        const SizedBox(height: 32),
-                      ],
+                    _MineNotificationSupportGroup(
+                      columns: tileColumns,
+                      updateDialogActive: _updateDialogActive,
+                      aboutLabel: s.mineAboutLabel,
+                      onOpenNotificationHistory: _openNotificationHistory,
+                      onOpenNotificationSettings: _openNotificationSettings,
+                      onOpenFeedback: _openFeedback,
+                      onShowUpdateDialog: _showUpdateDialog,
+                      onAbout: _aboutDialog,
                     ),
                   );
+                }
+                return const SizedBox.shrink();
               }
-              return const SizedBox.shrink();
+
+              final item = buildSlot();
+              return index == 9
+                  ? Padding(
+                      padding: const EdgeInsets.only(bottom: 32),
+                      child: item,
+                    )
+                  : item;
             },
           ),
         );
@@ -481,50 +530,212 @@ class MineScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _confirmLogout(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+  String _mineSortMenuLabel(AppLocale locale) =>
+      locale == AppLocale.en ? 'Sort menu' : '菜单排序';
+
+  void _showMineMenuSortSheet(BuildContext context) {
+    showAppModalSheet<void>(
       context: context,
-      builder: (ctx) => ValueListenableBuilder<AppLocale>(
-        valueListenable: I18n.localeListenable,
-        builder: (dialogCtx, locale, _) => AppDialog(
-          icon: const Icon(Icons.logout),
-          title: Text(I18n.tr('mine.logout.confirm_title')),
-          content: Text(I18n.tr('mine.logout.confirm_content')),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(I18n.tr('action.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: appSecondaryFilledButtonStyle(ctx),
-              child: Text(I18n.tr('auth.logout')),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    var cleanupFailed = false;
-    try {
-      await context.read<AuthProvider>().logout();
-    } catch (_) {
-      cleanupFailed = true;
-    }
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          cleanupFailed
-              ? I18n.tr('mine.logout.cleanup_failed')
-              : I18n.tr('mine.logout.done'),
-        ),
-      ),
+      builder: (_) => const _MineMenuSortSheet(),
     );
   }
 
-  Future<void> _pickAndSaveAvatar(BuildContext context) async {
+  // A disposed dialog can leave its popped Future unresolved. Keep the
+  // interaction guard on its originating view so it cannot block a new page.
+  static final Expando<Object> _logoutOperations = Expando<Object>();
+
+  Future<void> _confirmLogout(BuildContext context) async {
+    if (!context.mounted || _logoutOperations[context] != null) return;
+    final actionOrigin = SettingsActionOrigin(context);
+    if (!actionOrigin.isCurrent()) return;
+    final auth = context.read<AuthProvider>();
+    final lock = context.read<AppLockProvider?>();
+    final updater = context.read<AppUpdateService?>();
+    final originUserProvider = context.read<UserProvider>();
+    final ownerRoute = ModalRoute.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final originGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final originUserId = auth.state.userId;
+    final originIsLoggedIn = auth.state.isLoggedIn;
+    final originSessionGeneration = auth.sessionGeneration;
+    if (!originIsLoggedIn) return;
+
+    AuthSessionLease? sessionLease;
     try {
+      sessionLease = auth.captureSessionLease();
+    } catch (e) {
+      if (ownerRoute != null && !ownerRoute.isCurrent) return;
+      messenger?.showSnackBar(
+        SnackBar(
+          content: _MineFeedbackText(() => AccountUiCopy.formatError(e)),
+        ),
+      );
+      return;
+    }
+
+    final operation = Object();
+    _logoutOperations[context] = operation;
+    try {
+      ModalRoute<dynamic>? selectedDialog;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (dialogCtx, locale, _) => AppDialog(
+            icon: const Icon(Icons.logout),
+            title: Text(I18n.tr('mine.logout.confirm_title')),
+            content: Text(I18n.tr('mine.logout.confirm_content')),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  final route = ModalRoute.of(ctx);
+                  if (!ctx.mounted ||
+                      route == null ||
+                      !route.isActive ||
+                      !route.isCurrent) {
+                    return;
+                  }
+                  selectedDialog = route;
+                  Navigator.pop(ctx, false);
+                },
+                child: Text(I18n.tr('action.cancel')),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final route = ModalRoute.of(ctx);
+                  if (!ctx.mounted ||
+                      route == null ||
+                      !route.isActive ||
+                      !route.isCurrent ||
+                      !actionOrigin.isCurrent(checkRoute: false)) {
+                    return;
+                  }
+                  selectedDialog = route;
+                  Navigator.pop(ctx, true);
+                },
+                style: appSecondaryFilledButtonStyle(ctx),
+                child: Text(I18n.tr('auth.logout')),
+              ),
+            ],
+          ),
+        ),
+      );
+      await selectedDialog?.completed;
+      if (confirmed != true || !context.mounted) return;
+      if (!actionOrigin.isCurrent()) return;
+      if (ownerRoute != null && !ownerRoute.isCurrent) return;
+
+      final isCurrentSession =
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            originGeneration,
+          ) &&
+          auth.state.userId == originUserId &&
+          auth.state.isLoggedIn == originIsLoggedIn &&
+          auth.isSessionLeaseCurrent(sessionLease);
+
+      if (!isCurrentSession) {
+        messenger?.showSnackBar(
+          SnackBar(
+            content: _MineFeedbackText(
+              () => AccountUiCopy.accountChanged,
+            ),
+          ),
+        );
+        return;
+      }
+
+      var cleanupFailed = false;
+      try {
+        await auth.logout();
+      } catch (_) {
+        cleanupFailed = true;
+      }
+      if (!context.mounted || (ownerRoute != null && !ownerRoute.isCurrent)) {
+        return;
+      }
+      // Logout intentionally invalidates its starting lease and local data.
+      // Feedback still belongs to the original view and provider instances.
+      if (!identical(context.read<AuthProvider>(), auth) ||
+          !identical(context.read<UserProvider>(), originUserProvider) ||
+          !identical(
+            context.read<PreferencesProvider?>(),
+            actionOrigin.preferences,
+          ) ||
+          !identical(context.read<AppLockProvider?>(), lock) ||
+          !identical(context.read<AppUpdateService?>(), updater) ||
+          lock?.isLocked == true ||
+          updater?.mustUpdate == true ||
+          auth.isAccountTransitionInProgress ||
+          (auth.sessionGeneration != originSessionGeneration &&
+              auth.sessionGeneration != originSessionGeneration + 1)) {
+        return;
+      }
+      if (auth.state.isLoggedIn) {
+        if (auth.state.userId != originUserId) return;
+        messenger?.showSnackBar(
+          SnackBar(
+            content: _MineFeedbackText(
+              () => AccountUiCopy.feedbackLogoutFailed,
+            ),
+          ),
+        );
+        return;
+      }
+      messenger?.showSnackBar(
+        SnackBar(
+          content: _MineFeedbackText(
+            () => cleanupFailed
+                ? I18n.tr('mine.logout.cleanup_failed')
+                : I18n.tr('mine.logout.done'),
+          ),
+        ),
+      );
+    } finally {
+      if (identical(_logoutOperations[context], operation)) {
+        _logoutOperations[context] = null;
+      }
+    }
+  }
+
+  Future<void> _pickAndSaveAvatar(BuildContext context) async {
+    if (!context.mounted) return;
+    final actionOrigin = SettingsActionOrigin(context);
+    if (!actionOrigin.isCurrent()) return;
+    final auth = context.read<AuthProvider>();
+    final userProvider = context.read<UserProvider>();
+    final ownerRoute = ModalRoute.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final originGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final originUserId = auth.state.userId;
+    final originIsLoggedIn = auth.state.isLoggedIn;
+    AuthSessionLease? sessionLease;
+    var startupComplete = false;
+
+    bool isCurrentAvatarFlow() {
+      if (!context.mounted ||
+          !actionOrigin.isCurrent() ||
+          !identical(context.read<UserProvider>(), userProvider) ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            originGeneration,
+          )) {
+        return false;
+      }
+      if (auth.state.userId != originUserId) return false;
+      if (auth.state.isLoggedIn != originIsLoggedIn) return false;
+      if (sessionLease != null && !auth.isSessionLeaseCurrent(sessionLease)) {
+        return false;
+      }
+      if (originIsLoggedIn && sessionLease == null) {
+        return false;
+      }
+      return true;
+    }
+
+    try {
+      if (originIsLoggedIn) {
+        sessionLease = auth.captureSessionLease();
+      }
+      startupComplete = true;
       final file = await openFile(
         acceptedTypeGroups: [
           XTypeGroup(
@@ -534,18 +745,22 @@ class MineScreen extends StatelessWidget {
           ),
         ],
       );
-      if (file == null || !context.mounted) return;
-      final auth = context.read<AuthProvider>();
-      final userProvider = context.read<UserProvider>();
+      if (file == null || !isCurrentAvatarFlow()) return;
       if (auth.state.isLoggedIn) {
         final bytes = await file.readAsBytes();
+        if (!isCurrentAvatarFlow()) return;
         if (bytes.isEmpty) {
           throw Exception(I18n.tr('profile.avatar.file_empty'));
         }
         if (bytes.length > 3 * 1024 * 1024) {
           throw Exception(I18n.tr('profile.avatar.too_large'));
         }
-        await auth.uploadAvatarBytes(filename: file.name, bytes: bytes);
+        await auth.uploadAvatarBytes(
+          filename: file.name,
+          bytes: bytes,
+          sessionLease: sessionLease,
+        );
+        if (!isCurrentAvatarFlow()) return;
         final state = auth.state;
         await userProvider.updateProfile(
           username: _firstNonEmpty([
@@ -561,6 +776,7 @@ class MineScreen extends StatelessWidget {
         );
       } else {
         final storedPath = await _copyLocalAvatarFile(file);
+        if (!isCurrentAvatarFlow()) return;
         final profile = userProvider.profile;
         await userProvider.updateProfile(
           username: profile.username,
@@ -572,16 +788,44 @@ class MineScreen extends StatelessWidget {
           bio: profile.bio,
         );
       }
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AccountUiCopy.feedbackAvatarSaved)),
+      if (!isCurrentAvatarFlow()) return;
+      if (ownerRoute != null && !ownerRoute.isCurrent) return;
+      messenger?.showSnackBar(
+        SnackBar(
+          content: _MineFeedbackText(() => AccountUiCopy.feedbackAvatarSaved),
+        ),
       );
     } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (!startupComplete) {
+        final isCurrentStartupContext =
+            context.mounted &&
+            actionOrigin.isCurrent() &&
+            AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+              originGeneration,
+            ) &&
+            auth.state.userId == originUserId &&
+            auth.state.isLoggedIn == originIsLoggedIn &&
+            (ownerRoute == null || ownerRoute.isCurrent);
+        if (!isCurrentStartupContext) return;
+        messenger?.showSnackBar(
+          SnackBar(
+            content: _MineFeedbackText(
+              () =>
+                  '${I18n.tr('profile.avatar.save_failed_prefix')}${AccountUiCopy.formatError(e)}',
+            ),
+          ),
+        );
+        return;
+      }
+      if (!isCurrentAvatarFlow() ||
+          (ownerRoute != null && !ownerRoute.isCurrent)) {
+        return;
+      }
+      messenger?.showSnackBar(
         SnackBar(
-          content: Text(
-            '${I18n.tr('profile.avatar.save_failed_prefix')}${AccountUiCopy.formatError(e)}',
+          content: _MineFeedbackText(
+            () =>
+                '${I18n.tr('profile.avatar.save_failed_prefix')}${AccountUiCopy.formatError(e)}',
           ),
         ),
       );
@@ -589,9 +833,24 @@ class MineScreen extends StatelessWidget {
   }
 
   void _showAvatarPreview(BuildContext context) {
+    if (!context.mounted) return;
+    final actionOrigin = SettingsActionOrigin(context);
+    if (!actionOrigin.isCurrent()) return;
     final auth = context.read<AuthProvider>();
     final userProvider = context.read<UserProvider>();
     final profile = userProvider.profile;
+    final originGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final originUserId = auth.state.userId;
+    final originIsLoggedIn = auth.state.isLoggedIn;
+    AuthSessionLease? originSessionLease;
+    try {
+      if (originIsLoggedIn) {
+        originSessionLease = auth.captureSessionLease();
+      }
+    } catch (_) {
+      originSessionLease = null;
+    }
+
     final displayName = auth.state.isLoggedIn
         ? _firstNonEmpty([
             auth.state.displayName,
@@ -607,33 +866,143 @@ class MineScreen extends StatelessWidget {
             profile.avatarInitials,
           ])
         : _firstNonEmpty([profile.avatarUrl, profile.avatarInitials]);
+
+    bool isCurrentPreviewAccount() {
+      if (!context.mounted) return false;
+      if (!actionOrigin.isCurrent(checkRoute: false) ||
+          !identical(context.read<UserProvider>(), userProvider)) {
+        return false;
+      }
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        originGeneration,
+      )) {
+        return false;
+      }
+      if (auth.state.userId != originUserId) return false;
+      if (auth.state.isLoggedIn != originIsLoggedIn) return false;
+      if (originSessionLease != null &&
+          !auth.isSessionLeaseCurrent(originSessionLease)) {
+        return false;
+      }
+      if (originIsLoggedIn && originSessionLease == null) return false;
+      return true;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => _AvatarPreviewScreen(
           avatar: avatar,
           displayName: displayName,
           cacheKey: _avatarCacheKey(avatar, auth.state.userId),
-          onEdit: () => _pickAndSaveAvatar(context),
+          canEdit: isCurrentPreviewAccount,
+          onEdit: () {
+            if (!isCurrentPreviewAccount()) return;
+            _pickAndSaveAvatar(context);
+          },
         ),
       ),
     );
   }
 
-  void _showUpdateDialog(BuildContext context, AppUpdateService u) async {
-    if (!u.checking) await u.checkNow();
-    if (!context.mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: !u.mustUpdate,
-      builder: (ctx) => ValueListenableBuilder<AppLocale>(
-        valueListenable: I18n.localeListenable,
-        builder: (dialogCtx, locale, _) => Consumer<AppUpdateService>(
-          builder: (context, updater, _) {
-            if (kIsWeb) {
+  Future<void> _showUpdateDialog(
+    BuildContext context,
+    AppUpdateService u,
+  ) async {
+    if (!mounted || !context.mounted || _updateDialogActive || u.checking) {
+      return;
+    }
+    final origin = SettingsActionOrigin(context);
+    bool isCurrent() =>
+        origin.isCurrent() && identical(context.read<AppUpdateService?>(), u);
+    if (!isCurrent()) return;
+    setState(() => _updateDialogActive = true);
+    try {
+      await u.checkNow();
+      if (!mounted || !context.mounted || !isCurrent()) return;
+      final navigator = Navigator.of(context, rootNavigator: true);
+      final route = DialogRoute<void>(
+        context: context,
+        themes: InheritedTheme.capture(from: context, to: navigator.context),
+        barrierDismissible: !u.mustUpdate,
+        builder: (ctx) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (dialogCtx, locale, _) => Consumer<AppUpdateService>(
+            builder: (context, updater, _) {
+              if (kIsWeb) {
+                return PopScope(
+                  canPop: true,
+                  child: AppDialog(
+                    title: Text(I18n.tr('mine.update.check_title')),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${I18n.tr('mine.update.current_version_prefix')}${updater.currentVersion}',
+                        ),
+                        if (updater.latestVersion != null &&
+                            updater.latestVersion!.isNotEmpty)
+                          Text(
+                            '${I18n.tr('mine.update.remote_version_prefix')}${updater.latestVersion}',
+                          ),
+                        if (updater.checking) ...[
+                          const SizedBox(height: 12),
+                          const LinearProgressIndicator(),
+                          const SizedBox(height: 6),
+                          Text(
+                            I18n.tr('mine.update.checking'),
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
+                        if (updater.error != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            AccountUiCopy.formatError(updater.error),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                        if (updater.hasUpdate) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            I18n.tr('mine.update.web_available'),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                        ] else if (updater.error == null &&
+                            !updater.checking) ...[
+                          const SizedBox(height: 12),
+                          Text(I18n.tr('mine.update.up_to_date')),
+                        ],
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text(I18n.tr('action.close')),
+                      ),
+                      FilledButton(
+                        onPressed: () => reloadWebPage(),
+                        child: Text(I18n.tr('mine.update.web_refresh')),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              final notes = updater.latestNotesForDisplay;
               return PopScope(
-                canPop: true,
+                canPop: !updater.mustUpdate && !updater.busy,
                 child: AppDialog(
-                  title: Text(I18n.tr('mine.update.check_title')),
+                  title: Text(
+                    I18n.tr(
+                      updater.mustUpdate
+                          ? 'mine.update.required_title'
+                          : 'mine.update.check_title',
+                    ),
+                  ),
                   content: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -641,26 +1010,31 @@ class MineScreen extends StatelessWidget {
                       Text(
                         '${I18n.tr('mine.update.current_version_prefix')}${updater.currentVersion}',
                       ),
-                      if (updater.latestVersion != null &&
-                          updater.latestVersion!.isNotEmpty)
+                      Text(
+                        "${I18n.tr('mine.update.remote_version_prefix')}${updater.latestVersion ?? '—'}",
+                      ),
+                      if (updater.minimumSupportedVersion != null) ...[
+                        const SizedBox(height: 4),
                         Text(
-                          '${I18n.tr('mine.update.remote_version_prefix')}${updater.latestVersion}',
+                          "${I18n.tr('mine.update.min_supported_prefix')}${updater.minimumSupportedVersion}",
                         ),
-                      if (updater.checking) ...[
+                      ],
+                      if (updater.mustUpdate) ...[
                         const SizedBox(height: 12),
-                        const LinearProgressIndicator(),
-                        const SizedBox(height: 6),
-                        Text(
-                          I18n.tr('mine.update.checking'),
-                          style: const TextStyle(fontSize: 12),
+                        AppInfoBanner(
+                          icon: Icons.system_update_alt_outlined,
+                          title: I18n.tr('mine.update.force_banner_title'),
+                          message: I18n.tr('mine.update.force_banner_message'),
+                          color: Theme.of(context).colorScheme.error,
+                          margin: EdgeInsets.zero,
                         ),
                       ],
                       if (updater.error != null) ...[
                         const SizedBox(height: 8),
                         Text(
                           AccountUiCopy.formatError(updater.error),
-                          style: const TextStyle(
-                            color: Colors.red,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
                             fontSize: 12,
                           ),
                         ),
@@ -668,7 +1042,7 @@ class MineScreen extends StatelessWidget {
                       if (updater.hasUpdate) ...[
                         const SizedBox(height: 12),
                         Text(
-                          I18n.tr('mine.update.web_available'),
+                          I18n.tr('mine.update.available'),
                           style: const TextStyle(fontWeight: FontWeight.normal),
                         ),
                       ] else if (updater.error == null &&
@@ -676,177 +1050,119 @@ class MineScreen extends StatelessWidget {
                         const SizedBox(height: 12),
                         Text(I18n.tr('mine.update.up_to_date')),
                       ],
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: Text(I18n.tr('action.close')),
-                    ),
-                    FilledButton(
-                      onPressed: () => reloadWebPage(),
-                      child: Text(I18n.tr('mine.update.web_refresh')),
-                    ),
-                  ],
-                ),
-              );
-            }
-            final notes = updater.latestNotesForDisplay;
-            return PopScope(
-              canPop: !updater.mustUpdate && !updater.busy,
-              child: AppDialog(
-                title: Text(
-                  I18n.tr(
-                    updater.mustUpdate
-                        ? 'mine.update.required_title'
-                        : 'mine.update.check_title',
-                  ),
-                ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${I18n.tr('mine.update.current_version_prefix')}${updater.currentVersion}',
-                    ),
-                    Text(
-                      "${I18n.tr('mine.update.remote_version_prefix')}${updater.latestVersion ?? '—'}",
-                    ),
-                    if (updater.minimumSupportedVersion != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        "${I18n.tr('mine.update.min_supported_prefix')}${updater.minimumSupportedVersion}",
-                      ),
-                    ],
-                    if (updater.mustUpdate) ...[
-                      const SizedBox(height: 12),
-                      AppInfoBanner(
-                        icon: Icons.system_update_alt_outlined,
-                        title: I18n.tr('mine.update.force_banner_title'),
-                        message: I18n.tr('mine.update.force_banner_message'),
-                        color: Theme.of(context).colorScheme.error,
-                        margin: EdgeInsets.zero,
-                      ),
-                    ],
-                    if (updater.error != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        AccountUiCopy.formatError(updater.error),
-                        style: const TextStyle(color: Colors.red, fontSize: 12),
-                      ),
-                    ],
-                    if (updater.hasUpdate) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        I18n.tr('mine.update.available'),
-                        style: const TextStyle(fontWeight: FontWeight.normal),
-                      ),
-                    ] else if (updater.error == null && !updater.checking) ...[
-                      const SizedBox(height: 12),
-                      Text(I18n.tr('mine.update.up_to_date')),
-                    ],
-                    if (notes.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        I18n.tr('mine.update.notes'),
-                        style: const TextStyle(fontWeight: FontWeight.normal),
-                      ),
-                      const SizedBox(height: 6),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 220),
-                        child: Scrollbar(
-                          thumbVisibility: true,
-                          child: SingleChildScrollView(
-                            child: SelectableText(
-                              notes,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                height: 1.45,
+                      if (notes.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          I18n.tr('mine.update.notes'),
+                          style: const TextStyle(fontWeight: FontWeight.normal),
+                        ),
+                        const SizedBox(height: 6),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 220),
+                          child: Scrollbar(
+                            thumbVisibility: true,
+                            child: SingleChildScrollView(
+                              child: SelectableText(
+                                notes,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  height: 1.45,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
+                      if (updater.hasUpdate &&
+                          updater.latestAssetName != null) ...[
+                        const SizedBox(height: 8),
+                        _UpdatePackageInfo(assetName: updater.latestAssetName!),
+                      ],
+                      if ((updater.mustUpdate || updater.hasUpdate) &&
+                          updater.latestUrl == null &&
+                          !updater.hasDownloadedInstaller) ...[
+                        const SizedBox(height: 12),
+                        AppInfoBanner(
+                          icon: Icons.link_off_outlined,
+                          title: I18n.tr('mine.update.package_missing_title'),
+                          message: updater.forceUpdateBlockedReason == null
+                              ? I18n.tr('mine.update.package_missing_message')
+                              : "${I18n.tr('mine.update.package_broken_prefix')}${updater.forceUpdateBlockedReason}${I18n.tr('mine.update.package_broken_suffix')}",
+                          color: Theme.of(context).colorScheme.error,
+                          margin: EdgeInsets.zero,
+                        ),
+                      ],
+                      if (updater.hasUpdate && updater.downloading) ...[
+                        const SizedBox(height: 12),
+                        LinearProgressIndicator(
+                          value: updater.downloadProgress,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          updater.downloadProgress == null
+                              ? I18n.tr('mine.update.downloading')
+                              : "${I18n.tr('mine.update.downloading_progress_prefix')}${(updater.downloadProgress! * 100).clamp(0, 100).toStringAsFixed(0)}%",
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ] else if (updater.hasUpdate && updater.installing) ...[
+                        const SizedBox(height: 12),
+                        const LinearProgressIndicator(),
+                        const SizedBox(height: 6),
+                        Text(I18n.tr('mine.update.installing')),
+                      ],
                     ],
+                  ),
+                  actions: [
+                    if (!updater.mustUpdate)
+                      TextButton(
+                        onPressed: updater.busy
+                            ? null
+                            : () => Navigator.pop(ctx),
+                        child: Text(I18n.tr('action.close')),
+                      ),
                     if (updater.hasUpdate &&
-                        updater.latestAssetName != null) ...[
-                      const SizedBox(height: 8),
-                      _UpdatePackageInfo(assetName: updater.latestAssetName!),
-                    ],
-                    if ((updater.mustUpdate || updater.hasUpdate) &&
-                        updater.latestUrl == null &&
-                        !updater.hasDownloadedInstaller) ...[
-                      const SizedBox(height: 12),
-                      AppInfoBanner(
-                        icon: Icons.link_off_outlined,
-                        title: I18n.tr('mine.update.package_missing_title'),
-                        message: updater.forceUpdateBlockedReason == null
-                            ? I18n.tr('mine.update.package_missing_message')
-                            : "${I18n.tr('mine.update.package_broken_prefix')}${updater.forceUpdateBlockedReason}${I18n.tr('mine.update.package_broken_suffix')}",
-                        color: Theme.of(context).colorScheme.error,
-                        margin: EdgeInsets.zero,
-                      ),
-                    ],
-                    if (updater.hasUpdate && updater.downloading) ...[
-                      const SizedBox(height: 12),
-                      LinearProgressIndicator(value: updater.downloadProgress),
-                      const SizedBox(height: 6),
-                      Text(
-                        updater.downloadProgress == null
-                            ? I18n.tr('mine.update.downloading')
-                            : "${I18n.tr('mine.update.downloading_progress_prefix')}${(updater.downloadProgress! * 100).clamp(0, 100).toStringAsFixed(0)}%",
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ] else if (updater.hasUpdate && updater.installing) ...[
-                      const SizedBox(height: 12),
-                      const LinearProgressIndicator(),
-                      const SizedBox(height: 6),
-                      Text(I18n.tr('mine.update.installing')),
-                    ],
-                  ],
-                ),
-                actions: [
-                  if (!updater.mustUpdate)
-                    TextButton(
-                      onPressed: updater.busy ? null : () => Navigator.pop(ctx),
-                      child: Text(I18n.tr('action.close')),
-                    ),
-                  if (updater.hasUpdate &&
-                      (updater.latestUrl != null ||
-                          updater.hasDownloadedInstaller) &&
-                      AppUpdateInstaller.supportsInstall)
-                    FilledButton.icon(
-                      onPressed: updater.busy
-                          ? null
-                          : () async {
-                              await updater.downloadAndInstallLatest();
-                              if (!context.mounted) return;
-                              if (updater.error != null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      AccountUiCopy.formatError(updater.error),
+                        (updater.latestUrl != null ||
+                            updater.hasDownloadedInstaller) &&
+                        AppUpdateInstaller.supportsInstall)
+                      FilledButton.icon(
+                        onPressed: updater.busy
+                            ? null
+                            : () async {
+                                await updater.downloadAndInstallLatest();
+                                if (!context.mounted) return;
+                                if (updater.error != null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        AccountUiCopy.formatError(
+                                          updater.error,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                );
-                              }
-                            },
-                      icon: const Icon(Icons.download_for_offline_outlined),
-                      label: Text(
-                        I18n.tr(
-                          updater.hasDownloadedInstaller
-                              ? 'mine.update.install_downloaded'
-                              : 'mine.update.download_and_install',
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.download_for_offline_outlined),
+                        label: Text(
+                          I18n.tr(
+                            updater.hasDownloadedInstaller
+                                ? 'mine.update.install_downloaded'
+                                : 'mine.update.download_and_install',
+                          ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            );
-          },
+                  ],
+                ),
+              );
+            },
+          ),
         ),
-      ),
-    );
+      );
+      await navigator.push(route);
+      await route.completed;
+    } finally {
+      if (mounted) setState(() => _updateDialogActive = false);
+    }
   }
 
   Future<void> _openNotificationSettings(BuildContext context) async {
@@ -945,6 +1261,7 @@ String _firstNonEmpty(List<String?> values) {
 }
 
 class _MineHeaderSection extends StatelessWidget {
+  final BuildContext actionContext;
   final void Function(BuildContext context) onShowAvatarPreview;
   final void Function(BuildContext context) onPickAndSaveAvatar;
   final void Function(BuildContext context) onConfirmLogout;
@@ -952,6 +1269,7 @@ class _MineHeaderSection extends StatelessWidget {
   onOpenProfileEditor;
 
   const _MineHeaderSection({
+    required this.actionContext,
     required this.onShowAvatarPreview,
     required this.onPickAndSaveAvatar,
     required this.onConfirmLogout,
@@ -960,6 +1278,30 @@ class _MineHeaderSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    context.select<AuthProvider, (int, bool, bool)>(
+      (provider) => (
+        provider.sessionGeneration,
+        provider.isAccountTransitionInProgress,
+        provider.isLocalAccountDataBlocked,
+      ),
+    );
+    context.select<AuthProvider, AuthProvider>((provider) => provider);
+    context.select<UserProvider, UserProvider>((provider) => provider);
+    context.select<PreferencesProvider?, PreferencesProvider?>(
+      (provider) => provider,
+    );
+    context.select<AppLockProvider?, AppLockProvider?>((provider) => provider);
+    context.select<AppUpdateService?, AppUpdateService?>(
+      (provider) => provider,
+    );
+    context.select<PreferencesProvider?, int?>(
+      (provider) => provider?.storageGeneration,
+    );
+    final actionOrigin = SettingsActionOrigin(actionContext);
+    final originUserProvider = actionContext.read<UserProvider>();
+    bool canAct() =>
+        actionOrigin.isCurrent() &&
+        identical(actionContext.read<UserProvider>(), originUserProvider);
     final auth = context.select<AuthProvider, _MineAuthSlice>((provider) {
       final state = provider.state;
       return (
@@ -1037,13 +1379,13 @@ class _MineHeaderSection extends StatelessWidget {
       child: AppSurfaceCard(
         margin: const EdgeInsets.fromLTRB(12, 2, 12, 10),
         padding: const EdgeInsets.all(14),
-        borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 360;
             final avatarSize = compact ? 50.0 : 56.0;
             final textScaler = MediaQuery.textScalerOf(context);
             final textScale = textScaler.scale(14) / 14;
+            final stackAccountAction = compact && textScale > 1.15;
             final baseHeaderHeight = compact
                 ? _mineHeaderCompactHeight
                 : _mineHeaderRegularHeight;
@@ -1067,7 +1409,9 @@ class _MineHeaderSection extends StatelessWidget {
                         child: InkWell(
                           key: const ValueKey('mine_avatar_preview_button'),
                           customBorder: const CircleBorder(),
-                          onTap: () => onShowAvatarPreview(context),
+                          onTap: () {
+                            if (canAct()) onShowAvatarPreview(actionContext);
+                          },
                           child: Container(
                             width: avatarSize,
                             height: avatarSize,
@@ -1129,7 +1473,11 @@ class _MineHeaderSection extends StatelessWidget {
                             shape: const CircleBorder(),
                             child: InkWell(
                               customBorder: const CircleBorder(),
-                              onTap: () => onPickAndSaveAvatar(context),
+                              onTap: () {
+                                if (canAct()) {
+                                  onPickAndSaveAvatar(actionContext);
+                                }
+                              },
                               child: Center(
                                 child: Container(
                                   width: 20,
@@ -1164,15 +1512,16 @@ class _MineHeaderSection extends StatelessWidget {
             final username = auth.isLoggedIn
                 ? _firstNonEmpty([auth.username, profile.username])
                 : profile.username;
-            final accountAction = SizedBox(
-              width: auth.isLoggedIn ? 38 : 64,
-              height: 34,
-              child: auth.isLoggedIn
-                  ? Tooltip(
+            final accountAction = auth.isLoggedIn
+                ? SizedBox.square(
+                    dimension: 44,
+                    child: Tooltip(
                       message: I18n.tr('auth.logout'),
                       child: IconButton.filledTonal(
                         key: const ValueKey('mine_top_logout_button'),
-                        onPressed: () => onConfirmLogout(context),
+                        onPressed: () {
+                          if (canAct()) onConfirmLogout(actionContext);
+                        },
                         icon: const Icon(Icons.logout, size: 16),
                         style: IconButton.styleFrom(
                           backgroundColor: cs.errorContainer.withValues(
@@ -1184,8 +1533,14 @@ class _MineHeaderSection extends StatelessWidget {
                           padding: EdgeInsets.zero,
                         ),
                       ),
-                    )
-                  : FilledButton(
+                    ),
+                  )
+                : ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 64,
+                      minHeight: 44,
+                    ),
+                    child: FilledButton(
                       onPressed: () => Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -1195,16 +1550,13 @@ class _MineHeaderSection extends StatelessWidget {
                           EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         ),
                       ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          I18n.tr('auth.login'),
-                          maxLines: 1,
-                          style: const TextStyle(fontWeight: FontWeight.normal),
-                        ),
+                      child: Text(
+                        I18n.tr('auth.login'),
+                        softWrap: true,
+                        style: const TextStyle(fontWeight: FontWeight.normal),
                       ),
                     ),
-            );
+                  );
             final nameText = displayName.trim().isEmpty
                 ? I18n.tr('profile.default_user')
                 : displayName.trim();
@@ -1217,18 +1569,20 @@ class _MineHeaderSection extends StatelessWidget {
                     color: cs.primary,
                   );
             final rewardChips = <Widget>[
-              AccountStatusChip(status: displayStatus),
+              AccountStatusChip(status: displayStatus, wrapLabel: true),
               if (auth.isLoggedIn)
                 _MineUserLineChip(
                   label: '${I18n.tr('profile.coins')} $coins',
                   icon: Icons.savings_outlined,
                   color: cs.secondary,
+                  tabularFigures: true,
                 )
               else if (coins > 0)
                 _MineUserLineChip(
                   label: '${I18n.tr('profile.coins')} $coins',
                   icon: Icons.savings_outlined,
                   color: cs.secondary,
+                  tabularFigures: true,
                 ),
               if (auth.isLoggedIn && auth.isAdmin)
                 _MineUserLineChip(
@@ -1272,6 +1626,7 @@ class _MineHeaderSection extends StatelessWidget {
                                   style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(
                                         fontSize: 15,
+                                        fontWeight: FontWeight.normal,
                                         color: cs.onSurface,
                                         height: 1.18,
                                       ),
@@ -1282,6 +1637,13 @@ class _MineHeaderSection extends StatelessWidget {
                                   identityChip: identityChip,
                                   rewardChips: rewardChips,
                                 ),
+                                if (stackAccountAction) ...[
+                                  const SizedBox(height: 8),
+                                  Align(
+                                    alignment: AlignmentDirectional.centerEnd,
+                                    child: accountAction,
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -1289,8 +1651,10 @@ class _MineHeaderSection extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Center(child: accountAction),
+                  if (!stackAccountAction) ...[
+                    const SizedBox(width: 8),
+                    Center(child: accountAction),
+                  ],
                 ],
               ),
             );
@@ -1331,6 +1695,7 @@ class _MineStatsSection extends StatelessWidget {
         cards: [
           StatsOverviewCard(
             title: I18n.tr('mine.stats.todos'),
+            titleMaxLines: null,
             value: hasTodos
                 ? '$todoCompletionRate'
                 : AccountUiCopy.noDataPlaceholder,
@@ -1340,6 +1705,7 @@ class _MineStatsSection extends StatelessWidget {
           ),
           StatsOverviewCard(
             title: I18n.tr('mine.stats.streak'),
+            titleMaxLines: null,
             value: '${profile.currentStreak}',
             unit: I18n.tr('unit.day'),
             icon: Icons.repeat,
@@ -1347,6 +1713,7 @@ class _MineStatsSection extends StatelessWidget {
           ),
           StatsOverviewCard(
             title: I18n.tr('mine.stats.focus'),
+            titleMaxLines: null,
             value: (hasSessions || weeklyFocus > 0)
                 ? '$weeklyFocus'
                 : AccountUiCopy.noDataPlaceholder,
@@ -1358,6 +1725,7 @@ class _MineStatsSection extends StatelessWidget {
           ),
           StatsOverviewCard(
             title: I18n.tr('mine.stats.productivity'),
+            titleMaxLines: null,
             value: '${profile.productivityScore}',
             icon: Icons.auto_awesome,
             color: DesignTokens.defaultWarning,
@@ -1390,7 +1758,7 @@ class _MineAiAssistantSection extends StatelessWidget {
                 icon: Icons.auto_awesome,
                 title: I18n.tr('mine.ai_assistant'),
                 message: I18n.tr('mine.ai_assistant.disabled_message'),
-                color: Colors.purple,
+                color: Theme.of(context).colorScheme.primary,
                 onTap: isAdmin
                     ? () => Navigator.push(
                         context,
@@ -1413,6 +1781,7 @@ class _MineRecordReviewGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final aiEnabled = context.select<AiService, bool>((ai) => ai.enabled);
     final aiReviewHistoryCount = context.select<AiService, int>(
       (ai) => ai.reviewHistory.length,
@@ -1425,7 +1794,7 @@ class _MineRecordReviewGroup extends StatelessWidget {
         _Tile(
           icon: Icons.access_time,
           label: I18n.tr('time_audit.title'),
-          color: Colors.teal,
+          color: DesignTokens.defaultAccent,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1436,7 +1805,7 @@ class _MineRecordReviewGroup extends StatelessWidget {
         _Tile(
           icon: Icons.pie_chart_outline,
           label: I18n.tr('mine.tile.statistics'),
-          color: Colors.indigo,
+          color: cs.primary,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1448,7 +1817,7 @@ class _MineRecordReviewGroup extends StatelessWidget {
         _Tile(
           icon: Icons.book_outlined,
           label: I18n.tr('diary.title'),
-          color: Colors.teal,
+          color: DesignTokens.defaultAccent,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1459,7 +1828,7 @@ class _MineRecordReviewGroup extends StatelessWidget {
         _Tile(
           icon: Icons.edit_note,
           label: I18n.tr('note.title'),
-          color: Colors.amber.shade700,
+          color: DesignTokens.defaultWarning,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1470,7 +1839,7 @@ class _MineRecordReviewGroup extends StatelessWidget {
         _Tile(
           icon: Icons.emoji_events_outlined,
           label: I18n.tr('mine.tile.achievements'),
-          color: Colors.amber,
+          color: DesignTokens.defaultWarning,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1483,12 +1852,15 @@ class _MineRecordReviewGroup extends StatelessWidget {
           _Tile(
             icon: Icons.history,
             label: I18n.tr('ai_history.title'),
-            color: Colors.purple,
+            color: cs.tertiary,
             trailing: aiReviewHistoryCount == 0
                 ? null
                 : Text(
                     '$aiReviewHistoryCount',
-                    style: const TextStyle(fontSize: 11),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
                   ),
             onTap: () => Navigator.push(
               context,
@@ -1505,6 +1877,7 @@ class _MineRecordReviewGroup extends StatelessWidget {
 
 class _MineNotificationSupportGroup extends StatelessWidget {
   final int columns;
+  final bool updateDialogActive;
   final String aboutLabel;
   final void Function(BuildContext context) onOpenNotificationHistory;
   final void Function(BuildContext context) onOpenNotificationSettings;
@@ -1515,6 +1888,7 @@ class _MineNotificationSupportGroup extends StatelessWidget {
 
   const _MineNotificationSupportGroup({
     this.columns = 1,
+    required this.updateDialogActive,
     required this.aboutLabel,
     required this.onOpenNotificationHistory,
     required this.onOpenNotificationSettings,
@@ -1545,6 +1919,7 @@ class _MineNotificationSupportGroup extends StatelessWidget {
     final updateLatestVersion = context.select<AppUpdateService, String?>(
       (service) => service.latestVersion,
     );
+    final cs = Theme.of(context).colorScheme;
     return _TileGroup(
       columns: columns,
       title: I18n.tr('mine.group.notifications'),
@@ -1556,7 +1931,7 @@ class _MineNotificationSupportGroup extends StatelessWidget {
           subtitle: notificationHistoryCount == 0
               ? I18n.tr('mine.tile.notification_history.empty')
               : '$notificationHistoryCount${I18n.tr('mine.tile.notification_history.count_suffix')}',
-          color: Colors.blueGrey,
+          color: cs.onSurfaceVariant,
           trailing: notificationHistoryCount == 0
               ? null
               : hasUnreadNotificationHistory
@@ -1568,14 +1943,14 @@ class _MineNotificationSupportGroup extends StatelessWidget {
           icon: Icons.notifications_outlined,
           label: I18n.tr('mine.tile.notification_settings'),
           subtitle: I18n.tr('mine.tile.notification_settings.subtitle'),
-          color: Colors.orange,
+          color: DesignTokens.defaultWarning,
           onTap: () => onOpenNotificationSettings(context),
         ),
         if (isAdmin)
           _Tile(
             icon: Icons.admin_panel_settings_outlined,
             label: I18n.tr('mine.tile.admin'),
-            color: Colors.deepOrange,
+            color: cs.error,
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -1586,7 +1961,7 @@ class _MineNotificationSupportGroup extends StatelessWidget {
         _Tile(
           icon: Icons.campaign_outlined,
           label: I18n.tr('announcement.title'),
-          color: Colors.cyan,
+          color: cs.primary,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1599,13 +1974,13 @@ class _MineNotificationSupportGroup extends StatelessWidget {
           icon: Icons.forum_outlined,
           label: I18n.tr('mine.tile.feedback'),
           subtitle: I18n.tr('mine.tile.feedback.subtitle'),
-          color: Colors.indigo,
+          color: cs.tertiary,
           onTap: () => onOpenFeedback(context, 'feature'),
         ),
         _Tile(
           icon: Icons.system_update,
           label: I18n.tr('mine.tile.check_updates'),
-          color: Colors.teal,
+          color: DesignTokens.defaultAccent,
           trailing: updateChecking
               ? const SizedBox(
                   width: 14,
@@ -1615,12 +1990,14 @@ class _MineNotificationSupportGroup extends StatelessWidget {
               : (updateHasUpdate
                     ? _UpdateAvailableBadge(version: updateLatestVersion)
                     : null),
-          onTap: () => onShowUpdateDialog(context, updater),
+          onTap: updateChecking || updateDialogActive
+              ? null
+              : () => onShowUpdateDialog(context, updater),
         ),
         _Tile(
           icon: Icons.info_outline,
           label: aboutLabel,
-          color: Colors.grey,
+          color: cs.onSurfaceVariant,
           onTap: () => onAbout(context),
         ),
       ],
@@ -1781,11 +2158,13 @@ class _MineUserLineChip extends StatelessWidget {
   final String label;
   final IconData? icon;
   final Color color;
+  final bool tabularFigures;
 
   const _MineUserLineChip({
     required this.label,
     required this.color,
     this.icon,
+    this.tabularFigures = false,
   });
 
   @override
@@ -1817,6 +2196,9 @@ class _MineUserLineChip extends StatelessWidget {
                 ),
                 fontWeight: FontWeight.normal,
                 height: 1.1,
+                fontFeatures: tabularFigures
+                    ? const [FontFeature.tabularFigures()]
+                    : null,
               ),
             ),
           ),
@@ -1891,12 +2273,14 @@ class _AvatarPreviewScreen extends StatelessWidget {
   final String displayName;
   final Object? cacheKey;
   final VoidCallback? onEdit;
+  final bool Function()? canEdit;
 
   const _AvatarPreviewScreen({
     required this.avatar,
     required this.displayName,
     this.cacheKey,
     this.onEdit,
+    this.canEdit,
   });
 
   @override
@@ -1918,11 +2302,19 @@ class _AvatarPreviewScreen extends StatelessWidget {
               if (onEdit != null)
                 IconButton(
                   tooltip: I18n.tr('mine.avatar.edit'),
-                  onPressed: () {
+                  onPressed: () async {
+                    final route = ModalRoute.of(context);
+                    if (!context.mounted ||
+                        route == null ||
+                        !route.isActive ||
+                        !route.isCurrent ||
+                        canEdit?.call() == false) {
+                      return;
+                    }
                     Navigator.of(context).pop();
-                    WidgetsBinding.instance.addPostFrameCallback(
-                      (_) => onEdit!(),
-                    );
+                    await route.completed;
+                    if (canEdit?.call() == false) return;
+                    onEdit!();
                   },
                   icon: const Icon(Icons.edit_outlined),
                 ),
@@ -2129,43 +2521,49 @@ class _MineStatsGrid extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 520;
-          final columns = compact ? 2 : 4;
+          final columns = ((constraints.maxWidth + 8) / (144 * scale + 8))
+              .floor()
+              .clamp(1, compact ? 2 : 4);
           final baseHeight = compact ? 70.0 : 64.0;
-          final rowHeight = scale > 1.1
-              ? baseHeight * scale.clamp(1.0, 1.65)
-              : baseHeight;
           final rows = <Widget>[];
 
           for (var index = 0; index < cards.length; index += columns) {
             final rowCards = cards.skip(index).take(columns).toList();
             rows.add(
-              SizedBox(
-                height: rowHeight,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var i = 0; i < rowCards.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 8),
-                      Expanded(child: RepaintBoundary(child: rowCards[i])),
+              ConstrainedBox(
+                constraints: BoxConstraints(minHeight: baseHeight),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < rowCards.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 8),
+                        Expanded(child: RepaintBoundary(child: rowCards[i])),
+                      ],
+                      for (var i = rowCards.length; i < columns; i++) ...[
+                        if (i > 0) const SizedBox(width: 8),
+                        const Expanded(child: SizedBox.shrink()),
+                      ],
                     ],
-                    for (var i = rowCards.length; i < columns; i++) ...[
-                      if (i > 0) const SizedBox(width: 8),
-                      const Expanded(child: SizedBox.shrink()),
-                    ],
-                  ],
+                  ),
                 ),
               ),
             );
           }
 
-          return Column(
-            key: const ValueKey('mine_stats_stable_grid'),
-            children: [
-              for (var i = 0; i < rows.length; i++) ...[
-                if (i > 0) const SizedBox(height: 8),
-                rows[i],
+          return DefaultTextStyle.merge(
+            style: const TextStyle(
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+            child: Column(
+              key: const ValueKey('mine_stats_stable_grid'),
+              children: [
+                for (var i = 0; i < rows.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  rows[i],
+                ],
               ],
-            ],
+            ),
           );
         },
       ),
@@ -2189,30 +2587,78 @@ class _AiWeeklyReviewCard extends StatefulWidget {
 
 class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
   bool _busy = false;
-  String? _result;
-  String? _summary;
-  String? _error;
+  AiReviewEntry? _review;
+  String? get _result => _review?.content;
+  String? get _summary => _review?.displaySummary;
+  Object? _error;
   bool _generatedToday = false;
   bool _reviewExpanded = false;
+  AiService? _owner;
+  AuthProvider? _authOwner;
+  int? _historyGeneration;
+  final Set<AiReviewEntry> _discardedReviews = {};
+  int? _sessionGeneration;
+  int? _accountGeneration;
+  int _runSequence = 0;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final cached = context.read<AiService>().weeklyReviewForDay(DateTime.now());
-    if (cached != null && _result == null) {
-      _result = cached.content;
-      _summary = cached.summary;
-      _generatedToday = true;
+    final ai = context.watch<AiService>();
+    final auth = context.watch<AuthProvider?>();
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final historyChanged =
+        !identical(_owner, ai) || _historyGeneration != ai.historyGeneration;
+    final ownerChanged =
+        historyChanged ||
+        !identical(_authOwner, auth) ||
+        _sessionGeneration != auth?.sessionGeneration ||
+        _accountGeneration != accountGeneration;
+    if (historyChanged) {
+      _discardedReviews.clear();
+    } else if (ownerChanged) {
+      if (_review != null) _discardedReviews.add(_review!);
+      _discardedReviews.addAll(ai.reviewHistory);
+    }
+    _owner = ai;
+    _authOwner = auth;
+    _historyGeneration = ai.historyGeneration;
+    _sessionGeneration = auth?.sessionGeneration;
+    _accountGeneration = accountGeneration;
+    if (ownerChanged) {
+      _runSequence++;
+      _busy = false;
+    }
+    final cached = _savedReview(ai, DateTime.now());
+    if (ownerChanged || !identical(cached, _review)) {
+      _review = cached;
+      _generatedToday = cached != null;
       _reviewExpanded = false;
+      _error = null;
     }
   }
 
-  Future<void> _run() async {
-    final cached = context.read<AiService>().weeklyReviewForDay(DateTime.now());
+  AiReviewEntry? _savedReview(AiService ai, DateTime day) {
+    final candidate = ai.weeklyReviewForDay(day);
+    return _discardedReviews.contains(candidate) ? null : candidate;
+  }
+
+  Future<void> _run(
+    SettingsActionOrigin origin,
+    AiService ai,
+    int historyGeneration,
+  ) async {
+    if (_busy ||
+        ai.historyGeneration != historyGeneration ||
+        !origin.isCurrent() ||
+        !identical(context.read<AiService>(), ai)) {
+      return;
+    }
+    final cached = _savedReview(ai, DateTime.now());
+    if (cached == null && ai.weeklyReviewForDay(DateTime.now()) != null) return;
     if (cached != null) {
       setState(() {
-        _result = cached.content;
-        _summary = cached.summary;
+        _review = cached;
         _generatedToday = true;
         _reviewExpanded = false;
         _error = null;
@@ -2223,8 +2669,14 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
       _busy = true;
       _error = null;
     });
+    final sequence = ++_runSequence;
+    bool isCurrent() =>
+        mounted &&
+        sequence == _runSequence &&
+        ai.historyGeneration == historyGeneration &&
+        origin.isCurrent() &&
+        identical(context.read<AiService>(), ai);
     try {
-      final ai = context.read<AiService>();
       final now = DateTime.now();
       final range = _reviewRange(now);
       final completed = widget.todoProvider.completedTodos
@@ -2242,23 +2694,33 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
           60;
       final streak = widget.habitProvider.longestCurrentStreak;
       final label = _reviewRangeLabel(now);
-      _result = await ai.weeklyReview(
+      await ai.weeklyReview(
         completedTodos: completed,
         totalTodos: total,
         weeklyFocusMinutes: focus,
         habitStreak: streak,
         periodLabel: label,
+        period: now.weekday == DateTime.monday
+            ? WeeklyReviewPeriod.lastWeek
+            : WeeklyReviewPeriod.thisWeek,
+        ownerIsCurrent: isCurrent,
       );
-      _summary =
-          '$label${I18n.tr('mine.ai.summary.header_suffix')}$completed / $total${I18n.tr('mine.ai.summary.todos_suffix')}$focus${I18n.tr('mine.ai.summary.focus_suffix')}$streak${I18n.tr('mine.ai.summary.streak_suffix')}';
+      if (!isCurrent() || sequence != _runSequence) return;
+      // A same-day cache can win while generating. Display its saved facts,
+      // never the possibly different numbers submitted by this attempt.
+      final saved = _savedReview(ai, now);
+      if (saved == null) return;
+      _review = saved;
       _generatedToday = true;
       _reviewExpanded = true;
-    } on AiException catch (e) {
-      _error = AccountUiCopy.formatError(e.message);
+    } on AiReviewDiscardedException {
+      // The account/service boundary invalidated this request.
     } catch (e) {
-      _error = AccountUiCopy.formatError(e);
+      if (isCurrent() && sequence == _runSequence) _error = e;
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted && sequence == _runSequence) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -2285,45 +2747,62 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final hasReview = _result != null;
+    final actionOrigin = SettingsActionOrigin(context);
+    final ai = context.read<AiService>();
+    final historyGeneration = ai.historyGeneration;
     return AppSurfaceCard(
       padding: const EdgeInsets.all(14),
-      borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.auto_awesome, color: cs.primary, size: 18),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                I18n.tr('mine.ai.review_title'),
-                style: const TextStyle(fontWeight: FontWeight.normal),
-              ),
-              const Spacer(),
-              if (hasReview)
-                IconButton(
-                  key: const ValueKey('mine_ai_review_toggle'),
-                  tooltip: I18n.tr(
-                    _reviewExpanded ? 'mine.ai.collapse' : 'mine.ai.expand',
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final heading = Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.auto_awesome,
+                      color: cs.primary,
+                      size: 18,
+                    ),
                   ),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () =>
-                      setState(() => _reviewExpanded = !_reviewExpanded),
-                  icon: Icon(
-                    _reviewExpanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      I18n.tr('mine.ai.review_title'),
+                      style: const TextStyle(fontWeight: FontWeight.normal),
+                    ),
                   ),
-                ),
-              TextButton(
-                onPressed: _busy || _generatedToday ? null : _run,
+                  if (hasReview)
+                    IconButton(
+                      key: const ValueKey('mine_ai_review_toggle'),
+                      tooltip: I18n.tr(
+                        _reviewExpanded ? 'mine.ai.collapse' : 'mine.ai.expand',
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 44,
+                        minHeight: 44,
+                      ),
+                      visualDensity: VisualDensity.standard,
+                      onPressed: () =>
+                          setState(() => _reviewExpanded = !_reviewExpanded),
+                      icon: Icon(
+                        _reviewExpanded
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                      ),
+                    ),
+                ],
+              );
+              final generate = TextButton(
+                onPressed: _busy || _generatedToday
+                    ? null
+                    : () => _run(actionOrigin, ai, historyGeneration),
                 child: _busy
                     ? const SizedBox(
                         width: 16,
@@ -2337,15 +2816,31 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
                               : 'mine.ai.generate',
                         ),
                       ),
-              ),
-            ],
+              );
+              if (constraints.maxWidth < 440 ||
+                  MediaQuery.textScalerOf(context).scale(1) > 1.15) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    heading,
+                    Align(alignment: Alignment.centerRight, child: generate),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: heading),
+                  generate,
+                ],
+              );
+            },
           ),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                _error!,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
+                AccountUiCopy.formatError(_error!),
+                style: TextStyle(color: cs.error, fontSize: 12),
               ),
             )
           else if (_result != null)
@@ -2380,9 +2875,8 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
                   if (!_reviewExpanded)
                     TextButton.icon(
                       style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(0, 28),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        minimumSize: const Size(44, 44),
+                        visualDensity: VisualDensity.standard,
                       ),
                       onPressed: () => setState(() => _reviewExpanded = true),
                       icon: const Icon(Icons.unfold_more, size: 15),
@@ -2396,7 +2890,7 @@ class _AiWeeklyReviewCardState extends State<_AiWeeklyReviewCard> {
               padding: const EdgeInsets.only(top: 6),
               child: Text(
                 "${I18n.tr('mine.ai.hint_prefix')}${_reviewRangeLabel(DateTime.now())}${I18n.tr('mine.ai.hint_suffix')}",
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ),
         ],
@@ -2433,21 +2927,20 @@ class _TileGroup extends StatelessWidget {
               children: [
                 Icon(icon, size: 15, color: cs.primary.withValues(alpha: 0.82)),
                 const SizedBox(width: 6),
-                Text(
-                  title,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontSize: 12,
-                    height: 1.15,
-                    fontWeight: FontWeight.normal,
-                    letterSpacing: 0.15,
-                    color: cs.onSurface.withValues(alpha: 0.76),
-                  ),
-                ),
-                const SizedBox(width: 8),
                 Expanded(
-                  child: Divider(
-                    height: 1,
-                    color: cs.outlineVariant.withValues(alpha: 0.18),
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      title,
+                      softWrap: true,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: 12,
+                        height: 1.15,
+                        fontWeight: FontWeight.normal,
+                        letterSpacing: 0.15,
+                        color: cs.onSurface.withValues(alpha: 0.76),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -2455,10 +2948,17 @@ class _TileGroup extends StatelessWidget {
           ),
           RepaintBoundary(
             child: AppSurfaceCard(
-              color: cs.surfaceContainerLow,
-              elevation: 1,
-              borderRadius: BorderRadius.circular(DesignTokens.radiusCard),
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+              color: appSurfaceStyleOf(context) == null
+                  ? cs.surfaceContainerLow
+                  : null,
+              elevation: 0,
+              border:
+                  appSurfaceStyleOf(context)?.cardBorder ??
+                  Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.16),
+                    width: 0.45,
+                  ),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
               child: columns > 1
                   ? LayoutBuilder(
                       builder: (context, constraints) {
@@ -2508,12 +3008,24 @@ class _UpdateAvailableBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = version == null || version!.trim().isEmpty
-        ? I18n.tr('mine.update.badge')
-        : "${I18n.tr('mine.update.badge_version_prefix')}$version";
-    final cs = Theme.of(context).colorScheme;
+    final hasVersion = version != null && version!.trim().isNotEmpty;
+    final text = hasVersion
+        ? "${I18n.tr('mine.update.badge_version_prefix').trim()}\n${version!.trim()}"
+        : I18n.tr('mine.update.badge');
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final surfaceStyle = appSurfaceStyleOf(context);
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final cardFill = surfaceStyle?.cardFillColor;
+    final cardBg = cardFill != null
+        ? Color.alphaBlend(cardFill, scaffoldBg)
+        : cs.surface;
+    final fillBg = cs.error.withValues(alpha: 0.12);
+    final compositedBg = Color.alphaBlend(fillBg, cardBg);
+    final foreground = appReadableForeground(compositedBg, cs.error);
+
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 96),
+      constraints: const BoxConstraints(maxWidth: 112),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2527,14 +3039,19 @@ class _UpdateAvailableBadge extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: cs.error.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(4),
+                color: fillBg,
+                borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
               ),
               child: Text(
                 text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 10, color: cs.error),
+                textAlign: TextAlign.center,
+                softWrap: true,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.normal,
+                  height: 1.15,
+                  color: foreground,
+                ),
               ),
             ),
           ),
@@ -2582,6 +3099,11 @@ class _Tile extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    final tileTint = color.withValues(alpha: isDark ? 0.18 : 0.12);
+    final iconFg = appReadableForeground(
+      Color.alphaBlend(tileTint, cs.surface),
+      color,
+    );
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -2592,13 +3114,15 @@ class _Tile extends StatelessWidget {
           child: Row(
             children: [
               SizedBox.square(
-                dimension: 28,
+                dimension: 34,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: isDark ? 0.18 : 0.12),
-                    borderRadius: BorderRadius.circular(9),
+                    color: tileTint,
+                    borderRadius: BorderRadius.circular(
+                      DesignTokens.radiusControl,
+                    ),
                   ),
-                  child: Icon(icon, color: color, size: 16),
+                  child: Icon(icon, color: iconFg, size: 18),
                 ),
               ),
               const SizedBox(width: 10),
@@ -2608,8 +3132,7 @@ class _Tile extends StatelessWidget {
                   children: [
                     Text(
                       label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
                       style: appSecondaryMenuItemTextStyle(context).copyWith(
                         height: 1.2,
                         color: cs.onSurface,
@@ -2620,8 +3143,7 @@ class _Tile extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        softWrap: true,
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontSize: 11,
                           height: 1.15,
@@ -2646,6 +3168,128 @@ class _Tile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MineMenuSortSheet extends StatefulWidget {
+  const _MineMenuSortSheet();
+
+  @override
+  State<_MineMenuSortSheet> createState() => _MineMenuSortSheetState();
+}
+
+class _MineMenuSortSheetState extends State<_MineMenuSortSheet> {
+  @override
+  void initState() {
+    super.initState();
+    I18n.localeListenable.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    I18n.localeListenable.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  (String, IconData) _groupMeta(int groupIndex) {
+    return switch (groupIndex) {
+      4 => (I18n.tr('mine.group.action_plan'), Icons.explore_outlined),
+      5 => (I18n.tr('mine.group.review'), Icons.insights_outlined),
+      6 => (I18n.tr('mine.group.schedule'), Icons.calendar_today_outlined),
+      7 => (I18n.tr('mine.group.personal'), Icons.tune_outlined),
+      8 => (I18n.tr('mine.group.data'), Icons.hub_outlined),
+      _ => (I18n.tr('mine.group.notifications'), Icons.notifications_none_outlined),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEn = I18n.current == AppLocale.en;
+    final prefs = context.watch<PreferencesProvider?>();
+    final order =
+        prefs?.mineMenuOrder ?? PreferencesProvider.defaultMineMenuOrder;
+    final cs = Theme.of(context).colorScheme;
+
+    return AppModalSheet(
+      title: isEn ? 'Sort menu' : '菜单排序',
+      subtitle: isEn
+          ? 'Reorder menu groups on Mine'
+          : '调整“我的”页面菜单分组顺序',
+      maxWidth: 520,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < order.length; i++) ...[
+            Builder(
+              builder: (context) {
+                final groupIndex = order[i];
+                final (label, icon) = _groupMeta(groupIndex);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Icon(icon, size: 18, color: cs.primary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          label,
+                          softWrap: true,
+                          style: appSecondaryMenuItemTextStyle(context),
+                        ),
+                      ),
+                      IconButton(
+                        key: ValueKey('mine_sort_up_$groupIndex'),
+                        tooltip: isEn ? 'Move up' : '上移',
+                        icon: const Icon(Icons.arrow_upward, size: 18),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: prefs == null || i == 0
+                            ? null
+                            : () => prefs.moveMineMenuGroup(groupIndex, -1),
+                      ),
+                      IconButton(
+                        key: ValueKey('mine_sort_down_$groupIndex'),
+                        tooltip: isEn ? 'Move down' : '下移',
+                        icon: const Icon(Icons.arrow_downward, size: 18),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: prefs == null || i == order.length - 1
+                            ? null
+                            : () => prefs.moveMineMenuGroup(groupIndex, 1),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            if (i < order.length - 1)
+              Divider(
+                height: 1,
+                color: cs.outlineVariant.withValues(alpha: 0.14),
+              ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                key: const ValueKey('mine_sort_reset_button'),
+                onPressed: prefs == null ? null : () => prefs.resetMineMenuOrder(),
+                child: Text(isEn ? 'Reset' : '恢复默认'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                style: appSecondaryFilledButtonStyle(context),
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(isEn ? 'Done' : '完成'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

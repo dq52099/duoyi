@@ -70,6 +70,12 @@ class RecommendedGoal {
     this.dailyTargetCount,
   });
 
+  /// An enabled advance reminder needs an explicitly chosen target date.
+  bool get requiresTargetDate =>
+      reminder.enabled &&
+      reminder.kind != ReminderKind.off &&
+      reminder.daysBefore > 0;
+
   String get localizedTitle {
     return I18n.current == AppLocale.en ? (_enText[id]?.title ?? title) : title;
   }
@@ -820,10 +826,11 @@ class RecommendedGoalsLibrary {
   /// - `id` 为新 UUID v4,保证与既有 Goal 不冲突;
   /// - `status = active`、`progress = 0`、`autoProgress = true`、`milestones = []`、
   ///   `sortOrder = 0`;
-  /// - `startDate = today 00:00 (local)`,不携带 `targetDate`(推荐目标通常无截止日);
+  /// - `startDate = today 00:00 (local)`; `targetDate` 仅取调用方明确提供的日期，
+  ///   不为推荐目标推断截止日。含提前提醒的草稿须在持久化前补齐日期；
   /// - `createdAt / updatedAt = DateTime.now()`;
   /// - 其余字段从 [RecommendedGoal] 原样复制(结构共享,因为它们都是不可变值)。
-  static GoalItem instantiate(RecommendedGoal r) {
+  static GoalItem instantiate(RecommendedGoal r, {DateTime? targetDate}) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     return GoalItem(
@@ -833,6 +840,7 @@ class RecommendedGoalsLibrary {
       icon: r.icon,
       colorValue: r.colorValue,
       startDate: today,
+      targetDate: targetDate,
       status: GoalStatus.active,
       progress: 0,
       autoProgress: true,

@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:duoyi/core/platform_info.dart';
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/providers/notification_service.dart';
 import 'package:duoyi/services/alarm_service.dart';
 import 'package:duoyi/services/permission_health_service.dart';
 import 'package:duoyi/widgets/notification_health_card.dart';
 
 void main() {
+  setUp(() => I18n.setLocale(AppLocale.zh));
+  tearDown(() => I18n.setLocale(AppLocale.zh));
+
   testWidgets('通知健康卡片显示摘要、检查项和动作按钮', (tester) async {
     var refreshCount = 0;
     var openSettingsCount = 0;
@@ -180,6 +184,40 @@ void main() {
     expect(find.text('疑难设置入口'), findsNothing);
     expect(find.text('0 条待触发'), findsOneWidget);
     expect(openSettingsCount, 0);
+  });
+
+  testWidgets('通知健康卡片跟随中英文切换即时更新', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NotificationHealthCard(
+            report: null,
+            pendingCount: 0,
+            onRefresh: () {},
+            onOpenSystemSettings: () {},
+            onOpenNotificationChannelSettings: (_) {},
+            onSendTest: () {},
+            onSendStrongTest: () {},
+            onClearPending: () {},
+            onRequestNotificationPermission: () {},
+            onRequestExactAlarmPermission: () {},
+            onRequestFullScreenIntentPermission: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('通知健康检查'), findsOneWidget);
+    expect(find.text('立即发送测试通知'), findsOneWidget);
+
+    I18n.setLocale(AppLocale.en);
+    await tester.pump();
+
+    expect(find.text('Notification health'), findsOneWidget);
+    expect(find.text('Send test notification now'), findsOneWidget);
+    expect(find.text('Test strong reminder sound'), findsOneWidget);
+    expect(find.text('通知健康检查'), findsNothing);
+    expect(find.text('立即发送测试通知'), findsNothing);
   });
 
   testWidgets('多个静音渠道可以逐项打开对应渠道设置', (tester) async {

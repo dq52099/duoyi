@@ -107,6 +107,15 @@ class ScheduleSettings {
 
 /// 单节课
 class CourseItem {
+  static const int defaultReminderMinutes = 15;
+
+  static int normalizeReminderMinutes(int? minutes) {
+    if (minutes == null) return defaultReminderMinutes;
+    if (minutes <= 0) return 0;
+    if (minutes > 1440) return 1440;
+    return minutes;
+  }
+
   final String id;
   String name;
   String teacher;
@@ -116,6 +125,7 @@ class CourseItem {
   int sectionCount;
   List<int> weeks; // 上课周列表(1 基)
   int colorValue;
+  int reminderMinutes;
   String? note;
   DateTime updatedAt;
 
@@ -129,15 +139,32 @@ class CourseItem {
     this.sectionCount = 2,
     List<int>? weeks,
     this.colorValue = 0xFF4CAF50,
+    int reminderMinutes = defaultReminderMinutes,
     this.note,
     DateTime? updatedAt,
   }) : id = id ?? _uuid.v4(),
        weeks = weeks ?? [],
+       reminderMinutes = normalizeReminderMinutes(reminderMinutes),
        updatedAt = updatedAt ?? DateTime.now();
 
   bool activeInWeek(int week) => weeks.contains(week);
 
   int get endSection => startSection + sectionCount - 1;
+
+  List<int> overlappingWeeksWith(CourseItem other) {
+    if (weeks.isEmpty || other.weeks.isEmpty) return const <int>[];
+    final otherWeeks = other.weeks.toSet();
+    final shared = weeks.where(otherWeeks.contains).toSet().toList()..sort();
+    return shared;
+  }
+
+  bool overlapsWith(CourseItem other) {
+    if (weekday != other.weekday) return false;
+    if (startSection > other.endSection || endSection < other.startSection) {
+      return false;
+    }
+    return overlappingWeeksWith(other).isNotEmpty;
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -149,6 +176,7 @@ class CourseItem {
     'sectionCount': sectionCount,
     'weeks': weeks,
     'colorValue': colorValue,
+    'reminderMinutes': reminderMinutes,
     'note': note,
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -163,6 +191,9 @@ class CourseItem {
     sectionCount: json['sectionCount'] ?? 2,
     weeks: (json['weeks'] as List<dynamic>?)?.cast<int>() ?? [],
     colorValue: json['colorValue'] ?? 0xFF4CAF50,
+    reminderMinutes: normalizeReminderMinutes(
+      (json['reminderMinutes'] as num?)?.toInt(),
+    ),
     note: json['note'],
     updatedAt:
         DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??

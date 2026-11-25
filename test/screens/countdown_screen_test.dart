@@ -265,10 +265,9 @@ void main() {
           contains('padding: const EdgeInsets.fromLTRB(14, 12, 12, 12)'),
         );
         expect(card, contains('Wrap('));
-        expect(card, contains('constraints: const BoxConstraints('));
+        expect(card, contains('BoxConstraints('));
         expect(card, contains('minWidth: 54'));
-        expect(card, contains('maxWidth: 108'));
-        expect(card, contains('TextBaseline.alphabetic'));
+        expect(card, contains('alignment: WrapAlignment.end'));
         expect(
           card,
           anyOf(
@@ -536,7 +535,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '测试生日');
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, '添加').last);
+    final saveButton = find.byKey(
+      const ValueKey('anniversary_editor_save_button'),
+    );
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    expect(saveButton.hitTestable(), findsOneWidget);
+    await tester.tap(saveButton.hitTestable());
     await tester.pumpAndSettle();
 
     expect(provider.items, hasLength(1));
@@ -572,7 +577,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '测试纪念日');
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, '添加').last);
+    final saveButton = find.byKey(
+      const ValueKey('anniversary_editor_save_button'),
+    );
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    expect(saveButton.hitTestable(), findsOneWidget);
+    await tester.tap(saveButton.hitTestable());
     await tester.pumpAndSettle();
 
     expect(provider.items, hasLength(1));
@@ -675,7 +686,13 @@ void main() {
     expect(find.text('倒数日'), findsNothing);
     await tester.enterText(find.byType(TextField).first, '不会新增倒数日');
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, '添加'));
+    final saveButton = find.byKey(
+      const ValueKey('anniversary_editor_save_button'),
+    );
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    expect(saveButton.hitTestable(), findsOneWidget);
+    await tester.tap(saveButton.hitTestable());
     await tester.pumpAndSettle();
 
     expect(provider.items, hasLength(1));

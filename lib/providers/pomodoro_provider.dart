@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../core/domain_event_bus.dart';
+import '../core/account_preference_writes.dart';
 import '../core/focus_sound_catalog.dart';
 import '../models/pomodoro.dart';
 import '../services/focus_distraction_service.dart';
@@ -13,6 +15,8 @@ import '../services/focus_dnd_service.dart';
 import '../services/focus_sound_service.dart';
 import '../services/account_local_data_cleaner.dart';
 import 'cloud_sync_provider.dart';
+import 'auth_provider.dart';
+import 'preferences_provider.dart';
 import 'notification_service.dart';
 import 'time_audit_provider.dart';
 
@@ -20,6 +24,10 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// 运行态快照的持久化键：进程被杀重启后据此恢复进行中的专注。
   /// Android 小组件的 `focus_timer_ends_at_millis` 与 `endsAtMs` 同源。
   static const String runningSnapshotKey = 'pomodoro_running_snapshot';
+  static const String dailyFocusGoalPrefsKey = 'pomodoro_daily_goal_minutes';
+  static const int defaultDailyFocusGoalMinutes = 120;
+  static const String ambientMixerPrefsKey = 'pomodoro_ambient_mixer_v1';
+  static const int maxAmbientMixerTracks = 4;
 
   PomodoroState _state = PomodoroState(
     remainingSeconds: 1500,
@@ -31,6 +39,15 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   );
 
   PomodoroConfig _config = PomodoroConfig();
+  Future<void>? _configWriteTail;
+  PreferencesProvider? _preferences;
+  AuthProvider? _preferencesAuth;
+  int _defaultFocusMinutes = 25;
+  int _dailyFocusGoalMinutes = defaultDailyFocusGoalMinutes;
+  Map<String, double> _ambientMixerTracks = <String, double>{};
+  final Map<String, AudioPlayer> _extraMixerPlayers = <String, AudioPlayer>{};
+  bool _mixerAuditionActive = false;
+  bool _focusDraftPrepared = true;
   Timer? _timer;
   final ValueNotifier<int> _timerTicks = ValueNotifier<int>(0);
   List<PomodoroSession> _sessions = [];
@@ -76,13 +93,21 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _lifecycleAttached = false;
   FocusDndStatus _dndStatus = const FocusDndStatus.unavailable();
   int? _dndPreviousFilter;
+  int? _dndPendingRestoreFilter;
   bool _dndActive = false;
   bool _dndEnableInFlight = false;
   bool _dndRestoreInFlight = false;
+  Future<void>? _dndOperationTail;
   Timer? _distractionTimer;
   FocusDistractionStatus _distractionStatus =
       const FocusDistractionStatus.unavailable();
   String? _lastDistractingPackage;
+
+  PomodoroProvider() {
+    AccountLocalDataCleaner.accountDataGenerationListenable.addListener(
+      _syncPreferenceDefault,
+    );
+  }
 
   PomodoroState get state => _state;
   int get focusTimerEndsAtMillis =>
@@ -90,9 +115,73 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   int get focusTimerStartedAtMillis =>
       _state.isRunning && _state.isCountUp ? _activeAnchorMs ?? 0 : 0;
   PomodoroConfig get config => _config;
+  int get defaultFocusMinutes => _defaultFocusMinutes;
+  int get effectiveFocusDuration => _config.focusDurationUsesDefault
+      ? _defaultFocusMinutes * 60
+      : _config.focusDuration;
+
+  /// Preference observation is read-only; mode changes are explicit writes.
+  void attachPreferences(
+    PreferencesProvider preferences, {
+    AuthProvider? auth,
+  }) {
+    _preferences?.removeListener(_syncPreferenceDefault);
+    _preferencesAuth?.removeListener(_syncPreferenceDefault);
+    _preferences = preferences;
+    _preferencesAuth = auth;
+    preferences.addListener(_syncPreferenceDefault);
+    auth?.addListener(_syncPreferenceDefault);
+    _syncPreferenceDefault();
+  }
+
+  void _syncPreferenceDefault() {
+    final preferences = _preferences;
+    if (_disposed || preferences == null) return;
+    // An unhydrated or invalidated source cannot own a previous account's
+    // default. Only an untouched draft is refreshed; active phases keep time.
+    if (!preferences.isStorageLoaded) {
+      if (_defaultFocusMinutes != 25) {
+        _defaultFocusMinutes = 25;
+        _refreshPreparedFocus();
+        notifyListeners();
+      }
+      return;
+    }
+    if (AccountPreferenceWrites.isBoundaryActive ||
+        _preferencesAuth?.isAccountTransitionInProgress == true ||
+        _preferencesAuth?.isLocalAccountDataBlocked == true) {
+      return;
+    }
+    final minutes = preferences.defaultPomodoroMinutes.clamp(5, 180);
+    if (minutes == _defaultFocusMinutes) return;
+    _defaultFocusMinutes = minutes;
+    _refreshPreparedFocus();
+    notifyListeners();
+  }
+
+  bool _refreshPreparedFocus() {
+    if (!_focusDraftPrepared ||
+        _state.isRunning ||
+        _state.isCountUp ||
+        _state.type != PomodoroType.focus) {
+      return false;
+    }
+    final duration = effectiveFocusDuration;
+    if (_state.totalSeconds == duration &&
+        _state.remainingSeconds == duration) {
+      return false;
+    }
+    _state = _state.copyWith(
+      totalSeconds: duration,
+      remainingSeconds: duration,
+    );
+    return true;
+  }
+
   List<PomodoroSession> get sessions => _sessions;
   List<PomodoroFocusPenalty> get penalties => List.unmodifiable(_penalties);
   int get persistedRevision => _persistedRevision;
+  int get storageGeneration => _storageGeneration;
   int get sessionCountToday => _sessionCountToday;
   int get mineWeeklyFocusMinutes {
     final computedAt = _mineWeeklyFocusComputedAt;
@@ -110,6 +199,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void attachNotifier(NotificationService n) {
     _notifier = n;
+    _syncBackgroundEndReminder();
   }
 
   void attachTimeAudit(TimeAuditProvider provider) {
@@ -131,8 +221,13 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> handleFocusForegroundStopRequested() async {
-    await setWhiteNoiseSound(FocusSoundCatalog.none, preview: false);
-    await _sound.stop();
+    final ownsEffect = _captureEffectOwner(runtime: true, config: true);
+    final receipt = await _changeConfig(
+      (next) => next.whiteNoiseSound = FocusSoundCatalog.none,
+      guard: ownsEffect,
+    );
+    if (!_isCurrentConfigReceipt(receipt)) return;
+    await _syncSoundToState();
   }
 
   @override
@@ -147,7 +242,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       // 回到前台：若番茄钟正在跑 + 已选择白噪音，但服务静音了，补上。
       final expected = _state.whiteNoiseSound;
       if (_state.isRunning && expected != 'none' && !_sound.isPlaying) {
-        _sound.play(expected);
+        unawaited(_syncSoundToState());
       }
       if (_config.autoEnableDnd) {
         // ignore: discarded_futures
@@ -166,6 +261,8 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final runtimeRevision = _runtimeRevision;
+    final pendingConfig = _configWriteTail;
+    if (pendingConfig != null) await pendingConfig;
     final prefs = await SharedPreferences.getInstance();
     if (!_isCurrentStorageGeneration(generation, accountGeneration) ||
         runtimeRevision != _runtimeRevision) {
@@ -173,9 +270,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     final configData = prefs.getString('pomodoro_config');
-    if (configData != null) {
-      _config = PomodoroConfig.fromJson(json.decode(configData));
-    }
+    _config = configData == null
+        ? PomodoroConfig()
+        : PomodoroConfig.fromJson(json.decode(configData));
 
     final sessionsData = prefs.getString('pomodoro_sessions');
     if (sessionsData != null) {
@@ -194,6 +291,39 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _sessionCountToday = prefs.getInt('pomodoro_count_today') ?? 0;
     _lastDate = prefs.getString('pomodoro_last_date');
+    final storedGoal = prefs.getInt(dailyFocusGoalPrefsKey);
+    _dailyFocusGoalMinutes =
+        (storedGoal != null && storedGoal >= 10 && storedGoal <= 720)
+        ? storedGoal
+        : defaultDailyFocusGoalMinutes;
+    final rawMixer = prefs.getString(ambientMixerPrefsKey);
+    if (rawMixer != null && rawMixer.isNotEmpty) {
+      try {
+        final decoded = json.decode(rawMixer);
+        if (decoded is Map) {
+          final parsed = <String, double>{};
+          for (final entry in decoded.entries) {
+            final key = entry.key.toString().trim();
+            final val = entry.value is num ? (entry.value as num).toDouble() : null;
+            if (key.isNotEmpty &&
+                key != FocusSoundCatalog.none &&
+                val != null &&
+                parsed.length < maxAmbientMixerTracks) {
+              parsed[key] = val.clamp(0.1, 1.0).toDouble();
+            }
+          }
+          _ambientMixerTracks = parsed;
+        }
+      } catch (_) {
+        _ambientMixerTracks = <String, double>{};
+      }
+    } else if (_config.whiteNoiseSound != FocusSoundCatalog.none) {
+      _ambientMixerTracks = <String, double>{
+        _config.whiteNoiseSound: _config.focusSoundVolume,
+      };
+    } else {
+      _ambientMixerTracks = <String, double>{};
+    }
     // 先过跨天重置再恢复/结算，保证逾期补结算的当日计数归属恢复当天。
     _checkDayReset();
     var snapshotHandled = false;
@@ -224,6 +354,8 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       // 无快照且不在运行：重置为完整 focusDuration。
       // 有快照但逾期且未续跑时，保留结算后的 break 相位，不重置。
       _initState();
+    } else {
+      _refreshPreparedFocus();
     }
     _recomputeMineWeeklyFocus();
     _persistedRevision++;
@@ -235,10 +367,16 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     _runtimeRevision++;
     _cancelTimer();
     _clearRunningSnapshot();
+    _cancelBackgroundEndReminder();
     _runningSnapshotHydrated = false;
     _runningAccountGeneration = null;
     _timerTicks.value = 0;
     _config = PomodoroConfig();
+    _defaultFocusMinutes = 25;
+    _dailyFocusGoalMinutes = defaultDailyFocusGoalMinutes;
+    _ambientMixerTracks = <String, double>{};
+    _mixerAuditionActive = false;
+    unawaited(_stopExtraMixerPlayers());
     _sessions = [];
     _penalties = [];
     _sessionCountToday = 0;
@@ -252,7 +390,6 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     _restoreFocusDndIfNeeded(notify: false);
     _dndStatus = const FocusDndStatus.unavailable();
     _dndActive = false;
-    _dndEnableInFlight = false;
     _distractionTimer?.cancel();
     _distractionTimer = null;
     _distractionStatus = const FocusDistractionStatus.unavailable();
@@ -263,9 +400,10 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _initState() {
+    _focusDraftPrepared = true;
     _state = PomodoroState(
-      remainingSeconds: _config.focusDuration,
-      totalSeconds: _config.focusDuration,
+      remainingSeconds: effectiveFocusDuration,
+      totalSeconds: effectiveFocusDuration,
       isRunning: false,
       isCountUp: false,
       type: PomodoroType.focus,
@@ -308,14 +446,149 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setString('pomodoro_last_date', lastDate);
   }
 
-  Future<void> _saveConfig() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('pomodoro_config', json.encode(_config.toJson()));
+  Future<_PomodoroConfigReceipt?> _changeConfig(
+    void Function(PomodoroConfig) change, {
+    bool resetIdleFocus = false,
+    bool prepareIdleFocus = false,
+    bool Function()? guard,
+  }) {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final runtimeRevision = _runtimeRevision;
+    final auth = _preferencesAuth;
+    final session = auth?.sessionGeneration;
+    return AccountPreferenceWrites.runResult((token) {
+      final previous = _configWriteTail;
+      final write = () async {
+        bool isCurrent() =>
+            !_disposed &&
+            token.isCurrent &&
+            identical(auth, _preferencesAuth) &&
+            auth?.sessionGeneration == session &&
+            auth?.isAccountTransitionInProgress != true &&
+            auth?.isLocalAccountDataBlocked != true &&
+            _isCurrentStorageGeneration(generation, accountGeneration) &&
+            (guard?.call() ?? true);
+        if (previous != null) await previous;
+        if (!isCurrent()) return null;
+        final next = _config.copyWith();
+        change(next);
+        final changed =
+            json.encode(next.toJson()) != json.encode(_config.toJson());
+        if (changed) {
+          next.touch();
+          final payload = json.encode(next.toJson());
+          final prefs = await SharedPreferences.getInstance();
+          if (!isCurrent()) return null;
+          final transaction = AccountPreferenceTransaction(prefs, isCurrent);
+          try {
+            await transaction.setString('pomodoro_config', payload);
+            transaction.commit();
+          } on AccountPreferenceWriteCanceled {
+            await transaction.rollback(canceledBeforeCleanup: true);
+            return null;
+          } catch (_) {
+            await transaction.rollback();
+            rethrow;
+          }
+          if (!isCurrent()) return null;
+          _config = next;
+          _persistedRevision++;
+        }
+        final priorState = _state;
+        _state = _state.copyWith(
+          whiteNoiseSound: next.whiteNoiseSound,
+          focusRoomId: next.focusRoomId,
+          clearFocusRoom: next.focusRoomId == null,
+        );
+        if (prepareIdleFocus &&
+            (runtimeRevision == _runtimeRevision || _focusDraftPrepared) &&
+            !_state.isRunning) {
+          _runtimeRevision++;
+          _cancelTimer();
+          _clearRunningSnapshot();
+          _cancelBackgroundEndReminder();
+          _focusDraftPrepared = true;
+          _state = _state.copyWith(
+            isCountUp: false,
+            type: PomodoroType.focus,
+            remainingSeconds: effectiveFocusDuration,
+            totalSeconds: effectiveFocusDuration,
+          );
+        } else if (resetIdleFocus &&
+            runtimeRevision == _runtimeRevision &&
+            !_state.isRunning &&
+            !_state.isCountUp &&
+            _state.type == PomodoroType.focus) {
+          _focusDraftPrepared = true;
+          _refreshPreparedFocus();
+        }
+        final receipt = _PomodoroConfigReceipt(
+          _config,
+          generation,
+          accountGeneration,
+          token,
+          auth,
+          session,
+          changed,
+        );
+        if (changed ||
+            priorState.totalSeconds != _state.totalSeconds ||
+            priorState.remainingSeconds != _state.remainingSeconds ||
+            priorState.type != _state.type ||
+            priorState.isCountUp != _state.isCountUp) {
+          notifyListeners();
+        }
+        return receipt;
+      }();
+      final settled = write.then<void>(
+        (_) {},
+        onError: (Object _, StackTrace _) {},
+      );
+      _configWriteTail = settled;
+      settled.then((_) {
+        if (identical(_configWriteTail, settled)) _configWriteTail = null;
+      });
+      return write;
+    }, canceledResult: () => null);
   }
 
-  Future<void> _touchAndSaveConfig() async {
-    _config.touch();
-    await _saveConfig();
+  bool _isCurrentConfigReceipt(_PomodoroConfigReceipt? receipt) =>
+      receipt != null &&
+      !_disposed &&
+      receipt.token.isCurrent &&
+      identical(receipt.auth, _preferencesAuth) &&
+      receipt.auth?.sessionGeneration == receipt.session &&
+      receipt.auth?.isAccountTransitionInProgress != true &&
+      receipt.auth?.isLocalAccountDataBlocked != true &&
+      identical(receipt.config, _config) &&
+      _isCurrentStorageGeneration(
+        receipt.generation,
+        receipt.accountGeneration,
+      );
+
+  bool Function() _captureEffectOwner({
+    bool runtime = false,
+    bool config = false,
+  }) {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final writeGeneration = AccountPreferenceWrites.generation;
+    final auth = _preferencesAuth;
+    final session = auth?.sessionGeneration;
+    final runtimeRevision = _runtimeRevision;
+    final configuration = _config;
+    return () =>
+        !_disposed &&
+        !AccountPreferenceWrites.isBoundaryActive &&
+        AccountPreferenceWrites.generation == writeGeneration &&
+        _isCurrentStorageGeneration(generation, accountGeneration) &&
+        identical(auth, _preferencesAuth) &&
+        auth?.sessionGeneration == session &&
+        auth?.isAccountTransitionInProgress != true &&
+        auth?.isLocalAccountDataBlocked != true &&
+        (!runtime || runtimeRevision == _runtimeRevision) &&
+        (!config || identical(configuration, _config));
   }
 
   Future<void> _saveSessions() async {
@@ -422,6 +695,20 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Object _runningSnapshotKey() => (
+    _activeSessionId,
+    _state.type.index,
+    _state.isCountUp,
+    _state.totalSeconds,
+    _activeAnchorMs,
+    _state.completedSessions,
+    _state.taskName,
+    _state.tag,
+  );
+
+  Object? _lastEncodedSnapshotKey;
+  bool _runningSnapshotDirty = true;
+
   Map<String, dynamic> _runningSnapshot() => <String, dynamic>{
     'isRunning': true,
     'sessionId': _activeSessionId,
@@ -434,17 +721,25 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     'tag': _state.tag,
   };
 
-  /// 把当前运行态写入快照。在启动与每个计时 tick 调用；锚点不变时
-  /// payload 相同，直接跳过落盘（快照内容与 `endsAt` 无关的秒级推进）。
+  /// 把当前运行态写入快照。在启动与每个计时 tick 调用；锚点及元信息不变且上次
+  /// 写入已成功时跳过 JSON 编码与落盘，避免每秒 1s tick 触发序列化开销。
   void _persistRunningSnapshot() {
     if (!_state.isRunning || _activeAnchorMs == null) return;
+    final snapshotKey = _runningSnapshotKey();
+    if (!_runningSnapshotDirty && snapshotKey == _lastEncodedSnapshotKey) {
+      return;
+    }
     final payload = json.encode(_runningSnapshot());
     if (payload == _lastSnapshotPayload || payload == _pendingSnapshotPayload) {
+      _lastEncodedSnapshotKey = snapshotKey;
+      _runningSnapshotDirty = false;
       return;
     }
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     final revision = ++_snapshotRevision;
+    _lastEncodedSnapshotKey = snapshotKey;
+    _runningSnapshotDirty = false;
     _pendingSnapshotPayload = payload;
     unawaited(
       _queueSnapshotOp(
@@ -454,6 +749,9 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
               revision == _snapshotRevision) {
             _pendingSnapshotPayload = null;
             _lastSnapshotPayload = succeeded ? payload : null;
+            if (!succeeded) {
+              _runningSnapshotDirty = true;
+            }
           }
         },
       ),
@@ -464,6 +762,8 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   void _clearRunningSnapshot() {
     _activeAnchorMs = null;
     _activeSessionId = null;
+    _lastEncodedSnapshotKey = null;
+    _runningSnapshotDirty = true;
     _snapshotClearRetryTimer?.cancel();
     _snapshotRevision++;
     _lastSnapshotPayload = null;
@@ -753,6 +1053,32 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // --- Timer controls ---
 
+  void _syncBackgroundEndReminder() {
+    final notifier = _notifier;
+    if (notifier == null ||
+        _disposed ||
+        !_state.isRunning ||
+        _state.isCountUp ||
+        _activeAnchorMs == null) {
+      return;
+    }
+    final endsAt = DateTime.fromMillisecondsSinceEpoch(_activeAnchorMs!);
+    if (!endsAt.isAfter(clock.now())) return;
+    unawaited(
+      notifier.schedulePomodoroEndReminder(
+        isFocus: _state.type == PomodoroType.focus,
+        taskName: _state.taskName,
+        when: endsAt,
+      ),
+    );
+  }
+
+  void _cancelBackgroundEndReminder() {
+    final notifier = _notifier;
+    if (notifier == null) return;
+    unawaited(notifier.cancelPomodoroEndReminder());
+  }
+
   void toggleTimer() {
     if (_state.isRunning) {
       unawaited(_recordStrictFocusPenalty(FocusPenaltyReason.pause));
@@ -768,6 +1094,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _startTimer() {
+    _focusDraftPrepared = false;
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     _runningSnapshotHydrated = true;
@@ -778,6 +1105,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
         notifyListeners();
       }
       if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      _syncBackgroundEndReminder();
       unawaited(_syncSoundToState());
       _syncDndToState();
       _syncDistractionMonitorToState();
@@ -801,6 +1129,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
         !_state.isRunning) {
       return;
     }
+    _syncBackgroundEndReminder();
     unawaited(_syncSoundToState());
     _syncDndToState();
     _syncDistractionMonitorToState();
@@ -852,6 +1181,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     _runtimeRevision++;
     _cancelTimer();
     _clearRunningSnapshot();
+    _cancelBackgroundEndReminder();
     _state = _state.copyWith(isRunning: false);
     notifyListeners();
     _syncDndToState();
@@ -867,35 +1197,54 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   ///
   /// 调用点：`_startTimer` 与 `_completeSession` 的相位切换后。
   Future<bool> _syncSoundToState() async {
+    final ownsEffect = _captureEffectOwner(runtime: true, config: true);
+    if (!ownsEffect()) return false;
     final sound = _state.whiteNoiseSound;
+    final volume = _config.focusSoundVolume;
     final shouldPlay =
         _state.isRunning &&
         sound != 'none' &&
         (_state.type == PomodoroType.focus || _config.playSoundInBreak);
     if (shouldPlay) {
+      unawaited(_syncExtraMixerPlayers(play: _ambientMixerTracks.length >= 2));
       if (!_sound.isPlaying || _sound.currentSound != sound) {
-        return _playFocusSound(sound);
+        return _playFocusSound(sound, volume: volume, isCurrent: ownsEffect);
       } else {
-        await _sound.setVolume(_config.focusSoundVolume);
-        return true;
+        await _sound.setVolume(volume);
+        return ownsEffect();
       }
     } else {
-      if (_sound.isPlaying) {
+      if (!_mixerAuditionActive) {
+        unawaited(_syncExtraMixerPlayers(play: false));
+      }
+      if (_sound.isPlaying && !_mixerAuditionActive) {
         await _sound.stop();
       }
-      return true;
+      return ownsEffect();
     }
   }
 
-  Future<bool> _playFocusSound(String sound) async {
-    await _sound.setVolume(_config.focusSoundVolume);
-    return _sound.play(sound);
+  Future<bool> _playFocusSound(
+    String sound, {
+    required double volume,
+    required bool Function() isCurrent,
+  }) async {
+    if (!isCurrent()) return false;
+    await _sound.setVolume(volume);
+    if (!isCurrent()) return false;
+    final started = await _sound.play(sound);
+    return isCurrent() && started;
   }
 
   Future<bool> _previewWhiteNoiseSound(String sound) async {
+    final ownsEffect = _captureEffectOwner(runtime: true, config: true);
+    if (!ownsEffect()) return false;
     if (sound == FocusSoundCatalog.none || _state.isRunning) return true;
-    await _sound.setVolume(_config.focusSoundVolume);
-    return _sound.preview(sound);
+    final volume = _config.focusSoundVolume;
+    await _sound.setVolume(volume);
+    if (!ownsEffect()) return false;
+    final started = await _sound.preview(sound);
+    return ownsEffect() && started;
   }
 
   String get _focusSoundPreviewFallback {
@@ -913,6 +1262,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 结算即清旧快照（自然完成与崩溃后的逾期补结算共用）；若按
     // autoStart 续跑，_startTimer 会以新相位锚点重新落盘。
     _clearRunningSnapshot();
+    _cancelBackgroundEndReminder();
     final completedState = _state;
     final completedType = completedState.type;
     final durationSeconds = completedState.isCountUp
@@ -953,7 +1303,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     } else {
       nextType = PomodoroType.focus;
-      nextDuration = _config.focusDuration;
+      nextDuration = effectiveFocusDuration;
     }
     final shouldAutoStartNext = completedType == PomodoroType.focus
         ? _config.autoStartBreaks
@@ -981,6 +1331,8 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_state.isRunning) {
       _startTimer();
     } else {
+      _focusDraftPrepared =
+          !_state.isCountUp && _state.type == PomodoroType.focus;
       // 本相位不自动续跑：立刻把声音停掉（focus→break 过渡，或已到末尾）。
       // ignore: discarded_futures
       _sound.stop();
@@ -1040,10 +1392,16 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // Fire desktop notification
     if (!_disposed) {
+      final cancelPendingEndReminder = !_state.isRunning;
       if (completedType == PomodoroType.focus) {
-        _notifier?.notifyPomodoroComplete(taskName: completedState.taskName);
+        _notifier?.notifyPomodoroComplete(
+          taskName: completedState.taskName,
+          cancelPendingEndReminder: cancelPendingEndReminder,
+        );
       } else {
-        _notifier?.notifyBreakComplete();
+        _notifier?.notifyBreakComplete(
+          cancelPendingEndReminder: cancelPendingEndReminder,
+        );
       }
     }
 
@@ -1064,6 +1422,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     _runningSnapshotHydrated = true;
     _cancelTimer();
     _clearRunningSnapshot();
+    _cancelBackgroundEndReminder();
     unawaited(_recordStrictFocusPenalty(FocusPenaltyReason.skip));
     if (_state.type == PomodoroType.focus) {
       _state = _state.copyWith(
@@ -1074,12 +1433,14 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
     } else {
       _state = _state.copyWith(
-        remainingSeconds: _config.focusDuration,
-        totalSeconds: _config.focusDuration,
+        remainingSeconds: effectiveFocusDuration,
+        totalSeconds: effectiveFocusDuration,
         isRunning: false,
         type: PomodoroType.focus,
       );
     }
+    _focusDraftPrepared =
+        !_state.isCountUp && _state.type == PomodoroType.focus;
     // ignore: discarded_futures
     _sound.stop();
     _syncDndToState();
@@ -1092,14 +1453,16 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     _runningSnapshotHydrated = true;
     _cancelTimer();
     _clearRunningSnapshot();
+    _cancelBackgroundEndReminder();
     unawaited(_recordStrictFocusPenalty(FocusPenaltyReason.reset));
     _state = _state.copyWith(
-      remainingSeconds: _state.isCountUp ? 0 : _config.focusDuration,
-      totalSeconds: _state.isCountUp ? 0 : _config.focusDuration,
+      remainingSeconds: _state.isCountUp ? 0 : effectiveFocusDuration,
+      totalSeconds: _state.isCountUp ? 0 : effectiveFocusDuration,
       isRunning: false,
       type: PomodoroType.focus,
       completedSessions: 0,
     );
+    _focusDraftPrepared = !_state.isCountUp;
     // ignore: discarded_futures
     _sound.stop();
     _syncDndToState();
@@ -1122,12 +1485,13 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     _runningSnapshotHydrated = true;
     _cancelTimer();
     _state = _state.copyWith(
-      remainingSeconds: enabled ? 0 : _config.focusDuration,
-      totalSeconds: enabled ? 0 : _config.focusDuration,
+      remainingSeconds: enabled ? 0 : effectiveFocusDuration,
+      totalSeconds: enabled ? 0 : effectiveFocusDuration,
       isRunning: false,
       isCountUp: enabled,
       type: PomodoroType.focus,
     );
+    _focusDraftPrepared = !enabled;
     // ignore: discarded_futures
     _sound.stop();
     _syncDndToState();
@@ -1138,50 +1502,73 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   // --- Config ---
 
   Future<void> setConfig(PomodoroConfig cfg) async {
-    _config = cfg;
-    await _touchAndSaveConfig();
-    _persistedRevision++;
-    if (!_state.isRunning) {
-      _state = _state.copyWith(
-        remainingSeconds: _state.isCountUp ? 0 : cfg.focusDuration,
-        totalSeconds: _state.isCountUp ? 0 : cfg.focusDuration,
-        whiteNoiseSound: cfg.whiteNoiseSound,
-        focusRoomId: cfg.focusRoomId,
-      );
-    }
-    notifyListeners();
+    final snapshot = cfg.copyWith();
+    final receipt = await _changeConfig((next) {
+      next.focusDuration = snapshot.focusDuration;
+      next.focusDurationUsesDefault = snapshot.focusDurationUsesDefault;
+      next.shortBreakDuration = snapshot.shortBreakDuration;
+      next.longBreakDuration = snapshot.longBreakDuration;
+      next.sessionsPerLongBreak = snapshot.sessionsPerLongBreak;
+      next.whiteNoiseSound = snapshot.whiteNoiseSound;
+      next.autoStartBreaks = snapshot.autoStartBreaks;
+      next.autoStartFocus = snapshot.autoStartFocus;
+      next.autoEnableDnd = snapshot.autoEnableDnd;
+      next.strictFocusMode = snapshot.strictFocusMode;
+      next.monitorDistractingApps = snapshot.monitorDistractingApps;
+      next.distractingAppPackages = List.of(snapshot.distractingAppPackages);
+      next.focusRoomId = snapshot.focusRoomId;
+      next.focusSoundVolume = snapshot.focusSoundVolume;
+      next.playSoundInBreak = snapshot.playSoundInBreak;
+    }, resetIdleFocus: true);
+    if (!_isCurrentConfigReceipt(receipt)) return;
     _syncDndToState();
     _syncDistractionMonitorToState();
   }
 
+  Future<void> setFocusDuration(int seconds) async {
+    final receipt = await _changeConfig((next) {
+      next.focusDuration = seconds.clamp(60, 12 * 60 * 60);
+      next.focusDurationUsesDefault = false;
+    }, prepareIdleFocus: true);
+    if (!_isCurrentConfigReceipt(receipt)) return;
+  }
+
+  Future<void> useDefaultFocusDuration() async {
+    await _changeConfig((next) {
+      next.focusDurationUsesDefault = true;
+    }, prepareIdleFocus: true);
+  }
+
   Future<void> setAutoEnableDnd(bool enabled) async {
-    if (_config.autoEnableDnd == enabled) return;
-    _config.autoEnableDnd = enabled;
-    _persistedRevision++;
-    notifyListeners();
-    await _touchAndSaveConfig();
+    final receipt = await _changeConfig((next) => next.autoEnableDnd = enabled);
+    if (!_isCurrentConfigReceipt(receipt) || !receipt!.changed) return;
     if (enabled) {
       await refreshFocusDndStatus();
     } else {
       await _restoreFocusDndIfNeeded();
     }
+    if (!_isCurrentConfigReceipt(receipt)) return;
     notifyListeners();
     _syncDndToState();
   }
 
   Future<void> setStrictFocusMode(bool enabled) async {
-    if (_config.strictFocusMode == enabled) return;
-    _config.strictFocusMode = enabled;
-    _persistedRevision++;
-    notifyListeners();
-    await _touchAndSaveConfig();
+    final receipt = await _changeConfig(
+      (next) => next.strictFocusMode = enabled,
+    );
+    if (!_isCurrentConfigReceipt(receipt) || !receipt!.changed) return;
     _syncDistractionMonitorToState();
   }
 
   Future<FocusDndStatus> refreshFocusDndStatus() async {
-    _dndStatus = await _dnd.getStatus();
-    notifyListeners();
-    return _dndStatus;
+    final ownsEffect = _captureEffectOwner();
+    if (!ownsEffect()) return _dndStatus;
+    final status = await _dnd.getStatus();
+    if (ownsEffect()) {
+      _dndStatus = status;
+      notifyListeners();
+    }
+    return status;
   }
 
   Future<bool> openFocusDndSettings() => _dnd.openPolicyAccessSettings();
@@ -1192,8 +1579,15 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       _state.type == PomodoroType.focus;
 
   void _syncDndToState() {
+    if (!_captureEffectOwner()()) return;
+    if (_dndPendingRestoreFilter != null) {
+      if (!_dndRestoreInFlight && !_dndEnableInFlight) {
+        unawaited(_restoreFocusDndIfNeeded());
+      }
+      return;
+    }
     if (_shouldEnableDnd) {
-      if (!_dndActive && !_dndEnableInFlight) {
+      if (!_dndActive && !_dndEnableInFlight && !_dndRestoreInFlight) {
         // ignore: discarded_futures
         _enableFocusDndIfPossible();
       }
@@ -1205,56 +1599,102 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _enableFocusDndIfPossible() async {
-    _dndEnableInFlight = true;
-    try {
-      final status = await _dnd.getStatus();
-      _dndStatus = status;
-      if (!_shouldEnableDnd || !status.supported || !status.accessGranted) {
-        notifyListeners();
-        return;
-      }
-
-      final result = await _dnd.enable();
-      if (result.enabled) {
-        _dndPreviousFilter ??= result.previousFilter;
-        _dndActive = true;
-        _dndStatus = FocusDndStatus(
-          supported: true,
-          accessGranted: true,
-          currentFilter: result.currentFilter,
-        );
-      }
-      if (!_shouldEnableDnd) {
-        await _restoreFocusDndIfNeeded();
-      }
-      notifyListeners();
-    } finally {
-      _dndEnableInFlight = false;
-    }
+  Future<void> _enqueueDndOperation(Future<void> Function() operation) {
+    final previous = _dndOperationTail;
+    final result = () async {
+      if (previous != null) await previous;
+      await operation();
+    }();
+    final settled = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _dndOperationTail = settled;
+    settled.then((_) {
+      if (identical(_dndOperationTail, settled)) _dndOperationTail = null;
+    });
+    return result;
   }
 
-  Future<void> _restoreFocusDndIfNeeded({bool notify = true}) async {
-    if (_dndRestoreInFlight) return;
-    final previous = _dndPreviousFilter;
+  Future<void> _enableFocusDndIfPossible() {
+    if (_dndEnableInFlight) return Future<void>.value();
+    _dndEnableInFlight = true;
+    final ownsEffect = _captureEffectOwner(runtime: true, config: true);
+    return _enqueueDndOperation(() async {
+      try {
+        if (!ownsEffect()) return;
+        final status = await _dnd.getStatus();
+        if (!ownsEffect()) return;
+        _dndStatus = status;
+        if (!_shouldEnableDnd || !status.supported || !status.accessGranted) {
+          notifyListeners();
+          return;
+        }
+
+        final result = await _dnd.enable();
+        if (!ownsEffect() || !_shouldEnableDnd) {
+          // This issued enable belongs to the old operation. Restore its own
+          // filter before the queue lets a newer owner enable DND.
+          if (result.enabled) {
+            final restored = await _dnd.restore(result.previousFilter);
+            if (!restored) _dndPendingRestoreFilter = result.previousFilter;
+          }
+          return;
+        }
+        if (result.enabled) {
+          _dndPreviousFilter ??= result.previousFilter;
+          _dndActive = true;
+          _dndStatus = FocusDndStatus(
+            supported: true,
+            accessGranted: true,
+            currentFilter: result.currentFilter,
+          );
+        }
+        notifyListeners();
+      } finally {
+        _dndEnableInFlight = false;
+        if (!ownsEffect() && _dndPendingRestoreFilter == null) {
+          _syncDndToState();
+        }
+      }
+    });
+  }
+
+  Future<void> _restoreFocusDndIfNeeded({bool notify = true}) {
+    if (_dndRestoreInFlight) return _dndOperationTail ?? Future<void>.value();
+    final previous = _dndPendingRestoreFilter ?? _dndPreviousFilter;
     if (previous == null) {
       _dndActive = false;
-      return;
+      return Future<void>.value();
     }
     _dndRestoreInFlight = true;
+    _dndPendingRestoreFilter = previous;
     _dndPreviousFilter = null;
     _dndActive = false;
-    try {
-      await _dnd.restore(previous);
-      _dndStatus = await _dnd.getStatus();
-      if (notify) notifyListeners();
-    } finally {
-      _dndRestoreInFlight = false;
-    }
+    final ownsEffect = _captureEffectOwner();
+    var restored = false;
+    return _enqueueDndOperation(() async {
+      try {
+        // Restoration also runs after reset/dispose, using only the captured
+        // filter. It may never publish its result into a newer owner.
+        restored = await _dnd.restore(previous);
+        if (!restored) return;
+        _dndPendingRestoreFilter = null;
+        if (!ownsEffect()) return;
+        final status = await _dnd.getStatus();
+        if (!ownsEffect()) return;
+        _dndStatus = status;
+        if (notify) notifyListeners();
+      } finally {
+        _dndRestoreInFlight = false;
+        if (restored) _syncDndToState();
+      }
+    });
   }
 
   void setTaskName(String? name) {
     _state = _state.copyWith(taskName: name, clearTaskName: name == null);
+    _syncBackgroundEndReminder();
     notifyListeners();
   }
 
@@ -1264,28 +1704,24 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       tag: clean,
       clearTag: clean == null || clean.isEmpty,
     );
+    _syncBackgroundEndReminder();
     notifyListeners();
   }
 
   Future<void> setFocusRoomId(String? roomId) async {
     final clean = roomId?.trim();
     final nextRoomId = clean == null || clean.isEmpty ? null : clean;
-    if (_config.focusRoomId == nextRoomId && _state.focusRoomId == nextRoomId) {
-      return;
-    }
-    _config.focusRoomId = nextRoomId;
-    _state = _state.copyWith(
-      focusRoomId: _config.focusRoomId,
-      clearFocusRoom: _config.focusRoomId == null,
-    );
-    await _touchAndSaveConfig();
-    _persistedRevision++;
-    notifyListeners();
+    await _changeConfig((next) => next.focusRoomId = nextRoomId);
   }
 
   Future<void> refreshFocusDistractionStatus() async {
-    _distractionStatus = await _distraction.getStatus();
-    notifyListeners();
+    final ownsEffect = _captureEffectOwner();
+    if (!ownsEffect()) return;
+    final status = await _distraction.getStatus();
+    if (ownsEffect()) {
+      _distractionStatus = status;
+      notifyListeners();
+    }
   }
 
   Future<bool> openFocusUsageAccessSettings() {
@@ -1297,11 +1733,10 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> setMonitorDistractingApps(bool enabled) async {
-    if (_config.monitorDistractingApps == enabled) return;
-    _config.monitorDistractingApps = enabled;
-    _persistedRevision++;
-    notifyListeners();
-    await _touchAndSaveConfig();
+    final receipt = await _changeConfig(
+      (next) => next.monitorDistractingApps = enabled,
+    );
+    if (!_isCurrentConfigReceipt(receipt) || !receipt!.changed) return;
     // ignore: discarded_futures
     refreshFocusDistractionStatus();
     _syncDistractionMonitorToState();
@@ -1315,14 +1750,10 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
             .toSet()
             .toList()
           ..sort();
-    if (_config.distractingAppPackages.length == normalized.length &&
-        _config.distractingAppPackages.every(normalized.contains)) {
-      return;
-    }
-    _config.distractingAppPackages = normalized;
-    await _touchAndSaveConfig();
-    _persistedRevision++;
-    notifyListeners();
+    final receipt = await _changeConfig(
+      (next) => next.distractingAppPackages = normalized,
+    );
+    if (!_isCurrentConfigReceipt(receipt) || !receipt!.changed) return;
     _syncDistractionMonitorToState();
   }
 
@@ -1330,29 +1761,20 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     final normalized = sound.startsWith('custom:')
         ? sound
         : FocusSoundCatalog.normalizeForPlayback(sound);
-    if (_config.whiteNoiseSound == normalized &&
-        _state.whiteNoiseSound == normalized) {
-      if (preview &&
-          normalized != FocusSoundCatalog.none &&
-          !_state.isRunning) {
-        return _previewWhiteNoiseSound(normalized);
-      }
-      return true;
-    }
-    _state = _state.copyWith(whiteNoiseSound: normalized);
-    _config.whiteNoiseSound = normalized;
-    await _touchAndSaveConfig();
-    _persistedRevision++;
-    notifyListeners();
+    final receipt = await _changeConfig(
+      (next) => next.whiteNoiseSound = normalized,
+    );
+    if (!_isCurrentConfigReceipt(receipt)) return false;
+    final ownsEffect = _captureEffectOwner(runtime: true, config: true);
     final playbackOk = await _syncSoundToState();
+    if (!_isCurrentConfigReceipt(receipt) || !ownsEffect()) return false;
     if (!playbackOk &&
         _state.isRunning &&
         normalized != FocusSoundCatalog.none) {
-      _state = _state.copyWith(whiteNoiseSound: FocusSoundCatalog.none);
-      _config.whiteNoiseSound = FocusSoundCatalog.none;
-      await _touchAndSaveConfig();
-      _persistedRevision++;
-      notifyListeners();
+      await _changeConfig(
+        (next) => next.whiteNoiseSound = FocusSoundCatalog.none,
+        guard: () => _isCurrentConfigReceipt(receipt) && ownsEffect(),
+      );
       return false;
     }
     if (preview && normalized != FocusSoundCatalog.none && !_state.isRunning) {
@@ -1365,21 +1787,264 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     final normalized = volume
         .clamp(FocusSoundService.minimumAudibleVolume, 1.0)
         .toDouble();
-    if (_config.focusSoundVolume == normalized) {
-      if (preview && !_state.isRunning) {
-        return _previewWhiteNoiseSound(_focusSoundPreviewFallback);
-      }
-      return true;
-    }
-    _config.focusSoundVolume = normalized;
-    await _touchAndSaveConfig();
-    _persistedRevision++;
-    notifyListeners();
+    final receipt = await _changeConfig(
+      (next) => next.focusSoundVolume = normalized,
+    );
+    if (!_isCurrentConfigReceipt(receipt)) return false;
+    final ownsEffect = _captureEffectOwner(runtime: true, config: true);
     await _sound.setVolume(normalized);
+    if (!_isCurrentConfigReceipt(receipt) || !ownsEffect()) return false;
     if (preview && !_state.isRunning) {
       return _previewWhiteNoiseSound(_focusSoundPreviewFallback);
     }
     return true;
+  }
+
+  int get dailyFocusGoalMinutes => _dailyFocusGoalMinutes;
+
+  int get todayFocusMinutes =>
+      todayFocusSessions.fold<int>(0, (sum, s) => sum + s.durationSeconds) ~/
+      60;
+
+  double get dailyFocusGoalProgress => _dailyFocusGoalMinutes <= 0
+      ? 0.0
+      : (todayFocusMinutes / _dailyFocusGoalMinutes).clamp(0.0, 1.0);
+
+  Map<String, double> get ambientMixerTracks =>
+      Map<String, double>.unmodifiable(_ambientMixerTracks);
+
+  bool get hasMultiTrackMix => _ambientMixerTracks.length >= 2;
+
+  bool get isMixerAuditioning => _mixerAuditionActive;
+
+  List<String> get activeMixerTrackIds =>
+      _ambientMixerTracks.keys.toList(growable: false);
+
+  Future<void> setDailyFocusGoalMinutes(int minutes) async {
+    final clamped = minutes.clamp(10, 720).toInt();
+    if (_dailyFocusGoalMinutes == clamped) return;
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    _dailyFocusGoalMinutes = clamped;
+    _persistedRevision++;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      await prefs.setInt(dailyFocusGoalPrefsKey, clamped);
+    } catch (_) {
+      // Ignore storage errors in restricted environments gracefully.
+    }
+  }
+
+  Future<void> prepareSingleAmbientTrack(String id) async {
+    final normalized = id.startsWith('custom:')
+        ? id
+        : FocusSoundCatalog.normalizeForPlayback(id);
+    await _stopExtraMixerPlayers();
+    _mixerAuditionActive = false;
+    if (normalized == FocusSoundCatalog.none) {
+      _ambientMixerTracks = <String, double>{};
+    } else {
+      _ambientMixerTracks = <String, double>{
+        normalized: _config.focusSoundVolume,
+      };
+    }
+    await _persistAmbientMixer();
+  }
+
+  Future<bool> selectSingleAmbientTrack(
+    String sound, {
+    bool preview = true,
+  }) async {
+    final normalized = sound.startsWith('custom:')
+        ? sound
+        : FocusSoundCatalog.normalizeForPlayback(sound);
+    await prepareSingleAmbientTrack(normalized);
+    return setWhiteNoiseSound(normalized, preview: preview);
+  }
+
+  Future<void> toggleMixerTrack(
+    String trackId, {
+    double defaultVolume = 0.7,
+  }) async {
+    final clean = trackId.trim();
+    if (clean.isEmpty || clean == FocusSoundCatalog.none) {
+      await clearMixerTracks();
+      return;
+    }
+    final next = Map<String, double>.from(_ambientMixerTracks);
+    if (next.containsKey(clean)) {
+      next.remove(clean);
+    } else {
+      if (next.length >= maxAmbientMixerTracks) {
+        next.remove(next.keys.first);
+      }
+      next[clean] = defaultVolume.clamp(0.1, 1.0).toDouble();
+    }
+    _ambientMixerTracks = next;
+    await _persistAmbientMixer();
+    final primary = next.isEmpty ? FocusSoundCatalog.none : next.keys.first;
+    await _changeConfig((c) => c.whiteNoiseSound = primary);
+    await _syncMixerPlayback();
+    notifyListeners();
+  }
+
+  Future<void> setMixerTrackVolume(String trackId, double volume) async {
+    final clean = trackId.trim();
+    if (!_ambientMixerTracks.containsKey(clean)) return;
+    final clamped = volume.clamp(0.1, 1.0).toDouble();
+    _ambientMixerTracks = <String, double>{
+      ..._ambientMixerTracks,
+      clean: clamped,
+    };
+    await _persistAmbientMixer();
+    final primary = _ambientMixerTracks.isEmpty
+        ? null
+        : _ambientMixerTracks.keys.first;
+    if (clean == primary) {
+      final scaledPrimary = (clamped * _config.focusSoundVolume)
+          .clamp(FocusSoundService.minimumAudibleVolume, 1.0)
+          .toDouble();
+      try {
+        await _sound.setVolume(scaledPrimary);
+      } catch (_) {}
+    } else {
+      final player = _extraMixerPlayers[clean];
+      if (player != null) {
+        try {
+          await player.setVolume(
+            (clamped * _config.focusSoundVolume).clamp(0.05, 1.0),
+          );
+        } catch (_) {}
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> clearMixerTracks() async {
+    _ambientMixerTracks = <String, double>{};
+    _mixerAuditionActive = false;
+    await _persistAmbientMixer();
+    await _stopExtraMixerPlayers();
+    await setWhiteNoiseSound(FocusSoundCatalog.none, preview: false);
+    notifyListeners();
+  }
+
+  Future<bool> toggleMixerAudition() async {
+    if (_ambientMixerTracks.isEmpty) return false;
+    if (_mixerAuditionActive) {
+      _mixerAuditionActive = false;
+      await _stopExtraMixerPlayers();
+      try {
+        if (!_state.isRunning) await _sound.stop();
+      } catch (_) {}
+      notifyListeners();
+      return false;
+    }
+    _mixerAuditionActive = true;
+    await _syncMixerPlayback(forceAudition: true);
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> _persistAmbientMixer() async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!_isCurrentStorageGeneration(generation, accountGeneration)) return;
+      if (_ambientMixerTracks.isEmpty) {
+        await prefs.remove(ambientMixerPrefsKey);
+      } else {
+        await prefs.setString(
+          ambientMixerPrefsKey,
+          json.encode(_ambientMixerTracks),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _syncMixerPlayback({bool forceAudition = false}) async {
+    final shouldPlay =
+        forceAudition ||
+        _mixerAuditionActive ||
+        (_state.isRunning &&
+            (_state.type == PomodoroType.focus || _config.playSoundInBreak));
+    if (!shouldPlay || _ambientMixerTracks.isEmpty) {
+      await _stopExtraMixerPlayers();
+      if (!_state.isRunning) {
+        try {
+          await _sound.stop();
+        } catch (_) {}
+      }
+      return;
+    }
+    final entries = _ambientMixerTracks.entries.toList(growable: false);
+    final primary = entries.first;
+    final primaryVol = (primary.value * _config.focusSoundVolume)
+        .clamp(FocusSoundService.minimumAudibleVolume, 1.0)
+        .toDouble();
+    try {
+      await _sound.setVolume(primaryVol);
+      await _sound.play(primary.key);
+    } catch (_) {}
+    await _syncExtraMixerPlayers(play: entries.length >= 2);
+  }
+
+  Future<void> _syncExtraMixerPlayers({required bool play}) async {
+    if (!play || _ambientMixerTracks.length < 2) {
+      await _stopExtraMixerPlayers();
+      return;
+    }
+    final entries = _ambientMixerTracks.entries.skip(1).toList(growable: false);
+    final wantedIds = entries.map((e) => e.key).toSet();
+    final staleIds = _extraMixerPlayers.keys
+        .where((id) => !wantedIds.contains(id))
+        .toList(growable: false);
+    for (final staleId in staleIds) {
+      final stalePlayer = _extraMixerPlayers.remove(staleId);
+      if (stalePlayer != null) {
+        try {
+          await stalePlayer.stop();
+          await stalePlayer.dispose();
+        } catch (_) {}
+      }
+    }
+    for (final entry in entries) {
+      final vol = (entry.value * _config.focusSoundVolume)
+          .clamp(0.05, 1.0)
+          .toDouble();
+      final existing = _extraMixerPlayers[entry.key];
+      if (existing != null) {
+        try {
+          await existing.setVolume(vol);
+        } catch (_) {}
+        continue;
+      }
+      final assetPath = FocusSoundCatalog.assetMap[entry.key];
+      if (assetPath == null || assetPath.isEmpty) continue;
+      try {
+        final player = AudioPlayer();
+        _extraMixerPlayers[entry.key] = player;
+        await player.setReleaseMode(ReleaseMode.loop);
+        await player.play(AssetSource(assetPath), volume: vol);
+      } catch (_) {
+        // Ignore platform channel failures in host widget/unit tests.
+      }
+    }
+  }
+
+  Future<void> _stopExtraMixerPlayers() async {
+    if (_extraMixerPlayers.isEmpty) return;
+    final players = _extraMixerPlayers.values.toList(growable: false);
+    _extraMixerPlayers.clear();
+    for (final player in players) {
+      try {
+        await player.stop();
+        await player.dispose();
+      } catch (_) {}
+    }
   }
 
   void recordFocusLeaveAppPenalty() {
@@ -1450,6 +2115,8 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _checkDistractingForegroundApp() async {
+    final ownsEffect = _captureEffectOwner(runtime: true, config: true);
+    if (!ownsEffect()) return;
     if (!_config.strictFocusMode ||
         !_config.monitorDistractingApps ||
         !_state.isRunning ||
@@ -1457,6 +2124,7 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     final packageName = await _distraction.getForegroundApp();
+    if (!ownsEffect()) return;
     if (packageName == null || packageName.isEmpty) return;
     _distractionStatus = FocusDistractionStatus(
       supported: true,
@@ -1519,6 +2187,11 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void dispose() {
     _disposed = true;
+    _preferences?.removeListener(_syncPreferenceDefault);
+    _preferencesAuth?.removeListener(_syncPreferenceDefault);
+    AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
+      _syncPreferenceDefault,
+    );
     _snapshotClearRetryTimer?.cancel();
     _cancelTimer();
     if (_lifecycleAttached) {
@@ -1529,11 +2202,32 @@ class PomodoroProvider extends ChangeNotifier with WidgetsBindingObserver {
     // ignore: discarded_futures
     _sound.stop();
     // ignore: discarded_futures
+    _stopExtraMixerPlayers();
+    // ignore: discarded_futures
     _restoreFocusDndIfNeeded(notify: false);
     _distractionTimer?.cancel();
     _timerTicks.dispose();
     super.dispose();
   }
+}
+
+class _PomodoroConfigReceipt {
+  final PomodoroConfig config;
+  final int generation;
+  final int accountGeneration;
+  final AccountPreferenceWriteToken token;
+  final AuthProvider? auth;
+  final int? session;
+  final bool changed;
+  const _PomodoroConfigReceipt(
+    this.config,
+    this.generation,
+    this.accountGeneration,
+    this.token,
+    this.auth,
+    this.session,
+    this.changed,
+  );
 }
 
 /// 单文件本地持久化的 JSON 编码条数阈值：超过后挪到后台 isolate 编码。

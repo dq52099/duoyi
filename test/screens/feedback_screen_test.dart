@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:duoyi/core/feedback_ui_copy.dart';
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/providers/auth_provider.dart';
 import 'package:duoyi/screens/feedback_screen.dart';
 import 'package:duoyi/services/api_client.dart';
@@ -270,14 +272,17 @@ void main() {
         'lib/screens/feedback_screen.dart',
       ).readAsStringSync();
 
-      expect(source, contains("title: const Text('许愿与反馈')"));
+      expect(source, contains('title: Text(FeedbackUiCopy.screenTitle())'));
+      expect(FeedbackUiCopy.screenTitle(AppLocale.zh), '许愿与反馈');
+      expect(FeedbackUiCopy.screenTitle(AppLocale.en), 'Feedback & Wishes');
       expect(source, contains("title: '反馈记录'"));
       expect(
         source,
         contains('class FeedbackSubmitScreen extends StatefulWidget'),
       );
       expect(source, contains('appBar: AppBar('));
-      expect(source, contains("title: const Text('提交许愿与反馈')"));
+      expect(source, contains('title: Text(FeedbackUiCopy.submitTitle())'));
+      expect(FeedbackUiCopy.submitTitle(AppLocale.zh), '提交许愿与反馈');
       expect(
         source,
         contains("key: const ValueKey('feedback_submit_page_card')"),
@@ -300,10 +305,12 @@ void main() {
       expect(source, contains('void didUpdateWidget('));
       expect(source, contains('widget.recordId != oldWidget.recordId'));
       expect(source, contains("'feedback_record_detail_action'"));
-      expect(source, contains("title: const Text('反馈详情')"));
+      expect(source, contains('title: Text(FeedbackUiCopy.detailTitle())'));
+      expect(FeedbackUiCopy.detailTitle(AppLocale.zh), '反馈详情');
       expect(source, contains('const int _pageSize = 10'));
       expect(source, contains('PopupMenuButton<String>'));
-      expect(source, contains('onPointerDown: (_)'));
+      expect(source, contains('onPointerDown: enabled'));
+      expect(source, contains('enabled: enabled'));
       expect(source, contains('FocusManager.instance.primaryFocus?.unfocus()'));
       expect(
         source,
@@ -354,7 +361,8 @@ class _FakeAuthProvider extends AuthProvider {
 
   _FakeAuthProvider({required AuthState state, required ApiClient client})
     : _fakeState = state,
-      _fakeClient = client;
+      _fakeClient = client,
+      super(initialState: state, client: client);
 
   @override
   AuthState get state => _fakeState;

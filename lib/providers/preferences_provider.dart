@@ -2,10 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/local_timezone_resolver.dart';
+import '../core/i18n_date_format.dart';
+import '../core/calendar_date_navigation.dart';
 import '../core/account_preference_writes.dart';
 import '../core/notification_history_policy.dart';
 import '../core/report_reminder_config.dart';
 import '../core/web_target.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../models/goal.dart' show ReminderKind;
 
 class DailyReminderSlot {
@@ -98,6 +101,122 @@ class DailyReminderScheduleSlot {
   final DailyReminderSlot slot;
 
   const DailyReminderScheduleSlot({required this.index, required this.slot});
+}
+
+/// Immutable quiet-hours policy with DST-safe local wall-clock calculation.
+@immutable
+class QuietHoursPolicy {
+  static const int defaultStartMinutes = 22 * 60;
+  static const int defaultEndMinutes = 7 * 60;
+
+  final bool enabled;
+  final int startMinutes;
+  final int endMinutes;
+  final bool allowAlarms;
+  final bool deferUntilEnd;
+
+  const QuietHoursPolicy({
+    this.enabled = false,
+    this.startMinutes = defaultStartMinutes,
+    this.endMinutes = defaultEndMinutes,
+    this.allowAlarms = true,
+    this.deferUntilEnd = true,
+  });
+
+  static int normalizeMinutes(int minutes) => ((minutes % 1440) + 1440) % 1440;
+
+  QuietHoursPolicy copyWith({
+    bool? enabled,
+    int? startMinutes,
+    int? endMinutes,
+    bool? allowAlarms,
+    bool? deferUntilEnd,
+  }) {
+    return QuietHoursPolicy(
+      enabled: enabled ?? this.enabled,
+      startMinutes: normalizeMinutes(startMinutes ?? this.startMinutes),
+      endMinutes: normalizeMinutes(endMinutes ?? this.endMinutes),
+      allowAlarms: allowAlarms ?? this.allowAlarms,
+      deferUntilEnd: deferUntilEnd ?? this.deferUntilEnd,
+    );
+  }
+
+  int get startHour => normalizeMinutes(startMinutes) ~/ 60;
+  int get startMinute => normalizeMinutes(startMinutes) % 60;
+  int get endHour => normalizeMinutes(endMinutes) ~/ 60;
+  int get endMinute => normalizeMinutes(endMinutes) % 60;
+
+  bool isMinutesInQuietWindow(int minuteOfDay) {
+    if (!enabled) return false;
+    final start = normalizeMinutes(startMinutes);
+    final end = normalizeMinutes(endMinutes);
+    if (start == end) return false;
+    final value = normalizeMinutes(minuteOfDay);
+    if (start > end) {
+      // Midnight wrap, e.g. 22:00 -> 07:00
+      return value >= start || value < end;
+    }
+    return value >= start && value < end;
+  }
+
+  bool isWithinQuietHours(DateTime time) {
+    if (!enabled) return false;
+    final local = time.toLocal();
+    return isMinutesInQuietWindow(local.hour * 60 + local.minute);
+  }
+
+  /// Computes the next quiet-window end in local wall clock time, handling DST safely.
+  DateTime nextQuietEndLocal(DateTime time) {
+    final local = time.toLocal();
+    final start = normalizeMinutes(startMinutes);
+    final end = normalizeMinutes(endMinutes);
+    if (!enabled || start == end) return local;
+    final targetHour = end ~/ 60;
+    final targetMinute = end % 60;
+    final currentMinutes = local.hour * 60 + local.minute;
+    final crossesMidnight = start > end;
+    final dayOffset = crossesMidnight && currentMinutes >= start ? 1 : 0;
+    var candidate = DateTime(
+      local.year,
+      local.month,
+      local.day + dayOffset,
+      targetHour,
+      targetMinute,
+    );
+    if (!candidate.isAfter(local)) {
+      candidate = DateTime(
+        local.year,
+        local.month,
+        local.day + dayOffset + 1,
+        targetHour,
+        targetMinute,
+      );
+    }
+    return candidate;
+  }
+
+  String get digest =>
+      '$enabled:${normalizeMinutes(startMinutes)}:${normalizeMinutes(endMinutes)}:$allowAlarms:$deferUntilEnd';
+
+  @override
+  bool operator ==(Object other) {
+    return other is QuietHoursPolicy &&
+        other.enabled == enabled &&
+        normalizeMinutes(other.startMinutes) ==
+            normalizeMinutes(startMinutes) &&
+        normalizeMinutes(other.endMinutes) == normalizeMinutes(endMinutes) &&
+        other.allowAlarms == allowAlarms &&
+        other.deferUntilEnd == deferUntilEnd;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    enabled,
+    normalizeMinutes(startMinutes),
+    normalizeMinutes(endMinutes),
+    allowAlarms,
+    deferUntilEnd,
+  );
 }
 
 List<DailyReminderScheduleSlot> effectiveDailyReminderScheduleSlots(
@@ -201,8 +320,34 @@ class PreferencesProvider extends ChangeNotifier {
       'pref_yearly_report_reminder_minute';
   static const _kBottomNavOrder = 'pref_bottom_nav_order';
   static const _kBottomNavVisible = 'pref_bottom_nav_visible';
+  static const _kCalendarMenuOrder = 'pref_calendar_menu_order';
+  static const _kCalendarMenuHidden = 'pref_calendar_menu_hidden';
+  static const _kMineMenuOrder = 'pref_mine_menu_order';
+  static const List<String> defaultCalendarMenuOrder = <String>[
+    'today',
+    'pick',
+    'month',
+    'week',
+    'day',
+    'three_day',
+    'year',
+  ];
+  static const List<int> defaultMineMenuOrder = <int>[4, 5, 6, 7, 8, 9];
   static const _kAppTimeZone = LocalTimezoneResolver.preferenceKey;
   static const _kAppTimeZoneMode = LocalTimezoneResolver.modePreferenceKey;
+  static const _kQuietHoursEnabled = 'pref_quiet_hours_enabled';
+  static const _kQuietHoursStartMinutes = 'pref_quiet_hours_start_minutes';
+  static const _kQuietHoursEndMinutes = 'pref_quiet_hours_end_minutes';
+  static const _kQuietHoursAllowAlarms = 'pref_quiet_hours_allow_alarms';
+  static const _kQuietHoursDeferUntilEnd = 'pref_quiet_hours_defer_until_end';
+
+  static const Set<String> quietHoursPreferenceKeys = <String>{
+    _kQuietHoursEnabled,
+    _kQuietHoursStartMinutes,
+    _kQuietHoursEndMinutes,
+    _kQuietHoursAllowAlarms,
+    _kQuietHoursDeferUntilEnd,
+  };
 
   Future<void> Function()? onAppTimeZoneChanged;
   void Function(Iterable<String> keys)? onChangedKeys;
@@ -251,9 +396,25 @@ class PreferencesProvider extends ChangeNotifier {
   int _yearlyReportReminderMinute = 0;
   List<int> _bottomNavOrder = const [0, 1, 2, 3, 4, 5, 6];
   Set<int> _bottomNavVisible = defaultBottomNavTabs;
+  List<String> _calendarMenuOrder = defaultCalendarMenuOrder;
+  Set<String> _calendarMenuHidden = const <String>{};
+  List<int> _mineMenuOrder = defaultMineMenuOrder;
   String _appTimeZone = LocalTimezoneResolver.defaultIana;
   bool _followSystemTimeZone = true;
+  bool _quietHoursEnabled = false;
+  int _quietHoursStartMinutes = QuietHoursPolicy.defaultStartMinutes;
+  int _quietHoursEndMinutes = QuietHoursPolicy.defaultEndMinutes;
+  bool _quietHoursAllowAlarms = true;
+  bool _quietHoursDeferUntilEnd = true;
   int _storageGeneration = 0;
+  int _storageReadSerial = 0;
+  int? _loadedAccountGeneration;
+  int get storageGeneration => _storageGeneration;
+  bool get isStorageLoaded =>
+      _loadedAccountGeneration != null &&
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+        _loadedAccountGeneration!,
+      );
   Future<void> _preferenceWriteTail = Future<void>.value();
 
   Future<void> _enqueuePreferenceChange(
@@ -294,7 +455,7 @@ class PreferencesProvider extends ChangeNotifier {
         } catch (_) {
           if (!transaction.isCommitted) {
             await transaction.rollback();
-            if (isCurrent()) await loadFromStorage();
+            if (isCurrent()) await _readFromStorage();
           }
           rethrow;
         }
@@ -349,8 +510,16 @@ class PreferencesProvider extends ChangeNotifier {
     final savedYearlyReportReminderMinute = _yearlyReportReminderMinute;
     final savedBottomNavOrder = _bottomNavOrder;
     final savedBottomNavVisible = _bottomNavVisible;
+    final savedCalendarMenuOrder = _calendarMenuOrder;
+    final savedCalendarMenuHidden = _calendarMenuHidden;
+    final savedMineMenuOrder = _mineMenuOrder;
     final savedAppTimeZone = _appTimeZone;
     final savedFollowSystemTimeZone = _followSystemTimeZone;
+    final savedQuietHoursEnabled = _quietHoursEnabled;
+    final savedQuietHoursStartMinutes = _quietHoursStartMinutes;
+    final savedQuietHoursEndMinutes = _quietHoursEndMinutes;
+    final savedQuietHoursAllowAlarms = _quietHoursAllowAlarms;
+    final savedQuietHoursDeferUntilEnd = _quietHoursDeferUntilEnd;
     return () {
       _firstDayOfWeek = savedFirstDayOfWeek;
       _dateFormat = savedDateFormat;
@@ -392,8 +561,16 @@ class PreferencesProvider extends ChangeNotifier {
       _yearlyReportReminderMinute = savedYearlyReportReminderMinute;
       _bottomNavOrder = savedBottomNavOrder;
       _bottomNavVisible = savedBottomNavVisible;
+      _calendarMenuOrder = savedCalendarMenuOrder;
+      _calendarMenuHidden = savedCalendarMenuHidden;
+      _mineMenuOrder = savedMineMenuOrder;
       _appTimeZone = savedAppTimeZone;
       _followSystemTimeZone = savedFollowSystemTimeZone;
+      _quietHoursEnabled = savedQuietHoursEnabled;
+      _quietHoursStartMinutes = savedQuietHoursStartMinutes;
+      _quietHoursEndMinutes = savedQuietHoursEndMinutes;
+      _quietHoursAllowAlarms = savedQuietHoursAllowAlarms;
+      _quietHoursDeferUntilEnd = savedQuietHoursDeferUntilEnd;
     };
   }
 
@@ -409,6 +586,18 @@ class PreferencesProvider extends ChangeNotifier {
   bool get notificationTodayProgress => _notificationTodayProgress;
   int get notificationHistoryLimit => _notificationHistoryLimit;
   int get autoArchiveCompletedDays => _autoArchiveCompletedDays;
+  bool get quietHoursEnabled => _quietHoursEnabled;
+  int get quietHoursStartMinutes => _quietHoursStartMinutes;
+  int get quietHoursEndMinutes => _quietHoursEndMinutes;
+  bool get quietHoursAllowAlarms => _quietHoursAllowAlarms;
+  bool get quietHoursDeferUntilEnd => _quietHoursDeferUntilEnd;
+  QuietHoursPolicy get quietHoursPolicy => QuietHoursPolicy(
+    enabled: _quietHoursEnabled,
+    startMinutes: _quietHoursStartMinutes,
+    endMinutes: _quietHoursEndMinutes,
+    allowAlarms: _quietHoursAllowAlarms,
+    deferUntilEnd: _quietHoursDeferUntilEnd,
+  );
   bool get dailyReminderEnabled => _dailyReminderEnabled;
   int get dailyReminderHour => _dailyReminderHour;
   int get dailyReminderMinute => _dailyReminderMinute;
@@ -463,6 +652,12 @@ class PreferencesProvider extends ChangeNotifier {
   );
   List<int> get bottomNavOrder => List.unmodifiable(_bottomNavOrder);
   Set<int> get bottomNavVisible => Set.unmodifiable(_bottomNavVisible);
+  List<String> get calendarMenuOrder => List.unmodifiable(_calendarMenuOrder);
+  Set<String> get calendarMenuHidden => Set.unmodifiable(_calendarMenuHidden);
+  List<String> get visibleCalendarMenuItems => _calendarMenuOrder
+      .where((item) => !_calendarMenuHidden.contains(item))
+      .toList(growable: false);
+  List<int> get mineMenuOrder => List.unmodifiable(_mineMenuOrder);
   String get appTimeZone => _appTimeZone;
   bool get followSystemTimeZone => _followSystemTimeZone;
   String get appTimeZoneSelection => _followSystemTimeZone
@@ -514,25 +709,137 @@ class PreferencesProvider extends ChangeNotifier {
     return List.unmodifiable(result);
   }
 
-  String formatDate(DateTime d) {
-    final y = d.year.toString();
-    final m = d.month.toString().padLeft(2, '0');
-    final dd = d.day.toString().padLeft(2, '0');
-    switch (_dateFormat) {
-      case 'MM/dd/yyyy':
-        return '$m/$dd/$y';
-      case 'dd/MM/yyyy':
-        return '$dd/$m/$y';
-      case 'yyyy年M月d日':
-        return '${d.year}年${d.month}月${d.day}日';
-      case 'yyyy-MM-dd':
-      default:
-        return '$y-$m-$dd';
-    }
+  Future<void> setCalendarMenuItemVisible(String item, bool visible) {
+    return _enqueuePreferenceChange((transaction) async {
+      if (!defaultCalendarMenuOrder.contains(item)) return;
+      final next = {..._calendarMenuHidden};
+      if (visible) {
+        next.remove(item);
+      } else {
+        if (defaultCalendarMenuOrder.length - next.length <= 1 &&
+            !next.contains(item)) {
+          return;
+        }
+        next.add(item);
+      }
+      _calendarMenuHidden = _normalizeCalendarMenuHidden(next);
+      final p = await transaction.getPreferences();
+      await p.setStringList(
+        _kCalendarMenuHidden,
+        _calendarMenuHidden.toList()..sort(),
+      );
+      transaction.ensureCurrent();
+      _notifyPreferenceKeys(const [_kCalendarMenuHidden]);
+    });
   }
+
+  Future<void> moveCalendarMenuItem(String item, int delta) {
+    return _enqueuePreferenceChange((transaction) async {
+      final list = [..._calendarMenuOrder];
+      final index = list.indexOf(item);
+      if (index < 0) return;
+      final nextIndex = (index + delta).clamp(0, list.length - 1);
+      if (nextIndex == index) return;
+      list.removeAt(index);
+      list.insert(nextIndex, item);
+      _calendarMenuOrder = _normalizeCalendarMenuOrder(list);
+      final p = await transaction.getPreferences();
+      await p.setStringList(_kCalendarMenuOrder, _calendarMenuOrder);
+      transaction.ensureCurrent();
+      _notifyPreferenceKeys(const [_kCalendarMenuOrder]);
+    });
+  }
+
+  Future<void> resetCalendarMenuConfig() {
+    return _enqueuePreferenceChange((transaction) async {
+      _calendarMenuOrder = defaultCalendarMenuOrder;
+      _calendarMenuHidden = const <String>{};
+      final p = await transaction.getPreferences();
+      await p.setStringList(_kCalendarMenuOrder, _calendarMenuOrder);
+      await p.setStringList(_kCalendarMenuHidden, const <String>[]);
+      transaction.ensureCurrent();
+      _notifyPreferenceKeys(const [_kCalendarMenuOrder, _kCalendarMenuHidden]);
+    });
+  }
+
+  static List<String> _normalizeCalendarMenuOrder(Iterable<String>? source) {
+    final result = <String>[];
+    for (final item in source ?? const <String>[]) {
+      if (defaultCalendarMenuOrder.contains(item) && !result.contains(item)) {
+        result.add(item);
+      }
+    }
+    for (final item in defaultCalendarMenuOrder) {
+      if (!result.contains(item)) result.add(item);
+    }
+    return List.unmodifiable(result);
+  }
+
+  static Set<String> _normalizeCalendarMenuHidden(Iterable<String>? source) {
+    final result = <String>{};
+    for (final item in source ?? const <String>[]) {
+      if (defaultCalendarMenuOrder.contains(item)) {
+        result.add(item);
+      }
+    }
+    if (result.length >= defaultCalendarMenuOrder.length) {
+      return const <String>{};
+    }
+    return Set.unmodifiable(result);
+  }
+
+  Future<void> moveMineMenuGroup(int groupIndex, int delta) {
+    return _enqueuePreferenceChange((transaction) async {
+      final list = [..._mineMenuOrder];
+      final index = list.indexOf(groupIndex);
+      if (index < 0) return;
+      final nextIndex = (index + delta).clamp(0, list.length - 1);
+      if (nextIndex == index) return;
+      list.removeAt(index);
+      list.insert(nextIndex, groupIndex);
+      _mineMenuOrder = _normalizeMineMenuOrder(list);
+      final p = await transaction.getPreferences();
+      await p.setStringList(
+        _kMineMenuOrder,
+        _mineMenuOrder.map((v) => v.toString()).toList(),
+      );
+      transaction.ensureCurrent();
+      _notifyPreferenceKeys(const [_kMineMenuOrder]);
+    });
+  }
+
+  Future<void> resetMineMenuOrder() {
+    return _enqueuePreferenceChange((transaction) async {
+      _mineMenuOrder = defaultMineMenuOrder;
+      final p = await transaction.getPreferences();
+      await p.setStringList(
+        _kMineMenuOrder,
+        _mineMenuOrder.map((v) => v.toString()).toList(),
+      );
+      transaction.ensureCurrent();
+      _notifyPreferenceKeys(const [_kMineMenuOrder]);
+    });
+  }
+
+  static List<int> _normalizeMineMenuOrder(Iterable<int>? source) {
+    final result = <int>[];
+    for (final group in source ?? const <int>[]) {
+      if (defaultMineMenuOrder.contains(group) && !result.contains(group)) {
+        result.add(group);
+      }
+    }
+    for (final group in defaultMineMenuOrder) {
+      if (!result.contains(group)) result.add(group);
+    }
+    return List.unmodifiable(result);
+  }
+
+  String formatDate(DateTime d) => I18nDateFormat.date(d, pattern: _dateFormat);
 
   void resetLocalState() {
     _storageGeneration++;
+    _storageReadSerial++;
+    _loadedAccountGeneration = null;
     _applyDefaults();
     notifyListeners();
   }
@@ -582,16 +889,64 @@ class PreferencesProvider extends ChangeNotifier {
     _yearlyReportReminderMinute = 0;
     _bottomNavOrder = const [0, 1, 2, 3, 4, 5, 6];
     _bottomNavVisible = defaultBottomNavTabs;
+    _calendarMenuOrder = defaultCalendarMenuOrder;
+    _calendarMenuHidden = const <String>{};
+    _mineMenuOrder = defaultMineMenuOrder;
     _followSystemTimeZone = true;
     _appTimeZone = LocalTimezoneResolver.currentIana;
+    _quietHoursEnabled = false;
+    _quietHoursStartMinutes = QuietHoursPolicy.defaultStartMinutes;
+    _quietHoursEndMinutes = QuietHoursPolicy.defaultEndMinutes;
+    _quietHoursAllowAlarms = true;
+    _quietHoursDeferUntilEnd = true;
   }
 
-  Future<void> loadFromStorage() async {
+  Future<void> loadFromStorage() {
     final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final serial = ++_storageReadSerial;
+    _loadedAccountGeneration = null;
+    notifyListeners();
+    final read = _preferenceWriteTail.then(
+      (_) => _readFromStorage(
+        generation: generation,
+        accountGeneration: accountGeneration,
+        serial: serial,
+      ),
+    );
+    _preferenceWriteTail = read.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return read;
+  }
+
+  // Error recovery already owns the write tail; it must read directly.
+  Future<void> _readFromStorage({
+    int? generation,
+    int? accountGeneration,
+    int? serial,
+  }) async {
+    generation ??= _storageGeneration;
+    accountGeneration ??= AccountLocalDataCleaner.accountDataGeneration;
+    serial ??= ++_storageReadSerial;
+    bool isCurrent() =>
+        generation == _storageGeneration &&
+        serial == _storageReadSerial &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration!,
+        );
+    if (!isCurrent()) return;
+    _loadedAccountGeneration = null;
     final p = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
-    _firstDayOfWeek = p.getInt(_kFirstDayOfWeek) ?? 1;
-    _dateFormat = p.getString(_kDateFormat) ?? 'yyyy-MM-dd';
+    if (!isCurrent()) return;
+    _firstDayOfWeek = CalendarDateNavigation.normalizeFirstDayOfWeek(
+      p.getInt(_kFirstDayOfWeek) ?? 1,
+    );
+    final storedDateFormat = p.get(_kDateFormat);
+    _dateFormat = I18nDateFormat.normalizePattern(
+      storedDateFormat is String ? storedDateFormat : null,
+    );
     _followSystemTimeZone =
         (p.getString(_kAppTimeZoneMode) ??
             LocalTimezoneResolver.followSystemValue) !=
@@ -600,9 +955,9 @@ class PreferencesProvider extends ChangeNotifier {
       _followSystemTimeZone
           ? LocalTimezoneResolver.followSystemValue
           : (p.getString(_kAppTimeZone) ?? LocalTimezoneResolver.defaultIana),
-      isCurrent: () => generation == _storageGeneration,
+      isCurrent: isCurrent,
     );
-    if (generation != _storageGeneration) return;
+    if (!isCurrent()) return;
     _appTimeZone = LocalTimezoneResolver.currentIana;
     final storedOrder = p.getStringList(_kBottomNavOrder);
     final storedVisible = p.getStringList(_kBottomNavVisible);
@@ -616,7 +971,10 @@ class PreferencesProvider extends ChangeNotifier {
     _haptic = p.getBool(_kHapticFeedback) ?? true;
     _showLunar = p.getBool(_kShowLunar) ?? true;
     _showCompletedTodos = p.getBool(_kShowCompletedTodos) ?? false;
-    _defaultPomodoroMinutes = p.getInt(_kDefaultPomodoroMinutes) ?? 25;
+    _defaultPomodoroMinutes = (p.getInt(_kDefaultPomodoroMinutes) ?? 25).clamp(
+      5,
+      180,
+    );
     _quickCaptureFab = p.getBool(_kQuickCaptureFab) ?? true;
     _notificationQuickAdd = p.getBool(_kNotificationQuickAdd) ?? false;
     _notificationTodayProgress =
@@ -624,7 +982,8 @@ class PreferencesProvider extends ChangeNotifier {
     _notificationHistoryLimit = NotificationHistoryPolicy.normalize(
       p.getInt(_kNotificationHistoryLimit),
     );
-    _autoArchiveCompletedDays = p.getInt(_kAutoArchiveCompletedDays) ?? 0;
+    _autoArchiveCompletedDays = (p.getInt(_kAutoArchiveCompletedDays) ?? 0)
+        .clamp(0, 365);
     _dailyReminderEnabled = p.getBool(_kDailyReminderEnabled) ?? false;
     _dailyReminderKind = DailyReminderSlot.parseKind(
       p.getString(_kDailyReminderKind),
@@ -730,7 +1089,27 @@ class PreferencesProvider extends ChangeNotifier {
       storedVisible?.map(int.tryParse).whereType<int>(),
       order: _bottomNavOrder,
     );
-    if (generation != _storageGeneration) return;
+    _calendarMenuOrder = _normalizeCalendarMenuOrder(
+      p.getStringList(_kCalendarMenuOrder),
+    );
+    _calendarMenuHidden = _normalizeCalendarMenuHidden(
+      p.getStringList(_kCalendarMenuHidden),
+    );
+    _mineMenuOrder = _normalizeMineMenuOrder(
+      p.getStringList(_kMineMenuOrder)?.map(int.tryParse).whereType<int>(),
+    );
+    _quietHoursEnabled = p.getBool(_kQuietHoursEnabled) ?? false;
+    _quietHoursStartMinutes = QuietHoursPolicy.normalizeMinutes(
+      p.getInt(_kQuietHoursStartMinutes) ??
+          QuietHoursPolicy.defaultStartMinutes,
+    );
+    _quietHoursEndMinutes = QuietHoursPolicy.normalizeMinutes(
+      p.getInt(_kQuietHoursEndMinutes) ?? QuietHoursPolicy.defaultEndMinutes,
+    );
+    _quietHoursAllowAlarms = p.getBool(_kQuietHoursAllowAlarms) ?? true;
+    _quietHoursDeferUntilEnd = p.getBool(_kQuietHoursDeferUntilEnd) ?? true;
+    if (!isCurrent()) return;
+    _loadedAccountGeneration = accountGeneration;
     notifyListeners();
   }
 
@@ -1156,9 +1535,10 @@ class PreferencesProvider extends ChangeNotifier {
 
   Future<void> setDateFormat(String format) {
     return _enqueuePreferenceChange((transaction) async {
-      _dateFormat = format;
+      final normalized = I18nDateFormat.normalizePattern(format);
+      _dateFormat = normalized;
       final p = await transaction.getPreferences();
-      await p.setString(_kDateFormat, format);
+      await p.setString(_kDateFormat, normalized);
       transaction.ensureCurrent();
       _notifyPreferenceKeys(const [_kDateFormat]);
     });
@@ -1254,14 +1634,32 @@ class PreferencesProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> setNotificationHistoryLimit(int value) {
-    return _enqueuePreferenceChange((transaction) async {
-      _notificationHistoryLimit = NotificationHistoryPolicy.normalize(value);
+  Future<void> setNotificationHistoryLimit(int value) async {
+    await saveNotificationHistoryLimit(value);
+  }
+
+  /// Returns false for canceled writes; completion alone is not a save ACK.
+  Future<bool> saveNotificationHistoryLimit(
+    int value, {
+    bool Function()? canWrite,
+  }) async {
+    final next = NotificationHistoryPolicy.normalize(value);
+    var committed = false;
+    await _enqueuePreferenceChange((transaction) async {
+      if (!(canWrite?.call() ?? true)) {
+        throw const AccountPreferenceWriteCanceled();
+      }
       final p = await transaction.getPreferences();
-      await p.setInt(_kNotificationHistoryLimit, _notificationHistoryLimit);
-      transaction.ensureCurrent();
+      await p.setInt(_kNotificationHistoryLimit, next);
+      if (!(canWrite?.call() ?? true)) {
+        throw const AccountPreferenceWriteCanceled();
+      }
+      transaction.commit();
+      committed = true;
+      _notificationHistoryLimit = next;
       _notifyPreferenceKeys(const [_kNotificationHistoryLimit]);
     });
+    return committed;
   }
 
   Future<void> setAutoArchiveCompletedDays(int days) {
@@ -1403,6 +1801,66 @@ class PreferencesProvider extends ChangeNotifier {
       _notifyPreferenceKeys(const [_kDailyReminderPauseHolidays]);
     });
   }
+
+  Future<void> setQuietHours({
+    bool? enabled,
+    int? startMinutes,
+    int? endMinutes,
+    bool? allowAlarms,
+    bool? deferUntilEnd,
+  }) {
+    return _enqueuePreferenceChange((transaction) async {
+      final changedKeys = <String>[];
+      final p = await transaction.getPreferences();
+      if (enabled != null && enabled != _quietHoursEnabled) {
+        _quietHoursEnabled = enabled;
+        await p.setBool(_kQuietHoursEnabled, enabled);
+        changedKeys.add(_kQuietHoursEnabled);
+      }
+      if (startMinutes != null) {
+        final normalized = QuietHoursPolicy.normalizeMinutes(startMinutes);
+        if (normalized != _quietHoursStartMinutes) {
+          _quietHoursStartMinutes = normalized;
+          await p.setInt(_kQuietHoursStartMinutes, normalized);
+          changedKeys.add(_kQuietHoursStartMinutes);
+        }
+      }
+      if (endMinutes != null) {
+        final normalized = QuietHoursPolicy.normalizeMinutes(endMinutes);
+        if (normalized != _quietHoursEndMinutes) {
+          _quietHoursEndMinutes = normalized;
+          await p.setInt(_kQuietHoursEndMinutes, normalized);
+          changedKeys.add(_kQuietHoursEndMinutes);
+        }
+      }
+      if (allowAlarms != null && allowAlarms != _quietHoursAllowAlarms) {
+        _quietHoursAllowAlarms = allowAlarms;
+        await p.setBool(_kQuietHoursAllowAlarms, allowAlarms);
+        changedKeys.add(_kQuietHoursAllowAlarms);
+      }
+      if (deferUntilEnd != null && deferUntilEnd != _quietHoursDeferUntilEnd) {
+        _quietHoursDeferUntilEnd = deferUntilEnd;
+        await p.setBool(_kQuietHoursDeferUntilEnd, deferUntilEnd);
+        changedKeys.add(_kQuietHoursDeferUntilEnd);
+      }
+      transaction.ensureCurrent();
+      if (changedKeys.isNotEmpty) {
+        _notifyPreferenceKeys(changedKeys);
+      }
+    });
+  }
+
+  Future<void> setQuietHoursEnabled(bool value) =>
+      setQuietHours(enabled: value);
+
+  Future<void> setQuietHoursWindow(int startMinutes, int endMinutes) =>
+      setQuietHours(startMinutes: startMinutes, endMinutes: endMinutes);
+
+  Future<void> setQuietHoursAllowAlarms(bool value) =>
+      setQuietHours(allowAlarms: value);
+
+  Future<void> setQuietHoursDeferUntilEnd(bool value) =>
+      setQuietHours(deferUntilEnd: value);
 
   List<DailyReminderSlot> _replaceSlot(int index, DailyReminderSlot slot) {
     final next = [..._dailyReminderSlots];

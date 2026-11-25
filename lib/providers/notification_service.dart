@@ -3,20 +3,23 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/achievements.dart';
+import '../core/account_preference_writes.dart';
 import '../core/brand_strings.dart';
 import '../core/i18n.dart';
 import '../core/notification_history_policy.dart';
 import '../core/platform_info.dart';
 import '../models/location_reminder.dart';
-import '../models/goal.dart' show ReminderKind;
+import '../models/goal.dart' show ReminderKind, ReminderRuleType;
 import '../providers/location_reminder_provider.dart';
 import '../services/alarm_service.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../services/local_notifications.dart';
 import '../services/notification_permission_exception.dart';
 import '../services/notification_settings.dart';
 import '../services/reminder_sinks.dart';
 import '../services/reminder_issue_copy.dart';
 import '../services/reminder_delivery_copy.dart';
+import 'preferences_provider.dart' show QuietHoursPolicy;
 
 class NotificationItem {
   final String id;
@@ -25,6 +28,7 @@ class NotificationItem {
   final DateTime scheduledTime;
   final NotificationType type;
   final String? relatedId;
+  final String? payload;
   final bool isRead;
 
   const NotificationItem({
@@ -34,6 +38,7 @@ class NotificationItem {
     required this.scheduledTime,
     required this.type,
     this.relatedId,
+    this.payload,
     this.isRead = false,
   });
 
@@ -44,6 +49,7 @@ class NotificationItem {
     'scheduledTime': scheduledTime.toIso8601String(),
     'type': type.index,
     'relatedId': relatedId,
+    if (payload != null) 'payload': payload,
     'isRead': isRead,
   };
 
@@ -54,6 +60,7 @@ class NotificationItem {
     scheduledTime: DateTime.parse(j['scheduledTime']),
     type: NotificationType.values[(j['type'] as num?)?.toInt() ?? 0],
     relatedId: j['relatedId']?.toString(),
+    payload: j['payload']?.toString(),
     isRead: j['isRead'] == true || j['read'] == true,
   );
 
@@ -65,12 +72,22 @@ class NotificationItem {
       scheduledTime: scheduledTime,
       type: type,
       relatedId: relatedId,
+      payload: payload,
       isRead: isRead ?? this.isRead,
     );
   }
 }
 
 enum NotificationType { todo, habit, pomodoro, anniversary, general, location }
+
+typedef _NotificationHistoryKey = (
+  String,
+  String,
+  String,
+  NotificationType,
+  String?,
+  DateTime,
+);
 
 class NotificationScheduleIssue {
   final String title;
@@ -168,7 +185,14 @@ class NotificationService extends ChangeNotifier
   String? _lastScheduleIssueSignature;
   DateTime? _lastScheduleIssueRecordedAt;
   BrandStrings _strings = BrandStrings.defaultBrand;
+  QuietHoursPolicy _quietHours = const QuietHoursPolicy();
   int _storageGeneration = 0;
+  int get storageGeneration => _storageGeneration;
+  Future<void> _historyWriteTail = Future<void>.value();
+  bool _historyLoaded = false;
+  bool _disposed = false;
+  final Map<String, Future<void>> _calendarReminderTails = {};
+  final Map<String, int> _calendarReminderCancelEpochs = {};
   _NotificationBatch? _activeNotificationBatch;
 
   int get pendingCount => _pendingNotifications;
@@ -179,9 +203,14 @@ class NotificationService extends ChangeNotifier
   bool get hasUnreadHistory => unreadCount > 0;
   NotificationScheduleIssue? get lastScheduleIssue => _lastScheduleIssue;
   bool get permissionGranted => LocalNotifications.instance.permissionGranted;
+  QuietHoursPolicy get quietHours => _quietHours;
 
   void setStrings(BrandStrings s) {
     _strings = s;
+  }
+
+  void updateQuietHours(QuietHoursPolicy policy) {
+    _quietHours = policy;
   }
 
   Future<void> init() async {
@@ -206,9 +235,20 @@ class NotificationService extends ChangeNotifier
     await _loadHistory();
   }
 
-  Future<bool> requestPermission() async {
+  Future<bool> requestPermission({bool Function()? canContinue}) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    bool isCurrent() =>
+        !_disposed &&
+        generation == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        ) &&
+        canContinue?.call() != false;
+    if (!isCurrent()) return false;
     final before = permissionGranted;
     final granted = await LocalNotifications.instance.requestPermission();
+    if (!isCurrent()) return false;
     var changed = before != granted;
     if (granted && _lastScheduleIssueIsPermissionOnly) {
       _clearScheduleIssueState();
@@ -225,8 +265,10 @@ class NotificationService extends ChangeNotifier
     _pomodoroNotificationTimer?.cancel();
     _pendingNotifications = 0;
     _historyLimit = NotificationHistoryPolicy.defaultLimit;
+    _historyLoaded = false;
     _history.clear();
     _historyLastSeenAt = null;
+    _quietHours = const QuietHoursPolicy();
     _clearScheduleIssueState();
     notifyListeners();
   }
@@ -329,12 +371,50 @@ class NotificationService extends ChangeNotifier
     }
   }
 
+  Future<T> _queueHistoryWrite<T>(
+    Future<T> Function(bool Function() isCurrent) write, {
+    required T Function() canceledResult,
+    bool Function()? canWrite,
+  }) {
+    final generation = _storageGeneration;
+    final account = AccountLocalDataCleaner.accountDataGeneration;
+    return AccountPreferenceWrites.runResult((token) {
+      bool isCurrent() =>
+          !_disposed &&
+          generation == _storageGeneration &&
+          token.isCurrent &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(account) &&
+          (canWrite?.call() ?? true);
+      final result = _historyWriteTail.then((_) async {
+        if (!isCurrent()) return canceledResult();
+        return write(isCurrent);
+      });
+      _historyWriteTail = result.then<void>(
+        (_) {},
+        onError: (Object _, StackTrace _) {},
+      );
+      return result;
+    }, canceledResult: canceledResult);
+  }
+
   Future<void> _saveHistory() async {
-    final p = await SharedPreferences.getInstance();
-    await p.setStringList(
-      _kHistoryKey,
-      _history.take(_historyLimit).map((e) => jsonEncode(e.toJson())).toList(),
-    );
+    try {
+      await _queueHistoryWrite<bool>((isCurrent) async {
+        final p = await SharedPreferences.getInstance();
+        if (!isCurrent()) return false;
+        final target = _readHistoryIfNeeded(p);
+        return _applyHistoryLimitSnapshot(
+          p,
+          target,
+          isCurrent,
+          forceWrite: true,
+        );
+      }, canceledResult: () => false);
+    } catch (error, stack) {
+      // Scheduling callers cannot retry an already accepted reminder. Keep
+      // their in-memory history and leave persistence to the next save.
+      debugPrint('[NotificationService] history save failed: $error\n$stack');
+    }
   }
 
   Future<void> _saveHistorySeen() async {
@@ -348,43 +428,74 @@ class NotificationService extends ChangeNotifier
   }
 
   Future<void> _loadHistory() async {
-    final generation = _storageGeneration;
-    final p = await SharedPreferences.getInstance();
-    if (generation != _storageGeneration) return;
-    _historyLimit = NotificationHistoryPolicy.normalize(
+    await _queueHistoryWrite<bool>((isCurrent) async {
+      if (_historyLoaded) return true;
+      final p = await SharedPreferences.getInstance();
+      if (!isCurrent()) return false;
+      final target = _readHistoryIfNeeded(p);
+      if (_history.length > target) {
+        try {
+          return await _applyHistoryLimitSnapshot(p, target, isCurrent);
+        } catch (error, stack) {
+          debugPrint(
+            '[NotificationService] loaded history trim failed: $error\n$stack',
+          );
+        }
+      }
+      return true;
+    }, canceledResult: () => false);
+  }
+
+  /// Called inside the history queue before its first snapshot write. Merge
+  /// reminders received before deferred initialization with durable records.
+  int _readHistoryIfNeeded(SharedPreferences p) {
+    if (_historyLoaded) return _historyLimit;
+    final targetLimit = NotificationHistoryPolicy.normalize(
       p.getInt(NotificationHistoryPolicy.preferenceKey),
     );
-    _historyLastSeenAt = DateTime.tryParse(p.getString(_kHistorySeenKey) ?? '');
+    _historyLastSeenAt ??= DateTime.tryParse(
+      p.getString(_kHistorySeenKey) ?? '',
+    );
     final raw = p.getStringList(_kHistoryKey) ?? const [];
+    final live = List<NotificationItem>.of(_history);
+    final liveKeys = live.map(_historyRecordKey).toSet();
     _history
       ..clear()
+      ..addAll(live)
       ..addAll(
-        raw.map((e) {
-          try {
-            final decoded = jsonDecode(e);
-            if (decoded is! Map<String, dynamic>) return null;
-            final item = NotificationItem.fromJson(decoded);
-            final hasReadState =
-                decoded.containsKey('isRead') || decoded.containsKey('read');
-            if (!hasReadState) {
-              final seenAt = _historyLastSeenAt;
-              if (seenAt != null && !item.scheduledTime.isAfter(seenAt)) {
-                return item.copyWith(isRead: true);
+        raw
+            .map((e) {
+              try {
+                final decoded = jsonDecode(e);
+                if (decoded is! Map<String, dynamic>) return null;
+                final item = NotificationItem.fromJson(decoded);
+                final hasReadState =
+                    decoded.containsKey('isRead') ||
+                    decoded.containsKey('read');
+                if (!hasReadState) {
+                  final seenAt = _historyLastSeenAt;
+                  if (seenAt != null && !item.scheduledTime.isAfter(seenAt)) {
+                    return item.copyWith(isRead: true);
+                  }
+                  return item;
+                }
+                return item;
+              } catch (_) {
+                return null;
               }
-              return item;
-            }
-            return item;
-          } catch (_) {
-            return null;
-          }
-        }).whereType<NotificationItem>(),
+            })
+            .whereType<NotificationItem>()
+            .where((item) => !liveKeys.contains(_historyRecordKey(item))),
       );
-    if (generation != _storageGeneration) return;
-    if (_history.length > _historyLimit) {
-      _history.removeRange(_historyLimit, _history.length);
-      await _saveHistory();
+    _historyLoaded = true;
+    if (_history.length > targetLimit) {
+      // Preserve the complete loaded snapshot until trimming is acknowledged.
+      if (_historyLimit < _history.length) _historyLimit = _history.length;
+    } else {
+      _historyLimit = targetLimit;
     }
     _notifyListenersBatched();
+    return targetLimit;
   }
 
   @visibleForTesting
@@ -394,15 +505,93 @@ class NotificationService extends ChangeNotifier
   void addHistoryForTest(NotificationItem item) => _addToHistory(item);
 
   Future<void> setHistoryLimit(int value) async {
-    final next = NotificationHistoryPolicy.normalize(value);
-    if (_historyLimit == next && _history.length <= next) return;
-    _historyLimit = next;
-    if (_history.length > _historyLimit) {
-      _history.removeRange(_historyLimit, _history.length);
-      await _saveHistory();
-    }
-    notifyListeners();
+    await applyHistoryLimit(value);
   }
+
+  /// Publishes a trimmed history only after storage acknowledges the snapshot.
+  Future<bool> applyHistoryLimit(int value, {bool Function()? canWrite}) {
+    final next = NotificationHistoryPolicy.normalize(value);
+    return _queueHistoryWrite<bool>(
+      (isCurrent) async {
+        final p = await SharedPreferences.getInstance();
+        if (!isCurrent()) return false;
+        _readHistoryIfNeeded(p);
+        return _applyHistoryLimitSnapshot(p, next, isCurrent);
+      },
+      canceledResult: () => false,
+      canWrite: canWrite,
+    );
+  }
+
+  Future<bool> _applyHistoryLimitSnapshot(
+    SharedPreferences p,
+    int next,
+    bool Function() isCurrent, {
+    bool forceWrite = false,
+    Set<_NotificationHistoryKey>? removedRecords,
+    DateTime? markSeenAt,
+  }) async {
+    if (!isCurrent()) return false;
+    if (!forceWrite && _historyLimit == next && _history.length <= next) {
+      return true;
+    }
+    final transaction = AccountPreferenceTransaction(p, isCurrent);
+    try {
+      while (true) {
+        final original = List<NotificationItem>.of(_history);
+        final trimmed = original
+            .where(
+              (item) =>
+                  removedRecords?.contains(_historyRecordKey(item)) != true,
+            )
+            .take(next)
+            .toList();
+        await transaction.setStringList(
+          _kHistoryKey,
+          trimmed.map((item) => jsonEncode(item.toJson())).toList(),
+        );
+        if (markSeenAt != null) {
+          await transaction.setString(
+            _kHistorySeenKey,
+            markSeenAt.toIso8601String(),
+          );
+        }
+        // A reminder may have arrived while its platform write was pending.
+        // Save the latest snapshot before publishing any destructive trim.
+        if (_history.length != original.length ||
+            Iterable<int>.generate(
+              original.length,
+            ).any((index) => !identical(_history[index], original[index]))) {
+          continue;
+        }
+        transaction.commit();
+        final changed =
+            _historyLimit != next || trimmed.length != _history.length;
+        _historyLimit = next;
+        if (markSeenAt != null) _historyLastSeenAt = markSeenAt;
+        _history
+          ..clear()
+          ..addAll(trimmed);
+        if (changed) _notifyListenersBatched();
+        return true;
+      }
+    } on AccountPreferenceWriteCanceled {
+      await transaction.rollback(canceledBeforeCleanup: true);
+      return false;
+    } catch (_) {
+      await transaction.rollback();
+      rethrow;
+    }
+  }
+
+  _NotificationHistoryKey _historyRecordKey(NotificationItem item) => (
+    item.id,
+    item.title,
+    item.body,
+    item.type,
+    item.relatedId,
+    item.scheduledTime,
+  );
 
   void markHistorySeen() {
     final nextSeenAt = _history.isEmpty
@@ -614,12 +803,16 @@ class NotificationService extends ChangeNotifier
     NotificationIssueTitle? issueTitleCode,
     DateTime? scheduledTime,
     String? relatedId,
+    bool Function()? canContinue,
   }) async {
+    if (canContinue?.call() == false) return false;
     try {
       await LocalNotifications.instance.init();
+      if (canContinue?.call() == false) return false;
       final statuses = await NotificationSettings.notificationChannelStatuses(
         const [channelId],
       );
+      if (canContinue?.call() == false) return false;
       final status = statuses?[channelId];
       if (!PlatformInfo.isAndroid) return true;
       if (status == null ||
@@ -668,6 +861,7 @@ class NotificationService extends ChangeNotifier
         return true;
       }
     } catch (e, st) {
+      if (canContinue?.call() == false) return false;
       debugPrint(
         '[NotificationService] channel readiness probe failed: $e\n$st',
       );
@@ -699,7 +893,10 @@ class NotificationService extends ChangeNotifier
     String? payload,
     String? relatedId,
     bool requestIfNeeded = false,
+    bool bypassQuietHours = false,
+    bool Function()? canContinue,
   }) async {
+    if (canContinue?.call() == false) return false;
     final now = DateTime.now();
     if (!when.isAfter(now)) {
       _recordScheduleIssue(
@@ -714,15 +911,26 @@ class NotificationService extends ChangeNotifier
       );
       return false;
     }
+    var effectiveWhen = when;
+    var silentDelivery = false;
+    if (!bypassQuietHours && _quietHours.isWithinQuietHours(effectiveWhen)) {
+      if (_quietHours.deferUntilEnd) {
+        effectiveWhen = _quietHours.nextQuietEndLocal(effectiveWhen);
+      } else {
+        silentDelivery = true;
+      }
+    }
     final priorIssue = _lastScheduleIssue;
     if (!await _ensureChannelReadyOrRecord(
       issueTitle: issueTitle,
       issueTitleCode: issueTitleCode,
-      scheduledTime: when,
+      scheduledTime: effectiveWhen,
       relatedId: relatedId,
+      canContinue: canContinue,
     )) {
       return false;
     }
+    if (canContinue?.call() == false) return false;
     final channelWarningRecorded =
         !identical(priorIssue, _lastScheduleIssue) &&
         _lastScheduleIssue?.blocking == false;
@@ -731,12 +939,15 @@ class NotificationService extends ChangeNotifier
         id: id,
         title: title,
         body: body,
-        when: when,
+        when: effectiveWhen,
         channelId: channelId,
         payload: payload,
         requestIfNeeded: requestIfNeeded,
+        silent: silentDelivery,
       );
+      if (canContinue?.call() == false) return false;
       final granted = await LocalNotifications.instance.refreshPermission();
+      if (canContinue?.call() == false) return false;
       if (!granted) {
         _recordScheduleIssue(
           copy: ReminderIssueCopy.notification(
@@ -745,7 +956,7 @@ class NotificationService extends ChangeNotifier
           ),
           title: issueTitle,
           message: '系统通知权限未开启，提醒未确认注册成功。请开启通知权限后重新保存提醒。',
-          scheduledTime: when,
+          scheduledTime: effectiveWhen,
           relatedId: relatedId,
         );
         return false;
@@ -755,6 +966,7 @@ class NotificationService extends ChangeNotifier
       }
       return true;
     } on NotificationPermissionDeniedException {
+      if (canContinue?.call() == false) return false;
       _recordScheduleIssue(
         copy: ReminderIssueCopy.notification(
           NotificationIssueNotice.oncePermissionDenied,
@@ -762,11 +974,12 @@ class NotificationService extends ChangeNotifier
         ),
         title: issueTitle,
         message: '系统通知权限未开启，提醒未注册。请开启通知权限后重新保存提醒。',
-        scheduledTime: when,
+        scheduledTime: effectiveWhen,
         relatedId: relatedId,
       );
       return false;
     } catch (e, st) {
+      if (canContinue?.call() == false) return false;
       debugPrint('[NotificationService] scheduleOnce failed: $e\n$st');
       final issueDetail = e.toString();
       _recordScheduleIssue(
@@ -777,7 +990,7 @@ class NotificationService extends ChangeNotifier
         ),
         title: issueTitle,
         message: '系统通知注册失败，请检查通知权限、精确闹钟权限和系统通知渠道设置后重新保存提醒。($issueDetail)',
-        scheduledTime: when,
+        scheduledTime: effectiveWhen,
         relatedId: relatedId,
       );
       return false;
@@ -795,7 +1008,20 @@ class NotificationService extends ChangeNotifier
     List<int>? weekdays,
     String? payload,
     String? relatedId,
+    bool bypassQuietHours = false,
   }) async {
+    var effectiveHour = hour;
+    var effectiveMinute = minute;
+    var silentDelivery = false;
+    if (!bypassQuietHours &&
+        _quietHours.isMinutesInQuietWindow(effectiveHour * 60 + effectiveMinute)) {
+      if (_quietHours.deferUntilEnd) {
+        effectiveHour = _quietHours.endHour;
+        effectiveMinute = _quietHours.endMinute;
+      } else {
+        silentDelivery = true;
+      }
+    }
     final priorIssue = _lastScheduleIssue;
     if (!await _ensureChannelReadyOrRecord(
       issueTitle: issueTitle,
@@ -812,11 +1038,12 @@ class NotificationService extends ChangeNotifier
         id: id,
         title: title,
         body: body,
-        hour: hour,
-        minute: minute,
+        hour: effectiveHour,
+        minute: effectiveMinute,
         weekdays: weekdays,
         channelId: channelId,
         payload: payload,
+        silent: silentDelivery,
       );
       final granted = await LocalNotifications.instance.refreshPermission();
       if (!granted) {
@@ -863,13 +1090,22 @@ class NotificationService extends ChangeNotifier
     }
   }
 
-  String _notificationBodyForPayload(String body, String? payload) {
+  String _notificationBodyForPayload(
+    String body,
+    String? payload, {
+    AppLocale? locale,
+  }) {
     final uri = payload == null ? null : Uri.tryParse(payload);
     if (uri?.scheme != 'duoyi' || uri?.host != 'todo') return body;
     if (body.contains('\n')) return body;
     final title = body.trim();
-    if (title.isEmpty) return '点击查看待办详情';
-    return '任务：$title\n点击查看详情或完成';
+    final zh = (locale ?? I18n.current) == AppLocale.zh;
+    if (title.isEmpty) {
+      return zh ? '点击查看待办详情' : 'Open task details';
+    }
+    return zh
+        ? '任务：$title\n点击查看详情或完成'
+        : 'Task: $title\nOpen details or mark complete';
   }
 
   bool _isAlarmPushFallbackPayload(String? payload) {
@@ -879,15 +1115,21 @@ class NotificationService extends ChangeNotifier
 
   String? _relatedIdFromPayload(String? payload) {
     final uri = payload == null ? null : Uri.tryParse(payload);
-    if (uri == null || uri.scheme != 'duoyi' || uri.pathSegments.isEmpty) {
-      return null;
+    if (uri == null || uri.scheme != 'duoyi') return null;
+    if (uri.host == 'calendar') {
+      final eventId = uri.queryParameters['eventId']?.trim();
+      if (eventId != null && eventId.isNotEmpty) return eventId;
+      final date = uri.queryParameters['date']?.trim();
+      return (date != null && date.isNotEmpty) ? date : null;
     }
+    if (uri.pathSegments.isEmpty) return null;
     return switch (uri.host) {
       'todo' ||
       'habit' ||
       'anniversary' ||
       'countdown' ||
       'goal' ||
+      'course' ||
       'location' => uri.pathSegments.first,
       _ => null,
     };
@@ -895,14 +1137,17 @@ class NotificationService extends ChangeNotifier
 
   /// 从 deep-link payload 推断调度历史记录的归属类型：
   /// `duoyi://todo/<id>` → todo，`duoyi://habit/<id>` → habit，
-  /// 其余（含空 payload、`duoyi://tab/...` 等非对象链接）保持 general。
-  /// 通知记录页据此把可跳转记录接到 TodayDetailRouter（todo/habit 动线）；
-  /// 纪念日记录仍由 [scheduleAnniversary] 显式写 anniversary 类型。
+  /// `duoyi://anniversary/<id>` / `countdown` → anniversary，
+  /// `duoyi://focus` / `pomodoro` → pomodoro，`duoyi://location/<id>` → location，
+  /// 其余保持 general（附带 [NotificationItem.payload] 供通知中心路由详情）。
   NotificationType _historyTypeFromPayload(String? payload) {
     final uri = payload == null ? null : Uri.tryParse(payload);
     return switch (uri?.host) {
       'todo' => NotificationType.todo,
       'habit' => NotificationType.habit,
+      'anniversary' || 'countdown' => NotificationType.anniversary,
+      'focus' || 'pomodoro' => NotificationType.pomodoro,
+      'location' => NotificationType.location,
       _ => NotificationType.general,
     };
   }
@@ -934,6 +1179,7 @@ class NotificationService extends ChangeNotifier
     required String body,
     String? payload,
   }) {
+    final silent = _quietHours.isWithinQuietHours(DateTime.now());
     // ignore: discarded_futures
     LocalNotifications.instance
         .show(
@@ -942,6 +1188,7 @@ class NotificationService extends ChangeNotifier
           body: body,
           channelId: channelId,
           payload: payload,
+          silent: silent,
         )
         .catchError((Object e, StackTrace st) {
           debugPrint(
@@ -984,7 +1231,18 @@ class NotificationService extends ChangeNotifier
     String? issueTitle,
     NotificationIssueTitle? issueTitleCode,
     String? relatedId,
+    bool Function()? canContinue,
   }) async {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    bool isCurrent() =>
+        !_disposed &&
+        generation == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        ) &&
+        canContinue?.call() != false;
+    if (!isCurrent()) return false;
     final rawIssueTitle = issueTitle ?? '提醒注册失败';
     final effectiveTitleCode =
         issueTitleCode ??
@@ -1002,7 +1260,8 @@ class NotificationService extends ChangeNotifier
       );
       return false;
     }
-    final granted = await requestPermission();
+    final granted = await requestPermission(canContinue: isCurrent);
+    if (!isCurrent()) return false;
     if (!granted) {
       _recordScheduleIssue(
         copy: ReminderIssueCopy.notification(
@@ -1021,10 +1280,11 @@ class NotificationService extends ChangeNotifier
       issueTitleCode: effectiveTitleCode,
       scheduledTime: scheduledTime,
       relatedId: relatedId,
+      canContinue: isCurrent,
     )) {
       return false;
     }
-    return true;
+    return isCurrent();
   }
 
   // ——————————————————————————————————————————————
@@ -1150,6 +1410,7 @@ class NotificationService extends ChangeNotifier
         scheduledTime: when,
         type: _historyTypeFromPayload(payload),
         relatedId: _relatedIdFromPayload(payload),
+        payload: payload,
       ),
     );
     notifyListeners();
@@ -1162,9 +1423,27 @@ class NotificationService extends ChangeNotifier
     final id = int.tryParse(idStr ?? '');
     if (id == null) return;
     final minutes = int.tryParse(uri.queryParameters['delay'] ?? '5') ?? 5;
-    final title = uri.queryParameters['title'] ?? '稍后提醒';
-    final body = uri.queryParameters['body'] ?? '';
     final payload = uri.queryParameters['payload'];
+    var title = uri.queryParameters['title']?.trim() ?? '';
+    var body = uri.queryParameters['body'] ?? '';
+    if (title.isEmpty) {
+      final meta = await LocalNotifications.instance.metadataForNotification(id);
+      if (meta != null && meta.title.trim().isNotEmpty) {
+        title = meta.title;
+        if (body.isEmpty) body = meta.body;
+      } else {
+        for (final item in _history) {
+          if (item.id == id.toString() && item.title.trim().isNotEmpty) {
+            title = item.title;
+            if (body.isEmpty) body = item.body;
+            break;
+          }
+        }
+      }
+    }
+    if (title.isEmpty) {
+      title = I18n.tr('action.snooze');
+    }
     await snooze(
       id: id,
       title: title,
@@ -1212,6 +1491,7 @@ class NotificationService extends ChangeNotifier
         scheduledTime: when,
         type: _historyTypeFromPayload(payload),
         relatedId: _relatedIdFromPayload(payload),
+        payload: payload,
       ),
     );
     _notifyListenersBatched();
@@ -1267,6 +1547,7 @@ class NotificationService extends ChangeNotifier
         scheduledTime: when,
         type: _historyTypeFromPayload(payload),
         relatedId: _relatedIdFromPayload(payload),
+        payload: payload,
       ),
     );
     _notifyListenersBatched();
@@ -1278,44 +1559,118 @@ class NotificationService extends ChangeNotifier
     required String body,
     required DateTime when,
     String? payload,
-  }) async {
-    final id = _idFor('ai_calendar_$calendarEventId');
-    final displayBody = _notificationBodyForPayload(body, payload);
-    final scheduled = await _scheduleOnceOrRecord(
-      id: id,
-      title: title,
-      body: displayBody,
-      when: when,
-      payload: payload,
-      issueTitle: 'AI 日程提醒注册失败',
-      issueTitleCode: NotificationIssueTitle.aiRegistrationFailed,
-      relatedId: calendarEventId,
-    );
-    if (!scheduled) {
-      _throwLastScheduleIssue(
-        fallbackTitle: 'AI 日程提醒注册失败',
-        fallbackMessage: '系统通知未注册，AI 日程提醒不会在到点时弹出。',
-        scheduledTime: when,
-        relatedId: calendarEventId,
-      );
-    }
-    _pendingNotifications++;
-    _addScheduledToHistory(
-      NotificationItem(
-        id: id.toString(),
+    bool Function()? canContinue,
+  }) {
+    final generation = _storageGeneration;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final cancelEpoch = _calendarReminderCancelEpochs[calendarEventId] ?? 0;
+    bool isCurrent() =>
+        !_disposed &&
+        generation == _storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        ) &&
+        cancelEpoch == (_calendarReminderCancelEpochs[calendarEventId] ?? 0) &&
+        canContinue?.call() != false;
+    // Serialize registration and compensation for this event's stable native
+    // ID. A replacement must begin only after an older native call and its
+    // stale cancellation have settled.
+    return _enqueueCalendarReminder(
+      calendarEventId,
+      () => _registerCalendarReminderForOrigin(
+        calendarEventId: calendarEventId,
         title: title,
-        body: displayBody,
-        scheduledTime: when,
-        type: NotificationType.general,
-        relatedId: calendarEventId,
+        body: body,
+        when: when,
+        payload: payload,
+        isCurrent: isCurrent,
       ),
     );
-    _notifyListenersBatched();
   }
 
-  Future<void> cancelCalendarReminder(String calendarEventId) async {
-    await LocalNotifications.instance.cancel(
-      _idFor('ai_calendar_$calendarEventId'),
+  Future<void> _enqueueCalendarReminder(
+    String calendarEventId,
+    Future<void> Function() operation,
+  ) {
+    final previous =
+        _calendarReminderTails[calendarEventId] ?? Future<void>.value();
+    final run = previous.then((_) => operation());
+    final settled = run.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _calendarReminderTails[calendarEventId] = settled;
+    settled.then((_) {
+      if (identical(_calendarReminderTails[calendarEventId], settled)) {
+        _calendarReminderTails.remove(calendarEventId);
+        _calendarReminderCancelEpochs.remove(calendarEventId);
+      }
+    });
+    return run;
+  }
+
+  Future<void> _registerCalendarReminderForOrigin({
+    required String calendarEventId,
+    required String title,
+    required String body,
+    required DateTime when,
+    String? payload,
+    required bool Function() isCurrent,
+  }) async {
+    if (!isCurrent()) throw const AccountPreferenceWriteCanceled();
+    final id = _idFor('ai_calendar_$calendarEventId');
+    final displayBody = _notificationBodyForPayload(body, payload);
+    try {
+      final scheduled = await _scheduleOnceOrRecord(
+        id: id,
+        title: title,
+        body: displayBody,
+        when: when,
+        payload: payload,
+        issueTitle: 'AI 日程提醒注册失败',
+        issueTitleCode: NotificationIssueTitle.aiRegistrationFailed,
+        relatedId: calendarEventId,
+        canContinue: isCurrent,
+      );
+      if (!isCurrent()) throw const AccountPreferenceWriteCanceled();
+      if (!scheduled) {
+        _throwLastScheduleIssue(
+          fallbackTitle: 'AI 日程提醒注册失败',
+          fallbackMessage: '系统通知未注册，AI 日程提醒不会在到点时弹出。',
+          scheduledTime: when,
+          relatedId: calendarEventId,
+        );
+      }
+      _pendingNotifications++;
+      _addScheduledToHistory(
+        NotificationItem(
+          id: id.toString(),
+          title: title,
+          body: displayBody,
+          scheduledTime: when,
+          type: NotificationType.general,
+          relatedId: calendarEventId,
+          payload: payload,
+        ),
+      );
+      _notifyListenersBatched();
+    } finally {
+      if (!isCurrent()) {
+        // A native registration may finish after cancelAll during account
+        // cleanup. Revoke this operation's ID without touching other reminders.
+        await LocalNotifications.instance.cancel(id);
+      }
+    }
+  }
+
+  Future<void> cancelCalendarReminder(String calendarEventId) {
+    _calendarReminderCancelEpochs[calendarEventId] =
+        (_calendarReminderCancelEpochs[calendarEventId] ?? 0) + 1;
+    return _enqueueCalendarReminder(
+      calendarEventId,
+      () => LocalNotifications.instance.cancel(
+        _idFor('ai_calendar_$calendarEventId'),
+      ),
     );
   }
 
@@ -1360,6 +1715,7 @@ class NotificationService extends ChangeNotifier
         scheduledTime: DateTime.now(),
         type: _historyTypeFromPayload(payload),
         relatedId: _relatedIdFromPayload(payload),
+        payload: payload,
       ),
     );
     _notifyListenersBatched();
@@ -1414,6 +1770,7 @@ class NotificationService extends ChangeNotifier
         scheduledTime: DateTime.now(),
         type: _historyTypeFromPayload(payload),
         relatedId: _relatedIdFromPayload(payload),
+        payload: payload,
       ),
     );
     _notifyListenersBatched();
@@ -1500,8 +1857,19 @@ class NotificationService extends ChangeNotifier
     required String title,
     required DateTime when,
   }) async {
-    final body = _notificationBodyForPayload(title, 'duoyi://todo/$todoId');
-    final displayTitle = '提醒：$title';
+    // Capture locale before any platform await so the scheduled copy stays
+    // consistent with the user's language choice at registration time.
+    final locale = I18n.current;
+    final copy = ReminderDeliveryCopy.todo(
+      title,
+      ReminderRuleType.absolute,
+    ).render(locale: locale, strings: _strings);
+    final body = _notificationBodyForPayload(
+      copy.body,
+      'duoyi://todo/$todoId',
+      locale: locale,
+    );
+    final displayTitle = copy.title;
     final scheduled = await _scheduleOnceOrRecord(
       id: _idFor('todo_$todoId'),
       title: displayTitle,
@@ -1529,6 +1897,7 @@ class NotificationService extends ChangeNotifier
         scheduledTime: when,
         type: NotificationType.todo,
         relatedId: todoId,
+        payload: 'duoyi://todo/$todoId',
       ),
     );
     _notifyListenersBatched();
@@ -1584,6 +1953,7 @@ class NotificationService extends ChangeNotifier
         scheduledTime: DateTime.now(),
         type: NotificationType.habit,
         relatedId: habitId,
+        payload: 'duoyi://habit/$habitId?confirm=1',
       ),
     );
     _notifyListenersBatched();
@@ -1647,6 +2017,7 @@ class NotificationService extends ChangeNotifier
         scheduledTime: remindAt,
         type: NotificationType.anniversary,
         relatedId: annId,
+        payload: 'duoyi://tab/calendar',
       ),
     );
     _notifyListenersBatched();
@@ -1657,9 +2028,87 @@ class NotificationService extends ChangeNotifier
     await LocalNotifications.instance.cancel(_idFor('anni_$annId'));
   }
 
+  int get _pomodoroEndNotificationId => _idFor('pomodoro_active_session_end');
+  Future<void> _pomodoroEndReminderTail = Future<void>.value();
+
+  Future<void> _runPomodoroEndReminderOp(Future<void> Function() op) {
+    final next = _pomodoroEndReminderTail.then(
+      (_) => op(),
+      onError: (Object _, StackTrace _) => op(),
+    );
+    _pomodoroEndReminderTail = next.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return next;
+  }
+
+  /// Schedules an OS notification for the active countdown Pomodoro end time so
+  /// background/killed timers still alert the user and deep-link to Focus.
+  Future<void> schedulePomodoroEndReminder({
+    required bool isFocus,
+    String? taskName,
+    required DateTime when,
+  }) {
+    final generation = _storageGeneration;
+    return _runPomodoroEndReminderOp(() async {
+      if (_disposed ||
+          generation != _storageGeneration ||
+          !when.isAfter(DateTime.now())) {
+        return;
+      }
+      final id = _pomodoroEndNotificationId;
+      final title = isFocus
+          ? _strings.notifPomodoroDoneTitle
+          : _strings.notifBreakDoneTitle;
+      final cleanTask = taskName?.trim();
+      final body = isFocus
+          ? (cleanTask != null && cleanTask.isNotEmpty
+                ? '"$cleanTask" — ${_strings.notifPomodoroDoneBody}'
+                : _strings.notifPomodoroDoneBody)
+          : _strings.notifBreakDoneBody;
+      try {
+        await LocalNotifications.instance.cancel(id);
+      } catch (_) {}
+      if (_disposed ||
+          generation != _storageGeneration ||
+          !when.isAfter(DateTime.now())) {
+        return;
+      }
+      try {
+        await _scheduleOnceOrRecord(
+          id: id,
+          title: title,
+          body: body,
+          when: when,
+          payload: 'duoyi://focus',
+          issueTitle: '专注结束提醒注册失败',
+          relatedId: 'pomodoro_end',
+        );
+      } catch (_) {
+        // Never interrupt Pomodoro timing if OS permission or plugin is absent.
+      }
+    });
+  }
+
+  /// Cancels any pending background Pomodoro completion notification.
+  Future<void> cancelPomodoroEndReminder() {
+    return _runPomodoroEndReminderOp(() async {
+      try {
+        await LocalNotifications.instance.cancel(_pomodoroEndNotificationId);
+      } catch (_) {}
+    });
+  }
+
   /// 立即发送一条番茄钟完成通知（push 语义；番茄钟结束属 R4 的 push 事件）。
-  void notifyPomodoroComplete({String? taskName}) {
+  void notifyPomodoroComplete({
+    String? taskName,
+    bool cancelPendingEndReminder = true,
+  }) {
     _pomodoroNotificationTimer?.cancel();
+    if (cancelPendingEndReminder) {
+      unawaited(cancelPomodoroEndReminder());
+    }
     final body = taskName != null && taskName.isNotEmpty
         ? '"$taskName" — ${_strings.notifPomodoroDoneBody}'
         : _strings.notifPomodoroDoneBody;
@@ -1668,6 +2117,7 @@ class NotificationService extends ChangeNotifier
       id: notificationId,
       title: _strings.notifPomodoroDoneTitle,
       body: body,
+      payload: 'duoyi://focus',
     )) {
       return;
     }
@@ -1678,17 +2128,26 @@ class NotificationService extends ChangeNotifier
         body: body,
         scheduledTime: DateTime.now(),
         type: NotificationType.pomodoro,
+        payload: 'duoyi://focus',
       ),
     );
     notifyListeners();
   }
 
   /// 番茄钟休息结束提示（push 语义）。
-  void notifyBreakComplete() {
+  void notifyBreakComplete({bool cancelPendingEndReminder = true}) {
+    if (cancelPendingEndReminder) {
+      unawaited(cancelPomodoroEndReminder());
+    }
     final body = _strings.notifBreakDoneBody;
     final title = _strings.notifBreakDoneTitle;
     final notificationId = _ephemeralNotificationId();
-    if (!_showImmediate(id: notificationId, title: title, body: body)) {
+    if (!_showImmediate(
+      id: notificationId,
+      title: title,
+      body: body,
+      payload: 'duoyi://focus',
+    )) {
       return;
     }
     _addToHistory(
@@ -1698,6 +2157,7 @@ class NotificationService extends ChangeNotifier
         body: body,
         scheduledTime: DateTime.now(),
         type: NotificationType.pomodoro,
+        payload: 'duoyi://focus',
       ),
     );
     notifyListeners();
@@ -2133,7 +2593,7 @@ class NotificationService extends ChangeNotifier
 
   void _addToHistory(NotificationItem item) {
     _history.insert(0, item);
-    if (_history.length > _historyLimit) {
+    if (_historyLoaded && _history.length > _historyLimit) {
       _history.removeRange(_historyLimit, _history.length);
     }
     final batch = _activeNotificationBatch;
@@ -2147,15 +2607,24 @@ class NotificationService extends ChangeNotifier
   }
 
   Future<void> clearHistory() async {
-    _history.clear();
-    _historyLastSeenAt = DateTime.now();
-    await _saveHistory();
-    await _saveHistorySeen();
-    notifyListeners();
+    await _queueHistoryWrite<bool>((isCurrent) async {
+      final p = await SharedPreferences.getInstance();
+      if (!isCurrent()) return false;
+      final target = _readHistoryIfNeeded(p);
+      return _applyHistoryLimitSnapshot(
+        p,
+        target,
+        isCurrent,
+        forceWrite: true,
+        removedRecords: _history.map(_historyRecordKey).toSet(),
+        markSeenAt: DateTime.now(),
+      );
+    }, canceledResult: () => false);
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _pomodoroNotificationTimer?.cancel();
     super.dispose();
   }

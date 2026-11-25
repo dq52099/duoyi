@@ -16,62 +16,74 @@ class IcsExporter {
     Iterable<CalendarEvent> events, {
     String? calendarName,
   }) {
-    final copy = ExportUiCopy.current();
-    final resolvedCalendarName = calendarName ?? copy.eventsCalendarName;
-    final sb = StringBuffer()
-      ..writeln('BEGIN:VCALENDAR')
-      ..writeln('VERSION:2.0')
-      ..writeln('PRODID:-//Duoyi//ZH//CN')
-      ..writeln('X-WR-CALNAME:${_escape(resolvedCalendarName)}');
-    for (final e in events) {
-      sb
-        ..writeln('BEGIN:VEVENT')
-        ..writeln('UID:${e.id}@duoyi')
-        ..writeln('DTSTAMP:${_fmtUtc(DateTime.now())}')
-        ..writeln('DTSTART;VALUE=DATE:${_fmtDate(e.date)}')
-        ..writeln(
-          'DTEND;VALUE=DATE:${_fmtDate(e.date.add(const Duration(days: 1)))}',
-        )
-        ..writeln('SUMMARY:${_escape(e.title)}')
-        ..writeln('CATEGORIES:${e.type.name}')
-        ..writeln('END:VEVENT');
-    }
-    sb.writeln('END:VCALENDAR');
-    return sb.toString();
+    return combine(
+      events: events,
+      calendarName: calendarName ?? ExportUiCopy.current().eventsCalendarName,
+    );
   }
 
   /// 纪念日(带每年循环 RRULE)。
   static String fromAnniversaries(
     Iterable<Anniversary> items, {
     String? calendarName,
+  }) => combine(
+    anniversaries: items,
+    calendarName:
+        calendarName ?? ExportUiCopy.current().anniversariesCalendarName,
+  );
+
+  /// Serialize selected sources into one calendar, preserving their identities.
+  static String combine({
+    Iterable<CalendarEvent> events = const [],
+    Iterable<Anniversary> anniversaries = const [],
+    String? calendarName,
   }) {
-    final copy = ExportUiCopy.current();
-    final resolvedCalendarName = calendarName ?? copy.anniversariesCalendarName;
+    final name = calendarName ?? ExportUiCopy.current().eventsCalendarName;
     final sb = StringBuffer()
       ..writeln('BEGIN:VCALENDAR')
       ..writeln('VERSION:2.0')
       ..writeln('PRODID:-//Duoyi//ZH//CN')
-      ..writeln('X-WR-CALNAME:${_escape(resolvedCalendarName)}');
-    for (final a in items) {
-      final date = a.nextOccurrence;
-      final recurring = a.type != AnniversaryType.normal;
-      sb
-        ..writeln('BEGIN:VEVENT')
-        ..writeln('UID:anni_${a.id}@duoyi')
-        ..writeln('DTSTAMP:${_fmtUtc(DateTime.now())}')
-        ..writeln('DTSTART;VALUE=DATE:${_fmtDate(date)}')
-        ..writeln(
-          'DTEND;VALUE=DATE:${_fmtDate(date.add(const Duration(days: 1)))}',
-        )
-        ..writeln('SUMMARY:${_escape(a.title)}');
-      if ((a.description ?? '').isNotEmpty) {
-        sb.writeln('DESCRIPTION:${_escape(a.description!)}');
-      }
-      if (recurring) sb.writeln('RRULE:FREQ=YEARLY');
-      sb.writeln('END:VEVENT');
+      ..writeln('X-WR-CALNAME:${_escape(name)}');
+    for (final a in anniversaries) {
+      _writeAnniversary(sb, a);
+    }
+    for (final e in events) {
+      _writeEvent(sb, e);
     }
     sb.writeln('END:VCALENDAR');
     return sb.toString();
+  }
+
+  static void _writeEvent(StringBuffer sb, CalendarEvent e) {
+    sb
+      ..writeln('BEGIN:VEVENT')
+      ..writeln('UID:${e.id}@duoyi')
+      ..writeln('DTSTAMP:${_fmtUtc(DateTime.now())}')
+      ..writeln('DTSTART;VALUE=DATE:${_fmtDate(e.date)}')
+      ..writeln(
+        'DTEND;VALUE=DATE:${_fmtDate(e.date.add(const Duration(days: 1)))}',
+      )
+      ..writeln('SUMMARY:${_escape(e.title)}')
+      ..writeln('CATEGORIES:${e.type.name}')
+      ..writeln('END:VEVENT');
+  }
+
+  static void _writeAnniversary(StringBuffer sb, Anniversary a) {
+    final date = a.nextOccurrence;
+    sb
+      ..writeln('BEGIN:VEVENT')
+      ..writeln('UID:anni_${a.id}@duoyi')
+      ..writeln('DTSTAMP:${_fmtUtc(DateTime.now())}')
+      ..writeln('DTSTART;VALUE=DATE:${_fmtDate(date)}')
+      ..writeln(
+        'DTEND;VALUE=DATE:${_fmtDate(date.add(const Duration(days: 1)))}',
+      )
+      ..writeln('SUMMARY:${_escape(a.title)}');
+    if ((a.description ?? '').isNotEmpty) {
+      sb.writeln('DESCRIPTION:${_escape(a.description!)}');
+    }
+    if (a.type != AnniversaryType.normal) sb.writeln('RRULE:FREQ=YEARLY');
+    sb.writeln('END:VEVENT');
   }
 
   static String _fmtDate(DateTime d) =>

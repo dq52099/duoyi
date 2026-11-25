@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../core/design_tokens.dart';
@@ -68,6 +70,7 @@ class _AppTimePickerSheetState extends State<_AppTimePickerSheet> {
   late List<int> _minutes;
   late FixedExtentScrollController _hourController;
   late FixedExtentScrollController _minuteController;
+  ModalRoute<dynamic>? _owningRoute;
 
   @override
   void initState() {
@@ -84,6 +87,12 @@ class _AppTimePickerSheetState extends State<_AppTimePickerSheet> {
     I18n.localeListenable.addListener(_onLocaleChanged);
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _owningRoute ??= ModalRoute.of(context);
+  }
+
   void _onLocaleChanged() {
     if (mounted) setState(() {});
   }
@@ -94,6 +103,20 @@ class _AppTimePickerSheetState extends State<_AppTimePickerSheet> {
     _hourController.dispose();
     _minuteController.dispose();
     super.dispose();
+  }
+
+  void _handleCancel() {
+    if (!mounted) return;
+    final route = _owningRoute ?? ModalRoute.of(context);
+    if (route == null || !route.isActive || !route.isCurrent) return;
+    route.navigator?.pop();
+  }
+
+  void _handleConfirm() {
+    if (!mounted) return;
+    final route = _owningRoute ?? ModalRoute.of(context);
+    if (route == null || !route.isActive || !route.isCurrent) return;
+    route.navigator?.pop(_value);
   }
 
   int _normalizedStep(int step) {
@@ -158,11 +181,11 @@ class _AppTimePickerSheetState extends State<_AppTimePickerSheet> {
       subtitle: _resolveSubtitle(),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _handleCancel,
           child: Text(I18n.tr('action.cancel')),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, _value),
+          onPressed: _handleConfirm,
           child: Text(I18n.tr('action.confirm')),
         ),
       ],
@@ -196,31 +219,7 @@ class _AppTimePickerSheetState extends State<_AppTimePickerSheet> {
             ),
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _shiftMinutes(-30),
-                  icon: const Icon(Icons.keyboard_arrow_left_rounded),
-                  label: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(I18n.tr('picker.time.earlier_30m')),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _shiftMinutes(30),
-                  icon: const Icon(Icons.keyboard_arrow_right_rounded),
-                  label: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(I18n.tr('picker.time.later_30m')),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _TimeShiftButtons(onShift: _shiftMinutes),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -249,42 +248,151 @@ class _AppTimePickerSheetState extends State<_AppTimePickerSheet> {
             ],
           ),
           const SizedBox(height: 18),
-          Container(
-            height: 190,
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.32),
-              borderRadius: DesignTokens.borderRadiusLg,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _Wheel(
-                    controller: _hourController,
-                    count: 24,
-                    labelBuilder: (i) => i.toString().padLeft(2, '0'),
-                    onSelectedItemChanged: (i) => setState(() => _hour = i),
+          Builder(
+            builder: (context) {
+              final metrics = _wheelMetrics(context);
+              final colonWidth = _measureTimeText(
+                context,
+                ':',
+                theme.textTheme.headlineSmall,
+              ).width;
+              return Container(
+                height: math.max(190, metrics.height * 4),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.32),
+                  borderRadius: DesignTokens.borderRadiusLg,
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: math.max(
+                        constraints.maxWidth,
+                        metrics.width * 2 + colonWidth + 16,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _Wheel(
+                              controller: _hourController,
+                              itemExtent: metrics.height,
+                              count: 24,
+                              labelBuilder: (i) => i.toString().padLeft(2, '0'),
+                              onSelectedItemChanged: (i) =>
+                                  setState(() => _hour = i),
+                            ),
+                          ),
+                          Text(
+                            ':',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              color: cs.onSurface.withValues(alpha: 0.55),
+                            ),
+                          ),
+                          Expanded(
+                            child: _Wheel(
+                              controller: _minuteController,
+                              itemExtent: metrics.height,
+                              count: _minutes.length,
+                              labelBuilder: (i) =>
+                                  _minutes[i].toString().padLeft(2, '0'),
+                              onSelectedItemChanged: (i) =>
+                                  setState(() => _minute = _minutes[i]),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                Text(
-                  ':',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: cs.onSurface.withValues(alpha: 0.55),
-                  ),
-                ),
-                Expanded(
-                  child: _Wheel(
-                    controller: _minuteController,
-                    count: _minutes.length,
-                    labelBuilder: (i) => _minutes[i].toString().padLeft(2, '0'),
-                    onSelectedItemChanged: (i) =>
-                        setState(() => _minute = _minutes[i]),
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ],
       ),
+    );
+  }
+}
+
+Size _measureTimeText(BuildContext context, String text, TextStyle? style) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: DefaultTextStyle.of(context).style.merge(style),
+    ),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    locale: Localizations.maybeLocaleOf(context),
+  )..layout();
+  try {
+    return painter.size;
+  } finally {
+    painter.dispose();
+  }
+}
+
+Size _wheelMetrics(BuildContext context) {
+  final style = Theme.of(context).textTheme.titleLarge?.copyWith(
+    fontFeatures: const [FontFeature.tabularFigures()],
+  );
+  double width = 0;
+  double height = 44;
+  for (var i = 0; i < 60; i++) {
+    final size = _measureTimeText(context, i.toString().padLeft(2, '0'), style);
+    width = math.max(width, size.width + 8);
+    height = math.max(height, size.height + 8);
+  }
+  return Size(width, height);
+}
+
+class _TimeShiftButtons extends StatelessWidget {
+  final ValueChanged<int> onShift;
+  const _TimeShiftButtons({required this.onShift});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const states = <WidgetState>{};
+    final buttonStyle = theme.outlinedButtonTheme.style;
+    final textStyle = theme.textTheme.labelLarge?.merge(
+      buttonStyle?.textStyle?.resolve(states),
+    );
+    final padding =
+        (buttonStyle?.padding?.resolve(states) ??
+                const EdgeInsets.symmetric(horizontal: 24))
+            .resolve(Directionality.of(context));
+    final labels = [
+      I18n.tr('picker.time.earlier_30m'),
+      I18n.tr('picker.time.later_30m'),
+    ];
+    final widths = labels
+        .map((label) => _measureTimeText(context, label, textStyle).width)
+        .toList();
+    final requiredWidth = widths.reduce(math.max) + padding.horizontal + 24 + 8;
+    Widget button(int index) => OutlinedButton.icon(
+      onPressed: () => onShift(index == 0 ? -30 : 30),
+      icon: Icon(
+        index == 0
+            ? Icons.keyboard_arrow_left_rounded
+            : Icons.keyboard_arrow_right_rounded,
+      ),
+      label: Text(labels[index], textAlign: TextAlign.center),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (requiredWidth * 2 + 8 <= constraints.maxWidth) {
+          return Row(
+            children: [
+              Expanded(child: button(0)),
+              const SizedBox(width: 8),
+              Expanded(child: button(1)),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [button(0), const SizedBox(height: 8), button(1)],
+        );
+      },
     );
   }
 }
@@ -307,12 +415,14 @@ class _PresetChip extends StatelessWidget {
 
 class _Wheel extends StatelessWidget {
   final FixedExtentScrollController controller;
+  final double itemExtent;
   final int count;
   final String Function(int index) labelBuilder;
   final ValueChanged<int> onSelectedItemChanged;
 
   const _Wheel({
     required this.controller,
+    required this.itemExtent,
     required this.count,
     required this.labelBuilder,
     required this.onSelectedItemChanged,
@@ -324,7 +434,7 @@ class _Wheel extends StatelessWidget {
     final cs = theme.colorScheme;
     return ListWheelScrollView.useDelegate(
       controller: controller,
-      itemExtent: 44,
+      itemExtent: itemExtent,
       physics: const FixedExtentScrollPhysics(),
       perspective: 0.003,
       overAndUnderCenterOpacity: 0.42,

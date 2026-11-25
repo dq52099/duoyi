@@ -2,48 +2,114 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/account_preference_writes.dart';
+import '../core/location_reminder_storage.dart';
+import '../providers/cloud_sync_provider.dart';
 import 'account_local_data_cleaner.dart';
 
 /// 本地全量备份 / 恢复。导出/导入 JSON 文本；所有备份键列表集中在这。
 class BackupService {
-  static Future<void> _writeTail = Future<void>.value();
+  static Future<void>? _writeTail;
 
   static Future<T> _write<T>(
     Future<T> Function(
       SharedPreferences preferences,
       AccountPreferenceTransaction transaction,
     )
-    operation,
-  ) {
+    operation, {
+    bool Function()? canWrite,
+  }) {
     final generation = AccountLocalDataCleaner.accountDataGeneration;
+    final epoch = LocationReminderStorage.storageEpoch;
     final previous = _writeTail;
     final result = AccountPreferenceWrites.runResult<T>((token) async {
       await previous;
       token.ensureCurrent();
-      final preferences = await SharedPreferences.getInstance();
-      final transaction = AccountPreferenceTransaction(
-        preferences,
-        () =>
-            token.isCurrent &&
-            AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation),
-      );
-      try {
-        transaction.ensureCurrent();
-        final value = await operation(preferences, transaction);
-        transaction.commit();
-        return value;
-      } catch (error) {
-        await transaction.rollback(
-          canceledBeforeCleanup: error is AccountPreferenceWriteCanceled,
-        );
-        rethrow;
+      if (canWrite?.call() == false) {
+        throw const AccountPreferenceWriteCanceled();
       }
+      return LocationReminderStorage.run<T>(
+        () => CloudSyncProvider.withDeletedItemsLock<T>((lease) async {
+          final preferences = await SharedPreferences.getInstance();
+          final transaction = AccountPreferenceTransaction(
+            preferences,
+            () =>
+                token.isCurrent &&
+                lease.isCurrent &&
+                canWrite?.call() != false &&
+                AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                  generation,
+                ),
+          );
+          try {
+            transaction.ensureCurrent();
+            final value = await operation(preferences, transaction);
+            transaction.commit();
+            return value;
+          } catch (error) {
+            if (transaction.changedKeys.contains(
+              LocationReminderStorage.locationKey,
+            )) {
+              await LocationReminderStorage.compensateLocked(
+                transaction,
+                error,
+                account: generation,
+                epoch: epoch,
+              );
+            } else {
+              await _restoreOwnedPreimage(preferences, transaction);
+            }
+            rethrow;
+          }
+        }),
+        epoch: epoch,
+      );
     }, canceledResult: () => throw const AccountPreferenceWriteCanceled());
-    _writeTail = result.then<void>(
+    final settled = result.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
     );
+    _writeTail = settled;
+    settled.then((_) {
+      if (identical(_writeTail, settled)) _writeTail = null;
+    });
     return result;
+  }
+
+  // A late platform ACK may arrive after another owner replaced a value.
+  // Restore only values still equal to this transaction's issued image, while
+  // retaining the existing write lane through readback and compensation.
+  static Future<void> _restoreOwnedPreimage(
+    SharedPreferences preferences,
+    AccountPreferenceTransaction transaction,
+  ) async {
+    final previous = transaction.previousValues;
+    final issued = transaction.issuedValues;
+    final restored = <String, Object?>{};
+    await preferences.reload();
+    for (final entry in previous.entries.toList().reversed) {
+      if (!AccountPreferenceTransaction.valuesEqual(
+        preferences.get(entry.key),
+        issued[entry.key],
+      )) {
+        continue;
+      }
+      final saved = await AccountPreferenceTransaction.writeValue(
+        preferences,
+        entry.key,
+        entry.value,
+      );
+      if (!saved) throw StateError('Backup restoration rejected');
+      restored[entry.key] = entry.value;
+    }
+    await preferences.reload();
+    if (restored.entries.any(
+      (entry) => !AccountPreferenceTransaction.valuesEqual(
+        preferences.get(entry.key),
+        entry.value,
+      ),
+    )) {
+      throw StateError('Backup restoration not confirmed');
+    }
   }
 
   /// 偏好/提醒设置键（与 cloud_sync_provider 的 _preference*Keys 对齐）。
@@ -158,44 +224,47 @@ class BackupService {
   /// 导出 JSON 字符串。
   static Future<String> exportAll() async {
     final generation = AccountLocalDataCleaner.accountDataGeneration;
+    final epoch = LocationReminderStorage.storageEpoch;
     await AccountPreferenceWrites.waitForBoundary();
     await _writeTail;
     if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
       throw const AccountPreferenceWriteCanceled();
     }
-    final p = await SharedPreferences.getInstance();
-    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
-      throw const AccountPreferenceWriteCanceled();
-    }
-    final map = <String, dynamic>{};
-    for (final k in _keys) {
-      // 设备相关偏好不进备份（如时区），避免把 A 设备的设置写死到 B 设备。
-      if (_deviceSpecificPreferenceKeys.contains(k)) continue;
-      // 用无类型 get 探测：getStringList 对 string 值会抛类型转换异常
-      // (shared_preferences 的 getStringList 直接 as List)，string 键
-      // (pomodoro_config/user_profile 等) 不能先走 getStringList。
-      final value = p.get(k);
-      if (value is List) {
-        map[k] = {
-          'type': 'stringList',
-          'value': value.map((e) => e.toString()).toList(),
-        };
-      } else if (value is String) {
-        map[k] = {'type': 'string', 'value': value};
-      } else if (value is bool) {
-        map[k] = {'type': 'bool', 'value': value};
-      } else if (value is int) {
-        map[k] = {'type': 'int', 'value': value};
-      } else if (value is double) {
-        map[k] = {'type': 'double', 'value': value};
+    return LocationReminderStorage.run<String>(() async {
+      final p = await SharedPreferences.getInstance();
+      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(generation)) {
+        throw const AccountPreferenceWriteCanceled();
       }
-    }
-    return const JsonEncoder.withIndent('  ').convert({
-      'app': 'duoyi',
-      'schema': schemaVersion,
-      'exportedAt': DateTime.now().toIso8601String(),
-      'data': map,
-    });
+      final map = <String, dynamic>{};
+      for (final k in _keys) {
+        // 设备相关偏好不进备份（如时区），避免把 A 设备的设置写死到 B 设备。
+        if (_deviceSpecificPreferenceKeys.contains(k)) continue;
+        // 用无类型 get 探测：getStringList 对 string 值会抛类型转换异常
+        // (shared_preferences 的 getStringList 直接 as List)，string 键
+        // (pomodoro_config/user_profile 等) 不能先走 getStringList。
+        final value = p.get(k);
+        if (value is List) {
+          map[k] = {
+            'type': 'stringList',
+            'value': value.map((e) => e.toString()).toList(),
+          };
+        } else if (value is String) {
+          map[k] = {'type': 'string', 'value': value};
+        } else if (value is bool) {
+          map[k] = {'type': 'bool', 'value': value};
+        } else if (value is int) {
+          map[k] = {'type': 'int', 'value': value};
+        } else if (value is double) {
+          map[k] = {'type': 'double', 'value': value};
+        }
+      }
+      return const JsonEncoder.withIndent('  ').convert({
+        'app': 'duoyi',
+        'schema': schemaVersion,
+        'exportedAt': DateTime.now().toIso8601String(),
+        'data': map,
+      });
+    }, epoch: epoch);
   }
 
   /// 返回本次覆盖的键数量。
@@ -203,6 +272,7 @@ class BackupService {
     String rawJson, {
     bool merge = false,
     bool clearMissing = false,
+    bool Function()? canWrite,
   }) async {
     final obj = json.decode(rawJson);
     if (obj is! Map || obj['app'] != 'duoyi') {
@@ -265,7 +335,7 @@ class BackupService {
         }
       }
       return count;
-    });
+    }, canWrite: canWrite);
   }
 
   /// 清空全部本地数据(保留登录/服务器配置)。

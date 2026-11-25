@@ -26,7 +26,7 @@ void main() {
     expect(screen, contains("I18n.tr('sync_conflict.keep_local')"));
     expect(screen, contains('item.changedFields.isNotEmpty'));
     expect(screen, contains('_FieldChip'));
-    expect(screen, contains(r'字段: $field'));
+    expect(screen, contains("_syncText('字段', 'Field')"));
     expect(screen, contains('context.watch<CloudSyncProvider?>()'));
     expect(screen, contains('provider.syncUnavailableStatus'));
     expect(screen, contains('provider.syncRetryStatus'));

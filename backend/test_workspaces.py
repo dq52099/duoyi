@@ -21,6 +21,13 @@ class WorkspaceApiTest(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self._old_db_path = api.DB_PATH
         api.DB_PATH = os.path.join(self._tmp.name, "duoyi-test.db")
+        # Backup retention and avatar writes must stay inside each test too.
+        for attribute, folder in (
+            ("BACKUP_DIR", "backups"),
+            ("AVATAR_UPLOAD_DIR", "avatars"),
+        ):
+            self.addCleanup(setattr, api, attribute, getattr(api, attribute))
+            setattr(api, attribute, os.path.join(self._tmp.name, folder))
         api.TOKENS.clear()
         api.TOKEN_LAST_ACTIVE.clear()
         api.init_db()

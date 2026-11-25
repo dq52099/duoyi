@@ -387,10 +387,7 @@ void main() {
     });
 
     test('白噪音 manifest 记录的编码规格与真实文件一致', () {
-      if (Platform.environment['DUOYI_SKIP_FFMPEG_TESTS'] == '1') {
-        return;
-      }
-      final ffprobe = _findExecutable('ffprobe');
+      final ffprobe = _audioToolForTest('ffprobe');
       if (ffprobe == null) {
         return;
       }
@@ -402,18 +399,30 @@ void main() {
       final expectedDuration = (processing['durationSeconds'] as num)
           .toDouble();
       final expectedBitRate = (processing['bitRate'] as num).toInt();
+      final manifestTracks = _manifestTracks(manifest);
+      final targets = manifestTracks
+          .map((track) => 'assets/sounds/white_noise/${track['file'] ?? ''}')
+          .toList(growable: false);
+      final completedTargets = <String>[];
+      _printAudioToolWitness(
+        caseName: '白噪音 manifest 记录的编码规格与真实文件一致',
+        phase: 'entered',
+        targets: targets,
+        toolPath: ffprobe,
+      );
 
-      for (final track in _manifestTracks(manifest)) {
+      for (final track in manifestTracks) {
         final id = track['id']?.toString() ?? '';
         final fileName = track['file']?.toString() ?? '';
-        final result = Process.runSync('ffprobe', [
+        final target = 'assets/sounds/white_noise/$fileName';
+        final result = Process.runSync(ffprobe, [
           '-v',
           'error',
           '-show_entries',
           'format=duration,bit_rate',
           '-of',
           'default=noprint_wrappers=1:nokey=1',
-          'assets/sounds/white_noise/$fileName',
+          target,
         ]);
         expect(result.exitCode, 0, reason: '$id ffprobe 失败: ${result.stderr}');
         final lines = result.stdout
@@ -430,23 +439,37 @@ void main() {
         final bitRate = int.parse(lines[1]);
         expect(duration, closeTo(expectedDuration, 0.01), reason: '$id 时长异常');
         expect(bitRate, expectedBitRate, reason: '$id 码率异常');
+        completedTargets.add(target);
       }
+      _printAudioToolWitness(
+        caseName: '白噪音 manifest 记录的编码规格与真实文件一致',
+        phase: 'completed',
+        targets: completedTargets,
+        toolPath: ffprobe,
+      );
     });
 
     test('音轨可解码且存在可听信号', () {
-      if (Platform.environment['DUOYI_SKIP_FFMPEG_TESTS'] == '1') {
-        return;
-      }
-      final ffmpeg = _findExecutable('ffmpeg');
+      final ffmpeg = _audioToolForTest('ffmpeg');
       if (ffmpeg == null) {
         return;
       }
 
+      final targets = tracks
+          .map((id) => 'assets/sounds/white_noise/$id.mp3')
+          .toList(growable: false);
+      final completedTargets = <String>[];
+      _printAudioToolWitness(
+        caseName: '音轨可解码且存在可听信号',
+        phase: 'entered',
+        targets: targets,
+        toolPath: ffmpeg,
+      );
       final features = <String, _AudioFeature>{};
       for (final id in tracks) {
-        features[id] = _readAudioFeature(
-          File('assets/sounds/white_noise/$id.mp3'),
-        );
+        final file = File('assets/sounds/white_noise/$id.mp3');
+        features[id] = _readAudioFeature(file, ffmpeg);
+        completedTargets.add(file.path);
       }
 
       for (final entry in features.entries) {
@@ -488,6 +511,12 @@ void main() {
         greaterThan(0.15),
         reason: '白噪音动态差异过小，可能又回退成平直噪声底',
       );
+      _printAudioToolWitness(
+        caseName: '音轨可解码且存在可听信号',
+        phase: 'completed',
+        targets: completedTargets,
+        toolPath: ffmpeg,
+      );
     });
 
     test('Android 通知提示音存在且不是静音占位文件', () {
@@ -497,7 +526,7 @@ void main() {
         'duoyi_bell.wav',
         'duoyi_beep.wav',
         'duoyi_classic.wav',
-      ].map((name) => File('android/app/src/main/res/raw/$name'));
+      ].map((name) => File('android/app/src/main/res/raw/$name')).toList();
 
       for (final file in files) {
         expect(file.existsSync(), isTrue, reason: '${file.path} 不存在');
@@ -505,22 +534,80 @@ void main() {
         expect(file.lengthSync(), lessThan(256 * 1024));
       }
 
-      if (Platform.environment['DUOYI_SKIP_FFMPEG_TESTS'] == '1') {
-        return;
-      }
-      final ffmpeg = _findExecutable('ffmpeg');
+      final ffmpeg = _audioToolForTest('ffmpeg');
       if (ffmpeg == null) {
         return;
       }
+      final completedTargets = <String>[];
+      _printAudioToolWitness(
+        caseName: 'Android 通知提示音存在且不是静音占位文件',
+        phase: 'entered',
+        targets: files.map((file) => file.path).toList(growable: false),
+        toolPath: ffmpeg,
+      );
       for (final file in files) {
         expect(
-          _readMaxVolumeDb(file),
+          _readMaxVolumeDb(file, ffmpeg),
           greaterThan(-18),
           reason: '${file.path} 峰值过低，按 60% 提醒音量可能像静音',
         );
+        completedTargets.add(file.path);
       }
+      _printAudioToolWitness(
+        caseName: 'Android 通知提示音存在且不是静音占位文件',
+        phase: 'completed',
+        targets: completedTargets,
+        toolPath: ffmpeg,
+      );
     });
   });
+}
+
+String? _audioToolForTest(String executable) {
+  final environment = Platform.environment;
+  if (environment['DUOYI_AUDIO_TOOLS_REQUIRED'] != '1') {
+    if (environment['DUOYI_SKIP_FFMPEG_TESTS'] == '1') return null;
+    return _findExecutable(executable) == null ? null : executable;
+  }
+
+  expect(
+    environment['DUOYI_SKIP_FFMPEG_TESTS'],
+    isNot('1'),
+    reason: 'strict 音频验证不能设置 DUOYI_SKIP_FFMPEG_TESTS=1',
+  );
+  final variable = 'DUOYI_AUDIO_${executable.toUpperCase()}_PATH';
+  final path = environment[variable] ?? '';
+  expect(path, isNotEmpty, reason: 'strict 音频验证缺少 $variable');
+  final file = File(path);
+  expect(file.isAbsolute, isTrue, reason: '$variable 必须为绝对路径');
+  expect(file.existsSync(), isTrue, reason: '$variable 工具文件不存在: $path');
+  if (!Platform.isWindows) {
+    expect(
+      file.statSync().mode & 0x49,
+      greaterThan(0),
+      reason: '$variable 工具文件缺少执行权限: $path',
+    );
+  }
+  return path;
+}
+
+void _printAudioToolWitness({
+  required String caseName,
+  required String phase,
+  required List<String> targets,
+  required String toolPath,
+}) {
+  if (Platform.environment['DUOYI_AUDIO_TOOLS_REQUIRED'] != '1') return;
+  final payload = jsonEncode({
+    'runMarker': Platform.environment['DUOYI_RESOURCE_GUARD_RUN_ID'] ?? '',
+    'caseName': caseName,
+    'phase': phase,
+    'targets': targets,
+    'toolPath': toolPath,
+  });
+  // Intentional strict audio witness consumed from the test reporter.
+  // ignore: avoid_print
+  print('DUOYI_AUDIO_TOOL_WITNESS $payload');
 }
 
 String? _findExecutable(String executable) {
@@ -552,11 +639,11 @@ List<Map<String, dynamic>> _manifestTracks(Map<String, dynamic> manifest) {
       .toList(growable: false);
 }
 
-_AudioFeature _readAudioFeature(File mp3) {
+_AudioFeature _readAudioFeature(File mp3, String ffmpeg) {
   final temp = File(
     '${Directory.systemTemp.path}/duoyi_audio_${mp3.uri.pathSegments.last}.raw',
   );
-  final result = Process.runSync('ffmpeg', [
+  final result = Process.runSync(ffmpeg, [
     '-hide_banner',
     '-loglevel',
     'error',
@@ -643,8 +730,8 @@ class _AudioFeature {
   });
 }
 
-double _readMaxVolumeDb(File wav) {
-  final result = Process.runSync('ffmpeg', [
+double _readMaxVolumeDb(File wav, String ffmpeg) {
+  final result = Process.runSync(ffmpeg, [
     '-hide_banner',
     '-i',
     wav.path,

@@ -665,7 +665,7 @@ abstract class AppLocalizations {
   /// No description provided for @preferencesShowCompletedSubtitle.
   ///
   /// In zh, this message translates to:
-  /// **'关闭后只看未完成和进行中的事项'**
+  /// **'默认列表显示已完成事项；关闭后仍可通过“已完成”或“包含归档”查看'**
   String get preferencesShowCompletedSubtitle;
 
   /// No description provided for @preferencesPomodoroLengthTitle.
@@ -673,6 +673,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'默认番茄钟长度'**
   String get preferencesPomodoroLengthTitle;
+
+  /// No description provided for @preferencesPomodoroLengthSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择“默认”时生效，当前计时保持不变'**
+  String get preferencesPomodoroLengthSubtitle;
 
   /// No description provided for @preferencesSectionBottomNav.
   ///
@@ -836,6 +842,36 @@ abstract class AppLocalizations {
   /// **'内置提醒铃声'**
   String get preferencesRingtoneSection;
 
+  /// No description provided for @preferencesReportReminderDailyTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'每日复盘推送时间'**
+  String get preferencesReportReminderDailyTime;
+
+  /// No description provided for @preferencesReportReminderWeeklyTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'周报推送时间'**
+  String get preferencesReportReminderWeeklyTime;
+
+  /// No description provided for @preferencesReportReminderMonthlyTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'月报推送时间'**
+  String get preferencesReportReminderMonthlyTime;
+
+  /// No description provided for @preferencesReportReminderYearlyTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'年报推送时间'**
+  String get preferencesReportReminderYearlyTime;
+
+  /// No description provided for @preferencesReportReminderTimeSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'修改后会重排下一次报告通知'**
+  String get preferencesReportReminderTimeSubtitle;
+
   /// No description provided for @preferencesRingtoneSectionSubtitle.
   ///
   /// In zh, this message translates to:
@@ -955,6 +991,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'时间'**
   String get preferencesDailyReminderTimeSuffix;
+
+  /// No description provided for @preferencesDailyReminder1Time.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒一时间'**
+  String get preferencesDailyReminder1Time;
+
+  /// No description provided for @preferencesDailyReminder2Time.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒二时间'**
+  String get preferencesDailyReminder2Time;
+
+  /// No description provided for @preferencesDailyReminder3Time.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒三时间'**
+  String get preferencesDailyReminder3Time;
 
   /// No description provided for @preferencesDailyReminderTimePickerSubtitle.
   ///
@@ -2600,6 +2654,12 @@ abstract class AppLocalizations {
   /// **'恢复'**
   String get noteRestore;
 
+  /// No description provided for @noteActionFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'操作失败，内容未变更，请重试'**
+  String get noteActionFailed;
+
   /// No description provided for @noteLinkPlaceholder.
   ///
   /// In zh, this message translates to:
@@ -3842,11 +3902,29 @@ abstract class AppLocalizations {
   /// **' 篇记录'**
   String get diaryRecentRecordsSuffix;
 
+  /// No description provided for @diaryRecentRecordsSuffixSingular.
+  ///
+  /// In zh, this message translates to:
+  /// **' 篇记录'**
+  String get diaryRecentRecordsSuffixSingular;
+
   /// No description provided for @diaryEntryCountSuffix.
   ///
   /// In zh, this message translates to:
   /// **' 篇'**
   String get diaryEntryCountSuffix;
+
+  /// No description provided for @diaryEntryCountSuffixSingular.
+  ///
+  /// In zh, this message translates to:
+  /// **' 篇'**
+  String get diaryEntryCountSuffixSingular;
+
+  /// No description provided for @diaryStreakDaySingular.
+  ///
+  /// In zh, this message translates to:
+  /// **'天'**
+  String get diaryStreakDaySingular;
 
   /// No description provided for @diaryMoodStatsTitle.
   ///
@@ -5624,6 +5702,12 @@ abstract class AppLocalizations {
   /// **'日'**
   String get habitWeekday7;
 
+  /// No description provided for @habitGroupUngrouped.
+  ///
+  /// In zh, this message translates to:
+  /// **'未分组'**
+  String get habitGroupUngrouped;
+
   /// No description provided for @habitGroupTodaySuffix.
   ///
   /// In zh, this message translates to:
@@ -6260,11 +6344,77 @@ abstract class AppLocalizations {
   /// **'开始时间'**
   String get calendarContentTimePickerStartTime;
 
+  /// No description provided for @calendarPickerStartDate.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始日期'**
+  String get calendarPickerStartDate;
+
+  /// No description provided for @calendarPickerEndDate.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束日期'**
+  String get calendarPickerEndDate;
+
+  /// No description provided for @calendarPickerStartTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始时间'**
+  String get calendarPickerStartTime;
+
+  /// No description provided for @calendarPickerEndTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束时间'**
+  String get calendarPickerEndTime;
+
+  /// No description provided for @calendarPickerRescheduleDate.
+  ///
+  /// In zh, this message translates to:
+  /// **'调整日期'**
+  String get calendarPickerRescheduleDate;
+
+  /// No description provided for @calendarPickerAdjustStartTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'调整开始时间'**
+  String get calendarPickerAdjustStartTime;
+
+  /// No description provided for @calendarPickerAdjustStartTimeSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'保留当前日期和时长，自动更新结束时间'**
+  String get calendarPickerAdjustStartTimeSubtitle;
+
+  /// No description provided for @calendarPickerAdjustDueTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'调整时间'**
+  String get calendarPickerAdjustDueTime;
+
+  /// No description provided for @calendarPickerAdjustDueTimeSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'保留当前日期，只调整当天截止时间'**
+  String get calendarPickerAdjustDueTimeSubtitle;
+
   /// No description provided for @pickerActionToday.
   ///
   /// In zh, this message translates to:
   /// **'今天'**
   String get pickerActionToday;
+
+  /// No description provided for @pickerEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无可选项'**
+  String get pickerEmpty;
+
+  /// No description provided for @pickerNotSet.
+  ///
+  /// In zh, this message translates to:
+  /// **'未设置'**
+  String get pickerNotSet;
 
   /// No description provided for @pickerDateIgnoreYear.
   ///
@@ -6415,6 +6565,2283 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'查看习惯'**
   String get widgetHabitView;
+
+  /// No description provided for @aiScheduleScreenTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 创建日程'**
+  String get aiScheduleScreenTitle;
+
+  /// No description provided for @aiScheduleAiDisabledTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 未启用'**
+  String get aiScheduleAiDisabledTitle;
+
+  /// No description provided for @aiScheduleAiDisabledMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'将使用本地时间解析生成草稿，仍可确认创建日程或待办。'**
+  String get aiScheduleAiDisabledMessage;
+
+  /// No description provided for @aiScheduleInputTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入安排'**
+  String get aiScheduleInputTitle;
+
+  /// No description provided for @aiScheduleInputSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：明天下午 3 点和产品开会，提前提醒我'**
+  String get aiScheduleInputSubtitle;
+
+  /// No description provided for @aiScheduleInputHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入自然语言安排、待办或提醒'**
+  String get aiScheduleInputHint;
+
+  /// No description provided for @aiScheduleEmptyInput.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入要创建的日程或待办内容'**
+  String get aiScheduleEmptyInput;
+
+  /// No description provided for @aiScheduleRecognize.
+  ///
+  /// In zh, this message translates to:
+  /// **'识别并生成确认信息'**
+  String get aiScheduleRecognize;
+
+  /// No description provided for @aiScheduleRecognizing.
+  ///
+  /// In zh, this message translates to:
+  /// **'识别中'**
+  String get aiScheduleRecognizing;
+
+  /// No description provided for @aiScheduleErrorTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 创建失败'**
+  String get aiScheduleErrorTitle;
+
+  /// No description provided for @aiScheduleDraftTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'已生成确认草稿'**
+  String get aiScheduleDraftTitle;
+
+  /// No description provided for @aiScheduleDraftAiMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'请核对类型、标题、时间和提醒设置。'**
+  String get aiScheduleDraftAiMessage;
+
+  /// No description provided for @aiScheduleDraftFallbackMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前不是完整 AI 识别结果，请确认本地兜底草稿无误后再写入。'**
+  String get aiScheduleDraftFallbackMessage;
+
+  /// No description provided for @aiScheduleWarningAiIncomplete.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 识别结果不完整'**
+  String get aiScheduleWarningAiIncomplete;
+
+  /// No description provided for @aiScheduleWarningLocalFallback.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 识别未完成'**
+  String get aiScheduleWarningLocalFallback;
+
+  /// No description provided for @aiScheduleWarningAppendix.
+  ///
+  /// In zh, this message translates to:
+  /// **'请核对下方本地草稿后再确认创建。'**
+  String get aiScheduleWarningAppendix;
+
+  /// No description provided for @aiScheduleConfirmCardTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认创建内容'**
+  String get aiScheduleConfirmCardTitle;
+
+  /// No description provided for @aiScheduleTypeLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'类型'**
+  String get aiScheduleTypeLabel;
+
+  /// No description provided for @aiScheduleTitleLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'标题'**
+  String get aiScheduleTitleLabel;
+
+  /// No description provided for @aiScheduleStartLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始'**
+  String get aiScheduleStartLabel;
+
+  /// No description provided for @aiScheduleEndLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束'**
+  String get aiScheduleEndLabel;
+
+  /// No description provided for @aiScheduleReminderLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒'**
+  String get aiScheduleReminderLabel;
+
+  /// No description provided for @aiScheduleNotesLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'备注'**
+  String get aiScheduleNotesLabel;
+
+  /// No description provided for @aiScheduleSubtasksLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'子任务'**
+  String get aiScheduleSubtasksLabel;
+
+  /// No description provided for @aiScheduleCalendarType.
+  ///
+  /// In zh, this message translates to:
+  /// **'日程'**
+  String get aiScheduleCalendarType;
+
+  /// No description provided for @aiScheduleTodoType.
+  ///
+  /// In zh, this message translates to:
+  /// **'待办'**
+  String get aiScheduleTodoType;
+
+  /// No description provided for @aiScheduleReminderEnabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'已开启系统推送提醒'**
+  String get aiScheduleReminderEnabled;
+
+  /// No description provided for @aiScheduleReminderDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'未设置提醒'**
+  String get aiScheduleReminderDisabled;
+
+  /// No description provided for @aiScheduleSaving.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存中'**
+  String get aiScheduleSaving;
+
+  /// No description provided for @aiScheduleCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认创建'**
+  String get aiScheduleCreate;
+
+  /// No description provided for @aiScheduleDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'完成'**
+  String get aiScheduleDone;
+
+  /// No description provided for @aiScheduleViewDetails.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看详情'**
+  String get aiScheduleViewDetails;
+
+  /// No description provided for @aiScheduleCreatedEvent.
+  ///
+  /// In zh, this message translates to:
+  /// **'日程已创建'**
+  String get aiScheduleCreatedEvent;
+
+  /// No description provided for @aiScheduleCreatedTask.
+  ///
+  /// In zh, this message translates to:
+  /// **'待办已创建'**
+  String get aiScheduleCreatedTask;
+
+  /// No description provided for @aiScheduleCreatedEventWithReminderIssue.
+  ///
+  /// In zh, this message translates to:
+  /// **'日程已创建，但提醒未注册'**
+  String get aiScheduleCreatedEventWithReminderIssue;
+
+  /// No description provided for @aiScheduleCreatedTaskWithReminderIssue.
+  ///
+  /// In zh, this message translates to:
+  /// **'待办已创建，但提醒未注册'**
+  String get aiScheduleCreatedTaskWithReminderIssue;
+
+  /// Created item summary
+  ///
+  /// In zh, this message translates to:
+  /// **'{typeLabel}：{title}'**
+  String aiScheduleCreatedItemSummary(String typeLabel, String title);
+
+  /// Start summary for calendar event
+  ///
+  /// In zh, this message translates to:
+  /// **'开始时间：{value}'**
+  String aiScheduleStartSummaryCalendar(String value);
+
+  /// Start summary for todo task
+  ///
+  /// In zh, this message translates to:
+  /// **'计划时间：{value}'**
+  String aiScheduleStartSummaryTodo(String value);
+
+  /// No description provided for @aiScheduleLocalSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存到本机'**
+  String get aiScheduleLocalSaved;
+
+  /// No description provided for @aiScheduleLocalSavedCalendar.
+  ///
+  /// In zh, this message translates to:
+  /// **'日程已保存到本机'**
+  String get aiScheduleLocalSavedCalendar;
+
+  /// No description provided for @aiScheduleLocalSavedTodo.
+  ///
+  /// In zh, this message translates to:
+  /// **'待办已保存到本机'**
+  String get aiScheduleLocalSavedTodo;
+
+  /// No description provided for @aiScheduleReminderRegistered.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒已注册到系统通知'**
+  String get aiScheduleReminderRegistered;
+
+  /// No description provided for @aiScheduleTaskReminderSubmitted.
+  ///
+  /// In zh, this message translates to:
+  /// **'待办提醒已提交系统注册'**
+  String get aiScheduleTaskReminderSubmitted;
+
+  /// No description provided for @aiScheduleGenericReminderIssue.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒未注册'**
+  String get aiScheduleGenericReminderIssue;
+
+  /// No description provided for @aiScheduleAccountChanged.
+  ///
+  /// In zh, this message translates to:
+  /// **'账号已切换，请重新打开页面后再操作。'**
+  String get aiScheduleAccountChanged;
+
+  /// No description provided for @aiScheduleInputChanged.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入内容已变更，请重新识别后再创建。'**
+  String get aiScheduleInputChanged;
+
+  /// No description provided for @aiScheduleGenericSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存失败，请重试。'**
+  String get aiScheduleGenericSaveFailed;
+
+  /// No description provided for @aiScheduleAlarmPermissionRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 待办提醒注册失败：系统通知权限未开启，闹钟提醒未注册。请开启通知权限后重新保存提醒。'**
+  String get aiScheduleAlarmPermissionRequired;
+
+  /// No description provided for @aiScheduleEventReminderIssueTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 日程提醒注册失败'**
+  String get aiScheduleEventReminderIssueTitle;
+
+  /// No description provided for @aiScheduleTaskReminderIssueTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 待办提醒注册失败'**
+  String get aiScheduleTaskReminderIssueTitle;
+
+  /// No description provided for @aiScheduleCalendarSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 创建'**
+  String get aiScheduleCalendarSubtitle;
+
+  /// No description provided for @aiScheduleCalendarSubtitleAllDay.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 创建 · 全天'**
+  String get aiScheduleCalendarSubtitleAllDay;
+
+  /// No description provided for @aiScheduleCalendarReminderTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'日程提醒'**
+  String get aiScheduleCalendarReminderTitle;
+
+  /// No description provided for @aiScheduleSourceAi.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 已识别输入内容，请确认无误后创建'**
+  String get aiScheduleSourceAi;
+
+  /// No description provided for @aiScheduleSourceAiWithLocalFallback.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 返回不完整，已用本地解析补全'**
+  String get aiScheduleSourceAiWithLocalFallback;
+
+  /// No description provided for @aiScheduleSourceLocalParser.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前使用本地解析结果，请确认时间和类型'**
+  String get aiScheduleSourceLocalParser;
+
+  /// No description provided for @aiScheduleWarningReminderNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒提示'**
+  String get aiScheduleWarningReminderNotice;
+
+  /// No description provided for @aiScheduleWarningNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'提示'**
+  String get aiScheduleWarningNotice;
+
+  /// No description provided for @aiScheduleWarningUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 服务暂不可用，已准备本地兜底草稿。'**
+  String get aiScheduleWarningUnavailable;
+
+  /// No description provided for @aiScheduleWarningNoUsableDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 未返回可用草稿，已准备本地兜底草稿。'**
+  String get aiScheduleWarningNoUsableDraft;
+
+  /// No description provided for @aiScheduleWarningInvalidResponse.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 返回内容无法读取，已准备本地兜底草稿。'**
+  String get aiScheduleWarningInvalidResponse;
+
+  /// No description provided for @aiScheduleWarningMissingReminderTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'未识别到具体提醒时间，提醒已关闭。'**
+  String get aiScheduleWarningMissingReminderTime;
+
+  /// No description provided for @aiScheduleWarningReviewDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'请核对草稿内容后再确认创建。'**
+  String get aiScheduleWarningReviewDraft;
+
+  /// No description provided for @aiScheduleWarningGenericFallback.
+  ///
+  /// In zh, this message translates to:
+  /// **'已准备本地草稿供你核对。'**
+  String get aiScheduleWarningGenericFallback;
+
+  /// No description provided for @aiScheduleErrorNotEnabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 功能未启用，请联系管理员。'**
+  String get aiScheduleErrorNotEnabled;
+
+  /// No description provided for @aiScheduleErrorQuotaExceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日 AI 额度已用尽，请明日再试。'**
+  String get aiScheduleErrorQuotaExceeded;
+
+  /// No description provided for @aiScheduleErrorRateLimit.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求过于频繁，请稍候重试。'**
+  String get aiScheduleErrorRateLimit;
+
+  /// No description provided for @aiScheduleErrorTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 服务响应超时，请稍后重试。'**
+  String get aiScheduleErrorTimeout;
+
+  /// No description provided for @aiScheduleErrorGeneric.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建草稿失败，请重试。'**
+  String get aiScheduleErrorGeneric;
+
+  /// No description provided for @widgetHostSupportIosTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'从主屏幕添加小组件'**
+  String get widgetHostSupportIosTitle;
+
+  /// No description provided for @widgetHostSupportWebTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'网页版小组件预览'**
+  String get widgetHostSupportWebTitle;
+
+  /// No description provided for @widgetHostSupportMobileTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'手机端小组件预览'**
+  String get widgetHostSupportMobileTitle;
+
+  /// No description provided for @widgetHostSupportIosMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'在主屏幕长按空白处，打开小组件图库，搜索“多仪”并添加。'**
+  String get widgetHostSupportIosMessage;
+
+  /// No description provided for @widgetHostSupportMobileMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'这里可以查看小组件样式；添加到主屏幕需使用 Android 或 iOS 版多仪。'**
+  String get widgetHostSupportMobileMessage;
+
+  /// No description provided for @widgetHostAddIosAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看添加步骤'**
+  String get widgetHostAddIosAction;
+
+  /// No description provided for @widgetHostAddMobileAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'手机端使用方式'**
+  String get widgetHostAddMobileAction;
+
+  /// No description provided for @widgetHostHelpMobileTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'在手机端使用小组件'**
+  String get widgetHostHelpMobileTitle;
+
+  /// No description provided for @widgetAddDialogTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加到桌面'**
+  String get widgetAddDialogTitle;
+
+  /// No description provided for @widgetHostHelpIosMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'长按主屏幕空白处，点击“编辑”或“+”，进入小组件图库。搜索“多仪”，选择尺寸后点击“添加小组件”。系统提供小、中、大尺寸；支持的 iPad 还可选择超大尺寸。实际尺寸以系统图库为准。\n\niPhone（iOS 16 及以上）或 iPad（iPadOS 17 及以上）：长按锁定屏幕，点“自定”，再点小组件区域并选择多仪。'**
+  String get widgetHostHelpIosMessage;
+
+  /// No description provided for @widgetHostHelpMobileMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'本页展示小组件样式预览。要在手机主屏幕使用，请安装并打开 Android 或 iOS 版多仪。Android 可从 App 内添加，或长按主屏幕空白处选择小组件；iOS 请从主屏幕的小组件图库搜索“多仪”并添加。'**
+  String get widgetHostHelpMobileMessage;
+
+  /// No description provided for @widgetHostTipsIosMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'实际尺寸在系统小组件图库中选择。小组件显示最近同步的内容；若内容较旧，打开多仪后刷新。'**
+  String get widgetHostTipsIosMessage;
+
+  /// No description provided for @widgetHostTipsPreviewMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'这里的预览不等同于已添加的桌面小组件。实际添加与使用需在 Android 或 iOS 手机端完成。'**
+  String get widgetHostTipsPreviewMessage;
+
+  /// No description provided for @widgetTipsBannerMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'紧凑版和详细版为固定尺寸；标准版在桌面支持时可长按调整大小。要更换尺寸版本，请移除后重新添加。添加时需在系统弹窗中确认；若未出现弹窗，请检查多仪的桌面小组件权限。'**
+  String get widgetTipsBannerMessage;
+
+  /// No description provided for @widgetHostStyleCompactDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'紧凑样式，突出核心信息。'**
+  String get widgetHostStyleCompactDescription;
+
+  /// No description provided for @widgetHostStyleDetailedDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'详细样式，展示更多内容。'**
+  String get widgetHostStyleDetailedDescription;
+
+  /// No description provided for @widgetHostStyleStandardDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'标准样式，平衡信息与留白。'**
+  String get widgetHostStyleStandardDescription;
+
+  /// hostStyleDescription / ios 外层
+  ///
+  /// In zh, this message translates to:
+  /// **'{description} 实际尺寸在系统图库中选择。'**
+  String widgetHostStyleDescriptionIos(String description);
+
+  /// styleSyncSuccess / —; hostStyleSyncSuccess / ios；android委托styleSyncSuccess
+  ///
+  /// In zh, this message translates to:
+  /// **'小组件样式已设为{modeLabel}。'**
+  String widgetStyleSyncSuccess(String modeLabel);
+
+  /// hostStyleSyncSuccess / web/desktop
+  ///
+  /// In zh, this message translates to:
+  /// **'预览样式已设为{modeLabel}。'**
+  String widgetPreviewStyleSyncSuccess(String modeLabel);
+
+  /// No description provided for @widgetRefreshTooltip.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新小组件'**
+  String get widgetRefreshTooltip;
+
+  /// No description provided for @widgetPreviewHeaderTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面小组件预览'**
+  String get widgetPreviewHeaderTitle;
+
+  /// No description provided for @widgetStylePanelTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'小组件样式'**
+  String get widgetStylePanelTitle;
+
+  /// No description provided for @widgetCategoryAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部'**
+  String get widgetCategoryAll;
+
+  /// No description provided for @widgetCategoryProductivity.
+  ///
+  /// In zh, this message translates to:
+  /// **'效率'**
+  String get widgetCategoryProductivity;
+
+  /// No description provided for @widgetCategoryLife.
+  ///
+  /// In zh, this message translates to:
+  /// **'生活'**
+  String get widgetCategoryLife;
+
+  /// No description provided for @widgetCatalogTodoTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日待办'**
+  String get widgetCatalogTodoTitle;
+
+  /// No description provided for @widgetCatalogCalendarTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'月历'**
+  String get widgetCatalogCalendarTitle;
+
+  /// No description provided for @widgetCatalogScheduleTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日日程'**
+  String get widgetCatalogScheduleTitle;
+
+  /// No description provided for @widgetCatalogGoalTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'目标'**
+  String get widgetCatalogGoalTitle;
+
+  /// No description provided for @widgetCatalogNoteTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'随手记'**
+  String get widgetCatalogNoteTitle;
+
+  /// No description provided for @widgetCatalogAnniversaryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'纪念日'**
+  String get widgetCatalogAnniversaryTitle;
+
+  /// No description provided for @widgetCatalogTodoSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面查看与完成待办，支持快速记一笔'**
+  String get widgetCatalogTodoSubtitle;
+
+  /// No description provided for @widgetCatalogFocusSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'展示今日专注次数、时长与下一轮计划'**
+  String get widgetCatalogFocusSubtitle;
+
+  /// No description provided for @widgetCatalogHabitSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看今日完成率、连续记录与快捷打卡'**
+  String get widgetCatalogHabitSubtitle;
+
+  /// No description provided for @widgetCatalogCalendarSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'月视图概览与今日标记'**
+  String get widgetCatalogCalendarSubtitle;
+
+  /// No description provided for @widgetCatalogScheduleSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看今日按时间排序的日程安排'**
+  String get widgetCatalogScheduleSubtitle;
+
+  /// No description provided for @widgetCatalogGoalSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'展示当前目标与推进进度'**
+  String get widgetCatalogGoalSubtitle;
+
+  /// No description provided for @widgetCatalogCourseSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'展示今日课程节次、教室与时间'**
+  String get widgetCatalogCourseSubtitle;
+
+  /// No description provided for @widgetCatalogNoteSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看最近更新的便签与随手记'**
+  String get widgetCatalogNoteSubtitle;
+
+  /// No description provided for @widgetCatalogAnniversarySubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒数重要日子与累计天数'**
+  String get widgetCatalogAnniversarySubtitle;
+
+  /// No description provided for @widgetCatalogDiarySubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'回顾最近记录的心情与日记摘要'**
+  String get widgetCatalogDiarySubtitle;
+
+  /// No description provided for @widgetDisplayModeCompactLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'紧凑'**
+  String get widgetDisplayModeCompactLabel;
+
+  /// No description provided for @widgetDisplayModeDetailedLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'详细'**
+  String get widgetDisplayModeDetailedLabel;
+
+  /// No description provided for @widgetDisplayModeStandardLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'标准'**
+  String get widgetDisplayModeStandardLabel;
+
+  /// No description provided for @widgetDisplayModeCompactDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'紧凑版，固定尺寸，突出核心信息'**
+  String get widgetDisplayModeCompactDescription;
+
+  /// No description provided for @widgetDisplayModeDetailedDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'详细版，固定尺寸，内容随可用空间调整'**
+  String get widgetDisplayModeDetailedDescription;
+
+  /// No description provided for @widgetDisplayModeStandardDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'标准版，内容随可用空间调整；桌面支持时可长按调整大小'**
+  String get widgetDisplayModeStandardDescription;
+
+  /// No description provided for @widgetStyleSyncFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面小组件样式同步失败，请重试'**
+  String get widgetStyleSyncFailed;
+
+  /// No description provided for @widgetCannotOpenSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法打开应用设置，请手动进入系统设置检查多仪权限'**
+  String get widgetCannotOpenSettings;
+
+  /// No description provided for @widgetRefreshSuccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'小组件已刷新'**
+  String get widgetRefreshSuccess;
+
+  /// No description provided for @widgetRefreshFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新失败，请稍后重试'**
+  String get widgetRefreshFailed;
+
+  /// No description provided for @widgetPinSupportCheckingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在检查桌面小组件支持'**
+  String get widgetPinSupportCheckingTitle;
+
+  /// No description provided for @widgetPinSupportCheckingMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在检测当前桌面是否支持直接添加小组件。'**
+  String get widgetPinSupportCheckingMessage;
+
+  /// No description provided for @widgetPinSupportSupportedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前桌面支持应用内添加'**
+  String get widgetPinSupportSupportedTitle;
+
+  /// No description provided for @widgetPinSupportSupportedMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'可从 App 添加到桌面，请在系统弹窗中确认。'**
+  String get widgetPinSupportSupportedMessage;
+
+  /// No description provided for @widgetPinSupportUnsupportedPlatformTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前平台不支持应用内添加'**
+  String get widgetPinSupportUnsupportedPlatformTitle;
+
+  /// No description provided for @widgetPinSupportUnsupportedLauncherTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前桌面不支持应用内添加'**
+  String get widgetPinSupportUnsupportedLauncherTitle;
+
+  /// No description provided for @widgetPinSupportPermissionDeniedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面添加权限未通过'**
+  String get widgetPinSupportPermissionDeniedTitle;
+
+  /// No description provided for @widgetPinSupportConfirmationBlockedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面确认弹窗可能被拦截'**
+  String get widgetPinSupportConfirmationBlockedTitle;
+
+  /// No description provided for @widgetPinSupportInvalidKindTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前小组件类型不可添加'**
+  String get widgetPinSupportInvalidKindTitle;
+
+  /// No description provided for @widgetPinSupportFallbackTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前桌面可能不支持应用内添加'**
+  String get widgetPinSupportFallbackTitle;
+
+  /// No description provided for @widgetPinSupportUnsupportedPlatformMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'请在 Android 手机上通过系统小组件列表添加多仪。'**
+  String get widgetPinSupportUnsupportedPlatformMessage;
+
+  /// No description provided for @widgetPinSupportUnsupportedLauncherMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前桌面启动器未开放应用内添加，请从系统小组件列表选择添加。'**
+  String get widgetPinSupportUnsupportedLauncherMessage;
+
+  /// No description provided for @widgetPinSupportPermissionDeniedMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统未允许多仪添加桌面小组件，请在系统设置中开启权限后重试。'**
+  String get widgetPinSupportPermissionDeniedMessage;
+
+  /// No description provided for @widgetPinSupportConfirmationBlockedMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。'**
+  String get widgetPinSupportConfirmationBlockedMessage;
+
+  /// No description provided for @widgetPinSupportInvalidKindMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'请更新应用后重试。'**
+  String get widgetPinSupportInvalidKindMessage;
+
+  /// No description provided for @widgetPinSupportFallbackMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'若未弹出确认框，请打开系统设置检查桌面小组件与后台弹窗权限，或从系统小组件列表添加。'**
+  String get widgetPinSupportFallbackMessage;
+
+  /// No description provided for @widgetActionAppSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用设置'**
+  String get widgetActionAppSettings;
+
+  /// No description provided for @widgetActionRecheck.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新检测'**
+  String get widgetActionRecheck;
+
+  /// No description provided for @widgetActionOpenPermissions.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开权限设置'**
+  String get widgetActionOpenPermissions;
+
+  /// No description provided for @widgetActionGotIt.
+  ///
+  /// In zh, this message translates to:
+  /// **'知道了'**
+  String get widgetActionGotIt;
+
+  /// No description provided for @widgetPinHelpUnsupportedMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前桌面不支持应用内直接添加小组件。请长按桌面空白处，从系统小组件列表添加。'**
+  String get widgetPinHelpUnsupportedMessage;
+
+  /// No description provided for @widgetPinHelpUnsupportedPlatformMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前平台不支持直接添加 Android 桌面小组件。请在 Android 手机上从系统小组件列表添加多仪。'**
+  String get widgetPinHelpUnsupportedPlatformMessage;
+
+  /// No description provided for @widgetPinHelpUnsupportedLauncherMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前桌面启动器未开放应用内添加，请长按桌面空白处从系统小组件列表添加。'**
+  String get widgetPinHelpUnsupportedLauncherMessage;
+
+  /// No description provided for @widgetPinHelpPermissionDeniedMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统未允许多仪添加桌面小组件。请在系统设置中开启权限后重试，或从系统小组件列表添加。'**
+  String get widgetPinHelpPermissionDeniedMessage;
+
+  /// No description provided for @widgetPinHelpConfirmationBlockedMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。'**
+  String get widgetPinHelpConfirmationBlockedMessage;
+
+  /// No description provided for @widgetPinHelpInvalidKindMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前小组件类型暂不支持添加，请更新应用后重试。'**
+  String get widgetPinHelpInvalidKindMessage;
+
+  /// No description provided for @widgetPinHelpUnavailableMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法发起添加请求，请检查桌面权限后重试，或从系统小组件列表添加。'**
+  String get widgetPinHelpUnavailableMessage;
+
+  /// No description provided for @widgetPinHelpRequestedMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发起添加请求，请在桌面系统弹窗中确认。'**
+  String get widgetPinHelpRequestedMessage;
+
+  /// No description provided for @widgetPinConfirmationInvalidWidgetIdTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加未完成'**
+  String get widgetPinConfirmationInvalidWidgetIdTitle;
+
+  /// No description provided for @widgetPinConfirmationInvalidWidgetIdMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面未成功创建小组件，请重试或从系统小组件列表添加。'**
+  String get widgetPinConfirmationInvalidWidgetIdMessage;
+
+  /// No description provided for @widgetPinConfirmationTimeoutTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待桌面确认'**
+  String get widgetPinConfirmationTimeoutTitle;
+
+  /// No description provided for @widgetPinConfirmationTimeoutMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发起添加请求，但尚未收到系统确认。请查看桌面是否有确认弹窗，或在系统设置中检查权限。'**
+  String get widgetPinConfirmationTimeoutMessage;
+
+  /// No description provided for @widgetPinConfirmationUnavailableTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加异常'**
+  String get widgetPinConfirmationUnavailableTitle;
+
+  /// No description provided for @widgetPinConfirmationUnavailableMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面未返回添加结果。请重试或从系统小组件列表添加。'**
+  String get widgetPinConfirmationUnavailableMessage;
+
+  /// No description provided for @widgetPinConfirmationSuccessTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'已添加'**
+  String get widgetPinConfirmationSuccessTitle;
+
+  /// No description provided for @widgetPinConfirmationSuccessMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面小组件已添加。'**
+  String get widgetPinConfirmationSuccessMessage;
+
+  /// No description provided for @widgetCheckingDesktopSupport.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在检查桌面支持'**
+  String get widgetCheckingDesktopSupport;
+
+  /// No description provided for @widgetPinDisabledAndroidOnly.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅 Android 支持应用内添加'**
+  String get widgetPinDisabledAndroidOnly;
+
+  /// No description provided for @widgetPinDisabledPicker.
+  ///
+  /// In zh, this message translates to:
+  /// **'请从系统小组件列表添加'**
+  String get widgetPinDisabledPicker;
+
+  /// No description provided for @widgetPinDisabledHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看添加帮助'**
+  String get widgetPinDisabledHelp;
+
+  /// No description provided for @widgetLoadingStyle.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在读取样式'**
+  String get widgetLoadingStyle;
+
+  /// No description provided for @widgetStyleLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'样式读取失败，请重试或重新选择'**
+  String get widgetStyleLoadFailed;
+
+  /// No description provided for @widgetStyleSyncPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存所选样式，桌面小组件尚未确认同步。请重试或刷新。'**
+  String get widgetStyleSyncPending;
+
+  /// No description provided for @widgetUpdatingStyle.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在更新样式'**
+  String get widgetUpdatingStyle;
+
+  /// No description provided for @widgetRequestingAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在请求添加'**
+  String get widgetRequestingAdd;
+
+  /// addWidgetButtonLabel / —
+  ///
+  /// In zh, this message translates to:
+  /// **'添加{modeLabel} {launcherRequestLabel}'**
+  String widgetAddWidgetButtonLabel(
+    String modeLabel,
+    String launcherRequestLabel,
+  );
+
+  /// pinInitiatedSnackBar / —
+  ///
+  /// In zh, this message translates to:
+  /// **'已发起添加，请在系统弹窗中确认添加{modeLabel}小组件。'**
+  String widgetPinInitiatedSnackBar(String modeLabel);
+
+  /// pinSuccessSnackBar / —
+  ///
+  /// In zh, this message translates to:
+  /// **'已添加{modeLabel}小组件到桌面。'**
+  String widgetPinSuccessSnackBar(String modeLabel);
+
+  /// No description provided for @widgetTipsBannerTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面小组件使用提示'**
+  String get widgetTipsBannerTitle;
+
+  /// No description provided for @widgetDesktopWebTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'电脑网页版显示日历'**
+  String get widgetDesktopWebTitle;
+
+  /// No description provided for @widgetDesktopWebMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面小组件依赖 Android 或 iOS 系统；电脑网页版默认隐藏小组件入口，保留月历预览和日历入口。'**
+  String get widgetDesktopWebMessage;
+
+  /// No description provided for @widgetDesktopWebTileSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'电脑网页版默认展示日历，不显示添加桌面小组件按钮'**
+  String get widgetDesktopWebTileSubtitle;
+
+  /// No description provided for @widgetDesktopWebOpenCalendar.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开日历'**
+  String get widgetDesktopWebOpenCalendar;
+
+  /// No description provided for @widgetPreviewTodoTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日待办'**
+  String get widgetPreviewTodoTitle;
+
+  /// No description provided for @widgetPreviewScheduleTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日日程'**
+  String get widgetPreviewScheduleTitle;
+
+  /// previewSampleBadge / —
+  ///
+  /// In zh, this message translates to:
+  /// **'示例 · {title}'**
+  String widgetPreviewSampleBadge(String title);
+
+  /// sampleHeaderDate / date ?? 2026-05-17
+  ///
+  /// In zh, this message translates to:
+  /// **'{cellLabel} · {monthLabel}/{day}'**
+  String widgetSampleHeaderDate(
+    String cellLabel,
+    String monthLabel,
+    String day,
+  );
+
+  /// No description provided for @widgetRefreshPreviewTooltip.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新预览'**
+  String get widgetRefreshPreviewTooltip;
+
+  /// calendarMonthHeader / 整数转为原始十进制字符串
+  ///
+  /// In zh, this message translates to:
+  /// **'{yearText}年{monthLabel}月'**
+  String widgetCalendarMonthHeader(String yearText, String monthLabel);
+
+  /// No description provided for @widgetTodoItem1.
+  ///
+  /// In zh, this message translates to:
+  /// **'整理今日计划'**
+  String get widgetTodoItem1;
+
+  /// No description provided for @widgetTodoItem2.
+  ///
+  /// In zh, this message translates to:
+  /// **'项目方案复盘'**
+  String get widgetTodoItem2;
+
+  /// No description provided for @widgetTodoItem3.
+  ///
+  /// In zh, this message translates to:
+  /// **'晚间运动 30 分钟'**
+  String get widgetTodoItem3;
+
+  /// No description provided for @widgetTodoSummaryCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日待办 · 3 项'**
+  String get widgetTodoSummaryCount;
+
+  /// No description provided for @widgetTodoQuickAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'+ 记一笔'**
+  String get widgetTodoQuickAdd;
+
+  /// No description provided for @widgetFocusMetricSessions.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日专注'**
+  String get widgetFocusMetricSessions;
+
+  /// No description provided for @widgetFocusMetricDuration.
+  ///
+  /// In zh, this message translates to:
+  /// **'时长(分)'**
+  String get widgetFocusMetricDuration;
+
+  /// No description provided for @widgetFocusMetricNext.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一轮(分)'**
+  String get widgetFocusMetricNext;
+
+  /// No description provided for @widgetFocusTimerUnit.
+  ///
+  /// In zh, this message translates to:
+  /// **'分钟'**
+  String get widgetFocusTimerUnit;
+
+  /// No description provided for @widgetFocusStartButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始 25 分钟专注'**
+  String get widgetFocusStartButton;
+
+  /// No description provided for @widgetFocusLine1.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日专注 2 次 · 深度工作 50 分钟'**
+  String get widgetFocusLine1;
+
+  /// No description provided for @widgetFocusLine2.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一轮：25 分钟专注'**
+  String get widgetFocusLine2;
+
+  /// No description provided for @widgetFocusLine3.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击开始专注'**
+  String get widgetFocusLine3;
+
+  /// No description provided for @widgetHabitTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日习惯'**
+  String get widgetHabitTitle;
+
+  /// No description provided for @widgetCalendarCurrentDate.
+  ///
+  /// In zh, this message translates to:
+  /// **'5月17日 · 周日'**
+  String get widgetCalendarCurrentDate;
+
+  /// No description provided for @widgetCalendarCurrentDay.
+  ///
+  /// In zh, this message translates to:
+  /// **'5月17日'**
+  String get widgetCalendarCurrentDay;
+
+  /// No description provided for @widgetHabitLine1.
+  ///
+  /// In zh, this message translates to:
+  /// **'· 晚间拉伸 · 今日待打卡'**
+  String get widgetHabitLine1;
+
+  /// No description provided for @widgetHabitLine2.
+  ///
+  /// In zh, this message translates to:
+  /// **'· 连续记录 5 天'**
+  String get widgetHabitLine2;
+
+  /// No description provided for @widgetHabitCheckInButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'打卡：晚间拉伸'**
+  String get widgetHabitCheckInButton;
+
+  /// No description provided for @widgetScheduleItem1.
+  ///
+  /// In zh, this message translates to:
+  /// **'09:00 今日计划 · 到点提醒'**
+  String get widgetScheduleItem1;
+
+  /// No description provided for @widgetScheduleItem2.
+  ///
+  /// In zh, this message translates to:
+  /// **'14:30 团队例会'**
+  String get widgetScheduleItem2;
+
+  /// No description provided for @widgetScheduleItem3.
+  ///
+  /// In zh, this message translates to:
+  /// **'19:00 晚间复盘'**
+  String get widgetScheduleItem3;
+
+  /// No description provided for @widgetGoalItem1.
+  ///
+  /// In zh, this message translates to:
+  /// **'发版准备 · 68%'**
+  String get widgetGoalItem1;
+
+  /// No description provided for @widgetGoalItem2.
+  ///
+  /// In zh, this message translates to:
+  /// **'本周运动 3/5 次'**
+  String get widgetGoalItem2;
+
+  /// No description provided for @widgetGoalItem3.
+  ///
+  /// In zh, this message translates to:
+  /// **'晚间复盘 · 今日待推进'**
+  String get widgetGoalItem3;
+
+  /// No description provided for @widgetCourseItem1.
+  ///
+  /// In zh, this message translates to:
+  /// **'第 1-2 节 高等数学 · 教 203'**
+  String get widgetCourseItem1;
+
+  /// No description provided for @widgetCourseItem2.
+  ///
+  /// In zh, this message translates to:
+  /// **'第 3-4 节 产品设计 · 线上'**
+  String get widgetCourseItem2;
+
+  /// No description provided for @widgetCourseItem3.
+  ///
+  /// In zh, this message translates to:
+  /// **'第 5-6 节 英语 · 教 305'**
+  String get widgetCourseItem3;
+
+  /// No description provided for @widgetNoteItem1.
+  ///
+  /// In zh, this message translates to:
+  /// **'会议纪要'**
+  String get widgetNoteItem1;
+
+  /// No description provided for @widgetNoteItem2.
+  ///
+  /// In zh, this message translates to:
+  /// **'灵感清单'**
+  String get widgetNoteItem2;
+
+  /// No description provided for @widgetNoteItem3.
+  ///
+  /// In zh, this message translates to:
+  /// **'读书摘录'**
+  String get widgetNoteItem3;
+
+  /// No description provided for @widgetAnniversaryItem1.
+  ///
+  /// In zh, this message translates to:
+  /// **'相识纪念日 · 还有 6 天'**
+  String get widgetAnniversaryItem1;
+
+  /// No description provided for @widgetAnniversaryItem2.
+  ///
+  /// In zh, this message translates to:
+  /// **'入职周年 · 还有 18 天'**
+  String get widgetAnniversaryItem2;
+
+  /// No description provided for @widgetAnniversaryItem3.
+  ///
+  /// In zh, this message translates to:
+  /// **'旅行纪念 · 还有 32 天'**
+  String get widgetAnniversaryItem3;
+
+  /// No description provided for @widgetDiaryItem1.
+  ///
+  /// In zh, this message translates to:
+  /// **'5/17 今天完成了专注复盘'**
+  String get widgetDiaryItem1;
+
+  /// No description provided for @widgetDiaryItem2.
+  ///
+  /// In zh, this message translates to:
+  /// **'5/16 记录一次散步'**
+  String get widgetDiaryItem2;
+
+  /// No description provided for @widgetDiaryItem3.
+  ///
+  /// In zh, this message translates to:
+  /// **'5/15 睡前整理心情'**
+  String get widgetDiaryItem3;
+
+  /// No description provided for @widgetCalendarMonthJan.
+  ///
+  /// In zh, this message translates to:
+  /// **'1'**
+  String get widgetCalendarMonthJan;
+
+  /// No description provided for @widgetCalendarMonthFeb.
+  ///
+  /// In zh, this message translates to:
+  /// **'2'**
+  String get widgetCalendarMonthFeb;
+
+  /// No description provided for @widgetCalendarMonthMar.
+  ///
+  /// In zh, this message translates to:
+  /// **'3'**
+  String get widgetCalendarMonthMar;
+
+  /// No description provided for @widgetCalendarMonthApr.
+  ///
+  /// In zh, this message translates to:
+  /// **'4'**
+  String get widgetCalendarMonthApr;
+
+  /// No description provided for @widgetCalendarMonthMay.
+  ///
+  /// In zh, this message translates to:
+  /// **'5'**
+  String get widgetCalendarMonthMay;
+
+  /// No description provided for @widgetCalendarMonthJun.
+  ///
+  /// In zh, this message translates to:
+  /// **'6'**
+  String get widgetCalendarMonthJun;
+
+  /// No description provided for @widgetCalendarMonthJul.
+  ///
+  /// In zh, this message translates to:
+  /// **'7'**
+  String get widgetCalendarMonthJul;
+
+  /// No description provided for @widgetCalendarMonthAug.
+  ///
+  /// In zh, this message translates to:
+  /// **'8'**
+  String get widgetCalendarMonthAug;
+
+  /// No description provided for @widgetCalendarMonthSep.
+  ///
+  /// In zh, this message translates to:
+  /// **'9'**
+  String get widgetCalendarMonthSep;
+
+  /// No description provided for @widgetCalendarMonthOct.
+  ///
+  /// In zh, this message translates to:
+  /// **'10'**
+  String get widgetCalendarMonthOct;
+
+  /// No description provided for @widgetCalendarMonthNov.
+  ///
+  /// In zh, this message translates to:
+  /// **'11'**
+  String get widgetCalendarMonthNov;
+
+  /// No description provided for @widgetCalendarMonthDec.
+  ///
+  /// In zh, this message translates to:
+  /// **'12'**
+  String get widgetCalendarMonthDec;
+
+  /// Theme and widget appearance: themeSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'主题保存失败'**
+  String get dataSettingsThemeSaveFailed;
+
+  /// Theme and widget appearance: rewardShopReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'奖励商店主题装饰'**
+  String get dataSettingsRewardShopReason;
+
+  /// Theme and widget appearance: redeemThemeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'兑换主题：{name}'**
+  String dataSettingsRedeemThemeTitle(String name);
+
+  /// Theme and widget appearance: redeemFocusBackdropTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'兑换专注背景：{name}'**
+  String dataSettingsRedeemFocusBackdropTitle(String name);
+
+  /// Theme and widget appearance: redeemAvatarFrameTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'兑换头像框：{name}'**
+  String dataSettingsRedeemAvatarFrameTitle(String name);
+
+  /// Theme and widget appearance: redeemCardSkinTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'兑换卡片皮肤：{name}'**
+  String dataSettingsRedeemCardSkinTitle(String name);
+
+  /// Theme and widget appearance: insufficientCoins.
+  ///
+  /// In zh, this message translates to:
+  /// **'时光币不足，还差 {diff}'**
+  String dataSettingsInsufficientCoins(int diff);
+
+  /// Theme and widget appearance: themeApplied.
+  ///
+  /// In zh, this message translates to:
+  /// **'已启用 {name}'**
+  String dataSettingsThemeApplied(String name);
+
+  /// Theme and widget appearance: themeRedeemedAndApplied.
+  ///
+  /// In zh, this message translates to:
+  /// **'已兑换并启用 {name}'**
+  String dataSettingsThemeRedeemedAndApplied(String name);
+
+  /// Theme and widget appearance: widgetBackgroundSwitched.
+  ///
+  /// In zh, this message translates to:
+  /// **'小组件背景已切换为 {label}'**
+  String dataSettingsWidgetBackgroundSwitched(String label);
+
+  /// Theme and widget appearance: unlockThemeFirst.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先解锁该主题'**
+  String get dataSettingsUnlockThemeFirst;
+
+  /// Theme and widget appearance: widgetCardSkinSwitched.
+  ///
+  /// In zh, this message translates to:
+  /// **'小组件卡片皮肤已切换为 {label}'**
+  String dataSettingsWidgetCardSkinSwitched(String label);
+
+  /// Theme and widget appearance: unlockCardSkinFirst.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先解锁该卡片皮肤'**
+  String get dataSettingsUnlockCardSkinFirst;
+
+  /// Theme and widget appearance: widgetFollowCurrentTheme.
+  ///
+  /// In zh, this message translates to:
+  /// **'跟随当前主题'**
+  String get dataSettingsWidgetFollowCurrentTheme;
+
+  /// Theme and widget appearance: widgetFollowCardSkin.
+  ///
+  /// In zh, this message translates to:
+  /// **'跟随卡片皮肤'**
+  String get dataSettingsWidgetFollowCardSkin;
+
+  /// Theme and widget appearance: widgetThemeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面小组件主题'**
+  String get dataSettingsWidgetThemeTitle;
+
+  /// Theme and widget appearance: widgetThemeSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'单独调整桌面小组件背景和卡片皮肤'**
+  String get dataSettingsWidgetThemeSubtitle;
+
+  /// Theme and widget appearance: widgetBackgroundLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'背景图'**
+  String get dataSettingsWidgetBackgroundLabel;
+
+  /// Theme and widget appearance: widgetCardSkinLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'卡片皮肤'**
+  String get dataSettingsWidgetCardSkinLabel;
+
+  /// Theme and widget appearance: coinCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'时光币 {count}'**
+  String dataSettingsCoinCount(int count);
+
+  /// Theme and widget appearance: coinCost.
+  ///
+  /// In zh, this message translates to:
+  /// **'{cost} 币'**
+  String dataSettingsCoinCost(int cost);
+
+  /// Theme and widget appearance: focusBackdropSectionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'专注背景'**
+  String get dataSettingsFocusBackdropSectionTitle;
+
+  /// Theme and widget appearance: focusBackdropSectionSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'用时光币兑换番茄钟卡片装饰'**
+  String get dataSettingsFocusBackdropSectionSubtitle;
+
+  /// Theme and widget appearance: avatarFrameSectionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像框'**
+  String get dataSettingsAvatarFrameSectionTitle;
+
+  /// Theme and widget appearance: avatarFrameSectionSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'用时光币兑换我的页头像装饰'**
+  String get dataSettingsAvatarFrameSectionSubtitle;
+
+  /// Theme and widget appearance: cardSkinSectionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'卡片皮肤'**
+  String get dataSettingsCardSkinSectionTitle;
+
+  /// Theme and widget appearance: cardSkinSectionSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'用时光币兑换信息卡片质感'**
+  String get dataSettingsCardSkinSectionSubtitle;
+
+  /// Theme and widget appearance: widgetSyncNoticeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'小组件主题'**
+  String get dataSettingsWidgetSyncNoticeTitle;
+
+  /// Theme and widget appearance: widgetSyncNoticeSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'背景图和卡片皮肤会同步到手机桌面小组件'**
+  String get dataSettingsWidgetSyncNoticeSubtitle;
+
+  /// Built-in reward display name for stable ID classic_focus.
+  ///
+  /// In zh, this message translates to:
+  /// **'经典专注'**
+  String get dataSettingsFocusBackdropClassicName;
+
+  /// Built-in reward display name for stable ID morning_focus.
+  ///
+  /// In zh, this message translates to:
+  /// **'晨光书桌'**
+  String get dataSettingsFocusBackdropMorningName;
+
+  /// Built-in reward display name for stable ID forest_focus.
+  ///
+  /// In zh, this message translates to:
+  /// **'林间深呼吸'**
+  String get dataSettingsFocusBackdropForestName;
+
+  /// Built-in reward display name for stable ID ocean_focus.
+  ///
+  /// In zh, this message translates to:
+  /// **'海岸静流'**
+  String get dataSettingsFocusBackdropOceanName;
+
+  /// Built-in reward display name for stable ID night_focus.
+  ///
+  /// In zh, this message translates to:
+  /// **'夜航模式'**
+  String get dataSettingsFocusBackdropNightName;
+
+  /// Built-in reward display description for stable ID classic_focus.
+  ///
+  /// In zh, this message translates to:
+  /// **'简洁的番茄钟渐变背景'**
+  String get dataSettingsFocusBackdropClassicDescription;
+
+  /// Built-in reward display description for stable ID morning_focus.
+  ///
+  /// In zh, this message translates to:
+  /// **'适合清晨阅读和学习的暖色背景'**
+  String get dataSettingsFocusBackdropMorningDescription;
+
+  /// Built-in reward display description for stable ID forest_focus.
+  ///
+  /// In zh, this message translates to:
+  /// **'适合长时间深度工作的自然绿色背景'**
+  String get dataSettingsFocusBackdropForestDescription;
+
+  /// Built-in reward display description for stable ID ocean_focus.
+  ///
+  /// In zh, this message translates to:
+  /// **'适合复盘、写作和低压专注的蓝绿色背景'**
+  String get dataSettingsFocusBackdropOceanDescription;
+
+  /// Built-in reward display description for stable ID night_focus.
+  ///
+  /// In zh, this message translates to:
+  /// **'适合夜间学习的低亮度深色背景'**
+  String get dataSettingsFocusBackdropNightDescription;
+
+  /// Built-in reward display name for stable ID simple_frame.
+  ///
+  /// In zh, this message translates to:
+  /// **'简洁头像'**
+  String get dataSettingsAvatarFrameSimpleName;
+
+  /// Built-in reward display name for stable ID golden_frame.
+  ///
+  /// In zh, this message translates to:
+  /// **'金色勋章框'**
+  String get dataSettingsAvatarFrameGoldenName;
+
+  /// Built-in reward display name for stable ID forest_frame.
+  ///
+  /// In zh, this message translates to:
+  /// **'绿叶守护框'**
+  String get dataSettingsAvatarFrameForestName;
+
+  /// Built-in reward display name for stable ID aurora_frame.
+  ///
+  /// In zh, this message translates to:
+  /// **'极光能量框'**
+  String get dataSettingsAvatarFrameAuroraName;
+
+  /// Built-in reward display description for stable ID simple_frame.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认头像样式'**
+  String get dataSettingsAvatarFrameSimpleDescription;
+
+  /// Built-in reward display description for stable ID golden_frame.
+  ///
+  /// In zh, this message translates to:
+  /// **'适合成就达人展示的金色头像框'**
+  String get dataSettingsAvatarFrameGoldenDescription;
+
+  /// Built-in reward display description for stable ID forest_frame.
+  ///
+  /// In zh, this message translates to:
+  /// **'适合习惯连续打卡的自然头像框'**
+  String get dataSettingsAvatarFrameForestDescription;
+
+  /// Built-in reward display description for stable ID aurora_frame.
+  ///
+  /// In zh, this message translates to:
+  /// **'适合高效专注周的流光头像框'**
+  String get dataSettingsAvatarFrameAuroraDescription;
+
+  /// Built-in reward display name for stable ID plain_card.
+  ///
+  /// In zh, this message translates to:
+  /// **'素净卡片'**
+  String get dataSettingsCardSkinPlainName;
+
+  /// Built-in reward display name for stable ID paper_card.
+  ///
+  /// In zh, this message translates to:
+  /// **'纸感计划卡'**
+  String get dataSettingsCardSkinPaperName;
+
+  /// Built-in reward display name for stable ID mint_card.
+  ///
+  /// In zh, this message translates to:
+  /// **'薄荷清单卡'**
+  String get dataSettingsCardSkinMintName;
+
+  /// Built-in reward display name for stable ID starlight_card.
+  ///
+  /// In zh, this message translates to:
+  /// **'星光玻璃卡'**
+  String get dataSettingsCardSkinStarlightName;
+
+  /// Built-in reward display description for stable ID plain_card.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认信息卡片样式'**
+  String get dataSettingsCardSkinPlainDescription;
+
+  /// Built-in reward display description for stable ID paper_card.
+  ///
+  /// In zh, this message translates to:
+  /// **'适合日程和待办整理的柔和纸感'**
+  String get dataSettingsCardSkinPaperDescription;
+
+  /// Built-in reward display description for stable ID mint_card.
+  ///
+  /// In zh, this message translates to:
+  /// **'适合习惯和专注记录的清爽卡片'**
+  String get dataSettingsCardSkinMintDescription;
+
+  /// Built-in reward display description for stable ID starlight_card.
+  ///
+  /// In zh, this message translates to:
+  /// **'适合夜间复盘的低亮度玻璃质感'**
+  String get dataSettingsCardSkinStarlightDescription;
+
+  /// Settings presentation copy: saveFailed
+  ///
+  /// In zh, this message translates to:
+  /// **'设置未保存，请重试。'**
+  String get settingsUiSaveFailed;
+
+  /// Settings presentation copy: decreaseValue
+  ///
+  /// In zh, this message translates to:
+  /// **'减少'**
+  String get settingsUiDecreaseValue;
+
+  /// Settings presentation copy: increaseValue
+  ///
+  /// In zh, this message translates to:
+  /// **'增加'**
+  String get settingsUiIncreaseValue;
+
+  /// Settings presentation copy: decreaseSetting
+  ///
+  /// In zh, this message translates to:
+  /// **'减少“{title}”'**
+  String settingsUiDecreaseSetting(String title);
+
+  /// Settings presentation copy: increaseSetting
+  ///
+  /// In zh, this message translates to:
+  /// **'增加“{title}”'**
+  String settingsUiIncreaseSetting(String title);
+
+  /// Settings presentation copy: currentFirstWeekday
+  ///
+  /// In zh, this message translates to:
+  /// **'当前为{weekday}'**
+  String settingsUiCurrentFirstWeekday(String weekday);
+
+  /// Settings presentation copy: preferencesHeroExplanation
+  ///
+  /// In zh, this message translates to:
+  /// **'自定义显示与行为偏好，管理底部导航入口与小组件显示。'**
+  String get settingsUiPreferencesHeroExplanation;
+
+  /// Settings presentation copy: preferencesCategoriesSectionTitle
+  ///
+  /// In zh, this message translates to:
+  /// **'个性入口'**
+  String get settingsUiPreferencesCategoriesSectionTitle;
+
+  /// Settings presentation copy: preferencesCategoriesSectionSubtitle
+  ///
+  /// In zh, this message translates to:
+  /// **'选择要调整的设置类别'**
+  String get settingsUiPreferencesCategoriesSectionSubtitle;
+
+  /// Settings presentation copy: displayAndBehaviorTitle
+  ///
+  /// In zh, this message translates to:
+  /// **'显示与行为'**
+  String get settingsUiDisplayAndBehaviorTitle;
+
+  /// Settings presentation copy: displayAndBehaviorSubtitle
+  ///
+  /// In zh, this message translates to:
+  /// **'日期格式、应用时区、启动入口、交互与归档'**
+  String get settingsUiDisplayAndBehaviorSubtitle;
+
+  /// Settings presentation copy: displayAndBehaviorHeroSubtitle
+  ///
+  /// In zh, this message translates to:
+  /// **'管理日期格式、应用时区、启动默认项、交互反馈与待办归档。'**
+  String get settingsUiDisplayAndBehaviorHeroSubtitle;
+
+  /// Settings presentation copy: navigationSectionTitle
+  ///
+  /// In zh, this message translates to:
+  /// **'导航入口'**
+  String get settingsUiNavigationSectionTitle;
+
+  /// Settings presentation copy: navigationSectionSubtitle
+  ///
+  /// In zh, this message translates to:
+  /// **'最多 5 个底部入口；“我的”固定，小组件可隐藏'**
+  String get settingsUiNavigationSectionSubtitle;
+
+  /// Settings presentation copy: jumpToMenuTitle
+  ///
+  /// In zh, this message translates to:
+  /// **'快捷定位'**
+  String get settingsUiJumpToMenuTitle;
+
+  /// Settings presentation copy: jumpToDate
+  ///
+  /// In zh, this message translates to:
+  /// **'日期日历'**
+  String get settingsUiJumpToDate;
+
+  /// Settings presentation copy: jumpToDefaults
+  ///
+  /// In zh, this message translates to:
+  /// **'默认行为'**
+  String get settingsUiJumpToDefaults;
+
+  /// Settings presentation copy: jumpToInteraction
+  ///
+  /// In zh, this message translates to:
+  /// **'交互归档'**
+  String get settingsUiJumpToInteraction;
+
+  /// Settings presentation copy: dateFormatLabel
+  ///
+  /// In zh, this message translates to:
+  /// **'标准 ({pattern})'**
+  String settingsUiDateFormatIso(String pattern);
+
+  /// Settings presentation copy: dateFormatLabel
+  ///
+  /// In zh, this message translates to:
+  /// **'美式 ({pattern})'**
+  String settingsUiDateFormatUs(String pattern);
+
+  /// Settings presentation copy: dateFormatLabel
+  ///
+  /// In zh, this message translates to:
+  /// **'欧式 ({pattern})'**
+  String settingsUiDateFormatEurope(String pattern);
+
+  /// Settings presentation copy: dateFormatLabel
+  ///
+  /// In zh, this message translates to:
+  /// **'中文年月日 ({pattern})'**
+  String settingsUiDateFormatEastAsian(String pattern);
+
+  /// Settings presentation copy: timeZoneDisplayName
+  ///
+  /// In zh, this message translates to:
+  /// **'中国标准时间 (上海)'**
+  String get settingsUiTimeZoneShanghai;
+
+  /// Settings presentation copy: timeZoneDisplayName
+  ///
+  /// In zh, this message translates to:
+  /// **'墨西哥城时间'**
+  String get settingsUiTimeZoneMexicoCity;
+
+  /// Settings presentation copy: timeZoneDisplayName
+  ///
+  /// In zh, this message translates to:
+  /// **'蒂华纳时间'**
+  String get settingsUiTimeZoneTijuana;
+
+  /// Settings presentation copy: timeZoneDisplayName
+  ///
+  /// In zh, this message translates to:
+  /// **'东京时间 (日本)'**
+  String get settingsUiTimeZoneTokyo;
+
+  /// Settings presentation copy: timeZoneDisplayName
+  ///
+  /// In zh, this message translates to:
+  /// **'香港时间'**
+  String get settingsUiTimeZoneHongKong;
+
+  /// Settings presentation copy: timeZoneDisplayName
+  ///
+  /// In zh, this message translates to:
+  /// **'新加坡时间'**
+  String get settingsUiTimeZoneSingapore;
+
+  /// Settings presentation copy: timeZoneDisplayName
+  ///
+  /// In zh, this message translates to:
+  /// **'纽约时间 (美东)'**
+  String get settingsUiTimeZoneNewYork;
+
+  /// Settings presentation copy: timeZoneDisplayName
+  ///
+  /// In zh, this message translates to:
+  /// **'洛杉矶时间 (美西)'**
+  String get settingsUiTimeZoneLosAngeles;
+
+  /// Settings presentation copy: timeZoneDisplayName
+  ///
+  /// In zh, this message translates to:
+  /// **'伦敦时间'**
+  String get settingsUiTimeZoneLondon;
+
+  /// Settings presentation copy: timeZoneDisplayName
+  ///
+  /// In zh, this message translates to:
+  /// **'巴黎时间 (中欧)'**
+  String get settingsUiTimeZoneParis;
+
+  /// Settings presentation copy: timeZoneDisplayName
+  ///
+  /// In zh, this message translates to:
+  /// **'悉尼时间 (澳洲东部)'**
+  String get settingsUiTimeZoneSydney;
+
+  /// Settings presentation copy: navigationBannerMessage
+  ///
+  /// In zh, this message translates to:
+  /// **'底部导航最多显示 5 个入口，我的固定显示；小组件可隐藏，隐藏入口可在“我的”页面访问。'**
+  String get settingsUiNavigationBannerMessage;
+
+  /// Settings presentation copy: maxTabsConstraint
+  ///
+  /// In zh, this message translates to:
+  /// **'最多显示 {max} 个入口'**
+  String settingsUiMaxTabsConstraint(int max);
+
+  /// Settings presentation copy: navigationHiddenAtLimit
+  ///
+  /// In zh, this message translates to:
+  /// **'已达上限，先隐藏其他项'**
+  String get settingsUiNavigationHiddenAtLimit;
+
+  /// Settings presentation copy: navigationMoveUp
+  ///
+  /// In zh, this message translates to:
+  /// **'上移“{label}”'**
+  String settingsUiNavigationMoveUp(String label);
+
+  /// Settings presentation copy: navigationMoveDown
+  ///
+  /// In zh, this message translates to:
+  /// **'下移“{label}”'**
+  String settingsUiNavigationMoveDown(String label);
+
+  /// Settings presentation copy: selectOption
+  ///
+  /// In zh, this message translates to:
+  /// **'选择设置'**
+  String get settingsUiSelectOption;
+
+  /// Settings presentation copy: selectFirstDay
+  ///
+  /// In zh, this message translates to:
+  /// **'选择一周第一天'**
+  String get settingsUiSelectFirstDay;
+
+  /// Settings presentation copy: selectDateFormat
+  ///
+  /// In zh, this message translates to:
+  /// **'选择日期格式'**
+  String get settingsUiSelectDateFormat;
+
+  /// Settings presentation copy: selectTimeZone
+  ///
+  /// In zh, this message translates to:
+  /// **'选择应用时区'**
+  String get settingsUiSelectTimeZone;
+
+  /// Settings presentation copy: selectDefaultTab
+  ///
+  /// In zh, this message translates to:
+  /// **'选择启动默认 Tab'**
+  String get settingsUiSelectDefaultTab;
+
+  /// Settings presentation copy: selectAutoLock
+  ///
+  /// In zh, this message translates to:
+  /// **'选择自动锁定时间'**
+  String get settingsUiSelectAutoLock;
+
+  /// Settings presentation copy: autoLockOptionLabel
+  ///
+  /// In zh, this message translates to:
+  /// **'{minutes} 分钟'**
+  String settingsUiAutoLockMinutes(int minutes);
+
+  /// Settings presentation copy: autoLockSubtitle
+  ///
+  /// In zh, this message translates to:
+  /// **'离开 {minutes} 分钟后锁定'**
+  String settingsUiAutoLockAfter(int minutes);
+
+  /// Exact goal copy. Chinese intentionally ignores unit and retains literal 次; English uses default occurrence singular/plural only.
+  ///
+  /// In zh, this message translates to:
+  /// **'每周目标: {target} 次/周'**
+  String habitCopyWeekGoal(int target, String unit);
+
+  /// Exact goal copy. Chinese intentionally ignores unit and retains literal 次; English uses default occurrence singular/plural only.
+  ///
+  /// In zh, this message translates to:
+  /// **'每月目标: {target} 次/月'**
+  String habitCopyMonthGoal(int target, String unit);
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束'**
+  String get habitCopyActionEnd;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除习惯？'**
+  String get habitCopyDeleteConfirmTitle;
+
+  /// Exact copy; habitName is intentionally unused in English.
+  ///
+  /// In zh, this message translates to:
+  /// **'会删除“{habitName}”和关联记录，不可恢复。'**
+  String habitCopyDeleteConfirmContent(String habitName);
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束习惯？'**
+  String get habitCopyEndConfirmTitle;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束“{habitName}”？历史记录将保留。'**
+  String habitCopyEndConfirmContent(String habitName);
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束习惯'**
+  String get habitCopyEndHabitAction;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除习惯'**
+  String get habitCopyDeleteHabitAction;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'更多操作'**
+  String get habitCopyMoreActions;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'习惯已结束，历史记录已保留'**
+  String get habitCopyEndedFeedback;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'习惯已删除'**
+  String get habitCopyDeletedFeedback;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'习惯已保存'**
+  String get habitCopySaveSuccess;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'打卡失败，请重试'**
+  String get habitCopyCheckInFailedWithRetry;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'撤销打卡失败，请重试'**
+  String get habitCopyUndoFailedWithRetry;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存习惯失败，请重试'**
+  String get habitCopySaveFailedWithRetry;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'操作失败，请重试'**
+  String get habitCopyActionFailedWithRetry;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入习惯名称'**
+  String get habitCopyNameRequired;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'每日目标至少为 1'**
+  String get habitCopyDailyTargetInvalid;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒调度器尚未初始化，请重新打开应用后再保存提醒'**
+  String get habitCopyReminderSchedulerMissing;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统通知未授权，习惯提醒不会响铃或弹出'**
+  String get habitCopyNotificationsNotGranted;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要系统通知权限以接收提醒'**
+  String get habitCopyReminderPermissionError;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒注册失败'**
+  String get habitCopyReminderRegisterFailed;
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'习惯已保存，但提醒未同步：{issueText}'**
+  String habitCopyReminderSyncWarning(String issueText);
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'「{habitName}」{periodLabel}目标已达标'**
+  String habitCopyPeriodGoalReached(String habitName, String periodLabel);
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'「{habitName}」今日单次目标已完成'**
+  String habitCopySingleSessionGoalReached(String habitName);
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'已记录一次「{habitName}」'**
+  String habitCopyCheckInSuccessNegative(String habitName);
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'已记录「{habitName}」'**
+  String habitCopyDateRecordFeedback(String habitName);
+
+  /// Preserve the current HabitUiCopy output exactly; authored placeholders stay literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'已撤销「{habitName}」记录'**
+  String habitCopyDateUndoFeedback(String habitName);
+
+  /// Exact lowercase cup key; count == 1 only.
+  ///
+  /// In zh, this message translates to:
+  /// **'杯'**
+  String get habitCopyUnitCup;
+
+  /// Exact lowercase cup key; count != 1.
+  ///
+  /// In zh, this message translates to:
+  /// **'杯'**
+  String get habitCopyUnitCups;
+
+  /// Default generated occurrence singular; count == 1 only.
+  ///
+  /// In zh, this message translates to:
+  /// **'次'**
+  String get habitCopyUnitTime;
+
+  /// Preserve the current HabitUiCopy output exactly.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} {unit}'**
+  String habitCopyMeasuredCount(int count, String unit);
+
+  /// Preserve the current HabitUiCopy output exactly.
+  ///
+  /// In zh, this message translates to:
+  /// **'{measuredCount} · {flexProgressLabel}'**
+  String habitCopyCountWithFlexProgress(
+    String measuredCount,
+    String flexProgressLabel,
+  );
+
+  /// Preserve the current HabitUiCopy output exactly.
+  ///
+  /// In zh, this message translates to:
+  /// **'已记录 {measuredCount}'**
+  String habitCopyCountRecorded(String measuredCount);
+
+  /// Preserve the current HabitUiCopy output exactly.
+  ///
+  /// In zh, this message translates to:
+  /// **'{measuredCount} / {target} {targetUnit}'**
+  String habitCopyCountRatio(
+    String measuredCount,
+    int target,
+    String targetUnit,
+  );
+
+  /// Preserve the current HabitUiCopy output exactly.
+  ///
+  /// In zh, this message translates to:
+  /// **'「{habitName}」今日已达标'**
+  String habitCopyCheckInSuccessStandardReached(String habitName);
+
+  /// Preserve the current HabitUiCopy output exactly.
+  ///
+  /// In zh, this message translates to:
+  /// **'已打卡「{habitName}」 {count}/{target}'**
+  String habitCopyCheckInSuccessStandardProgress(
+    String habitName,
+    int count,
+    int target,
+  );
+
+  /// Null flexPrefix only; empty or blank authored prefix must remain literal.
+  ///
+  /// In zh, this message translates to:
+  /// **'本周期'**
+  String get habitCopyPeriodFallback;
+
+  /// Preserve the current HabitUiCopy output exactly.
+  ///
+  /// In zh, this message translates to:
+  /// **'已打卡「{habitName}」 {flexLabel}'**
+  String habitCopyCheckInSuccessFlexProgress(
+    String habitName,
+    String flexLabel,
+  );
+
+  /// Complete settings label with locale-specific grammar and punctuation.
+  ///
+  /// In zh, this message translates to:
+  /// **'1 天'**
+  String get settingsUiAutoArchiveDayOne;
+
+  /// Complete settings label with locale-specific grammar and punctuation.
+  ///
+  /// In zh, this message translates to:
+  /// **'{days} 天'**
+  String settingsUiAutoArchiveDayMany(int days);
+
+  /// Complete settings label with locale-specific grammar and punctuation.
+  ///
+  /// In zh, this message translates to:
+  /// **'1 天后自动隐藏'**
+  String get settingsUiAutoArchiveAfterOneDay;
+
+  /// Complete settings label with locale-specific grammar and punctuation.
+  ///
+  /// In zh, this message translates to:
+  /// **'{days} 天后自动隐藏'**
+  String settingsUiAutoArchiveAfterDays(int days);
+
+  /// Complete settings label with locale-specific grammar and punctuation.
+  ///
+  /// In zh, this message translates to:
+  /// **'跟随手机：{timeZoneName}'**
+  String settingsUiFollowingSystemTimeZone(String timeZoneName);
 }
 
 class _AppLocalizationsDelegate

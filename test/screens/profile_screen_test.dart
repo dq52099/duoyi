@@ -10,6 +10,7 @@ import 'package:duoyi/providers/theme_provider.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/providers/user_provider.dart';
 import 'package:duoyi/core/app_version.dart';
+import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/screens/mine_screen.dart';
 import 'package:duoyi/screens/profile_screen.dart';
 import 'package:duoyi/services/api_client.dart';
@@ -17,6 +18,7 @@ import 'package:duoyi/services/ai_service.dart';
 import 'package:duoyi/services/app_update_service.dart';
 import 'package:duoyi/widgets/cached_avatar_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -283,7 +285,7 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, '显示名'), '新显示名');
     await tester.enterText(find.widgetWithText(TextField, '本地昵称'), '新昵称');
     await tester.enterText(
-      find.widgetWithText(TextField, '邮箱（仅本地展示，不用于登录或找回）'),
+      find.byKey(const ValueKey('profile_local_email_field')),
       'new@example.com',
     );
     await tester.enterText(find.widgetWithText(TextField, '简介'), '新的个人简介');
@@ -620,18 +622,101 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  test('account profile long email labels are single-line ellipsized', () {
-    final source = File('lib/screens/profile_screen.dart').readAsStringSync();
-    final accountBody = source.substring(
-      source.indexOf('class _AccountProfileEditor'),
-      source.indexOf('class _LocalProfileEditor'),
-    );
-
-    expect(accountBody, contains('account.email?.isNotEmpty == true'));
-    expect(accountBody, contains('account.email?.trim().isEmpty != false'));
-    expect(accountBody, contains('maxLines: 1'));
-    expect(accountBody, contains('overflow: TextOverflow.ellipsis'));
-  });
+  for (final brand in ['defaultBrand', 'liquidGlass']) {
+    for (final locale in AppLocale.values) {
+      testWidgets('account profile complete email $brand ${locale.name}', (
+        tester,
+      ) async {
+        tester.view.physicalSize = const Size(320, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final savedLocale = I18n.current;
+        I18n.setLocale(locale);
+        addTearDown(() => I18n.setLocale(savedLocale));
+        SharedPreferences.setMockInitialValues({'active_brand': brand});
+        const email =
+            'a.very.long.account.address.with.details@extended.example.com';
+        final auth = AuthProvider(
+          initialState: const AuthState(
+            userId: 'long-email-profile',
+            username: 'synthetic-user',
+            email: email,
+            emailVerified: false,
+            displayName: 'Synthetic profile',
+            token: 'synthetic-token',
+          ),
+          client: ApiClient(
+            baseUrl: 'https://synthetic.example.test',
+            token: 'synthetic-token',
+            httpClient: MockClient(
+              (_) async => http.Response('not found', 404),
+            ),
+          ),
+        );
+        final theme = ThemeProvider();
+        final user = UserProvider();
+        await theme.loadFromStorage();
+        addTearDown(() async {
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pumpAndSettle();
+          auth.dispose();
+          theme.dispose();
+          user.dispose();
+        });
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider<AuthProvider>.value(value: auth),
+              ChangeNotifierProvider<ThemeProvider>.value(value: theme),
+              ChangeNotifierProvider<UserProvider>.value(value: user),
+              ChangeNotifierProvider(create: (_) => AchievementProvider()),
+            ],
+            child: MaterialApp(
+              theme: theme.brand.theme,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(2)),
+                child: child!,
+              ),
+              home: const ProfileScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(theme.brand.id, brand);
+        expect(
+          find.byWidgetPredicate(
+            (widget) => widget is Tooltip && widget.message == email,
+          ),
+          findsOneWidget,
+        );
+        final address = find.text(email);
+        await tester.scrollUntilVisible(
+          address,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(address, findsOneWidget);
+        await tester.pumpAndSettle();
+        final paragraph = tester.renderObject<RenderParagraph>(
+          find.descendant(of: address, matching: find.byType(RichText)),
+        );
+        expect(paragraph.text.toPlainText(), email);
+        expect(paragraph.didExceedMaxLines, isFalse);
+        expect(
+          paragraph.textSize.width,
+          lessThanOrEqualTo(paragraph.size.width + .1),
+        );
+        expect(
+          paragraph.textSize.height,
+          lessThanOrEqualTo(paragraph.size.height + .1),
+        );
+        expect(auth.state.email, email);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
 
   testWidgets('local profile avatar opens full screen preview', (tester) async {
     tester.view.physicalSize = const Size(390, 900);

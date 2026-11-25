@@ -1,6 +1,11 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'dart:typed_data';
+
+// ignore: depend_on_referenced_packages
+import 'package:file_selector_platform_interface/file_selector_platform_interface.dart';
 
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/achievement_provider.dart';
@@ -25,7 +30,11 @@ import 'package:duoyi/providers/time_audit_provider.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/providers/user_provider.dart';
 import 'package:duoyi/core/i18n.dart';
+import 'package:duoyi/core/account_ui_copy.dart';
+import 'package:duoyi/core/todo_ui_copy.dart';
+import 'package:duoyi/core/todo_board_ui_copy.dart';
 import 'package:duoyi/screens/mine_screen.dart';
+import 'package:duoyi/screens/lock_settings_screen.dart';
 import 'package:duoyi/screens/more_apps_screen.dart';
 import 'package:duoyi/screens/profile_screen.dart';
 import 'package:duoyi/screens/today_screen.dart';
@@ -47,16 +56,64 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:duoyi/core/app_brand.dart';
 import 'package:duoyi/core/design_tokens.dart';
+import 'package:duoyi/widgets/surface_components.dart';
+import 'package:duoyi/widgets/brand_background.dart';
 
 import '../support/widget_polish_screenshot_font.dart';
+import '../support/rendered_information_chip_contrast.dart';
 
 Widget _wrap(
   Widget child, {
   AuthProvider? authProvider,
+  UserProvider? userProvider,
   TodoProvider? todoProvider,
+  ThemeProvider? themeProvider,
+  AppUpdateService? updater,
   ThemeData? theme,
   double? textScale,
+  bool liveTheme = false,
+  bool screenshotFonts = false,
 }) {
+  ThemeData? appTheme() {
+    final base = liveTheme ? themeProvider!.brand.theme : theme;
+    if (!screenshotFonts || base == null) return base;
+    return base.copyWith(
+      textTheme: base.textTheme.apply(
+        fontFamily: 'DuoyiScreenshotLatin',
+        fontFamilyFallback: const ['DuoyiScreenshot'],
+      ),
+      primaryTextTheme: base.primaryTextTheme.apply(
+        fontFamily: 'DuoyiScreenshotLatin',
+        fontFamilyFallback: const ['DuoyiScreenshot'],
+      ),
+      appBarTheme: base.appBarTheme.copyWith(
+        titleTextStyle: base.appBarTheme.titleTextStyle?.copyWith(
+          fontFamily: 'DuoyiScreenshotLatin',
+          fontFamilyFallback: const ['DuoyiScreenshot'],
+        ),
+      ),
+      snackBarTheme: base.snackBarTheme.copyWith(
+        contentTextStyle: base.snackBarTheme.contentTextStyle?.copyWith(
+          fontFamily: 'DuoyiScreenshotLatin',
+          fontFamilyFallback: const ['DuoyiScreenshot'],
+        ),
+      ),
+    );
+  }
+
+  Widget buildApp() => MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: appTheme(),
+    builder: textScale == null
+        ? null
+        : (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(textScale)),
+            child: child!,
+          ),
+    home: child,
+  );
   return MultiProvider(
     providers: [
       if (todoProvider == null)
@@ -65,10 +122,16 @@ Widget _wrap(
         ChangeNotifierProvider<TodoProvider>.value(value: todoProvider),
       ChangeNotifierProvider(create: (_) => HabitProvider()),
       ChangeNotifierProvider(create: (_) => PomodoroProvider()),
-      ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      if (themeProvider == null)
+        ChangeNotifierProvider(create: (_) => ThemeProvider())
+      else
+        ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
       ChangeNotifierProvider(create: (_) => CloudSyncProvider()),
       ChangeNotifierProvider(create: (_) => CalendarProvider()),
-      ChangeNotifierProvider(create: (_) => UserProvider()),
+      if (userProvider == null)
+        ChangeNotifierProvider(create: (_) => UserProvider())
+      else
+        ChangeNotifierProvider<UserProvider>.value(value: userProvider),
       ChangeNotifierProvider(create: (_) => CountdownProvider()),
       ChangeNotifierProvider(create: (_) => NoteProvider()),
       ChangeNotifierProvider(create: (_) => AnniversaryProvider()),
@@ -89,31 +152,126 @@ Widget _wrap(
       ChangeNotifierProvider(create: (_) => LocaleProvider()),
       ChangeNotifierProvider(create: (_) => LocationReminderProvider()),
       ChangeNotifierProvider(create: (_) => CalendarSyncProvider()),
-      ChangeNotifierProvider(
-        create: (_) => AppUpdateService(
-          repo: 'dq52099/duoyi',
-          currentVersion: AppVersion.name,
+      if (updater != null)
+        ChangeNotifierProvider<AppUpdateService>.value(value: updater)
+      else
+        ChangeNotifierProvider(
+          create: (_) => AppUpdateService(
+            repo: 'dq52099/duoyi',
+            currentVersion: AppVersion.name,
+          ),
         ),
-      ),
     ],
-    child: MaterialApp(
-      theme: theme,
-      builder: textScale == null
-          ? null
-          : (context, child) => MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: TextScaler.linear(textScale)),
-              child: child!,
-            ),
-      home: child,
-    ),
+    child: liveTheme
+        ? AnimatedBuilder(
+            animation: themeProvider!,
+            builder: (context, child) => buildApp(),
+          )
+        : buildApp(),
   );
 }
 
 double? _topOrScrolledAway(WidgetTester tester, Finder finder) {
   if (finder.evaluate().isEmpty) return null;
   return tester.getTopLeft(finder).dy;
+}
+
+Finder _todayCompletionButton(Finder tile) {
+  final toggle = find.descendant(
+    of: tile,
+    matching: find.byWidgetPredicate(
+      (widget) => widget is Semantics && widget.properties.checked != null,
+    ),
+  );
+  return find.descendant(of: toggle, matching: find.byType(InkWell));
+}
+
+Future<void> _captureTodayCompletion(WidgetTester tester, String name) async {
+  final directory = Platform.environment['DUOYI_TODAY_COMPLETION_SCREENSHOTS'];
+  if (directory == null) return;
+  await tester.runAsync(() async {
+    final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(const ValueKey('today-completion-evidence')),
+    );
+    final picture = await boundary.toImage(pixelRatio: 1);
+    final data = await picture.toByteData(format: ui.ImageByteFormat.png);
+    picture.dispose();
+    final file = File('$directory/$name.png');
+    file.parent.createSync(recursive: true);
+    file.writeAsBytesSync(data!.buffer.asUint8List());
+  });
+}
+
+Future<void> _expectTodayCompletionContrast(
+  WidgetTester tester,
+  Finder tile,
+  String brand,
+) async {
+  final text = find.descendant(
+    of: tile,
+    matching: find.text(I18n.tr('today.completed')),
+  );
+  final foreground = tester.widget<Text>(text).style!.color!;
+  final box = tester.renderObject<RenderBox>(
+    find.ancestor(of: text, matching: find.byType(DecoratedBox)).first,
+  );
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(const ValueKey('today-completion-evidence')),
+  );
+  final rect = MatrixUtils.transformRect(
+    box.getTransformTo(boundary),
+    Offset.zero & box.size,
+  );
+  final rows = await tester.runAsync(() async {
+    final picture = await boundary.toImage(pixelRatio: 1);
+    try {
+      final data = (await picture.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      ))!;
+      return [
+        for (final fraction in [0.25, 0.5, 0.75])
+          (() {
+            final point = Offset(
+              rect.left + rect.width * fraction,
+              rect.top + 1,
+            );
+            final offset =
+                (point.dy.floor() * picture.width + point.dx.floor()) * 4;
+            final background = Color.fromARGB(
+              255,
+              data.getUint8(offset),
+              data.getUint8(offset + 1),
+              data.getUint8(offset + 2),
+            );
+            return <String, Object>{
+              'brand': brand,
+              'foreground': foreground.toARGB32(),
+              'background': background.toARGB32(),
+              'contrast': appContrastRatio(
+                Color.alphaBlend(foreground, background),
+                background,
+              ),
+            };
+          })(),
+      ];
+    } finally {
+      picture.dispose();
+    }
+  });
+  final destination =
+      Platform.environment['DUOYI_TODAY_COMPLETION_MEASUREMENTS'];
+  if (destination != null) {
+    File(
+      destination,
+    ).writeAsStringSync('${jsonEncode(rows)}\n', mode: FileMode.append);
+  }
+  for (final row in rows!) {
+    expect(
+      row['contrast'],
+      greaterThanOrEqualTo(4.5),
+      reason: 'Completed status against actual raster padding: $row',
+    );
+  }
 }
 
 void main() {
@@ -123,6 +281,703 @@ void main() {
   });
 
   tearDown(() => I18n.setLocale(AppLocale.zh));
+
+  for (final brand in ['defaultBrand', 'liquidGlass']) {
+    testWidgets('Today completion remains visible and can reopen $brand', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      SharedPreferences.setMockInitialValues({
+        'active_brand': brand,
+        'theme_unlocked_brands': ['defaultBrand', 'liquidGlass'],
+      });
+      final theme = ThemeProvider();
+      await theme.loadFromStorage();
+      final todos = TodoProvider();
+      final task = TodoItem(
+        id: 'today-completion-retention',
+        title: '保留完成任务并允许取消',
+        date: DateTime.now(),
+      );
+      await todos.addTodo(task);
+      await tester.runAsync(loadWidgetPolishScreenshotFonts);
+      await tester.pumpWidget(
+        _wrap(
+          const RepaintBoundary(
+            key: ValueKey('today-completion-evidence'),
+            child: BrandBackground(child: TodayScreen()),
+          ),
+          todoProvider: todos,
+          themeProvider: theme,
+          textScale: 2,
+          liveTheme: true,
+          screenshotFonts: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final tile = find.byKey(ValueKey('today_todo_${task.id}'));
+      await tester.ensureVisible(tile);
+      await tester.pumpAndSettle();
+      await _captureTodayCompletion(tester, '$brand-pending');
+      await tester.tap(_todayCompletionButton(tile));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(TodoUiCopy.actionContinue));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(TodoUiCopy.actionSkip));
+      await tester.pumpAndSettle();
+      expect(todos.todos.single.isCompleted, isTrue);
+      expect(
+        tile,
+        findsOneWidget,
+        reason: 'ROOT-7: completing must retain the row',
+      );
+      final title = tester.widget<Text>(
+        find.descendant(of: tile, matching: find.text(task.title)),
+      );
+      expect(title.style?.decoration, TextDecoration.lineThrough);
+      await tester.ensureVisible(tile);
+      await tester.pumpAndSettle();
+      await _expectTodayCompletionContrast(tester, tile, brand);
+      await _captureTodayCompletion(tester, '$brand-completed');
+      await tester.tap(_todayCompletionButton(tile));
+      await tester.pumpAndSettle();
+      expect(todos.todos.single.isCompleted, isFalse);
+      expect(todos.todos.single.completedAt, isNull);
+      expect(todos.todos.single.isArchivedAfterRollover, isFalse);
+      expect(tile, findsOneWidget);
+      expect(
+        find.text(TodoBoardUiCopy.restoredFeedback(task.title)),
+        findsOneWidget,
+      );
+      expect(find.text(TodoUiCopy.completedFeedback(task.title)), findsNothing);
+      final stored = TodoProvider();
+      await stored.loadFromStorage();
+      expect(stored.todos.single.isCompleted, isFalse);
+      expect(stored.todos.single.completedAt, isNull);
+      stored.dispose();
+      await _captureTodayCompletion(tester, '$brand-reopened');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      todos.dispose();
+      theme.dispose();
+    });
+
+    testWidgets('Today completed reminder checkbox can reopen $brand', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      SharedPreferences.setMockInitialValues({
+        'active_brand': brand,
+        'theme_unlocked_brands': ['defaultBrand', 'liquidGlass'],
+      });
+      final todos = TodoProvider();
+      final now = DateTime.now();
+      final task = TodoItem(
+        id: 'today-reminder-reopen',
+        title: '已完成提醒可以取消',
+        date: now,
+        dueDate: DateTime(now.year, now.month, now.day, 23, 59),
+        isCompleted: true,
+        completedAt: now,
+      );
+      await todos.addTodo(task);
+      final theme = ThemeProvider();
+      await theme.loadFromStorage();
+      await tester.pumpWidget(
+        _wrap(
+          const TodayScreen(),
+          todoProvider: todos,
+          themeProvider: theme,
+          liveTheme: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('today_reminder_header_toggle')),
+      );
+      await tester.pumpAndSettle();
+      final tile = find.byKey(ValueKey('today_reminder_todo_${task.id}'));
+      await tester.ensureVisible(tile);
+      await tester.pumpAndSettle();
+      await tester.tap(_todayCompletionButton(tile));
+      await tester.pumpAndSettle();
+      expect(todos.todos.single.isCompleted, isFalse);
+      expect(todos.todos.single.completedAt, isNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      todos.dispose();
+      theme.dispose();
+    });
+  }
+
+  for (final brand in ['defaultBrand', 'liquidGlass']) {
+    testWidgets('Mine update live root theme roundtrip $brand', (tester) async {
+      tester.view.physicalSize = const Size(320, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      SharedPreferences.setMockInitialValues({
+        'active_brand': brand,
+        'theme_unlocked_brands': ['defaultBrand', 'liquidGlass'],
+      });
+      final theme = ThemeProvider();
+      final updater = _HeldMineUpdater();
+      addTearDown(theme.dispose);
+      addTearDown(updater.dispose);
+      await theme.loadFromStorage();
+      await tester.pumpWidget(
+        _wrap(
+          const MineScreen(),
+          themeProvider: theme,
+          updater: updater,
+          textScale: 2,
+          liveTheme: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final onTap = await _mineUpdateCallback(tester);
+      onTap();
+      await tester.pump();
+      expect(updater.calls, 1);
+      updater.finish();
+      await tester.pumpAndSettle();
+      final dialog = tester.element(find.byType(AppDialog));
+      final route = ModalRoute.of(dialog)!;
+      final screen = tester.state(find.byType(MineScreen));
+      void expectRetained() {
+        final current = tester.element(find.byType(AppDialog));
+        expect(current, same(dialog));
+        expect(ModalRoute.of(current), same(route));
+        expect(route.isCurrent, isTrue);
+        expect(Theme.of(current).colorScheme, theme.brand.theme.colorScheme);
+        expect(tester.state(find.byType(MineScreen)), same(screen));
+        expect(updater.calls, 1);
+        expect(tester.takeException(), isNull);
+      }
+
+      expectRetained();
+      for (final next in [
+        brand == 'defaultBrand' ? 'liquidGlass' : 'defaultBrand',
+        brand,
+      ]) {
+        var done = false;
+        final change = theme.setBrand(next).whenComplete(() => done = true);
+        for (var frame = 0; frame < 100 && !done; frame++) {
+          await tester.pump(const Duration(milliseconds: 20));
+        }
+        expect(done, isTrue);
+        expect(await change, isTrue);
+        await tester.pumpAndSettle();
+        expect(theme.brand.id, next);
+        expectRetained();
+        I18n.setLocale(AppLocale.en);
+        await tester.pumpAndSettle();
+        expectRetained();
+      }
+      Navigator.of(dialog).pop();
+      await tester.pumpAndSettle();
+      expect(route.isActive, isFalse);
+      expect(find.byType(AppDialog), findsNothing);
+      expect(tester.state(find.byType(MineScreen)), same(screen));
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final changedSource in ['covered', 'account', 'forced', 'provider']) {
+    testWidgets('Mine update completion ignores $changedSource source', (
+      tester,
+    ) async {
+      final updater = _HeldMineUpdater();
+      addTearDown(updater.dispose);
+      await tester.pumpWidget(_wrap(const MineScreen(), updater: updater));
+      await tester.pumpAndSettle();
+      final onTap = await _mineUpdateCallback(tester);
+      onTap();
+      onTap();
+      await tester.pump();
+      expect(updater.calls, 1);
+      expect(_mineUpdateInkWell(tester).onTap, isNull);
+      if (changedSource == 'covered') {
+        Navigator.of(tester.element(find.byType(MineScreen))).push<void>(
+          MaterialPageRoute(
+            builder: (_) => const Scaffold(body: Text('Cover')),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 400));
+      } else if (changedSource == 'account') {
+        AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+      } else if (changedSource == 'forced') {
+        updater.forceUpdate = true;
+      } else {
+        final replacement = _HeldMineUpdater();
+        addTearDown(replacement.dispose);
+        await tester.pumpWidget(
+          _wrap(const MineScreen(), updater: replacement),
+        );
+        await tester.pump();
+      }
+      updater.finish();
+      await tester.pumpAndSettle();
+      expect(find.byType(AppDialog), findsNothing);
+      if (changedSource == 'covered') {
+        expect(find.text('Cover'), findsOneWidget);
+        Navigator.of(tester.element(find.text('Cover'))).pop();
+        await tester.pumpAndSettle();
+        expect(_mineUpdateInkWell(tester).onTap, isNotNull);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets(
+    'Mine update owns one dialog through locale change and dismissal',
+    (tester) async {
+      final updater = _HeldMineUpdater();
+      addTearDown(updater.dispose);
+      await tester.pumpWidget(_wrap(const MineScreen(), updater: updater));
+      await tester.pumpAndSettle();
+      final onTap = await _mineUpdateCallback(tester);
+      onTap();
+      await tester.pump();
+      I18n.setLocale(AppLocale.en);
+      await tester.pump();
+      onTap();
+      expect(updater.calls, 1);
+      updater.finish();
+      await tester.pumpAndSettle();
+      expect(find.byType(AppDialog), findsOneWidget);
+      onTap();
+      expect(updater.calls, 1);
+      final navigator = Navigator.of(tester.element(find.byType(AppDialog)));
+      navigator.pop();
+      await tester.pump();
+      onTap();
+      expect(updater.calls, 1, reason: 'Guard includes the exit animation');
+      await tester.pumpAndSettle();
+      expect(find.byType(AppDialog), findsNothing);
+      onTap();
+      await tester.pump();
+      expect(updater.calls, 2);
+      updater.finish();
+      await tester.pumpAndSettle();
+      expect(find.byType(AppDialog), findsOneWidget);
+      navigator.pop();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final fixture in [
+    for (final locale in AppLocale.values)
+      for (final brand in [AppBrands.defaultBrand, AppBrands.liquidGlass])
+        (locale: locale, brand: brand),
+  ]) {
+    final locale = fixture.locale;
+    final brand = fixture.brand;
+    final name =
+        'Mine overview preserves enlarged labels: '
+        '${locale.name} ${brand.id}';
+    testWidgets(name, (tester) async {
+      addTearDown(tester.view.reset);
+      I18n.setLocale(locale);
+      for (final presentation in [
+        (width: 320.0, scale: 1.6),
+        if (brand.id == AppBrands.defaultBrand.id) ...[
+          (width: 320.0, scale: 3.2),
+          (width: 960.0, scale: 3.2),
+        ],
+      ]) {
+        for (final loggedIn in [
+          if (brand.id == AppBrands.defaultBrand.id) false,
+          true,
+        ]) {
+          tester.view.physicalSize = Size(presentation.width, 844);
+          tester.view.devicePixelRatio = 1;
+          await tester.runAsync(loadWidgetPolishScreenshotFonts);
+          SharedPreferences.setMockInitialValues({'active_brand': brand.id});
+          final themeProvider = ThemeProvider();
+          addTearDown(themeProvider.dispose);
+          await themeProvider.loadFromStorage();
+          expect(themeProvider.brand.id, brand.id);
+          final base = brand.theme;
+          final theme = base.copyWith(
+            textTheme: base.textTheme.apply(
+              fontFamily: 'DuoyiScreenshotLatin',
+              fontFamilyFallback: const ['DuoyiScreenshot'],
+            ),
+            appBarTheme: base.appBarTheme.copyWith(
+              titleTextStyle: base.appBarTheme.titleTextStyle?.copyWith(
+                fontFamily: 'DuoyiScreenshotLatin',
+                fontFamilyFallback: const ['DuoyiScreenshot'],
+              ),
+            ),
+          );
+          final auth = AuthProvider(
+            initialState: loggedIn
+                ? const AuthState(
+                    userId: 'overview-user',
+                    username: 'overview',
+                    displayName: 'Overview',
+                    token: 'synthetic-overview-token',
+                  )
+                : const AuthState(),
+            client: ApiClient(
+              baseUrl: 'https://duoyi.test',
+              httpClient: MockClient((_) async => http.Response('{}', 404)),
+            ),
+          );
+          addTearDown(auth.dispose);
+          final captureKey = GlobalKey();
+          await tester.pumpWidget(
+            RepaintBoundary(
+              key: captureKey,
+              child: _wrap(
+                const BrandBackground(
+                  child: MineScreen(useShellBackground: true),
+                ),
+                authProvider: auth,
+                themeProvider: themeProvider,
+                theme: theme,
+                textScale: presentation.scale,
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final header = find.byKey(const ValueKey('mine_header_stable_box'));
+          final status = find.descendant(
+            of: header,
+            matching: find.text(
+              loggedIn
+                  ? AccountUiCopy.statusLoggedIn
+                  : AccountUiCopy.statusNotLoggedIn,
+            ),
+          );
+          expect(status, findsOneWidget);
+          expect(
+            tester.renderObject<RenderParagraph>(status).didExceedMaxLines,
+            isFalse,
+          );
+          if (locale == AppLocale.en) {
+            final paragraph = tester.renderObject<RenderParagraph>(status);
+            final text = paragraph.text.toPlainText();
+            for (final word in RegExp(r'\S+').allMatches(text)) {
+              expect(
+                paragraph
+                    .getBoxesForSelection(
+                      TextSelection(
+                        baseOffset: word.start,
+                        extentOffset: word.end,
+                      ),
+                    )
+                    .length,
+                1,
+                reason: 'Account status must wrap at words: ${word.group(0)}',
+              );
+            }
+          }
+          expect(
+            find.descendant(of: header, matching: find.byType(FittedBox)),
+            findsNothing,
+          );
+          if (loggedIn &&
+              presentation.width == 320 &&
+              presentation.scale == 1.6) {
+            await expectInformationChipContrast(tester, captureKey, [
+              AccountUiCopy.statusLoggedIn,
+            ]);
+            await _captureMineOverview(
+              tester,
+              captureKey,
+              '${brand.id}-${locale.name}-logged-in-1.6-top',
+            );
+          }
+          final action = loggedIn
+              ? find.byKey(const ValueKey('mine_top_logout_button'))
+              : find.widgetWithText(FilledButton, I18n.tr('auth.login'));
+          expect(tester.getSize(action).shortestSide, greaterThanOrEqualTo(44));
+          final label = loggedIn ? null : find.text(I18n.tr('auth.login'));
+          if (label != null) {
+            expect(
+              tester.renderObject<RenderParagraph>(label).didExceedMaxLines,
+              isFalse,
+            );
+          }
+          final captureName = '${locale.name}-${presentation.scale}';
+          if (!loggedIn && presentation.width == 320) {
+            await _captureMineOverview(tester, captureKey, '$captureName-top');
+          }
+          final scrollable = find.byWidgetPredicate(
+            (widget) =>
+                widget is Scrollable &&
+                widget.restorationId == 'mine_screen_list',
+          );
+          for (final key in [
+            'mine.stats.todos',
+            'mine.stats.streak',
+            'mine.stats.focus',
+            'mine.stats.productivity',
+          ]) {
+            final title = find.text(I18n.tr(key));
+            await tester.scrollUntilVisible(title, 160, scrollable: scrollable);
+            await tester.pumpAndSettle();
+            expect(tester.widget<Text>(title).maxLines, isNull, reason: key);
+            expect(
+              tester.renderObject<RenderParagraph>(title).didExceedMaxLines,
+              isFalse,
+              reason: key,
+            );
+            final metric = find.ancestor(
+              of: title,
+              matching: find.byType(AppMetricCard),
+            );
+            for (final text
+                in find
+                    .descendant(of: metric, matching: find.byType(Text))
+                    .evaluate()) {
+              final paragraph = tester.renderObject<RenderParagraph>(
+                find.byWidget(text.widget),
+              );
+              expect(paragraph.didExceedMaxLines, isFalse, reason: key);
+              expect(
+                paragraph.textScaler.scale(11),
+                closeTo(11 * presentation.scale, 0.001),
+              );
+            }
+            expect(tester.takeException(), isNull);
+          }
+          if (!loggedIn && presentation.width == 320) {
+            await _captureMineOverview(
+              tester,
+              captureKey,
+              '$captureName-stats',
+            );
+          }
+          await tester.pumpWidget(const SizedBox.shrink());
+        }
+      }
+    });
+  }
+
+  for (final locale in AppLocale.values) {
+    testWidgets(
+      'Mine menu labels wrap and follow iOS surfaces: ${locale.name}',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        I18n.setLocale(locale);
+        await tester.runAsync(loadWidgetPolishScreenshotFonts);
+        final text = AppBrands.defaultBrand.theme.textTheme.apply(
+          fontFamily: 'DuoyiScreenshotLatin',
+          fontFamilyFallback: const ['DuoyiScreenshot'],
+        );
+        final base = AppBrands.defaultBrand.theme;
+        final theme = base.copyWith(
+          textTheme: text,
+          primaryTextTheme: text,
+          appBarTheme: base.appBarTheme.copyWith(
+            titleTextStyle: base.appBarTheme.titleTextStyle?.copyWith(
+              fontFamily: 'DuoyiScreenshotLatin',
+              fontFamilyFallback: const ['DuoyiScreenshot'],
+            ),
+          ),
+        );
+        final captureKey = GlobalKey();
+        await tester.pumpWidget(
+          RepaintBoundary(
+            key: captureKey,
+            child: _wrap(const MineScreen(), theme: theme, textScale: 1.6),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final scrollable = find.byWidgetPredicate(
+          (widget) =>
+              widget is Scrollable &&
+              widget.restorationId == 'mine_screen_list',
+        );
+        Future<void> capture(String name) async {
+          final directory =
+              Platform.environment['DUOYI_ME_ENTRY_SCREENSHOT_DIR'];
+          if (directory == null || directory.isEmpty) return;
+          await tester.pumpAndSettle();
+          await tester.runAsync(() async {
+            final boundary =
+                captureKey.currentContext!.findRenderObject()!
+                    as RenderRepaintBoundary;
+            final image = await boundary.toImage();
+            final data = await image.toByteData(format: ui.ImageByteFormat.png);
+            image.dispose();
+            final file = File('$directory/mine-${locale.name}-$name.png');
+            file.parent.createSync(recursive: true);
+            file.writeAsBytesSync(data!.buffer.asUint8List());
+          });
+        }
+
+        await capture('top');
+        for (final key in [
+          'mine.tile.more_apps',
+          'preferences.title',
+          'app_lock.title',
+          'mine.tile.integrations',
+          'sync_conflict.title',
+          'mine.tile.notification_history',
+          'mine.tile.notification_settings',
+          'mine.tile.feedback',
+        ]) {
+          tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+          await tester.pumpAndSettle();
+          final label = find.text(I18n.tr(key));
+          await tester.scrollUntilVisible(label, 240, scrollable: scrollable);
+          await tester.pumpAndSettle();
+          final paragraph = tester.renderObject<RenderParagraph>(label);
+          expect(paragraph.didExceedMaxLines, isFalse, reason: key);
+          expect(tester.widget<Text>(label).softWrap, isTrue);
+          final action = find
+              .ancestor(of: label, matching: find.byType(InkWell))
+              .first;
+          expect(tester.getSize(action).height, greaterThanOrEqualTo(44));
+          final card = tester.widget<AppSurfaceCard>(
+            find
+                .ancestor(of: label, matching: find.byType(AppSurfaceCard))
+                .first,
+          );
+          expect(card.borderRadius, isNull);
+          expect(card.border, theme.extension<AppSurfaceStyle>()!.cardBorder);
+          expect(card.color, isNull);
+          if (key == 'preferences.title' ||
+              key == 'mine.tile.notification_settings') {
+            await capture(key.split('.').last);
+          }
+          expect(tester.takeException(), isNull);
+        }
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
+  for (final size in [(width: 390.0, scale: 1.0), (width: 320.0, scale: 1.6)]) {
+    testWidgets('Mine App Lock retained route ${size.width}/${size.scale}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(size.width, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_wrap(const MineScreen(), textScale: size.scale));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final entrance = find.text(I18n.tr('app_lock.title'));
+      await tester.scrollUntilVisible(
+        entrance,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(entrance);
+      await tester.pumpAndSettle();
+      final route = find.byType(LockSettingsScreen);
+      final originalState = tester.state<State<LockSettingsScreen>>(route);
+      final lock = tester.element(route).read<AppLockProvider>();
+      final prefs = await SharedPreferences.getInstance();
+      var lockNotifications = 0;
+      void recordNotification() => lockNotifications++;
+      lock.addListener(recordNotification);
+      addTearDown(() => lock.removeListener(recordNotification));
+
+      Future<void> toggle() async {
+        await tester.ensureVisible(find.byType(Switch).first);
+        await tester.tap(find.byType(Switch).first);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+
+      Future<void> confirm(String pin) async {
+        await tester.enterText(find.byType(TextField).last, pin);
+        await tester.tap(
+          find.widgetWithText(FilledButton, I18n.tr('action.confirm')),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+
+      await toggle();
+      await tester.enterText(find.byType(TextField).last, '2468');
+      final field = tester.widget<EditableText>(find.byType(EditableText).last);
+      final controller = field.controller;
+      controller.selection = const TextSelection(
+        baseOffset: 1,
+        extentOffset: 3,
+      );
+      final focus = field.focusNode;
+      for (final locale in [AppLocale.en, AppLocale.zh]) {
+        I18n.setLocale(locale);
+        await tester.pumpAndSettle();
+        final retained = tester.widget<EditableText>(
+          find.byType(EditableText).last,
+        );
+        expect(
+          tester.state<State<LockSettingsScreen>>(route),
+          same(originalState),
+        );
+        expect(retained.controller, same(controller));
+        expect(retained.focusNode, same(focus));
+        expect(retained.controller.text, '2468');
+        expect(
+          retained.controller.selection,
+          const TextSelection(baseOffset: 1, extentOffset: 3),
+        );
+        expect(retained.focusNode.hasFocus, isTrue);
+        expect(retained.obscureText, isTrue);
+        expect(find.text(I18n.tr('app_lock.dialog.set_pin')), findsOneWidget);
+        expect(lock.enabled, isFalse);
+        expect(lockNotifications, 0);
+        expect(prefs.getString('app_lock_pin_hash'), isNull);
+        expect(tester.takeException(), isNull);
+      }
+      await tester.tap(
+        find.widgetWithText(TextButton, I18n.tr('action.cancel')),
+      );
+      await tester.pumpAndSettle();
+      expect(lock.enabled, isFalse);
+      expect(lockNotifications, 0);
+
+      await toggle();
+      await tester.enterText(find.byType(TextField).last, '2468');
+      I18n.setLocale(AppLocale.en);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, I18n.tr('action.confirm')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(I18n.tr('app_lock.dialog.confirm_pin')), findsOneWidget);
+      expect(
+        tester.state<State<LockSettingsScreen>>(route),
+        same(originalState),
+      );
+      await confirm('2468');
+      expect(lock.enabled, isTrue);
+      expect(await lock.verify('2468'), isTrue);
+      expect(lockNotifications, 1);
+
+      await toggle();
+      await confirm('1357');
+      expect(lock.enabled, isTrue);
+      expect(lockNotifications, 1);
+      await toggle();
+      await confirm('2468');
+      expect(lock.enabled, isFalse);
+      expect(lockNotifications, 2);
+      await tester.pump(const Duration(seconds: 5));
+      lock.removeListener(recordNotification);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('Today greeting changes on a locale notifier alone', (
     tester,
@@ -352,6 +1207,90 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('priority theme paired page screenshots', (tester) async {
+    final directory =
+        Platform.environment['DUOYI_PRIORITY_THEME_SCREENSHOT_DIR'];
+    if (directory == null || directory.isEmpty) return;
+    addTearDown(tester.view.reset);
+    final previousDisableShadows = debugDisableShadows;
+    debugDisableShadows = false;
+    addTearDown(() => debugDisableShadows = previousDisableShadows);
+    try {
+      await tester.runAsync(loadWidgetPolishScreenshotFonts);
+      for (final brand in [AppBrands.defaultBrand, AppBrands.liquidGlass]) {
+        for (final locale in AppLocale.values) {
+          I18n.setLocale(locale);
+          SharedPreferences.setMockInitialValues({'active_brand': brand.id});
+          final provider = ThemeProvider();
+          await provider.loadFromStorage();
+          expect(provider.brand.id, brand.id);
+          final base = brand.theme;
+          final theme = base.copyWith(
+            textTheme: base.textTheme.apply(
+              fontFamily: 'DuoyiScreenshotLatin',
+              fontFamilyFallback: const ['DuoyiScreenshot'],
+            ),
+            appBarTheme: base.appBarTheme.copyWith(
+              titleTextStyle: base.appBarTheme.titleTextStyle?.copyWith(
+                fontFamily: 'DuoyiScreenshotLatin',
+                fontFamilyFallback: const ['DuoyiScreenshot'],
+              ),
+            ),
+          );
+          for (final width in [320.0, 1024.0]) {
+            final scale = width == 320 ? 1.6 : 1.0;
+            tester.view.physicalSize = Size(width, 900);
+            tester.view.devicePixelRatio = 1;
+            for (final page in ['today', 'mine']) {
+              final key = GlobalKey();
+              await tester.pumpWidget(
+                _wrap(
+                  RepaintBoundary(
+                    key: key,
+                    child: BrandBackground(
+                      child: page == 'today'
+                          ? const TodayScreen()
+                          : const MineScreen(),
+                    ),
+                  ),
+                  themeProvider: provider,
+                  theme: theme,
+                  textScale: scale,
+                ),
+              );
+              await _pumpTodayLayoutFrame(tester);
+              expect(
+                tester.takeException(),
+                isNull,
+                reason: '${brand.id}/$page/${locale.name}/$width',
+              );
+              await tester.runAsync(() async {
+                final boundary =
+                    key.currentContext!.findRenderObject()!
+                        as RenderRepaintBoundary;
+                final image = await boundary.toImage();
+                final bytes = await image.toByteData(
+                  format: ui.ImageByteFormat.png,
+                );
+                image.dispose();
+                final file = File(
+                  '$directory/${brand.id}-$page-${locale.name}-${width.toInt()}-scale-$scale.png',
+                );
+                file.parent.createSync(recursive: true);
+                file.writeAsBytesSync(bytes!.buffer.asUint8List());
+              });
+              await tester.pumpWidget(const SizedBox.shrink());
+              await tester.pumpAndSettle();
+            }
+          }
+          provider.dispose();
+        }
+      }
+    } finally {
+      debugDisableShadows = previousDisableShadows;
+    }
+  });
+
   testWidgets('Today keeps todo section visible when there is no task', (
     tester,
   ) async {
@@ -398,7 +1337,13 @@ void main() {
       final key = GlobalKey();
       await tester.pumpWidget(
         _wrap(
-          RepaintBoundary(key: key, child: const TodayScreen()),
+          RepaintBoundary(
+            key: key,
+            child: const ColoredBox(
+              color: DesignTokens.defaultPageBackground,
+              child: TodayScreen(),
+            ),
+          ),
           todoProvider: todos,
           theme: screenshotTheme,
           textScale: 1.6,
@@ -423,8 +1368,11 @@ void main() {
           final image = await boundary.toImage();
           final data = await image.toByteData(format: ui.ImageByteFormat.png);
           image.dispose();
+          final directory =
+              Platform.environment['DUOYI_TODAY_SCREENSHOT_DIR'] ??
+              'evidence/screenshots/home-locale-20261011';
           final file = File(
-            'evidence/screenshots/home-locale-20261011/home-en-${width.toInt()}-scale-1.6.png',
+            '$directory/home-en-${width.toInt()}-scale-1.6.png',
           );
           file.parent.createSync(recursive: true);
           file.writeAsBytesSync(data!.buffer.asUint8List());
@@ -473,6 +1421,23 @@ void main() {
         completedAt: now,
       ),
     );
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '昨日完成任务',
+        date: yesterday,
+        isCompleted: true,
+        completedAt: yesterday,
+      ),
+    );
+    await todoProvider.addTodo(
+      TodoItem(
+        title: '已归档任务',
+        date: today,
+        isCompleted: true,
+        completedAt: now,
+        isArchivedAfterRollover: true,
+      ),
+    );
 
     await tester.pumpWidget(
       _wrap(const TodayScreen(), todoProvider: todoProvider),
@@ -485,7 +1450,9 @@ void main() {
     expect(find.text('今天截止任务'), findsOneWidget);
     expect(find.text('昨天截止任务'), findsNothing);
     expect(find.text('明天截止任务'), findsOneWidget);
-    expect(find.text('已完成任务'), findsNothing);
+    expect(find.text('已完成任务'), findsOneWidget);
+    expect(find.text('昨日完成任务'), findsNothing);
+    expect(find.text('已归档任务'), findsNothing);
   });
 
   testWidgets(
@@ -560,9 +1527,10 @@ void main() {
             final image = await boundary.toImage();
             final data = await image.toByteData(format: ui.ImageByteFormat.png);
             image.dispose();
-            final file = File(
-              'evidence/screenshots/home-calendar-20261011/home-${width.toInt()}.png',
-            );
+            final directory =
+                Platform.environment['DUOYI_TODAY_SCREENSHOT_DIR'] ??
+                'evidence/screenshots/home-calendar-20261012';
+            final file = File('$directory/home-${width.toInt()}.png');
             file.parent.createSync(recursive: true);
             file.writeAsBytesSync(data!.buffer.asUint8List());
           });
@@ -831,6 +1799,411 @@ void main() {
     expect(find.text('个人资料'), findsOneWidget);
   });
 
+  testWidgets('Mine avatar rejects a picker result from the previous account', (
+    tester,
+  ) async {
+    final selector = _HeldAvatarSelector();
+    final previous = FileSelectorPlatform.instance;
+    FileSelectorPlatform.instance = selector;
+    addTearDown(() => FileSelectorPlatform.instance = previous);
+    final auth = _AvatarAuth();
+    final user = UserProvider();
+    addTearDown(auth.dispose);
+    addTearDown(user.dispose);
+    await tester.pumpWidget(
+      _wrap(const MineScreen(), authProvider: auth, userProvider: user),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mine_avatar_edit_button')));
+    await tester.pump();
+    expect(selector.calls, 1);
+    AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+    user.resetLocalState();
+    final file = _HeldAvatarFile();
+    selector.result.complete(file);
+    await tester.pumpAndSettle();
+    expect(file.reads, 0);
+    expect(auth.uploads, 0);
+    expect(user.profile.avatarUrl, isEmpty);
+    expect(find.text(AccountUiCopy.feedbackAvatarSaved), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Mine avatar rechecks account after held file read', (
+    tester,
+  ) async {
+    final selector = _HeldAvatarSelector();
+    final previous = FileSelectorPlatform.instance;
+    FileSelectorPlatform.instance = selector;
+    addTearDown(() => FileSelectorPlatform.instance = previous);
+    final auth = _AvatarAuth();
+    final user = UserProvider();
+    addTearDown(auth.dispose);
+    addTearDown(user.dispose);
+    await tester.pumpWidget(
+      _wrap(const MineScreen(), authProvider: auth, userProvider: user),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mine_avatar_edit_button')));
+    final file = _HeldAvatarFile();
+    selector.result.complete(file);
+    await tester.pumpAndSettle();
+    expect(file.reads, 1);
+    AccountLocalDataCleaner.invalidateInFlightAccountWrites();
+    user.resetLocalState();
+    file.bytes.complete(Uint8List.fromList([1, 2, 3]));
+    await tester.pumpAndSettle();
+    expect(auth.uploads, 0);
+    expect(user.profile.avatarUrl, isEmpty);
+    expect(find.text(AccountUiCopy.feedbackAvatarSaved), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Mine avatar completion preserves a newer covering route', (
+    tester,
+  ) async {
+    final selector = _HeldAvatarSelector();
+    final previous = FileSelectorPlatform.instance;
+    FileSelectorPlatform.instance = selector;
+    addTearDown(() => FileSelectorPlatform.instance = previous);
+    final auth = _AvatarAuth()..holdUpload = true;
+    addTearDown(auth.dispose);
+    await tester.pumpWidget(_wrap(const MineScreen(), authProvider: auth));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mine_avatar_edit_button')));
+    selector.result.complete(
+      XFile.fromData(Uint8List.fromList([1]), name: 'old.png'),
+    );
+    await tester.pumpAndSettle();
+    expect(auth.uploads, 1);
+    Navigator.of(tester.element(find.byType(MineScreen))).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('newer avatar route')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    auth.uploadRelease.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('newer avatar route'), findsOneWidget);
+    expect(find.text(AccountUiCopy.feedbackAvatarSaved), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final nextUserId in ['next-account', 'mine-origin']) {
+    testWidgets(
+      'Mine held logout confirmation rejects replacement session: $nextUserId',
+      (tester) async {
+        final requests = <String>[];
+        final auth = _mineSessionAuth(requests);
+        addTearDown(auth.dispose);
+        await tester.pumpWidget(_wrap(const MineScreen(), authProvider: auth));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('mine_top_logout_button')));
+        await tester.pumpAndSettle();
+        expect(find.text(I18n.tr('mine.logout.confirm_title')), findsOneWidget);
+        await _settleMineSessionOperation(tester, () async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(
+            'auth_state',
+            jsonEncode(
+              AuthState(
+                userId: nextUserId,
+                username: 'replacement',
+                token: 'replacement-session-token',
+              ).toJson(),
+            ),
+          );
+          await auth.loadFromStorage(refreshServerConfig: false);
+        });
+        await tester.pumpAndSettle();
+        expect(auth.state.userId, nextUserId);
+        expect(auth.state.token, 'replacement-session-token');
+        await tester.tap(
+          find.widgetWithText(FilledButton, I18n.tr('auth.logout')),
+        );
+        await tester.pumpAndSettle();
+        expect(requests.where((path) => path == '/api/auth/logout'), isEmpty);
+        expect(auth.state.userId, nextUserId);
+        expect(auth.state.isLoggedIn, isTrue);
+        expect(find.text(I18n.tr('mine.logout.done')), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
+  for (final confirm in [false, true]) {
+    testWidgets(
+      'covered Mine logout ${confirm ? 'confirmation' : 'cancel'} cannot pop a newer route',
+      (tester) async {
+        final requests = <String>[];
+        final auth = _mineSessionAuth(requests);
+        addTearDown(auth.dispose);
+        await tester.pumpWidget(_wrap(const MineScreen(), authProvider: auth));
+        await tester.pumpAndSettle();
+        final navigator = Navigator.of(tester.element(find.byType(MineScreen)));
+        addTearDown(() async {
+          if (navigator.mounted) {
+            navigator.popUntil((route) => route.isFirst);
+            await tester.pumpAndSettle();
+          }
+          await tester.pumpWidget(const SizedBox.shrink());
+        });
+        await tester.tap(find.byKey(const ValueKey('mine_top_logout_button')));
+        await tester.pumpAndSettle();
+        final VoidCallback callback = confirm
+            ? tester
+                  .widget<FilledButton>(
+                    find.widgetWithText(FilledButton, I18n.tr('auth.logout')),
+                  )
+                  .onPressed!
+            : tester
+                  .widget<TextButton>(
+                    find.widgetWithText(TextButton, I18n.tr('action.cancel')),
+                  )
+                  .onPressed!;
+        unawaited(
+          navigator.push(
+            MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Newer Mine route')),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        callback();
+        await tester.pumpAndSettle();
+        expect(find.text('Newer Mine route'), findsOneWidget);
+        expect(requests.where((path) => path == '/api/auth/logout'), isEmpty);
+        expect(auth.state.isLoggedIn, isTrue);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('covered Mine avatar callback cannot open the file picker', (
+    tester,
+  ) async {
+    final selector = _HeldAvatarSelector();
+    final previous = FileSelectorPlatform.instance;
+    FileSelectorPlatform.instance = selector;
+    addTearDown(() => FileSelectorPlatform.instance = previous);
+    final auth = _AvatarAuth();
+    addTearDown(auth.dispose);
+    await tester.pumpWidget(_wrap(const MineScreen(), authProvider: auth));
+    await tester.pumpAndSettle();
+    final callback = tester
+        .widget<InkWell>(
+          find.descendant(
+            of: find.byKey(const ValueKey('mine_avatar_edit_button')),
+            matching: find.byType(InkWell),
+          ),
+        )
+        .onTap!;
+    final navigator = Navigator.of(tester.element(find.byType(MineScreen)));
+    unawaited(
+      navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('Newer avatar route')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    callback();
+    selector.result.complete(null);
+    await tester.pumpAndSettle();
+    expect(selector.calls, 0);
+    expect(auth.uploads, 0);
+    expect(find.text('Newer avatar route'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'retained Mine header logout and avatar callbacks reject a same-user token rotation',
+    (tester) async {
+      final selector = _HeldAvatarSelector();
+      final previous = FileSelectorPlatform.instance;
+      FileSelectorPlatform.instance = selector;
+      addTearDown(() => FileSelectorPlatform.instance = previous);
+      final requests = <String>[];
+      final auth = _mineSessionAuth(requests);
+      addTearDown(auth.dispose);
+      await tester.pumpWidget(_wrap(const MineScreen(), authProvider: auth));
+      await tester.pumpAndSettle();
+
+      final logoutCallback = tester
+          .widget<IconButton>(
+            find.byKey(const ValueKey('mine_top_logout_button')),
+          )
+          .onPressed!;
+      final avatarButton = find.byKey(
+        const ValueKey('mine_avatar_edit_button'),
+      );
+      final avatarCallback = tester
+          .widget<InkWell>(
+            find.descendant(of: avatarButton, matching: find.byType(InkWell)),
+          )
+          .onTap!;
+      final originalGeneration = auth.sessionGeneration;
+
+      await _settleMineSessionOperation(tester, () async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+          'auth_state',
+          jsonEncode(
+            const AuthState(
+              userId: 'mine-origin',
+              username: 'replacement-token',
+              token: 'rotated-session-token',
+            ).toJson(),
+          ),
+        );
+        await auth.loadFromStorage(refreshServerConfig: false);
+      });
+      await tester.pumpAndSettle();
+      expect(auth.state.userId, 'mine-origin');
+      expect(auth.state.token, 'rotated-session-token');
+      expect(auth.sessionGeneration, greaterThan(originalGeneration));
+
+      logoutCallback();
+      await tester.pumpAndSettle();
+      avatarCallback();
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsNothing);
+      expect(selector.calls, 0);
+      expect(auth.uploads, 0);
+      expect(requests.where((path) => path == '/api/auth/logout'), isEmpty);
+
+      final freshAvatarCallback = tester
+          .widget<InkWell>(
+            find.descendant(of: avatarButton, matching: find.byType(InkWell)),
+          )
+          .onTap!;
+      freshAvatarCallback();
+      await tester.pump();
+      expect(selector.calls, 1);
+      selector.result.complete(null);
+      await tester.pumpAndSettle();
+      expect(auth.state.isLoggedIn, isTrue);
+      expect(requests.where((path) => path == '/api/auth/logout'), isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'covered avatar preview edit callback cannot pop the new route or open the picker',
+    (tester) async {
+      final selector = _HeldAvatarSelector();
+      final previous = FileSelectorPlatform.instance;
+      FileSelectorPlatform.instance = selector;
+      addTearDown(() => FileSelectorPlatform.instance = previous);
+      final auth = _AvatarAuth();
+      addTearDown(auth.dispose);
+      await tester.pumpWidget(_wrap(const MineScreen(), authProvider: auth));
+      await tester.pumpAndSettle();
+      final navigator = Navigator.of(tester.element(find.byType(MineScreen)));
+
+      final preview = find.byKey(const ValueKey('mine_avatar_preview_button'));
+      await tester.tapAt(tester.getTopLeft(preview) + const Offset(20, 20));
+      await tester.pumpAndSettle();
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      final editButton = find.ancestor(
+        of: find.byTooltip(I18n.tr('mine.avatar.edit')),
+        matching: find.byType(IconButton),
+      );
+      expect(editButton, findsOneWidget);
+      final callback = tester.widget<IconButton>(editButton).onPressed!;
+      addTearDown(() async {
+        if (navigator.mounted) {
+          navigator.popUntil((route) => route.isFirst);
+          await tester.pumpAndSettle();
+        }
+        await tester.pumpWidget(const SizedBox.shrink());
+      });
+
+      unawaited(
+        navigator.push(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('Newer preview route')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      callback();
+      selector.result.complete(null);
+      await tester.pumpAndSettle();
+      expect(selector.calls, 0);
+      expect(auth.uploads, 0);
+      expect(find.text('Newer preview route'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Mine held avatar picker error is silent after session expiry', (
+    tester,
+  ) async {
+    final selector = _HeldAvatarSelector();
+    final previous = FileSelectorPlatform.instance;
+    FileSelectorPlatform.instance = selector;
+    addTearDown(() => FileSelectorPlatform.instance = previous);
+    final auth = _mineSessionAuth([]);
+    addTearDown(auth.dispose);
+    await tester.pumpWidget(_wrap(const MineScreen(), authProvider: auth));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mine_avatar_edit_button')));
+    await tester.pump();
+    expect(selector.calls, 1);
+    await _settleMineSessionOperation(
+      tester,
+      () => auth.refreshMe(force: true),
+    );
+    await tester.pumpAndSettle();
+    expect(auth.state.isLoggedIn, isFalse);
+    selector.result.completeError(StateError('synthetic old picker failure'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining(I18n.tr('profile.avatar.save_failed_prefix')),
+      findsNothing,
+    );
+    expect(find.byType(SnackBar), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('Mine old avatar preview cannot start guest edit after expiry', (
+    tester,
+  ) async {
+    final selector = _HeldAvatarSelector();
+    final previous = FileSelectorPlatform.instance;
+    FileSelectorPlatform.instance = selector;
+    addTearDown(() => FileSelectorPlatform.instance = previous);
+    final auth = _mineSessionAuth([]);
+    addTearDown(auth.dispose);
+    await tester.pumpWidget(_wrap(const MineScreen(), authProvider: auth));
+    await tester.pumpAndSettle();
+    final preview = find.byKey(const ValueKey('mine_avatar_preview_button'));
+    await tester.tapAt(tester.getTopLeft(preview) + const Offset(20, 20));
+    await tester.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+    await _settleMineSessionOperation(
+      tester,
+      () => auth.refreshMe(force: true),
+    );
+    await tester.pumpAndSettle();
+    expect(auth.state.isLoggedIn, isFalse);
+    await tester.tap(find.byTooltip(I18n.tr('mine.avatar.edit')));
+    await tester.pumpAndSettle();
+    final calls = selector.calls;
+    if (calls > 0) {
+      selector.result.complete(null);
+      await tester.pumpAndSettle();
+    }
+    expect(calls, 0);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('MineScreen exposes logout in the top user info row', (
     tester,
   ) async {
@@ -886,6 +2259,10 @@ void main() {
     expect(auth.state.isLoggedIn, isFalse);
     expect(find.textContaining('已退出登录'), findsOneWidget);
     expect(find.textContaining('本机账号数据已清理'), findsOneWidget);
+    I18n.setLocale(AppLocale.en);
+    await tester.pump();
+    expect(find.text(I18n.tr('mine.logout.done')), findsOneWidget);
+    expect(find.textContaining('已退出登录'), findsNothing);
   });
 
   testWidgets('Today todo left swipe exposes detail and delete actions', (
@@ -1405,10 +2782,15 @@ void main() {
 
     await tester.enterText(find.widgetWithText(TextField, '显示名'), '新显示名');
     await tester.enterText(find.widgetWithText(TextField, '本地昵称'), '新昵称');
-    await tester.enterText(
-      find.widgetWithText(TextField, '邮箱（仅本地展示，不用于登录或找回）'),
-      'new@example.com',
+    expect(find.text('邮箱（仅本地展示，不用于登录或找回）'), findsOneWidget);
+    final localEmail = find.byKey(const ValueKey('profile_local_email_field'));
+    expect(localEmail, findsOneWidget);
+    expect(
+      tester.widget<TextField>(localEmail).controller!.text,
+      'old@example.com',
     );
+    await tester.ensureVisible(localEmail);
+    await tester.enterText(localEmail, 'new@example.com');
     await tester.enterText(find.widgetWithText(TextField, '简介'), '新的个人简介');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
@@ -1577,7 +2959,178 @@ void main() {
   });
 }
 
+InkWell _mineUpdateInkWell(WidgetTester tester) => tester.widget<InkWell>(
+  find
+      .ancestor(
+        of: find.text(I18n.tr('mine.tile.check_updates')),
+        matching: find.byType(InkWell),
+      )
+      .first,
+);
+
+Future<VoidCallback> _mineUpdateCallback(WidgetTester tester) async {
+  await tester.scrollUntilVisible(
+    find.text(I18n.tr('mine.tile.check_updates')),
+    600,
+    scrollable: find.byType(Scrollable).last,
+  );
+  return _mineUpdateInkWell(tester).onTap!;
+}
+
+class _HeldMineUpdater extends AppUpdateService {
+  _HeldMineUpdater() : super(repo: 'synthetic/duoyi', currentVersion: '1.0.0');
+
+  Completer<void>? _pending;
+  int calls = 0;
+  bool forceUpdate = false;
+
+  @override
+  bool get checking => _pending != null;
+  @override
+  bool get mustUpdate => forceUpdate;
+
+  @override
+  Future<void> checkNow() async {
+    calls++;
+    final pending = Completer<void>();
+    _pending = pending;
+    notifyListeners();
+    await pending.future;
+  }
+
+  void finish() {
+    final pending = _pending!;
+    _pending = null;
+    notifyListeners();
+    pending.complete();
+  }
+}
+
 Future<void> _pumpTodayLayoutFrame(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 250));
+}
+
+Future<void> _captureMineOverview(
+  WidgetTester tester,
+  GlobalKey key,
+  String name,
+) async {
+  final directory = Platform.environment['DUOYI_ME_ENTRY_SCREENSHOT_DIR'];
+  if (directory == null || directory.isEmpty) return;
+  await tester.runAsync(() async {
+    final boundary =
+        key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+    final image = await boundary.toImage();
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    final file = File('$directory/overview-$name.png');
+    file.parent.createSync(recursive: true);
+    file.writeAsBytesSync(data!.buffer.asUint8List());
+  });
+}
+
+class _HeldAvatarSelector extends FileSelectorPlatform {
+  final result = Completer<XFile?>();
+  int calls = 0;
+
+  @override
+  Future<XFile?> openFile({
+    List<XTypeGroup>? acceptedTypeGroups,
+    String? initialDirectory,
+    String? confirmButtonText,
+  }) {
+    calls++;
+    return result.future;
+  }
+}
+
+Future<void> _settleMineSessionOperation(
+  WidgetTester tester,
+  Future<void> Function() operation,
+) async {
+  var finished = false;
+  final pending = operation().whenComplete(() => finished = true);
+  for (var frame = 0; frame < 100 && !finished; frame++) {
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+  expect(finished, isTrue, reason: 'Synthetic auth lifecycle must settle');
+  await pending;
+}
+
+_MineSessionAuth _mineSessionAuth(List<String> requests) {
+  return _MineSessionAuth(requests);
+}
+
+class _MineSessionAuth extends AuthProvider {
+  _MineSessionAuth(List<String> requests)
+    : super(
+        initialState: const AuthState(
+          userId: 'mine-origin',
+          username: 'origin',
+          token: 'origin-session-token',
+        ),
+        client: ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'origin-session-token',
+          httpClient: MockClient((request) async {
+            requests.add(request.url.path);
+            if (request.url.path == '/api/auth/me' ||
+                request.url.path == '/api/me') {
+              return http.Response('{}', 401);
+            }
+            return http.Response('{}', 200);
+          }),
+        ),
+      );
+
+  int uploads = 0;
+
+  @override
+  Future<void> uploadAvatarBytes({
+    required String filename,
+    required Uint8List bytes,
+    AuthSessionLease? sessionLease,
+  }) async {
+    uploads++;
+    if (sessionLease != null) requireCurrentSessionLease(sessionLease);
+  }
+}
+
+class _HeldAvatarFile extends XFile {
+  _HeldAvatarFile() : super('/synthetic/held-avatar.png');
+  final bytes = Completer<Uint8List>();
+  int reads = 0;
+
+  @override
+  Future<Uint8List> readAsBytes() {
+    reads++;
+    return bytes.future;
+  }
+}
+
+class _AvatarAuth extends AuthProvider {
+  _AvatarAuth()
+    : super(
+        initialState: const AuthState(
+          userId: 'avatar-origin',
+          username: 'avatar-user',
+          token: 'synthetic-avatar-token',
+        ),
+      );
+
+  int uploads = 0;
+  bool holdUpload = false;
+  final uploadRelease = Completer<void>();
+
+  @override
+  Future<void> uploadAvatarBytes({
+    required String filename,
+    required Uint8List bytes,
+    AuthSessionLease? sessionLease,
+  }) async {
+    uploads++;
+    if (holdUpload) await uploadRelease.future;
+    if (sessionLease != null) requireCurrentSessionLease(sessionLease);
+  }
 }

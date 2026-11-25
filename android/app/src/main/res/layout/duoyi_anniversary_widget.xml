@@ -34,10 +34,11 @@
         android:visibility="gone" />
 
     <LinearLayout
+        android:id="@+id/widget_anniversary_content"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="8dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -53,13 +54,13 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:text="多仪"
-            android:textColor="#E91E63"
+            android:textColor="#0066D6"
             android:textSize="14sp" />
 
         <TextView
             android:id="@+id/widget_refresh"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:minWidth="36dp"
             android:minHeight="36dp"
             android:contentDescription="@string/widget_refresh_description"
@@ -127,7 +128,8 @@
     <LinearLayout
         android:id="@+id/widget_anniversary_bottom_nav"
         android:layout_width="match_parent"
-        android:layout_height="30dp"
+        android:layout_height="wrap_content"
+        android:minHeight="30dp"
         android:layout_marginTop="8dp"
         android:background="@drawable/widget_nav_bg"
         android:gravity="center"
@@ -140,7 +142,8 @@
         <TextView
             android:id="@+id/widget_anniversary_nav_todo"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
             android:layout_weight="1"
             android:gravity="center"
             android:ellipsize="end"
@@ -152,7 +155,8 @@
         <TextView
             android:id="@+id/widget_anniversary_nav_habit"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
             android:layout_weight="1"
             android:gravity="center"
             android:ellipsize="end"
@@ -164,19 +168,21 @@
         <TextView
             android:id="@+id/widget_anniversary_nav_calendar"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
             android:layout_weight="1"
             android:gravity="center"
             android:ellipsize="end"
             android:maxLines="1"
             android:text="@string/widget_tab_calendar"
-            android:textColor="#E91E63"
+            android:textColor="#0066D6"
             android:textSize="10sp" />
 
         <TextView
             android:id="@+id/widget_anniversary_nav_focus"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="30dp"
             android:layout_weight="1"
             android:gravity="center"
             android:ellipsize="end"

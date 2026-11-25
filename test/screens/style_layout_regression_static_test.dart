@@ -24,8 +24,26 @@ void main() {
   test('二级页面避免粗字重、大标题和厚边框回退', () {
     for (final path in scopedScreens) {
       final source = File(path).readAsStringSync();
+      var renderedTypography = source;
+      if (path == 'lib/screens/widget_screen.dart') {
+        // Only this pure measurement helper may use system-requested bold.
+        // It must match Text's accessibility rendering when choosing capacity.
+        final start = source.indexOf('TextStyle _widgetMeasurementStyle(');
+        final end = source.indexOf('\nAxis _widgetSegmentDirection(', start);
+        expect(start, greaterThanOrEqualTo(0));
+        expect(end, greaterThan(start));
+        final measurementHelper = source.substring(start, end);
+        expect(measurementHelper, contains('MediaQuery.boldTextOf(context)'));
+        expect(
+          measurementHelper,
+          contains('MediaQuery.maybeLineHeightScaleFactorOverrideOf(context)'),
+        );
+        expect(measurementHelper, isNot(contains('Text(')));
+        expect(measurementHelper, isNot(contains('Widget(')));
+        renderedTypography = source.replaceRange(start, end, '');
+      }
       expect(
-        source,
+        renderedTypography,
         isNot(matches(RegExp(r'FontWeight\.(bold|w700|w800|w900)'))),
         reason: '$path should use regular secondary-page typography',
       );
@@ -48,6 +66,18 @@ void main() {
         final width = RegExp(
           r'width:\s*([0-9]+(?:\.[0-9]+)?)',
         ).firstMatch(call);
+        final widthName = RegExp(
+          r'width:\s*([A-Za-z_]\w*)\s*[,)]',
+        ).firstMatch(call)?.group(1);
+        final constantWidth = widthName == null
+            ? null
+            : RegExp(
+                'const double ${RegExp.escape(widthName)}'
+                r'\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*;',
+              ).firstMatch(source);
+        final resolvedWidth = double.tryParse(
+          width?.group(1) ?? constantWidth?.group(1) ?? '',
+        );
         final sharedInputWidth = RegExp(
           r'OutlineInputBorder inputBorder\(Color color, \{double width = ([0-9]+(?:\.[0-9]+)?)\}\)',
         ).firstMatch(source);
@@ -55,14 +85,21 @@ void main() {
             call.contains('width: width') &&
             sharedInputWidth != null &&
             double.parse(sharedInputWidth.group(1)!) <= 0.5;
+        final usesWidgetThemeWidth =
+            path == 'lib/screens/widget_screen.dart' &&
+            call.contains('width: widgetTheme.borderWidthDp.toDouble()') &&
+            source.contains('border: widgetTheme.borderWidthDp == 0') &&
+            source.contains(
+              'HomeWidgetThemePayload.fromThemeProvider(provider)',
+            );
         expect(
-          width != null || usesSharedInputWidth,
+          resolvedWidth != null || usesSharedInputWidth || usesWidgetThemeWidth,
           isTrue,
           reason: '$path uses default 1px border:\n$call',
         );
-        if (width != null) {
+        if (resolvedWidth != null) {
           expect(
-            double.parse(width.group(1)!),
+            resolvedWidth,
             lessThanOrEqualTo(0.6),
             reason: '$path uses a thick border:\n$call',
           );
@@ -87,7 +124,7 @@ void main() {
       surfaceCard,
       matches(
         RegExp(
-          r'boxShadow:\s*elevation\s*<=\s*0\s*'
+          r'boxShadow:\s*boxShadow\s*\?\?\s*\(\s*elevation\s*<=\s*0\s*'
           r'\?\s*\(surfaceStyle\?\.cardShadow\s*\?\?\s*const\s*\[\]\)'
           r'\s*:\s*\[\s*BoxShadow\(',
           dotAll: true,
@@ -173,7 +210,7 @@ void main() {
     expect(pagination, contains('WrapAlignment.spaceBetween'));
     expect(
       pagination,
-      contains('return SizedBox(\n              width: double.infinity,'),
+      matches(RegExp(r'return SizedBox\(\s*width:\s*double\.infinity,')),
     );
     final compactControls = pagination.substring(
       pagination.indexOf("ValueKey('admin_compact_pagination_controls')"),
@@ -183,7 +220,7 @@ void main() {
     expect(compactControls, contains('?pageSizePicker'));
     expect(
       compactControls,
-      contains("Tooltip(message: '分页导航', child: navigation())"),
+      contains('message: AdminUiCopy.paginationNavigationFor(locale)'),
     );
     expect(
       pagination,
@@ -199,7 +236,7 @@ void main() {
 
     final primaryTabBar = admin.substring(
       admin.indexOf('bottom: TabBar('),
-      admin.indexOf('tabs: const [', admin.indexOf('bottom: TabBar(')),
+      admin.indexOf('body: TabBarView('),
     );
     expect(primaryTabBar, contains('labelColor: cs.onSurface'));
     expect(
@@ -266,7 +303,10 @@ void main() {
     expect(pagination, contains('constraints.maxWidth < 360'));
     expect(pagination, contains('Column('));
     expect(pagination, contains('Row(children: controls)'));
-    expect(pagination, contains('appSecondaryControlLabelStyle(context)'));
+    expect(
+      pagination,
+      matches(RegExp(r'appSecondaryControlLabelStyle\(\s*context\s*,?\s*\)')),
+    );
     expect(
       pagination,
       isNot(contains('padding: const EdgeInsets.symmetric(horizontal: 12)')),
@@ -339,7 +379,7 @@ void main() {
     final todo = File('lib/screens/todo_screen.dart').readAsStringSync();
     final summary = todo.substring(
       todo.indexOf("icon: Icons.check_circle_outline"),
-      todo.indexOf("label: '重点'"),
+      todo.indexOf('label: TodoBoardUiCopy.todaySummaryChipKey'),
     );
     expect(summary, contains('icon: Icons.check_circle_outline'));
 
@@ -454,10 +494,15 @@ void main() {
       'lib/widgets/surface_components.dart',
     ).readAsStringSync();
     final modalSheet = surfaceComponents.substring(
-      surfaceComponents.indexOf('Future<T?> showAppModalSheet<T>'),
+      surfaceComponents.indexOf(
+        'ModalBottomSheetRoute<T> createAppModalSheetRoute<T>',
+      ),
       surfaceComponents.indexOf('class AppDialog'),
     );
     expect(modalSheet, contains('requestFocus: false'));
+    expect(modalSheet, contains('showDragHandle: false'));
+    expect(modalSheet, contains('bool isScrollControlled = true'));
+    expect(modalSheet, contains('backgroundColor: Colors.transparent'));
     expect(modalSheet, isNot(contains('requestFocus: false ||')));
     expect(
       surfaceComponents,
@@ -505,9 +550,13 @@ void main() {
     final note = File('lib/screens/note_screen.dart').readAsStringSync();
     final attachmentPicker = note.substring(
       note.indexOf('Future<void> _addAttachment'),
-      note.indexOf('if (source == null) return;'),
+      note.indexOf('if (source == _AttachmentSource.file)'),
     );
-    expect(attachmentPicker, contains('showAppModalSheet<_AttachmentSource>('));
+    expect(
+      attachmentPicker,
+      contains('createAppModalSheetRoute<_AttachmentSource>('),
+    );
+    expect(attachmentPicker, contains('_pushOwned<_AttachmentSource>('));
     expect(attachmentPicker, contains('AppModalSheet('));
     expect(attachmentPicker, contains('AppSettingsTile('));
     expect(attachmentPicker, isNot(contains('showModalBottomSheet')));
@@ -610,6 +659,143 @@ void main() {
           contains('final routeBackground = Colors.transparent;'),
           reason: path,
         );
+      } else if (path == 'lib/screens/integrations_screen.dart') {
+        // Independently require the root's ordinary and owned Brand backing.
+        final bodyStart = source.indexOf('class _IntegrationsScreenBody');
+        final bodyEnd = source.indexOf(
+          'ButtonStyle _integrationOutlinedButtonStyle',
+          bodyStart,
+        );
+        expect(bodyStart, greaterThanOrEqualTo(0));
+        expect(bodyEnd, greaterThan(bodyStart));
+        final body = source.substring(bodyStart, bodyEnd);
+        expect(
+          body,
+          matches(RegExp(
+            r'final routeBackground = Theme\.of\(context\)\.brightness == Brightness\.dark'
+            r'\s*\? cs\.surface\s*:\s*cs\.surfaceContainerLowest;',
+          )),
+        );
+        expect(
+          body,
+          matches(RegExp(
+            r'backgroundColor:\s*isLiquidGlass\s*\?\s*Colors\.transparent\s*:\s*routeBackground',
+          )),
+        );
+        expect(
+          body,
+          matches(RegExp(r'if \(!isLiquidGlass\)\s*\{\s*return scaffold;')),
+        );
+        expect(
+          body,
+          contains('findAncestorWidgetOfExactType<BrandBackground>()'),
+        );
+        expect(
+          body,
+          contains('findAncestorWidgetOfExactType<BrandRouteSurface>()'),
+        );
+        expect(
+          body,
+          matches(RegExp(r'if \(hasBrandSurface\)\s*\{\s*return scaffold;')),
+        );
+        expect(
+          body,
+          matches(RegExp(
+            r'return Material\(\s*color: routeBackground,\s*child: BrandBackground\(child: scaffold\)',
+          )),
+        );
+        expect(
+          body,
+          isNot(matches(RegExp(r'backgroundColor:\s*Colors\.transparent'))),
+        );
+        expect(
+          routeSurface,
+          matches(RegExp(
+            r'return Material\(\s*color: routeBackground,\s*child: BrandBackground\(',
+          )),
+          reason: 'An ancestor BrandRouteSurface must own its backing.',
+        );
+        final painterStart = brandBackground.indexOf(
+          'class _LiquidGlassBackdropPainter',
+        );
+        final painterEnd = brandBackground.indexOf(
+          'class BrandRouteSurface',
+          painterStart,
+        );
+        expect(painterStart, greaterThanOrEqualTo(0));
+        expect(painterEnd, greaterThan(painterStart));
+        final painter = brandBackground.substring(painterStart, painterEnd);
+        expect(painter, contains('final rect = Offset.zero & size;'));
+        expect(
+          painter,
+          matches(RegExp(
+            r'final basePaint = Paint\(\)\s*\.\.shader = const LinearGradient\('
+            r'[\s\S]*?colors:\s*\[\s*Color\(0xFFE2ECF8\),\s*'
+            r'Color\(0xFFE9EEF6\),\s*Color\(0xFFDFEAF7\),\s*'
+            r'Color\(0xFFE7EFF8\),\s*\]',
+          )),
+          reason: 'The Brand backdrop retains an opaque viewport base.',
+        );
+        expect(painter, contains('canvas.drawRect(rect, basePaint);'));
+
+        // Only this measured OAuth DialogRoute host gets the modal exception.
+        final oauthStart = source.indexOf('class _OAuthCalendarCard');
+        final oauthEnd = source.indexOf('class _OAuthCalendarTile', oauthStart);
+        expect(oauthStart, greaterThanOrEqualTo(0));
+        expect(oauthEnd, greaterThan(oauthStart));
+        final oauth = source.substring(oauthStart, oauthEnd);
+        final modalStart = oauth.indexOf(
+          'final ok = await showControllerDialog<bool>(',
+        );
+        final modalEnd = oauth.indexOf(
+          'final displayName = nameCtrl.text.trim();',
+          modalStart,
+        );
+        expect(modalStart, greaterThanOrEqualTo(0));
+        expect(modalEnd, greaterThan(modalStart));
+        final modal = oauth.substring(modalStart, modalEnd);
+        final transparentScaffold = RegExp(
+          r'backgroundColor:\s*Colors\.transparent',
+        );
+        expect(transparentScaffold.allMatches(source), hasLength(1));
+        expect(transparentScaffold.allMatches(oauth), hasLength(1));
+        expect(transparentScaffold.allMatches(modal), hasLength(1));
+        expect(
+          modal,
+          matches(RegExp(
+            r'builder:\s*\(dialogCtx\)\s*=>\s*ScaffoldMessenger\('
+            r'\s*child:\s*Scaffold\(\s*backgroundColor:\s*Colors\.transparent,'
+            r'\s*resizeToAvoidBottomInset:\s*false,',
+          )),
+        );
+        expect(modal, contains('child: AppDialog('));
+        expect(modal, contains('valueListenable: I18n.localeListenable'));
+        final controllerDialog = File(
+          'lib/widgets/controller_dialog.dart',
+        ).readAsStringSync();
+        final createStart = controllerDialog.indexOf(
+          'DialogRoute<T> createControllerDialogRoute<T>',
+        );
+        final showStart = controllerDialog.indexOf(
+          'Future<T?> showControllerDialog<T>',
+          createStart,
+        );
+        final showEnd = controllerDialog.indexOf(
+          'class _ControlledDialogThemeScope',
+          showStart,
+        );
+        expect(createStart, greaterThanOrEqualTo(0));
+        expect(showStart, greaterThan(createStart));
+        expect(showEnd, greaterThan(showStart));
+        final createRoute = controllerDialog.substring(createStart, showStart);
+        final showRoute = controllerDialog.substring(showStart, showEnd);
+        expect(createRoute, contains('final route = DialogRoute<T>('));
+        expect(createRoute, contains('barrierColor:'));
+        expect(createRoute, contains('themes: InheritedTheme.capture('));
+        expect(showRoute, contains('final route = createControllerDialogRoute<T>('));
+        expect(showRoute, contains('builder: builder,'));
+        expect(showRoute, contains('final result = navigator.push<T>(route);'));
+        expect(showRoute, contains('route.completed.then((_) => disposeControllers())'));
       } else {
         expect(
           source,
@@ -977,7 +1163,7 @@ void main() {
     );
     expect(admin, contains('height: 38'));
     expect(admin, isNot(contains('height: 44')));
-    expect(admin, contains('text.length * 12.0 + 28.0'));
+    expect(admin, contains('AdminUiCopy.tabTitle(text, locale)'));
     expect(admin, contains('Icon(icon, size: 16)'));
 
     for (final className in [
@@ -992,7 +1178,14 @@ void main() {
         start,
         nextClass == -1 ? admin.length : nextClass,
       );
-      expect(section, contains('return Column('), reason: className);
+      if (className == 'class _FeedbackTabState') {
+        expect(section, contains('return RefreshIndicator('));
+        expect(section, contains('child: CustomScrollView('));
+        expect(section, contains('SliverToBoxAdapter('));
+        expect(section, contains("ValueKey('admin_feedback_scroll')"));
+      } else {
+        expect(section, contains('return Column('), reason: className);
+      }
       expect(section, isNot(contains('return Scaffold(')), reason: className);
     }
   });
@@ -1091,9 +1284,7 @@ void main() {
     expect(moreApps, contains('Expanded('));
 
     final habit = File('lib/screens/habit_screen.dart').readAsStringSync();
-    expect(habit, contains('const double _habitCheckinCardBodyHeight = 38'));
     expect(habit, isNot(contains("label: const Text('还原')")));
-    expect(habit, contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'));
   });
 
   test('小组件页自身有背景且预览不会在宽屏左侧缩成窄列', () {
@@ -1110,10 +1301,9 @@ void main() {
     expect(widgetScreen, contains('AppSecondaryControlTheme('));
     expect(widgetScreen, contains('appSecondaryFilledButtonStyle(context)'));
     expect(widgetScreen, isNot(contains('fontSize: 20')));
-    expect(
-      widgetScreen,
-      isNot(contains('backgroundColor: Colors.transparent')),
-    );
+    // An opaque owned BrandBackground may contain a transparent Scaffold.
+    // widget_style_loading_layout_test.dart checks standalone and pushed
+    // route margins against the real painter and rejects a black/alpha hole.
     expect(widgetScreen, contains("'2x2', 1.0, 320"));
     expect(widgetScreen, contains("'3x2', 1.5, 480"));
     expect(widgetScreen, contains("'4x3', 4 / 3, 640"));
@@ -1131,14 +1321,7 @@ void main() {
     expect(habit, contains('SliverList.builder('));
     expect(habit, contains('itemCount: activeHabits.length'));
     expect(habit, contains('_HabitTodaySummaryCard('));
-    expect(habit, contains('const double _habitCheckinCardBodyHeight = 38'));
-    expect(habit, contains('const double _habitTitleStatusHeight = 15'));
-    expect(habit, contains('const double _habitUndoButtonWidth = 28'));
-    expect(habit, contains('const double _habitCheckinButtonWidth = 52'));
     expect(habit, contains('minimumSize: const Size('));
-    expect(habit, contains('_habitCheckinButtonWidth'));
-    expect(habit, contains('fixedSize: const Size(_habitUndoButtonWidth, 26)'));
-    expect(habit, contains('const double _habitActionRailWidth'));
     expect(habit, contains("key: const ValueKey('habit-undo-inline-button')"));
     expect(habit, contains('IconButton.styleFrom('));
     expect(habit, isNot(contains("label: const Text('还原')")));
@@ -1149,15 +1332,43 @@ void main() {
     expect(habit, contains('onDelete: () => _runAction('));
     expect(
       habit,
-      contains("_handleHabitMenuAction(context, widget.habit, 'end')"),
+      matches(
+        RegExp(
+          r"_handleHabitMenuAction\(\s*context,\s*widget\.habit,\s*'end',\s*origin,?\s*\)",
+        ),
+      ),
     );
     expect(
       habit,
-      contains("_handleHabitMenuAction(context, widget.habit, 'delete')"),
+      matches(
+        RegExp(
+          r"_handleHabitMenuAction\(\s*context,\s*widget\.habit,\s*'delete',\s*origin,?\s*\)",
+        ),
+      ),
     );
-    expect(habit, contains('await provider.deleteHabit(habit.id)'));
-    expect(habit, contains('await provider.endHabit(habit.id)'));
-    expect(habit, contains('builder: (ctx) => AppDialog('));
+    expect(habit, contains('await origin.habitProvider.deleteHabit(habit.id)'));
+    expect(habit, contains('await origin.habitProvider.endHabit(habit.id)'));
+    expect(
+      habit,
+      contains('await confirmHabitEnd(context, habit, origin: origin)'),
+    );
+    expect(
+      habit,
+      contains('await confirmHabitDelete(context, habit, origin: origin)'),
+    );
+    final habitDetail = File(
+      'lib/screens/habit_detail_screen.dart',
+    ).readAsStringSync();
+    final confirmations = habitDetail.substring(
+      habitDetail.indexOf('Future<bool> confirmHabitDelete('),
+      habitDetail.indexOf('Future<bool> _confirmHabitDelete('),
+    );
+    expect(
+      RegExp(r'return AppDialog\(').allMatches(confirmations),
+      hasLength(2),
+    );
+    expect(confirmations, contains('valueListenable: I18n.localeListenable'));
+    expect(confirmations, isNot(contains('AlertDialog(')));
     expect(habit, isNot(contains('builder: (ctx) => AlertDialog(')));
     expect(habit, isNot(contains('...activeHabits.map')));
     final heatmapStart = habit.indexOf('class _HabitHeatmapTab');

@@ -505,38 +505,60 @@ void main() {
       screen.indexOf('class _ReminderKindSelector'),
       screen.indexOf('class _ReminderKindOptionSpec'),
     );
-    expect(kindSelector, contains('ConstrainedBox('));
-    expect(kindSelector, contains('minHeight: 42'));
+    expect(kindSelector, contains('LayoutBuilder('));
+    expect(kindSelector, contains('TextPainter('));
+    expect(kindSelector, contains('textScaler: textScaler'));
+    expect(kindSelector, contains('textDirection: textDirection'));
+    expect(
+      kindSelector,
+      contains('locale: Localizations.maybeLocaleOf(context)'),
+    );
+    expect(kindSelector, contains('measureLabelWidth(label)'));
+    expect(kindSelector, contains('col4Available >= maxOptionMinWidth'));
+    expect(kindSelector, contains('col2Available >= maxOptionMinWidth'));
     final kindButton = screen.substring(
       screen.indexOf('class _ReminderKindOptionButton'),
       screen.indexOf('Color _reminderKindForeground'),
     );
+    expect(kindButton, contains('ConstrainedBox('));
+    expect(
+      kindButton,
+      contains(
+        RegExp(r'BoxConstraints\(\s*minWidth: 44,\s*minHeight: 44,?\s*\)'),
+      ),
+      reason: '实际交互按钮必须保留至少 44×44 的点击目标。',
+    );
     expect(kindButton, isNot(contains('FittedBox(')));
     expect(kindButton, contains('labelMedium'));
+    expect(kindButton, contains('fontWeight: FontWeight.normal'));
+    expect(kindButton, contains('softWrap: true'));
+    expect(kindButton, isNot(contains('TextOverflow.ellipsis')));
 
     expect(main, contains('Future<void> _scheduleDailyDigestRepeating({'));
     expect(main, contains('Future<void> _scheduleDailyDigestOnce({'));
     expect(
       main,
-      contains(
-        'Future<void> _dailyDigestReminderSyncQueue = Future<void>.value();',
-      ),
+      contains('final _digestReminderCoordinator = DigestReminderCoordinator('),
     );
     expect(
       main,
-      contains('Future<T> _runDailyDigestReminderSyncSerialized<T>'),
-      reason: '每日提醒可能由偏好监听和生命周期恢复同时触发，必须串行避免跨通道重复注册。',
+      contains('_digestReminderCoordinator.run<DailyDigestReminderResult>'),
+      reason: '每日提醒和报告共用队列，避免并发与切号期间重复注册。',
     );
     expect(
       main,
       contains('Future<DailyDigestReminderResult> _syncDailyDigestReminder('),
     );
     expect(main, contains('_syncDailyDigestReminderLocked('));
+    expect(main, contains('_digestReminderCoordinator.run<void>'));
+    final coordinator = File(
+      'lib/services/digest_reminder_coordinator.dart',
+    ).readAsStringSync();
+    expect(coordinator, contains('Future<void>? _tail;'));
+    expect(coordinator, contains('if (identical(_tail, tail)) _tail = null;'));
     expect(
-      main,
-      contains(
-        '_dailyDigestReminderSyncQueue = run.then<void>((_) {}, onError: (_) {});',
-      ),
+      coordinator,
+      contains('onError: (Object _, StackTrace _) => release()'),
     );
     expect(main, contains('_reminderScheduler.popup.scheduleRepeating'));
     expect(main, contains('_reminderScheduler.popup.scheduleOnce'));
@@ -679,6 +701,11 @@ void main() {
     );
     expect(pendingEnd, greaterThan(pendingStart));
     final pendingHelper = main.substring(pendingStart, pendingEnd);
+    expect(repeatingAlarmBranch, contains('rememberIssue: rememberIssue'));
+    expect(onceAlarmBranch, contains('rememberIssue: rememberIssue'));
+    expect(pendingHelper, contains('issue.record(notification)'));
+    expect(pendingHelper, contains('rememberIssue(issue)'));
+    expect(pendingHelper, contains('scheduledTime: scheduledTime'));
     expect(
       pendingHelper,
       contains('if (alarm is! ReminderPendingSink) return false;'),

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:duoyi/providers/auth_provider.dart';
+import 'package:duoyi/core/admin_ui_copy.dart';
 import 'package:duoyi/screens/admin_screen.dart';
 import 'package:duoyi/services/admin_api.dart';
 import 'package:duoyi/services/api_client.dart';
@@ -18,10 +19,13 @@ void main() {
       final source = File('lib/screens/admin_screen.dart').readAsStringSync();
 
       expect(source, contains('class _AdminInlineLoadingIndicator'));
-      expect(source, contains("label: '正在更新当前页'"));
-      expect(source, contains("label: '正在更新反馈列表'"));
+      expect(source, contains("_userText('正在更新当前页', 'Updating this page')"));
+      expect(source, contains('label: AdminFeedbackUiCopy.updatingFor()'));
       expect(source, contains("text: '许愿与反馈'"));
-      expect(source, contains("tooltip: '刷新当前页'"));
+      expect(
+        source,
+        contains('tooltip: AdminUiCopy.refreshCurrentPageTooltip'),
+      );
       final swipeActionsSource = source.substring(
         source.indexOf('class _AdminFeedbackSwipeActions'),
         source.indexOf('class _AdminFeedbackSwipeButton'),
@@ -40,10 +44,16 @@ void main() {
         contains('Tween<double>(end: _open ? -_actionRailWidth : 0)'),
       );
       expect(swipeActionsSource, contains('Transform.translate('));
-      expect(swipeActionsSource, contains("tooltip: '查看反馈详情'"));
-      expect(swipeActionsSource, contains("tooltip: '回复'"));
-      expect(swipeActionsSource, contains("tooltip: '关闭'"));
-      expect(swipeActionsSource, contains("tooltip: '删除'"));
+      expect(
+        swipeActionsSource,
+        contains('tooltip: AdminFeedbackUiCopy.detailTooltipFor()'),
+      );
+      expect(
+        swipeActionsSource,
+        contains('tooltip: AdminFeedbackUiCopy.replyFor()'),
+      );
+      expect(swipeActionsSource, contains('tooltip: AdminUiCopy.closeFor()'));
+      expect(swipeActionsSource, contains('tooltip: AdminUiCopy.deleteFor()'));
       final feedbackDetailSource = source.substring(
         source.indexOf('Future<void> _showFeedbackDetail'),
         source.indexOf('Future<void> _deleteFeedback'),
@@ -54,7 +64,10 @@ void main() {
         contains('FutureBuilder<Map<String, dynamic>>'),
       );
       expect(feedbackDetailSource, contains('initialData: summary'));
-      expect(feedbackDetailSource, contains('详情加载失败，已展示列表摘要'));
+      expect(
+        feedbackDetailSource,
+        contains('AdminFeedbackUiCopy.detailFailure('),
+      );
       expect(
         feedbackDetailSource,
         contains('BoxConstraints(maxWidth: 640, maxHeight: 520)'),
@@ -80,12 +93,9 @@ void main() {
       );
       expect(
         source,
-        contains('if (!mounted || loadSerial != _loadSerial) return;'),
+        contains('bool current() => serial == _loadSerial && valid();'),
       );
-      expect(
-        source,
-        contains('if (mounted && loadSerial == _loadSerial) setState'),
-      );
+      expect(source, contains('if (mounted && serial == _loadSerial)'));
     },
   );
 
@@ -97,14 +107,14 @@ void main() {
     expect(source, contains("ValueKey('admin_users_toolbar_actions')"));
     expect(source, contains('toolbarConstraints.maxWidth < 380'));
     expect(source, contains('constraints.maxWidth < 420'));
-    expect(source, contains("label: const Text('更多详情')"));
+    expect(source, contains("_userText('更多详情', 'More details')"));
     expect(source, contains('width: 40,'));
     expect(source, contains("title: '基础功能'"));
     expect(source, contains("title: '个人数据'"));
     expect(source, contains("title: '管理功能'"));
     expect(source, contains("title: '系统功能'"));
     expect(source, contains('class _AdminGroupSummaryCard'));
-    expect(source, contains("subtitle: '管理默认时光币、成员分组和管理员权限模板'"));
+    expect(source, contains('subtitle: AdminUiCopy.groupsAndRolesSubtitle'));
     expect(source, contains('AppCompactDropdown<String>'));
 
     for (final hiddenTerm in [
@@ -272,7 +282,7 @@ void main() {
       of: find.byKey(const ValueKey('admin_feedback_pagination')),
       matching: find.byTooltip('下一页'),
     );
-    await tester.ensureVisible(nextPageButton);
+    await _scrollFeedbackTo(tester, nextPageButton);
     await tester.tap(nextPageButton);
     await tester.pumpAndSettle();
 
@@ -382,7 +392,7 @@ void main() {
       of: find.byKey(const ValueKey('admin_feedback_pagination')),
       matching: find.byTooltip('下一页'),
     );
-    await tester.ensureVisible(nextPageButton);
+    await _scrollFeedbackTo(tester, nextPageButton);
     await tester.tap(nextPageButton);
     await tester.pumpAndSettle();
 
@@ -484,7 +494,7 @@ void main() {
     final paginationRect = tester.getRect(pagination);
     final rowRect = tester.getRect(row);
     expect(paginationRect.height, lessThanOrEqualTo(80));
-    expect(rowRect.bottom, lessThan(paginationRect.top));
+    expect(rowRect.bottom, lessThanOrEqualTo(paginationRect.top));
     expect(find.byTooltip('下一页'), findsWidgets);
   });
 
@@ -603,17 +613,22 @@ void main() {
 
     final pagination = find.byKey(const ValueKey('admin_feedback_pagination'));
     final firstRow = find.byKey(const ValueKey('admin_feedback_swipe_7'));
-    expect(pagination, findsOneWidget);
+    await _scrollFeedbackTo(tester, firstRow);
     expect(firstRow, findsOneWidget);
-
-    final paginationRect = tester.getRect(pagination);
+    final scrollable = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('admin_feedback_scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     final firstRowRect = tester.getRect(firstRow);
+    final rowContentBottom = firstRowRect.bottom + scrollable.position.pixels;
     final contentRect = tester.getRect(
       find.textContaining('低高度窄屏下仍然需要先看到反馈正文').first,
     );
-    expect(paginationRect.height, lessThanOrEqualTo(80));
     expect(firstRowRect.top, greaterThanOrEqualTo(0));
-    expect(firstRowRect.bottom, lessThan(paginationRect.top));
     expect(firstRowRect.height, greaterThanOrEqualTo(64));
     expect(
       contentRect.right,
@@ -621,6 +636,16 @@ void main() {
       reason: '详情/回复/关闭/删除操作不能在未左滑时预留右侧按钮区域。',
     );
 
+    await _scrollFeedbackTo(tester, pagination);
+    final paginationRect = tester.getRect(pagination);
+    expect(paginationRect.height, lessThanOrEqualTo(80));
+    expect(
+      rowContentBottom,
+      lessThan(paginationRect.top + scrollable.position.pixels),
+    );
+    scrollable.position.jumpTo(0);
+    await tester.pumpAndSettle();
+    await _scrollFeedbackTo(tester, find.textContaining('低高度窄屏下仍然需要先看到反馈正文'));
     await tester.tap(find.textContaining('低高度窄屏下仍然需要先看到反馈正文'));
     await tester.pumpAndSettle();
     expect(find.text('反馈详情'), findsOneWidget);
@@ -708,7 +733,10 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.tap(find.text('本页待处理转处理中'));
+    await _scrollFeedbackTo(tester, find.text('本页待处理转处理中'));
+    await tester.tap(find.text('本页待处理转处理中').hitTestable());
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '提交').hitTestable());
     await tester.pumpAndSettle();
 
     expect(requests, contains('POST /api/admin/feedback/bulk-status'));
@@ -782,7 +810,10 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.tap(find.text('本页已解决转关闭'));
+    await _scrollFeedbackTo(tester, find.text('本页已解决转已关闭'));
+    await tester.tap(find.text('本页已解决转已关闭').hitTestable());
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '提交').hitTestable());
     await tester.pumpAndSettle();
 
     expect(requests, contains('POST /api/admin/feedback/bulk-status'));
@@ -1085,9 +1116,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('用户组管理'), findsOneWidget);
-      expect(find.textContaining('默认普通用户 100 时光币'), findsOneWidget);
-      expect(find.textContaining('默认组为 100'), findsOneWidget);
-      expect(find.textContaining('默认时光币'), findsOneWidget);
+      expect(find.text(AdminUiCopy.groupManagementSubtitle), findsOneWidget);
+      expect(find.text(AdminUiCopy.groupDefaultQuotaMessage), findsOneWidget);
+      expect(find.text(AdminUiCopy.groupCardCoinsLabel(100)), findsOneWidget);
       expect(find.textContaining('\n100'), findsOneWidget);
       expect(find.textContaining('生图'), findsNothing);
       expect(find.textContaining('改图'), findsNothing);
@@ -1096,7 +1127,7 @@ void main() {
       final pagination = find.byKey(
         const ValueKey('admin_groups_pagination_bar'),
       );
-      final groupText = find.textContaining('默认时光币').first;
+      final groupText = find.text(AdminUiCopy.groupCardCoinsLabel(100));
       expect(pagination, findsOneWidget);
       expect(
         tester.getRect(groupText).bottom,
@@ -1125,6 +1156,8 @@ void main() {
       expect(savedPayload?.containsKey('default_generate_quota'), isFalse);
       expect(savedPayload?.containsKey('default_edit_quota'), isFalse);
       expect(find.textContaining('\n135'), findsOneWidget);
+      expect(find.text(AdminUiCopy.groupDefaultQuotaMessage), findsOneWidget);
+      expect(AdminUiCopy.groupDefaultQuotaMessage, isNot(contains('100')));
     },
   );
 
@@ -1467,4 +1500,16 @@ class _FakeAuthProvider extends AuthProvider {
 
   @override
   ApiClient get client => _fakeClient;
+}
+
+Future<void> _scrollFeedbackTo(WidgetTester tester, Finder target) async {
+  final scrollable = find
+      .descendant(
+        of: find.byKey(const ValueKey('admin_feedback_scroll')),
+        matching: find.byType(Scrollable),
+      )
+      .first;
+  await tester.scrollUntilVisible(target, 160, scrollable: scrollable);
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
 }

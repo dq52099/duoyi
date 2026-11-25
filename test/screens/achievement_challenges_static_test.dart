@@ -55,7 +55,7 @@ void main() {
     expect(screen, contains("import '../core/productivity_challenges.dart';"));
     expect(screen, contains('每日/每周挑战'));
     expect(screen, contains('_ChallengeCard'));
-    expect(screen, contains('challenge.periodLabel'));
+    expect(screen, contains('AchievementUiCopy.challengePeriod(challenge)'));
     expect(screen, contains('challenge.rewardCoins'));
 
     expect(main, contains('todayCompletedTodos: todayCompletedTodos'));

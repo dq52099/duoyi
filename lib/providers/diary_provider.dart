@@ -63,10 +63,7 @@ class DiaryProvider extends ChangeNotifier {
   DiaryEntry? entryForDate(DateTime date) {
     final key =
         '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    for (final e in _entries) {
-      if (e.dateKey == key) return e;
-    }
-    return null;
+    return entriesByDate[key];
   }
 
   Map<String, DiaryEntry> get entriesByDate {
@@ -123,6 +120,20 @@ class DiaryProvider extends ChangeNotifier {
   Future<void> _save() async {
     final generation = _storageGeneration;
     final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final snapshot = List<DiaryEntry>.of(_entries);
+    final shouldOffload =
+        !kIsWeb &&
+        (snapshot.length >= _isolateEncodeMinItems ||
+            _estimateDiaryPayloadChars(snapshot) >= _isolateEncodeMinChars);
+    final payload = shouldOffload
+        ? await compute(_encodeDiaryStoragePayload, snapshot)
+        : _encodeDiaryStoragePayload(snapshot);
+    if (generation != _storageGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          accountGeneration,
+        )) {
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     if (generation != _storageGeneration ||
         !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
@@ -130,10 +141,7 @@ class DiaryProvider extends ChangeNotifier {
         )) {
       return;
     }
-    await prefs.setStringList(
-      _key,
-      _entries.map((e) => jsonEncode(e.toJson())).toList(),
-    );
+    await prefs.setStringList(_key, payload);
     if (generation != _storageGeneration ||
         !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
           accountGeneration,
@@ -188,3 +196,21 @@ class DiaryProvider extends ChangeNotifier {
     await _save();
   }
 }
+
+const int _isolateEncodeMinItems = 500;
+const int _isolateEncodeMinChars = 120 * 1024;
+
+int _estimateDiaryPayloadChars(List<DiaryEntry> entries) {
+  var total = 0;
+  for (final e in entries) {
+    total += e.content.length + 128;
+    for (final path in e.imagePaths) {
+      total += path.length;
+    }
+    if (total >= _isolateEncodeMinChars) return total;
+  }
+  return total;
+}
+
+List<String> _encodeDiaryStoragePayload(List<DiaryEntry> entries) =>
+    entries.map((e) => jsonEncode(e.toJson())).toList();

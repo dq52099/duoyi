@@ -479,7 +479,7 @@ class DuoyiWidgetFrameCoreTest {
                 }
             },
             build = { frame -> "views(wall=${frame.clock.wallMillis})" },
-            rejectionReason = { frame ->
+            rejectionReason = { frame, _ ->
                 if (frame.clock.wallMillis < capMillis) {
                     val currentClock = DuoyiWidgetFrameClock(
                         wallMillis = capMillis + 10L,
@@ -496,7 +496,7 @@ class DuoyiWidgetFrameCoreTest {
                     reason(frame, currentClock = currentClock)
                 }
             },
-            commit = { views -> committed += views },
+            commit = { _, views -> committed += views; true },
             acceptedEffect = { _, _ -> },
             rejected = { rejections += it },
         )
@@ -510,10 +510,12 @@ class DuoyiWidgetFrameCoreTest {
     fun effectiveModeRespectsMinimumSizeThresholdsAndModeBounds() {
         fun mode(width: Int, height: Int, preferred: String = "detailed"): String {
             val values = baseValues().apply { put("widget_display_mode_9", preferred) }
-            return core(
+            val frame = core(
                 values = values,
                 options = DuoyiWidgetFrameOptions(minWidth = width, minHeight = height),
-            ).effectiveMode
+            )
+            assertEquals(preferred, frame.requestedMode)
+            return frame.effectiveMode
         }
 
         assertEquals("compact", mode(179, 170))
@@ -532,6 +534,23 @@ class DuoyiWidgetFrameCoreTest {
     }
 
     @Test
+    fun requestedModeKeepsValidatedInstanceGlobalPrecedenceAtResizeBoundaries() {
+        for (height in listOf(99, 100, 169, 170, 171)) {
+            val options = DuoyiWidgetFrameOptions(minWidth = 250, minHeight = height)
+            val values = baseValues().apply {
+                put("widget_display_mode", "detailed")
+                put("widget_display_mode_9", "invalid")
+            }
+            assertEquals("detailed", core(values = values, options = options).requestedMode)
+            values["widget_display_mode_9"] = "compact"
+            assertEquals("compact", core(values = values, options = options).requestedMode)
+            values["widget_display_mode_9"] = "invalid"
+            values["widget_display_mode"] = "invalid"
+            assertEquals("standard", core(values = values, options = options).requestedMode)
+        }
+    }
+
+    @Test
     fun frameAttemptsRejectFirstCaptureThenCommitSecondMatchingBuildBeforeEffect() {
         var captures = 0
         var builds = 0
@@ -547,13 +566,14 @@ class DuoyiWidgetFrameCoreTest {
             build = { frame ->
                 (++builds).let { "views:$frame" }.also { events += "build:$frame" }
             },
-            rejectionReason = { frame ->
+            rejectionReason = { frame, _ ->
                 events += "check:$frame"
                 if (frame == 1) "data_changed" else null
             },
-            commit = { views ->
+            commit = { _, views ->
                 events += "commit:$views"
                 committed += views
+                true
             },
             acceptedEffect = { frame, views ->
                 events += "effect:$frame:$views"
@@ -591,8 +611,8 @@ class DuoyiWidgetFrameCoreTest {
         val accepted = DuoyiWidgetFrameAttempts.run(
             capture = { ++captures },
             build = { frame -> ++builds; frame * 10 },
-            rejectionReason = { frame -> "reject-$frame" },
-            commit = { committed += it },
+            rejectionReason = { frame, _ -> "reject-$frame" },
+            commit = { _, views -> committed += views; true },
             acceptedEffect = { frame, _ -> effects += frame },
             rejected = { rejected += it },
         )
@@ -616,8 +636,8 @@ class DuoyiWidgetFrameCoreTest {
             DuoyiWidgetFrameAttempts.run(
                 capture = { ++captures },
                 build = { ++builds },
-                rejectionReason = { null },
-                commit = { commits++; throw IllegalStateException("commit failed") },
+                rejectionReason = { _, _ -> null },
+                commit = { _, _ -> commits++; throw IllegalStateException("commit failed") },
                 acceptedEffect = { _, _ -> effects++ },
                 rejected = { throw AssertionError("unexpected rejection: $it") },
             )
@@ -627,6 +647,79 @@ class DuoyiWidgetFrameCoreTest {
         assertEquals(1, builds)
         assertEquals(1, commits)
         assertEquals(0, effects)
+    }
+
+    @Test
+    fun frameAttemptsRecaptureAfterCommitRejectsAndRunEffectOnlyAfterAcceptance() {
+        var captures = 0
+        val commits = mutableListOf<String>()
+        val effects = mutableListOf<Int>()
+        val rejections = mutableListOf<String>()
+
+        val accepted = DuoyiWidgetFrameAttempts.run(
+            capture = { ++captures },
+            build = { "views:$it" },
+            rejectionReason = { _, _ -> null },
+            commit = { frame, views ->
+                commits += "$frame:$views"
+                frame == 2
+            },
+            acceptedEffect = { frame, _ -> effects += frame },
+            rejected = { rejections += it },
+        )
+
+        assertTrue(accepted)
+        assertEquals(2, captures)
+        assertEquals(listOf("1:views:1", "2:views:2"), commits)
+        assertEquals(listOf("commit_rejected"), rejections)
+        assertEquals(listOf(2), effects)
+    }
+
+    @Test
+    fun frameAttemptsExhaustRejectedCommitsWithoutEffectsOrThirdCapture() {
+        var captures = 0
+        var builds = 0
+        var commits = 0
+        var effects = 0
+        val rejections = mutableListOf<String>()
+
+        val accepted = DuoyiWidgetFrameAttempts.run(
+            capture = { ++captures },
+            build = { ++builds },
+            rejectionReason = { _, _ -> null },
+            commit = { _, _ -> commits++; false },
+            acceptedEffect = { _, _ -> effects++ },
+            rejected = { rejections += it },
+        )
+
+        assertFalse(accepted)
+        assertEquals(2, captures)
+        assertEquals(2, builds)
+        assertEquals(2, commits)
+        assertEquals(0, effects)
+        assertEquals(listOf("commit_rejected", "commit_rejected"), rejections)
+    }
+
+    @Test
+    fun frameAttemptsSkipsBuildWhileBusyThenRetries() {
+        var captures = 0
+        var builds = 0
+        var effects = 0
+
+        val accepted = DuoyiWidgetFrameAttempts.run(
+            capture = { ++captures },
+            canBuild = { it == 2 },
+            build = { ++builds },
+            rejectionReason = { _, _ -> null },
+            commit = { _, _ -> true },
+            acceptedEffect = { _, _ -> effects++ },
+            rejected = {},
+        )
+
+        assertTrue(accepted)
+        assertEquals(2, captures)
+        assertEquals(1, builds)
+        assertEquals(1, effects)
     }
 
     private fun core(

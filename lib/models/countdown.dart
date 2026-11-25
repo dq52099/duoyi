@@ -19,11 +19,14 @@ DateTime _readDate(Object? value, DateTime fallback) {
 }
 
 class CountdownItem {
+  // Stable storage value; only the presentation of generated defaults localizes.
+  static const defaultCategory = '默认';
   final String id;
   final String title;
   final DateTime targetDate;
   final bool isPinned;
   final String category;
+  final bool categoryIsDefault;
   final bool remind;
   final int remindDaysBefore;
   final int remindHour;
@@ -36,14 +39,21 @@ class CountdownItem {
     required this.title,
     required this.targetDate,
     this.isPinned = false,
-    this.category = '默认',
+    String? category,
+    bool? categoryIsDefault,
     this.remind = false,
     this.remindDaysBefore = 1,
     this.remindHour = 9,
     this.remindMinute = 0,
     this.reminderKind = ReminderKind.push,
     DateTime? updatedAt,
-  }) : updatedAt = updatedAt ?? DateTime.now();
+  }) : categoryIsDefault =
+           categoryIsDefault == true || (category?.trim().isEmpty ?? true),
+       category =
+           categoryIsDefault == true || (category?.trim().isEmpty ?? true)
+           ? defaultCategory
+           : category!,
+       updatedAt = updatedAt ?? DateTime.now();
 
   int get daysRemaining => daysRemainingForDate(DateTime.now());
 
@@ -63,6 +73,7 @@ class CountdownItem {
     'targetDate': targetDate.toIso8601String(),
     'isPinned': isPinned,
     'category': category,
+    'categoryIsDefault': categoryIsDefault,
     'remind': remind,
     'remindDaysBefore': remindDaysBefore,
     'remindHour': remindHour,
@@ -86,7 +97,9 @@ class CountdownItem {
       title: _readText(json['title'] ?? json['name'], '未命名倒数日'),
       targetDate: targetDate,
       isPinned: json['isPinned'] == true,
-      category: _readText(json['category'], '默认'),
+      // Nonempty legacy strings are authored unless explicitly marked.
+      category: json['category']?.toString().trim(),
+      categoryIsDefault: json['categoryIsDefault'] == true,
       remind: json['remind'] == true && reminderKind != ReminderKind.off,
       remindDaysBefore: _readInt(
         json['remindDaysBefore'],
@@ -108,6 +121,7 @@ class CountdownItem {
     DateTime? targetDate,
     bool? isPinned,
     String? category,
+    bool? categoryIsDefault,
     bool? remind,
     int? remindDaysBefore,
     int? remindHour,
@@ -121,6 +135,9 @@ class CountdownItem {
       targetDate: targetDate ?? this.targetDate,
       isPinned: isPinned ?? this.isPinned,
       category: category ?? this.category,
+      categoryIsDefault:
+          categoryIsDefault ??
+          (category == null ? this.categoryIsDefault : null),
       remind: (remind ?? this.remind) && nextKind != ReminderKind.off,
       remindDaysBefore: remindDaysBefore ?? this.remindDaysBefore,
       remindHour: remindHour ?? this.remindHour,

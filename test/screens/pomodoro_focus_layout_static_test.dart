@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  test('当前专注首屏使用自适应一屏布局，不回退成长滚动卡片', () {
+  test('当前专注保留紧凑布局，受限高度按自然尺寸滚动', () {
     final source = File('lib/screens/pomodoro_screen.dart').readAsStringSync();
     final timerTabSource = source.split('// History tab').first;
 
@@ -22,7 +22,7 @@ void main() {
     expect(source, contains('unawaited(_pomodoro.loadFromStorage())'));
     expect(timerTabSource, contains('availableHeight < 660'));
     expect(timerTabSource, contains('availableHeight < 560'));
-    expect(timerTabSource, contains('FittedBox('));
+    expect(timerTabSource, isNot(contains('FittedBox(')));
     expect(timerTabSource, contains('_PomodoroLiveTimer('));
     expect(source, contains('ValueListenableBuilder<int>'));
     expect(source, contains('provider.timerTicks'));
@@ -108,12 +108,23 @@ void main() {
 
     expect(find.byType(PomodoroScreen), findsOneWidget);
     expect(find.text('好友与全局排行榜'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('专注自习室'),
-      220,
-      scrollable: find.byType(Scrollable).last,
+    final roomTitle = find.text('专注自习室');
+    final roomScroll = find.byWidgetPredicate(
+      (widget) => widget is Scrollable && widget.axisDirection == AxisDirection.down,
+    ).last;
+    for (var attempt = 0; attempt < 20 && roomTitle.evaluate().isEmpty; attempt++) {
+      await tester.drag(roomScroll, const Offset(0, -220));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, 2);
+    }
+    expect(roomTitle, findsOneWidget);
+    final titleElement = tester.element(roomTitle);
+    await Scrollable.of(titleElement, axis: Axis.vertical).position.ensureVisible(
+      titleElement.findRenderObject()!,
     );
-    expect(find.text('专注自习室'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(roomTitle.hitTestable(), findsOneWidget);
+    expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, 2);
     expect(tester.takeException(), isNull);
   });
 }

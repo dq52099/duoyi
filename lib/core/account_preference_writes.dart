@@ -106,17 +106,49 @@ class AccountPreferenceTransaction {
   final SharedPreferences _preferences;
   final bool Function() _isCurrent;
   final Map<String, Object?> _previous = {};
+  final Map<String, Object?> _issued = {};
   bool _committed = false;
 
   AccountPreferenceTransaction(this._preferences, this._isCurrent);
 
   bool get isCommitted => _committed;
   Iterable<String> get changedKeys => _previous.keys;
+  Map<String, Object?> get previousValues => Map.unmodifiable(_previous);
+  Map<String, Object?> get issuedValues => Map.unmodifiable(_issued);
+
+  static Object? freezeValue(Object? value) =>
+      value is List ? List<String>.unmodifiable(value.cast<String>()) : value;
+
+  static bool valuesEqual(Object? left, Object? right) {
+    if (left is List && right is List) {
+      if (left.length != right.length) return false;
+      for (var i = 0; i < left.length; i++) {
+        if (!valuesEqual(left[i], right[i])) return false;
+      }
+      return true;
+    }
+    return left.runtimeType == right.runtimeType && left == right;
+  }
+
+  static Future<bool> writeValue(
+    SharedPreferences preferences,
+    String key,
+    Object? value,
+  ) => switch (value) {
+    bool() => preferences.setBool(key, value),
+    int() => preferences.setInt(key, value),
+    double() => preferences.setDouble(key, value),
+    String() => preferences.setString(key, value),
+    List<String>() => preferences.setStringList(key, value),
+    null => preferences.remove(key),
+    _ => throw StateError('Unsupported preference value'),
+  };
 
   void commit() {
     ensureCurrent();
     _committed = true;
     _previous.clear();
+    _issued.clear();
   }
 
   void ensureCurrent() {
@@ -128,9 +160,14 @@ class AccountPreferenceTransaction {
     return this;
   }
 
-  Future<bool> _write(String key, Future<bool> Function() write) async {
+  Future<bool> _write(
+    String key,
+    Object? value,
+    Future<bool> Function() write,
+  ) async {
     ensureCurrent();
-    _previous.putIfAbsent(key, () => _preferences.get(key));
+    _previous.putIfAbsent(key, () => freezeValue(_preferences.get(key)));
+    _issued[key] = freezeValue(value);
     final saved = await write();
     ensureCurrent();
     if (!saved) throw StateError('Preference persistence failed');
@@ -138,17 +175,43 @@ class AccountPreferenceTransaction {
   }
 
   Future<bool> setBool(String key, bool value) =>
-      _write(key, () => _preferences.setBool(key, value));
+      _write(key, value, () => _preferences.setBool(key, value));
   Future<bool> setInt(String key, int value) =>
-      _write(key, () => _preferences.setInt(key, value));
+      _write(key, value, () => _preferences.setInt(key, value));
   Future<bool> setDouble(String key, double value) =>
-      _write(key, () => _preferences.setDouble(key, value));
+      _write(key, value, () => _preferences.setDouble(key, value));
   Future<bool> setString(String key, String value) =>
-      _write(key, () => _preferences.setString(key, value));
+      _write(key, value, () => _preferences.setString(key, value));
   Future<bool> setStringList(String key, List<String> value) =>
-      _write(key, () => _preferences.setStringList(key, value));
+      _write(key, value, () => _preferences.setStringList(key, value));
   Future<bool> remove(String key) =>
-      _write(key, () => _preferences.remove(key));
+      _write(key, null, () => _preferences.remove(key));
+
+  /// Caller retains its storage lane through compensation, even after account
+  /// authority is invalidated. Cleanup drains that caller before removing data.
+  Future<Object?> rollbackChecked() async {
+    Object? firstError;
+    for (final entry in _previous.entries.toList().reversed) {
+      try {
+        if (!await writeValue(_preferences, entry.key, entry.value)) {
+          firstError ??= StateError('Preference restoration rejected');
+        }
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+    try {
+      await _preferences.reload();
+      if (_previous.entries.every(
+        (entry) => valuesEqual(_preferences.get(entry.key), entry.value),
+      )) {
+        return null;
+      }
+    } catch (error) {
+      firstError ??= error;
+    }
+    return firstError ?? StateError('Preference restoration not confirmed');
+  }
 
   Future<void> reload() async {
     ensureCurrent();

@@ -30,16 +30,65 @@ class GoalValidationField {
   static const String timeTargetSeconds = 'timeTargetSeconds';
   static const String hour = 'hour';
   static const String minute = 'minute';
+  static const String targetDate = 'targetDate';
+}
+
+/// Stable reasons let callers choose a language without parsing error text.
+enum GoalValidationCode {
+  fixedWeekdaysRange,
+  fixedWeekdaysDuplicate,
+  fixedMonthDaysRange,
+  fixedMonthDaysDuplicate,
+  randomMinGapDays,
+  randomMaxPerWeek,
+  randomMaxPerMonth,
+  dailyTargetCount,
+  timeTargetSeconds,
+  reminderHour,
+  reminderMinute,
+  reminderTargetDate,
 }
 
 /// 单条校验问题：
 /// - [field]：触发该错误的字段标识（对应 [GoalValidationField]）。
-/// - [message]：给用户看的中文提示（可直接展示在 SnackBar / FormField 下方）。
+/// - [message]：兼容既有调用的中文提示。
+/// - [localizedMessage]：由调用者传入语言，保持验证器没有 Flutter/global locale 依赖。
 class GoalValidationIssue {
   final String field;
   final String message;
+  final GoalValidationCode? code;
 
-  const GoalValidationIssue(this.field, this.message);
+  const GoalValidationIssue(this.field, this.message, {this.code});
+
+  String localizedMessage({required bool isEnglish}) {
+    if (!isEnglish) return message;
+    return switch (code) {
+      GoalValidationCode.fixedWeekdaysRange =>
+        'Weekdays must be between Monday (0) and Sunday (6).',
+      GoalValidationCode.fixedWeekdaysDuplicate => 'Select each weekday once.',
+      GoalValidationCode.fixedMonthDaysRange =>
+        'Month days must be between 1 and 31.',
+      GoalValidationCode.fixedMonthDaysDuplicate =>
+        'Select each day of the month once.',
+      GoalValidationCode.randomMinGapDays =>
+        'The minimum interval must be at least 1 day.',
+      GoalValidationCode.randomMaxPerWeek =>
+        'The weekly limit must be at least 1.',
+      GoalValidationCode.randomMaxPerMonth =>
+        'The monthly limit must be at least 1.',
+      GoalValidationCode.dailyTargetCount =>
+        'The daily target count cannot be negative.',
+      GoalValidationCode.timeTargetSeconds =>
+        'The target duration cannot be negative.',
+      GoalValidationCode.reminderHour =>
+        'The reminder hour must be between 0 and 23.',
+      GoalValidationCode.reminderMinute =>
+        'The reminder minute must be between 0 and 59.',
+      GoalValidationCode.reminderTargetDate =>
+        'Set a target date for advance reminders.',
+      null => message,
+    };
+  }
 
   @override
   String toString() => 'GoalValidationIssue($field: $message)';
@@ -75,6 +124,7 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
           const GoalValidationIssue(
             GoalValidationField.fixedWeekdays,
             '固定星期只能在 0(周一)~6(周日) 范围内',
+            code: GoalValidationCode.fixedWeekdaysRange,
           ),
         );
       } else if (days.toSet().length != days.length) {
@@ -82,6 +132,7 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
           const GoalValidationIssue(
             GoalValidationField.fixedWeekdays,
             '固定星期不能重复选择',
+            code: GoalValidationCode.fixedWeekdaysDuplicate,
           ),
         );
       }
@@ -98,6 +149,7 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
           const GoalValidationIssue(
             GoalValidationField.fixedMonthDays,
             '固定日期只能在每月 1~31 号之间',
+            code: GoalValidationCode.fixedMonthDaysRange,
           ),
         );
       } else if (days.toSet().length != days.length) {
@@ -105,6 +157,7 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
           const GoalValidationIssue(
             GoalValidationField.fixedMonthDays,
             '固定日期不能重复选择',
+            code: GoalValidationCode.fixedMonthDaysDuplicate,
           ),
         );
       }
@@ -119,6 +172,7 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
         const GoalValidationIssue(
           GoalValidationField.randomMinGapDays,
           '随机模式下最小间隔天数需 ≥ 1',
+          code: GoalValidationCode.randomMinGapDays,
         ),
       );
     }
@@ -128,6 +182,7 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
         const GoalValidationIssue(
           GoalValidationField.randomMaxPerWeek,
           '每周最多派发次数需 ≥ 1',
+          code: GoalValidationCode.randomMaxPerWeek,
         ),
       );
     }
@@ -137,6 +192,7 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
         const GoalValidationIssue(
           GoalValidationField.randomMaxPerMonth,
           '每月最多派发次数需 ≥ 1',
+          code: GoalValidationCode.randomMaxPerMonth,
         ),
       );
     }
@@ -149,6 +205,7 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
       const GoalValidationIssue(
         GoalValidationField.dailyTargetCount,
         '每日目标次数不能为负数',
+        code: GoalValidationCode.dailyTargetCount,
       ),
     );
   }
@@ -160,25 +217,58 @@ List<GoalValidationIssue> validateGoal(GoalItem g) {
       const GoalValidationIssue(
         GoalValidationField.timeTargetSeconds,
         '目标时长不能为负数',
+        code: GoalValidationCode.timeTargetSeconds,
       ),
     );
   }
 
   // --- 已启用提醒时，hour/minute 必须合法 ---
   final reminder = g.reminder;
-  if (reminder.enabled) {
+  if (reminder.enabled && reminder.kind != ReminderKind.off) {
     final hour = reminder.hour;
     if (hour == null || hour < 0 || hour > 23) {
       issues.add(
-        const GoalValidationIssue(GoalValidationField.hour, '提醒小时需在 0~23 之间'),
+        const GoalValidationIssue(
+          GoalValidationField.hour,
+          '提醒小时需在 0~23 之间',
+          code: GoalValidationCode.reminderHour,
+        ),
       );
     }
     final minute = reminder.minute;
     if (minute == null || minute < 0 || minute > 59) {
       issues.add(
-        const GoalValidationIssue(GoalValidationField.minute, '提醒分钟需在 0~59 之间'),
+        const GoalValidationIssue(
+          GoalValidationField.minute,
+          '提醒分钟需在 0~59 之间',
+          code: GoalValidationCode.reminderMinute,
+        ),
       );
     }
+  }
+
+  // Match the scheduler's active-plan/legacy fallback. Relative rules need a
+  // target date; absolute and recurring rules can legitimately omit it.
+  final plan = g.reminderPlan.enabled && g.reminderPlan.rules.isNotEmpty
+      ? g.reminderPlan
+      : reminder.enabled
+      ? ReminderPlan.fromLegacy(reminder)
+      : const ReminderPlan.disabled();
+  if (g.targetDate == null &&
+      plan.enabled &&
+      plan.rules.any(
+        (rule) =>
+            rule.enabled &&
+            rule.kind != ReminderKind.off &&
+            rule.type == ReminderRuleType.relativeToDue,
+      )) {
+    issues.add(
+      const GoalValidationIssue(
+        GoalValidationField.targetDate,
+        '请先设置目标日期，再使用提前提醒。',
+        code: GoalValidationCode.reminderTargetDate,
+      ),
+    );
   }
 
   return issues.isEmpty ? const <GoalValidationIssue>[] : issues;
@@ -191,15 +281,27 @@ bool isGoalValid(GoalItem g) => validateGoal(g).isEmpty;
 ///
 /// - 返回 `null` 表示合法（含 `v == null` 的"未填写"）。
 /// - 返回 `String` 即错误描述，可直接塞给 `TextFormField.validator`。
-String? validateRandomMinGapDaysInt(int? v) {
+String? validateRandomMinGapDaysInt(int? v, {bool isEnglish = false}) {
   if (v == null) return null;
-  if (v < 1) return '随机模式下最小间隔天数需 ≥ 1';
+  if (v < 1) {
+    return const GoalValidationIssue(
+      GoalValidationField.randomMinGapDays,
+      '随机模式下最小间隔天数需 ≥ 1',
+      code: GoalValidationCode.randomMinGapDays,
+    ).localizedMessage(isEnglish: isEnglish);
+  }
   return null;
 }
 
 /// 字段级校验器：`dailyTargetCount`（每日目标次数，允许 0）。
-String? validateDailyTargetCountInt(int? v) {
+String? validateDailyTargetCountInt(int? v, {bool isEnglish = false}) {
   if (v == null) return null;
-  if (v < 0) return '每日目标次数不能为负数';
+  if (v < 0) {
+    return const GoalValidationIssue(
+      GoalValidationField.dailyTargetCount,
+      '每日目标次数不能为负数',
+      code: GoalValidationCode.dailyTargetCount,
+    ).localizedMessage(isEnglish: isEnglish);
+  }
   return null;
 }

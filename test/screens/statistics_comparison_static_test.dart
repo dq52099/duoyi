@@ -12,11 +12,11 @@ void main() {
     expect(source, contains('ReportEngine.buildReport'));
     expect(source, contains('ReportEngine.compare'));
     expect(source, contains('_ProductivityComparisonCard'));
-    expect(source, contains('效率对比'));
-    expect(source, contains('与上周同段对比'));
-    expect(source, contains('完成率'));
-    expect(source, contains('效率分'));
-    expect(source, contains('较上期'));
+    expect(source, contains('.productivityComparison'));
+    expect(source, contains('.rangeCompareLabelWeek'));
+    expect(source, contains('.completionRate'));
+    expect(source, contains('.efficiencyScore'));
+    expect(source, contains('.vsPreviousPeriod'));
   });
 
   test('统计页展示多周期效率趋势折线', () {
@@ -29,10 +29,10 @@ void main() {
     expect(source, contains('_ProductivityTrendPoint'));
     expect(source, contains('LineChart'));
     expect(source, contains('FlSpot'));
-    expect(source, contains('效率趋势'));
-    expect(source, contains('近 6 周同段效率分'));
-    expect(source, contains('近 6 个月同段效率分'));
-    expect(source, contains('近 5 年同段效率分'));
+    expect(source, contains('.productivityTrend'));
+    expect(source, contains('.trendSubtitleWeek'));
+    expect(source, contains('.trendSubtitleMonth'));
+    expect(source, contains('.trendSubtitleYear'));
   });
 
   test('统计页展示趋势洞察和历史摘要', () {
@@ -40,15 +40,15 @@ void main() {
       'lib/screens/statistics_screen.dart',
     ).readAsStringSync();
 
-    expect(source, contains('趋势洞察'));
+    expect(source, contains('.trendInsights'));
     expect(source, contains('_insightText'));
     expect(source, contains('_bestPoint'));
     expect(source, contains('_averageScore'));
     expect(source, contains('_rankText'));
     expect(source, contains('_TrendHistoryMetric'));
-    expect(source, contains('历史最佳'));
-    expect(source, contains('平均分'));
-    expect(source, contains('当前排名'));
+    expect(source, contains('.historicalBest'));
+    expect(source, contains('.averageScore'));
+    expect(source, contains('.currentRank'));
   });
 
   test('统计页展示逐周期趋势详情 drill-down', () {
@@ -56,17 +56,17 @@ void main() {
       'lib/screens/statistics_screen.dart',
     ).readAsStringSync();
 
-    expect(source, contains('查看趋势详情'));
+    expect(source, contains('.viewTrendDetail'));
     expect(source, contains('_ProductivityTrendDetailScreen'));
     expect(source, contains('MaterialPageRoute('));
-    expect(source, contains("title: const Text('趋势详情')"));
+    expect(source, contains('.trendDetailTitle'));
     expect(
       source,
       contains('titleTextStyle: appSecondaryRouteTitleTextStyle(context)'),
     );
-    expect(source, contains('趋势概览'));
-    expect(source, contains('逐周期明细'));
-    expect(source, contains('周期明细'));
+    expect(source, contains('.trendOverview'));
+    expect(source, contains('.periodByPeriodBreakdown'));
+    expect(source, contains('.cycleBreakdown'));
     expect(source, contains('_TrendDetailTile'));
     expect(source, contains('_TrendDetailMetric'));
     expect(source, contains('dateRangeLabel'));
@@ -74,12 +74,12 @@ void main() {
     expect(source, contains('point.focusMinutes'));
     expect(source, contains('point.habitCheckIns'));
     expect(source, contains('point.timeEntryMinutes'));
-    expect(source, contains("label: '待办'"));
-    expect(source, contains("label: '专注'"));
-    expect(source, contains("label: '习惯'"));
-    expect(source, contains("label: '足迹'"));
-    expect(source, contains("label: '最佳'"));
-    expect(source, contains("label: '当前'"));
+    expect(source, contains('.todos'));
+    expect(source, contains('.focus'));
+    expect(source, contains('.habits'));
+    expect(source, contains('.footprint'));
+    expect(source, contains('.best'));
+    expect(source, contains('.current'));
   });
 
   test('统计页展示全局活动热力图', () {
@@ -128,16 +128,16 @@ void main() {
     expect(source, contains('ScatterChart'));
     expect(source, contains('ScatterSpot'));
     expect(source, contains('BarChartRodStackItem'));
-    expect(source, contains('专注 × 待办相关性'));
-    expect(source, contains('横轴为专注分钟数，纵轴为待办完成数'));
-    expect(source, contains('习惯 × 待办相关性'));
-    expect(source, contains('横轴为习惯达标次数，纵轴为待办完成数'));
-    expect(source, contains('日记 × 专注相关性'));
-    expect(source, contains('横轴为日记篇数，纵轴为专注分钟数'));
-    expect(source, contains('时间分类占比趋势'));
-    expect(source, contains('按当前周期展示各类时间投入结构变化'));
-    expect(source, contains('时间投入 × 待办产出效率'));
-    expect(source, contains('每小时完成'));
+    expect(source, contains('.focusTodoCorrelation'));
+    expect(source, contains('.focusTodoAxisLabel'));
+    expect(source, contains('.habitTodoCorrelation'));
+    expect(source, contains('.habitTodoAxisLabel'));
+    expect(source, contains('.diaryFocusCorrelation'));
+    expect(source, contains('.diaryFocusAxisLabel'));
+    expect(source, contains('.timeCategoryShareTrend'));
+    expect(source, contains('.timeCategoryShareTrendSubtitle'));
+    expect(source, contains('.timeOutputEfficiencyTitle'));
+    expect(source, contains('.completedPerHour'));
 
     expect(core, contains('class ReportCrossAnalysis'));
     expect(core, contains('class FocusTodoCorrelation'));
@@ -175,8 +175,8 @@ void main() {
     expect(source, contains('_buildProjectEfficiencyCard'));
     expect(source, contains('_buildProjectEfficiencyChart'));
     expect(source, contains('_ProjectEfficiencyRow'));
-    expect(source, contains('项目效率拆解'));
-    expect(source, contains('按清单/目标汇总完成项、目标里程碑和时间投入'));
-    expect(source, contains('项/时'));
+    expect(source, contains('.projectEfficiencyTitle'));
+    expect(source, contains('.projectEfficiencySubtitle'));
+    expect(source, contains('.itemsPerHour'));
   });
 }

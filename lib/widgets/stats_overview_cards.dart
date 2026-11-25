@@ -7,6 +7,7 @@ class StatsOverviewCard extends StatelessWidget {
   final String? unit;
   final IconData icon;
   final Color color;
+  final int? titleMaxLines;
 
   const StatsOverviewCard({
     super.key,
@@ -15,6 +16,7 @@ class StatsOverviewCard extends StatelessWidget {
     this.unit,
     required this.icon,
     required this.color,
+    this.titleMaxLines = 1,
   });
 
   @override
@@ -25,6 +27,7 @@ class StatsOverviewCard extends StatelessWidget {
       unit: unit,
       icon: icon,
       color: color,
+      titleMaxLines: titleMaxLines,
       padding: const EdgeInsets.all(10),
     );
   }

@@ -1,6 +1,10 @@
 import Flutter
 import Foundation
 import UIKit
+import UserNotifications
+#if canImport(flutter_local_notifications)
+import flutter_local_notifications
+#endif
 
 // BEGIN DUOYI_WIDGET_LAUNCH_CORE
 struct DuoyiWidgetLaunchDelivery {
@@ -26,7 +30,7 @@ final class DuoyiWidgetLaunchBuffer {
       return (false, nil)
     }
     let hosts = Set(["tab", "todo", "habit", "calendar", "focus", "widget", "course", "note",
-                     "diary", "goal", "anniversary", "countdown", "time-entry", "report", "action"])
+                     "diary", "goal", "anniversary", "countdown", "time-entry", "event", "pomodoro", "report", "action"])
     guard hosts.contains(components.host ?? ""), url.absoluteString.utf8.count <= 8192 else {
       return (true, nil)
     }
@@ -85,6 +89,16 @@ final class DuoyiWidgetLaunchBridge {
     }
   }
 
+  func detach(from oldMessenger: FlutterBinaryMessenger) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard let current = messenger,
+          (current as AnyObject) === (oldMessenger as AnyObject) else { return }
+    subscribed = false
+    channel?.setMethodCallHandler(nil)
+    channel = nil
+    messenger = nil
+  }
+
   func handle(url: URL) -> Bool {
     let receipt = buffer.receive(url: url)
     if let delivery = receipt.delivery, subscribed {
@@ -140,6 +154,16 @@ final class DuoyiDeepLinkBridge {
     channel = nextChannel
   }
 
+  func detach(from oldMessenger: FlutterBinaryMessenger) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    DuoyiWidgetLaunchBridge.shared.detach(from: oldMessenger)
+    guard let current = messenger,
+          (current as AnyObject) === (oldMessenger as AnyObject) else { return }
+    channel?.setMethodCallHandler(nil)
+    channel = nil
+    messenger = nil
+  }
+
   @discardableResult
   func handle(url: URL?, initial: Bool = false) -> Bool {
     guard let url = url, url.scheme == "duoyi" else {
@@ -159,13 +183,58 @@ final class DuoyiDeepLinkBridge {
   }
 }
 
+// Each engine publishes its own observer; registering a headless engine does
+// not replace the active view's channels or acknowledge pending launches.
+final class DuoyiWidgetLaunchLifecyclePlugin: NSObject, FlutterPlugin {
+  static let pluginKey = "DuoyiWidgetLaunchLifecyclePlugin"
+  private let registeredMessenger: FlutterBinaryMessenger
+
+  private init(messenger: FlutterBinaryMessenger) {
+    registeredMessenger = messenger
+    super.init()
+  }
+
+  static func register(with registrar: FlutterPluginRegistrar) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    let observer = DuoyiWidgetLaunchLifecyclePlugin(messenger: registrar.messenger())
+    registrar.publish(observer)
+  }
+
+  func detachFromEngine(for registrar: FlutterPluginRegistrar) {
+    // The registrar's engine may already be tearing down. Keep the relay
+    // captured at registration, including across a delayed main-queue callback.
+    let oldMessenger = registeredMessenger
+    if Thread.isMainThread {
+      DuoyiDeepLinkBridge.shared.detach(from: oldMessenger)
+    } else {
+      DispatchQueue.main.async {
+        DuoyiDeepLinkBridge.shared.detach(from: oldMessenger)
+      }
+    }
+  }
+}
+
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UNUserNotificationCenterDelegate {
+  private static let todoCategoryId = "DUOYI_TODO_REMINDER"
+  private static let habitCategoryId = "DUOYI_HABIT_REMINDER"
+  private static let alarmCategoryId = "DUOYI_ALARM_REMINDER"
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    #if canImport(flutter_local_notifications)
+    FlutterLocalNotificationsPlugin.setPluginRegistrantCallback { registry in
+      if !registry.hasPlugin("FlutterLocalNotificationsPlugin") {
+        GeneratedPluginRegistrant.register(with: registry)
+      }
+    }
+    #endif
+    let notificationCenter = UNUserNotificationCenter.current()
+    registerNotificationCategories(on: notificationCenter)
     let launched = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    notificationCenter.delegate = self
     if let controller = window?.rootViewController as? FlutterViewController {
       DuoyiDeepLinkBridge.shared.attach(to: controller.binaryMessenger)
     }
@@ -178,6 +247,110 @@ final class DuoyiDeepLinkBridge {
       )
     }
     return launched
+  }
+
+  private func registerNotificationCategories(on center: UNUserNotificationCenter) {
+    let isEnglish = Locale.preferredLanguages.first?.lowercased().hasPrefix("en") == true
+    let todoComplete = UNNotificationAction(
+      identifier: "todo_complete",
+      title: isEnglish ? "Complete" : "完成",
+      options: []
+    )
+    let snooze10mTodo = UNNotificationAction(
+      identifier: "todo_snooze_10m",
+      title: isEnglish ? "Snooze 10m" : "稍后10分钟",
+      options: []
+    )
+    let habitCheckin = UNNotificationAction(
+      identifier: "habit_checkin",
+      title: isEnglish ? "Check in" : "打卡",
+      options: []
+    )
+    let snooze10mHabit = UNNotificationAction(
+      identifier: "habit_snooze_10m",
+      title: isEnglish ? "Snooze 10m" : "稍后10分钟",
+      options: []
+    )
+    let alarmSnooze10m = UNNotificationAction(
+      identifier: "alarm_snooze_10m",
+      title: isEnglish ? "Snooze 10m" : "稍后10分钟",
+      options: []
+    )
+    let alarmDismiss = UNNotificationAction(
+      identifier: "alarm_dismiss",
+      title: isEnglish ? "Dismiss" : "关闭闹钟",
+      options: [.destructive]
+    )
+
+    let categories: Set<UNNotificationCategory> = [
+      UNNotificationCategory(
+        identifier: Self.todoCategoryId,
+        actions: [todoComplete, snooze10mTodo],
+        intentIdentifiers: [],
+        options: [.customDismissAction]
+      ),
+      UNNotificationCategory(
+        identifier: Self.habitCategoryId,
+        actions: [habitCheckin, snooze10mHabit],
+        intentIdentifiers: [],
+        options: [.customDismissAction]
+      ),
+      UNNotificationCategory(
+        identifier: Self.alarmCategoryId,
+        actions: [alarmSnooze10m, alarmDismiss],
+        intentIdentifiers: [],
+        options: [.customDismissAction]
+      ),
+    ]
+    center.setNotificationCategories(categories)
+  }
+
+  private func userInfoBool(_ userInfo: [AnyHashable: Any], key: String) -> Bool? {
+    if let number = userInfo[key] as? NSNumber {
+      return number.boolValue
+    }
+    if let flag = userInfo[key] as? Bool {
+      return flag
+    }
+    return nil
+  }
+
+  // Note: FlutterAppDelegate forwards didReceiveNotificationResponse through its
+  // Objective-C lifecycle delegate to flutter_local_notifications; keeping only
+  // willPresent here preserves plugin action routing while ensuring foreground
+  // presentation options (banner/list/sound/badge) for both plugin and native notifications.
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    let userInfo = notification.request.content.userInfo
+    if userInfo["NotificationId"] != nil {
+      var options: UNNotificationPresentationOptions = []
+      if #available(iOS 14.0, *) {
+        if userInfoBool(userInfo, key: "presentBanner") ?? true {
+          options.insert(.banner)
+        }
+        if userInfoBool(userInfo, key: "presentList") ?? true {
+          options.insert(.list)
+        }
+      } else if userInfoBool(userInfo, key: "presentAlert") ?? true {
+        options.insert(.alert)
+      }
+      if userInfoBool(userInfo, key: "presentSound") ?? true {
+        options.insert(.sound)
+      }
+      if userInfoBool(userInfo, key: "presentBadge") ?? true {
+        options.insert(.badge)
+      }
+      completionHandler(options)
+      return
+    }
+    if #available(iOS 14.0, *) {
+      completionHandler([.banner, .list, .sound, .badge])
+    } else {
+      completionHandler([.alert, .sound, .badge])
+    }
   }
 
   override func application(
@@ -193,5 +366,14 @@ final class DuoyiDeepLinkBridge {
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let registry = engineBridge.pluginRegistry
+    if !registry.hasPlugin(DuoyiWidgetPublicationBridge.pluginKey),
+       let registrar = registry.registrar(forPlugin: DuoyiWidgetPublicationBridge.pluginKey) {
+      DuoyiWidgetPublicationBridge.register(with: registrar)
+    }
+    if !registry.hasPlugin(DuoyiWidgetLaunchLifecyclePlugin.pluginKey),
+       let registrar = registry.registrar(forPlugin: DuoyiWidgetLaunchLifecyclePlugin.pluginKey) {
+      DuoyiWidgetLaunchLifecyclePlugin.register(with: registrar)
+    }
   }
 }

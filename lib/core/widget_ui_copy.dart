@@ -1,11 +1,13 @@
 /// Duoyi widget screen and preview UI localization strings (Task: iOS style & i18n).
 library;
 
+import '../l10n/generated/app_localizations.dart';
 import '../services/android_widget_manager.dart';
 import 'i18n.dart';
-import 'i18n_date_format.dart';
 
 enum WidgetCategory { all, productivity, life }
+
+enum WidgetHostPlatform { android, ios, web, desktop }
 
 enum WidgetPreviewKind {
   todo,
@@ -23,259 +25,218 @@ enum WidgetPreviewKind {
 class WidgetUiCopy {
   WidgetUiCopy._();
 
+  static AppLocalizations _l10n() =>
+      lookupAppLocalizations(I18n.current.flutterLocale);
+
   static bool get isZh => I18n.current == AppLocale.zh;
 
+  static String hostSupportTitle(WidgetHostPlatform platform) =>
+      switch (platform) {
+        WidgetHostPlatform.ios => _l10n().widgetHostSupportIosTitle,
+        WidgetHostPlatform.web => _l10n().widgetHostSupportWebTitle,
+        _ => _l10n().widgetHostSupportMobileTitle,
+      };
+
+  static String hostSupportMessage(WidgetHostPlatform platform) =>
+      platform == WidgetHostPlatform.ios
+      ? _l10n().widgetHostSupportIosMessage
+      : _l10n().widgetHostSupportMobileMessage;
+
+  static String hostAddAction(WidgetHostPlatform platform) =>
+      platform == WidgetHostPlatform.ios
+      ? _l10n().widgetHostAddIosAction
+      : _l10n().widgetHostAddMobileAction;
+
+  static String hostHelpTitle(WidgetHostPlatform platform) =>
+      platform == WidgetHostPlatform.ios
+      ? addDialogTitle
+      : _l10n().widgetHostHelpMobileTitle;
+
+  static String hostHelpMessage(WidgetHostPlatform platform) =>
+      platform == WidgetHostPlatform.ios
+      ? _l10n().widgetHostHelpIosMessage
+      : _l10n().widgetHostHelpMobileMessage;
+
+  static String hostTipsMessage(WidgetHostPlatform platform) =>
+      platform == WidgetHostPlatform.android
+      ? widgetTipsBannerMessage
+      : platform == WidgetHostPlatform.ios
+      ? _l10n().widgetHostTipsIosMessage
+      : _l10n().widgetHostTipsPreviewMessage;
+
+  static String hostStyleDescription(String id, WidgetHostPlatform platform) {
+    if (platform == WidgetHostPlatform.android) {
+      return displayModeDescription(id);
+    }
+    final l10n = _l10n();
+    final description = switch (id) {
+      'compact' => l10n.widgetHostStyleCompactDescription,
+      'detailed' => l10n.widgetHostStyleDetailedDescription,
+      _ => l10n.widgetHostStyleStandardDescription,
+    };
+    if (platform != WidgetHostPlatform.ios) return description;
+    return l10n.widgetHostStyleDescriptionIos(description);
+  }
+
+  static String hostStyleSyncSuccess(
+    String label,
+    WidgetHostPlatform platform,
+  ) {
+    if (platform == WidgetHostPlatform.android) return styleSyncSuccess(label);
+    if (platform == WidgetHostPlatform.ios) {
+      return _l10n().widgetStyleSyncSuccess(label);
+    }
+    return _l10n().widgetPreviewStyleSyncSuccess(label);
+  }
+
   // Screen header & control strings
-  static String get screenTitle => isZh ? '小组件' : 'Widgets';
-  static String get refreshTooltip => isZh ? '刷新小组件' : 'Refresh widgets';
-  static String get previewHeaderTitle =>
-      isZh ? '桌面小组件预览' : 'Home Screen Widget Preview';
-  static String get stylePanelTitle => isZh ? '小组件样式' : 'Widget Style';
+  static String get screenTitle => _l10n().navWidget;
+  static String get refreshTooltip => _l10n().widgetRefreshTooltip;
+  static String get previewHeaderTitle => _l10n().widgetPreviewHeaderTitle;
+  static String get stylePanelTitle => _l10n().widgetStylePanelTitle;
 
   // Category labels
   static String categoryLabel(WidgetCategory category) {
-    return switch (I18n.current) {
-      AppLocale.en => switch (category) {
-        WidgetCategory.all => 'All',
-        WidgetCategory.productivity => 'Productivity',
-        WidgetCategory.life => 'Lifestyle',
-      },
-      AppLocale.zh => switch (category) {
-        WidgetCategory.all => '全部',
-        WidgetCategory.productivity => '效率',
-        WidgetCategory.life => '生活',
-      },
+    final l10n = _l10n();
+    return switch (category) {
+      WidgetCategory.all => l10n.widgetCategoryAll,
+      WidgetCategory.productivity => l10n.widgetCategoryProductivity,
+      WidgetCategory.life => l10n.widgetCategoryLife,
     };
   }
 
   // Catalog item titles
   static String catalogTitle(DuoyiWidgetKind kind) {
-    return switch (I18n.current) {
-      AppLocale.en => switch (kind) {
-        DuoyiWidgetKind.todo => 'Today’s tasks',
-        DuoyiWidgetKind.focus => 'Focus',
-        DuoyiWidgetKind.habit => 'Habits',
-        DuoyiWidgetKind.calendar => 'Calendar',
-        DuoyiWidgetKind.schedule => 'Today’s schedule',
-        DuoyiWidgetKind.goal => 'Goals',
-        DuoyiWidgetKind.course => 'Timetable',
-        DuoyiWidgetKind.note => 'Quick Notes',
-        DuoyiWidgetKind.anniversary => 'Anniversaries',
-        DuoyiWidgetKind.diary => 'Diary',
-      },
-      AppLocale.zh => switch (kind) {
-        DuoyiWidgetKind.todo => '今日待办',
-        DuoyiWidgetKind.focus => '专注',
-        DuoyiWidgetKind.habit => '习惯',
-        DuoyiWidgetKind.calendar => '月历',
-        DuoyiWidgetKind.schedule => '今日日程',
-        DuoyiWidgetKind.goal => '目标',
-        DuoyiWidgetKind.course => '课程表',
-        DuoyiWidgetKind.note => '随手记',
-        DuoyiWidgetKind.anniversary => '纪念日',
-        DuoyiWidgetKind.diary => '日记',
-      },
+    final l10n = _l10n();
+    return switch (kind) {
+      DuoyiWidgetKind.todo => l10n.widgetCatalogTodoTitle,
+      DuoyiWidgetKind.focus => l10n.navFocus,
+      DuoyiWidgetKind.habit => l10n.navHabit,
+      DuoyiWidgetKind.calendar => l10n.widgetCatalogCalendarTitle,
+      DuoyiWidgetKind.schedule => l10n.widgetCatalogScheduleTitle,
+      DuoyiWidgetKind.goal => l10n.widgetCatalogGoalTitle,
+      DuoyiWidgetKind.course => l10n.mineTileCourses,
+      DuoyiWidgetKind.note => l10n.widgetCatalogNoteTitle,
+      DuoyiWidgetKind.anniversary => l10n.widgetCatalogAnniversaryTitle,
+      DuoyiWidgetKind.diary => l10n.diaryTitle,
     };
   }
 
   // Catalog item subtitles
   static String catalogSubtitle(DuoyiWidgetKind kind) {
-    return switch (I18n.current) {
-      AppLocale.en => switch (kind) {
-        DuoyiWidgetKind.todo =>
-          'View and complete todos on home screen with quick capture',
-        DuoyiWidgetKind.focus =>
-          'Show today focus sessions, duration, and next plan',
-        DuoyiWidgetKind.habit =>
-          'Track today completion rate, streaks, and quick check-in',
-        DuoyiWidgetKind.calendar => 'Monthly overview with today indicator',
-        DuoyiWidgetKind.schedule =>
-          'View today schedule items ordered chronologically',
-        DuoyiWidgetKind.goal => 'Show active goals and progress status',
-        DuoyiWidgetKind.course =>
-          'Show today class periods, classrooms, and times',
-        DuoyiWidgetKind.note => 'View recently updated memos and quick notes',
-        DuoyiWidgetKind.anniversary =>
-          'Count down important days and track total days',
-        DuoyiWidgetKind.diary =>
-          'Review recent mood entries and diary snippets',
-      },
-      AppLocale.zh => switch (kind) {
-        DuoyiWidgetKind.todo => '桌面查看与完成待办，支持快速记一笔',
-        DuoyiWidgetKind.focus => '展示今日专注次数、时长与下一轮计划',
-        DuoyiWidgetKind.habit => '查看今日完成率、连续记录与快捷打卡',
-        DuoyiWidgetKind.calendar => '月视图概览与今日标记',
-        DuoyiWidgetKind.schedule => '查看今日按时间排序的日程安排',
-        DuoyiWidgetKind.goal => '展示当前目标与推进进度',
-        DuoyiWidgetKind.course => '展示今日课程节次、教室与时间',
-        DuoyiWidgetKind.note => '查看最近更新的便签与随手记',
-        DuoyiWidgetKind.anniversary => '倒数重要日子与累计天数',
-        DuoyiWidgetKind.diary => '回顾最近记录的心情与日记摘要',
-      },
+    final l10n = _l10n();
+    return switch (kind) {
+      DuoyiWidgetKind.todo => l10n.widgetCatalogTodoSubtitle,
+      DuoyiWidgetKind.focus => l10n.widgetCatalogFocusSubtitle,
+      DuoyiWidgetKind.habit => l10n.widgetCatalogHabitSubtitle,
+      DuoyiWidgetKind.calendar => l10n.widgetCatalogCalendarSubtitle,
+      DuoyiWidgetKind.schedule => l10n.widgetCatalogScheduleSubtitle,
+      DuoyiWidgetKind.goal => l10n.widgetCatalogGoalSubtitle,
+      DuoyiWidgetKind.course => l10n.widgetCatalogCourseSubtitle,
+      DuoyiWidgetKind.note => l10n.widgetCatalogNoteSubtitle,
+      DuoyiWidgetKind.anniversary => l10n.widgetCatalogAnniversarySubtitle,
+      DuoyiWidgetKind.diary => l10n.widgetCatalogDiarySubtitle,
     };
   }
 
   // Display mode labels & descriptions
   static String displayModeLabel(String id) {
-    return switch (I18n.current) {
-      AppLocale.en => switch (id) {
-        'compact' => 'Compact',
-        'detailed' => 'Detailed',
-        _ => 'Standard',
-      },
-      AppLocale.zh => switch (id) {
-        'compact' => '紧凑',
-        'detailed' => '详细',
-        _ => '标准',
-      },
+    final l10n = _l10n();
+    return switch (id) {
+      'compact' => l10n.widgetDisplayModeCompactLabel,
+      'detailed' => l10n.widgetDisplayModeDetailedLabel,
+      _ => l10n.widgetDisplayModeStandardLabel,
     };
   }
 
   static String displayModeDescription(String id) {
-    return switch (I18n.current) {
-      AppLocale.en => switch (id) {
-        'compact' =>
-          'Compact size showing one key line. Long press on home screen to resize.',
-        'detailed' =>
-          'Detailed size showing three lines. Long press on home screen to resize.',
-        _ =>
-          'Standard size showing two lines. Long press on home screen to resize.',
-      },
-      AppLocale.zh => switch (id) {
-        'compact' => '紧凑尺寸，展示核心一行内容，长按桌面可调整大小',
-        'detailed' => '详细尺寸，展示三行内容，长按桌面可调整大小',
-        _ => '标准尺寸，展示两行内容，长按桌面可调整大小',
-      },
+    final l10n = _l10n();
+    return switch (id) {
+      'compact' => l10n.widgetDisplayModeCompactDescription,
+      'detailed' => l10n.widgetDisplayModeDetailedDescription,
+      _ => l10n.widgetDisplayModeStandardDescription,
     };
   }
 
   // SnackBar / feedback messages
-  static String get styleSyncFailed => isZh
-      ? '桌面小组件样式同步失败，请重试'
-      : 'Failed to sync widget style to home screen. Please retry.';
-  static String get actionRetry => isZh ? '重试' : 'Retry';
-  static String styleSyncSuccess(String modeLabel) => isZh
-      ? '小组件样式已设为$modeLabel。长按桌面小组件可调整大小。'
-      : 'Widget style set to $modeLabel. Long press home screen widget to resize.';
-  static String get cannotOpenSettings => isZh
-      ? '无法打开应用设置，请手动进入系统设置检查多仪权限'
-      : 'Unable to open app settings. Please check Duoyi permissions in system settings.';
-  static String get refreshSuccess => isZh ? '小组件已刷新' : 'Widgets refreshed';
-  static String get refreshFailed =>
-      isZh ? '刷新失败，请稍后重试' : 'Failed to refresh. Please try again later.';
+  static String get styleSyncFailed => _l10n().widgetStyleSyncFailed;
+  static String get actionRetry => _l10n().actionRetry;
+  static String styleSyncSuccess(String modeLabel) =>
+      _l10n().widgetStyleSyncSuccess(modeLabel);
+  static String get cannotOpenSettings => _l10n().widgetCannotOpenSettings;
+  static String get refreshSuccess => _l10n().widgetRefreshSuccess;
+  static String get refreshFailed => _l10n().widgetRefreshFailed;
 
   // Pin support banner
   static String get pinSupportCheckingTitle =>
-      isZh ? '正在检查桌面小组件支持' : 'Checking home screen widget support';
-  static String get pinSupportCheckingMessage => isZh
-      ? '正在检测当前桌面是否支持直接添加小组件。'
-      : 'Checking whether current launcher supports adding widgets directly.';
+      _l10n().widgetPinSupportCheckingTitle;
+  static String get pinSupportCheckingMessage =>
+      _l10n().widgetPinSupportCheckingMessage;
   static String get pinSupportSupportedTitle =>
-      isZh ? '当前桌面支持应用内添加' : 'Current launcher supports adding from app';
-  static String get pinSupportSupportedMessage => isZh
-      ? '可直接添加到桌面，添加后需系统弹窗确认；长按桌面小组件可调整大小。'
-      : 'Add directly to home screen with system confirmation dialog. Long press to resize.';
+      _l10n().widgetPinSupportSupportedTitle;
+  static String get pinSupportSupportedMessage =>
+      _l10n().widgetPinSupportSupportedMessage;
 
   static String pinSupportResultTitle(AndroidWidgetPinResult? support) {
-    return switch (I18n.current) {
-      AppLocale.en => switch (support) {
-        AndroidWidgetPinResult.unsupportedPlatform =>
-          'Platform does not support in-app pinning',
-        AndroidWidgetPinResult.unsupportedLauncher =>
-          'Current launcher does not support in-app pinning',
-        AndroidWidgetPinResult.permissionDenied =>
-          'Home screen permission denied',
-        AndroidWidgetPinResult.confirmationBlocked =>
-          'Confirmation dialog may be blocked',
-        AndroidWidgetPinResult.invalidKind => 'Widget kind cannot be pinned',
-        _ => 'Current launcher may not support in-app pinning',
-      },
-      AppLocale.zh => switch (support) {
-        AndroidWidgetPinResult.unsupportedPlatform => '当前平台不支持应用内添加',
-        AndroidWidgetPinResult.unsupportedLauncher => '当前桌面不支持应用内添加',
-        AndroidWidgetPinResult.permissionDenied => '桌面添加权限未通过',
-        AndroidWidgetPinResult.confirmationBlocked => '桌面确认弹窗可能被拦截',
-        AndroidWidgetPinResult.invalidKind => '当前小组件类型不可添加',
-        _ => '当前桌面可能不支持应用内添加',
-      },
+    final l10n = _l10n();
+    return switch (support) {
+      AndroidWidgetPinResult.unsupportedPlatform =>
+        l10n.widgetPinSupportUnsupportedPlatformTitle,
+      AndroidWidgetPinResult.unsupportedLauncher =>
+        l10n.widgetPinSupportUnsupportedLauncherTitle,
+      AndroidWidgetPinResult.permissionDenied =>
+        l10n.widgetPinSupportPermissionDeniedTitle,
+      AndroidWidgetPinResult.confirmationBlocked =>
+        l10n.widgetPinSupportConfirmationBlockedTitle,
+      AndroidWidgetPinResult.invalidKind =>
+        l10n.widgetPinSupportInvalidKindTitle,
+      _ => l10n.widgetPinSupportFallbackTitle,
     };
   }
 
   static String pinSupportResultMessage(AndroidWidgetPinResult? support) {
-    return switch (I18n.current) {
-      AppLocale.en => switch (support) {
-        AndroidWidgetPinResult.unsupportedPlatform =>
-          'Please add Duoyi via the system widget picker on Android.',
-        AndroidWidgetPinResult.unsupportedLauncher =>
-          'Current launcher has not enabled in-app pinning. Please add from system widget picker.',
-        AndroidWidgetPinResult.permissionDenied =>
-          'System did not allow Duoyi to add widgets. Enable permission in settings and retry.',
-        AndroidWidgetPinResult.confirmationBlocked =>
-          'Confirmation dialog may be blocked. Please check background pop-up permissions.',
-        AndroidWidgetPinResult.invalidKind =>
-          'Please update the app and retry.',
-        _ =>
-          'If no dialog appears, check widget and pop-up permissions in system settings, or add via system widget picker.',
-      },
-      AppLocale.zh => switch (support) {
-        AndroidWidgetPinResult.unsupportedPlatform =>
-          '请在 Android 手机上通过系统小组件列表添加多仪。',
-        AndroidWidgetPinResult.unsupportedLauncher =>
-          '当前桌面启动器未开放应用内添加，请从系统小组件列表选择添加。',
-        AndroidWidgetPinResult.permissionDenied =>
-          '系统未允许多仪添加桌面小组件，请在系统设置中开启权限后重试。',
-        AndroidWidgetPinResult.confirmationBlocked =>
-          '桌面确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。',
-        AndroidWidgetPinResult.invalidKind => '请更新应用后重试。',
-        _ => '若未弹出确认框，请打开系统设置检查桌面小组件与后台弹窗权限，或从系统小组件列表添加。',
-      },
+    final l10n = _l10n();
+    return switch (support) {
+      AndroidWidgetPinResult.unsupportedPlatform =>
+        l10n.widgetPinSupportUnsupportedPlatformMessage,
+      AndroidWidgetPinResult.unsupportedLauncher =>
+        l10n.widgetPinSupportUnsupportedLauncherMessage,
+      AndroidWidgetPinResult.permissionDenied =>
+        l10n.widgetPinSupportPermissionDeniedMessage,
+      AndroidWidgetPinResult.confirmationBlocked =>
+        l10n.widgetPinSupportConfirmationBlockedMessage,
+      AndroidWidgetPinResult.invalidKind =>
+        l10n.widgetPinSupportInvalidKindMessage,
+      _ => l10n.widgetPinSupportFallbackMessage,
     };
   }
 
-  static String get actionAppSettings => isZh ? '应用设置' : 'App Settings';
-  static String get actionRecheck => isZh ? '重新检测' : 'Recheck';
+  static String get actionAppSettings => _l10n().widgetActionAppSettings;
+  static String get actionRecheck => _l10n().widgetActionRecheck;
   static String get actionOpenPermissions =>
-      isZh ? '打开权限设置' : 'Open Permissions';
-  static String get actionGotIt => isZh ? '知道了' : 'Got It';
-  static String get addDialogTitle => isZh ? '添加到桌面' : 'Add to Home Screen';
+      _l10n().widgetActionOpenPermissions;
+  static String get actionGotIt => _l10n().widgetActionGotIt;
+  static String get addDialogTitle => _l10n().widgetAddDialogTitle;
 
   // Help messages for AndroidWidgetPinResult
   static String pinHelpMessage(AndroidWidgetPinResult result) {
-    return switch (I18n.current) {
-      AppLocale.en => switch (result) {
-        AndroidWidgetPinResult.unsupported =>
-          'Current launcher does not support direct pinning. Long press an empty area on your home screen to add from the widget picker.',
-        AndroidWidgetPinResult.unsupportedPlatform =>
-          'Current platform does not support adding Android widgets. Please add Duoyi from the system widget picker on Android.',
-        AndroidWidgetPinResult.unsupportedLauncher =>
-          'Current launcher has not enabled in-app pinning. Long press an empty area on home screen to add from widget picker.',
-        AndroidWidgetPinResult.permissionDenied =>
-          'System did not allow Duoyi to add widgets. Enable permission in system settings and retry, or add from widget picker.',
-        AndroidWidgetPinResult.confirmationBlocked =>
-          'System confirmation dialog may be blocked. Please check background pop-up permissions.',
-        AndroidWidgetPinResult.invalidKind =>
-          'This widget type is not supported yet. Update the app and try again.',
-        AndroidWidgetPinResult.unavailable =>
-          'Failed to send request. Check home screen permissions and retry, or add from widget picker.',
-        AndroidWidgetPinResult.requested =>
-          'Pin request initiated. Please confirm in the system dialog.',
-      },
-      AppLocale.zh => switch (result) {
-        AndroidWidgetPinResult.unsupported =>
-          '当前桌面不支持应用内直接添加小组件。请长按桌面空白处，从系统小组件列表添加。',
-        AndroidWidgetPinResult.unsupportedPlatform =>
-          '当前平台不支持直接添加 Android 桌面小组件。请在 Android 手机上从系统小组件列表添加多仪。',
-        AndroidWidgetPinResult.unsupportedLauncher =>
-          '当前桌面启动器未开放应用内添加，请长按桌面空白处从系统小组件列表添加。',
-        AndroidWidgetPinResult.permissionDenied =>
-          '系统未允许多仪添加桌面小组件。请在系统设置中开启权限后重试，或从系统小组件列表添加。',
-        AndroidWidgetPinResult.confirmationBlocked =>
-          '系统确认弹窗可能被拦截，请检查后台弹窗或悬浮窗权限后重试。',
-        AndroidWidgetPinResult.invalidKind => '当前小组件类型暂不支持添加，请更新应用后重试。',
-        AndroidWidgetPinResult.unavailable =>
-          '无法发起添加请求，请检查桌面权限后重试，或从系统小组件列表添加。',
-        AndroidWidgetPinResult.requested => '已发起添加请求，请在桌面系统弹窗中确认。',
-      },
+    final l10n = _l10n();
+    return switch (result) {
+      AndroidWidgetPinResult.unsupported =>
+        l10n.widgetPinHelpUnsupportedMessage,
+      AndroidWidgetPinResult.unsupportedPlatform =>
+        l10n.widgetPinHelpUnsupportedPlatformMessage,
+      AndroidWidgetPinResult.unsupportedLauncher =>
+        l10n.widgetPinHelpUnsupportedLauncherMessage,
+      AndroidWidgetPinResult.permissionDenied =>
+        l10n.widgetPinHelpPermissionDeniedMessage,
+      AndroidWidgetPinResult.confirmationBlocked =>
+        l10n.widgetPinHelpConfirmationBlockedMessage,
+      AndroidWidgetPinResult.invalidKind =>
+        l10n.widgetPinHelpInvalidKindMessage,
+      AndroidWidgetPinResult.unavailable =>
+        l10n.widgetPinHelpUnavailableMessage,
+      AndroidWidgetPinResult.requested => l10n.widgetPinHelpRequestedMessage,
     };
   }
 
@@ -283,241 +244,209 @@ class WidgetUiCopy {
   static (String title, String message) pinConfirmationFailure(
     AndroidWidgetPinFinalStatus status,
   ) {
-    return switch (I18n.current) {
-      AppLocale.en => switch (status) {
-        AndroidWidgetPinFinalStatus.invalidWidgetId => (
-          'Addition Incomplete',
-          'Widget was not created on home screen. Retry or add from system widget picker.',
-        ),
-        AndroidWidgetPinFinalStatus.timeout => (
-          'Awaiting Confirmation',
-          'Request sent, but system confirmation not received. Check home screen for dialog or verify permissions.',
-        ),
-        AndroidWidgetPinFinalStatus.unavailable => (
-          'Addition Error',
-          'No result returned by launcher. Retry or add from system widget picker.',
-        ),
-        AndroidWidgetPinFinalStatus.success => (
-          'Added',
-          'Home screen widget added.',
-        ),
-      },
-      AppLocale.zh => switch (status) {
-        AndroidWidgetPinFinalStatus.invalidWidgetId => (
-          '添加未完成',
-          '桌面未成功创建小组件，请重试或从系统小组件列表添加。',
-        ),
-        AndroidWidgetPinFinalStatus.timeout => (
-          '等待桌面确认',
-          '已发起添加请求，但尚未收到系统确认。请查看桌面是否有确认弹窗，或在系统设置中检查权限。',
-        ),
-        AndroidWidgetPinFinalStatus.unavailable => (
-          '添加异常',
-          '桌面未返回添加结果。请重试或从系统小组件列表添加。',
-        ),
-        AndroidWidgetPinFinalStatus.success => ('已添加', '桌面小组件已添加。'),
-      },
+    final l10n = _l10n();
+    return switch (status) {
+      AndroidWidgetPinFinalStatus.invalidWidgetId => (
+        l10n.widgetPinConfirmationInvalidWidgetIdTitle,
+        l10n.widgetPinConfirmationInvalidWidgetIdMessage,
+      ),
+      AndroidWidgetPinFinalStatus.timeout => (
+        l10n.widgetPinConfirmationTimeoutTitle,
+        l10n.widgetPinConfirmationTimeoutMessage,
+      ),
+      AndroidWidgetPinFinalStatus.unavailable => (
+        l10n.widgetPinConfirmationUnavailableTitle,
+        l10n.widgetPinConfirmationUnavailableMessage,
+      ),
+      AndroidWidgetPinFinalStatus.success => (
+        l10n.widgetPinConfirmationSuccessTitle,
+        l10n.widgetPinConfirmationSuccessMessage,
+      ),
     };
   }
 
   // Add button labels
   static String get checkingDesktopSupport =>
-      isZh ? '正在检查桌面支持' : 'Checking support';
+      _l10n().widgetCheckingDesktopSupport;
+
   static String pinDisabledAction(AndroidWidgetPinResult? support) {
-    return switch (I18n.current) {
-      AppLocale.en => switch (support) {
-        AndroidWidgetPinResult.unsupportedPlatform =>
-          'In-app pin is Android only',
-        AndroidWidgetPinResult.unsupportedLauncher =>
-          'Add via system widget picker',
-        _ => 'View Pin Help',
-      },
-      AppLocale.zh => switch (support) {
-        AndroidWidgetPinResult.unsupportedPlatform => '仅 Android 支持应用内添加',
-        AndroidWidgetPinResult.unsupportedLauncher => '请从系统小组件列表添加',
-        _ => '查看添加帮助',
-      },
+    final l10n = _l10n();
+    return switch (support) {
+      AndroidWidgetPinResult.unsupportedPlatform =>
+        l10n.widgetPinDisabledAndroidOnly,
+      AndroidWidgetPinResult.unsupportedLauncher =>
+        l10n.widgetPinDisabledPicker,
+      _ => l10n.widgetPinDisabledHelp,
     };
   }
 
-  static String get requestingAdd => isZh ? '正在请求添加' : 'Requesting...';
+  static String get loadingStyle => _l10n().widgetLoadingStyle;
+  static String get styleLoadFailed => _l10n().widgetStyleLoadFailed;
+  static String get styleSyncPending => _l10n().widgetStyleSyncPending;
+  static String get updatingStyle => _l10n().widgetUpdatingStyle;
+  static String get requestingAdd => _l10n().widgetRequestingAdd;
+
   static String addWidgetButtonLabel({
     required String modeLabel,
     required String launcherRequestLabel,
-  }) {
-    return isZh
-        ? '添加$modeLabel $launcherRequestLabel'
-        : 'Add $modeLabel $launcherRequestLabel';
-  }
+  }) => _l10n().widgetAddWidgetButtonLabel(modeLabel, launcherRequestLabel);
 
-  static String pinInitiatedSnackBar(String modeLabel) => isZh
-      ? '已发起添加，请在系统弹窗中确认添加$modeLabel小组件。长按桌面可调整大小。'
-      : 'Request sent. Please confirm adding the $modeLabel widget in the system dialog. Long press to resize.';
+  static String pinInitiatedSnackBar(String modeLabel) =>
+      _l10n().widgetPinInitiatedSnackBar(modeLabel);
 
   static String pinSuccessSnackBar(String modeLabel) =>
-      isZh ? '已添加$modeLabel小组件到桌面。' : 'Added $modeLabel widget to home screen.';
+      _l10n().widgetPinSuccessSnackBar(modeLabel);
 
   // Tips banner
-  static String get widgetTipsBannerTitle =>
-      isZh ? '桌面小组件使用提示' : 'Home Screen Widget Tips';
-  static String get widgetTipsBannerMessage => isZh
-      ? '长按桌面小组件可调整大小。添加小组件需系统弹窗确认；若未弹出确认框，请打开系统设置检查多仪的桌面小组件权限。'
-      : 'Long press widgets on the home screen to resize. Adding widgets requires system confirmation; if no dialog appears, check Duoyi permissions in system settings.';
+  static String get widgetTipsBannerTitle => _l10n().widgetTipsBannerTitle;
+  static String get widgetTipsBannerMessage => _l10n().widgetTipsBannerMessage;
 
   // Desktop web fallback
-  static String get desktopWebTitle => isZh ? '电脑网页版显示日历' : 'Web Calendar View';
-  static String get desktopWebMessage => isZh
-      ? '桌面小组件依赖 Android 或 iOS 系统；电脑网页版默认隐藏小组件入口，保留月历预览和日历入口。'
-      : 'Home screen widgets require Android or iOS. Web desktop hides widget pinning and preserves monthly calendar preview and entry.';
-  static String get desktopWebTileSubtitle => isZh
-      ? '电脑网页版默认展示日历，不显示添加桌面小组件按钮'
-      : 'Web desktop displays calendar by default without widget pin controls';
-  static String get desktopWebOpenCalendar => isZh ? '打开日历' : 'Open Calendar';
+  static String get desktopWebTitle => _l10n().widgetDesktopWebTitle;
+  static String get desktopWebMessage => _l10n().widgetDesktopWebMessage;
+  static String get desktopWebTileSubtitle =>
+      _l10n().widgetDesktopWebTileSubtitle;
+  static String get desktopWebOpenCalendar =>
+      _l10n().widgetDesktopWebOpenCalendar;
 
   // Preview card titles
   static String previewTitle(WidgetPreviewKind kind) {
-    return switch (I18n.current) {
-      AppLocale.en => switch (kind) {
-        WidgetPreviewKind.todo => 'Tasks',
-        WidgetPreviewKind.focus => 'Focus',
-        WidgetPreviewKind.habit => 'Habits',
-        WidgetPreviewKind.calendar => 'Calendar',
-        WidgetPreviewKind.schedule => 'Schedule',
-        WidgetPreviewKind.goal => 'Goals',
-        WidgetPreviewKind.course => 'Timetable',
-        WidgetPreviewKind.note => 'Notes',
-        WidgetPreviewKind.anniversary => 'Anniversaries',
-        WidgetPreviewKind.diary => 'Diary',
-      },
-      AppLocale.zh => switch (kind) {
-        WidgetPreviewKind.todo => '今日待办预览',
-        WidgetPreviewKind.focus => '专注预览',
-        WidgetPreviewKind.habit => '习惯预览',
-        WidgetPreviewKind.calendar => '月历预览',
-        WidgetPreviewKind.schedule => '今日日程预览',
-        WidgetPreviewKind.goal => '目标预览',
-        WidgetPreviewKind.course => '课程表预览',
-        WidgetPreviewKind.note => '随手记预览',
-        WidgetPreviewKind.anniversary => '纪念日预览',
-        WidgetPreviewKind.diary => '日记预览',
-      },
+    final l10n = _l10n();
+    return switch (kind) {
+      WidgetPreviewKind.todo => l10n.widgetPreviewTodoTitle,
+      WidgetPreviewKind.focus => l10n.navFocus,
+      WidgetPreviewKind.habit => l10n.navHabit,
+      WidgetPreviewKind.calendar => l10n.widgetCatalogCalendarTitle,
+      WidgetPreviewKind.schedule => l10n.widgetPreviewScheduleTitle,
+      WidgetPreviewKind.goal => l10n.widgetCatalogGoalTitle,
+      WidgetPreviewKind.course => l10n.mineTileCourses,
+      WidgetPreviewKind.note => l10n.noteTitle,
+      WidgetPreviewKind.anniversary => l10n.widgetCatalogAnniversaryTitle,
+      WidgetPreviewKind.diary => l10n.diaryTitle,
     };
   }
 
   static String previewSampleBadge(String title) =>
-      isZh ? '示例 · $title' : 'Sample · $title';
+      _l10n().widgetPreviewSampleBadge(title);
 
   static String sampleHeaderDate(String cellLabel, {DateTime? date}) {
     final d = date ?? DateTime(2026, 5, 17);
-    return switch (I18n.current) {
-      AppLocale.en => '$cellLabel · ${I18nDateFormat.monthDay(d)}',
-      AppLocale.zh => '$cellLabel · 05/17',
-    };
+    final l10n = _l10n();
+    final isChinese = isZh;
+    final monthLabel = isChinese
+        ? d.month.toString().padLeft(2, '0')
+        : _enMonth(d.month, l10n);
+    final day = isChinese ? d.day.toString().padLeft(2, '0') : d.day.toString();
+    return l10n.widgetSampleHeaderDate(cellLabel, monthLabel, day);
   }
 
-  static String get refreshPreviewTooltip => isZh ? '刷新预览' : 'Refresh preview';
+  static String get refreshPreviewTooltip =>
+      _l10n().widgetRefreshPreviewTooltip;
 
-  static List<String> get previewNavLabels => isZh
-      ? const ['待办', '习惯', '日历', '专注']
-      : const ['Todo', 'Habits', 'Calendar', 'Focus'];
+  static List<String> get previewNavLabels {
+    final l10n = _l10n();
+    return List<String>.unmodifiable([
+      l10n.navTodo,
+      l10n.navHabit,
+      l10n.navCalendar,
+      l10n.navFocus,
+    ]);
+  }
 
   // Calendar body
   static String calendarMonthHeader(int year, int month) {
-    return switch (I18n.current) {
-      AppLocale.en => '${_enMonth(month)} $year',
-      AppLocale.zh => '$year年$month月',
-    };
+    final l10n = _l10n();
+    final monthLabel = isZh ? month.toString() : _enMonth(month, l10n);
+    return l10n.widgetCalendarMonthHeader(year.toString(), monthLabel);
   }
 
-  static String get calendarToday => isZh ? '今天' : 'Today';
+  static String get calendarToday => _l10n().pickerActionToday;
 
-  static List<String> get calendarWeekLabels => isZh
-      ? const ['一', '二', '三', '四', '五', '六', '日']
-      : const ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  static List<String> get calendarWeekLabels {
+    final l10n = _l10n();
+    return List<String>.unmodifiable([
+      l10n.habitWeekday1,
+      l10n.habitWeekday2,
+      l10n.habitWeekday3,
+      l10n.habitWeekday4,
+      l10n.habitWeekday5,
+      l10n.habitWeekday6,
+      l10n.habitWeekday7,
+    ]);
+  }
 
   // 10 sample preview bodies
   // Todo
-  static String get todoItem1 => isZh ? '整理今日计划' : 'Organize daily plan';
-  static String get todoItem2 => isZh ? '项目方案复盘' : 'Review project proposal';
-  static String get todoItem3 => isZh ? '晚间运动 30 分钟' : '30-min evening workout';
-  static String get todoSummaryCount =>
-      isZh ? '今日待办 · 3 项' : 'Today’s tasks · 3 items';
-  static String get todoQuickAdd => isZh ? '+ 记一笔' : '+ Quick Add';
+  static String get todoItem1 => _l10n().widgetTodoItem1;
+  static String get todoItem2 => _l10n().widgetTodoItem2;
+  static String get todoItem3 => _l10n().widgetTodoItem3;
+  static String get todoSummaryCount => _l10n().widgetTodoSummaryCount;
+  static String get todoQuickAdd => _l10n().widgetTodoQuickAdd;
 
   // Focus
-  static String get focusMetricSessions => isZh ? '今日专注' : 'Sessions';
-  static String get focusMetricDuration => isZh ? '时长(分)' : 'Minutes';
-  static String get focusMetricNext => isZh ? '下一轮(分)' : 'Next (min)';
-  static String get focusStartButton =>
-      isZh ? '开始 25 分钟专注' : 'Start 25-min focus';
-  static String get focusLine1 =>
-      isZh ? '今日专注 2 次 · 深度工作 50 分钟' : 'Today: 2 sessions · 50 min deep work';
-  static String get focusLine2 => isZh ? '下一轮：25 分钟专注' : 'Next: 25-min focus';
-  static String get focusLine3 => isZh ? '点击开始专注' : 'Tap to start focus';
+  static String get focusMetricSessions => _l10n().widgetFocusMetricSessions;
+  static String get focusMetricDuration => _l10n().widgetFocusMetricDuration;
+  static String get focusMetricNext => _l10n().widgetFocusMetricNext;
+  static String get focusTimerUnit => _l10n().widgetFocusTimerUnit;
+  static String get focusStartButton => _l10n().widgetFocusStartButton;
+  static String get focusLine1 => _l10n().widgetFocusLine1;
+  static String get focusLine2 => _l10n().widgetFocusLine2;
+  static String get focusLine3 => _l10n().widgetFocusLine3;
 
   // Habit
-  static String get habitTitle => isZh ? '今日习惯' : 'Today’s habits';
-  static String get habitLine1 =>
-      isZh ? '· 晚间拉伸 · 今日待打卡' : '· Evening Stretch · Pending';
-  static String get habitLine2 => isZh ? '· 连续记录 5 天' : '· 5-day streak';
-  static String get habitCheckInButton =>
-      isZh ? '打卡：晚间拉伸' : 'Check-in: Stretch';
+  static String get habitTitle => _l10n().widgetHabitTitle;
+  static String get calendarCurrentDate => _l10n().widgetCalendarCurrentDate;
+  static String get calendarCurrentDay => _l10n().widgetCalendarCurrentDay;
+  static String get habitLine1 => _l10n().widgetHabitLine1;
+  static String get habitLine2 => _l10n().widgetHabitLine2;
+  static String get habitCheckInButton => _l10n().widgetHabitCheckInButton;
 
   // Schedule
-  static String get scheduleItem1 =>
-      isZh ? '20:25 厕所 · 到点提醒' : '20:25 Break · Reminder';
-  static String get scheduleItem2 => isZh ? '14:30 团队例会' : '14:30 Team sync';
-  static String get scheduleItem3 =>
-      isZh ? '19:00 晚间复盘' : '19:00 Evening review';
+  static String get scheduleItem1 => _l10n().widgetScheduleItem1;
+  static String get scheduleItem2 => _l10n().widgetScheduleItem2;
+  static String get scheduleItem3 => _l10n().widgetScheduleItem3;
 
   // Goal
-  static String get goalItem1 => isZh ? '发版准备 · 68%' : 'Release prep · 68%';
-  static String get goalItem2 => isZh ? '本周运动 3/5 次' : 'Workouts 3/5 this week';
-  static String get goalItem3 =>
-      isZh ? '晚间复盘 · 今日待推进' : 'Evening review · Pending';
+  static String get goalItem1 => _l10n().widgetGoalItem1;
+  static String get goalItem2 => _l10n().widgetGoalItem2;
+  static String get goalItem3 => _l10n().widgetGoalItem3;
 
   // Course
-  static String get courseItem1 =>
-      isZh ? '第 1-2 节 高等数学 · 教 203' : 'Period 1-2 Advanced Math · Rm 203';
-  static String get courseItem2 =>
-      isZh ? '第 3-4 节 产品设计 · 线上' : 'Period 3-4 Product Design · Online';
-  static String get courseItem3 =>
-      isZh ? '14:30 团队例会 · 打开日历查看' : '14:30 Team sync · View in calendar';
+  static String get courseItem1 => _l10n().widgetCourseItem1;
+  static String get courseItem2 => _l10n().widgetCourseItem2;
+  static String get courseItem3 => _l10n().widgetCourseItem3;
 
   // Note
-  static String get noteItem1 => isZh ? '会议纪要' : 'Meeting notes';
-  static String get noteItem2 => isZh ? '灵感清单' : 'Idea checklist';
-  static String get noteItem3 => isZh ? '读书摘录' : 'Book highlights';
+  static String get noteItem1 => _l10n().widgetNoteItem1;
+  static String get noteItem2 => _l10n().widgetNoteItem2;
+  static String get noteItem3 => _l10n().widgetNoteItem3;
 
   // Anniversary
-  static String get anniversaryItem1 =>
-      isZh ? '相识纪念日 · 还有 6 天' : 'Anniversary · 6 days left';
-  static String get anniversaryItem2 =>
-      isZh ? '入职周年 · 还有 18 天' : 'Work Anniversary · 18 days left';
-  static String get anniversaryItem3 =>
-      isZh ? '旅行纪念 · 还有 32 天' : 'Trip Anniversary · 32 days left';
+  static String get anniversaryItem1 => _l10n().widgetAnniversaryItem1;
+  static String get anniversaryItem2 => _l10n().widgetAnniversaryItem2;
+  static String get anniversaryItem3 => _l10n().widgetAnniversaryItem3;
 
   // Diary
-  static String get diaryItem1 =>
-      isZh ? '5/18 今天完成了专注复盘' : 'May 18 Completed focus review today';
-  static String get diaryItem2 =>
-      isZh ? '5/17 记录一次散步' : 'May 17 Logged an evening walk';
-  static String get diaryItem3 =>
-      isZh ? '5/16 睡前整理心情' : 'May 16 Bedtime reflection';
+  static String get diaryItem1 => _l10n().widgetDiaryItem1;
+  static String get diaryItem2 => _l10n().widgetDiaryItem2;
+  static String get diaryItem3 => _l10n().widgetDiaryItem3;
 
-  static String _enMonth(int month) => switch (month) {
-    1 => 'Jan',
-    2 => 'Feb',
-    3 => 'Mar',
-    4 => 'Apr',
-    5 => 'May',
-    6 => 'Jun',
-    7 => 'Jul',
-    8 => 'Aug',
-    9 => 'Sep',
-    10 => 'Oct',
-    11 => 'Nov',
-    12 => 'Dec',
-    _ => '',
-  };
+  static String _enMonth(int month, [AppLocalizations? l10n]) {
+    final localL10n = l10n ?? _l10n();
+    return switch (month) {
+      1 => localL10n.widgetCalendarMonthJan,
+      2 => localL10n.widgetCalendarMonthFeb,
+      3 => localL10n.widgetCalendarMonthMar,
+      4 => localL10n.widgetCalendarMonthApr,
+      5 => localL10n.widgetCalendarMonthMay,
+      6 => localL10n.widgetCalendarMonthJun,
+      7 => localL10n.widgetCalendarMonthJul,
+      8 => localL10n.widgetCalendarMonthAug,
+      9 => localL10n.widgetCalendarMonthSep,
+      10 => localL10n.widgetCalendarMonthOct,
+      11 => localL10n.widgetCalendarMonthNov,
+      12 => localL10n.widgetCalendarMonthDec,
+      _ => '',
+    };
+  }
 }

@@ -34,6 +34,18 @@ object ReminderRingtoneScheduler {
     private const val recentDeliveryWindowMillis = 45_000L
     private const val recentDeliveryTokenMaxAgeMillis = 24 * 60 * 60 * 1000L
     private const val deliveryTokenExtra = "deliveryToken"
+    private const val appPrefsName = "FlutterSharedPreferences"
+    private const val appTimezoneModeKey = "flutter.pref_app_timezone_mode"
+    private const val appTimezoneIanaKey = "flutter.pref_app_timezone_iana"
+    private const val appTimezoneModeFixed = "fixed"
+    internal const val defaultSnoozeMinutes = 10
+    internal const val actionCleanupFlutterPluginOwners =
+        "com.duoyi.duoyi.ACTION_CLEANUP_FLUTTER_OWNERS"
+    internal const val actionCleanupFlutterPluginNotification =
+        "com.duoyi.duoyi.ACTION_CLEANUP_FLUTTER_NOTIFICATION"
+    internal const val extraCleanupNotificationId = "cleanupNotificationId"
+    private const val cleanupOwnersRequestCodeBase = 940_100
+    private const val cleanupNotificationNamespace = 0x48000000
     const val FOLLOW_UP_SNOOZE = "snooze"
     const val FOLLOW_UP_AUTO_REPEAT = "auto_repeat"
     private const val followUpSnoozeNamespace = 0x20000000
@@ -264,7 +276,7 @@ object ReminderRingtoneScheduler {
             hour = source.getIntExtra("hour", 9),
             minute = source.getIntExtra("minute", 0),
             weekdays = source.getIntArrayExtra("weekdays") ?: intArrayOf(),
-            timezoneId = source.getStringExtra("timezoneId"),
+            timezoneId = resolveRescheduleTimeZone(context, source.getStringExtra("timezoneId")),
             payload = source.getStringExtra("payload"),
             fullScreen = source.getBooleanExtra("fullScreen", false),
             vibrate = source.getBooleanExtra("vibrate", true),
@@ -722,35 +734,13 @@ object ReminderRingtoneScheduler {
         minute: Int,
         weekdays: IntArray,
         timezoneId: String,
-    ): Long {
-        val zone = TimeZone.getTimeZone(timezoneId)
-        val now = Calendar.getInstance(zone)
-        var best: Long? = null
-        for (offset in 0..7) {
-            val candidate = Calendar.getInstance(zone).apply {
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-                set(Calendar.HOUR_OF_DAY, hour.coerceIn(0, 23))
-                set(Calendar.MINUTE, minute.coerceIn(0, 59))
-                add(Calendar.DAY_OF_YEAR, offset)
-            }
-            val dartWeekday = when (candidate.get(Calendar.DAY_OF_WEEK)) {
-                Calendar.MONDAY -> 1
-                Calendar.TUESDAY -> 2
-                Calendar.WEDNESDAY -> 3
-                Calendar.THURSDAY -> 4
-                Calendar.FRIDAY -> 5
-                Calendar.SATURDAY -> 6
-                else -> 7
-            }
-            val weekdayAllowed = weekdays.isEmpty() || weekdays.contains(dartWeekday)
-            if (weekdayAllowed && candidate.after(now)) {
-                val millis = candidate.timeInMillis
-                if (best == null || millis < best!!) best = millis
-            }
-        }
-        return best ?: now.timeInMillis + 60_000L
-    }
+    ): Long = computeNextWallClockMillis(
+        hour = hour,
+        minute = minute,
+        weekdays = weekdays,
+        timezoneId = timezoneId,
+        nowMillis = System.currentTimeMillis(),
+    )
 
     private fun normalizeTimeZone(timezoneId: String?): String {
         val systemDefault = TimeZone.getDefault().id
@@ -823,7 +813,10 @@ object ReminderRingtoneScheduler {
                 hour = json.optInt("hour", 9),
                 minute = json.optInt("minute", 0),
                 weekdays = weekdays,
-                timezoneId = json.optString("timezoneId").ifBlank { null },
+                timezoneId = resolveRescheduleTimeZone(
+                    context,
+                    json.optString("timezoneId").ifBlank { null },
+                ),
                 payload = payload,
                 fullScreen = fullScreen,
                 vibrate = vibrate,
@@ -925,5 +918,181 @@ object ReminderRingtoneScheduler {
             .put("weekdays", JSONArray(weekdays.toList()))
             .put("timezoneId", intent.getStringExtra("timezoneId") ?: "")
             .toString()
+    }
+
+    internal data class StoredScheduleMetadata(
+        val vibrate: Boolean,
+        val snoozeMinutes: Int,
+        val repeatCount: Int,
+    )
+
+    internal fun readScheduleMetadata(context: Context, id: Int): StoredScheduleMetadata? {
+        if (id == 0) return null
+        val raw = prefs(context).getString("${entryPrefix}$id", null) ?: return null
+        val json = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        return StoredScheduleMetadata(
+            vibrate = json.optBoolean("vibrate", true),
+            snoozeMinutes = json.optInt("snoozeMinutes", 0).coerceIn(0, 120),
+            repeatCount = json.optInt("repeatCount", 0).coerceIn(0, 10),
+        )
+    }
+
+    internal fun computeNextWallClockMillis(
+        hour: Int,
+        minute: Int,
+        weekdays: IntArray,
+        timezoneId: String,
+        nowMillis: Long,
+    ): Long {
+        val zone = TimeZone.getTimeZone(timezoneId)
+        val now = Calendar.getInstance(zone).apply {
+            timeInMillis = nowMillis
+        }
+        var best: Long? = null
+        for (offset in 0..7) {
+            val candidate = Calendar.getInstance(zone).apply {
+                timeInMillis = nowMillis
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                set(Calendar.HOUR_OF_DAY, hour.coerceIn(0, 23))
+                set(Calendar.MINUTE, minute.coerceIn(0, 59))
+                add(Calendar.DAY_OF_YEAR, offset)
+            }
+            val dartWeekday = when (candidate.get(Calendar.DAY_OF_WEEK)) {
+                Calendar.MONDAY -> 1
+                Calendar.TUESDAY -> 2
+                Calendar.WEDNESDAY -> 3
+                Calendar.THURSDAY -> 4
+                Calendar.FRIDAY -> 5
+                Calendar.SATURDAY -> 6
+                else -> 7
+            }
+            val weekdayAllowed = weekdays.isEmpty() || weekdays.contains(dartWeekday)
+            if (weekdayAllowed && candidate.after(now)) {
+                val millis = candidate.timeInMillis
+                if (best == null || millis < best!!) best = millis
+            }
+        }
+        return best ?: (nowMillis + 60_000L)
+    }
+
+    internal fun normalizeTimeZoneFor(
+        timezoneId: String?,
+        systemDefault: String,
+    ): String {
+        val normalized = timezoneId?.trim().orEmpty()
+        if (normalized.isBlank() || normalized == "UTC" || normalized == "Etc/UTC") {
+            return systemDefault
+        }
+        val resolved = TimeZone.getTimeZone(normalized)
+        if (resolved.id == "GMT" && normalized != "GMT" && normalized != "Etc/GMT") {
+            return systemDefault
+        }
+        return normalized
+    }
+
+    internal fun resolveTimeZoneForReschedule(
+        appTimezoneMode: String?,
+        fixedTimezoneId: String?,
+        persistedTimezoneId: String?,
+        systemDefault: String = TimeZone.getDefault().id,
+    ): String {
+        val normalizedMode = appTimezoneMode?.trim().orEmpty()
+        if (normalizedMode == appTimezoneModeFixed) {
+            val fixedTarget = fixedTimezoneId?.trim()?.takeIf { it.isNotBlank() }
+                ?: persistedTimezoneId
+            return normalizeTimeZoneFor(fixedTarget, systemDefault)
+        }
+        return normalizeTimeZoneFor(null, systemDefault)
+    }
+
+    internal fun resolveRescheduleTimeZone(
+        context: Context,
+        persistedTimezoneId: String? = null,
+    ): String {
+        val systemDefault = TimeZone.getDefault().id
+        val (mode, fixedId) = runCatching {
+            val appPrefs = context.getSharedPreferences(appPrefsName, Context.MODE_PRIVATE)
+            Pair(
+                appPrefs.getString(appTimezoneModeKey, null),
+                appPrefs.getString(appTimezoneIanaKey, null),
+            )
+        }.getOrElse { Pair(null, null) }
+        return resolveTimeZoneForReschedule(
+            appTimezoneMode = mode,
+            fixedTimezoneId = fixedId,
+            persistedTimezoneId = persistedTimezoneId,
+            systemDefault = systemDefault,
+        )
+    }
+
+    internal fun normalizeSnoozeMinutes(
+        minutes: Int,
+        fallbackMinutes: Int = defaultSnoozeMinutes,
+    ): Int {
+        val chosen = if (minutes > 0) minutes else fallbackMinutes
+        return chosen.coerceIn(1, 120)
+    }
+
+    internal fun computeSnoozeTriggerAtMillis(
+        nowMillis: Long,
+        delayMinutes: Int,
+    ): Long {
+        return nowMillis + normalizeSnoozeMinutes(delayMinutes) * 60_000L
+    }
+
+    internal fun pluginNotificationCleanupRequestCode(id: Int, slot: Int): Int {
+        val mixed = (id * 31 + slot) and 0x07FFFFFF
+        return cleanupNotificationNamespace or mixed
+    }
+
+    fun scheduleBootCleanupAlarm(
+        context: Context,
+        slot: Int,
+        delayMillis: Long,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): Boolean {
+        val requestCode = cleanupOwnersRequestCodeBase + slot
+        val triggerAtMillis = nowMillis + delayMillis.coerceAtLeast(1_000L)
+        val intent = Intent(context, ReminderRingtoneBootReceiver::class.java)
+            .setAction(actionCleanupFlutterPluginOwners)
+        return scheduleInexactAllowWhileIdle(context, requestCode, triggerAtMillis, intent)
+    }
+
+    fun schedulePluginNotificationCleanupAlarm(
+        context: Context,
+        id: Int,
+        slot: Int,
+        delayMillis: Long,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): Boolean {
+        if (id == 0) return false
+        val requestCode = pluginNotificationCleanupRequestCode(id, slot)
+        val triggerAtMillis = nowMillis + delayMillis.coerceAtLeast(1_000L)
+        val intent = Intent(context, ReminderRingtoneBootReceiver::class.java)
+            .setAction(actionCleanupFlutterPluginNotification)
+            .putExtra(extraCleanupNotificationId, id)
+        return scheduleInexactAllowWhileIdle(context, requestCode, triggerAtMillis, intent)
+    }
+
+    private fun scheduleInexactAllowWhileIdle(
+        context: Context,
+        requestCode: Int,
+        triggerAtMillis: Long,
+        intent: Intent,
+    ): Boolean {
+        return runCatching {
+            val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val operation = pendingIntent(context, requestCode, intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
+            } else {
+                manager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
+            }
+            true
+        }.getOrElse { error ->
+            Log.w(tag, "inexact cleanup alarm schedule failed: requestCode=$requestCode", error)
+            false
+        }
     }
 }

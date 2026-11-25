@@ -1229,11 +1229,10 @@ class CompetitorTaskImporter {
       id: 'imported_countdown_${DateTime.now().microsecondsSinceEpoch}_$rowNumber',
       title: title.trim(),
       targetDate: targetDate,
-      category:
-          _emptyToNull(
-            _firstText(raw, const ['category', 'group', 'folder', '分类', '分组']),
-          ) ??
-          '默认',
+      category: _emptyToNull(
+        _firstText(raw, const ['category', 'group', 'folder', '分类', '分组']),
+      ),
+      categoryIsDefault: raw['categoryisdefault'] == true,
       isPinned: _parseBool(_firstText(raw, const ['pinned', 'pin', '置顶'])),
       remind: _parseBool(_firstText(raw, const ['remind', '提醒'])),
       remindDaysBefore: _parseNonNegativeInt(

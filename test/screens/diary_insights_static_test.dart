@@ -7,7 +7,10 @@ void main() {
     final source = File('lib/screens/diary_screen.dart').readAsStringSync();
 
     expect(source, contains("import '../core/diary_insights.dart';"));
-    expect(source, contains('DiaryInsightEngine.buildInsights(entries)'));
+    expect(
+      source,
+      contains('DiaryInsightEngine.buildInsights(entries, locale: locale)'),
+    );
     expect(source, contains('_DiaryInsightCard'));
     expect(source, contains("I18n.tr('diary.ai.insights')"));
     expect(source, contains('DiaryInsightKind.emotionTrend'));

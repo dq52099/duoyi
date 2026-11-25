@@ -123,6 +123,7 @@ void main() {
           title: 'Blank source ID',
           sourceId: ' \n\t ',
           date: day.add(const Duration(hours: 2)),
+          type: CalendarEventType.todo,
         ),
         _event(
           id: 'completed-habit',

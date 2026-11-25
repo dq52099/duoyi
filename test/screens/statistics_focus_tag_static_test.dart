@@ -15,10 +15,10 @@ void main() {
     expect(source, contains('_buildFocusTagShare'));
     expect(source, contains('_buildFocusTagTrendCard'));
     expect(source, contains('_buildFocusTagTrendChart'));
-    expect(source, contains('专注标签排行'));
-    expect(source, contains('专注标签趋势'));
-    expect(source, contains('暂无专注标签数据'));
-    expect(source, contains('暂无专注标签趋势'));
+    expect(source, contains('.focusTagRanking'));
+    expect(source, contains('.focusTagTrend'));
+    expect(source, contains('.noFocusTagData'));
+    expect(source, contains('.noFocusTagTrend'));
     expect(source, contains('LinearProgressIndicator'));
     expect(source, contains('LineChartData'));
     expect(source, contains('FocusTagTrendBucket.month'));

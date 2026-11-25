@@ -31,6 +31,8 @@ void main() {
     String title = 'today',
     DateTime? at,
     bool force = false,
+    int firstDayOfWeek = 1,
+    bool Function()? isPresentationCurrent,
   }) => HomeWidgetService.push(
     todoCount: 1,
     habitPercent: 0,
@@ -42,6 +44,8 @@ void main() {
     theme: theme,
     snapshotAt: at,
     force: force,
+    firstDayOfWeek: firstDayOfWeek,
+    isPresentationCurrent: isPresentationCurrent,
   );
 
   setUp(() async {
@@ -102,6 +106,73 @@ void main() {
     messenger.setMockMethodCallHandler(channel, null);
     HomeWidgetService.supportedForTesting = null;
   });
+
+  test(
+    'week-start changes publish even when business content is unchanged',
+    () async {
+      expect(await push(firstDayOfWeek: 1), isTrue);
+      expect(stored['widget_first_day_of_week'], 1);
+      writes.clear();
+      refreshes = 0;
+      expect(await push(firstDayOfWeek: 7), isTrue);
+      expect(stored['widget_first_day_of_week'], 7);
+      expect(writes, contains('widget_first_day_of_week'));
+      expect(refreshes, greaterThan(0));
+      expect(await push(firstDayOfWeek: 1), isTrue);
+      expect(stored['widget_first_day_of_week'], 1);
+    },
+  );
+
+  test(
+    'a stale slow presentation never marks its payload current or refreshes',
+    () async {
+      var revision = 0;
+      saveEntered = Completer<void>();
+      saveRelease = Completer<void>();
+      final old = push(
+        firstDayOfWeek: 7,
+        isPresentationCurrent: () => revision == 0,
+      );
+      await saveEntered!.future;
+      revision++;
+      final current = push(
+        firstDayOfWeek: 1,
+        isPresentationCurrent: () => revision == 1,
+      );
+      saveRelease!.complete();
+      expect(await old, isFalse);
+      expect(refreshes, 0);
+      expect(await current, isTrue);
+      expect(stored['widget_first_day_of_week'], 1);
+      expect(stored['widget_snapshot_day'], isNotEmpty);
+    },
+  );
+
+  test(
+    'Monday to Sunday to Monday does not revive a queued old Monday push',
+    () async {
+      var revision = 0;
+      saveEntered = Completer<void>();
+      saveRelease = Completer<void>();
+      final old = push(isPresentationCurrent: () => revision == 0);
+      await saveEntered!.future;
+      final queuedOld = push(
+        title: 'old queued',
+        isPresentationCurrent: () => revision == 0,
+      );
+      revision += 2;
+      final current = push(
+        title: 'new Monday',
+        isPresentationCurrent: () => revision == 2,
+      );
+      saveRelease!.complete();
+      expect(await old, isFalse);
+      expect(await queuedOld, isFalse);
+      expect(await current, isTrue);
+      expect(stored['todo_top3_1'], '· new Monday');
+      expect(stored['widget_first_day_of_week'], 1);
+    },
+  );
 
   test(
     'display mode rejects failed native storage without refreshing',

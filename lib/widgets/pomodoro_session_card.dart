@@ -1,4 +1,6 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../core/design_tokens.dart';
 import '../core/focus_sound_catalog.dart';
 import '../core/i18n_date_format.dart';
 import '../models/pomodoro.dart';
@@ -36,7 +38,11 @@ class PomodoroSessionCard extends StatelessWidget {
     final dur = session.durationSeconds ~/ 60;
     final time = I18nDateFormat.time(session.startTime);
     final isFocus = session.type == PomodoroType.focus;
-    final color = isFocus ? const Color(0xFFE53935) : const Color(0xFF4CAF50);
+    final color = isFocus
+        ? (isDark ? DesignTokens.todoOverdueDark : DesignTokens.defaultError)
+        : (isDark
+              ? DesignTokens.todoCompletedDark
+              : DesignTokens.defaultSuccess);
     final title = session.taskName?.trim().isNotEmpty == true
         ? session.taskName!
         : (MainUiCopy.isEn
@@ -50,123 +56,244 @@ class PomodoroSessionCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Container(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final typeIconWidget = Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: isDark ? 0.16 : 0.10),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(_icon(session.type), color: color, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
+            );
+
+            final contentColumn = Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.normal,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          size: 12,
+                          color: cs.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          time,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.hourglass_bottom,
+                          size: 12,
+                          color: cs.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          durationText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            );
+
+            final soundBadgeWidget = session.whiteNoiseSound != 'none'
+                ? Container(
+                    margin: const EdgeInsets.only(left: 4),
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(
+                        alpha: isDark ? 0.35 : 0.65,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      _soundIcon(session.whiteNoiseSound),
+                      size: 14,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  )
+                : null;
+
+            final editButton = onEdit != null
+                ? Tooltip(
+                    message: MainUiCopy.pomodoroEditRecord,
+                    child: IconButton(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined),
+                      iconSize: 20,
+                      constraints: const BoxConstraints(
+                        minWidth: 44,
+                        minHeight: 44,
+                      ),
+                      color: cs.primary,
+                    ),
+                  )
+                : null;
+
+            final deleteButton = onDelete != null
+                ? Tooltip(
+                    message: MainUiCopy.pomodoroDeleteRecord,
+                    child: IconButton(
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline),
+                      iconSize: 20,
+                      constraints: const BoxConstraints(
+                        minWidth: 44,
+                        minHeight: 44,
+                      ),
+                      color: cs.error,
+                    ),
+                  )
+                : null;
+
+            final hasActions = editButton != null || deleteButton != null;
+            final textScaler =
+                MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+            final textDirection =
+                Directionality.maybeOf(context) ?? TextDirection.ltr;
+
+            final defaultTextStyle = DefaultTextStyle.of(context);
+            var effectiveMetadataStyle = defaultTextStyle.style.merge(
+              TextStyle(
+                fontSize: 12,
+                color: cs.onSurfaceVariant,
+              ),
+            );
+            if (MediaQuery.maybeBoldTextOf(context) ?? false) {
+              effectiveMetadataStyle = effectiveMetadataStyle.merge(
+                const TextStyle(fontWeight: FontWeight.bold),
+              );
+            }
+
+            final timePainter = TextPainter(
+              text: TextSpan(
+                text: time,
+                style: effectiveMetadataStyle,
+              ),
+              textDirection: textDirection,
+              textScaler: textScaler,
+            )..layout();
+            final timeItemWidth = 16.0 + timePainter.width;
+            timePainter.dispose();
+
+            final durPainter = TextPainter(
+              text: TextSpan(
+                text: durationText,
+                style: effectiveMetadataStyle,
+              ),
+              textDirection: textDirection,
+              textScaler: textScaler,
+            )..layout();
+            final durItemWidth = 16.0 + durPainter.width;
+            durPainter.dispose();
+
+            final minMetadataWidth = math.max(timeItemWidth, durItemWidth);
+
+            // Resolve actual IconButton layout width according to Material's
+            // tapTargetSize, visualDensity, and explicit constraint contract.
+            // When materialTapTargetSize is padded, Flutter's _InputPadding expands
+            // the interactive tap-target bounds to at least kMinInteractiveDimension (48dp),
+            // which takes precedence over smaller inner constraints (44dp).
+            final iconThemeStyle = theme.iconButtonTheme.style;
+            final effectiveTapTarget = iconThemeStyle?.tapTargetSize ??
+                theme.materialTapTargetSize;
+            final effectiveDensity = iconThemeStyle?.visualDensity ??
+                theme.visualDensity;
+            final densityAdjustment = effectiveDensity.baseSizeAdjustment.dx;
+            final tapTargetMinWidth =
+                effectiveTapTarget == MaterialTapTargetSize.padded
+                    ? (kMinInteractiveDimension + densityAdjustment)
+                    : 0.0;
+            const double explicitButtonMinWidth = 44.0;
+            final double actionButtonWidth = math.max(
+              explicitButtonMinWidth + densityAdjustment,
+              tapTargetMinWidth,
+            );
+
+            const double leadingWidth = 48.0;
+            final double soundWidth = soundBadgeWidget != null ? 30.0 : 0.0;
+            final double editWidth =
+                editButton != null ? actionButtonWidth : 0.0;
+            final double deleteWidth =
+                deleteButton != null ? actionButtonWidth : 0.0;
+            final double inlineTrailingWidth =
+                soundWidth + editWidth + deleteWidth;
+            final double availableForColumn =
+                constraints.maxWidth - leadingWidth - inlineTrailingWidth;
+
+            final shouldReflowActions =
+                hasActions && (availableForColumn < minMetadataWidth);
+
+            if (shouldReflowActions) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.normal,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                  Row(
                     children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.access_time,
-                            size: 12,
-                            color: cs.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            time,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.hourglass_bottom,
-                            size: 12,
-                            color: cs.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            durationText,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
+                      typeIconWidget,
+                      const SizedBox(width: 12),
+                      Expanded(child: contentColumn),
+                      ?soundBadgeWidget,
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ?editButton,
+                      ?deleteButton,
                     ],
                   ),
                 ],
-              ),
-            ),
-            if (session.whiteNoiseSound != 'none')
-              Container(
-                margin: const EdgeInsets.only(left: 4),
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest.withValues(
-                    alpha: isDark ? 0.35 : 0.65,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  _soundIcon(session.whiteNoiseSound),
-                  size: 14,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            if (onEdit != null)
-              Tooltip(
-                message: MainUiCopy.pomodoroEditRecord,
-                child: IconButton(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined),
-                  iconSize: 20,
-                  constraints: const BoxConstraints(
-                    minWidth: 44,
-                    minHeight: 44,
-                  ),
-                  color: cs.primary,
-                ),
-              ),
-            if (onDelete != null)
-              Tooltip(
-                message: MainUiCopy.pomodoroDeleteRecord,
-                child: IconButton(
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline),
-                  iconSize: 20,
-                  constraints: const BoxConstraints(
-                    minWidth: 44,
-                    minHeight: 44,
-                  ),
-                  color: cs.error,
-                ),
-              ),
-          ],
+              );
+            }
+
+            return Row(
+              children: [
+                typeIconWidget,
+                const SizedBox(width: 12),
+                Expanded(child: contentColumn),
+                ?soundBadgeWidget,
+                ?editButton,
+                ?deleteButton,
+              ],
+            );
+          },
         ),
       ),
     );

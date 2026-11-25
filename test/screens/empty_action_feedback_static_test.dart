@@ -2,14 +2,34 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import 'package:duoyi/core/app_update_ui_copy.dart';
+import 'package:duoyi/core/habit_ui_copy.dart';
+import 'package:duoyi/core/i18n.dart';
+
 void main() {
   test('扩展功能无效输入不会静默失败', () {
     final source = File(
       'lib/screens/integrations_screen.dart',
     ).readAsStringSync();
 
-    expect(source, contains('String? nameError'));
-    expect(source, contains('String? urlError'));
+    expect(source, contains('var nameInvalid = false;'));
+    expect(source, contains('var urlInvalid = false;'));
+    expect(source, contains('var urlEmpty = false;'));
+    expect(source, contains('final nameError = nameInvalid'));
+    expect(source, contains('final urlError = urlInvalid'));
+    expect(source, contains('nameInvalid = hasNameError;'));
+    expect(source, contains('urlInvalid = hasUrlError;'));
+    expect(source, contains('urlEmpty = url.isEmpty;'));
+    expect(source, contains('if (hasNameError || hasUrlError)'));
+    expect(source, contains('errorText: nameError'));
+    expect(source, contains('errorText: urlError'));
+    expect(source, contains('valueListenable: I18n.localeListenable'));
+    expect(
+      source,
+      matches(RegExp(
+        r'if \(hasNameError \|\| hasUrlError\)\s*\{\s*setSt\(\(\) \{\}\);\s*return;',
+      )),
+    );
     expect(source, contains('请填写订阅名称'));
     expect(source, contains('请输入有效的 http/https 地址'));
     expect(source, contains('String? titleError'));
@@ -50,7 +70,10 @@ void main() {
   test('习惯列表默认不露出结束和删除且按钮文字保持对比', () {
     final source = File('lib/screens/habit_screen.dart').readAsStringSync();
 
-    expect(source, contains("message: '编辑'"));
+    expect(source, contains('label: HabitUiCopy.actionEdit(locale)'));
+    expect(source, contains('Tooltip(message: label'));
+    expect(HabitUiCopy.actionEdit(AppLocale.zh), '编辑');
+    expect(HabitUiCopy.actionEdit(AppLocale.en), 'Edit');
     expect(source, isNot(contains("tooltip: '习惯操作'")));
     expect(source, isNot(contains("PopupMenuItem(value: 'end'")));
     expect(source, isNot(contains("value: 'delete'")));
@@ -59,8 +82,11 @@ void main() {
       source,
       contains("key: const ValueKey('habit_swipe_delete_button')"),
     );
-    expect(source, contains('await provider.endHabit(habit.id)'));
-    expect(source, contains('await provider.deleteHabit(habit.id)'));
+    expect(source, contains('await origin.habitProvider.endHabit(habit.id)'));
+    expect(
+      source,
+      contains('await origin.habitProvider.deleteHabit(habit.id)'),
+    );
     expect(source, contains('Color _habitButtonForeground(Color background)'));
     expect(source, contains('_habitContrastRatio(background, Colors.white)'));
     expect(
@@ -82,6 +108,17 @@ void main() {
       contains("import '../services/app_update_installer.dart';"),
     );
     expect(forceUpdateGate, contains('AppUpdateInstaller.supportsInstall'));
-    expect(forceUpdateGate, contains('当前平台不支持应用内安装'));
+    expect(
+      forceUpdateGate,
+      contains('title: AppUpdateUiCopy.unsupportedPlatformTitle()'),
+    );
+    expect(
+      AppUpdateUiCopy.unsupportedPlatformTitle(locale: AppLocale.zh),
+      '当前平台不支持应用内安装',
+    );
+    expect(
+      AppUpdateUiCopy.unsupportedPlatformTitle(locale: AppLocale.en),
+      'In-app installation is not supported on this platform',
+    );
   });
 }

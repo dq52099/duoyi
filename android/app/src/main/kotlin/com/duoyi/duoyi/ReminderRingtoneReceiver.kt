@@ -146,12 +146,32 @@ class ReminderRingtoneReceiver : BroadcastReceiver() {
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             val openIntent = ReminderFullScreenActivity.mainActivityIntent(context, payload, stopRingtone = true)
             val contentIntent = PendingIntent.getActivity(context, id, openIntent, flags)
+            val storedMetadata = ReminderRingtoneScheduler.readScheduleMetadata(context, id)
+            val fullScreenActivityIntent = ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload, locale)
+                .apply {
+                    if (storedMetadata != null) {
+                        putExtra(ReminderFullScreenActivity.extraVibrate, storedMetadata.vibrate)
+                        putExtra(ReminderFullScreenActivity.extraSnoozeMinutes, storedMetadata.snoozeMinutes)
+                        putExtra(ReminderFullScreenActivity.extraRepeatCount, storedMetadata.repeatCount)
+                    }
+                }
             val fullScreenIntent = PendingIntent.getActivity(
                 context,
                 id + 4_000_000,
-                ReminderFullScreenActivity.intent(context, id, rootId, title, body, payload, locale),
+                fullScreenActivityIntent,
                 flags,
             )
+            if (fullScreen &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                !manager.canUseFullScreenIntent()
+            ) {
+                ReminderRingtoneScheduler.recordDeliveryIssue(
+                    context,
+                    id,
+                    "full_screen_permission_denied",
+                    "未开启全屏提醒权限，已通过高优先级通知展示兜底提醒。",
+                )
+            }
             val notification = NotificationCompat.Builder(context, fallbackChannelId)
                 .setSmallIcon(R.drawable.ic_stat_duoyi)
                 .setContentTitle(displayTitle)

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_preview_compact_title">多仪 · 紧凑</string>
+    <string name="widget_preview_compact_sample">今日关键事项</string>
+    <string name="widget_preview_compact_size" translatable="false">2×2</string>
+
+    <string name="widget_preview_standard_title">多仪 · 标准</string>
+    <string name="widget_preview_standard_sample_one">今日事项一</string>
+    <string name="widget_preview_standard_sample_two">今日事项二</string>
+    <string name="widget_preview_navigation_labels">待办 · 习惯 · 日历 · 专注</string>
+
+    <string name="widget_preview_detailed_title">多仪 · 详细</string>
+    <string name="widget_preview_detailed_sample_one">今日事项一</string>
+    <string name="widget_preview_detailed_sample_two">今日事项二</string>
+    <string name="widget_preview_detailed_summary">今日摘要与进度</string>
+    <string name="widget_preview_detailed_more_content">4×3 · 更多内容</string>
+</resources>

@@ -12,6 +12,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../providers/location_reminder_provider.dart';
+import 'account_local_data_cleaner.dart';
 
 abstract class LocationProbe {
   /// 启动后台位置追踪。命中 [LocationReminder] 时回调 [onFix]。
@@ -66,6 +67,9 @@ class LocationReminderController {
   final LocationReminderProvider provider;
   final void Function(LocationReminderHit hit)? onHit;
   StreamSubscription<void>? _hbSub;
+  int _generation = 0;
+  bool _running = false;
+  Future<void>? _lifecycleTail;
 
   LocationReminderController({
     required this.probe,
@@ -73,19 +77,75 @@ class LocationReminderController {
     this.onHit,
   });
 
-  Future<void> start() async {
-    await probe.start(onFix: _handleFix);
+  Future<void> start() {
+    final generation = ++_generation;
+    final storageGeneration = provider.storageGeneration;
+    final account = AccountLocalDataCleaner.accountDataGeneration;
+    _running = true;
+    return _queueLifecycle(() async {
+      if (generation != _generation) return;
+      try {
+        await probe.start(
+          onFix: (fix) {
+            if (!_running ||
+                generation != _generation ||
+                storageGeneration != provider.storageGeneration ||
+                !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                  account,
+                )) {
+              return;
+            }
+            _handleFix(fix);
+          },
+        );
+        if (generation != _generation) await probe.stop();
+      } catch (_) {
+        if (generation == _generation) _running = false;
+        await probe.stop();
+        rethrow;
+      }
+    });
   }
 
-  Future<void> stop() async {
-    await _hbSub?.cancel();
-    await probe.stop();
+  Future<void> stop() {
+    _running = false;
+    _generation++;
+    return _queueLifecycle(() async {
+      await _hbSub?.cancel();
+      await probe.stop();
+    });
   }
 
-  void _handleFix(LocationFix fix) {
+  Future<void> _queueLifecycle(Future<void> Function() operation) {
+    final previous = _lifecycleTail;
+    final result = previous == null
+        ? Future<void>.sync(operation)
+        : previous.then<void>((_) => operation());
+    final tail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _lifecycleTail = tail;
+    tail.then<void>((_) {
+      if (identical(_lifecycleTail, tail)) _lifecycleTail = null;
+    });
+    return result;
+  }
+
+  void _handleFix(LocationFix fix) async {
+    final generation = _generation;
+    final storageGeneration = provider.storageGeneration;
+    final account = AccountLocalDataCleaner.accountDataGeneration;
+    bool isCurrent() =>
+        _running &&
+        generation == _generation &&
+        storageGeneration == provider.storageGeneration &&
+        AccountLocalDataCleaner.isCurrentAccountDataGeneration(account);
     try {
-      final hits = provider.ingestFix(fix);
+      final hits = await provider.ingestFix(fix, isCurrent: isCurrent);
+      if (!isCurrent()) return;
       for (final hit in hits) {
+        if (!isCurrent()) return;
         onHit?.call(hit);
       }
     } catch (e, st) {

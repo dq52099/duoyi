@@ -63,6 +63,49 @@ void main() {
     );
   });
 
+  for (final id in [
+    'REQ-DEFAULT-IOS',
+    'REQ-I18N',
+    'REQ-SETTINGS',
+    'REQ-FLUENCY',
+  ]) {
+    test('matrix validator rejects a missing $id row', () async {
+      final matrix = File('docs/goal-requirement-matrix.md').readAsLinesSync();
+      final requirementRows = matrix.where(
+        (line) => line.startsWith('| $id |'),
+      );
+      expect(requirementRows, hasLength(1));
+
+      final result = await _runMatrixValidatorWithContent(
+        matrix.where((line) => !line.startsWith('| $id |')).join('\n'),
+      );
+
+      expect(result.exitCode, isNot(0), reason: _combinedOutput(result));
+      expect(
+        _combinedOutput(result),
+        contains('matrix must contain exactly one row for $id'),
+      );
+    });
+
+    test('matrix validator rejects a duplicate $id row', () async {
+      final matrix = File('docs/goal-requirement-matrix.md').readAsLinesSync();
+      final requirementRows = matrix.where(
+        (line) => line.startsWith('| $id |'),
+      );
+      expect(requirementRows, hasLength(1));
+
+      final result = await _runMatrixValidatorWithContent(
+        [...matrix, requirementRows.single].join('\n'),
+      );
+
+      expect(result.exitCode, isNot(0), reason: _combinedOutput(result));
+      expect(
+        _combinedOutput(result),
+        contains('matrix must contain exactly one row for $id'),
+      );
+    });
+  }
+
   test('matrix validator rejects missing local evidence paths', () async {
     final tempDir = await Directory.systemTemp.createTemp('duoyi-goal-matrix-');
     try {
@@ -183,6 +226,28 @@ void main() {
       }
     },
   );
+}
+
+Future<ProcessResult> _runMatrixValidatorWithContent(String content) async {
+  final tempDir = await Directory.systemTemp.createTemp('duoyi-goal-matrix-');
+  try {
+    final matrixFile = File('${tempDir.path}/goal-requirement-matrix.md')
+      ..writeAsStringSync('$content\n');
+    return await Process.run(
+      'bash',
+      ['scripts/validate_goal_requirement_matrix.sh'],
+      workingDirectory: Directory.current.path,
+      environment: bashEnvironment(
+        {'MATRIX_FILE': matrixFile.path},
+        pathVariables: {'MATRIX_FILE'},
+      ),
+      includeParentEnvironment: true,
+    );
+  } finally {
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+  }
 }
 
 String _combinedOutput(ProcessResult result) {

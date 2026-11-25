@@ -1,87 +1,94 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#FFC79A"/>
-      <stop offset="1" stop-color="#FF6B6B"/>
+    <linearGradient id="bgTop" x1="0" y1="0" x2="1" y2="0.85">
+      <stop offset="0" stop-color="#F69B7C"/>
+      <stop offset="0.52" stop-color="#FAD4B4"/>
+      <stop offset="1" stop-color="#FDF1D2"/>
     </linearGradient>
-    <linearGradient id="sandTop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FF8A8A"/>
-      <stop offset="1" stop-color="#FF6B6B"/>
+    <linearGradient id="bgBottom" x1="0" y1="0.3" x2="1" y2="1">
+      <stop offset="0" stop-color="#87B8B8"/>
+      <stop offset="0.55" stop-color="#2D83A8"/>
+      <stop offset="1" stop-color="#0E5A8A"/>
     </linearGradient>
-    <linearGradient id="sandBot" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFC79A"/>
-      <stop offset="1" stop-color="#FFA76B"/>
+    <linearGradient id="headerCoral" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FF835B"/>
+      <stop offset="1" stop-color="#FF784E"/>
     </linearGradient>
-    <linearGradient id="frame" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3A2A24"/>
-      <stop offset="1" stop-color="#5A3F36"/>
+    <linearGradient id="cardFace" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#FFFDF8"/>
+      <stop offset="0.72" stop-color="#FCF7EE"/>
+      <stop offset="1" stop-color="#D4E2EA"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
-    </radialGradient>
+    <linearGradient id="ringGrad" x1="0" y1="0.2" x2="1" y2="0.8">
+      <stop offset="0" stop-color="#FF6D4A"/>
+      <stop offset="0.5" stop-color="#FF9C38"/>
+      <stop offset="1" stop-color="#FFCC52"/>
+    </linearGradient>
+    <linearGradient id="duoGrad" x1="0.2" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#FF5C3E"/>
+      <stop offset="0.52" stop-color="#FFA52F"/>
+      <stop offset="1" stop-color="#299473"/>
+    </linearGradient>
+    <linearGradient id="ribbonGrad" x1="0" y1="0.5" x2="1" y2="0.3">
+      <stop offset="0" stop-color="#76B79E"/>
+      <stop offset="0.45" stop-color="#4B9A8C"/>
+      <stop offset="0.75" stop-color="#1969A4"/>
+      <stop offset="1" stop-color="#0E508D"/>
+    </linearGradient>
+    <linearGradient id="orbGrad" x1="0.2" y1="0.2" x2="0.9" y2="0.9">
+      <stop offset="0" stop-color="#FFD96B"/>
+      <stop offset="1" stop-color="#FF8A2B"/>
+    </linearGradient>
+    <clipPath id="squircle">
+      <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224"/>
+    </clipPath>
   </defs>
 
-  <!-- Rounded square background -->
-  <rect x="64" y="64" width="896" height="896" rx="200" ry="200" fill="url(#bg)"/>
-  <!-- Soft top-left highlight -->
-  <ellipse cx="320" cy="280" rx="380" ry="280" fill="url(#glow)"/>
+  <g clip-path="url(#squircle)">
+    <rect x="0" y="0" width="1024" height="1024" fill="url(#bgTop)"/>
+    <path d="M 0 650 Q 260 540 540 600 T 1024 440 L 1024 1024 L 0 1024 Z" fill="url(#bgBottom)" opacity="0.92"/>
+    <path d="M 320 1024 Q 540 830 820 845 T 1024 720 L 1024 1024 Z" fill="#0B5C8E" opacity="0.7"/>
 
-  <!-- Hourglass frame (single solid bowtie outline)
-       Top trapezoid:    280,260 -> 744,260 -> 552,512 -> 472,512
-       Bottom trapezoid: 472,512 -> 552,512 -> 744,764 -> 280,764
-       Plus top and bottom plates -->
-  <g>
-    <!-- Top plate -->
-    <rect x="240" y="232" width="544" height="42" rx="14" ry="14" fill="url(#frame)"/>
-    <!-- Bottom plate -->
-    <rect x="240" y="750" width="544" height="42" rx="14" ry="14" fill="url(#frame)"/>
+    <!-- Orbiting ribbon behind right edge -->
+    <path d="M 810 370 C 970 390, 990 520, 810 620" fill="none" stroke="#FFF9EE" stroke-width="56" stroke-linecap="round"/>
+    <path d="M 810 382 C 950 400, 965 512, 810 605" fill="none" stroke="#135A99" stroke-width="40" stroke-linecap="round"/>
 
-    <!-- Glass body -->
-    <path d="M 280 274
-             L 744 274
-             L 552 504
-             L 552 520
-             L 744 750
-             L 280 750
-             L 472 520
-             L 472 504
-             Z"
-          fill="#FFFFFF" fill-opacity="0.18"
-          stroke="url(#frame)" stroke-width="22" stroke-linejoin="round"/>
-  </g>
+    <!-- Calendar card soft shadow & body -->
+    <rect x="184" y="156" width="656" height="736" rx="116" ry="116" fill="#0E304B" opacity="0.18"/>
+    <rect x="184" y="138" width="656" height="736" rx="116" ry="116" fill="url(#headerCoral)" stroke="#FFFDF8" stroke-width="8"/>
+    <rect x="334" y="102" width="66" height="104" rx="33" fill="#B95A3A" opacity="0.22"/>
+    <rect x="606" y="102" width="66" height="104" rx="33" fill="#B95A3A" opacity="0.22"/>
+    <rect x="334" y="96" width="66" height="104" rx="33" fill="#FFCA9E" stroke="#FFFDF8" stroke-width="6"/>
+    <rect x="606" y="96" width="66" height="104" rx="33" fill="#FFCA9E" stroke="#FFFDF8" stroke-width="6"/>
 
-  <!-- Sand: top falling down -->
-  <path d="M 320 296
-           L 704 296
-           L 552 480
-           L 472 480 Z"
-        fill="url(#sandTop)"/>
+    <!-- Main cream card face -->
+    <path d="M 184 316 C 184 252, 232 232, 316 232 L 456 232 C 504 232, 520 278, 578 278 L 730 278 C 804 278, 840 314, 840 384 L 840 760 C 840 826, 788 874, 720 874 L 304 874 C 236 874, 184 826, 184 760 Z" fill="url(#cardFace)"/>
 
-  <!-- Sand stream through neck -->
-  <rect x="503" y="490" width="18" height="60" fill="url(#sandTop)" rx="3"/>
+    <!-- Calligraphy '多' mark -->
+    <g fill="url(#duoGrad)">
+      <ellipse cx="322" cy="306" rx="34" ry="18" transform="rotate(-18 322 306)"/>
+      <path d="M 244 374 C 288 344, 344 334, 386 344 C 400 348, 396 368, 374 380 C 330 404, 280 434, 224 456 C 266 426, 312 396, 348 374 C 314 370, 276 376, 244 374 Z"/>
+      <path d="M 250 442 C 296 414, 352 404, 392 414 C 406 418, 402 440, 376 456 C 324 488, 276 530, 220 568 C 258 524, 304 480, 348 446 C 314 446, 274 466, 230 494 C 252 470, 276 452, 250 442 Z"/>
+    </g>
 
-  <!-- Sand: bottom pile -->
-  <path d="M 472 540
-           L 552 540
-           L 720 728
-           L 304 728 Z"
-        fill="url(#sandBot)"/>
-  <ellipse cx="512" cy="728" rx="220" ry="22" fill="url(#sandBot)"/>
+    <!-- Clock ring & checkmark -->
+    <circle cx="564" cy="552" r="196" fill="#C97652" opacity="0.16"/>
+    <circle cx="564" cy="542" r="184" fill="#FFFDF8" stroke="url(#ringGrad)" stroke-width="34"/>
+    <rect x="556" y="394" width="16" height="30" rx="8" fill="#FFA43B"/>
+    <rect x="556" y="660" width="16" height="30" rx="8" fill="#FFA43B"/>
+    <rect x="416" y="534" width="30" height="16" rx="8" fill="#FFA43B"/>
+    <rect x="682" y="534" width="30" height="16" rx="8" fill="#FFA43B"/>
+    <path d="M 494 544 L 542 592 L 640 492" fill="none" stroke="#C95638" stroke-width="38" stroke-linecap="round" stroke-linejoin="round" opacity="0.22"/>
+    <path d="M 494 538 L 542 586 L 640 486" fill="none" stroke="#FF6448" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- Floating grain dots in upper chamber -->
-  <g fill="#FFFFFF" fill-opacity="0.6">
-    <circle cx="430" cy="360" r="6"/>
-    <circle cx="600" cy="332" r="5"/>
-    <circle cx="540" cy="402" r="4"/>
-    <circle cx="488" cy="430" r="5"/>
-    <circle cx="568" cy="450" r="4"/>
-  </g>
+    <!-- Front orbiting wave ribbon (continuous white rim) -->
+    <path d="M 184 554 C 42 618, 44 760, 214 768 C 350 774, 378 720, 434 768 C 492 818, 588 812, 720 736 C 814 682, 886 624, 916 552" fill="none" stroke="#103654" stroke-width="58" stroke-linecap="round" opacity="0.14"/>
+    <path d="M 184 542 C 42 606, 44 748, 214 756 C 350 762, 378 708, 434 756 C 492 806, 588 800, 720 724 C 814 670, 886 612, 916 540" fill="none" stroke="#FFFDF8" stroke-width="58" stroke-linecap="round"/>
+    <path d="M 184 542 C 54 602, 56 738, 218 746 C 352 752, 378 698, 434 746 C 492 796, 588 790, 720 714 C 814 660, 886 602, 916 530" fill="none" stroke="url(#ribbonGrad)" stroke-width="40" stroke-linecap="round"/>
 
-  <!-- Sparkle accents -->
-  <g fill="#FFFFFF" fill-opacity="0.9">
-    <path d="M 800 380 l 14 0 l 0 -14 l 6 0 l 0 14 l 14 0 l 0 6 l -14 0 l 0 14 l -6 0 l 0 -14 l -14 0 z"/>
-    <path d="M 196 660 l 10 0 l 0 -10 l 4 0 l 0 10 l 10 0 l 0 4 l -10 0 l 0 10 l -4 0 l 0 -10 l -10 0 z"/>
+    <!-- Glowing orange orb -->
+    <circle cx="716" cy="768" r="42" fill="#103654" opacity="0.18"/>
+    <circle cx="716" cy="762" r="40" fill="url(#orbGrad)" stroke="#FFF6DE" stroke-width="4"/>
   </g>
 </svg>

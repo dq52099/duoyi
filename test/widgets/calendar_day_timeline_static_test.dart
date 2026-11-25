@@ -44,11 +44,15 @@ void main() {
     expect(source, contains('alpha: 0.10'));
     expect(source, contains('alpha: 0.08'));
     expect(source, contains('Positioned('));
-    expect(source, contains('top: clampedTop'));
-    expect(source, contains('height: clampedHeight'));
-    expect(source, contains('_minutesFromDayStart(start) / 60 * _hourHeight'));
-    expect(source, contains('_overlapLane(event, index)'));
-    expect(source, contains('overlapLane * 10.0'));
+    expect(source, contains('top: placement.top'));
+    expect(source, contains('height: placement.height'));
+    expect(
+      source,
+      contains('const hourHeight = _CalendarDayTimeGrid._hourHeight'),
+    );
+    expect(source, contains('_minutesFromDayStart(start) / 60 * hourHeight'));
+    // The real card layout fixture covers distinct lanes and minimum-height
+    // collisions; the old capped 10px indentation obscured earlier cards.
   });
 
   test('时间线事件支持跨日边界裁剪和短块紧凑卡片', () {
@@ -61,7 +65,7 @@ void main() {
     expect(source, contains('int _minutesFromDayStart(DateTime value)'));
     expect(source, contains('final dayEnd = _dateOnly(day).add'));
     expect(source, contains('math.max(30, end.difference(start).inMinutes)'));
-    expect(source, contains('compact: clampedHeight < 88'));
+    expect(source, contains('compact: placement.height < 88'));
     expect(source, contains('final bool compact'));
     expect(source, contains('_buildCompactContent(context, e, title: title)'));
     expect(source, contains('CalendarEventDisplayText.resolveTitle(e)'));

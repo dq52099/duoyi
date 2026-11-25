@@ -20,20 +20,133 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="description" content="多仪 Duoyi - 跨平台效率工具">
+  <meta name="theme-color" content="#0066D6">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0A84FF">
 
   <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="多仪">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png">
+  <link rel="shortcut icon" href="favicon.ico">
 
   <title>多仪</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    :root {
+      --duoyi-bg: #F6F7F9;
+      --duoyi-card: #FFFFFF;
+      --duoyi-ink: #1A1D24;
+      --duoyi-muted: #6B7280;
+      --duoyi-accent: #0066D6;
+      --duoyi-track: rgba(0, 102, 214, 0.14);
+      --duoyi-border: rgba(26, 29, 36, 0.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --duoyi-bg: #0F1115;
+        --duoyi-card: #181B22;
+        --duoyi-ink: #F3F4F6;
+        --duoyi-muted: #9CA3AF;
+        --duoyi-accent: #0A84FF;
+        --duoyi-track: rgba(10, 132, 255, 0.20);
+        --duoyi-border: rgba(255, 255, 255, 0.08);
+      }
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--duoyi-bg);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    flutter-view, flt-glass-pane {
+      background-color: var(--duoyi-bg);
+    }
+    #duoyi-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background:
+        radial-gradient(640px 420px at 50% 35%, rgba(0, 102, 214, 0.08), transparent 70%),
+        var(--duoyi-bg);
+      color: var(--duoyi-ink);
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 260ms ease, visibility 260ms ease;
+    }
+    #duoyi-splash.duoyi-splash-hide {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .duoyi-splash-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 16px;
+      object-fit: cover;
+      display: block;
+      box-shadow: 0 12px 28px rgba(0, 102, 214, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
+      border: none;
+      background: transparent;
+    }
+    .duoyi-splash-title {
+      font-size: 18px;
+      line-height: 1.3;
+      letter-spacing: 0.4px;
+      color: var(--duoyi-ink);
+    }
+    .duoyi-splash-sub {
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--duoyi-muted);
+      margin-top: -8px;
+    }
+    .duoyi-splash-bar {
+      width: 120px;
+      height: 3px;
+      border-radius: 999px;
+      background: var(--duoyi-track);
+      overflow: hidden;
+      position: relative;
+      margin-top: 2px;
+    }
+    .duoyi-splash-bar::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 44%;
+      border-radius: 999px;
+      background: var(--duoyi-accent);
+      animation: duoyiSlide 1.2s ease-in-out infinite;
+    }
+    @keyframes duoyiSlide {
+      0% { transform: translateX(-110%); }
+      55% { transform: translateX(130%); }
+      100% { transform: translateX(240%); }
+    }
+  </style>
 </head>
 <body>
+  <div id="duoyi-splash" aria-label="Loading Duoyi">
+    <img class="duoyi-splash-icon" src="icons/Icon-192.png" alt="Duoyi"/>
+    <div class="duoyi-splash-title" id="duoyi-splash-title">多仪 · Duoyi</div>
+    <div class="duoyi-splash-sub" id="duoyi-splash-sub">正在载入工作台…</div>
+    <div class="duoyi-splash-bar"></div>
+  </div>
   <script>
     (() => {
       let raw = '';
@@ -68,6 +181,28 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script>
+    (function () {
+      var sub = document.getElementById('duoyi-splash-sub');
+      var title = document.getElementById('duoyi-splash-title');
+      var lang = ((navigator.languages && navigator.languages[0]) || navigator.language || '').toLowerCase();
+      if (sub && lang && lang.indexOf('zh') !== 0) {
+        if (title) title.textContent = 'Duoyi';
+        sub.textContent = 'Loading workspace…';
+      }
+      function hideSplash() {
+        var el = document.getElementById('duoyi-splash');
+        if (!el || el.classList.contains('duoyi-splash-hide')) return;
+        el.classList.add('duoyi-splash-hide');
+        window.setTimeout(function () {
+          if (el && el.parentNode) el.parentNode.removeChild(el);
+        }, 320);
+      }
+      window.addEventListener('flutter-first-frame', hideSplash, { once: true });
+      window.setTimeout(hideSplash, 10000);
+    })();
+  </script>
+  <script src="web_resume_guard.js"></script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

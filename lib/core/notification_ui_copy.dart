@@ -1,5 +1,12 @@
 import '../providers/notification_service.dart'
     show NotificationScheduleIssue, NotificationType;
+import '../services/daily_digest_reminder_sync.dart';
+import '../services/notification_permission_exception.dart';
+import '../services/permission_health_service.dart'
+    show
+        NotificationHealthReport,
+        PermissionHealthCheck,
+        PermissionHealthStatus;
 import 'i18n.dart';
 
 /// Localized UI copy and runtime diagnostic helpers for integrations,
@@ -365,6 +372,231 @@ class NotificationUiCopy {
   static String get checkAgainAction => isEn ? 'Check again' : '重新检查';
   static String get enableAction => isEn ? 'Enable' : '开启';
 
+  // 通知健康卡片与事项提醒健康提示。
+  // 这些文案集中在这里，避免设置页、待办编辑器和习惯编辑器各自维护
+  // 一套只包含中文的诊断文本。
+  static String get healthCardTitle => isEn ? 'Notification health' : '通知健康检查';
+  static String get healthCheckingSubtitle => isEn
+      ? 'Checking system permissions and notification channels'
+      : '正在检查系统权限与通知渠道';
+  static String get healthIntroSubtitle => isEn
+      ? 'Review system notifications and alarm delivery issues'
+      : '用于排查系统通知和闹钟异常';
+  static String get refreshActionShort => isEn ? 'Refresh' : '刷新';
+  static String get healthCheckFailed => isEn ? 'Check failed' : '检测失败';
+  static String get sendTestNowTitle =>
+      isEn ? 'Send test notification now' : '立即发送测试通知';
+  static String get sendTestNowSubtitle => isEn
+      ? 'Verify that the standard notification channel is visible and can play sound'
+      : '验证普通通知渠道是否可见、可响铃';
+  static String lastTestSubtitle(String formatted) =>
+      isEn ? 'Last test $formatted' : '上次测试 $formatted';
+  static String get strongTestTitle =>
+      isEn ? 'Test strong reminder sound' : '测试强提醒铃声';
+  static String get strongTestSubtitle => isEn
+      ? 'Verify alarm reminders, built-in sounds, stop actions, system alarm volume, and Do Not Disturb behavior. This may ring.'
+      : '验证闹钟提醒、内置铃声和通知停止按钮，同时检查系统闹钟音量和勿扰影响，可能会响铃';
+  static String get troubleshootingSettingsTitle =>
+      isEn ? 'Troubleshooting settings' : '疑难设置入口';
+  static String get troubleshootingSettingsSubtitle => isEn
+      ? 'If the launcher cannot open vendor controls directly, review each check above first.'
+      : '系统无法直达厂商开关时再打开应用页；先按上方检查项逐项确认';
+  static String get scheduledRemindersTitle =>
+      isEn ? 'Scheduled reminders' : '已调度提醒';
+  static String get scheduledRemindersLoading =>
+      isEn ? 'Reading pending queue...' : '正在读取待触发队列';
+  static String scheduledRemindersCount(int count) =>
+      isEn ? '$count pending' : '$count 条待触发';
+  static String get cancelAllAction => isEn ? 'Cancel all' : '全部取消';
+  static String get healthSummaryChecking => isEn ? 'Checking' : '正在检查';
+  static String get healthSummaryUnavailable =>
+      isEn ? 'Notification health has not been read yet' : '尚未读取通知健康状态';
+  static String healthSummaryTitle(PermissionHealthStatus status) {
+    return switch (status) {
+      PermissionHealthStatus.ok => isEn ? 'Notification health' : '通知健康',
+      PermissionHealthStatus.warning => isEn ? 'Review needed' : '需要确认',
+      PermissionHealthStatus.blocked => isEn ? 'Needs attention' : '需要修复',
+      PermissionHealthStatus.unknown => isEn ? 'Partly unknown' : '部分未知',
+    };
+  }
+
+  static String get healthSummaryWaiting => isEn
+      ? 'Please wait while permissions and channels are checked'
+      : '请稍候，正在读取权限和渠道状态';
+  static String get healthSummaryRefreshHint => isEn
+      ? 'Refresh to view the current notification health result'
+      : '刷新后可查看系统通知健康结果';
+  static String healthSummaryChecks(int count, String formatted) =>
+      isEn ? '$count checks · $formatted' : '$count 项检查 · $formatted';
+  static String healthReportSummarySubtitle(NotificationHealthReport report) {
+    if (!report.isAndroid) {
+      return report.notificationGranted
+          ? (isEn ? 'Notifications are enabled on this platform' : '当前平台通知权限正常')
+          : (isEn
+                ? 'Notifications are not enabled on this platform'
+                : '当前平台通知权限未授权');
+    }
+    if (report.hasBlockingIssue) {
+      return isEn
+          ? 'Permissions or system controls need attention'
+          : '存在需要修复的权限或系统开关';
+    }
+    if (report.hasWarnings) {
+      return report.isXiaomiLike
+          ? xiaomiPolicyWarning
+          : (isEn ? 'Some system policies need manual review' : '仍有系统策略需要人工确认');
+    }
+    if (report.hasUnknown) return unknownPolicyWarning;
+    return isEn
+        ? 'Notifications, channels, exact alarms, and full-screen alerts are ready'
+        : '系统通知、渠道、精准闹钟与弹屏权限均正常';
+  }
+
+  static String get reminderHealthLabel => isEn ? 'Reminder health' : '提醒健康';
+  static String get reminderHealthReadFailed =>
+      isEn ? 'Unable to read system reminder status' : '无法读取系统提醒状态';
+  static String get reminderHealthLoading =>
+      isEn ? 'Reading reminder health status' : '正在读取提醒健康状态';
+  static String get notificationPermissionMissing => isEn
+      ? 'Notification permission is off, so reminders may not appear'
+      : '系统通知未授权，提醒不会正常显示';
+  static String get notificationPermissionAction =>
+      isEn ? 'Notifications' : '通知授权';
+  static String get exactAlarmMissing => isEn
+      ? 'Notifications are enabled, but exact alarms are off; strong reminders may be delayed'
+      : '系统通知已授权，但精准闹钟未开启，强提醒可能延后';
+  static String get exactAlarmAction => isEn ? 'Exact alarms' : '精准闹钟';
+  static String get fullScreenMissing => isEn
+      ? 'Full-screen intent is off; strong reminders may appear only in the notification shade'
+      : '弹出屏幕权限未允许，强提醒可能只显示在通知栏';
+  static String get fullScreenAction => isEn ? 'Full-screen alerts' : '弹屏权限';
+  static String get xiaomiPolicyWarning => isEn
+      ? 'HyperOS/MIUI requires checks for autostart, background, battery, lock screen, banners, and channel sound'
+      : 'HyperOS/MIUI 需确认自启动、后台、电池、锁屏、横幅和渠道声音';
+  static String get androidPolicyWarning => isEn
+      ? 'Android devices may also require background and battery restrictions to be reviewed'
+      : 'Android 设备还要检查后台和电池限制';
+  static String get unknownPolicyWarning =>
+      isEn ? 'Some system states cannot be read automatically' : '部分系统状态无法自动读取';
+  static String get alarmReadySubtitle => isEn
+      ? 'System notifications, exact alarms, and full-screen alerts are ready'
+      : '系统通知、精准闹钟和弹屏权限均已就绪';
+  static String get notificationReadySubtitle => isEn
+      ? 'Notifications are enabled and reminders can enter the notification center'
+      : '系统通知已授权，提醒可正常进入通知中心';
+  static String get channelSettingsAction => isEn ? 'Channel settings' : '渠道设置';
+  static String get systemSettingsAction => isEn ? 'System settings' : '系统设置';
+  static String get handleAction => isEn ? 'Review' : '处理';
+  static String healthActionLabel(PermissionHealthCheck check) {
+    if (!isEn) return check.actionLabel ?? handleAction;
+    return switch (check.id) {
+      'notification_permission' => notificationPermissionAction,
+      'exact_alarm_permission' => exactAlarmAction,
+      'full_screen_intent_permission' => fullScreenAction,
+      'notification_channel_sound' => channelSettingsAction,
+      'notification_channel_status' => systemSettingsAction,
+      'system_alarm_volume' ||
+      'system_notification_volume' ||
+      'native_reminder_delivery' => systemSettingsAction,
+      'system_dnd_mode' => isEn ? 'Do Not Disturb settings' : '勿扰设置',
+      _ => check.actionLabel ?? handleAction,
+    };
+  }
+
+  static String healthCheckTitle(PermissionHealthCheck check) {
+    if (!isEn) return check.title;
+    return switch (check.id) {
+      'notification_permission' => 'Notification permission',
+      'exact_alarm_permission' => 'Exact alarm permission',
+      'full_screen_intent_permission' => 'Full-screen alert permission',
+      'notification_channels' => 'Notification channels',
+      'legacy_notification_channels' => 'Legacy notification channels',
+      'notification_channel_status' => 'Notification channel status',
+      'notification_channel_sound' => 'Channel sound',
+      'system_audio_status' => 'System volume and Do Not Disturb',
+      'system_alarm_volume' => 'System alarm volume',
+      'system_notification_volume' => 'System notification and ringtone volume',
+      'system_dnd_mode' => 'Do Not Disturb',
+      'native_reminder_delivery' => 'Alarm delivery diagnosis',
+      'xiaomi_autostart_policy' => 'HyperOS/MIUI autostart',
+      'xiaomi_battery_policy' => 'HyperOS/MIUI background and battery',
+      'xiaomi_lock_screen_policy' => 'HyperOS/MIUI lock screen and banners',
+      'xiaomi_channel_sound_policy' => 'HyperOS/MIUI channel sound',
+      'android_notification_policy' => 'Background and battery policy',
+      _ => check.title,
+    };
+  }
+
+  static String healthCheckSubtitle(PermissionHealthCheck check) {
+    if (!isEn) return check.subtitle;
+    return switch (check.id) {
+      'notification_permission' =>
+        check.subtitle.contains('已授权')
+            ? 'Granted; reminders can appear in the notification center'
+            : 'Not granted; reminders may not appear',
+      'exact_alarm_permission' =>
+        check.subtitle.contains('Android 12')
+            ? 'No separate request is usually needed below Android 12'
+            : check.subtitle.contains('已授权')
+            ? 'Granted; strong reminders are more reliable'
+            : 'Not granted; alarm reminders may be delayed or downgraded',
+      'full_screen_intent_permission' =>
+        check.subtitle.contains('Android 14')
+            ? 'No separate request is usually needed below Android 14'
+            : check.subtitle.contains('已允许')
+            ? 'Allowed; strong reminders can show a confirmation screen'
+            : 'Not allowed; lock-screen reminders may appear only in the notification shade',
+      'notification_channels' =>
+        check.subtitle.contains('缺少')
+            ? 'Some channels are missing. Send a test notification to create them.'
+            : 'Required reminder, alarm, ringtone-status, and quick-entry channels are present',
+      'legacy_notification_channels' =>
+        'Legacy channels were found. New channels are used first; review sound, banners, and lock-screen display if reminders are silent.',
+      'notification_channel_status' =>
+        'Unable to read channel sound status. Open system settings and verify reminder and alarm channels.',
+      'notification_channel_sound' =>
+        'Some channels are muted, blocked, or low priority. Open the channel settings and enable sound, banners, and lock-screen display.',
+      'system_alarm_volume' =>
+        check.subtitle.contains('为 0')
+            ? 'Alarm volume is 0; strong reminders may only vibrate or stay silent'
+            : 'Alarm volume is low; raise the system alarm volume if reminders are too quiet',
+      'system_notification_volume' =>
+        'Notification or ringtone volume is 0; standard reminders and fallback alerts may be silent.',
+      'system_dnd_mode' =>
+        'Do Not Disturb may block notifications or alarms. Review alarm and notification exceptions.',
+      'system_audio_status' =>
+        'System volume is readable and no Do Not Disturb interception was detected.',
+      'xiaomi_autostart_policy' =>
+        'Allow Duoyi to start automatically in Security Center or App management so reminders recover after reboot.',
+      'xiaomi_battery_policy' =>
+        'Allow unrestricted background use and remove battery restrictions that affect alarms and focus sounds.',
+      'xiaomi_lock_screen_policy' =>
+        'Allow lock-screen, banner, floating, sound, and vibration notifications.',
+      'xiaomi_channel_sound_policy' =>
+        'Check the Duoyi standard and strong reminder channels and do not mute them.',
+      'android_notification_policy' =>
+        'If timed reminders are unreliable, allow background use and exclude Duoyi from battery optimization.',
+      _ => check.subtitle,
+    };
+  }
+
+  static String channelDisplayName(String id) {
+    if (id.contains('alarm') || id.contains('fullscreen')) {
+      return isEn ? 'Strong reminder channel' : '强提醒渠道';
+    }
+    if (id.contains('fallback')) return isEn ? 'Alarm fallback' : '闹钟兜底通知';
+    if (id.contains('native') || id.contains('status')) {
+      return isEn ? 'Built-in ringtone status' : '内置铃声状态';
+    }
+    if (id.contains('reminder') ||
+        id.contains('notification') ||
+        id.contains('general') ||
+        id.contains('alerts')) {
+      return isEn ? 'Reminder notification channel' : '通知提醒渠道';
+    }
+    return id;
+  }
+
   static String get channelGeneralTitle =>
       isEn ? 'Standard Reminder Channel' : '普通提醒渠道';
   static String get channelGeneralSubtitle => isEn
@@ -459,6 +691,14 @@ class NotificationUiCopy {
       : '控制由通知触发的快捷记录和历史保留';
   static String get historyRetentionTitle =>
       isEn ? 'Notification History Retention' : '通知记录保留';
+  static String historyRetentionSaved(int count) =>
+      isEn ? 'History limit saved: $count records.' : '已保存，最多保留 $count 条通知记录。';
+  static String get historyRetentionSaveFailed => isEn
+      ? 'Could not save the history limit. Your records are unchanged.'
+      : '未能保存保留数量，原有记录未改变。';
+  static String get historyRetentionTrimFailed => isEn
+      ? 'Limit saved, but old records could not be cleaned up. Retry to finish.'
+      : '保留数量已保存，旧记录暂未清理，请重试完成。';
   static String historyRetentionSubtitle(int limit) => isEn
       ? 'Retain up to $limit notifications. Lower values trim older logs.'
       : '最多保留 $limit 条历史，调低后会裁剪旧记录';
@@ -501,6 +741,103 @@ class NotificationUiCopy {
   static String get scheduledTestIssueNonBlocking => isEn
       ? 'Scheduled test registered, but reminder channels need review.'
       : '定时测试已注册，但提醒通道需要检查。';
+
+  static String get diagnosticExactAlarmMissingTitle =>
+      isEn ? 'Exact alarm permission not granted' : '闹钟测试权限未开启';
+  static String get diagnosticExactAlarmMissing => isEn
+      ? 'Enable exact alarms in system settings before scheduling the 1-minute alarm test.'
+      : '精准闹钟权限未开启，无法可靠注册 1 分钟后的闹钟测试。请在系统设置开启后重试。';
+  static String get diagnosticFullScreenMissingTitle =>
+      isEn ? 'Full-screen alarm permission not granted' : '全屏闹钟权限未开启';
+  static String get diagnosticFullScreenMissing => isEn
+      ? 'Enable full-screen reminders in system settings before scheduling the lock-screen alarm test.'
+      : '强提醒弹屏权限未开启，无法注册锁屏全屏闹钟测试。请在系统设置开启后重试。';
+
+  static String diagnosticKindLabel(
+    String kind, {
+    required bool fullScreenAlarm,
+    required bool popupInAppOnly,
+  }) => switch (kind) {
+    'popup' =>
+      popupInAppOnly
+          ? (isEn ? 'in-app pop-up' : '应用内弹出提醒')
+          : (isEn ? 'pop-up with notification fallback' : '弹出提醒+通知兜底'),
+    'alarm' =>
+      fullScreenAlarm
+          ? (isEn ? 'lock-screen alarm' : '锁屏全屏闹钟提醒')
+          : (isEn ? 'alarm' : '闹钟提醒'),
+    _ => isEn ? 'standard notification' : '普通定时通知',
+  };
+
+  static String get dailyRegistrationFailed => isEn
+      ? 'Daily reminder saved, but could not be scheduled. Check notification, exact alarm, and background permissions, then retry.'
+      : '每日提醒已保存，但系统注册失败。请检查通知、精准闹钟和后台运行权限后重试。';
+  static String get dailySaveFailed => isEn
+      ? 'Daily reminder settings could not be saved. Please retry.'
+      : '每日提醒设置未能保存，请重试。';
+  static String get reportSaveFailed => isEn
+      ? 'Report notification settings could not be saved. Please retry.'
+      : '报告推送设置未能保存，请重试。';
+  static String dailyRegistrationIssue(DailyDigestReminderIssue issue) {
+    final prefix = issue.blocking
+        ? (isEn ? 'Daily reminder saved, but not scheduled' : '每日提醒已保存，但未注册')
+        : (isEn
+              ? 'Daily reminder saved; review delivery settings'
+              : '每日提醒已保存，但需要确认');
+    final separator = isEn ? ': ' : '：';
+    final title = issue.copy == null
+        ? formatIssueText(issue.title)
+        : issue.renderTitle(locale: I18n.current);
+    final message = issue.copy == null
+        ? formatIssueText(issue.message)
+        : issue.renderMessage(locale: I18n.current);
+    return '$prefix$separator$title$separator$message';
+  }
+
+  static String get dailyExactAlarmMissing => isEn
+      ? 'Enable exact alarms in system settings before saving a lock-screen alarm reminder.'
+      : '精准闹钟权限未开启，无法保存锁屏闹钟提醒。请在系统设置开启后重试。';
+  static String get dailyFullScreenMissing => isEn
+      ? 'Enable full-screen reminders in system settings before saving a lock-screen alarm reminder.'
+      : '全屏提醒权限未开启，无法保存锁屏闹钟提醒。请在系统设置开启后重试。';
+  static String get dailyAlarmPreparationFailed => isEn
+      ? 'Could not prepare the alarm reminder. Check exact alarm, full-screen, and background permissions.'
+      : '闹钟提醒准备失败，请检查精准闹钟、全屏提醒和后台运行权限。';
+
+  static String registeredSummary({
+    required int total,
+    required int queued,
+    required int partial,
+    required int unconfirmed,
+    required int missing,
+    required bool busy,
+    required String probe,
+  }) {
+    if (total == 0) {
+      return busy
+          ? (isEn ? 'Reading reminder registry' : '正在读取提醒注册表')
+          : (isEn
+                ? 'No reminders registered with the scheduler'
+                : '暂无通过提醒调度器注册的提醒');
+    }
+    final parts = <String>[
+      if (queued > 0) '${queueStateLabel('queued')} $queued',
+      if (partial > 0) '${queueStateLabel('partial')} $partial',
+      if (unconfirmed > 0) '${queueStateLabel('unconfirmed')} $unconfirmed',
+      if (missing > 0) '${queueStateLabel('missing')} $missing',
+    ];
+    final status = parts.isEmpty
+        ? (isEn ? 'No system queue matches' : '系统队列未命中')
+        : parts.join(' / ');
+    final hint = switch (probe) {
+      'loading' => isEn ? 'Reading system queue, ' : '正在读取系统队列，',
+      'failed' => isEn ? 'System queue unavailable, ' : '系统队列读取失败，',
+      _ => '',
+    };
+    return isEn
+        ? '$total registered, $hint$status; tap View for details'
+        : '$total 条登记，$hint$status；点查看简述和原因';
+  }
 
   static String formatScheduledDiagnosticSuccess(
     String label,
@@ -571,8 +908,23 @@ class NotificationUiCopy {
     return '$title: $msg';
   }
 
+  static String formatScheduleException(
+    NotificationScheduleUnavailableException issue,
+  ) {
+    final locale = I18n.current;
+    final separator = locale == AppLocale.zh ? '：' : ': ';
+    final title = issue.copy == null
+        ? formatIssueText(issue.title)
+        : issue.renderTitle(locale: locale);
+    final message = issue.copy == null
+        ? formatIssueText(issue.message)
+        : issue.renderMessage(locale: locale);
+    return '$title$separator$message';
+  }
+
   static String formatIssueText(String raw) {
     if (!isEn) return raw;
+    if (raw == '每日提醒注册失败') return 'Daily reminder not scheduled';
     if (raw.contains('闹钟测试权限未开启')) return 'Exact alarm permission not granted';
     if (raw.contains('全屏闹钟权限未开启')) {
       return 'Full-screen alarm permission not granted';
@@ -1048,16 +1400,12 @@ class NotificationUiCopy {
   static String get reportRemindersTitle =>
       isEn ? 'Report Notifications' : '报告推送';
   static String get reportRemindersSubtitle => isEn
-      ? 'Reminds you to review daily reviews, weekly reports, monthly reports, and annual summaries'
+      ? 'Review your daily, weekly, monthly and annual reports'
       : '按你的节奏提醒查看每日复盘、周报、月报和年报';
-  static String get reportDailyTitle =>
-      isEn ? 'Daily Productivity Review' : '每日效率复盘';
-  static String get reportWeeklyTitle =>
-      isEn ? 'Weekly Productivity Report' : '每周效率周报';
-  static String get reportMonthlyTitle =>
-      isEn ? 'Monthly Growth Report' : '每月成长月报';
-  static String get reportYearlyTitle =>
-      isEn ? 'Annual Growth Report' : '每年成长年报';
+  static String get reportDailyTitle => isEn ? 'Daily Review' : '每日效率复盘';
+  static String get reportWeeklyTitle => isEn ? 'Weekly Report' : '每周效率周报';
+  static String get reportMonthlyTitle => isEn ? 'Monthly Report' : '每月成长月报';
+  static String get reportYearlyTitle => isEn ? 'Annual Report' : '每年成长年报';
 
   static String reportCadenceDaily(String time) =>
       isEn ? 'Daily $time' : '每天 $time';

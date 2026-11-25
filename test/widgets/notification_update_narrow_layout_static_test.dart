@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:duoyi/core/app_update_ui_copy.dart';
 import 'package:duoyi/core/i18n.dart';
+import 'package:duoyi/core/notification_ui_copy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -82,12 +83,17 @@ void main() {
     expect(appBarEnd, greaterThan(appBarStart));
     final appBar = source.substring(appBarStart, appBarEnd);
 
-    expect(
-      appBar,
-      contains("'notification_history_mark_all_read_button'"),
-    );
-    expect(appBar, contains("'Mark all as read'"));
-    expect(appBar, contains("'全部标为已读'"));
+    expect(appBar, contains("'notification_history_mark_all_read_button'"));
+    expect(appBar, contains('tooltip: NotificationUiCopy.markAllReadTooltip'));
+    final originalLocale = I18n.current;
+    try {
+      I18n.setLocale(AppLocale.zh);
+      expect(NotificationUiCopy.markAllReadTooltip, '全部标为已读');
+      I18n.setLocale(AppLocale.en);
+      expect(NotificationUiCopy.markAllReadTooltip, 'Mark all as read');
+    } finally {
+      I18n.setLocale(originalLocale);
+    }
     expect(appBar, isNot(contains('TextButton.icon(')));
 
     final filterStart = source.indexOf('class _NotificationHistoryFilters');

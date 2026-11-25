@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -173,6 +174,51 @@ void main() {
       expect(find.byType(TodoDetailScreen), findsNothing);
       expect(find.text('home-root'), findsOneWidget);
       expect(provider.todos.single.reminderPlan.enabled, isTrue);
+    });
+
+    testWidgets('提醒注册失败：保存内容并停留提示，clean再次保存才返回', (tester) async {
+      final provider = TodoProvider();
+      addTearDown(provider.dispose);
+      final item = TodoItem(
+        title: '未来提醒任务',
+        notes: '原始备注',
+        dueDate: DateTime.now().add(const Duration(days: 1)),
+      );
+      await provider.addTodo(item);
+      provider.scheduler = RecordingReminderScheduler()
+        ..todoSyncError = StateError('synthetic registration failure');
+      await tester.pumpWidget(buildApp(provider: provider, todoId: item.id));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('open-detail'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('提醒'),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('提醒'));
+      await tester.pump();
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.check));
+      await tester.pumpAndSettle();
+      expect(find.byType(TodoDetailScreen), findsOneWidget);
+      expect(find.text('home-root'), findsNothing);
+      expect(find.textContaining('待办已保存，但提醒未注册'), findsOneWidget);
+      expect(provider.todos.single.reminderPlan.enabled, isTrue);
+      final preferences = await SharedPreferences.getInstance();
+      final saved = jsonDecode(preferences.getString('todos')!) as List;
+      final persisted = TodoItem.fromJson(
+        Map<String, dynamic>.from(saved.single as Map),
+      );
+      expect(persisted.id, item.id);
+      expect(persisted.reminderPlan.enabled, isTrue);
+      final before = preferences.getString('todos');
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.check));
+      await tester.pumpAndSettle();
+      expect(find.byType(TodoDetailScreen), findsNothing);
+      expect(find.text('home-root'), findsOneWidget);
+      expect(preferences.getString('todos'), before);
+      await tester.pumpWidget(const SizedBox.shrink());
     });
 
     testWidgets('clean 状态点保存：直接返回 home', (tester) async {

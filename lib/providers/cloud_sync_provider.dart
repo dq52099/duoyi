@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/account_preference_writes.dart';
+import '../core/location_reminder_storage.dart';
 import '../core/feature_flags.dart';
 import '../core/i18n.dart';
 import '../services/account_local_data_cleaner.dart';
@@ -124,6 +125,93 @@ class CloudSyncProvider extends ChangeNotifier {
   static const _autoRetryDelay = Duration(minutes: 3);
   static const _remotePollDelay = Duration(minutes: 2);
   static const deletedItemsStorageKey = 'sync_deleted_items';
+  static Future<void>? _deletedItemsWriteTail;
+
+  /// Serializes both tombstone keys through acknowledgement and rollback.
+  /// The lease is valid only inside [operation]. No provider reload, account
+  /// cleanup or callback that may wait for another writer belongs in this lock.
+  static Future<T> withDeletedItemsLock<T>(
+    Future<T> Function(DeletedItemsWriteLease lease) operation,
+  ) {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    return Future<T>.sync(
+      () => AccountPreferenceWrites.runResult<T>(
+        (token) => _queueDeletedItemsWrite(
+          () =>
+              token.isCurrent &&
+              AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+                accountGeneration,
+              ),
+          operation,
+        ),
+        canceledResult: () => throw const AccountPreferenceWriteCanceled(),
+      ),
+    );
+  }
+
+  static Future<T> _queueDeletedItemsWrite<T>(
+    bool Function() isCurrent,
+    Future<T> Function(DeletedItemsWriteLease lease) operation,
+  ) {
+    Future<T> invoke() async {
+      final lease = DeletedItemsWriteLease._(isCurrent);
+      try {
+        lease.ensureCurrent();
+        final result = await operation(lease);
+        lease.ensureCurrent();
+        return result;
+      } finally {
+        lease._active = false;
+      }
+    }
+
+    final previous = _deletedItemsWriteTail;
+    final queued = previous == null
+        ? Future<T>.sync(invoke)
+        : previous.then<T>((_) => invoke());
+    final tail = queued.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _deletedItemsWriteTail = tail;
+    // Release completed work and its originating async zone while idle.
+    tail.then<void>((_) {
+      if (identical(_deletedItemsWriteTail, tail)) {
+        _deletedItemsWriteTail = null;
+      }
+    });
+    return queued;
+  }
+
+  /// Auth uploads pending data before removing the outgoing account. Only its
+  /// active, provider-tracked writeback may acknowledge inside that boundary.
+  /// Ordinary deletes continue to use the public, boundary-rejecting entry.
+  Future<T> _withSyncDeletedItemsLock<T>(
+    int accountGeneration,
+    Future<T> Function(DeletedItemsWriteLease lease) operation,
+  ) {
+    final writeback = _activeLocalWriteback;
+    if (_accountChangePreflightDepth <= 0 ||
+        !AccountPreferenceWrites.isBoundaryActive ||
+        writeback == null) {
+      return withDeletedItemsLock(operation);
+    }
+    final preferenceGeneration = AccountPreferenceWrites.generation;
+    final dataGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    return _queueDeletedItemsWrite(
+      () =>
+          _accountChangePreflightDepth > 0 &&
+          AccountPreferenceWrites.isBoundaryActive &&
+          preferenceGeneration == AccountPreferenceWrites.generation &&
+          identical(_activeLocalWriteback, writeback) &&
+          _isCurrentAccountGeneration(accountGeneration) &&
+          AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            dataGeneration,
+          ),
+      operation,
+    );
+  }
+
   static const _serverUpdatedAtStorageKey = 'sync_server_updated_at';
   static const _serverVersionStorageKey = 'sync_server_version';
   static const _collectionHashesStorageKey = 'sync_collection_hashes';
@@ -180,6 +268,8 @@ class CloudSyncProvider extends ChangeNotifier {
   String? _workspaceDeletedItemsRawCache;
 
   SyncChangedCollectionsCallback? onSynced;
+  Future<void> Function(Future<void> Function() apply)? localApplyBarrier;
+  Future<void> Function()? beforeAccountChangeFlush;
 
   // 由 main.dart 注入(通过 AuthProvider 取活跃的 ApiClient)
   ApiClient? Function()? apiClientGetter;
@@ -299,6 +389,18 @@ class CloudSyncProvider extends ChangeNotifier {
 
   void _throwIfAccountGenerationChanged(int generation) {
     if (!_isCurrentAccountGeneration(generation)) {
+      throw const _SyncCancelled();
+    }
+  }
+
+  void _ensureSyncStorageCurrent(int account, int epoch, int dataGeneration) {
+    _throwIfAccountGenerationChanged(account);
+    if (epoch != LocationReminderStorage.storageEpoch ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          dataGeneration,
+        ) ||
+        (AccountPreferenceWrites.isBoundaryActive &&
+            _accountChangePreflightDepth == 0)) {
       throw const _SyncCancelled();
     }
   }
@@ -506,6 +608,40 @@ class CloudSyncProvider extends ChangeNotifier {
         allowDuringBoundary: true,
       );
 
+  /// Take the lane before creating the queued metadata future. This drains
+  /// private auth-preflight repair writes for direct cleanup without a tail/lane
+  /// cycle, and permits retry metadata while location payloads remain gated.
+  Future<void> _repairPendingChanges(int account, int epoch, int data) async {
+    try {
+      await LocationReminderStorage.run<void>(
+        () async {
+          _ensureSyncStorageCurrent(account, epoch, data);
+          final prefs = await SharedPreferences.getInstance();
+          _ensureSyncStorageCurrent(account, epoch, data);
+          await _writePendingChanges(prefs, true);
+          _ensureSyncStorageCurrent(account, epoch, data);
+        },
+        epoch: epoch,
+        allowUncertain: true,
+      );
+    } on _SyncCancelled {
+      // Cleanup invalidated this request; its retry marker is no longer owned.
+    } on AccountPreferenceWriteCanceled {
+      // Confirmed removal invalidated this queued storage epoch.
+    } catch (error, stack) {
+      // Repair failure retains the pending result. It must not strand the
+      // originating sync's busy state or turn a failed upload into success.
+      if (!_isCurrentAccountGeneration(account) ||
+          epoch != LocationReminderStorage.storageEpoch ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(data)) {
+        return;
+      }
+      _hasPendingChanges = true;
+      _lastError ??= _userVisibleSyncError(error);
+      debugPrint('[CloudSync] retry marker persistence failed: $error\n$stack');
+    }
+  }
+
   Future<void> _setPendingChanges(SharedPreferences prefs, bool value) {
     final localGeneration = _localChangeGeneration;
     return _persistAccountMetadata((storage) async {
@@ -531,9 +667,23 @@ class CloudSyncProvider extends ChangeNotifier {
   Future<bool> flushPendingLocalChangesBeforeAccountChange({
     Duration timeout = const Duration(seconds: 8),
   }) async {
+    final account = _accountGeneration;
+    final epoch = LocationReminderStorage.storageEpoch;
+    final data = AccountLocalDataCleaner.accountDataGeneration;
     _accountChangePreflightDepth++;
     try {
-      return await _flushPendingLocalChangesBeforeAccountChange(timeout);
+      await beforeAccountChangeFlush?.call();
+      _ensureSyncStorageCurrent(account, epoch, data);
+      return await _flushPendingLocalChangesBeforeAccountChange(
+        timeout,
+        account,
+        epoch,
+        data,
+      );
+    } on _SyncCancelled {
+      return false;
+    } on AccountPreferenceWriteCanceled {
+      return false;
     } finally {
       _accountChangePreflightDepth--;
     }
@@ -541,8 +691,13 @@ class CloudSyncProvider extends ChangeNotifier {
 
   Future<bool> _flushPendingLocalChangesBeforeAccountChange(
     Duration timeout,
+    int account,
+    int epoch,
+    int data,
   ) async {
+    _ensureSyncStorageCurrent(account, epoch, data);
     final prefs = await SharedPreferences.getInstance();
+    _ensureSyncStorageCurrent(account, epoch, data);
     final persistedPending =
         prefs.getBool(_pendingLocalChangesStorageKey) ?? false;
     if (persistedPending && !_hasPendingChanges) {
@@ -552,19 +707,23 @@ class CloudSyncProvider extends ChangeNotifier {
     if (!_hasPendingChanges) return true;
     try {
       await syncNow().timeout(timeout);
+      _ensureSyncStorageCurrent(account, epoch, data);
     } on TimeoutException {
+      _ensureSyncStorageCurrent(account, epoch, data);
       _lastError = const CloudSyncNotice(
         CloudSyncNoticeKind.switchUploadTimedOut,
       );
       _hasPendingChanges = true;
-      await _writePendingChanges(prefs, true);
+      await _repairPendingChanges(account, epoch, data);
       _notifySyncStateChanged();
     } catch (e) {
+      _ensureSyncStorageCurrent(account, epoch, data);
       _lastError = _userVisibleSyncError(e);
       _hasPendingChanges = true;
-      await _writePendingChanges(prefs, true);
+      await _repairPendingChanges(account, epoch, data);
       _notifySyncStateChanged();
     }
+    _ensureSyncStorageCurrent(account, epoch, data);
     final stillPersisted =
         prefs.getBool(_pendingLocalChangesStorageKey) ?? false;
     if (_hasPendingChanges || stillPersisted) {
@@ -600,6 +759,45 @@ class CloudSyncProvider extends ChangeNotifier {
   /// 系统杀掉时只保存了本地数据、没保存“待上传服务器”的标记。
   Future<void> markUserMutationPendingDurably() {
     return _markPendingLocalChange();
+  }
+
+  /// An archive receipt must distinguish a canceled metadata write from a
+  /// durable pending marker, including Auth's old-account upload preflight.
+  Future<bool> markArchiveMutationPendingDurably() async {
+    if (_syncSuspendedForAccountChange ||
+        (AccountPreferenceWrites.isBoundaryActive &&
+            _accountChangePreflightDepth == 0)) {
+      return false;
+    }
+    final account = _accountGeneration;
+    final writes = AccountPreferenceWrites.generation;
+    _localChangeGeneration++;
+    _clearSyncRetryPending();
+    _hasPendingChanges = true;
+    _notifySyncStateChanged();
+    _remotePollTimer?.cancel();
+    if (!AccountPreferenceWrites.isBoundaryActive) _scheduleAutoSync();
+    await _persistAccountMetadata(
+      (prefs) => prefs.setBool(_pendingLocalChangesStorageKey, true),
+      allowDuringBoundary: true,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    return account == _accountGeneration &&
+        !_syncSuspendedForAccountChange &&
+        (AccountPreferenceWrites.isBoundaryActive
+            ? _accountChangePreflightDepth > 0
+            : writes == AccountPreferenceWrites.generation) &&
+        prefs.getBool(_pendingLocalChangesStorageKey) == true;
+  }
+
+  Future<void> _runLocalApply(
+    int accountGeneration,
+    Future<void> Function() apply,
+  ) {
+    Future<void> writeback() =>
+        _runAccountBoundWriteback(accountGeneration, apply);
+    final barrier = localApplyBarrier;
+    return barrier == null ? writeback() : barrier(writeback);
   }
 
   void _markPendingLocalChangeInBackground() {
@@ -1221,12 +1419,16 @@ class CloudSyncProvider extends ChangeNotifier {
     String id, {
     DateTime? deletedAt,
     String? workspaceId,
+    AccountPreferenceTransaction? transaction,
+    DeletedItemsWriteLease? lease,
   }) async {
     await recordDeletedItems(
       collection,
       [id],
       deletedAt: deletedAt,
       workspaceId: workspaceId,
+      transaction: transaction,
+      lease: lease,
     );
   }
 
@@ -1235,21 +1437,71 @@ class CloudSyncProvider extends ChangeNotifier {
     Iterable<String> ids, {
     DateTime? deletedAt,
     String? workspaceId,
-  }) async {
+    AccountPreferenceTransaction? transaction,
+    DeletedItemsWriteLease? lease,
+  }) {
     final cleanIds = ids
         .map((id) => id.trim())
         .where((id) => id.isNotEmpty)
         .toSet();
-    if (cleanIds.isEmpty) return;
-    final accountGenerationAtStart =
-        AccountLocalDataCleaner.accountDataGeneration;
-    final prefs = await SharedPreferences.getInstance();
-    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-      accountGenerationAtStart,
-    )) {
-      return;
-    }
+    if (cleanIds.isEmpty) return Future<void>.value();
     final stamp = (deletedAt ?? DateTime.now()).toIso8601String();
+    if (transaction != null || lease != null) {
+      if (transaction == null || lease == null) {
+        return Future<void>.error(
+          StateError('Tombstone transactions require the owning lease'),
+        );
+      }
+      return () async {
+        lease.ensureCurrent();
+        final prefs = await SharedPreferences.getInstance();
+        lease.ensureCurrent();
+        await _recordDeletedItemsLocked(
+          prefs,
+          transaction,
+          lease,
+          collection,
+          cleanIds,
+          stamp,
+          workspaceId,
+        );
+      }();
+    }
+    return withDeletedItemsLock<void>((lease) async {
+      final prefs = await SharedPreferences.getInstance();
+      lease.ensureCurrent();
+      final transaction = AccountPreferenceTransaction(
+        prefs,
+        () => lease.isCurrent,
+      );
+      try {
+        await _recordDeletedItemsLocked(
+          prefs,
+          transaction,
+          lease,
+          collection,
+          cleanIds,
+          stamp,
+          workspaceId,
+        );
+        transaction.commit();
+      } catch (_) {
+        await transaction.rollback(canceledBeforeCleanup: true);
+        rethrow;
+      }
+    }).onError<AccountPreferenceWriteCanceled>((_, _) {});
+  }
+
+  static Future<void> _recordDeletedItemsLocked(
+    SharedPreferences prefs,
+    AccountPreferenceTransaction transaction,
+    DeletedItemsWriteLease lease,
+    String collection,
+    Set<String> cleanIds,
+    String stamp,
+    String? workspaceId,
+  ) async {
+    lease.ensureCurrent();
     final sharedWorkspaceId = _normalizeSharedWorkspaceId(workspaceId);
     if (sharedWorkspaceId != null) {
       if (!_workspacePayloadCollections.containsKey(collection)) return;
@@ -1265,12 +1517,7 @@ class CloudSyncProvider extends ChangeNotifier {
           bucket[id] = stamp;
         }
       }
-      if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-        accountGenerationAtStart,
-      )) {
-        return;
-      }
-      await prefs.setString(
+      await transaction.setString(
         workspaceDeletedItemsStorageKey,
         json.encode(deleted),
       );
@@ -1287,12 +1534,7 @@ class CloudSyncProvider extends ChangeNotifier {
         bucket[id] = stamp;
       }
     }
-    if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
-      accountGenerationAtStart,
-    )) {
-      return;
-    }
-    await prefs.setString(deletedItemsStorageKey, json.encode(deleted));
+    await transaction.setString(deletedItemsStorageKey, json.encode(deleted));
   }
 
   static Map<String, Map<String, Map<String, String>>>
@@ -1529,6 +1771,8 @@ class CloudSyncProvider extends ChangeNotifier {
     _clearSyncRetryPending();
     _notifySyncStateChanged();
     final accountGenerationAtStart = _accountGeneration;
+    final storageEpochAtStart = LocationReminderStorage.storageEpoch;
+    final dataGenerationAtStart = AccountLocalDataCleaner.accountDataGeneration;
 
     SharedPreferences? prefs;
     var shouldRetryLocalChanges = _hasPendingChanges;
@@ -1544,7 +1788,19 @@ class CloudSyncProvider extends ChangeNotifier {
       // 负载构建 + 哈希是 CPU 密集型操作（JSON 解码 + 递归排序 + SHA-256，
       // 2000 条待办时约 120ms），合并为单次后台 isolate 往返执行，主线程
       // 只保留 prefs 字符串读取与小负载组装，UI 不再被同步阻塞。
-      final prepared = await _buildLocalSyncPayload(prefs);
+      final prepared = await LocationReminderStorage.run(() {
+        _ensureSyncStorageCurrent(
+          accountGenerationAtStart,
+          storageEpochAtStart,
+          dataGenerationAtStart,
+        );
+        return _buildLocalSyncPayload(prefs!);
+      }, epoch: storageEpochAtStart);
+      _ensureSyncStorageCurrent(
+        accountGenerationAtStart,
+        storageEpochAtStart,
+        dataGenerationAtStart,
+      );
       final payload = prepared.payload;
       final localHashes = prepared.collections;
       final localItemHashes = prepared.items;
@@ -1562,39 +1818,57 @@ class CloudSyncProvider extends ChangeNotifier {
       if (changedCollections == null) {
         response = await client.post('/api/sync', payload);
       } else if (changedCollections.isEmpty) {
-        await _runAccountBoundWriteback(accountGenerationAtStart, () async {
-          _lastCollectionHashes = localHashes;
-          _lastItemHashes = localItemHashes;
-          await _guardAccountGeneration(
-            accountGenerationAtStart,
-            () => prefs!.setString(
-              _collectionHashesStorageKey,
-              json.encode(localHashes),
-            ),
-          );
-          await _guardAccountGeneration(
-            accountGenerationAtStart,
-            () => prefs!.setString(
-              _itemHashesStorageKey,
-              json.encode(localItemHashes),
-            ),
-          );
-          await _guardAccountGeneration(
-            accountGenerationAtStart,
-            () => _persistPreferencesSnapshot(
-              prefs!,
-              payload['preferences'],
-              localChangeGenerationAtStart: syncGeneration,
-            ),
-          );
-          await _guardAccountGeneration(
-            accountGenerationAtStart,
-            () => _setPendingChanges(
-              prefs!,
-              _localChangeGeneration != syncGeneration,
-            ),
-          );
-        });
+        await _runAccountBoundWriteback(
+          accountGenerationAtStart,
+          () => LocationReminderStorage.run(() async {
+            _ensureSyncStorageCurrent(
+              accountGenerationAtStart,
+              storageEpochAtStart,
+              dataGenerationAtStart,
+            );
+            _lastCollectionHashes = localHashes;
+            _lastItemHashes = localItemHashes;
+            await _guardAccountGeneration(
+              accountGenerationAtStart,
+              () => prefs!.setString(
+                _collectionHashesStorageKey,
+                json.encode(localHashes),
+              ),
+            );
+            await _guardAccountGeneration(
+              accountGenerationAtStart,
+              () => prefs!.setString(
+                _itemHashesStorageKey,
+                json.encode(localItemHashes),
+              ),
+            );
+            await _guardAccountGeneration(
+              accountGenerationAtStart,
+              () => _persistPreferencesSnapshot(
+                prefs!,
+                payload['preferences'],
+                localChangeGenerationAtStart: syncGeneration,
+              ),
+            );
+            await _guardAccountGeneration(
+              accountGenerationAtStart,
+              () => _setPendingChanges(
+                prefs!,
+                _localChangeGeneration != syncGeneration,
+              ),
+            );
+            _ensureSyncStorageCurrent(
+              accountGenerationAtStart,
+              storageEpochAtStart,
+              dataGenerationAtStart,
+            );
+          }, epoch: storageEpochAtStart),
+        );
+        _ensureSyncStorageCurrent(
+          accountGenerationAtStart,
+          storageEpochAtStart,
+          dataGenerationAtStart,
+        );
         _lastError = null;
         _clearSyncRetryPending();
         _isSyncing = false;
@@ -1635,40 +1909,72 @@ class CloudSyncProvider extends ChangeNotifier {
           changedCollectionKeys: changedCollections?.keys,
         );
       }
-      await _runAccountBoundWriteback(accountGenerationAtStart, () async {
-        final applyResult = await _applySyncResponse(
-          prefs!,
-          response,
-          accountGenerationAtStart: accountGenerationAtStart,
-          localChangeGenerationAtStart: syncGeneration,
-          requestCollectionHashes: localHashes,
-          requestWorkspacePayloads: Map<String, dynamic>.from(
-            prepared.payload['workspace_payloads'] as Map,
-          ),
-          requestLocalSnapshots: prepared.snapshots,
-          fallbackDeletedItems:
-              payload['deleted_items'] as Map<String, Map<String, String>>,
-        );
-
-        final now = DateTime.now();
-        _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
-        await _guardAccountGeneration(
-          accountGenerationAtStart,
-          () => prefs!.setString('sync_last_time', now.toIso8601String()),
-        );
-        await _guardAccountGeneration(
-          accountGenerationAtStart,
-          () => _setPendingChanges(
+      await _runLocalApply(accountGenerationAtStart, () async {
+        final applyResult = await LocationReminderStorage.run(() async {
+          _ensureSyncStorageCurrent(
+            accountGenerationAtStart,
+            storageEpochAtStart,
+            dataGenerationAtStart,
+          );
+          final result = await _applySyncResponse(
             prefs!,
-            _localChangeGeneration != syncGeneration ||
-                applyResult.hasSkippedLocalChanges,
-          ),
-        );
+            response,
+            accountGenerationAtStart: accountGenerationAtStart,
+            storageEpochAtStart: storageEpochAtStart,
+            dataGenerationAtStart: dataGenerationAtStart,
+            localChangeGenerationAtStart: syncGeneration,
+            requestCollectionHashes: localHashes,
+            requestWorkspacePayloads: Map<String, dynamic>.from(
+              prepared.payload['workspace_payloads'] as Map,
+            ),
+            requestLocalSnapshots: prepared.snapshots,
+            fallbackDeletedItems:
+                payload['deleted_items'] as Map<String, Map<String, String>>,
+          );
+
+          final now = DateTime.now();
+          final timestampSaved = await _guardAccountGeneration(
+            accountGenerationAtStart,
+            () => prefs!.setString('sync_last_time', now.toIso8601String()),
+          );
+          _ensureSyncStorageCurrent(
+            accountGenerationAtStart,
+            storageEpochAtStart,
+            dataGenerationAtStart,
+          );
+          if (!timestampSaved) {
+            throw StateError('Sync timestamp persistence failed');
+          }
+          _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
+          await _guardAccountGeneration(
+            accountGenerationAtStart,
+            () => _setPendingChanges(
+              prefs!,
+              _localChangeGeneration != syncGeneration ||
+                  result.hasSkippedLocalChanges,
+            ),
+          );
+
+          _ensureSyncStorageCurrent(
+            accountGenerationAtStart,
+            storageEpochAtStart,
+            dataGenerationAtStart,
+          );
+          return result;
+        }, epoch: storageEpochAtStart);
 
         if (applyResult.changedCollections.isNotEmpty) {
-          _throwIfAccountGenerationChanged(accountGenerationAtStart);
+          _ensureSyncStorageCurrent(
+            accountGenerationAtStart,
+            storageEpochAtStart,
+            dataGenerationAtStart,
+          );
           await onSynced?.call(applyResult.changedCollections);
-          _throwIfAccountGenerationChanged(accountGenerationAtStart);
+          _ensureSyncStorageCurrent(
+            accountGenerationAtStart,
+            storageEpochAtStart,
+            dataGenerationAtStart,
+          );
         }
       });
       _lastError = null;
@@ -1679,7 +1985,13 @@ class CloudSyncProvider extends ChangeNotifier {
       _completeQueuedSyncWaiters();
       return;
     } catch (e) {
-      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+      if (!_isCurrentAccountGeneration(accountGenerationAtStart) ||
+          storageEpochAtStart != LocationReminderStorage.storageEpoch ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            dataGenerationAtStart,
+          ) ||
+          (AccountPreferenceWrites.isBoundaryActive &&
+              _accountChangePreflightDepth == 0)) {
         _isSyncing = false;
         _notifySyncStateChanged();
         _completeQueuedSyncWaiters();
@@ -1690,12 +2002,11 @@ class CloudSyncProvider extends ChangeNotifier {
         _lastError = message;
         _clearSyncRetryPending();
         _hasPendingChanges = true;
-        final localPrefs = prefs;
-        if (localPrefs == null) {
-          unawaited(_persistPendingChanges(true));
-        } else {
-          await _writePendingChanges(localPrefs, true);
-        }
+        await _repairPendingChanges(
+          accountGenerationAtStart,
+          storageEpochAtStart,
+          dataGenerationAtStart,
+        );
       } else {
         _setSyncRetryPending(
           message.withKind(CloudSyncNoticeKind.baselineRetry),
@@ -1704,7 +2015,11 @@ class CloudSyncProvider extends ChangeNotifier {
     }
 
     _isSyncing = false;
-    if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+    if (!_isCurrentAccountGeneration(accountGenerationAtStart) ||
+        storageEpochAtStart != LocationReminderStorage.storageEpoch ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          dataGenerationAtStart,
+        )) {
       _notifySyncStateChanged();
       _completeQueuedSyncWaiters();
       return;
@@ -1732,6 +2047,8 @@ class CloudSyncProvider extends ChangeNotifier {
     if (_syncSuspendedForAccountChange) return;
     final accountGenerationAtStart =
         expectedAccountGeneration ?? _accountGeneration;
+    final storageEpochAtStart = LocationReminderStorage.storageEpoch;
+    final dataGenerationAtStart = AccountLocalDataCleaner.accountDataGeneration;
     if (!_isCurrentAccountGeneration(accountGenerationAtStart)) return;
     if (_isSyncing) {
       _queueRemotePull();
@@ -1765,7 +2082,19 @@ class CloudSyncProvider extends ChangeNotifier {
         return;
       }
       final syncGeneration = _localChangeGeneration;
-      final prepared = await _buildLocalSyncPayload(prefs);
+      final prepared = await LocationReminderStorage.run(() {
+        _ensureSyncStorageCurrent(
+          accountGenerationAtStart,
+          storageEpochAtStart,
+          dataGenerationAtStart,
+        );
+        return _buildLocalSyncPayload(prefs);
+      }, epoch: storageEpochAtStart);
+      _ensureSyncStorageCurrent(
+        accountGenerationAtStart,
+        storageEpochAtStart,
+        dataGenerationAtStart,
+      );
       final localHashes = prepared.collections;
       final response = await client.post('/api/sync/pull', {
         'collection_hashes': localHashes,
@@ -1775,39 +2104,71 @@ class CloudSyncProvider extends ChangeNotifier {
         _notifySyncStateChanged();
         return;
       }
-      await _runAccountBoundWriteback(accountGenerationAtStart, () async {
-        final applyResult = await _applySyncResponse(
-          prefs,
-          response,
-          accountGenerationAtStart: accountGenerationAtStart,
-          localChangeGenerationAtStart: syncGeneration,
-          requestCollectionHashes: localHashes,
-          requestWorkspacePayloads: Map<String, dynamic>.from(
-            prepared.payload['workspace_payloads'] as Map,
-          ),
-          requestLocalSnapshots: prepared.snapshots,
-          fallbackDeletedItems:
-              prepared.payload['deleted_items']
-                  as Map<String, Map<String, String>>,
-        );
-        final now = DateTime.now();
-        _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
-        await _guardAccountGeneration(
-          accountGenerationAtStart,
-          () => prefs.setString('sync_last_time', now.toIso8601String()),
-        );
-        await _guardAccountGeneration(
-          accountGenerationAtStart,
-          () => _setPendingChanges(
+      await _runLocalApply(accountGenerationAtStart, () async {
+        final applyResult = await LocationReminderStorage.run(() async {
+          _ensureSyncStorageCurrent(
+            accountGenerationAtStart,
+            storageEpochAtStart,
+            dataGenerationAtStart,
+          );
+          final result = await _applySyncResponse(
             prefs,
-            _localChangeGeneration != syncGeneration ||
-                applyResult.hasSkippedLocalChanges,
-          ),
-        );
+            response,
+            accountGenerationAtStart: accountGenerationAtStart,
+            storageEpochAtStart: storageEpochAtStart,
+            dataGenerationAtStart: dataGenerationAtStart,
+            localChangeGenerationAtStart: syncGeneration,
+            requestCollectionHashes: localHashes,
+            requestWorkspacePayloads: Map<String, dynamic>.from(
+              prepared.payload['workspace_payloads'] as Map,
+            ),
+            requestLocalSnapshots: prepared.snapshots,
+            fallbackDeletedItems:
+                prepared.payload['deleted_items']
+                    as Map<String, Map<String, String>>,
+          );
+          final now = DateTime.now();
+          final timestampSaved = await _guardAccountGeneration(
+            accountGenerationAtStart,
+            () => prefs.setString('sync_last_time', now.toIso8601String()),
+          );
+          _ensureSyncStorageCurrent(
+            accountGenerationAtStart,
+            storageEpochAtStart,
+            dataGenerationAtStart,
+          );
+          if (!timestampSaved) {
+            throw StateError('Sync timestamp persistence failed');
+          }
+          _config = SyncConfig(lastSync: now, autoSync: _config.autoSync);
+          await _guardAccountGeneration(
+            accountGenerationAtStart,
+            () => _setPendingChanges(
+              prefs,
+              _localChangeGeneration != syncGeneration ||
+                  result.hasSkippedLocalChanges,
+            ),
+          );
+          _ensureSyncStorageCurrent(
+            accountGenerationAtStart,
+            storageEpochAtStart,
+            dataGenerationAtStart,
+          );
+          return result;
+        }, epoch: storageEpochAtStart);
+
         if (applyResult.changedCollections.isNotEmpty) {
-          _throwIfAccountGenerationChanged(accountGenerationAtStart);
+          _ensureSyncStorageCurrent(
+            accountGenerationAtStart,
+            storageEpochAtStart,
+            dataGenerationAtStart,
+          );
           await onSynced?.call(applyResult.changedCollections);
-          _throwIfAccountGenerationChanged(accountGenerationAtStart);
+          _ensureSyncStorageCurrent(
+            accountGenerationAtStart,
+            storageEpochAtStart,
+            dataGenerationAtStart,
+          );
         }
       });
       _lastError = null;
@@ -1817,7 +2178,13 @@ class CloudSyncProvider extends ChangeNotifier {
       _notifySyncStateChanged();
       return;
     } catch (e) {
-      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+      if (!_isCurrentAccountGeneration(accountGenerationAtStart) ||
+          storageEpochAtStart != LocationReminderStorage.storageEpoch ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            dataGenerationAtStart,
+          ) ||
+          (AccountPreferenceWrites.isBoundaryActive &&
+              _accountChangePreflightDepth == 0)) {
         _isSyncing = false;
         _notifySyncStateChanged();
         return;
@@ -1834,7 +2201,11 @@ class CloudSyncProvider extends ChangeNotifier {
     }
 
     _isSyncing = false;
-    if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
+    if (!_isCurrentAccountGeneration(accountGenerationAtStart) ||
+        storageEpochAtStart != LocationReminderStorage.storageEpoch ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          dataGenerationAtStart,
+        )) {
       _notifySyncStateChanged();
       return;
     }
@@ -2353,12 +2724,14 @@ class CloudSyncProvider extends ChangeNotifier {
     required Map<String, dynamic> requestWorkspacePayloads,
     required Map<String, Object?> requestLocalSnapshots,
     required Map<String, Map<String, String>> fallbackDeletedItems,
+    required int storageEpochAtStart,
+    required int dataGenerationAtStart,
   }) async {
-    void throwIfAccountChanged() {
-      if (!_isCurrentAccountGeneration(accountGenerationAtStart)) {
-        throw const _SyncCancelled();
-      }
-    }
+    void throwIfAccountChanged() => _ensureSyncStorageCurrent(
+      accountGenerationAtStart,
+      storageEpochAtStart,
+      dataGenerationAtStart,
+    );
 
     throwIfAccountChanged();
     // 请求发出后本地是否有新改动：用本地变更生成数判定。
@@ -2372,27 +2745,52 @@ class CloudSyncProvider extends ChangeNotifier {
     final responseDeletedItems = response['deleted_items'];
     var mergedDeletedItems = fallbackDeletedItems;
     if (responseDeletedItems is Map) {
-      final remoteDeletedItems = _decodeDeletedItems(
-        json.encode(responseDeletedItems),
+      mergedDeletedItems = await _withSyncDeletedItemsLock(
+        accountGenerationAtStart,
+        (lease) async {
+          throwIfAccountChanged();
+          lease.ensureCurrent();
+          final remoteDeletedItems = _decodeDeletedItems(
+            json.encode(responseDeletedItems),
+          );
+          final currentDeletedItems = _decodeDeletedItems(
+            prefs.getString(deletedItemsStorageKey),
+          );
+          final expectedDeletedHash = requestCollectionHashes['deleted_items'];
+          final mergedDeletedItems =
+              expectedDeletedHash != null &&
+                  _syncPayloadHash(currentDeletedItems) != expectedDeletedHash
+              ? _mergeDeletedItemMaps(remoteDeletedItems, currentDeletedItems)
+              : remoteDeletedItems;
+          if (_syncPayloadHash(currentDeletedItems) !=
+              _syncPayloadHash(mergedDeletedItems)) {
+            throwIfAccountChanged();
+            final transaction = AccountPreferenceTransaction(
+              prefs,
+              () =>
+                  lease.isCurrent &&
+                  _isCurrentAccountGeneration(accountGenerationAtStart),
+            );
+            try {
+              await transaction.setString(
+                deletedItemsStorageKey,
+                json.encode(mergedDeletedItems),
+              );
+              transaction.commit();
+            } catch (error) {
+              await LocationReminderStorage.compensateLocked(
+                transaction,
+                error,
+                account: dataGenerationAtStart,
+                epoch: storageEpochAtStart,
+              );
+              rethrow;
+            }
+            throwIfAccountChanged();
+          }
+          return mergedDeletedItems;
+        },
       );
-      final currentDeletedItems = _decodeDeletedItems(
-        prefs.getString(deletedItemsStorageKey),
-      );
-      final expectedDeletedHash = requestCollectionHashes['deleted_items'];
-      mergedDeletedItems =
-          expectedDeletedHash != null &&
-              _syncPayloadHash(currentDeletedItems) != expectedDeletedHash
-          ? _mergeDeletedItemMaps(remoteDeletedItems, currentDeletedItems)
-          : remoteDeletedItems;
-      if (_syncPayloadHash(currentDeletedItems) !=
-          _syncPayloadHash(mergedDeletedItems)) {
-        throwIfAccountChanged();
-        await prefs.setString(
-          deletedItemsStorageKey,
-          json.encode(mergedDeletedItems),
-        );
-        throwIfAccountChanged();
-      }
     }
 
     for (final entry in _listPayloads.entries) {
@@ -2426,7 +2824,13 @@ class CloudSyncProvider extends ChangeNotifier {
                 (item) => item is Map && _sharedWorkspaceId(item) != null,
               ),
             ];
-      if (!await _writeLocalList(prefs, localKey, writeValue)) {
+      if (!await _writeLocalList(
+        prefs,
+        localKey,
+        writeValue,
+        storageEpochAtStart: storageEpochAtStart,
+        dataGenerationAtStart: dataGenerationAtStart,
+      )) {
         skippedCollections.add(remoteKey);
       }
       throwIfAccountChanged();
@@ -2736,68 +3140,90 @@ class CloudSyncProvider extends ChangeNotifier {
     Set<String> skippedCollections,
   ) async {
     final decisions = <SyncMergeDecision>[];
-    final localDeletedItems = _decodeWorkspaceDeletedItems(
-      prefs.getString(workspaceDeletedItemsStorageKey),
+    final mergedDeletedItems = await _withSyncDeletedItemsLock(
+      accountGenerationAtStart,
+      (lease) async {
+        _throwIfAccountGenerationChanged(accountGenerationAtStart);
+        lease.ensureCurrent();
+        final localDeletedItems = _decodeWorkspaceDeletedItems(
+          prefs.getString(workspaceDeletedItemsStorageKey),
+        );
+        final requestDeletedItems = _decodeWorkspaceDeletedItemsValue({
+          for (final entry in requestWorkspacePayloads.entries)
+            if (entry.value is Map &&
+                (entry.value as Map).containsKey('deleted_items'))
+              entry.key: (entry.value as Map)['deleted_items'],
+        });
+        final responseDeletedItemsRaw = <String, dynamic>{};
+        final responseHasDeletedItems = <String>{};
+        for (final entry in payloads.entries) {
+          final payload = entry.value;
+          if (payload is! Map) continue;
+          final workspaceId = _normalizeSharedWorkspaceId(entry.key.toString());
+          if (workspaceId == null || !payload.containsKey('deleted_items')) {
+            continue;
+          }
+          responseHasDeletedItems.add(workspaceId);
+          responseDeletedItemsRaw[workspaceId] = payload['deleted_items'];
+        }
+        final responseDeletedItems = _decodeWorkspaceDeletedItemsValue(
+          responseDeletedItemsRaw,
+        );
+        final mergedDeletedItems = <String, Map<String, Map<String, String>>>{
+          for (final entry in localDeletedItems.entries)
+            entry.key: {
+              for (final collection in entry.value.entries)
+                collection.key: Map<String, String>.from(collection.value),
+            },
+        };
+        for (final workspaceId in responseHasDeletedItems) {
+          final serverTombstones =
+              responseDeletedItems[workspaceId] ??
+              <String, Map<String, String>>{};
+          final localTombstones =
+              localDeletedItems[workspaceId] ?? <String, Map<String, String>>{};
+          final requestedTombstones =
+              requestDeletedItems[workspaceId] ??
+              <String, Map<String, String>>{};
+          final hasLocalChangesSinceRequest =
+              _syncPayloadHash(localTombstones) !=
+              _syncPayloadHash(requestedTombstones);
+          final nextTombstones = hasLocalChangesSinceRequest
+              ? _mergeWorkspaceCollectionDeletedItems(
+                  serverTombstones,
+                  localTombstones,
+                )
+              : serverTombstones;
+          if (nextTombstones.isEmpty) {
+            mergedDeletedItems.remove(workspaceId);
+          } else {
+            mergedDeletedItems[workspaceId] = nextTombstones;
+          }
+        }
+        if (_syncPayloadHash(localDeletedItems) !=
+            _syncPayloadHash(mergedDeletedItems)) {
+          _throwIfAccountGenerationChanged(accountGenerationAtStart);
+          final transaction = AccountPreferenceTransaction(
+            prefs,
+            () =>
+                lease.isCurrent &&
+                _isCurrentAccountGeneration(accountGenerationAtStart),
+          );
+          try {
+            await transaction.setString(
+              workspaceDeletedItemsStorageKey,
+              json.encode(mergedDeletedItems),
+            );
+            transaction.commit();
+          } catch (_) {
+            await transaction.rollback(canceledBeforeCleanup: true);
+            rethrow;
+          }
+          _throwIfAccountGenerationChanged(accountGenerationAtStart);
+        }
+        return mergedDeletedItems;
+      },
     );
-    final requestDeletedItems = _decodeWorkspaceDeletedItemsValue({
-      for (final entry in requestWorkspacePayloads.entries)
-        if (entry.value is Map &&
-            (entry.value as Map).containsKey('deleted_items'))
-          entry.key: (entry.value as Map)['deleted_items'],
-    });
-    final responseDeletedItemsRaw = <String, dynamic>{};
-    final responseHasDeletedItems = <String>{};
-    for (final entry in payloads.entries) {
-      final payload = entry.value;
-      if (payload is! Map) continue;
-      final workspaceId = _normalizeSharedWorkspaceId(entry.key.toString());
-      if (workspaceId == null || !payload.containsKey('deleted_items')) {
-        continue;
-      }
-      responseHasDeletedItems.add(workspaceId);
-      responseDeletedItemsRaw[workspaceId] = payload['deleted_items'];
-    }
-    final responseDeletedItems = _decodeWorkspaceDeletedItemsValue(
-      responseDeletedItemsRaw,
-    );
-    final mergedDeletedItems = <String, Map<String, Map<String, String>>>{
-      for (final entry in localDeletedItems.entries)
-        entry.key: {
-          for (final collection in entry.value.entries)
-            collection.key: Map<String, String>.from(collection.value),
-        },
-    };
-    for (final workspaceId in responseHasDeletedItems) {
-      final serverTombstones =
-          responseDeletedItems[workspaceId] ?? <String, Map<String, String>>{};
-      final localTombstones =
-          localDeletedItems[workspaceId] ?? <String, Map<String, String>>{};
-      final requestedTombstones =
-          requestDeletedItems[workspaceId] ?? <String, Map<String, String>>{};
-      final hasLocalChangesSinceRequest =
-          _syncPayloadHash(localTombstones) !=
-          _syncPayloadHash(requestedTombstones);
-      final nextTombstones = hasLocalChangesSinceRequest
-          ? _mergeWorkspaceCollectionDeletedItems(
-              serverTombstones,
-              localTombstones,
-            )
-          : serverTombstones;
-      if (nextTombstones.isEmpty) {
-        mergedDeletedItems.remove(workspaceId);
-      } else {
-        mergedDeletedItems[workspaceId] = nextTombstones;
-      }
-    }
-    if (_syncPayloadHash(localDeletedItems) !=
-        _syncPayloadHash(mergedDeletedItems)) {
-      _throwIfAccountGenerationChanged(accountGenerationAtStart);
-      await prefs.setString(
-        workspaceDeletedItemsStorageKey,
-        json.encode(mergedDeletedItems),
-      );
-      _throwIfAccountGenerationChanged(accountGenerationAtStart);
-    }
 
     final workspaceIds = <String>{
       for (final entry in payloads.entries)
@@ -2964,8 +3390,10 @@ class CloudSyncProvider extends ChangeNotifier {
   Future<bool> _writeLocalList(
     SharedPreferences prefs,
     String localKey,
-    Iterable<dynamic> items,
-  ) async {
+    Iterable<dynamic> items, {
+    int? storageEpochAtStart,
+    int? dataGenerationAtStart,
+  }) async {
     final accountGenerationAtStart = _accountGeneration;
     _throwIfAccountGenerationChanged(accountGenerationAtStart);
     final list = items.toList(growable: false);
@@ -3009,7 +3437,41 @@ class CloudSyncProvider extends ChangeNotifier {
         return true;
       }
       // 编码期间新的本地持久化必须保留，并通知 apply 继续待上传状态。
-      if (!await prefs.setString(localKey, encoded)) return false;
+      if (localKey == LocationReminderStorage.locationKey) {
+        final epoch = storageEpochAtStart;
+        final account = dataGenerationAtStart;
+        if (epoch == null || account == null) {
+          throw StateError(
+            'Location write requires its request storage identity',
+          );
+        }
+        _ensureSyncStorageCurrent(accountGenerationAtStart, epoch, account);
+        await _withSyncDeletedItemsLock<void>(accountGenerationAtStart, (
+          lease,
+        ) async {
+          final transaction = AccountPreferenceTransaction(
+            prefs,
+            () =>
+                lease.isCurrent &&
+                _isCurrentAccountGeneration(accountGenerationAtStart) &&
+                epoch == LocationReminderStorage.storageEpoch,
+          );
+          try {
+            await transaction.setString(localKey, encoded);
+            transaction.commit();
+          } catch (error) {
+            await LocationReminderStorage.compensateLocked(
+              transaction,
+              error,
+              account: account,
+              epoch: epoch,
+            );
+            rethrow;
+          }
+        });
+      } else if (!await prefs.setString(localKey, encoded)) {
+        return false;
+      }
       _throwIfAccountGenerationChanged(accountGenerationAtStart);
       _decodedCollectionCache[localKey] = _DecodedCollection(
         raw: encoded,
@@ -3446,6 +3908,21 @@ class CloudSyncProvider extends ChangeNotifier {
       return json.decode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>?;
     }
     return null;
+  }
+}
+
+/// Authority for one serialized tombstone operation; callers may join an
+/// existing transaction only while its owning lock body is still running.
+class DeletedItemsWriteLease {
+  final bool Function() _isCurrent;
+  bool _active = true;
+
+  DeletedItemsWriteLease._(this._isCurrent);
+
+  bool get isCurrent => _active && _isCurrent();
+
+  void ensureCurrent() {
+    if (!isCurrent) throw const AccountPreferenceWriteCanceled();
   }
 }
 

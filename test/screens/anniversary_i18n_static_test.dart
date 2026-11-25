@@ -20,8 +20,6 @@ void main() {
       'anniversary.summary.within_30_days',
       'anniversary.list.suffix',
       'anniversary.list.subtitle',
-      'anniversary.delete.title',
-      'anniversary.delete.content_suffix',
       'anniversary.occurrence.prefix',
       'anniversary.occurrence.suffix',
       'anniversary.years_elapsed.prefix',
@@ -40,7 +38,6 @@ void main() {
       'anniversary.field.color',
       'anniversary.validation.title_required',
       'anniversary.saved',
-      'anniversary.save_failed_prefix',
       'anniversary.reminder.register_failed',
       'anniversary.reminder.not_registered',
       'anniversary.reminder.popup_fallback_failed',
@@ -51,10 +48,8 @@ void main() {
       'anniversary.reminder.exact_alarm_missing',
       'anniversary.reminder.fullscreen_missing',
       'anniversary.reminder.email_warning',
-      'anniversary.reminder.exception_prefix',
       'anniversary.reminder.saved_prefix',
       'anniversary.reminder.time_past',
-      'anniversary.lunar.year_suffix',
       'reminder.kind.push',
       'reminder.kind.popup',
       'reminder.kind.alarm',
@@ -74,6 +69,11 @@ void main() {
     ]) {
       expect(source, contains("'$key'"), reason: key);
     }
+
+    expect(source, contains('AlmanacLocaleFormat.formatFullLunarDate('));
+    expect(source, contains('includeGanzhi: true'));
+    expect(source, isNot(contains('lunar.chineseText')));
+    expect(source, isNot(contains('lunar.toString()')));
 
     for (final hardcoded in [
       "'新增纪念'",
@@ -291,15 +291,22 @@ void main() {
     expect(saveMethod, contains('ScaffoldMessenger.maybeOf(context)'));
     expect(
       saveMethod.indexOf('await _checkReminderBeforeSave('),
-      lessThan(saveMethod.indexOf('await p.add(item)')),
+      lessThan(saveMethod.indexOf('await origin.anniversaries.add(')),
     );
     final popIndex = saveMethod.indexOf('Navigator.pop(context)');
-    expect(popIndex, greaterThan(saveMethod.indexOf('await p.add(item)')));
-    expect(popIndex, greaterThan(saveMethod.indexOf('await p.update(item)')));
+    expect(
+      popIndex,
+      greaterThan(saveMethod.indexOf('await origin.anniversaries.add(')),
+    );
+    expect(
+      popIndex,
+      greaterThan(saveMethod.indexOf('await origin.anniversaries.update(')),
+    );
     expect(source, contains('reminderKind: remind ? kind : ReminderKind.off'));
-    expect(source, contains('bool _saving = false'));
+    expect(source, contains('bool get _saving => dateItemBusy'));
+    expect(source, contains('DateItemUiCopy.saveFailed'));
+    expect(source, contains('confirmDateItemDeletion('));
     expect(source, contains('if (_saving) return'));
-    expect(source, contains('setState(() => _saving = true)'));
     expect(source, contains('onPressed: _saving ? null : _save'));
     expect(source, contains('CircularProgressIndicator(strokeWidth: 2)'));
     expect(source, isNot(contains('showAnniversaryEditor(routeContext')));

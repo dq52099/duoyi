@@ -1,3 +1,6 @@
+import '../core/i18n.dart';
+import 'reminder_issue_copy.dart';
+
 class DailyDigestReminderResult {
   final List<DailyDigestReminderIssue> issues;
 
@@ -24,6 +27,7 @@ class DailyDigestReminderIssue {
   final DateTime? scheduledTime;
   final String? relatedId;
   final bool blocking;
+  final ReminderIssueCopy? copy;
 
   const DailyDigestReminderIssue({
     required this.title,
@@ -31,7 +35,14 @@ class DailyDigestReminderIssue {
     this.scheduledTime,
     this.relatedId,
     this.blocking = true,
+    this.copy,
   });
+
+  String renderTitle({AppLocale? locale}) =>
+      copy?.renderTitle(fallback: title, locale: locale) ?? title;
+
+  String renderMessage({AppLocale? locale}) =>
+      copy?.renderMessage(fallback: message, locale: locale) ?? message;
 }
 
 class DailyDigestReminderSync {

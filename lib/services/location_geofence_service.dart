@@ -47,6 +47,15 @@ class LocationGeofenceService {
   static Future<LocationGeofenceSyncResult> syncReminders(
     List<LocationReminder> reminders,
   ) {
+    if (kIsWeb) {
+      return Future.value(
+        const LocationGeofenceSyncResult(
+          available: false,
+          scheduledCount: 0,
+          status: 'unsupported_web',
+        ),
+      );
+    }
     final generation = _accountChangeGeneration;
     if (!_canSync(generation)) return Future.value(_accountChangeResult);
     final encoded = reminders.map(_encodeReminder).toList(growable: false);
@@ -70,8 +79,17 @@ class LocationGeofenceService {
     });
   }
 
-  static Future<LocationGeofenceSyncResult> clearReminders() =>
-      _runSerialized(() async {
+  static Future<LocationGeofenceSyncResult> clearReminders() {
+    if (kIsWeb) {
+      return Future.value(
+        const LocationGeofenceSyncResult(
+          available: false,
+          scheduledCount: 0,
+          status: 'unsupported_web',
+        ),
+      );
+    }
+    return _runSerialized(() async {
         try {
           final raw = await _channel.invokeMapMethod<String, dynamic>(
             'clearReminders',
@@ -87,8 +105,18 @@ class LocationGeofenceService {
           );
         }
       });
+  }
 
   static Future<LocationGeofencePermissionResult> requestPermissions() async {
+    if (kIsWeb) {
+      return const LocationGeofencePermissionResult(
+        foregroundGranted: false,
+        backgroundGranted: false,
+        foregroundPermanentlyDenied: false,
+        backgroundPermanentlyDenied: false,
+        shouldOpenSettings: false,
+      );
+    }
     var foreground = await Permission.locationWhenInUse.status;
     if (!foreground.isGranted) {
       foreground = await Permission.locationWhenInUse.request();
@@ -112,6 +140,15 @@ class LocationGeofenceService {
   }
 
   static Future<LocationGeofencePermissionResult> permissionStatus() async {
+    if (kIsWeb) {
+      return const LocationGeofencePermissionResult(
+        foregroundGranted: false,
+        backgroundGranted: false,
+        foregroundPermanentlyDenied: false,
+        backgroundPermanentlyDenied: false,
+        shouldOpenSettings: false,
+      );
+    }
     final foreground = await Permission.locationWhenInUse.status;
     final background = await Permission.locationAlways.status;
     return LocationGeofencePermissionResult(
@@ -145,6 +182,7 @@ class LocationGeofenceService {
   }
 
   static Future<bool> openLocationSettings() async {
+    if (kIsWeb) return false;
     try {
       return await _channel.invokeMethod<bool>('openLocationSettings') ?? false;
     } on PlatformException catch (e, st) {

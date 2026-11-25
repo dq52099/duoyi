@@ -52,13 +52,13 @@ fi
 uname -a > "$HOST_UNAME" 2>&1 || true
 write_row host_architecture available "Host OS is $HOST_OS and architecture is $HOST_ARCH."
 
-if grep -Eq '"targetPlatform":"android' "$FLUTTER_DEVICES_MACHINE"; then
+if python3 "$ROOT_DIR/scripts/flutter_device_platform.py" android < "$FLUTTER_DEVICES_MACHINE"; then
   write_row android_runtime ready 'Flutter detects an Android device or emulator.'
 else
   write_row android_runtime missing 'Flutter does not detect an Android device or emulator.'
 fi
 
-if grep -Eq '"targetPlatform":"ios' "$FLUTTER_DEVICES_MACHINE"; then
+if python3 "$ROOT_DIR/scripts/flutter_device_platform.py" ios < "$FLUTTER_DEVICES_MACHINE"; then
   write_row ios_runtime ready 'Flutter detects an iOS device.'
 else
   write_row ios_runtime missing 'Flutter does not detect an iOS device.'

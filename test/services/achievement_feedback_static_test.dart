@@ -17,10 +17,18 @@ void main() {
       provider,
       contains('!_notifiedAchievementIds.contains(achievement.id)'),
     );
-    expect(main, contains('addListener(_showAchievementFeedback)'));
-    expect(main, contains('removeListener(_showAchievementFeedback)'));
-    expect(main, contains('ScaffoldMessenger.maybeOf(context)'));
-    expect(main, contains('解锁成就：'));
+    final host = File(
+      'lib/widgets/achievement_feedback_host.dart',
+    ).readAsStringSync();
+    expect(main, contains('AchievementFeedbackHost(child: child!)'));
+    expect(host, contains('provider.addListener(_receive)'));
+    expect(host, contains('_provider?.removeListener(_receive)'));
+    expect(host, contains('AchievementUiCopy.unlockMessage(badge)'));
+    expect(host, contains('_provider?.storageGeneration == _generation'));
+    expect(
+      host,
+      contains('AccountLocalDataCleaner.accountDataGenerationListenable'),
+    );
   });
 
   test('成就通知重启后不会重复进入通知栏和小红点', () {

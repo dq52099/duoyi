@@ -49,10 +49,10 @@ void main() {
     );
     expect(screen, contains('rollbackSnapshot: rollbackSnapshot'));
     expect(screen, contains('final undo = await _showCompetitorImportResult('));
-    expect(
-      screen,
-      contains('await _rollbackCompetitorImport(rollbackSnapshot)'),
-    );
+    expect(screen, contains('await _rollbackCompetitorImport('));
+    expect(screen, contains('token: rollbackToken'));
+    expect(screen, contains('token: boundToken'));
+    expect(screen, contains('accountGeneration: importGeneration'));
     expect(screen, contains('Future<void> _rollbackCompetitorImport('));
     expect(screen, contains('clearMissing: true'));
     expect(screen, contains('DataSettingsUiCopy.undoImportSuccess'));
@@ -90,27 +90,37 @@ void main() {
       screen,
       contains('final timeAuditProvider = context.read<TimeAuditProvider>();'),
     );
-    expect(screen, contains('todoProvider.importTodos(parsed.todos)'));
-    expect(screen, contains('habitProvider.importHabits(parsed.habits)'));
-    expect(screen, contains('noteProvider.importNotes(parsed.notes)'));
-    expect(
-      screen,
-      contains('calendarProvider.importLocalEvents(parsed.calendarEvents)'),
-    );
-    expect(
-      screen,
-      contains('anniversaryProvider.importAnniversaries(parsed.anniversaries)'),
-    );
-    expect(
-      screen,
-      contains('final countdownProvider = context.read<CountdownProvider>();'),
-    );
-    expect(screen, contains('importCountdowns(parsed.countdowns)'));
+    final importStart = screen.indexOf('Future<void> _previewAndImportCompetitorData(');
+    final importEnd = screen.indexOf('Future<bool> _confirmCompetitorImportPreview(', importStart);
+    expect(importStart, isNonNegative);
+    expect(importEnd, greaterThan(importStart));
+    final importBody = screen.substring(importStart, importEnd);
+    expect(importBody, contains('final currentGeneration = effectiveOrigin.accountGeneration;'));
+    expect(importBody, contains('final currentSeq = effectiveOrigin.seq;'));
+    expect(importBody, contains('bool canWriteDates() =>'));
+    expect(importBody, contains('effectiveOrigin.isCurrent() &&'));
+    expect(importBody, contains('_isCurrentAction(currentSeq, currentGeneration) &&'));
+    expect(importBody, contains('(anniversaryOperation?.isCurrent() ?? true) &&'));
+    expect(importBody, contains('(countdownOperation?.isCurrent() ?? true)'));
+    for (final call in <(String, String, String, bool)>[
+      ('todoProvider', 'importTodos', 'todos', false),
+      ('habitProvider', 'importHabits', 'habits', false),
+      ('noteProvider', 'importNotes', 'notes', false),
+      ('calendarProvider', 'importLocalEvents', 'calendarEvents', false),
+      ('anniversaryProvider', 'importAnniversaries', 'anniversaries', true),
+      ('countdownProvider', 'importCountdowns', 'countdowns', true),
+      ('timeAuditProvider', 'importTimeEntries', 'timeEntries', false),
+    ]) {
+      final tail = call.$4 ? r',\s*canWrite:\s*canWriteDates,\s*' : r',?\s*';
+      final pattern = RegExp(
+        r'await\s+effectiveOrigin\.' + RegExp.escape(call.$1) + r'\.' +
+        RegExp.escape(call.$2) + r'\(\s*parsed\.' + RegExp.escape(call.$3) +
+        tail + r'\);\s*if\s*\(!mounted\s*\|\|\s*!canWriteDates\(\)\)\s*return;',
+      );
+      expect(pattern.allMatches(importBody), hasLength(1), reason: call.$2);
+    }
+    expect(screen, contains('final countdownProvider = context.read<CountdownProvider>();'));
     expect(screen, contains('DataSettingsUiCopy.moduleCountdown'));
-    expect(
-      screen,
-      contains('timeAuditProvider.importTimeEntries(parsed.timeEntries)'),
-    );
     expect(
       screen,
       contains('? const HabitImportSummary(inserted: 0, skippedDuplicates: 0)'),
@@ -190,10 +200,15 @@ void main() {
     );
     expect(
       provider,
-      contains('final seen = _localEvents.map(_importDuplicateKey).toSet();'),
+      contains('final seen = next.map(_importDuplicateKey).toSet();'),
     );
     expect(provider, contains('skippedDuplicates++'));
-    expect(provider, contains('_localEvents.add(_asLocalEvent(event));'));
+    expect(provider, contains('next.add(_asLocalEvent(event));'));
+    expect(
+      provider,
+      contains('await _saveLocalEvents(next, generation, accountGeneration)'),
+    );
+    expect(provider, contains('_publishLocalSnapshot(next)'));
     expect(
       provider,
       contains('String _importDuplicateKey(CalendarEvent event)'),
@@ -213,10 +228,7 @@ void main() {
     );
     expect(anniversaryProvider, contains('item.originDate.toIso8601String()'));
     expect(anniversaryProvider, contains('skippedDuplicates++'));
-    expect(
-      anniversaryProvider,
-      contains('reminderSyncIssue: reminderSyncIssue'),
-    );
+    expect(anniversaryProvider, contains('reminderSyncIssue: issue'));
   });
 
   test('competitor import supports countdown creation paths', () {
@@ -237,7 +249,7 @@ void main() {
     expect(screen, contains('countdownInserted'));
     expect(countdownProvider, contains('class CountdownImportSummary'));
     expect(countdownProvider, contains('final String? reminderSyncIssue'));
-    expect(countdownProvider, contains('reminderSyncIssue: reminderSyncIssue'));
+    expect(countdownProvider, contains('reminderSyncIssue: issue'));
   });
 
   test('TimeAuditProvider exposes duplicate-safe bulk time entry import', () {

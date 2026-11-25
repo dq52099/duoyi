@@ -1,32 +1,39 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:duoyi/core/account_preference_writes.dart';
 import 'package:duoyi/core/achievements.dart';
 import 'package:duoyi/providers/achievement_provider.dart';
 import 'package:duoyi/services/account_local_data_cleaner.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
+  tearDown(() async => AccountPreferenceWrites.drain());
 
   test(
     'old reward snapshot cannot restore memory after account reset',
     () async {
       final provider = AchievementProvider();
+      final store = _HeldRewardStore();
+      SharedPreferencesStorePlatform.instance = store;
       final prefs = await SharedPreferences.getInstance();
       final operation = provider.applyRewardsSnapshot({
         'balance': 100,
         'lifetime': 100,
         'updatedAt': '2026-06-01T00:00:00Z',
       });
-      await Future<void>.value();
+      await store.started.future.timeout(const Duration(seconds: 5));
       expect(prefs.getString('duoyi_virtual_rewards'), isNotNull);
       AccountLocalDataCleaner.invalidateInFlightAccountWrites();
       provider.resetLocalState();
       final revision = provider.persistedRevision;
 
+      store.release.complete();
       await operation;
       expect(provider.coinBalance, 0);
       expect(provider.persistedRevision, revision);
@@ -381,4 +388,19 @@ void main() {
       provider.dispose();
     },
   );
+}
+
+class _HeldRewardStore extends InMemorySharedPreferencesStore {
+  _HeldRewardStore() : super.withData({});
+  final started = Completer<void>();
+  final release = Completer<void>();
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (key == 'flutter.duoyi_virtual_rewards' && !started.isCompleted) {
+      started.complete();
+      await release.future;
+    }
+    return super.setValue(valueType, key, value);
+  }
 }

@@ -1,8 +1,11 @@
 import 'package:duoyi/core/i18n.dart';
 import 'package:duoyi/core/notification_ui_copy.dart';
+import 'package:duoyi/models/goal.dart' show ReminderKind;
 import 'package:duoyi/providers/notification_service.dart'
     show NotificationScheduleIssue;
 import 'package:duoyi/services/reminder_issue_copy.dart';
+import 'package:duoyi/services/daily_digest_reminder_sync.dart';
+import 'package:duoyi/services/notification_permission_exception.dart';
 import 'package:duoyi/services/todo_reminder_preflight_copy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -194,4 +197,97 @@ void main() {
       'Custom legacy title: opaque service diagnostic: code=0xC1 / retained verbatim',
     );
   });
+
+  test(
+    'daily registration result uses its blocking state in both languages',
+    () {
+      for (final locale in AppLocale.values) {
+        I18n.setLocale(locale);
+        for (final blocking in [false, true]) {
+          final issue = DailyDigestReminderIssue(
+            title: '每日提醒注册失败',
+            message: '通知权限未开启',
+            blocking: blocking,
+          );
+          final text = NotificationUiCopy.dailyRegistrationIssue(issue);
+          if (locale == AppLocale.en) {
+            expect(
+              text,
+              startsWith(
+                blocking
+                    ? 'Daily reminder saved, but not scheduled'
+                    : 'Daily reminder saved; review delivery settings',
+              ),
+            );
+            expect(text, isNot(matches(RegExp(r'[\u3400-\u9fff]'))));
+          } else {
+            expect(
+              text,
+              startsWith(blocking ? '每日提醒已保存，但未注册' : '每日提醒已保存，但需要确认'),
+            );
+            expect(text, contains('通知权限未开启'));
+          }
+        }
+      }
+    },
+  );
+
+  test(
+    'schedule exception resolves typed feedback using the current locale',
+    () {
+      const issue = NotificationScheduleUnavailableException(
+        title: '提醒注册失败',
+        message: '旧语言的提示',
+        copy: ReminderIssueCopy.notification(
+          NotificationIssueNotice.oncePermissionUnconfirmed,
+          titleCode: NotificationIssueTitle.taskRegistrationFailed,
+        ),
+      );
+      I18n.setLocale(AppLocale.en);
+      final text = NotificationUiCopy.formatScheduleException(issue);
+      expect(text, startsWith('Check task reminder: '));
+      expect(text, contains('Enable notifications'));
+      expect(text, isNot(matches(RegExp(r'[\u3400-\u9fff]'))));
+    },
+  );
+
+  test(
+    'typed daily channel fallback follows locale and preserves result metadata',
+    () {
+      for (final kind in [ReminderKind.popup, ReminderKind.alarm]) {
+        final scheduled = DateTime(2026, 10, 13, 10);
+        final issue = DailyDigestReminderIssue(
+          title: '每日提醒已退回普通通知',
+          message: '旧语言的通道说明',
+          scheduledTime: scheduled,
+          relatedId: 'daily_reminder_1',
+          blocking: false,
+          copy: ReminderIssueCopy.notification(
+            NotificationIssueNotice.dailyChannelFallback,
+            titleCode: NotificationIssueTitle.dailyFallback,
+            requestedKind: kind,
+            detail: 'synthetic-code=0xD4',
+          ),
+        );
+        I18n.setLocale(AppLocale.en);
+        final en = NotificationUiCopy.dailyRegistrationIssue(issue);
+        expect(
+          en,
+          contains(kind == ReminderKind.alarm ? 'lock-screen alarm' : 'pop-up'),
+        );
+        expect(en, contains('now uses a regular notification'));
+        expect(en, contains('synthetic-code=0xD4'));
+        expect(en, isNot(matches(RegExp(r'[\u3400-\u9fff]'))));
+        I18n.setLocale(AppLocale.zh);
+        final zh = NotificationUiCopy.dailyRegistrationIssue(issue);
+        expect(zh, contains(kind == ReminderKind.alarm ? '锁屏闹钟' : '弹出框'));
+        expect(zh, contains('已改用普通通知兜底'));
+        expect(issue.title, '每日提醒已退回普通通知');
+        expect(issue.message, '旧语言的通道说明');
+        expect(issue.scheduledTime, same(scheduled));
+        expect(issue.relatedId, 'daily_reminder_1');
+        expect(issue.blocking, isFalse);
+      }
+    },
+  );
 }

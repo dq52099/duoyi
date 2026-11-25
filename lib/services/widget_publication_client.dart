@@ -127,18 +127,131 @@ class WidgetStoreRead {
   bool get absent => status == 'absent';
 }
 
-/// Immutable operation retained for an exact retry after an uncertain response.
+/// Strict facts from recovery inspection. No document, readiness or capability
+/// can be inferred from these facts, even if an earlier receipt is visible.
+class WidgetRecoveryFacts {
+  WidgetRecoveryFacts._({
+    required this.storeRevision,
+    required this.ownerEpoch,
+    required this.binding,
+    required this.desiredRevision,
+    required this.desiredLocale,
+    required this.appliedRevision,
+    required this.lastOperationId,
+    required this.lastRequestDigest,
+  });
+
+  final int storeRevision;
+  final String ownerEpoch;
+  final WidgetWorkspaceBinding? binding;
+  final int desiredRevision;
+  final AppLocale desiredLocale;
+  final int appliedRevision;
+  final String lastOperationId;
+  final String lastRequestDigest;
+
+  static WidgetRecoveryFacts? _decode(Object? raw) {
+    if (!_keys(raw, {
+      'storeRevision',
+      'ownerEpoch',
+      'binding',
+      'desiredPresentation',
+      'appliedPresentationRevision',
+      'lastOperationId',
+      'lastRequestDigest',
+    })) {
+      return null;
+    }
+    final map = raw as Map;
+    final desired = map['desiredPresentation'];
+    if (!_keys(desired, {'revision', 'locale'})) return null;
+    final presentation = desired as Map;
+    final revision = presentation['revision'];
+    final locale = _locale(presentation['locale']);
+    final applied = map['appliedPresentationRevision'];
+    final binding = WidgetWorkspaceBinding._decode(map['binding']);
+    final digest = map['lastRequestDigest'];
+    if (!_integer(map['storeRevision'], positive: true) ||
+        !_opaque(map['ownerEpoch']) ||
+        (map['binding'] != null && binding == null) ||
+        !_integer(revision) ||
+        locale == null ||
+        !_integer(applied) ||
+        (applied as int) > (revision as int) ||
+        !_opaque(map['lastOperationId']) ||
+        digest is! String ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(digest)) {
+      return null;
+    }
+    return WidgetRecoveryFacts._(
+      storeRevision: map['storeRevision'] as int,
+      ownerEpoch: map['ownerEpoch'] as String,
+      binding: binding,
+      desiredRevision: revision,
+      desiredLocale: locale,
+      appliedRevision: applied,
+      lastOperationId: map['lastOperationId'] as String,
+      lastRequestDigest: digest,
+    );
+  }
+}
+
+class WidgetRecoveryInspection {
+  WidgetRecoveryInspection._(this.status, [this.facts]);
+
+  final String status;
+  final WidgetRecoveryFacts? facts;
+}
+
+/// Host-supplied immutable intent, constructed from current authorization.
+/// The token identifies a generation; it does not authenticate the binding.
+class WidgetRecoveryContext {
+  WidgetRecoveryContext.workspace({
+    required this.scopeToken,
+    required WidgetWorkspaceBinding workspaceBinding,
+  }) : kind = 'workspace',
+       binding = workspaceBinding {
+    _validate();
+  }
+
+  WidgetRecoveryContext.cleanup({required this.scopeToken})
+    : kind = 'cleanup',
+      binding = null {
+    _validate();
+  }
+
+  final String kind;
+  final String scopeToken;
+  final WidgetWorkspaceBinding? binding;
+
+  void _validate() {
+    if (!_opaque(scopeToken)) {
+      throw const FormatException('Invalid widget recovery scope');
+    }
+  }
+
+  Map<String, Object?> toJson() => {
+    'kind': kind,
+    'scopeToken': scopeToken,
+    'binding': binding?.toJson(),
+  };
+}
+
+/// Immutable operation; ordinary mutations may retain it for exact retry.
 /// No retry may substitute a newer revision, epoch, binding or document.
+/// An uncertain recovery instead needs fresh inspection and a new operation.
 class WidgetStoreRequest {
   WidgetStoreRequest._(
     this.method,
     Map<String, Object?> arguments,
-    this.expected,
-  ) : arguments = _freeze(arguments);
+    this.expected, {
+    this.recoveryFacts,
+  }) : arguments = _freeze(arguments);
 
   final String method;
   final Map<String, Object?> arguments;
   final WidgetStoreSnapshot? expected;
+  final WidgetRecoveryFacts? recoveryFacts;
   String get operationId => arguments['operationId'] as String;
 
   static Map<String, Object?> _common(
@@ -197,6 +310,32 @@ class WidgetStoreRequest {
     'presentation': _presentation(presentation),
   }, expected);
 
+  /// Recovery always seals. Only a separate validated open may grant a lease.
+  /// Do not retry an uncertain recovery by editing its identity/expectations.
+  factory WidgetStoreRequest.recover({
+    required String operationId,
+    required WidgetRecoveryFacts expected,
+    required WidgetRecoveryContext context,
+    required WidgetPublication presentation,
+  }) {
+    if (!_opaque(operationId) || operationId == expected.lastOperationId) {
+      throw const FormatException('Recovery requires a new operation identity');
+    }
+    return WidgetStoreRequest._(
+      'recoverWidgetStore',
+      {
+        'protocolVersion': 1,
+        'operationId': operationId,
+        'expectedStoreRevision': expected.storeRevision,
+        'expectedOwnerEpoch': expected.ownerEpoch,
+        'recoveryContext': context.toJson(),
+        'presentation': _presentation(presentation),
+      },
+      null,
+      recoveryFacts: expected,
+    );
+  }
+
   factory WidgetStoreRequest.advance({
     required String operationId,
     required WidgetStoreSnapshot expected,
@@ -251,6 +390,11 @@ class WidgetStoreAcknowledgement {
       return WidgetStoreAcknowledgement._('invalidResponse');
     }
     final status = raw['status'] as String;
+    final recovering = request.method == 'recoverWidgetStore';
+    // Native receipt visibility never establishes a synchronized recovery.
+    if (recovering && status == 'alreadyApplied') {
+      return WidgetStoreAcknowledgement._('invalidResponse');
+    }
     if (status != 'applied' && status != 'alreadyApplied') {
       if (!_failureStatuses.contains(status) ||
           !(_keys(raw, {'status'}) ||
@@ -296,6 +440,7 @@ class WidgetStoreAcknowledgement {
         (applied as int) > (desired as int) ||
         !{'published', 'cleared', 'blocked'}.contains(state) ||
         raw['refreshRequested'] is! bool ||
+        (recovering && raw['refreshRequested'] != false) ||
         (open && !_opaque(raw['writerLeaseId']))) {
       return WidgetStoreAcknowledgement._('invalidResponse');
     }
@@ -328,6 +473,7 @@ class WidgetStoreAcknowledgement {
                 (args['desiredPresentation'] as Map)['revision'];
       case 'invalidateWidgetWorkspace':
       case 'openWidgetWorkspace':
+      case 'recoverWidgetStore':
         final presentation = args['presentation'] as Map;
         if (raw['desiredPresentationRevision'] != presentation['revision']) {
           return false;
@@ -359,6 +505,33 @@ class WidgetPublicationClient {
 
   final MethodChannel _channel;
   final Duration responseTimeout;
+
+  /// Ordered on the same native queue as writes. Inspection may let SQLite
+  /// recover its journal, but never clears quarantine or returns a lease.
+  Future<WidgetRecoveryInspection> inspectRecovery() async {
+    try {
+      final raw = await _channel
+          .invokeMethod<Object?>('inspectWidgetStoreRecovery')
+          .timeout(responseTimeout);
+      if (raw is! Map || raw['status'] is! String) {
+        return WidgetRecoveryInspection._('invalidResponse');
+      }
+      final status = raw['status'] as String;
+      if (status == 'inspected' && _keys(raw, {'status', 'facts'})) {
+        final facts = WidgetRecoveryFacts._decode(raw['facts']);
+        if (facts != null) return WidgetRecoveryInspection._(status, facts);
+      } else if (_keys(raw, {'status'}) && _failureStatuses.contains(status)) {
+        return WidgetRecoveryInspection._(status);
+      }
+      return WidgetRecoveryInspection._('invalidResponse');
+    } on MissingPluginException {
+      return WidgetRecoveryInspection._('unavailable');
+    } on PlatformException {
+      return WidgetRecoveryInspection._('unavailable');
+    } on TimeoutException {
+      return WidgetRecoveryInspection._('unavailable');
+    }
+  }
 
   Future<WidgetStoreRead> read() async {
     try {

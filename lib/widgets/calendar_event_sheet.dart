@@ -1,8 +1,13 @@
+import '../core/date_item_ui_copy.dart';
+import '../services/date_item_action_origin.dart';
+import 'date_item_feedback.dart';
+import 'app_date_format.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/calendar_event_display_text.dart';
 import '../core/calendar_event_sheet_ui_copy.dart';
+import '../core/design_tokens.dart';
 import '../core/i18n.dart';
 import '../core/i18n_date_format.dart';
 import '../core/iterable_extensions.dart';
@@ -33,6 +38,7 @@ import '../widgets/brand_background.dart';
 import '../widgets/todo_completion_flow.dart';
 import 'app_date_picker.dart';
 import 'app_time_picker.dart';
+import 'controller_dialog.dart' show createControllerDialogRoute;
 import 'surface_components.dart';
 
 bool _canEditWorkspace(BuildContext context, String? workspaceId) {
@@ -47,10 +53,8 @@ Future<void> showCalendarEventSheet(BuildContext context, CalendarEvent event) {
   final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
   return showAppModalSheet<void>(
     context: context,
-    builder: (_) => CalendarEventSheet(
-      event: event,
-      accountGeneration: accountGeneration,
-    ),
+    builder: (_) =>
+        CalendarEventSheet(event: event, accountGeneration: accountGeneration),
   );
 }
 
@@ -63,6 +67,7 @@ class _LocalEventEditorDraft {
   final TimeOfDay startTime;
   final TimeOfDay endTime;
   final Color color;
+  final int? reminderMinutes;
 
   const _LocalEventEditorDraft({
     required this.title,
@@ -73,7 +78,18 @@ class _LocalEventEditorDraft {
     required this.startTime,
     required this.endTime,
     required this.color,
+    this.reminderMinutes,
   });
+}
+
+const List<int?> _localEventReminderOptions = <int?>[null, 0, 5, 15, 30, 60];
+
+String _localEventReminderLabel(int? minutes) {
+  final isEn = I18n.current == AppLocale.en;
+  if (minutes == null) return isEn ? 'No reminder' : '不提醒';
+  if (minutes == 0) return isEn ? 'At time' : '准时';
+  if (minutes == 60) return isEn ? '1 hour before' : '提前 60 分钟';
+  return isEn ? '$minutes min before' : '提前 $minutes 分钟';
 }
 
 class _LocalEventEditorDialog extends StatefulWidget {
@@ -101,6 +117,7 @@ class _LocalEventEditorDialogState extends State<_LocalEventEditorDialog> {
   late TimeOfDay _startTime;
   late TimeOfDay _endTime;
   late Color _color;
+  late int? _reminderMinutes;
 
   @override
   void initState() {
@@ -116,6 +133,7 @@ class _LocalEventEditorDialogState extends State<_LocalEventEditorDialog> {
         ? const TimeOfDay(hour: 10, minute: 0)
         : TimeOfDay.fromDateTime(event!.endDate!);
     _color = event?.color ?? const Color(0xFF5B6EE1);
+    _reminderMinutes = event?.reminderMinutes;
   }
 
   @override
@@ -126,9 +144,13 @@ class _LocalEventEditorDialogState extends State<_LocalEventEditorDialog> {
   }
 
   void _onSave() {
+    if (!mounted) return;
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) {
-      Navigator.pop(context, null);
+      return;
+    }
+    final route = ModalRoute.of(context);
+    if (route != null && (!route.isCurrent || !route.isActive)) {
       return;
     }
     Navigator.pop(
@@ -142,6 +164,7 @@ class _LocalEventEditorDialogState extends State<_LocalEventEditorDialog> {
         startTime: _startTime,
         endTime: _endTime,
         color: _color,
+        reminderMinutes: _reminderMinutes,
       ),
     );
   }
@@ -192,6 +215,7 @@ class _LocalEventEditorDialogState extends State<_LocalEventEditorDialog> {
                       titleKey: 'calendar.picker.start_date',
                     );
                     if (picked == null ||
+                        !mounted ||
                         !context.mounted ||
                         !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
                           widget.accountGeneration,
@@ -220,6 +244,7 @@ class _LocalEventEditorDialogState extends State<_LocalEventEditorDialog> {
                       titleKey: 'calendar.picker.end_date',
                     );
                     if (picked == null ||
+                        !mounted ||
                         !context.mounted ||
                         !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
                           widget.accountGeneration,
@@ -243,6 +268,7 @@ class _LocalEventEditorDialogState extends State<_LocalEventEditorDialog> {
                         minuteStep: 5,
                       );
                       if (picked == null ||
+                          !mounted ||
                           !context.mounted ||
                           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
                             widget.accountGeneration,
@@ -265,6 +291,7 @@ class _LocalEventEditorDialogState extends State<_LocalEventEditorDialog> {
                         minuteStep: 5,
                       );
                       if (picked == null ||
+                          !mounted ||
                           !context.mounted ||
                           !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
                             widget.accountGeneration,
@@ -300,13 +327,51 @@ class _LocalEventEditorDialogState extends State<_LocalEventEditorDialog> {
                   ),
                   maxLines: 2,
                 ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        I18n.current == AppLocale.en ? 'Reminder' : '提醒时间',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final option in _localEventReminderOptions)
+                            ChoiceChip(
+                              label: Text(_localEventReminderLabel(option)),
+                              selected: _reminderMinutes == option,
+                              onSelected: (selected) {
+                                if (!selected) return;
+                                setState(() => _reminderMinutes = option);
+                              },
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, null),
+            onPressed: () {
+              if (!mounted) return;
+              final route = ModalRoute.of(context);
+              if (route != null && (!route.isCurrent || !route.isActive)) {
+                return;
+              }
+              Navigator.pop(context, null);
+            },
             child: Text(CalendarEventSheetUiCopy.cancel),
           ),
           FilledButton(
@@ -333,13 +398,16 @@ Future<void> showLocalCalendarEventEditor(
   final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
   final defaultDate = initialDate ?? event?.date ?? DateTime.now();
 
-  final draft = await showDialog<_LocalEventEditorDraft>(
+  final route = createControllerDialogRoute<_LocalEventEditorDraft>(
     context: context,
     builder: (dialogContext) => _LocalEventEditorDialog(
       event: event,
       initialDate: defaultDate,
       accountGeneration: accountGeneration,
     ),
+  );
+  final draft = await Navigator.of(context, rootNavigator: true).push<_LocalEventEditorDraft>(
+    route,
   );
 
   if (draft == null ||
@@ -373,6 +441,7 @@ Future<void> showLocalCalendarEventEditor(
     time: draft.allDay ? null : draft.startTime,
     note: draft.note.isEmpty ? null : draft.note,
     updatedAt: DateTime.now(),
+    reminderMinutes: draft.reminderMinutes,
   );
 
   if (!context.mounted ||
@@ -419,7 +488,23 @@ class CalendarEventSheet extends StatefulWidget {
   State<CalendarEventSheet> createState() => _CalendarEventSheetState();
 }
 
-class _CalendarEventSheetState extends State<CalendarEventSheet> {
+class _CalendarEventSheetState extends State<CalendarEventSheet>
+    with DateItemMutationState<CalendarEventSheet> {
+  DateItemActionOrigin? _dateOrigin;
+  bool _datePicking = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _dateOrigin ??= switch (widget.event.type) {
+      CalendarEventType.countdown => DateItemActionOrigin.countdown(context),
+      CalendarEventType.anniversary => DateItemActionOrigin.anniversary(
+        context,
+      ),
+      _ => null,
+    };
+  }
+
   late final int _originAccountGeneration;
 
   @override
@@ -469,10 +554,7 @@ class _CalendarEventSheetState extends State<CalendarEventSheet> {
           title: displayTitle,
           maxWidth: 860,
           scrollable: false,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * 0.68,
-            ),
+          child: Flexible(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,10 +631,12 @@ class _CalendarEventSheetState extends State<CalendarEventSheet> {
                 ),
                 const SizedBox(height: 16),
                 // Type-specific action buttons
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _buildActions(context),
+                dateItemStatus(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _buildActions(context),
+                  ),
                 ),
               ],
             ),
@@ -564,7 +648,7 @@ class _CalendarEventSheetState extends State<CalendarEventSheet> {
 
   /// Build action buttons based on event type.
   List<Widget> _buildActions(BuildContext context) {
-    final canEdit = _canEditEvent(context);
+    final canEdit = _canEditEvent(context) && !dateItemBusy && !_datePicking;
     switch (widget.event.type) {
       case CalendarEventType.event:
         return [
@@ -1007,6 +1091,12 @@ class _CalendarEventSheetState extends State<CalendarEventSheet> {
   }
 
   Future<void> _openDetail(BuildContext context) async {
+    if (!mounted ||
+        (_dateOrigin != null &&
+            (!_dateOrigin!.isCurrent() || dateItemBusy || _datePicking))) {
+      return;
+    }
+
     final sourceId = widget.event.sourceId;
     if (sourceId == null) return;
     if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
@@ -1092,7 +1182,85 @@ class _CalendarEventSheetState extends State<CalendarEventSheet> {
     }
   }
 
+  Future<void> _rescheduleDateItem(BuildContext context) async {
+    final origin = _dateOrigin!;
+    final sourceId = widget.event.sourceId;
+    if (sourceId == null ||
+        dateItemBusy ||
+        _datePicking ||
+        !origin.isCurrent() ||
+        !_canEditEvent(context)) {
+      return;
+    }
+    DateTime? picked;
+    setState(() => _datePicking = true);
+    try {
+      picked = await AppDatePicker.pickSolar(
+        context,
+        initialDate: widget.event.date,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+        title: CalendarEventSheetUiCopy.rescheduleDateTitle,
+        titleKey: 'calendar.picker.reschedule_date',
+      );
+    } finally {
+      if (mounted) setState(() => _datePicking = false);
+    }
+    if (!context.mounted ||
+        picked == null ||
+        !origin.isCurrent() ||
+        !_canEditEvent(context)) {
+      return;
+    }
+    final targetDate = picked;
+    DateItemReminderIssue? reminderIssue;
+    await runDateItemMutation(
+      origin: origin,
+      failure: () => DateItemUiCopy.saveFailed,
+      write: (operation) async {
+        bool canWrite() => operation.isCurrent() && _canEditEvent(context);
+        if (origin.anniversary) {
+          final item = origin.anniversaries.items
+              .where((a) => a.id == sourceId)
+              .firstOrNull;
+          if (item == null) throw StateError('Date item no longer exists');
+          item.originDate = targetDate;
+          await origin.anniversaries.update(item, canWrite: canWrite);
+          reminderIssue = origin.anniversaries.lastReminderIssue;
+        } else {
+          final item = origin.countdown.items
+              .where((a) => a.id == sourceId)
+              .firstOrNull;
+          if (item == null) throw StateError('Date item no longer exists');
+          await origin.countdown.updateItem(
+            item.copyWith(targetDate: targetDate),
+            canWrite: canWrite,
+          );
+          reminderIssue = origin.countdown.lastReminderIssue;
+        }
+      },
+      onCommitted: () {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        Navigator.pop(context);
+        if (reminderIssue != null) {
+          messenger?.showSnackBar(
+            SnackBar(
+              content: DateItemFeedbackText(
+                () => DateItemUiCopy.savedReminderWarning,
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+    );
+  }
+
   Future<void> _reschedule(BuildContext context) async {
+    if (_dateOrigin != null) {
+      await _rescheduleDateItem(context);
+      return;
+    }
     final sourceId = widget.event.sourceId;
     if (sourceId == null && widget.event.type != CalendarEventType.event) {
       return;
@@ -1120,7 +1288,6 @@ class _CalendarEventSheetState extends State<CalendarEventSheet> {
       return;
     }
 
-    String? reminderSyncIssue;
     switch (widget.event.type) {
       case CalendarEventType.todo:
         final provider = context.read<TodoProvider>();
@@ -1147,20 +1314,8 @@ class _CalendarEventSheetState extends State<CalendarEventSheet> {
           await provider.update(goal);
         }
       case CalendarEventType.anniversary:
-        final provider = context.read<AnniversaryProvider>();
-        final item = provider.items.where((a) => a.id == sourceId).firstOrNull;
-        if (item != null) {
-          item.originDate = picked;
-          reminderSyncIssue = await provider.update(item);
-        }
       case CalendarEventType.countdown:
-        final provider = context.read<CountdownProvider>();
-        final item = provider.items.where((c) => c.id == sourceId).firstOrNull;
-        if (item != null) {
-          reminderSyncIssue = await provider.updateItem(
-            item.copyWith(targetDate: picked),
-          );
-        }
+        return;
       case CalendarEventType.timeEntry:
         final provider = context.read<TimeAuditProvider>();
         final entry = provider.entries
@@ -1194,17 +1349,7 @@ class _CalendarEventSheetState extends State<CalendarEventSheet> {
         AccountLocalDataCleaner.isCurrentAccountDataGeneration(
           _originAccountGeneration,
         )) {
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      final issue = reminderSyncIssue?.trim();
       Navigator.pop(context);
-      if (issue != null && issue.isNotEmpty) {
-        messenger?.showSnackBar(
-          SnackBar(
-            content: Text(CalendarEventSheetUiCopy.reminderSyncIssue(issue)),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     }
   }
 
@@ -1459,6 +1604,12 @@ class _CalendarEventSheetState extends State<CalendarEventSheet> {
   }
 
   Future<void> _editSourceEvent(BuildContext context) async {
+    if (!mounted ||
+        (_dateOrigin != null &&
+            (!_dateOrigin!.isCurrent() || dateItemBusy || _datePicking))) {
+      return;
+    }
+
     final sourceId = widget.event.sourceId;
     if (sourceId == null) return;
     if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
@@ -1566,6 +1717,29 @@ class _CalendarEventSheetState extends State<CalendarEventSheet> {
   }
 
   Future<void> _delete(BuildContext context) async {
+    final origin = _dateOrigin;
+    if (origin != null) {
+      final id = widget.event.sourceId;
+      if (!mounted ||
+          !origin.isCurrent() ||
+          id == null ||
+          !_canEditEvent(context) ||
+          _datePicking) {
+        return;
+      }
+      await runDateItemMutation(
+        origin: origin,
+        failure: () => DateItemUiCopy.deleteFailed,
+        write: (operation) {
+          bool canWrite() => operation.isCurrent() && _canEditEvent(context);
+          return origin.anniversary
+              ? origin.anniversaries.delete(id, canWrite: canWrite)
+              : origin.countdown.deleteItem(id, canWrite: canWrite);
+        },
+        onCommitted: () => Navigator.pop(context),
+      );
+      return;
+    }
     if (!AccountLocalDataCleaner.isCurrentAccountDataGeneration(
           _originAccountGeneration,
         ) ||
@@ -1708,7 +1882,7 @@ class _DatePickTile extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: Icon(icon),
       title: Text(title),
-      subtitle: Text(I18nDateFormat.date(value)),
+      subtitle: Text(AppDateFormat.date(context, value)),
       onTap: onTap,
     );
   }
@@ -1765,8 +1939,19 @@ class _ColorChoice extends StatelessWidget {
             color: selected
                 ? Theme.of(context).colorScheme.onSurface
                 : Colors.transparent,
-            width: 2,
+            width: 0.6,
           ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.28),
+                    blurRadius: 0,
+                    spreadRadius: 1.5,
+                  ),
+                ]
+              : null,
         ),
         child: selected
             ? Icon(
@@ -1785,10 +1970,10 @@ class _ColorChoice extends StatelessWidget {
 const _localEventColors = <Color>[
   Color(0xFF5B6EE1),
   Color(0xFF26A69A),
-  Color(0xFFFF9800),
-  Color(0xFFE91E63),
+  DesignTokens.defaultWarning,
+  DesignTokens.defaultError,
   Color(0xFF7E57C2),
-  Color(0xFF607D8B),
+  DesignTokens.defaultTextMuted,
 ];
 
 _LocalEventTimeRange _normalizeLocalEventTime({

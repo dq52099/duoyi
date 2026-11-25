@@ -7,6 +7,9 @@ void main() {
     'startup keeps heavy reload sync notification and widget work staggered',
     () {
       final main = File('lib/main.dart').readAsStringSync();
+      final widgetQueue = File(
+        'lib/services/home_widget_push_queue.dart',
+      ).readAsStringSync();
 
       expect(main, contains('Future<void> _runStartupIdleQueue('));
       expect(main, contains('Future<void> _runStartupStaggeredTask('));
@@ -100,10 +103,13 @@ void main() {
         reason: '冷启动通知 action 必须在提醒 Provider hydration 后再派发。',
       );
       expect(main, contains('achievementProvider.resumeUnlockFeedback'));
-      expect(main, contains('Timer(const Duration(milliseconds: 2200)'));
       expect(
-        main,
-        contains('const homeWidgetPushMinInterval = Duration(seconds: 8)'),
+        widgetQueue,
+        contains('debounceDelay = Duration(milliseconds: 2200)'),
+      );
+      expect(
+        widgetQueue,
+        contains('minimumInterval = Duration(seconds: 8)'),
         reason: '登录和同步恢复的连续 provider 变化需要合并小组件推送，避免短时间多次刷新。',
       );
       expect(main, contains('Timer? userStatsRefreshDebounce'));
@@ -124,16 +130,33 @@ void main() {
         contains('userStatsRefreshDebounce?.cancel();'),
         reason: '用户统计刷新必须防抖，避免 Mine 刚进入时被多次同步写入打断滚动。',
       );
-      expect(main, contains('DateTime? lastHomeWidgetPushStartedAt'));
+      expect(widgetQueue, contains('DateTime? _lastStartedAt'));
       expect(
-        main,
-        contains('scheduleHomeWidgetPushDebounce(homeWidgetPushDelay(),'),
+        widgetQueue,
+        contains(
+          'final delay = remaining > debounceDelay ? remaining : debounceDelay;',
+        ),
       );
-      expect(main, contains('var homeWidgetPushInFlight = false'));
-      expect(main, contains('homeWidgetPushQueued = true'));
-      expect(main, contains('String lastHomeWidgetDataSignature = \'\';'));
+      expect(widgetQueue, contains('if (running != null) return running;'));
+      expect(widgetQueue, contains('_pending = true'));
+      expect(widgetQueue, contains('String _lastSignature = \'\';'));
       expect(main, contains('String homeWidgetDataRevisionSignature()'));
       expect(main, contains('_homeWidgetDataRevisionSignature('));
+      expect(
+        main,
+        contains('String? cachedHomeWidgetDataSignature;'),
+        reason: '合并后的重复小组件刷新应复用已计算的数据签名，避免每次重试都遍历全部集合。',
+      );
+      expect(
+        main,
+        contains('void invalidateHomeWidgetDataSignature()'),
+        reason: '数据、语言、主题或周起始日变化后必须失效签名缓存，避免展示陈旧内容。',
+      );
+      expect(
+        main,
+        contains('if (!homeWidgetDataSignatureDirty &&'),
+        reason: '签名缓存只在没有数据变更且日期上下文一致时复用。',
+      );
       final widgetDataSignatureStart = main.indexOf(
         'String _homeWidgetDataRevisionSignature(',
       );
@@ -161,13 +184,13 @@ void main() {
       );
       expect(localeListener, contains('queueHomeWidgetPush();'));
       expect(
-        main,
-        contains('if (dataSignature != lastHomeWidgetDataSignature)'),
+        widgetQueue,
+        contains('if (signature != _lastSignature)'),
         reason: '登录和同步恢复会连续触发多个 provider notify，小组件应先做轻量数据签名去重。',
       );
       expect(
-        main,
-        contains('lastHomeWidgetDataSignature = \'\';'),
+        widgetQueue,
+        contains('_lastSignature = \'\';'),
         reason: '小组件推送失败后必须允许下一次相同数据重试。',
       );
       expect(
@@ -326,7 +349,10 @@ void main() {
       );
       expect(notificationSettings, contains('CustomScrollView('));
       expect(notificationSettings, contains('SliverSafeArea('));
-      expect(notificationSettings, contains('通知状态读取失败，请稍后重试或打开系统通知设置检查。'));
+      expect(
+        notificationSettings,
+        contains('NotificationUiCopy.statusReadFailed'),
+      );
       expect(
         main,
         isNot(contains('_builtTabs.contains(tab) && tab == safeIndex')),

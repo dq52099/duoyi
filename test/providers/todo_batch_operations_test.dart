@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:duoyi/core/domain_event_bus.dart';
+import 'package:duoyi/core/todo_kanban.dart';
+import 'package:duoyi/models/recurrence.dart';
 import 'package:duoyi/models/todo.dart';
 import 'package:duoyi/providers/todo_provider.dart';
 import 'package:duoyi/services/reminder_scheduler.dart'
@@ -208,23 +211,72 @@ void main() {
     expect(provider.todos.single.isCompleted, isTrue);
   });
 
-  test('TodoProvider exposes batch completion and recurrence preservation', () {
-    final source = File('lib/providers/todo_provider.dart').readAsStringSync();
-
-    expect(source, contains('Future<int> completeTodos('));
-    expect(source, contains('final requested = ids.toSet();'));
-    expect(source, contains('_claimInFlightKeys('));
-    expect(
-      source,
-      contains('if (!selected.contains(prev.id) || prev.isCompleted)'),
-    );
-    expect(source, contains('completed.add(next);'));
-    expect(source, contains('DomainEventType.todoCompleted'));
-    expect(source, contains('if (prev.recurrence.isActive)'));
-    expect(source, contains('final recurring = _nextRecurringTodo(prev);'));
-    expect(source, contains('await _timeAudit?.recordTodoCompletion('));
-    expect(source, contains('return changed;'));
-  });
+  test(
+    'batch completion preserves recurrence and ignores duplicates and completed IDs',
+    () async {
+      final selected = TodoItem(
+        id: 'batch-recurring',
+        title: 'selected',
+        date: DateTime(2026, 10, 1, 9),
+        dueDate: DateTime(2026, 10, 1, 18),
+        recurrence: const RecurrenceRule(
+          frequency: RecurrenceFrequency.daily,
+          maxOccurrences: 2,
+        ),
+      );
+      final existing = [
+        selected,
+        TodoItem(id: 'unselected', title: 'unchanged'),
+        TodoItem(id: 'already-done', title: 'done', isCompleted: true),
+      ];
+      SharedPreferences.setMockInitialValues({
+        'todos': jsonEncode(existing.map((item) => item.toJson()).toList()),
+      });
+      final provider = TodoProvider();
+      addTearDown(provider.dispose);
+      await provider.loadFromStorage();
+      final events = <DomainEvent>[];
+      final subscription = DomainEventBus.instance.events.listen(events.add);
+      addTearDown(subscription.cancel);
+      expect(
+        await provider.completeTodos([
+          selected.id,
+          selected.id,
+          'already-done',
+        ], recordCompletionTime: false),
+        1,
+      );
+      expect(provider.todos, hasLength(4));
+      expect(
+        provider.todos
+            .singleWhere((todo) => todo.id == selected.id)
+            .isCompleted,
+        isTrue,
+      );
+      expect(
+        provider.todos
+            .singleWhere((todo) => todo.id == 'unselected')
+            .isCompleted,
+        isFalse,
+      );
+      final successor = provider.todos.singleWhere(
+        (todo) => !existing.any((original) => original.id == todo.id),
+      );
+      expect(successor.date, DateTime(2026, 10, 2, 9));
+      expect(successor.dueDate, DateTime(2026, 10, 2, 18));
+      expect(successor.recurrence.maxOccurrences, 1);
+      expect(events.map((event) => event.objectId), [selected.id]);
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        jsonDecode(prefs.getString('todos')!),
+        provider.todos.map((item) => item.toJson()).toList(),
+      );
+      final committed = prefs.getString('todos');
+      expect(await provider.completeTodos([selected.id, 'already-done']), 0);
+      expect(prefs.getString('todos'), committed);
+      expect(events, hasLength(1));
+    },
+  );
 
   test('TodoProvider resyncs reminders after completion and deletion changes', () {
     final source = File('lib/providers/todo_provider.dart').readAsStringSync();
@@ -241,7 +293,7 @@ void main() {
       source,
       matches(
         RegExp(
-          r'Future<TodoReminderSyncResult> _syncTodoRemindersNow\(\{\s*String\? reportTodoId,?\s*\}\) async',
+          r'Future<TodoReminderSyncResult> _syncTodoRemindersNow\(\{\s*String\? reportTodoId,\s*bool Function\(\)\? canWrite,?\s*\}\) async',
         ),
       ),
     );
@@ -387,39 +439,65 @@ void main() {
     );
     expect(
       method(
-        'Future<void> updateListGroupWorkspace(',
+        'Future<bool> updateListGroupWorkspace(',
         '// --- Subtask operations ---',
       ),
-      contains('await _syncTodoRemindersNow();'),
+      contains('await _syncTodoRemindersNow(canWrite: isCurrent);'),
     );
   });
 
-  test('TodoProvider exposes batch reopen and deletion paths', () {
-    final source = File('lib/providers/todo_provider.dart').readAsStringSync();
-
-    expect(source, contains('Future<int> reopenTodos(Iterable<String> ids)'));
-    expect(
-      source,
-      contains('if (!selected.contains(prev.id) || !prev.isCompleted)'),
-    );
-    expect(source, contains('prev.copyWith('));
-    expect(source, contains('isCompleted: false'));
-    expect(source, contains('completedAt: null'));
-    expect(source, contains('kanbanColumnId: prev.kanbanColumnId'));
-    expect(source, contains('await _timeAudit?.removeTodoCompletion('));
-    expect(source, contains('Future<int> deleteTodos(Iterable<String> ids)'));
-    expect(
-      source,
-      contains(
-        'await _timeAudit?.deleteBySource(TimeEntrySource.todo, todo.id)',
-      ),
-    );
-    expect(
-      source,
-      contains('_todos.removeWhere((t) => selected.contains(t.id))'),
-    );
-    expect(source, contains('return existing.length;'));
-  });
+  test(
+    'batch reopen and delete persist selected IDs and their tombstones once',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final provider = TodoProvider();
+      addTearDown(provider.dispose);
+      for (final id in ['first', 'second', 'keep']) {
+        await provider.addTodo(
+          TodoItem(
+            id: id,
+            title: 'Batch $id',
+            isCompleted: id != 'keep',
+            completedAt: id == 'keep' ? null : DateTime(2026, 11, 9, 10),
+            kanbanColumnId: id == 'keep'
+                ? defaultKanbanPendingColumnId
+                : defaultKanbanDoneColumnId,
+            isArchivedAfterRollover: id != 'keep',
+          ),
+        );
+      }
+      expect(
+        await provider.reopenTodos([
+          'first',
+          'first',
+          'second',
+          'keep',
+          'missing',
+        ]),
+        2,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final reopened = jsonDecode(prefs.getString('todos')!) as List;
+      expect(reopened, hasLength(3));
+      for (final row in reopened.where((r) => r['id'] != 'keep')) {
+        expect(row['isCompleted'], isFalse);
+        expect(row['completedAt'], isNull);
+        expect(row['isArchivedAfterRollover'], isFalse);
+        expect(row['kanbanColumnId'], defaultKanbanPendingColumnId);
+      }
+      expect(
+        await provider.deleteTodos(['first', 'first', 'second', 'missing']),
+        2,
+      );
+      expect(provider.todos.map((r) => r.id), ['keep']);
+      final stored = prefs.getString('todos');
+      expect((jsonDecode(stored!) as List).single['id'], 'keep');
+      final markers = jsonDecode(prefs.getString('sync_deleted_items')!) as Map;
+      expect((markers['todos'] as Map).keys.toSet(), {'first', 'second'});
+      expect(await provider.deleteTodos(['first', 'second']), 0);
+      expect(prefs.getString('todos'), stored);
+    },
+  );
 
   test('TodoProvider exposes batch quadrant and priority updates', () {
     final source = File('lib/providers/todo_provider.dart').readAsStringSync();
@@ -444,9 +522,11 @@ void main() {
     expect(source, contains('defaultKanbanDoneColumnId'));
     expect(source, contains('todo.copyWith('));
     expect(source, contains('kanbanColumnId: target'));
+    expect(source, contains('isCompleted: nextCompleted'));
+    expect(source, contains(': todo.isCompleted'));
     expect(
       source,
-      contains('isCompleted: target == defaultKanbanDoneColumnId'),
+      contains('final nextCompleted = target == defaultKanbanDoneColumnId'),
     );
     expect(
       source,

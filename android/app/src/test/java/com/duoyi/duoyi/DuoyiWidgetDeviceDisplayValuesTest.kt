@@ -57,6 +57,23 @@ class DuoyiWidgetDeviceDisplayValuesTest {
     }
 
     @Test
+    fun weekStartIsAnIntegerPublicationValueAndCannotBeOverriddenByDevicePreferences() {
+        val publication = publication("published").toFlatValues()
+        assertEquals(1, publication["widget_first_day_of_week"])
+        assertTrue(publication["widget_first_day_of_week"] is Int)
+
+        val deviceValue = mapOf("widget_first_day_of_week" to 7)
+        assertTrue(DuoyiWidgetFrameCore.deviceDisplayValues(deviceValue, 3).isEmpty())
+
+        val captured = captured(
+            "published",
+            deviceValue + ("widget_display_mode" to "compact"),
+        )
+        assertEquals(1, captured.prefs.getInt("widget_first_day_of_week", -1))
+        assertTrue(DuoyiWidgetDisplayMode.isCompact(captured.prefs, 3))
+    }
+
+    @Test
     fun validInstancePrecedesGlobalAndInvalidInstanceFallsBackSafely() {
         fun rendered(global: Any?, instance: Any?) = captured("published", mapOf(
             "widget_display_mode" to global, "widget_display_mode_3" to instance))
@@ -122,12 +139,13 @@ class DuoyiWidgetDeviceDisplayValuesTest {
         val integers = setOf("todo_count", "habit_percent", "habit_active_count", "pomodoro_today",
             "focus_minutes_today", "todo_top3_count", "focus_timer_remaining_seconds",
             "focus_timer_total_seconds", "widget_theme_corner_radius_dp",
-            "widget_theme_control_radius_dp", "widget_theme_border_width_dp")
+            "widget_theme_control_radius_dp", "widget_theme_border_width_dp",
+            "widget_first_day_of_week")
         val longs = setOf("focus_timer_started_at_millis", "focus_timer_ends_at_millis")
         val booleans = setOf("focus_timer_count_up", "focus_timer_running", "widget_theme_dark")
         val values = DuoyiWidgetPublicationDocument.valueKeys.associateWith { key ->
             when (key) { in integers -> 0; in longs -> 0L; in booleans -> false; else -> "" }
-        }
+        }.toMutableMap().apply { put("widget_first_day_of_week", 1) }
         return requireNotNull(DuoyiWidgetPublicationDocument.tryFromMap(mapOf(
             "schemaVersion" to 1, "ownerEpoch" to "current-account", "publicationRevision" to 1L,
             "localeRevision" to 1L, "state" to state, "locale" to "en",

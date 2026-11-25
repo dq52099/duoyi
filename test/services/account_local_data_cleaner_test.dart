@@ -418,7 +418,17 @@ void main() {
       'Future<void> addSubscription',
     );
     expect(calendarReset, contains('_subscriptions.clear()'));
-    expect(calendarReset, contains('_oauthAccounts.clear()'));
+    expect(calendarReset, contains('OAuthCalendarStorage.invalidateReset()'));
+    expect(calendarReset, contains('_clearOAuthProjection()'));
+    final oauthProjectionReset = _sourceBlock(
+      calendar,
+      'void _clearOAuthProjection() {',
+      'void _onOAuthStorageChanged()',
+    );
+    expect(oauthProjectionReset, contains('_oauthAccounts.clear()'));
+    expect(oauthProjectionReset, contains('_eventsByOAuthAccount.clear()'));
+    expect(oauthProjectionReset, contains('_observedPendingOAuthAttempt = null'));
+    expect(oauthProjectionReset, contains('_publishedOAuthAuthority = null'));
     expect(calendarReset, contains('_eventsBySubscription.clear()'));
     expect(calendarReset, contains('_eventsByOAuthAccount.clear()'));
     expect(calendarReset, contains('_writeTarget = null'));

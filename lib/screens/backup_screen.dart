@@ -1,9 +1,16 @@
+import '../providers/app_lock_provider.dart';
+import '../providers/auth_provider.dart';
+import '../services/app_access_route_gate.dart';
+import '../services/app_update_service.dart';
+import '../services/date_item_action_origin.dart';
 import 'package:flutter/material.dart';
+import '../core/account_preference_writes.dart';
 import '../core/data_settings_ui_copy.dart';
 import '../core/i18n.dart';
 import 'package:flutter/services.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:provider/provider.dart';
+import '../services/account_local_data_cleaner.dart';
 import '../providers/anniversary_provider.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/countdown_provider.dart';
@@ -25,9 +32,15 @@ import '../services/backup_service.dart';
 import '../services/competitor_task_importer.dart';
 import '../services/ics_exporter.dart';
 import '../services/reminder_ringtone_settings.dart';
+import '../services/web_file_download.dart';
 import '../services/webdav_backup_service.dart';
+import '../core/design_tokens.dart';
 import '../widgets/surface_components.dart';
 import '../widgets/controller_dialog.dart';
+import 'package:duoyi/desktop_web/desktop_embedded_scope.dart';
+
+import '../widgets/brand_background.dart'
+    show BrandBackground, BrandRouteSurface, LocaleStatePreservingRoute;
 
 enum BackupEntryMode { backup, restore }
 
@@ -69,6 +82,305 @@ class _CompetitorImportConfig {
     required this.source,
     this.fieldMapping = const CompetitorFieldMapping(),
   });
+}
+
+class _CompetitorRollbackBanner {
+  final int token;
+  final int accountGeneration;
+  final _CompetitorImportOrigin origin;
+  bool isConsumed = false;
+
+  _CompetitorRollbackBanner({
+    required this.token,
+    required this.accountGeneration,
+    required this.origin,
+  });
+
+  void dispose() {
+    if (!isConsumed) {
+      origin.dispose();
+    }
+  }
+}
+
+class _CompetitorImportOrigin {
+  final BuildContext screenContext;
+  final ModalRoute<dynamic>? screenRoute;
+  final int seq;
+  final int accountGeneration;
+  final bool Function() isActionCurrent;
+  final TodoProvider todoProvider;
+  final HabitProvider habitProvider;
+  final NoteProvider noteProvider;
+  final CalendarProvider calendarProvider;
+  final AnniversaryProvider anniversaryProvider;
+  final CountdownProvider countdownProvider;
+  final TimeAuditProvider timeAuditProvider;
+  final DateItemActionOrigin? anniversaryOrigin;
+  final DateItemActionOrigin? countdownOrigin;
+  final AuthProvider? auth;
+  final AppLockProvider? lock;
+  final AppUpdateService? update;
+
+  late final int? sessionGeneration;
+  late final bool wasLoggedIn;
+  String? _userId;
+  late final Object? _client;
+  AuthSessionLease? _lease;
+  bool _leaseFailed = false;
+  late final int? lockAccessGeneration;
+  late final bool wasLocked;
+  late final bool wasMustUpdate;
+
+  bool _expired = false;
+  bool _disposed = false;
+  bool _isTransferred = false;
+  bool get isTransferred => _isTransferred;
+  void markTransferred() => _isTransferred = true;
+  final Object menuOwnerToken = Object();
+  final Set<Route<dynamic>> _ownedRoutes = <Route<dynamic>>{};
+  final List<AppAccessRouteGate> _gates = <AppAccessRouteGate>[];
+
+  _CompetitorImportOrigin({
+    required this.screenContext,
+    required this.screenRoute,
+    required this.seq,
+    required this.accountGeneration,
+    required this.isActionCurrent,
+    required this.todoProvider,
+    required this.habitProvider,
+    required this.noteProvider,
+    required this.calendarProvider,
+    required this.anniversaryProvider,
+    required this.countdownProvider,
+    required this.timeAuditProvider,
+    required this.anniversaryOrigin,
+    required this.countdownOrigin,
+    required this.auth,
+    required this.lock,
+    required this.update,
+  }) {
+    sessionGeneration = auth?.sessionGeneration;
+    wasLoggedIn = auth?.state.isLoggedIn ?? false;
+    final uid = auth?.state.userId?.trim();
+    _userId = (uid == null || uid.isEmpty) ? null : uid;
+    _client = _clientSnapshot();
+    if (wasLoggedIn && auth != null) {
+      try {
+        _lease = auth!.captureSessionLease();
+      } catch (_) {
+        _leaseFailed = true;
+      }
+    }
+    wasLocked = lock?.isLocked ?? false;
+    lockAccessGeneration = lock?.accessGeneration;
+    wasMustUpdate = update?.mustUpdate ?? false;
+
+    if (wasLocked || wasMustUpdate || _leaseFailed) {
+      _expired = true;
+    }
+
+    auth?.addListener(_observeAuthority);
+    lock?.addListener(_observeAuthority);
+    update?.addListener(_observeAuthority);
+    AccountLocalDataCleaner.accountDataGenerationListenable.addListener(
+      _observeAuthority,
+    );
+    screenRoute?.secondaryAnimation?.addListener(_observeSourceCover);
+
+    try {
+      for (final observer in Navigator.of(screenContext).widget.observers) {
+        if (observer is AppAccessRouteGate) {
+          _gates.add(observer);
+          observer.routeRevision.addListener(_observeRoute);
+        }
+      }
+    } catch (_) {}
+  }
+
+  Object? _clientSnapshot() => (
+    auth?.client,
+    auth?.client.token,
+    auth?.client.baseUrl,
+    auth?.state.token,
+  );
+
+  void registerOwnedRoute(Route<dynamic> route) {
+    if (_expired || _disposed) return;
+    if (_ownedRoutes.add(route)) {
+      if (route is TransitionRoute<dynamic>) {
+        route.completed.then((_) {
+          _ownedRoutes.remove(route);
+        });
+      } else {
+        route.popped.then((_) {
+          _ownedRoutes.remove(route);
+        });
+      }
+    }
+  }
+
+  void _observeAuthority() {
+    if (_disposed || _expired) return;
+    if (!isCurrent(checkRoute: false)) {
+      _invalidate();
+    }
+  }
+
+  void _observeSourceCover() {
+    if (_disposed || _expired) return;
+    if (_ownedRoutes.isEmpty &&
+        (screenRoute?.secondaryAnimation?.value ?? 0) > 0) {
+      _invalidate();
+    }
+  }
+
+  void _observeRoute() {
+    if (_disposed || _expired) return;
+    for (final gate in _gates) {
+      final current = gate.currentRoute;
+      if (current == null) continue;
+      if (identical(current, screenRoute)) continue;
+      if (_ownedRoutes.contains(current)) continue;
+      if (current.settings.name == 'AppAnchoredDropdownMenu') {
+        final metadata = current.settings.arguments;
+        if (metadata is AppAnchoredDropdownMenuMetadata &&
+            identical(metadata.ownerToken, menuOwnerToken)) {
+          metadata.onRouteCreated?.call(current);
+          registerOwnedRoute(current);
+          continue;
+        }
+        _invalidate();
+        return;
+      }
+      _invalidate();
+      return;
+    }
+  }
+
+  void _invalidate() {
+    if (_expired || _disposed) return;
+    _expired = true;
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    auth?.removeListener(_observeAuthority);
+    lock?.removeListener(_observeAuthority);
+    update?.removeListener(_observeAuthority);
+    AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
+      _observeAuthority,
+    );
+    screenRoute?.secondaryAnimation?.removeListener(_observeSourceCover);
+    for (final gate in _gates) {
+      gate.routeRevision.removeListener(_observeRoute);
+    }
+    _gates.clear();
+    _ownedRoutes.clear();
+  }
+
+  bool isCurrent({
+    ModalRoute<dynamic>? currentModalRoute,
+    bool checkDates = true,
+    bool checkRoute = true,
+    bool checkParentActiveOnly = false,
+  }) {
+    if (_expired || _disposed || _leaseFailed) return false;
+    if (wasLocked || wasMustUpdate) return false;
+    if (!screenContext.mounted) return false;
+    if (!isActionCurrent()) return false;
+    if (screenRoute != null && !screenRoute!.isActive) return false;
+
+    if (checkRoute) {
+      if (currentModalRoute != null) {
+        if (!currentModalRoute.isActive) {
+          return false;
+        }
+        if (!checkParentActiveOnly && !currentModalRoute.isCurrent) {
+          return false;
+        }
+        if (!_ownedRoutes.contains(currentModalRoute)) {
+          return false;
+        }
+      } else {
+        if (screenRoute != null && !screenRoute!.isCurrent) {
+          return false;
+        }
+      }
+    }
+
+    try {
+      if (!identical(screenContext.read<TodoProvider>(), todoProvider) ||
+          !identical(screenContext.read<HabitProvider>(), habitProvider) ||
+          !identical(screenContext.read<NoteProvider>(), noteProvider) ||
+          !identical(
+            screenContext.read<CalendarProvider>(),
+            calendarProvider,
+          ) ||
+          !identical(
+            screenContext.read<AnniversaryProvider>(),
+            anniversaryProvider,
+          ) ||
+          !identical(
+            screenContext.read<CountdownProvider>(),
+            countdownProvider,
+          ) ||
+          !identical(
+            screenContext.read<TimeAuditProvider>(),
+            timeAuditProvider,
+          )) {
+        return false;
+      }
+      if (!identical(screenContext.read<AuthProvider?>(), auth) ||
+          !identical(screenContext.read<AppLockProvider?>(), lock) ||
+          !identical(screenContext.read<AppUpdateService?>(), update)) {
+        return false;
+      }
+      if (lock != null &&
+          (lock!.isLocked || lock!.accessGeneration != lockAccessGeneration)) {
+        _expired = true;
+        return false;
+      }
+      if (update != null && update!.mustUpdate) {
+        _expired = true;
+        return false;
+      }
+      final currentAuth = auth;
+      if (currentAuth != null) {
+        if (currentAuth.sessionGeneration != sessionGeneration ||
+            currentAuth.state.isLoggedIn != wasLoggedIn ||
+            currentAuth.isAccountTransitionInProgress ||
+            currentAuth.isLocalAccountDataBlocked ||
+            (_lease != null && !currentAuth.isSessionLeaseCurrent(_lease!)) ||
+            _clientSnapshot() != _client) {
+          _expired = true;
+          return false;
+        }
+        final currentUid = currentAuth.state.userId?.trim();
+        if ((_userId?.isNotEmpty ?? false) && _userId != currentUid) {
+          _expired = true;
+          return false;
+        }
+        if (currentUid?.isNotEmpty ?? false) {
+          _userId ??= currentUid;
+        }
+      }
+      if (checkDates) {
+        if (anniversaryOrigin != null &&
+            !anniversaryOrigin!.isCurrent(checkRoute: false)) {
+          return false;
+        }
+        if (countdownOrigin != null &&
+            !countdownOrigin!.isCurrent(checkRoute: false)) {
+          return false;
+        }
+      }
+    } catch (_) {
+      return false;
+    }
+    return true;
+  }
 }
 
 const _competitorFieldMappingTargets = <(String, String)>[
@@ -130,7 +442,8 @@ class _CompetitorImportApplySummary {
   bool get hasReminderSyncIssues => reminderSyncIssues.isNotEmpty;
 }
 
-class BackupScreen extends StatefulWidget {
+class BackupScreen extends StatefulWidget
+    implements LocaleStatePreservingRoute {
   final BackupEntryMode initialMode;
 
   const BackupScreen({super.key, this.initialMode = BackupEntryMode.backup});
@@ -145,36 +458,191 @@ class _BackupScreenState extends State<BackupScreen> {
   _ExportKind? _currentExportKind;
   bool _busy = false;
   WebDavBackupConfig _webDavConfig = WebDavBackupConfig.empty();
+  int _actionSeq = 0;
+  int _configReadSeq = 0;
+  int _rollbackTokenSeq = 0;
+  int? _currentRollbackToken;
+  int? _competitorRollbackGeneration;
+  _CompetitorRollbackBanner? _activeBanner;
+  final Set<_CompetitorImportOrigin> _activeRollbackOperations =
+      <_CompetitorImportOrigin>{};
+
+  void _dismissActiveBanner() {
+    final banner = _activeBanner;
+    if (banner != null) {
+      _activeBanner = null;
+      banner.dispose();
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    AccountLocalDataCleaner.accountDataGenerationListenable.addListener(
+      _onAccountDataChanged,
+    );
     _loadWebDavConfig();
   }
 
-  Future<void> _loadWebDavConfig() async {
-    final config = await WebDavBackupService.loadConfig();
+  @override
+  void dispose() {
+    _dismissActiveBanner();
+    for (final op in List<_CompetitorImportOrigin>.of(
+      _activeRollbackOperations,
+    )) {
+      op.dispose();
+    }
+    _activeRollbackOperations.clear();
+    AccountLocalDataCleaner.accountDataGenerationListenable.removeListener(
+      _onAccountDataChanged,
+    );
+    super.dispose();
+  }
+
+  void _onAccountDataChanged() {
     if (!mounted) return;
-    setState(() => _webDavConfig = config);
+    _dismissActiveBanner();
+    for (final op in List<_CompetitorImportOrigin>.of(
+      _activeRollbackOperations,
+    )) {
+      op.dispose();
+    }
+    _activeRollbackOperations.clear();
+    _actionSeq++;
+    _configReadSeq++;
+    _currentRollbackToken = null;
+    _competitorRollbackGeneration = null;
+    _busy = false;
+    _exported = null;
+    _exportedTitle = null;
+    _currentExportKind = null;
+    _webDavConfig = WebDavBackupConfig.empty();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    setState(() {});
+    _loadWebDavConfig();
+  }
+
+  bool _isCurrentAction(int seq, int accountGeneration) =>
+      mounted &&
+      seq == _actionSeq &&
+      AccountLocalDataCleaner.isCurrentAccountDataGeneration(accountGeneration);
+
+  _CompetitorImportOrigin? _captureCompetitorImportOrigin(
+    int seq, {
+    bool tasksOnly = false,
+  }) {
+    if (!mounted) return null;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isActive || !route.isCurrent) return null;
+    final currentGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    try {
+      final todoProvider = context.read<TodoProvider>();
+      final habitProvider = context.read<HabitProvider>();
+      final noteProvider = context.read<NoteProvider>();
+      final calendarProvider = context.read<CalendarProvider>();
+      final anniversaryProvider = context.read<AnniversaryProvider>();
+      final countdownProvider = context.read<CountdownProvider>();
+      final timeAuditProvider = context.read<TimeAuditProvider>();
+      final auth = context.read<AuthProvider?>();
+      final lock = context.read<AppLockProvider?>();
+      final update = context.read<AppUpdateService?>();
+      final anniversaryOrigin = tasksOnly
+          ? null
+          : DateItemActionOrigin.anniversary(context);
+      final countdownOrigin = tasksOnly
+          ? null
+          : DateItemActionOrigin.countdown(context);
+      final origin = _CompetitorImportOrigin(
+        screenContext: context,
+        screenRoute: route,
+        seq: seq,
+        accountGeneration: currentGeneration,
+        isActionCurrent: () => _isCurrentAction(seq, currentGeneration),
+        todoProvider: todoProvider,
+        habitProvider: habitProvider,
+        noteProvider: noteProvider,
+        calendarProvider: calendarProvider,
+        anniversaryProvider: anniversaryProvider,
+        countdownProvider: countdownProvider,
+        timeAuditProvider: timeAuditProvider,
+        anniversaryOrigin: anniversaryOrigin,
+        countdownOrigin: countdownOrigin,
+        auth: auth,
+        lock: lock,
+        update: update,
+      );
+      if (!origin.isCurrent()) {
+        origin.dispose();
+        return null;
+      }
+      return origin;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _loadWebDavConfig() async {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final readSeq = ++_configReadSeq;
+    try {
+      final config = await WebDavBackupService.loadConfig();
+      if (!mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          ) ||
+          readSeq != _configReadSeq) {
+        return;
+      }
+      setState(() => _webDavConfig = config);
+    } catch (e) {
+      if (e is AccountPreferenceWriteCanceled ||
+          !mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          ) ||
+          readSeq != _configReadSeq) {
+        return;
+      }
+    }
+  }
+
+  String _formatWipeError(Object? error) {
+    return DataSettingsUiCopy.isEn
+        ? 'Failed to clear local data. Please try again.'
+        : '清空本地数据失败，请重试';
+  }
+
+  String _formatCopyError(Object? error) {
+    return DataSettingsUiCopy.isEn
+        ? 'Failed to copy to clipboard. Please try again.'
+        : '复制到剪贴板失败，请重试';
   }
 
   Future<void> _exportAll() async {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final seq = ++_actionSeq;
     setState(() => _busy = true);
     try {
       final text = await BackupService.exportAll();
-      if (!mounted) return;
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
       setState(() {
         _exported = text;
         _currentExportKind = _ExportKind.fullJson;
         _exportedTitle = DataSettingsUiCopy.fullBackupJsonTitle;
-        _busy = false;
       });
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (!mounted ||
+          e is AccountPreferenceWriteCanceled ||
+          !_isCurrentAction(seq, accountGeneration)) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(DataSettingsUiCopy.formatExportError(e))),
       );
+    } finally {
+      if (mounted && _isCurrentAction(seq, accountGeneration)) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -207,16 +675,187 @@ class _BackupScreenState extends State<BackupScreen> {
     };
   }
 
+  String _exportFileName(_ExportKind? kind) {
+    final now = DateTime.now();
+    final dateTag =
+        '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    return switch (kind) {
+      _ExportKind.fullJson => 'duoyi_backup_$dateTag.json',
+      _ExportKind.todosCsv => 'duoyi_todos_$dateTag.csv',
+      _ExportKind.todosMd => 'duoyi_todos_$dateTag.md',
+      _ExportKind.habitsCsv => 'duoyi_habits_$dateTag.csv',
+      _ExportKind.timeEntriesCsv => 'duoyi_time_entries_$dateTag.csv',
+      _ExportKind.notesCsv => 'duoyi_notes_$dateTag.csv',
+      _ExportKind.notesMd => 'duoyi_notes_$dateTag.md',
+      _ExportKind.diaryMd => 'duoyi_diary_$dateTag.md',
+      _ExportKind.diaryCsv => 'duoyi_diary_$dateTag.csv',
+      _ExportKind.anniversariesCsv => 'duoyi_anniversaries_$dateTag.csv',
+      _ExportKind.anniversariesMd => 'duoyi_anniversaries_$dateTag.md',
+      _ExportKind.goalsCsv => 'duoyi_goals_$dateTag.csv',
+      _ExportKind.goalsMd => 'duoyi_goals_$dateTag.md',
+      null => 'duoyi_export_$dateTag.txt',
+    };
+  }
+
+  Future<void> _downloadExportedText(_ExportKind? kind, String text) async {
+    if (_busy) return;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final seq = ++_actionSeq;
+    setState(() => _busy = true);
+    final fileName = _exportFileName(kind);
+    try {
+      final result = await WebFileDownload.saveText(
+        content: text,
+        fileName: fileName,
+        shareSubject: _activeExportedTitle(),
+        canProceed: () =>
+            mounted &&
+            _isCurrentAction(seq, accountGeneration) &&
+            _exported == text,
+      );
+      if (!mounted ||
+          !_isCurrentAction(seq, accountGeneration) ||
+          !result.saved) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, locale, _) => Text(
+              locale == AppLocale.en
+                  ? 'Exported file: $fileName'
+                  : '已导出文件：$fileName',
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted ||
+          e is AccountPreferenceWriteCanceled ||
+          !_isCurrentAction(seq, accountGeneration)) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.formatExportError(e))),
+      );
+    } finally {
+      if (mounted && _isCurrentAction(seq, accountGeneration)) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _downloadExported() async {
+    final text = _exported;
+    if (text == null) return;
+    await _downloadExportedText(_currentExportKind, text);
+  }
+
+  Future<void> _exportAndDownloadAllJson() async {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final seq = ++_actionSeq;
+    setState(() => _busy = true);
+    try {
+      final text = await BackupService.exportAll();
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
+      setState(() {
+        _exported = text;
+        _currentExportKind = _ExportKind.fullJson;
+        _exportedTitle = DataSettingsUiCopy.fullBackupJsonTitle;
+      });
+      final fileName = _exportFileName(_ExportKind.fullJson);
+      final result = await WebFileDownload.saveText(
+        content: text,
+        fileName: fileName,
+        mimeType: 'application/json;charset=utf-8',
+        shareSubject: DataSettingsUiCopy.fullBackupJsonTitle,
+        canProceed: () =>
+            mounted && _isCurrentAction(seq, accountGeneration),
+      );
+      if (!mounted ||
+          !_isCurrentAction(seq, accountGeneration) ||
+          !result.saved) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, locale, _) => Text(
+              locale == AppLocale.en
+                  ? 'Exported JSON backup: $fileName'
+                  : '已导出 JSON 备份：$fileName',
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted ||
+          e is AccountPreferenceWriteCanceled ||
+          !_isCurrentAction(seq, accountGeneration)) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DataSettingsUiCopy.formatExportError(e))),
+      );
+    } finally {
+      if (mounted && _isCurrentAction(seq, accountGeneration)) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
   Future<void> _copy() async {
-    if (_exported == null) return;
-    await Clipboard.setData(ClipboardData(text: _exported!));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(DataSettingsUiCopy.copiedToClipboard)),
-    );
+    if (_busy) return;
+    final text = _exported;
+    if (text == null) return;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final actionSeq = _actionSeq;
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (!mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          ) ||
+          actionSeq != _actionSeq ||
+          _exported != text) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, locale, _) =>
+                Text(DataSettingsUiCopy.copiedToClipboard),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (e is AccountPreferenceWriteCanceled ||
+          !mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          ) ||
+          actionSeq != _actionSeq ||
+          _exported != text) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, locale, _) => Text(_formatCopyError(e)),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _import({bool merge = false}) async {
+    final todoProvider = context.read<TodoProvider>();
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final seq = ++_actionSeq;
     final ctrl = TextEditingController();
     final raw = await showControllerDialog<String>(
       context: context,
@@ -262,30 +901,44 @@ class _BackupScreenState extends State<BackupScreen> {
         ),
       ),
     );
+    if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
     if (raw == null || raw.trim().isEmpty) return;
 
+    _currentRollbackToken = null;
+    _competitorRollbackGeneration = null;
     setState(() => _busy = true);
     try {
-      final count = await BackupService.importAll(
-        raw,
-        merge: merge,
-        // 覆盖=还原到备份快照：备份中不存在的本机数据一并删除，弹窗已警告。
-        // 服务层 `clearMissing && !merge` 守卫保证 merge 合并入口不受影响。
-        clearMissing: true,
+      final count = await todoProvider.runExternalStorageUpdate(
+        () async => await BackupService.importAll(
+          raw,
+          merge: merge,
+          // 覆盖=还原到备份快照：备份中不存在的本机数据一并删除，弹窗已警告。
+          // 服务层 `clearMissing && !merge` 守卫保证 merge 合并入口不受影响。
+          clearMissing: true,
+        ),
+        expectedAccountDataGeneration: accountGeneration,
       );
-      if (!mounted) return;
-      await _reloadAll();
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
+      _currentRollbackToken = null;
+      _competitorRollbackGeneration = null;
+      await _reloadAll(accountGeneration: accountGeneration, seq: seq);
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(DataSettingsUiCopy.importSuccess(merge, count))),
       );
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (!mounted ||
+          e is AccountPreferenceWriteCanceled ||
+          !_isCurrentAction(seq, accountGeneration)) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(DataSettingsUiCopy.formatImportError(e))),
       );
+    } finally {
+      if (mounted && _isCurrentAction(seq, accountGeneration)) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -303,6 +956,10 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   Future<void> _importBackupFile({required bool merge}) async {
+    _dismissActiveBanner();
+    final todoProvider = context.read<TodoProvider>();
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final seq = ++_actionSeq;
     // 覆盖=真删数据：文件覆盖与粘贴覆盖导入 / WebDAV 覆盖恢复一致，
     // 必须先弹窗写明删除后果，防止误触一次即静默删除本机数据。
     if (!merge) {
@@ -340,59 +997,122 @@ class _BackupScreenState extends State<BackupScreen> {
           ),
         ),
       );
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
       if (ok != true) return;
-      if (!mounted) return;
     }
+    _currentRollbackToken = null;
+    _competitorRollbackGeneration = null;
     setState(() => _busy = true);
     try {
       final raw = await _pickImportTextFile();
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
       if (raw == null || raw.trim().isEmpty) {
-        if (!mounted) return;
-        setState(() => _busy = false);
         return;
       }
-      final count = await BackupService.importAll(
-        raw,
-        merge: merge,
-        // 覆盖=还原到备份快照：备份中不存在的本机数据一并删除，弹窗已警告。
-        // 服务层 `clearMissing && !merge` 守卫保证 merge 合并入口不受影响。
-        clearMissing: true,
+      final count = await todoProvider.runExternalStorageUpdate(
+        () async => await BackupService.importAll(
+          raw,
+          merge: merge,
+          // 覆盖=还原到备份快照：备份中不存在的本机数据一并删除，弹窗已警告。
+          // 服务层 `clearMissing && !merge` 守卫保证 merge 合并入口不受影响。
+          clearMissing: true,
+        ),
+        expectedAccountDataGeneration: accountGeneration,
       );
-      if (!mounted) return;
-      await _reloadAll();
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
+      _currentRollbackToken = null;
+      _competitorRollbackGeneration = null;
+      await _reloadAll(accountGeneration: accountGeneration, seq: seq);
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(DataSettingsUiCopy.importFileSuccess(merge, count)),
         ),
       );
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (!mounted ||
+          e is AccountPreferenceWriteCanceled ||
+          !_isCurrentAction(seq, accountGeneration)) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(DataSettingsUiCopy.formatFileImportError(e))),
       );
+    } finally {
+      if (mounted && _isCurrentAction(seq, accountGeneration)) {
+        setState(() => _busy = false);
+      }
     }
   }
 
   Future<void> _importTasksFromOtherApps() async {
-    final draft = await _askCompetitorImportText(tasksOnly: true);
-    if (draft == null) return;
-    await _previewAndImportCompetitorData(draft, tasksOnly: true);
+    _dismissActiveBanner();
+    final seq = ++_actionSeq;
+    final origin = _captureCompetitorImportOrigin(seq, tasksOnly: true);
+    if (origin == null || !origin.isCurrent()) {
+      origin?.dispose();
+      return;
+    }
+    try {
+      final draft = await _askCompetitorImportText(
+        tasksOnly: true,
+        origin: origin,
+      );
+      if (!mounted || !origin.isCurrent()) return;
+      if (draft == null) return;
+      await _previewAndImportCompetitorData(
+        draft,
+        tasksOnly: true,
+        origin: origin,
+      );
+    } finally {
+      if (!origin.isTransferred) {
+        origin.dispose();
+      }
+    }
   }
 
   Future<void> _importProductivityDataFromOtherApps() async {
-    final draft = await _askCompetitorImportText(tasksOnly: false);
-    if (draft == null) return;
-    await _previewAndImportCompetitorData(draft, tasksOnly: false);
+    _dismissActiveBanner();
+    final seq = ++_actionSeq;
+    final origin = _captureCompetitorImportOrigin(seq, tasksOnly: false);
+    if (origin == null || !origin.isCurrent()) {
+      origin?.dispose();
+      return;
+    }
+    try {
+      final draft = await _askCompetitorImportText(
+        tasksOnly: false,
+        origin: origin,
+      );
+      if (!mounted || !origin.isCurrent()) return;
+      if (draft == null) return;
+      await _previewAndImportCompetitorData(
+        draft,
+        tasksOnly: false,
+        origin: origin,
+      );
+    } finally {
+      if (!origin.isTransferred) {
+        origin.dispose();
+      }
+    }
   }
 
   Future<void> _importProductivityDataFile() async {
+    _dismissActiveBanner();
+    final seq = ++_actionSeq;
+    final origin = _captureCompetitorImportOrigin(seq, tasksOnly: false);
+    if (origin == null || !origin.isCurrent()) {
+      origin?.dispose();
+      return;
+    }
     try {
       final raw = await _pickImportTextFile();
+      if (!mounted || !origin.isCurrent()) return;
       if (raw == null || raw.trim().isEmpty) return;
-      final config = await _selectCompetitorImportSource();
+      final config = await _selectCompetitorImportSource(origin: origin);
+      if (!mounted || !origin.isCurrent()) return;
       if (config == null) return;
       await _previewAndImportCompetitorData(
         _CompetitorImportDraft(
@@ -401,18 +1121,31 @@ class _BackupScreenState extends State<BackupScreen> {
           fieldMapping: config.fieldMapping,
         ),
         tasksOnly: false,
+        origin: origin,
       );
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(DataSettingsUiCopy.formatFileMigrationError(e))),
-      );
+      if (!mounted ||
+          e is AccountPreferenceWriteCanceled ||
+          !origin.isCurrent()) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(DataSettingsUiCopy.formatFileMigrationError(e)),
+          ),
+        );
+    } finally {
+      if (!origin.isTransferred) {
+        origin.dispose();
+      }
     }
   }
 
   Future<_CompetitorImportDraft?> _askCompetitorImportText({
     required bool tasksOnly,
+    _CompetitorImportOrigin? origin,
   }) async {
     final ctrl = TextEditingController();
     var source = _CompetitorImportSource.zhijianTime;
@@ -420,6 +1153,7 @@ class _BackupScreenState extends State<BackupScreen> {
     final draft = await showControllerDialog<_CompetitorImportDraft>(
       context: context,
       controllers: [ctrl],
+      onRouteCreated: origin?.registerOwnedRoute,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => ValueListenableBuilder<AppLocale>(
           valueListenable: I18n.localeListenable,
@@ -436,6 +1170,30 @@ class _BackupScreenState extends State<BackupScreen> {
                   children: [
                     AppDropdownField<_CompetitorImportSource>(
                       initialValue: source,
+                      wrapSelectedText: true,
+                      onMenuRouteCreated: origin?.registerOwnedRoute,
+                      menuOwnerToken: origin?.menuOwnerToken,
+                      isSelectionAllowed: () {
+                        if (!ctx.mounted) return false;
+                        final dialogRoute = ModalRoute.of(ctx);
+                        if (dialogRoute == null || !dialogRoute.isActive) {
+                          return false;
+                        }
+                        return origin == null ||
+                            origin.isCurrent(
+                              currentModalRoute: dialogRoute,
+                              checkParentActiveOnly: true,
+                            );
+                      },
+                      isInteractionAllowed: () {
+                        if (!ctx.mounted) return false;
+                        final dialogRoute = ModalRoute.of(ctx);
+                        if (dialogRoute == null || !dialogRoute.isCurrent) {
+                          return false;
+                        }
+                        return origin == null ||
+                            origin.isCurrent(currentModalRoute: dialogRoute);
+                      },
                       decoration: InputDecoration(
                         labelText: DataSettingsUiCopy.sourceLabel,
                         prefixIcon: const Icon(Icons.source_outlined),
@@ -450,6 +1208,15 @@ class _BackupScreenState extends State<BackupScreen> {
                           .toList(),
                       onChanged: (value) {
                         if (value == null) return;
+                        if (!ctx.mounted) return;
+                        final dialogRoute = ModalRoute.of(ctx);
+                        if (dialogRoute == null || !dialogRoute.isCurrent) {
+                          return;
+                        }
+                        if (origin != null &&
+                            !origin.isCurrent(currentModalRoute: dialogRoute)) {
+                          return;
+                        }
                         setDialogState(() => source = value);
                       },
                     ),
@@ -465,10 +1232,34 @@ class _BackupScreenState extends State<BackupScreen> {
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: () async {
+                        if (!ctx.mounted) return;
+                        final dialogRoute = ModalRoute.of(ctx);
+                        if (dialogRoute == null || !dialogRoute.isCurrent) {
+                          return;
+                        }
+                        if (origin != null &&
+                            !origin.isCurrent(currentModalRoute: dialogRoute)) {
+                          return;
+                        }
                         final updated = await _editCompetitorFieldMapping(
                           fieldMapping,
+                          origin: origin,
+                          parentRoute: dialogRoute,
                         );
                         if (updated == null) return;
+                        if (!ctx.mounted) return;
+                        final recheckRoute = ModalRoute.of(ctx);
+                        if (recheckRoute == null ||
+                            !recheckRoute.isActive ||
+                            !recheckRoute.isCurrent) {
+                          return;
+                        }
+                        if (origin != null &&
+                            !origin.isCurrent(
+                              currentModalRoute: recheckRoute,
+                            )) {
+                          return;
+                        }
                         setDialogState(() => fieldMapping = updated);
                       },
                       icon: const Icon(Icons.schema_outlined),
@@ -499,11 +1290,27 @@ class _BackupScreenState extends State<BackupScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(ctx),
+                onPressed: () {
+                  if (!ctx.mounted) return;
+                  final dialogRoute = ModalRoute.of(ctx);
+                  if (dialogRoute == null || !dialogRoute.isCurrent) {
+                    return;
+                  }
+                  Navigator.pop(ctx);
+                },
                 child: Text(I18n.tr('action.cancel')),
               ),
               FilledButton(
                 onPressed: () {
+                  if (!ctx.mounted) return;
+                  final dialogRoute = ModalRoute.of(ctx);
+                  if (dialogRoute == null || !dialogRoute.isCurrent) {
+                    return;
+                  }
+                  if (origin != null &&
+                      !origin.isCurrent(currentModalRoute: dialogRoute)) {
+                    return;
+                  }
                   final raw = ctrl.text.trim();
                   if (raw.isEmpty) return;
                   Navigator.pop(
@@ -527,11 +1334,14 @@ class _BackupScreenState extends State<BackupScreen> {
     return draft;
   }
 
-  Future<_CompetitorImportConfig?> _selectCompetitorImportSource() {
+  Future<_CompetitorImportConfig?> _selectCompetitorImportSource({
+    required _CompetitorImportOrigin origin,
+  }) async {
     var source = _CompetitorImportSource.zhijianTime;
     var fieldMapping = const CompetitorFieldMapping();
-    return showDialog<_CompetitorImportConfig>(
+    final chooserRoute = createControllerDialogRoute<_CompetitorImportConfig>(
       context: context,
+      onRouteCreated: origin.registerOwnedRoute,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => ValueListenableBuilder<AppLocale>(
           valueListenable: I18n.localeListenable,
@@ -543,6 +1353,28 @@ class _BackupScreenState extends State<BackupScreen> {
                 children: [
                   AppDropdownField<_CompetitorImportSource>(
                     initialValue: source,
+                    wrapSelectedText: true,
+                    onMenuRouteCreated: origin.registerOwnedRoute,
+                    menuOwnerToken: origin.menuOwnerToken,
+                    isSelectionAllowed: () {
+                      if (!ctx.mounted) return false;
+                      final dialogRoute = ModalRoute.of(ctx);
+                      if (dialogRoute == null || !dialogRoute.isActive) {
+                        return false;
+                      }
+                      return origin.isCurrent(
+                        currentModalRoute: dialogRoute,
+                        checkParentActiveOnly: true,
+                      );
+                    },
+                    isInteractionAllowed: () {
+                      if (!ctx.mounted) return false;
+                      final dialogRoute = ModalRoute.of(ctx);
+                      if (dialogRoute == null || !dialogRoute.isCurrent) {
+                        return false;
+                      }
+                      return origin.isCurrent(currentModalRoute: dialogRoute);
+                    },
                     decoration: InputDecoration(
                       labelText: DataSettingsUiCopy.sourceLabel,
                       prefixIcon: const Icon(Icons.source_outlined),
@@ -557,6 +1389,14 @@ class _BackupScreenState extends State<BackupScreen> {
                         .toList(),
                     onChanged: (value) {
                       if (value == null) return;
+                      if (!ctx.mounted) return;
+                      final dialogRoute = ModalRoute.of(ctx);
+                      if (dialogRoute == null || !dialogRoute.isCurrent) {
+                        return;
+                      }
+                      if (!origin.isCurrent(currentModalRoute: dialogRoute)) {
+                        return;
+                      }
                       setDialogState(() => source = value);
                     },
                   ),
@@ -572,10 +1412,30 @@ class _BackupScreenState extends State<BackupScreen> {
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: () async {
+                      if (!ctx.mounted) return;
+                      final dialogRoute = ModalRoute.of(ctx);
+                      if (dialogRoute == null || !dialogRoute.isCurrent) {
+                        return;
+                      }
+                      if (!origin.isCurrent(currentModalRoute: dialogRoute)) {
+                        return;
+                      }
                       final updated = await _editCompetitorFieldMapping(
                         fieldMapping,
+                        origin: origin,
+                        parentRoute: dialogRoute,
                       );
                       if (updated == null) return;
+                      if (!ctx.mounted) return;
+                      final recheckRoute = ModalRoute.of(ctx);
+                      if (recheckRoute == null ||
+                          !recheckRoute.isActive ||
+                          !recheckRoute.isCurrent) {
+                        return;
+                      }
+                      if (!origin.isCurrent(currentModalRoute: recheckRoute)) {
+                        return;
+                      }
                       setDialogState(() => fieldMapping = updated);
                     },
                     icon: const Icon(Icons.schema_outlined),
@@ -595,17 +1455,34 @@ class _BackupScreenState extends State<BackupScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(ctx),
+                onPressed: () {
+                  if (!ctx.mounted) return;
+                  final dialogRoute = ModalRoute.of(ctx);
+                  if (dialogRoute == null || !dialogRoute.isCurrent) {
+                    return;
+                  }
+                  Navigator.pop(ctx);
+                },
                 child: Text(I18n.tr('action.cancel')),
               ),
               FilledButton(
-                onPressed: () => Navigator.pop(
-                  ctx,
-                  _CompetitorImportConfig(
-                    source: source,
-                    fieldMapping: fieldMapping,
-                  ),
-                ),
+                onPressed: () {
+                  if (!ctx.mounted) return;
+                  final dialogRoute = ModalRoute.of(ctx);
+                  if (dialogRoute == null || !dialogRoute.isCurrent) {
+                    return;
+                  }
+                  if (!origin.isCurrent(currentModalRoute: dialogRoute)) {
+                    return;
+                  }
+                  Navigator.pop(
+                    ctx,
+                    _CompetitorImportConfig(
+                      source: source,
+                      fieldMapping: fieldMapping,
+                    ),
+                  );
+                },
                 child: Text(
                   DataSettingsUiCopy.importCompetitorFileSourceAction,
                 ),
@@ -615,32 +1492,56 @@ class _BackupScreenState extends State<BackupScreen> {
         ),
       ),
     );
+    final result = await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push<_CompetitorImportConfig>(chooserRoute);
+    await chooserRoute.completed;
+    return result;
   }
 
   Future<void> _previewAndImportCompetitorData(
     _CompetitorImportDraft draft, {
     required bool tasksOnly,
+    _CompetitorImportOrigin? origin,
+    int? seq,
   }) async {
+    final effectiveOrigin =
+        origin ??
+        _captureCompetitorImportOrigin(
+          seq ?? ++_actionSeq,
+          tasksOnly: tasksOnly,
+        );
+    if (effectiveOrigin == null || !effectiveOrigin.isCurrent()) {
+      if (origin == null) {
+        effectiveOrigin?.dispose();
+      }
+      return;
+    }
+    final currentGeneration = effectiveOrigin.accountGeneration;
+    final currentSeq = effectiveOrigin.seq;
     final parsed = const CompetitorTaskImporter().parse(
       draft.raw,
       fieldMapping: draft.fieldMapping,
     );
     final recognized = tasksOnly ? parsed.todos.length : parsed.totalImported;
     if (recognized == 0) {
-      if (!mounted) return;
+      if (!mounted || !effectiveOrigin.isCurrent()) return;
       final separator = DataSettingsUiCopy.isEn ? '; ' : '；';
       final warning = parsed.warnings.isEmpty
           ? ''
           : (DataSettingsUiCopy.isEn
                 ? ': ${parsed.warnings.take(2).join(separator)}'
                 : '：${parsed.warnings.take(2).join(separator)}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            DataSettingsUiCopy.noDataRecognized(tasksOnly, warning),
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              DataSettingsUiCopy.noDataRecognized(tasksOnly, warning),
+            ),
           ),
-        ),
-      );
+        );
       return;
     }
 
@@ -648,41 +1549,86 @@ class _BackupScreenState extends State<BackupScreen> {
       draft: draft,
       parsed: parsed,
       tasksOnly: tasksOnly,
+      origin: effectiveOrigin,
     );
-    if (confirmed != true || !mounted) return;
+    if (!mounted || !effectiveOrigin.isCurrent()) return;
+    if (confirmed != true) return;
 
-    final todoProvider = context.read<TodoProvider>();
-    final habitProvider = context.read<HabitProvider>();
-    final noteProvider = context.read<NoteProvider>();
-    final calendarProvider = context.read<CalendarProvider>();
-    final anniversaryProvider = context.read<AnniversaryProvider>();
-    final countdownProvider = context.read<CountdownProvider>();
-    final timeAuditProvider = context.read<TimeAuditProvider>();
-    setState(() => _busy = true);
+    if (effectiveOrigin.anniversaryOrigin?.isCurrent(checkRoute: false) ==
+            false ||
+        effectiveOrigin.countdownOrigin?.isCurrent(checkRoute: false) ==
+            false) {
+      return;
+    }
+    final anniversaryOperation =
+        tasksOnly || effectiveOrigin.anniversaryOrigin == null
+        ? null
+        : DateItemOperation(effectiveOrigin.anniversaryOrigin!);
+    final countdownOperation =
+        tasksOnly || effectiveOrigin.countdownOrigin == null
+        ? null
+        : DateItemOperation(effectiveOrigin.countdownOrigin!);
+    bool canWriteDates() =>
+        effectiveOrigin.isCurrent() &&
+        _isCurrentAction(currentSeq, currentGeneration) &&
+        (anniversaryOperation?.isCurrent() ?? true) &&
+        (countdownOperation?.isCurrent() ?? true);
+    var dateApplyReleased = false;
+    var actionBusyOccupied = false;
+    _dismissActiveBanner();
+    _currentRollbackToken = null;
+    _competitorRollbackGeneration = null;
+    setState(() {
+      _busy = true;
+      actionBusyOccupied = true;
+    });
     try {
+      if (!mounted || !canWriteDates()) return;
       final rollbackSnapshot = await BackupService.exportAll();
-      if (!mounted) return;
-      final todoSummary = await todoProvider.importTodos(parsed.todos);
+      if (!mounted || !canWriteDates()) return;
+      final todoSummary = await effectiveOrigin.todoProvider.importTodos(
+        parsed.todos,
+      );
+      if (!mounted || !canWriteDates()) return;
       final habitSummary = tasksOnly
           ? const HabitImportSummary(inserted: 0, skippedDuplicates: 0)
-          : await habitProvider.importHabits(parsed.habits);
+          : await effectiveOrigin.habitProvider.importHabits(parsed.habits);
+      if (!mounted || !canWriteDates()) return;
       final noteSummary = tasksOnly
           ? const NoteImportSummary(inserted: 0, skippedDuplicates: 0)
-          : await noteProvider.importNotes(parsed.notes);
+          : await effectiveOrigin.noteProvider.importNotes(parsed.notes);
+      if (!mounted || !canWriteDates()) return;
       final eventSummary = tasksOnly
           ? const CalendarEventImportSummary(inserted: 0, skippedDuplicates: 0)
-          : await calendarProvider.importLocalEvents(parsed.calendarEvents);
+          : await effectiveOrigin.calendarProvider.importLocalEvents(
+              parsed.calendarEvents,
+            );
+      if (!mounted || !canWriteDates()) return;
       final anniversarySummary = tasksOnly
           ? const AnniversaryImportSummary(inserted: 0, skippedDuplicates: 0)
-          : await anniversaryProvider.importAnniversaries(parsed.anniversaries);
+          : await effectiveOrigin.anniversaryProvider.importAnniversaries(
+              parsed.anniversaries,
+              canWrite: canWriteDates,
+            );
+      if (!mounted || !canWriteDates()) return;
       final countdownSummary = tasksOnly
           ? const CountdownImportSummary(inserted: 0, skippedDuplicates: 0)
-          : await countdownProvider.importCountdowns(parsed.countdowns);
+          : await effectiveOrigin.countdownProvider.importCountdowns(
+              parsed.countdowns,
+              canWrite: canWriteDates,
+            );
+      if (!mounted || !canWriteDates()) return;
       final timeEntrySummary = tasksOnly
           ? const TimeEntryImportSummary(inserted: 0, skippedDuplicates: 0)
-          : await timeAuditProvider.importTimeEntries(parsed.timeEntries);
-      if (!mounted) return;
+          : await effectiveOrigin.timeAuditProvider.importTimeEntries(
+              parsed.timeEntries,
+            );
+      if (!mounted || !canWriteDates()) return;
+      final rollbackToken = ++_rollbackTokenSeq;
+      _currentRollbackToken = rollbackToken;
+      _competitorRollbackGeneration = currentGeneration;
       setState(() => _busy = false);
+      actionBusyOccupied = false;
       final summary = _CompetitorImportApplySummary(
         todoInserted: todoSummary.inserted,
         habitInserted: habitSummary.inserted,
@@ -715,21 +1661,43 @@ class _BackupScreenState extends State<BackupScreen> {
             '${DataSettingsUiCopy.moduleCountdown}: $issue',
         ],
       );
+      if (!canWriteDates()) return;
+      dateApplyReleased = true;
+      anniversaryOperation?.dispose();
+      countdownOperation?.dispose();
       final undo = await _showCompetitorImportResult(
         draft: draft,
         parsed: parsed,
         summary: summary,
         tasksOnly: tasksOnly,
         rollbackSnapshot: rollbackSnapshot,
+        origin: effectiveOrigin,
       );
-      if (!mounted) return;
+      if (!mounted || !effectiveOrigin.isCurrent()) return;
       if (undo == true) {
-        await _rollbackCompetitorImport(rollbackSnapshot);
+        ScaffoldMessenger.of(context).clearSnackBars();
+        await _rollbackCompetitorImport(
+          rollbackSnapshot,
+          token: rollbackToken,
+          accountGeneration: currentGeneration,
+          origin: effectiveOrigin,
+        );
       } else {
+        _dismissActiveBanner();
+        effectiveOrigin.markTransferred();
+        final banner = _CompetitorRollbackBanner(
+          token: rollbackToken,
+          accountGeneration: currentGeneration,
+          origin: effectiveOrigin,
+        );
+        _activeBanner = banner;
         final reminderIssueSuffix = summary.hasReminderSyncIssues
             ? DataSettingsUiCopy.partialRemindersSuffix
             : '';
-        ScaffoldMessenger.of(context).showSnackBar(
+        final importGeneration = currentGeneration;
+        final boundToken = rollbackToken;
+        ScaffoldMessenger.of(context).clearSnackBars();
+        final controller = ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               DataSettingsUiCopy.importSuccessBanner(
@@ -739,15 +1707,59 @@ class _BackupScreenState extends State<BackupScreen> {
                 reminderIssueSuffix,
               ),
             ),
+            action: SnackBarAction(
+              label: DataSettingsUiCopy.undoImport,
+              onPressed: () {
+                if (!mounted || !effectiveOrigin.isCurrent()) return;
+                _rollbackCompetitorImport(
+                  rollbackSnapshot,
+                  token: boundToken,
+                  accountGeneration: importGeneration,
+                  origin: effectiveOrigin,
+                  banner: banner,
+                );
+              },
+            ),
           ),
         );
+        controller.closed.then((_) {
+          if (identical(_activeBanner, banner)) {
+            _activeBanner = null;
+            if (_currentRollbackToken == boundToken) {
+              _currentRollbackToken = null;
+              _competitorRollbackGeneration = null;
+            }
+          }
+          if (!banner.isConsumed) {
+            banner.origin.dispose();
+          }
+        });
       }
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(DataSettingsUiCopy.formatDataMigrationError(e))),
-      );
+      if (!mounted ||
+          (!dateApplyReleased && !canWriteDates()) ||
+          e is AccountPreferenceWriteCanceled ||
+          !effectiveOrigin.isCurrent()) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(DataSettingsUiCopy.formatDataMigrationError(e)),
+          ),
+        );
+    } finally {
+      anniversaryOperation?.dispose();
+      countdownOperation?.dispose();
+      if (origin == null && !effectiveOrigin.isTransferred) {
+        effectiveOrigin.dispose();
+      }
+      if (actionBusyOccupied &&
+          mounted &&
+          _isCurrentAction(currentSeq, currentGeneration)) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -755,167 +1767,197 @@ class _BackupScreenState extends State<BackupScreen> {
     required _CompetitorImportDraft draft,
     required CompetitorTaskImportResult parsed,
     required bool tasksOnly,
+    required _CompetitorImportOrigin origin,
   }) async {
     var confirmed = false;
     final otherModuleCount = parsed.totalImported - parsed.todos.length;
-    return await showDialog<bool>(
-          context: context,
-          builder: (ctx) => StatefulBuilder(
-            builder: (ctx, setDialogState) => ValueListenableBuilder<AppLocale>(
-              valueListenable: I18n.localeListenable,
-              builder: (ctx, locale, _) {
-                final samples = _competitorPreviewSamples(
-                  parsed,
-                  tasksOnly: tasksOnly,
-                );
-                return AppDialog(
-                  title: Text(DataSettingsUiCopy.importPreviewTitle),
-                  maxWidth: 600,
-                  content: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+    final previewRoute = createControllerDialogRoute<bool>(
+      context: context,
+      onRouteCreated: origin.registerOwnedRoute,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => ValueListenableBuilder<AppLocale>(
+          valueListenable: I18n.localeListenable,
+          builder: (ctx, locale, _) {
+            final samples = _competitorPreviewSamples(
+              parsed,
+              tasksOnly: tasksOnly,
+            );
+            return AppDialog(
+              title: Text(DataSettingsUiCopy.importPreviewTitle),
+              maxWidth: 600,
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      DataSettingsUiCopy.importPreviewSource(
+                        _competitorSourceLabel(draft.source),
+                        parsed.sourceLabel,
+                      ),
+                    ),
+                    if (!draft.fieldMapping.isEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        DataSettingsUiCopy.importPreviewMapping(
+                          _fieldMappingSummary(draft.fieldMapping),
+                        ),
+                        style: Theme.of(ctx).textTheme.bodySmall,
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        Text(
-                          DataSettingsUiCopy.importPreviewSource(
-                            _competitorSourceLabel(draft.source),
-                            parsed.sourceLabel,
-                          ),
+                        _importPreviewChip(
+                          DataSettingsUiCopy.moduleTodo,
+                          parsed.todos.length,
                         ),
-                        if (!draft.fieldMapping.isEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            DataSettingsUiCopy.importPreviewMapping(
-                              _fieldMappingSummary(draft.fieldMapping),
-                            ),
-                            style: Theme.of(ctx).textTheme.bodySmall,
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _importPreviewChip(
-                              DataSettingsUiCopy.moduleTodo,
-                              parsed.todos.length,
-                            ),
-                            _importPreviewChip(
-                              DataSettingsUiCopy.moduleHabit,
-                              parsed.habits.length,
-                            ),
-                            _importPreviewChip(
-                              DataSettingsUiCopy.moduleNote,
-                              parsed.notes.length,
-                            ),
-                            _importPreviewChip(
-                              DataSettingsUiCopy.moduleEvent,
-                              parsed.calendarEvents.length,
-                            ),
-                            _importPreviewChip(
-                              DataSettingsUiCopy.moduleAnniversary,
-                              parsed.anniversaries.length,
-                            ),
-                            _importPreviewChip(
-                              DataSettingsUiCopy.moduleCountdown,
-                              parsed.countdowns.length,
-                            ),
-                            _importPreviewChip(
-                              DataSettingsUiCopy.moduleTimeEntry,
-                              parsed.timeEntries.length,
-                            ),
-                            if (parsed.skippedRows > 0)
-                              _importPreviewChip(
-                                DataSettingsUiCopy.moduleSkippedRows,
-                                parsed.skippedRows,
-                              ),
-                          ],
+                        _importPreviewChip(
+                          DataSettingsUiCopy.moduleHabit,
+                          parsed.habits.length,
                         ),
-                        if (tasksOnly && otherModuleCount > 0) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            DataSettingsUiCopy.tasksOnlyNotice(
-                              otherModuleCount,
-                            ),
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        Text(
-                          DataSettingsUiCopy.duplicatePolicyNotice,
-                          style: Theme.of(ctx).textTheme.bodySmall,
+                        _importPreviewChip(
+                          DataSettingsUiCopy.moduleNote,
+                          parsed.notes.length,
                         ),
-                        if (samples.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            DataSettingsUiCopy.sampleHeader,
-                            style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.normal,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          ...samples
-                              .take(6)
-                              .map(
-                                (line) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: Text('· $line'),
-                                ),
-                              ),
-                        ],
-                        if (parsed.warnings.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            DataSettingsUiCopy.warningHeader,
-                            style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.normal,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          ...parsed.warnings
-                              .take(4)
-                              .map(
-                                (line) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: Text('· $line'),
-                                ),
-                              ),
-                        ],
-                        const SizedBox(height: 8),
-                        CheckboxListTile(
-                          value: confirmed,
-                          contentPadding: EdgeInsets.zero,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          title: Text(
-                            DataSettingsUiCopy.confirmImportPolicyCheckbox,
-                          ),
-                          onChanged: (value) {
-                            setDialogState(() => confirmed = value == true);
-                          },
+                        _importPreviewChip(
+                          DataSettingsUiCopy.moduleEvent,
+                          parsed.calendarEvents.length,
                         ),
+                        _importPreviewChip(
+                          DataSettingsUiCopy.moduleAnniversary,
+                          parsed.anniversaries.length,
+                        ),
+                        _importPreviewChip(
+                          DataSettingsUiCopy.moduleCountdown,
+                          parsed.countdowns.length,
+                        ),
+                        _importPreviewChip(
+                          DataSettingsUiCopy.moduleTimeEntry,
+                          parsed.timeEntries.length,
+                        ),
+                        if (parsed.skippedRows > 0)
+                          _importPreviewChip(
+                            DataSettingsUiCopy.moduleSkippedRows,
+                            parsed.skippedRows,
+                          ),
                       ],
                     ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: Text(I18n.tr('action.cancel')),
+                    if (tasksOnly && otherModuleCount > 0) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        DataSettingsUiCopy.tasksOnlyNotice(otherModuleCount),
+                        style: TextStyle(
+                          color: Theme.of(ctx).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Text(
+                      DataSettingsUiCopy.duplicatePolicyNotice,
+                      style: Theme.of(ctx).textTheme.bodySmall,
                     ),
-                    FilledButton(
-                      onPressed: confirmed
-                          ? () => Navigator.pop(ctx, true)
-                          : null,
-                      child: Text(DataSettingsUiCopy.confirmImport),
+                    if (samples.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        DataSettingsUiCopy.sampleHeader,
+                        style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.normal,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      ...samples
+                          .take(6)
+                          .map(
+                            (line) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text('· $line'),
+                            ),
+                          ),
+                    ],
+                    if (parsed.warnings.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        DataSettingsUiCopy.warningHeader,
+                        style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.normal,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      ...parsed.warnings
+                          .take(4)
+                          .map(
+                            (line) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text('· $line'),
+                            ),
+                          ),
+                    ],
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      value: confirmed,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(
+                        DataSettingsUiCopy.confirmImportPolicyCheckbox,
+                      ),
+                      onChanged: (value) {
+                        if (!ctx.mounted) return;
+                        final route = ModalRoute.of(ctx);
+                        if (route == null || !route.isCurrent) {
+                          return;
+                        }
+                        if (!origin.isCurrent(currentModalRoute: route)) {
+                          return;
+                        }
+                        setDialogState(() => confirmed = value == true);
+                      },
                     ),
                   ],
-                );
-              },
-            ),
-          ),
-        ) ??
-        false;
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    if (!ctx.mounted) return;
+                    final route = ModalRoute.of(ctx);
+                    if (route == null || !route.isCurrent) {
+                      return;
+                    }
+                    Navigator.pop(ctx, false);
+                  },
+                  child: Text(I18n.tr('action.cancel')),
+                ),
+                FilledButton(
+                  onPressed: confirmed
+                      ? () {
+                          if (!ctx.mounted) return;
+                          final route = ModalRoute.of(ctx);
+                          if (route == null || !route.isCurrent) {
+                            return;
+                          }
+                          if (!origin.isCurrent(currentModalRoute: route)) {
+                            return;
+                          }
+                          Navigator.pop(ctx, true);
+                        }
+                      : null,
+                  child: Text(DataSettingsUiCopy.confirmImport),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+    final confirmedResult = await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push<bool>(previewRoute);
+    await previewRoute.completed;
+    return confirmedResult ?? false;
   }
 
   Future<bool> _showCompetitorImportResult({
@@ -924,137 +1966,236 @@ class _BackupScreenState extends State<BackupScreen> {
     required _CompetitorImportApplySummary summary,
     required bool tasksOnly,
     required String rollbackSnapshot,
+    required _CompetitorImportOrigin origin,
   }) async {
     assert(rollbackSnapshot.isNotEmpty);
     final separator = DataSettingsUiCopy.isEn ? '; ' : '；';
-    return await showDialog<bool>(
-          context: context,
-          builder: (ctx) => ValueListenableBuilder<AppLocale>(
-            valueListenable: I18n.localeListenable,
-            builder: (ctx, locale, _) => AppDialog(
-              title: Text(DataSettingsUiCopy.importCompletedTitle),
-              maxWidth: 560,
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${_competitorSourceLabel(draft.source)} · ${parsed.sourceLabel}',
-                  ),
-                  const SizedBox(height: 12),
-                  _importResultLine(
-                    DataSettingsUiCopy.moduleTodo,
-                    summary.todoInserted,
-                  ),
-                  if (!tasksOnly) ...[
-                    _importResultLine(
-                      DataSettingsUiCopy.moduleHabit,
-                      summary.habitInserted,
-                    ),
-                    _importResultLine(
-                      DataSettingsUiCopy.moduleNote,
-                      summary.noteInserted,
-                    ),
-                    _importResultLine(
-                      DataSettingsUiCopy.moduleEvent,
-                      summary.eventInserted,
-                    ),
-                    _importResultLine(
-                      DataSettingsUiCopy.moduleAnniversary,
-                      summary.anniversaryInserted,
-                    ),
-                    _importResultLine(
-                      DataSettingsUiCopy.moduleCountdown,
-                      summary.countdownInserted,
-                    ),
-                    _importResultLine(
-                      DataSettingsUiCopy.moduleTimeEntry,
-                      summary.timeEntryInserted,
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Text(
-                    DataSettingsUiCopy.skippedSummary(
-                      summary.skippedRows,
-                      summary.skippedDuplicates,
-                    ),
-                  ),
-                  if (tasksOnly &&
-                      parsed.totalImported > parsed.todos.length) ...[
-                    const SizedBox(height: 8),
-                    Text(DataSettingsUiCopy.tasksOnlyResultNotice),
-                  ],
-                  if (parsed.warnings.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '${DataSettingsUiCopy.warningsPrefix}${parsed.warnings.take(2).join(separator)}',
-                    ),
-                  ],
-                  if (summary.hasReminderSyncIssues) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      DataSettingsUiCopy.reminderNotFullyRegistered(
-                        summary.reminderSyncIssues.take(2).join(separator),
-                      ),
-                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(ctx).colorScheme.error,
-                      ),
-                    ),
-                    if (summary.reminderSyncIssues.length > 2)
-                      Text(
-                        DataSettingsUiCopy.reminderMoreNeedResaving(
-                          summary.reminderSyncIssues.length - 2,
-                        ),
-                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(ctx).colorScheme.error,
-                        ),
-                      ),
-                  ],
-                  const SizedBox(height: 8),
-                  Text(
-                    DataSettingsUiCopy.rollbackHint,
-                    style: Theme.of(ctx).textTheme.bodySmall,
-                  ),
-                ],
+    final resultRoute = createControllerDialogRoute<bool>(
+      context: context,
+      onRouteCreated: origin.registerOwnedRoute,
+      builder: (ctx) => ValueListenableBuilder<AppLocale>(
+        valueListenable: I18n.localeListenable,
+        builder: (ctx, locale, _) => AppDialog(
+          title: Text(DataSettingsUiCopy.importCompletedTitle),
+          maxWidth: 560,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${_competitorSourceLabel(draft.source)} · ${parsed.sourceLabel}',
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: Text(DataSettingsUiCopy.undoImport),
+              const SizedBox(height: 12),
+              _importResultLine(
+                DataSettingsUiCopy.moduleTodo,
+                summary.todoInserted,
+              ),
+              if (!tasksOnly) ...[
+                _importResultLine(
+                  DataSettingsUiCopy.moduleHabit,
+                  summary.habitInserted,
                 ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: Text(DataSettingsUiCopy.gotIt),
+                _importResultLine(
+                  DataSettingsUiCopy.moduleNote,
+                  summary.noteInserted,
+                ),
+                _importResultLine(
+                  DataSettingsUiCopy.moduleEvent,
+                  summary.eventInserted,
+                ),
+                _importResultLine(
+                  DataSettingsUiCopy.moduleAnniversary,
+                  summary.anniversaryInserted,
+                ),
+                _importResultLine(
+                  DataSettingsUiCopy.moduleCountdown,
+                  summary.countdownInserted,
+                ),
+                _importResultLine(
+                  DataSettingsUiCopy.moduleTimeEntry,
+                  summary.timeEntryInserted,
                 ),
               ],
-            ),
+              const SizedBox(height: 8),
+              Text(
+                DataSettingsUiCopy.skippedSummary(
+                  summary.skippedRows,
+                  summary.skippedDuplicates,
+                ),
+              ),
+              if (tasksOnly && parsed.totalImported > parsed.todos.length) ...[
+                const SizedBox(height: 8),
+                Text(DataSettingsUiCopy.tasksOnlyResultNotice),
+              ],
+              if (parsed.warnings.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${DataSettingsUiCopy.warningsPrefix}${parsed.warnings.take(2).join(separator)}',
+                ),
+              ],
+              if (summary.hasReminderSyncIssues) ...[
+                const SizedBox(height: 8),
+                Text(
+                  DataSettingsUiCopy.reminderNotFullyRegistered(
+                    summary.reminderSyncIssues.take(2).join(separator),
+                  ),
+                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(ctx).colorScheme.error,
+                  ),
+                ),
+                if (summary.reminderSyncIssues.length > 2)
+                  Text(
+                    DataSettingsUiCopy.reminderMoreNeedResaving(
+                      summary.reminderSyncIssues.length - 2,
+                    ),
+                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(ctx).colorScheme.error,
+                    ),
+                  ),
+              ],
+              const SizedBox(height: 8),
+              Text(
+                DataSettingsUiCopy.rollbackHint,
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+            ],
           ),
-        ) ??
-        false;
+          actions: [
+            TextButton(
+              onPressed: () {
+                if (!ctx.mounted) return;
+                final route = ModalRoute.of(ctx);
+                if (route == null || !route.isCurrent) {
+                  return;
+                }
+                if (!origin.isCurrent(currentModalRoute: route)) {
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: Text(DataSettingsUiCopy.undoImport),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (!ctx.mounted) return;
+                final route = ModalRoute.of(ctx);
+                if (route == null || !route.isCurrent) {
+                  return;
+                }
+                Navigator.pop(ctx, false);
+              },
+              child: Text(DataSettingsUiCopy.gotIt),
+            ),
+          ],
+        ),
+      ),
+    );
+    final undoResult = await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push<bool>(resultRoute);
+    await resultRoute.completed;
+    return undoResult ?? false;
   }
 
-  Future<void> _rollbackCompetitorImport(String rollbackSnapshot) async {
-    if (!mounted) return;
-    setState(() => _busy = true);
+  Future<void> _rollbackCompetitorImport(
+    String rollbackSnapshot, {
+    int? token,
+    int? accountGeneration,
+    required _CompetitorImportOrigin origin,
+    _CompetitorRollbackBanner? banner,
+  }) async {
+    if (!mounted || _busy) return;
+    if (!origin.isCurrent()) {
+      if (banner != null && identical(_activeBanner, banner)) {
+        _dismissActiveBanner();
+      } else {
+        origin.dispose();
+      }
+      return;
+    }
+    final effectiveToken = token ?? _currentRollbackToken;
+    final effectiveGeneration =
+        accountGeneration ?? _competitorRollbackGeneration;
+    if (effectiveToken == null ||
+        _currentRollbackToken != effectiveToken ||
+        effectiveGeneration == null ||
+        _competitorRollbackGeneration != effectiveGeneration ||
+        !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+          effectiveGeneration,
+        )) {
+      if (banner != null && identical(_activeBanner, banner)) {
+        _dismissActiveBanner();
+      } else {
+        origin.dispose();
+      }
+      return;
+    }
+    _currentRollbackToken = null;
+    _competitorRollbackGeneration = null;
+    if (banner != null && identical(_activeBanner, banner)) {
+      banner.isConsumed = true;
+      _activeBanner = null;
+    }
+    _activeRollbackOperations.add(origin);
+
+    final todoProvider = origin.todoProvider;
+    bool canWriteRollback() => mounted && origin.isCurrent();
+    if (!canWriteRollback()) {
+      _activeRollbackOperations.remove(origin);
+      origin.dispose();
+      return;
+    }
+
+    var rollbackBusyOccupied = false;
+    setState(() {
+      _busy = true;
+      rollbackBusyOccupied = true;
+    });
     try {
-      await BackupService.importAll(
-        rollbackSnapshot,
-        merge: false,
-        clearMissing: true,
-      );
-      if (!mounted) return;
-      await _reloadAll();
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (!canWriteRollback()) return;
+      await todoProvider.runExternalStorageUpdate(() async {
+        if (!canWriteRollback()) return;
+        await BackupService.importAll(
+          rollbackSnapshot,
+          merge: false,
+          clearMissing: true,
+          canWrite: canWriteRollback,
+        );
+      }, expectedAccountDataGeneration: effectiveGeneration);
+      if (!canWriteRollback()) return;
+      await Future.wait([
+        origin.todoProvider.loadFromStorage(),
+        origin.habitProvider.loadFromStorage(),
+        origin.noteProvider.loadFromStorage(),
+        origin.calendarProvider.loadFromStorage(),
+        origin.anniversaryProvider.loadFromStorage(),
+        origin.countdownProvider.loadFromStorage(),
+        origin.timeAuditProvider.loadFromStorage(),
+      ]);
+      if (!mounted || !canWriteRollback()) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(DataSettingsUiCopy.undoImportSuccess)),
       );
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(DataSettingsUiCopy.formatRollbackError(e))),
-      );
+      if (!mounted ||
+          e is AccountPreferenceWriteCanceled ||
+          !canWriteRollback()) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(DataSettingsUiCopy.formatRollbackError(e))),
+        );
+    } finally {
+      _activeRollbackOperations.remove(origin);
+      origin.dispose();
+      if (rollbackBusyOccupied &&
+          mounted &&
+          _isCurrentAction(origin.seq, effectiveGeneration)) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -1085,8 +2226,10 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   Future<CompetitorFieldMapping?> _editCompetitorFieldMapping(
-    CompetitorFieldMapping initial,
-  ) async {
+    CompetitorFieldMapping initial, {
+    _CompetitorImportOrigin? origin,
+    ModalRoute<dynamic>? parentRoute,
+  }) async {
     final controllers = <String, TextEditingController>{
       for (final target in _competitorFieldMappingTargets)
         target.$1: TextEditingController(text: initial.sourceFor(target.$1)),
@@ -1094,6 +2237,7 @@ class _BackupScreenState extends State<BackupScreen> {
     return await showControllerDialog<CompetitorFieldMapping>(
       context: context,
       controllers: [...controllers.values],
+      onRouteCreated: origin?.registerOwnedRoute,
       builder: (ctx) => ValueListenableBuilder<AppLocale>(
         valueListenable: I18n.localeListenable,
         builder: (ctx, locale, _) => AppDialog(
@@ -1122,6 +2266,7 @@ class _BackupScreenState extends State<BackupScreen> {
                         helperText: DataSettingsUiCopy.standardFieldHelper(
                           target.$1,
                         ),
+                        helperMaxLines: 3,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -1133,6 +2278,16 @@ class _BackupScreenState extends State<BackupScreen> {
           actions: [
             TextButton(
               onPressed: () {
+                if (!ctx.mounted) return;
+                final route = ModalRoute.of(ctx);
+                if (route == null || !route.isCurrent) {
+                  return;
+                }
+                if ((parentRoute != null && !parentRoute.isActive) ||
+                    (origin != null &&
+                        !origin.isCurrent(currentModalRoute: route))) {
+                  return;
+                }
                 for (final controller in controllers.values) {
                   controller.clear();
                 }
@@ -1140,11 +2295,29 @@ class _BackupScreenState extends State<BackupScreen> {
               child: Text(I18n.tr('action.clear')),
             ),
             TextButton(
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: () {
+                if (!ctx.mounted) return;
+                final route = ModalRoute.of(ctx);
+                if (route == null || !route.isCurrent) {
+                  return;
+                }
+                Navigator.pop(ctx);
+              },
               child: Text(I18n.tr('action.cancel')),
             ),
             FilledButton(
               onPressed: () {
+                if (!ctx.mounted) return;
+                final route = ModalRoute.of(ctx);
+                if (route == null || !route.isCurrent) {
+                  return;
+                }
+                if ((parentRoute != null && !parentRoute.isActive) ||
+                    (origin != null &&
+                        !origin.isCurrent(currentModalRoute: route))) {
+                  Navigator.pop(ctx);
+                  return;
+                }
                 Navigator.pop(
                   ctx,
                   CompetitorFieldMapping({
@@ -1292,6 +2465,9 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   Future<void> _wipe() async {
+    final todoProvider = context.read<TodoProvider>();
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final seq = ++_actionSeq;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => ValueListenableBuilder<AppLocale>(
@@ -1316,17 +2492,45 @@ class _BackupScreenState extends State<BackupScreen> {
         ),
       ),
     );
+    if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
     if (ok != true) return;
-    await BackupService.wipeAll();
-    if (!mounted) return;
-    await _reloadAll();
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(DataSettingsUiCopy.wipeSuccess)));
+
+    _currentRollbackToken = null;
+    _competitorRollbackGeneration = null;
+    setState(() => _busy = true);
+    try {
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
+      await todoProvider.runExternalStorageUpdate(
+        () async => await BackupService.wipeAll(),
+        expectedAccountDataGeneration: accountGeneration,
+      );
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
+      _currentRollbackToken = null;
+      _competitorRollbackGeneration = null;
+      await _reloadAll(accountGeneration: accountGeneration, seq: seq);
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(DataSettingsUiCopy.wipeSuccess)));
+    } catch (e) {
+      if (!mounted ||
+          e is AccountPreferenceWriteCanceled ||
+          !_isCurrentAction(seq, accountGeneration)) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_formatWipeError(e))));
+    } finally {
+      if (mounted && _isCurrentAction(seq, accountGeneration)) {
+        setState(() => _busy = false);
+      }
+    }
   }
 
   Future<void> _configureWebDavBackup() async {
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final seq = ++_actionSeq;
     final baseCtrl = TextEditingController(text: _webDavConfig.baseUrl);
     final userCtrl = TextEditingController(text: _webDavConfig.username);
     final passwordCtrl = TextEditingController(text: _webDavConfig.password);
@@ -1397,6 +2601,7 @@ class _BackupScreenState extends State<BackupScreen> {
         ),
       ),
     );
+    if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
     if (saved != true) return;
     final config = WebDavBackupConfig(
       baseUrl: baseCtrl.text.trim(),
@@ -1411,32 +2616,57 @@ class _BackupScreenState extends State<BackupScreen> {
     );
     try {
       await WebDavBackupService.saveConfig(config);
-      if (!mounted) return;
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
       setState(() => _webDavConfig = config);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(DataSettingsUiCopy.webDavConfigSaved)),
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, locale, _) =>
+                Text(DataSettingsUiCopy.webDavConfigSaved),
+          ),
+        ),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted ||
+          e is AccountPreferenceWriteCanceled ||
+          !_isCurrentAction(seq, accountGeneration)) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(DataSettingsUiCopy.formatWebDavSaveError(e))),
+        SnackBar(
+          content: ValueListenableBuilder<AppLocale>(
+            valueListenable: I18n.localeListenable,
+            builder: (context, locale, _) =>
+                Text(DataSettingsUiCopy.formatWebDavSaveError(e)),
+          ),
+        ),
       );
     }
   }
 
   Future<void> _uploadWebDavBackup() async {
+    var accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!_webDavConfig.isConfigured) {
       await _configureWebDavBackup();
-      if (!mounted) return;
-      if (!_webDavConfig.isConfigured) return;
+      if (!mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          ) ||
+          !_webDavConfig.isConfigured) {
+        return;
+      }
     }
+    accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final seq = ++_actionSeq;
+    final targetConfig = _webDavConfig;
     setState(() => _busy = true);
     try {
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
       final result = await WebDavBackupService().uploadCurrentBackup(
-        _webDavConfig,
+        targetConfig,
       );
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
       final sanitizedUri = _sanitizeUriForDisplay(result.uri);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1449,11 +2679,18 @@ class _BackupScreenState extends State<BackupScreen> {
         ),
       );
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (!mounted ||
+          e is AccountPreferenceWriteCanceled ||
+          !_isCurrentAction(seq, accountGeneration)) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(DataSettingsUiCopy.formatWebDavUploadError(e))),
       );
+    } finally {
+      if (mounted && _isCurrentAction(seq, accountGeneration)) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -1475,11 +2712,21 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   Future<void> _restoreFromWebDav({required bool merge}) async {
+    var accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
     if (!_webDavConfig.isConfigured) {
       await _configureWebDavBackup();
-      if (!mounted) return;
-      if (!_webDavConfig.isConfigured) return;
+      if (!mounted ||
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          ) ||
+          !_webDavConfig.isConfigured) {
+        return;
+      }
     }
+    final todoProvider = context.read<TodoProvider>();
+    accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    final seq = ++_actionSeq;
+    final targetConfig = _webDavConfig;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => ValueListenableBuilder<AppLocale>(
@@ -1493,7 +2740,7 @@ class _BackupScreenState extends State<BackupScreen> {
               Text(
                 DataSettingsUiCopy.webDavRestoreDesc(
                   merge,
-                  _webDavConfig.filename,
+                  targetConfig.filename,
                 ),
               ),
               // 覆盖恢复同样真删数据：写明缺失数据将被删除的后果。
@@ -1521,64 +2768,120 @@ class _BackupScreenState extends State<BackupScreen> {
         ),
       ),
     );
+    if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
     if (ok != true) return;
+    _currentRollbackToken = null;
+    _competitorRollbackGeneration = null;
     setState(() => _busy = true);
     try {
       final raw = await WebDavBackupService().downloadLatestBackup(
-        _webDavConfig,
+        targetConfig,
       );
-      final count = await BackupService.importAll(
-        raw,
-        merge: merge,
-        // 覆盖=还原到备份快照：备份中不存在的本机数据一并删除，弹窗已警告。
-        // 服务层 `clearMissing && !merge` 守卫保证 merge 合并入口不受影响。
-        clearMissing: true,
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
+      final count = await todoProvider.runExternalStorageUpdate(
+        () async => await BackupService.importAll(
+          raw,
+          merge: merge,
+          // 覆盖=还原到备份快照：备份中不存在的本机数据一并删除，弹窗已警告。
+          // 服务层 `clearMissing && !merge` 守卫保证 merge 合并入口不受影响。
+          clearMissing: true,
+        ),
+        expectedAccountDataGeneration: accountGeneration,
       );
-      if (!mounted) return;
-      await _reloadAll();
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
+      _currentRollbackToken = null;
+      _competitorRollbackGeneration = null;
+      await _reloadAll(accountGeneration: accountGeneration, seq: seq);
+      if (!mounted || !_isCurrentAction(seq, accountGeneration)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(DataSettingsUiCopy.webDavRestoreSuccess(merge, count)),
         ),
       );
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (!mounted ||
+          e is AccountPreferenceWriteCanceled ||
+          !_isCurrentAction(seq, accountGeneration)) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(DataSettingsUiCopy.formatWebDavRestoreError(e))),
       );
+    } finally {
+      if (mounted && _isCurrentAction(seq, accountGeneration)) {
+        setState(() => _busy = false);
+      }
     }
   }
 
-  Future<void> _reloadAll() async {
+  Future<void> _reloadAll({int? accountGeneration, int? seq}) async {
+    bool isCurrent() {
+      if (!mounted) return false;
+      if (accountGeneration != null &&
+          !AccountLocalDataCleaner.isCurrentAccountDataGeneration(
+            accountGeneration,
+          )) {
+        return false;
+      }
+      if (seq != null && seq != _actionSeq) return false;
+      return true;
+    }
+
+    if (!isCurrent()) return;
+
+    final preferencesProvider = context.read<PreferencesProvider>();
+    final achievementProvider = context.read<AchievementProvider>();
+    final todoProvider = context.read<TodoProvider>();
+    final habitProvider = context.read<HabitProvider>();
+    final pomodoroProvider = context.read<PomodoroProvider>();
+    final noteProvider = context.read<NoteProvider>();
+    final anniversaryProvider = context.read<AnniversaryProvider>();
+    final diaryProvider = context.read<DiaryProvider>();
+    final goalProvider = context.read<GoalProvider>();
+    final courseProvider = context.read<CourseProvider>();
+    final userProvider = context.read<UserProvider>();
+    final timeAuditProvider = context.read<TimeAuditProvider>();
+    final shareProvider = context.read<ShareProvider>();
+    final calendarProvider = context.read<CalendarProvider>();
+    final countdownProvider = context.read<CountdownProvider>();
+    final locationReminderProvider = context.read<LocationReminderProvider>();
+    final quickCaptureTemplateProvider = context
+        .read<QuickCaptureTemplateProvider>();
+
     // 偏好键已纳入备份键集（BackupService._keys）：wipeAll/importAll 都会
     // 改写偏好存储，而根级 PreferencesProvider 的值缓存在内存字段，不重载
     // 会造成进程内偏好与存储分叉。与 main.dart 账号清理/云同步拉取一致：
     // 先 resetLocalState 作废在途读取并套用默认值，再 loadFromStorage 读回
     // 存储真值，最后把铃声偏好重放到原生设置（非 Android 为 no-op）。
-    final preferencesProvider = context.read<PreferencesProvider>();
+    // AchievementProvider 类似地会合并在途读取，需先 resetLocalState 作废旧读取。
     preferencesProvider.resetLocalState();
+    if (!isCurrent()) return;
+    achievementProvider.resetLocalState();
+    if (!isCurrent()) return;
+
     await preferencesProvider.loadFromStorage();
+    if (!isCurrent()) return;
+
     await ReminderRingtoneSettings.applyPersistedSettingsToNative();
-    if (!mounted) return;
+    if (!isCurrent()) return;
+
     await Future.wait([
-      context.read<TodoProvider>().loadFromStorage(),
-      context.read<HabitProvider>().loadFromStorage(),
-      context.read<PomodoroProvider>().loadFromStorage(),
-      context.read<NoteProvider>().loadFromStorage(),
-      context.read<AnniversaryProvider>().loadFromStorage(),
-      context.read<DiaryProvider>().loadFromStorage(),
-      context.read<GoalProvider>().loadFromStorage(),
-      context.read<CourseProvider>().loadFromStorage(),
-      context.read<UserProvider>().loadFromStorage(),
-      context.read<TimeAuditProvider>().loadFromStorage(),
-      context.read<AchievementProvider>().loadFromStorage(),
-      context.read<ShareProvider>().load(),
-      context.read<CalendarProvider>().loadFromStorage(),
-      context.read<LocationReminderProvider>().loadFromStorage(),
-      context.read<QuickCaptureTemplateProvider>().loadFromStorage(),
+      todoProvider.loadFromStorage(),
+      habitProvider.loadFromStorage(),
+      pomodoroProvider.loadFromStorage(),
+      noteProvider.loadFromStorage(),
+      anniversaryProvider.loadFromStorage(),
+      diaryProvider.loadFromStorage(),
+      goalProvider.loadFromStorage(),
+      courseProvider.loadFromStorage(),
+      userProvider.loadFromStorage(),
+      timeAuditProvider.loadFromStorage(),
+      achievementProvider.loadFromStorage(),
+      shareProvider.load(),
+      calendarProvider.loadFromStorage(),
+      countdownProvider.loadFromStorage(),
+      locationReminderProvider.loadFromStorage(),
+      quickCaptureTemplateProvider.loadFromStorage(),
     ]);
   }
 
@@ -1591,10 +2894,12 @@ class _BackupScreenState extends State<BackupScreen> {
         final routeBackground = Theme.of(context).brightness == Brightness.dark
             ? cs.surface
             : cs.surfaceContainerLowest;
+        final surfaceStyle = appSurfaceStyleOf(context);
+        final isLiquidGlass = surfaceStyle == AppSurfaceStyle.liquidGlass;
         final restoreFirst = widget.initialMode == BackupEntryMode.restore;
         final pageTitle = DataSettingsUiCopy.backupHeroTitle(restoreFirst);
-        return Scaffold(
-          backgroundColor: routeBackground,
+        final scaffold = Scaffold(
+          backgroundColor: isLiquidGlass ? Colors.transparent : routeBackground,
           appBar: AppBar(
             title: Text(pageTitle),
             titleTextStyle: appSecondaryRouteTitleTextStyle(context),
@@ -1778,22 +3083,36 @@ class _BackupScreenState extends State<BackupScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _activeExportedTitle(),
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.normal,
-                                      color: cs.onSurface,
-                                    ),
+                        Text(
+                          _activeExportedTitle(),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.normal,
+                                color: cs.onSurface,
                               ),
-                            ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
                             TextButton.icon(
-                              onPressed: _copy,
+                              onPressed: _busy ? null : _copy,
                               icon: const Icon(Icons.copy, size: 14),
                               label: Text(DataSettingsUiCopy.copyButton),
+                            ),
+                            TextButton.icon(
+                              key: const ValueKey('backup_download_exported'),
+                              onPressed: _busy ? null : _downloadExported,
+                              icon: const Icon(
+                                Icons.download_outlined,
+                                size: 14,
+                              ),
+                              label: Text(
+                                I18n.current == AppLocale.en
+                                    ? 'Download file'
+                                    : '下载文件',
+                              ),
                             ),
                           ],
                         ),
@@ -1829,13 +3148,15 @@ class _BackupScreenState extends State<BackupScreen> {
                   children: [
                     OutlinedButton.icon(
                       onPressed: _busy ? null : _wipe,
-                      icon: const Icon(Icons.delete_forever, color: Colors.red),
+                      icon: Icon(Icons.delete_forever, color: cs.error),
                       label: Text(
                         DataSettingsUiCopy.wipeButton,
-                        style: const TextStyle(color: Colors.red),
+                        style: TextStyle(color: cs.error),
                       ),
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.red.shade300),
+                        side: BorderSide(
+                          color: cs.error.withValues(alpha: 0.45),
+                        ),
                       ),
                     ),
                   ],
@@ -1843,6 +3164,22 @@ class _BackupScreenState extends State<BackupScreen> {
               ],
             ),
           ),
+        );
+
+        if (!isLiquidGlass) {
+          return scaffold;
+        }
+
+        final hasBrandSurface =
+            DesktopEmbeddedHostScope.isHosted(context) ||
+            context.findAncestorWidgetOfExactType<BrandBackground>() != null ||
+            context.findAncestorWidgetOfExactType<BrandRouteSurface>() != null;
+        if (hasBrandSurface) {
+          return scaffold;
+        }
+        return Material(
+          color: routeBackground,
+          child: BrandBackground(child: scaffold),
         );
       },
     );
@@ -1852,7 +3189,7 @@ class _BackupScreenState extends State<BackupScreen> {
     return ActionChip(
       avatar: const Icon(Icons.download, size: 14),
       label: Text(label, style: const TextStyle(fontSize: 12)),
-      onPressed: onTap,
+      onPressed: _busy ? null : onTap,
     );
   }
 
@@ -1867,6 +3204,20 @@ class _BackupScreenState extends State<BackupScreen> {
             onPressed: _busy ? null : _exportAll,
             icon: const Icon(Icons.download_outlined, size: 18),
             label: Text(DataSettingsUiCopy.generateJsonButton),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            key: const ValueKey('backup_download_json'),
+            onPressed: _busy ? null : _exportAndDownloadAllJson,
+            icon: const Icon(Icons.file_download_outlined, size: 18),
+            label: Text(
+              I18n.current == AppLocale.en
+                  ? 'Export & download .json file'
+                  : '导出并下载 .json 文件',
+            ),
           ),
         ),
       ],

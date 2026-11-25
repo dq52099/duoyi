@@ -46,7 +46,7 @@ backend/      FastAPI auth/sync/admin/feedback/announcements
 | AchievementProvider | 已实现 | 订阅 DomainEventBus，持久化 unlockedAt，解锁反馈和时光币奖励 |
 | TimeEntry + TimeAuditProvider | 已实现 | 模型/CRUD/dedupeKey/分类，番茄/待办/日历入口写入 |
 | Workspace + ShareProvider | 已实现 | 模型/角色/邀请码/评论/提及/负责人/排行榜 |
-| FocusSoundService | 已实现 | 13 条单音轨，循环/淡入/淡出，自定义音轨播放 |
+| FocusSoundService | 已实现 | 28 条当前单音轨，mediaPlayer 循环/淡入/淡出，自定义音轨播放；实际听感与后台连续性待验收 |
 | HomeWidgetService | 已实现 | 10 个可见独立 Android 小组件数据推送和点击流 |
 | HolidayCalendar | 已实现 | 2024-2026 内置数据，updateFrom 扩展口 |
 | FeatureFlags | 已实现 | 4 个开关，全部默认 true |
@@ -482,7 +482,7 @@ final role = shareProvider.currentRole(workspaceId);
 | GoalProvider | goalAchieved | setStatus(achieved) |
 | GoalProvider | goalMilestoneCompleted | completeMilestone() |
 | DiaryProvider | diaryWritten | add() |
-| ThemeProvider | themeSwitched | setTheme() |
+| ThemeProvider | themeSwitched | setBrand() 成功提交后 |
 
 每处 publish 格式：
 
@@ -577,46 +577,15 @@ CalendarEventSheet 中 course 类型的 `_open` 已导航到
 
 #### 4.8.1 Widget 完成操作
 
-Android 端 `DuoyiTodoWidgetProvider.kt` 在待办项旁增加完成按钮：
-
-```kotlin
-// 点击完成 → 发送 Intent action = "com.duoyi.COMPLETE_TODO"
-//           extra = todoId
-// BroadcastReceiver 接收后：
-//   1. 调用 HomeWidget.getWidgetData("todo_top3_1_id") 获取 id
-//   2. 通过 MethodChannel 调用 Flutter 端 TodoProvider.toggleTodo(id)
-//   3. 触发 HomeWidgetService.push() 刷新
-```
-
-Flutter 端注册 background callback：
-
-```dart
-// main.dart
-HomeWidget.registerInteractivityCallback(homeWidgetBackgroundCallback);
-
-@pragma('vm:entry-point')
-Future<void> homeWidgetBackgroundCallback(Uri? uri) async {
-  if (uri?.host == 'complete-todo') {
-    final todoId = uri!.pathSegments.first;
-    // 读取 SharedPreferences → toggle todo → push widget update
-  }
-}
-```
+当前待办动作使用 `duoyi://action/complete_todo?id=<id>`，并由原生新鲜发布帧附加账号、日期和时区等绑定。Flutter 经 `WidgetLinkDispatch.resolve` 完成宿主数据加载及 `HomeWidgetService.isCurrentWidgetAction` 校验后，走现有 Provider 写路径；对象缺失、已完成或绑定失效不能重复修改。旧的直接读取 HomeWidget/SharedPreferences 再 toggle 的伪代码不代表当前实现。
 
 #### 4.8.2 Widget Deep-link
 
-HomeWidgetService.widgetClickedStream 已存在。在 main.dart 中：
-
-```dart
-HomeWidgetService.widgetClickedStream.listen((uri) {
-  if (uri != null) DeepLinkRouter.handle(navigatorKey.currentContext!, uri);
-});
-```
+点击流与平台 deep-link 均进入现有受控分发及对象路由，保留账号切换、锁定、加载和返回边界；不能只收到 URI 就直接执行对象动作。真实 Launcher/WidgetKit 点击仍需独立验收。
 
 #### 4.8.3 数据变更刷新
 
-各 Provider mutation 后已在 main.dart listener 中调用 `HomeWidgetService.push()`。
-确认所有写操作路径（包括新增的 background callback）都触发 push。
+主题、语言和业务变更通过 `HomeWidgetPushQueue` 合并，加载与账号有效性允许后捕获完整文档。Android/iOS 通过 `duoyi/widget-publication` 发布规范 SQLite 文档；提交、读回及宿主上下文确认后才请求刷新。原生业务/主题/语言不回退读取旧偏好键，设备自己的显示模式偏好例外。ThemeProvider 仍使用受账号/事务保护的应用偏好保存选择，提交后通知；这不构成原生偏好发布兜底。详见[当前发布通道](widget-publication-channel.md)。存储确认不保证桌面已经显示。
 
 ### D9: 智能日期解析
 
@@ -788,29 +757,13 @@ List<String> tags; // 如 ['工作', '编程', '阅读']
 
 标签在开始专注时选择，统计页按标签分组显示时长。
 
-#### 4.11.3 白噪音分类
+#### 4.11.3 白噪音分类与播放策略
 
-FocusSoundService._assetMap 当前 9 个音轨。增加分类元数据：
+当前 `FocusSoundCatalog` 定义 28 条音轨、28 个单音轨选项及“无白噪音”；旧的 9 条/13 条计数和示例 SoundCategory 不是当前目录实现。旧 `*_noise` / `white_stream` 选择兼容归一到 `night_rain`，不重新显示为可选音轨；含“+”的组合不接受。`none` 停止播放，自定义音轨走本机文件源。
 
-```dart
-class SoundTrack {
-  final String id;
-  final String asset;
-  final String label;
-  final SoundCategory category;
-}
+UI 按 category 分组显示音轨选择器。该设计要求继续保留；当前 FocusSoundCatalog/选择器使用平铺 options，类别分组尚待对齐与验收。目录状态描述的计数修正不关闭此项。
 
-enum SoundCategory { nature, ambient, noise }
-
-static const List<SoundTrack> tracks = [
-  SoundTrack(id: 'rain', asset: '...', label: '雨声', category: SoundCategory.nature),
-  SoundTrack(id: 'cafe', asset: '...', label: '咖啡馆', category: SoundCategory.ambient),
-  SoundTrack(id: 'brown_noise', asset: '...', label: '棕噪', category: SoundCategory.noise),
-  // ...
-];
-```
-
-UI 按 category 分组显示音轨选择器。
+`FocusSoundService` 使用 mediaPlayer、ReleaseMode.loop、淡入/淡出；默认音量 1.0，用户目标音量范围 0.4–1.0。媒体上下文配置 gain、respectSilence=false、stayAwake=true，Android 生命周期请求 mediaPlayback 前台服务。以上是代码策略，不证明实际音量、可辨识性、无缝循环、锁屏持续播放或 ROM 行为已通过。根需求 25/26 的可辨识场景音、音量、循环连贯和相关真机门禁继续保留。requirement-v2 的旧“已有基础”段落描述 31 条历史目录，当前为 28 条；该状态描述不新增恢复三个退役纯噪声资源的任务，资源准入仍要求可追溯真实录音。兼容别名不证明听感或连续播放已经履约。
 
 ### D12: 习惯增强
 
@@ -1097,21 +1050,9 @@ void _afterMutation() {
 
 移除 main.dart 中通过 listener 间接调用的旧路径，保持单一调用点。
 
-### D18: AudioService 清理
+### D18: AudioService 兼容边界
 
-#### 4.18.1 删除 deprecated shim
-
-1. 删除 `lib/services/audio_service.dart`
-2. 全局搜索 `AudioService` 引用，替换为 `FocusSoundService.instance`
-3. 如果有第三方插件引用，在 CHANGELOG 中注明 breaking change
-
-#### 4.18.2 验证
-
-确认以下路径都使用 FocusSoundService：
-
-- PomodoroProvider._sound
-- PomodoroScreen 白噪音选择器
-- 任何其他可能引用旧 AudioService 的位置
+当前保留 `lib/services/audio_service.dart` 的 deprecated shim；生产播放入口使用 `FocusSoundService.instance`。shim 转发 play/stop/状态，toggle 仅停止已有播放，dispose 不释放共享单例。“未发现生产 import”不等于已删除兼容类，也不能要求源码中完全没有 AudioService 标识符。以后删除需单独核实兼容调用及生命周期，不作为本轮文档对齐动作。
 
 ---
 
@@ -1140,9 +1081,7 @@ void _afterMutation() {
 
 ### 5.4 AudioService 清理迁移
 
-- 先 grep 确认无生产代码直接 import audio_service.dart。
-- 删除文件。
-- CI 构建验证通过。
+当前生产调用迁移与兼容 shim 保留应分别记录；D18 旧删除步骤是历史计划。构建通过记录保留其原快照范围，不能据此声称兼容文件已经删除。
 
 ### 5.5 PomodoroSession tags 迁移
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'i18n.dart';
+
 const String goalFeatureIconAsset = 'assets/icons/goal_icon.png';
 
 class GoalIconChoice {
@@ -14,7 +16,49 @@ class GoalIconChoice {
     required this.icon,
     required this.color,
   });
+
+  String localizedLabel([AppLocale? locale]) {
+    if ((locale ?? I18n.current) != AppLocale.en) return label;
+    return _englishGoalIconLabels[name] ?? 'Goal';
+  }
 }
+
+const _englishGoalIconLabels = <String, String>{
+  'flag': 'Flag',
+  'track_changes': 'Target',
+  'flag_circle': 'Milestone',
+  'emoji_events': 'Trophy',
+  'workspace_premium': 'Medal',
+  'rocket_launch': 'Sprint',
+  'trending_up': 'Growth',
+  'task_alt': 'Achievement',
+  'local_drink': 'Water',
+  'bedtime': 'Sleep',
+  'self_improvement': 'Meditation',
+  'edit_note': 'Notes',
+  'rate_review': 'Review',
+  'directions_walk': 'Walking',
+  'medical_services': 'Health',
+  'remove_red_eye': 'Eye care',
+  'restaurant': 'Meals',
+  'menu_book': 'Reading',
+  'translate': 'Language',
+  'school': 'Learning',
+  'assignment': 'Tasks',
+  'directions_run': 'Running',
+  'fitness_center': 'Fitness',
+  'accessibility_new': 'Stretching',
+  'stairs': 'Stairs',
+  'pedal_bike': 'Cycling',
+  'volunteer_activism': 'Together',
+  'call': 'Call',
+  'mood': 'Mood',
+  'air': 'Breathing',
+  'message': 'Messages',
+  'calendar_today': 'Plans',
+  'lightbulb': 'Ideas',
+  'local_fire_department': 'Momentum',
+};
 
 const GoalIconChoice defaultGoalIconChoice = GoalIconChoice(
   name: 'flag',
@@ -234,4 +278,5 @@ GoalIconChoice goalIconChoiceFromName(String name) {
 
 IconData goalIconFromName(String name) => goalIconChoiceFromName(name).icon;
 
-String goalIconLabel(String name) => goalIconChoiceFromName(name).label;
+String goalIconLabel(String name, [AppLocale? locale]) =>
+    goalIconChoiceFromName(name).localizedLabel(locale);

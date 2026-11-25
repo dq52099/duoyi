@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_preview_compact_title">Duoyi · Compact</string>
+    <string name="widget_preview_compact_sample">Today\'s key tasks</string>
+    <string name="widget_preview_compact_size" translatable="false">2×2</string>
+
+    <string name="widget_preview_standard_title">Duoyi · Standard</string>
+    <string name="widget_preview_standard_sample_one">Today\'s task 1</string>
+    <string name="widget_preview_standard_sample_two">Today\'s task 2</string>
+    <string name="widget_preview_navigation_labels">Todos · Habits · Calendar · Focus</string>
+
+    <string name="widget_preview_detailed_title">Duoyi · Detailed</string>
+    <string name="widget_preview_detailed_sample_one">Today\'s task 1</string>
+    <string name="widget_preview_detailed_sample_two">Today\'s task 2</string>
+    <string name="widget_preview_detailed_summary">Today\'s summary and progress</string>
+    <string name="widget_preview_detailed_more_content">4×3 · More content</string>
+</resources>

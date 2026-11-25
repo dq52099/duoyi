@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:duoyi/core/i18n.dart';
+import 'package:duoyi/core/weekly_review_summary.dart';
 import 'package:duoyi/services/ai_service.dart';
 import 'package:duoyi/services/api_client.dart';
 import 'package:duoyi/services/reminder_scheduler.dart';
@@ -11,7 +13,87 @@ import 'package:test/test.dart';
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    I18n.setLocale(AppLocale.zh);
   });
+  tearDown(() => I18n.setLocale(AppLocale.zh));
+
+  test(
+    'weekly review persists saved facts and reuses them after reload',
+    () async {
+      final today = DateTime(2026, 5, 25, 9);
+      var requests = 0;
+      final client = MockClient((request) async {
+        requests++;
+        return http.Response(jsonEncode({'content': 'invalid response'}), 200);
+      });
+      final service = AiService();
+      addTearDown(service.dispose);
+      addTearDown(client.close);
+      service.attachClient(
+        ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'fixture-token',
+          httpClient: client,
+        ),
+      );
+      service.updateFromServerConfig({'ai_enabled': true});
+      final original = await service.weeklyReview(
+        completedTodos: 7,
+        totalTodos: 5,
+        weeklyFocusMinutes: 61,
+        habitStreak: 4,
+        periodLabel: '上周',
+        period: WeeklyReviewPeriod.lastWeek,
+        now: today,
+      );
+      final stored = (await SharedPreferences.getInstance())
+          .getStringList('ai_review_history')!
+          .single;
+      expect((jsonDecode(stored) as Map)['weeklyStats'], {
+        'completedTodos': 7,
+        'totalTodos': 5,
+        'focusMinutes': 61,
+        'habitStreak': 4,
+        'period': 'lastWeek',
+      });
+      final restored = AiService();
+      addTearDown(restored.dispose);
+      restored.attachClient(
+        ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'fixture-token',
+          httpClient: client,
+        ),
+      );
+      restored.updateFromServerConfig({'ai_enabled': true});
+      await restored.loadFromStorage();
+      final cached = await restored.weeklyReview(
+        completedTodos: 99,
+        totalTodos: 99,
+        weeklyFocusMinutes: 99,
+        habitStreak: 99,
+        periodLabel: '本周',
+        period: WeeklyReviewPeriod.thisWeek,
+        now: today,
+      );
+      expect(cached, original);
+      expect(requests, 1);
+      final entry = restored.weeklyReviewForDay(today)!;
+      I18n.setLocale(AppLocale.en);
+      expect(
+        entry.displaySummary,
+        'last week summary: tasks done 7 / 5, focus 61 min, longest habit streak 4 days.',
+      );
+      expect(entry.content, original);
+      expect(entry.summary, '上周数据：完成 7 / 5 项待办，专注 61 分钟，习惯连续打卡 4 天。');
+      expect(
+        (await SharedPreferences.getInstance()).getStringList(
+          'ai_review_history',
+        ),
+        [stored],
+      );
+    },
+  );
 
   test(
     'weekly review history keeps same-day generated result visible',
@@ -256,6 +338,7 @@ void main() {
       expect(draft.startAt, DateTime(2026, 5, 24, 15));
       expect(draft.endAt, DateTime(2026, 5, 24, 16));
       expect(draft.reminderEnabled, isTrue);
+      expect(draft.notes, '明天下午3点和产品开会，提前提醒我');
     },
   );
 
@@ -410,6 +493,7 @@ void main() {
 
       expect(draft.source, AiScheduleSource.aiWithLocalFallback);
       expect(draft.warning, contains('AI 没有返回可用草稿'));
+      expect(draft.warningKind, AiScheduleWarningKind.noUsableDraft);
       expect(draft.type, AiScheduleType.calendar);
       expect(draft.startAt, DateTime(2026, 5, 24, 10));
     },
@@ -440,6 +524,7 @@ void main() {
     expect(draft.source, AiScheduleSource.localParser);
     expect(draft.warning, contains('AI 识别失败，已用本地时间解析生成草稿'));
     expect(draft.warning, contains('AI 上游服务不可达'));
+    expect(draft.warningKind, AiScheduleWarningKind.unavailable);
     expect(draft.type, AiScheduleType.calendar);
     expect(draft.startAt, DateTime(2026, 5, 24, 15));
     expect(draft.reminderEnabled, isTrue);
@@ -474,6 +559,49 @@ void main() {
       expect(draft.warning, contains('/api/ai/chat'));
       expect(draft.warning, contains('Base URL'));
       expect(draft.title, contains('产品'));
+    },
+  );
+
+  test(
+    'AI schedule turns off an un-timed reminder request with a typed warning',
+    () async {
+      final service = AiService();
+      addTearDown(service.dispose);
+      service.attachClient(
+        ApiClient(
+          baseUrl: 'https://duoyi.test',
+          token: 'token',
+          httpClient: MockClient((request) async {
+            return http.Response(
+              jsonEncode({
+                'content': jsonEncode({
+                  'type': 'todo',
+                  'title': '整理资料',
+                  'start_at': '',
+                  'all_day': true,
+                  'reminder': true,
+                  'notes': '放入项目归档',
+                }),
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        ),
+      );
+      service.updateFromServerConfig({'ai_enabled': true});
+
+      final draft = await service.createScheduleDraft(
+        '明天整理资料并提醒我',
+        now: DateTime(2026, 5, 23, 9),
+      );
+
+      expect(draft.title, '整理资料');
+      expect(draft.notes, '放入项目归档');
+      expect(draft.allDay, isTrue);
+      expect(draft.reminderEnabled, isFalse);
+      expect(draft.warningKind, AiScheduleWarningKind.missingReminderTime);
+      expect(draft.warning, contains('提醒已关闭'));
     },
   );
 

@@ -78,6 +78,164 @@ class DuoyiWidgetCalendarDateCoreTest {
     }
 
     @Test
+    fun firstDayPreferenceRotatesAllSevenWeekdaysAndKeepsSundaysInTheirColumn() {
+        val shortEnglish = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+        val fullEnglish = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+        val shortChinese = listOf("一", "二", "三", "四", "五", "六", "日")
+        val fullChinese = listOf("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
+
+        fun <T> rotate(labels: List<T>, firstDayOfWeek: Int): List<T> =
+            (0 until 7).map { offset -> labels[(firstDayOfWeek - 1 + offset) % 7] }
+
+        for (firstDayOfWeek in 1..7) {
+            val grid = DuoyiWidgetContent.buildMonthGrid(
+                2024,
+                9,
+                todayDay = 4,
+                isZh = false,
+                timeZone = utc,
+                firstDayOfWeek = firstDayOfWeek,
+            )
+            val expectedOffset = (LocalDate.of(2024, 9, 1).dayOfWeek.value - firstDayOfWeek + 7) % 7
+            assertEquals(expectedOffset, grid.firstWeekdayOffset)
+            assertEquals(expectedOffset, grid.cells.indexOfFirst { it.dayNumber == 1 } % 7)
+            assertEquals(
+                rotate(shortEnglish, firstDayOfWeek),
+                DuoyiWidgetContent.calendarWeekdayLabels(
+                    isZh = false,
+                    firstDayOfWeek = firstDayOfWeek,
+                ),
+            )
+            assertEquals(
+                rotate(fullEnglish, firstDayOfWeek),
+                DuoyiWidgetContent.calendarWeekdayLabels(
+                    isZh = false,
+                    firstDayOfWeek = firstDayOfWeek,
+                    full = true,
+                ),
+            )
+            assertEquals(
+                rotate(shortChinese, firstDayOfWeek),
+                DuoyiWidgetContent.calendarWeekdayLabels(
+                    isZh = true,
+                    firstDayOfWeek = firstDayOfWeek,
+                ),
+            )
+            assertEquals(
+                rotate(fullChinese, firstDayOfWeek),
+                DuoyiWidgetContent.calendarWeekdayLabels(
+                    isZh = true,
+                    firstDayOfWeek = firstDayOfWeek,
+                    full = true,
+                ),
+            )
+            assertEquals(
+                rotate(shortEnglish, firstDayOfWeek).joinToString(" "),
+                grid.weekdayHeader,
+            )
+        }
+
+        val sundayFirst = DuoyiWidgetContent.buildMonthGrid(
+            2024,
+            9,
+            todayDay = 1,
+            isZh = true,
+            timeZone = utc,
+            firstDayOfWeek = 7,
+        )
+        listOf(1, 8, 15, 22, 29).forEach { sunday ->
+            val index = sundayFirst.cells.indexOfFirst { it.dayNumber == sunday }
+            assertTrue("September $sunday should occupy the Sunday column", index >= 0)
+            assertEquals(0, index % 7)
+        }
+    }
+
+    @Test
+    fun invalidFirstDayPreferenceFallsBackToMondayForBothMonthGridOverloads() {
+        val anchor = Date.from(Instant.parse("2024-09-04T12:00:00Z"))
+        val invalidValues = listOf(Int.MIN_VALUE, -1, 0, 8, Int.MAX_VALUE)
+
+        invalidValues.forEach { invalid ->
+            val civil = DuoyiWidgetContent.buildMonthGrid(
+                2024,
+                9,
+                todayDay = 4,
+                isZh = false,
+                timeZone = utc,
+                firstDayOfWeek = invalid,
+            )
+            val anchored = DuoyiWidgetContent.buildMonthGrid(
+                anchor,
+                utc,
+                isZh = false,
+                firstDayOfWeek = invalid,
+            )
+            listOf(civil, anchored).forEach { model ->
+                assertEquals("invalid value $invalid defaults to Monday", 6, model.firstWeekdayOffset)
+                assertEquals(1, model.cells[6].dayNumber)
+                assertEquals("Mo Tu We Th Fr Sa Su", model.weekdayHeader)
+            }
+            assertEquals(
+                listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"),
+                DuoyiWidgetContent.calendarWeekdayLabels(
+                    isZh = false,
+                    firstDayOfWeek = invalid,
+                ),
+            )
+        }
+
+        assertEquals(
+            listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"),
+            DuoyiWidgetContent.calendarWeekdayLabels(isZh = false),
+        )
+        assertEquals(
+            listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"),
+            DuoyiWidgetContent.calendarWeekdayLabels(isZh = false, full = true),
+        )
+    }
+
+    @Test
+    fun yearBoundariesKeepTheirCivilDaysWithSundayFirstColumns() {
+        val firstCivil = DuoyiWidgetContent.buildMonthGrid(
+            1,
+            1,
+            todayDay = 1,
+            isZh = false,
+            timeZone = utc,
+            firstDayOfWeek = 7,
+        )
+        val lastCivil = DuoyiWidgetContent.buildMonthGrid(
+            9999,
+            12,
+            todayDay = 31,
+            isZh = false,
+            timeZone = utc,
+            firstDayOfWeek = 7,
+        )
+        assertEquals("0001-01-01", firstCivil.cells.single { it.isToday }.dateKey)
+        assertEquals("9999-12-31", lastCivil.cells.single { it.isToday }.dateKey)
+        assertEquals(1, firstCivil.cells.indexOfFirst { it.dayNumber == 1 } % 7)
+        assertEquals(5, lastCivil.cells.indexOfFirst { it.dayNumber == 31 } % 7)
+
+        val firstAnchor = DuoyiWidgetContent.buildMonthGrid(
+            Date.from(Instant.parse("0001-01-01T12:00:00Z")),
+            utc,
+            isZh = false,
+            firstDayOfWeek = 7,
+        )
+        val lastAnchor = DuoyiWidgetContent.buildMonthGrid(
+            Date.from(Instant.parse("9999-12-31T12:00:00Z")),
+            utc,
+            isZh = false,
+            firstDayOfWeek = 7,
+        )
+        assertEquals("0001-01-01", firstAnchor.cells.single { it.isToday }.dateKey)
+        assertEquals("9999-12-31", lastAnchor.cells.single { it.isToday }.dateKey)
+        assertEquals(1, firstAnchor.cells.indexOfFirst { it.dayNumber == 1 } % 7)
+        assertEquals(5, lastAnchor.cells.indexOfFirst { it.dayNumber == 31 } % 7)
+    }
+
+    @Test
     fun leapYearsUseProlepticGregorianRules() {
         listOf(
             MonthFixture(year = 1500, month = 2, days = 28),
@@ -236,11 +394,13 @@ class DuoyiWidgetCalendarDateCoreTest {
             Date.from(Instant.parse("2024-03-10T06:30:00Z")),
             newYork,
             isZh = true,
+            firstDayOfWeek = 7,
         )
         val afterSpringJump = DuoyiWidgetContent.buildMonthGrid(
             Date.from(Instant.parse("2024-03-10T07:30:00Z")),
             newYork,
             isZh = true,
+            firstDayOfWeek = 7,
         )
 
         listOf(beforeSpringJump, afterSpringJump).forEach { model ->
@@ -248,6 +408,7 @@ class DuoyiWidgetCalendarDateCoreTest {
             assertEquals(3, model.month)
             assertEquals(10, model.todayDay)
             assertEquals("2024-03-10", model.cells.single { it.isToday }.dateKey)
+            assertEquals(0, model.cells.indexOfFirst { it.isToday } % 7)
             assertEquals(
                 "duoyi://calendar?date=2024-03-10",
                 model.cells.single { it.isToday }.target,

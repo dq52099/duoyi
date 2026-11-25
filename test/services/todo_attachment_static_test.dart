@@ -55,7 +55,7 @@ void main() {
     expect(
       exporter,
       contains(
-        "sb.writeln('  - 附件: [\${attachment.name}](\${attachment.uri})');",
+        "'  - \${copy.attachment}: [\${attachment.name}](\${attachment.uri})'",
       ),
     );
   });

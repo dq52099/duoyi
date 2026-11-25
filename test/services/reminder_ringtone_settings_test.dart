@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:duoyi/core/i18n.dart';
+import 'package:duoyi/core/notification_ui_copy.dart';
 import 'package:duoyi/services/reminder_ringtone_settings.dart';
 import 'package:duoyi/services/reminder_ringtone_preview_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +15,34 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  test('ringtone feedback follows the selected language', () {
+    final original = I18n.current;
+    try {
+      I18n.setLocale(AppLocale.zh);
+      expect(NotificationUiCopy.ringtonePreviewing, '正在试听当前提醒铃声');
+      expect(NotificationUiCopy.ringtoneVolumeSuccess, '已切换音量并开始试听');
+      expect(
+        NotificationUiCopy.ringtoneSoundSuccess('柔和晨铃'),
+        '已切换为 柔和晨铃，并开始试听',
+      );
+      I18n.setLocale(AppLocale.en);
+      expect(
+        NotificationUiCopy.ringtonePreviewing,
+        'Playing current reminder sound preview',
+      );
+      expect(
+        NotificationUiCopy.ringtoneVolumeSuccess,
+        'Volume updated, playing preview',
+      );
+      expect(
+        NotificationUiCopy.ringtoneSoundSuccess('Gentle Morning Bell'),
+        'Switched to Gentle Morning Bell, playing preview',
+      );
+    } finally {
+      I18n.setLocale(original);
+    }
   });
 
   test('loads defaults when ringtone settings are absent', () async {
@@ -332,17 +362,30 @@ void main() {
     expect(source, isNot(contains('铃声播放器初始化失败')));
     expect(native, contains("static Future<void> stopPreview()"));
     expect(native, isNot(contains('await cancel(previewNotificationId)')));
-    expect(screen, contains('Future<void> _reloadRingtoneSettings() async'));
-    expect(screen, contains('await _reloadRingtoneSettings();'));
+    expect(
+      screen,
+      contains(
+        'Future<void> _reloadRingtoneSettings({int? expectedOpSeq}) async',
+      ),
+    );
+    expect(
+      screen,
+      contains('await _reloadRingtoneSettings(expectedOpSeq: seq);'),
+    );
+    expect(screen, contains('opSeq != _opSeq'));
+    expect(screen, contains('_readSeq++;'));
     expect(screen, contains('Future<void> _previewCurrentSound() async'));
-    expect(screen, contains("tooltip: '试听当前铃声'"));
+    expect(
+      screen,
+      contains('tooltip: NotificationUiCopy.previewSoundTooltip'),
+    );
     expect(screen, contains('ReminderRingtoneSettings.previewCurrentSound()'));
     expect(screen, contains('ReminderRingtoneSettings.stopPreview()'));
-    expect(screen, contains('正在试听当前提醒铃声'));
+    expect(screen, contains('NotificationUiCopy.ringtonePreviewing'));
     expect(screen, contains('if (_previewing) return;'));
     expect(screen, contains('_previewing = true;'));
-    expect(screen, contains(r"successMessage: '已切换为 $label，并开始试听'"));
-    expect(screen, contains("successMessage: '已切换音量并开始试听'"));
+    expect(screen, contains('NotificationUiCopy.ringtoneSoundSuccess('));
+    expect(screen, contains('NotificationUiCopy.ringtoneVolumeSuccess'));
   });
 
   test('ringtone volume changes also trigger Flutter preview by default', () {

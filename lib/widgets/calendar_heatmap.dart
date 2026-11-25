@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 import '../core/heatmap_calendar.dart';
 import '../core/heatmap_ui_copy.dart';
 import '../core/i18n.dart';
-import '../core/i18n_date_format.dart';
 import '../core/design_tokens.dart';
+import 'app_date_format.dart';
 import 'app_date_picker.dart';
 
 /// Shared calendar geometry and date inspection. Compact cells have one keyboard
@@ -141,7 +141,11 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            copy.range(widget.window.start, widget.window.today),
+            copy.range(
+              widget.window.start,
+              widget.window.today,
+              pattern: AppDateFormat.patternOf(context),
+            ),
             style: textStyle.copyWith(fontSize: DesignTokens.fontSizeCaption),
           ),
           if (widget.summary != null) ...[
@@ -176,7 +180,6 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
               }
               _pitch = math.max(cell + 3, labelHeight + 3);
               final axisWidth = math.max(32.0, labelWidth + 6);
-              final headerHeight = math.max(22.0, 16 * scale);
               final months = <int, DateTime>{0: widget.window.start};
               for (
                 var month = DateTime(
@@ -193,10 +196,41 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
                         7] =
                     month;
               }
-              if (months.length > 1 &&
-                  months.keys.elementAt(1) * _pitch < 36 * scale) {
-                months.remove(0);
+
+              // Measure month text labels to prevent clipping enlarged glyphs and resolve placements without collision.
+              var maxMonthHeight = 0.0;
+              final monthWidths = <int, double>{};
+              for (final entry in months.entries) {
+                final painter = TextPainter(
+                  text: TextSpan(
+                    text: copy.month(entry.value),
+                    style: DefaultTextStyle.of(context).style.merge(textStyle),
+                  ),
+                  textDirection: Directionality.of(context),
+                  textScaler: MediaQuery.textScalerOf(context),
+                )..layout();
+                monthWidths[entry.key] = painter.width;
+                maxMonthHeight = math.max(maxMonthHeight, painter.height);
+                painter.dispose();
               }
+              final headerHeight = math.max(22.0, maxMonthHeight + 4);
+
+              final monthPositions = <int, double>{};
+              double? prevRight;
+              for (final entry in months.entries) {
+                final idealLeft = entry.key * _pitch + 1.5;
+                final width = monthWidths[entry.key] ?? 0.0;
+                final placedLeft = prevRight == null
+                    ? idealLeft
+                    : math.max(idealLeft, prevRight + 4.0);
+                monthPositions[entry.key] = placedLeft;
+                prevRight = placedLeft + width;
+              }
+
+              final cellsWidth = widget.window.weeks * _pitch + 36 * scale;
+              final lastMonthRight = (prevRight ?? 0.0) + 4.0;
+              final contentWidth = math.max(cellsWidth, lastMonthRight);
+
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (!mounted || _initialScrollDone || !_scroll.hasClients) {
                   return;
@@ -220,9 +254,7 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
                                   ? Text(
                                       copy.weekday(day),
                                       style: textStyle.copyWith(
-                                        color: cs.onSurface.withValues(
-                                          alpha: 0.45,
-                                        ),
+                                        color: cs.onSurfaceVariant,
                                       ),
                                     )
                                   : null,
@@ -258,7 +290,7 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
                             controller: _scroll,
                             scrollDirection: Axis.horizontal,
                             child: SizedBox(
-                              width: widget.window.weeks * _pitch + 36 * scale,
+                              width: contentWidth,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -268,7 +300,8 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
                                       children: [
                                         for (final month in months.entries)
                                           Positioned(
-                                            left: month.key * _pitch + 1.5,
+                                            left: monthPositions[month.key] ??
+                                                (month.key * _pitch + 1.5),
                                             child: Text(
                                               copy.month(month.value),
                                               style: textStyle,
@@ -315,9 +348,10 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
           const SizedBox(height: DesignTokens.spaceMd),
           widget.legend,
           const SizedBox(height: DesignTokens.spaceSm),
-          Row(
-            children: [
-              IconButton(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final dateText = AppDateFormat.date(context, _selected);
+              final previousButton = IconButton(
                 key: const ValueKey('heatmap_previous_day'),
                 tooltip: locale == AppLocale.en ? 'Previous day' : '前一天',
                 constraints: const BoxConstraints.tightFor(
@@ -330,19 +364,9 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
                     ? null
                     : () => _move(-1),
                 icon: const Icon(Icons.chevron_left, size: 20),
-              ),
-              Expanded(
-                child: TextButton(
-                  key: const ValueKey('heatmap_selected_date'),
-                  style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-                  onPressed: _pickDay,
-                  child: Text(
-                    I18nDateFormat.date(_selected),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-              IconButton(
+              );
+
+              final nextButton = IconButton(
                 key: const ValueKey('heatmap_next_day'),
                 tooltip: locale == AppLocale.en ? 'Next day' : '后一天',
                 constraints: const BoxConstraints.tightFor(
@@ -355,8 +379,9 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
                     ? null
                     : () => _move(1),
                 icon: const Icon(Icons.chevron_right, size: 20),
-              ),
-              IconButton(
+              );
+
+              final todayButton = IconButton(
                 key: const ValueKey('heatmap_today'),
                 tooltip: copy.today,
                 constraints: const BoxConstraints.tightFor(
@@ -365,13 +390,75 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
                 ),
                 onPressed: () => _select(widget.window.today),
                 icon: const Icon(Icons.today_outlined, size: 20),
-              ),
-            ],
+              );
+
+              final dateButton = TextButton(
+                key: const ValueKey('heatmap_selected_date'),
+                style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                onPressed: _pickDay,
+                child: Text(
+                  dateText,
+                  textAlign: TextAlign.center,
+                ),
+              );
+
+              final availableWidth = constraints.maxWidth;
+              final textStyle =
+                  Theme.of(context).textTheme.labelLarge ??
+                  DefaultTextStyle.of(context).style;
+              final painter = TextPainter(
+                text: TextSpan(text: dateText, style: textStyle),
+                textDirection: Directionality.of(context),
+                textScaler: MediaQuery.textScalerOf(context),
+              )..layout();
+              final naturalDateWidth = painter.width;
+              painter.dispose();
+
+              // Three 48dp icon buttons take 144dp, plus text button horizontal padding (24dp).
+              final fitsSingleRow =
+                  availableWidth.isFinite &&
+                  (naturalDateWidth + 168.0 <= availableWidth);
+
+              if (fitsSingleRow) {
+                return Row(
+                  children: [
+                    previousButton,
+                    Expanded(child: dateButton),
+                    nextButton,
+                    todayButton,
+                  ],
+                );
+              }
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: dateButton,
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      previousButton,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          nextButton,
+                          todayButton,
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
           Semantics(
             liveRegion: true,
             label:
-                '${I18nDateFormat.date(_selected)} · ${widget.describeDay(_selected)}',
+                '${AppDateFormat.date(context, _selected)} · ${widget.describeDay(_selected)}',
             excludeSemantics: true,
             child: AnimatedSwitcher(
               duration: DesignTokens.durationFast,
@@ -457,7 +544,7 @@ class _CalendarHeatmapState extends State<CalendarHeatmap> {
     }
     final color = widget.colorForDay(day);
     final label =
-        '${I18nDateFormat.date(day)} · ${widget.describeDay(day)}${today ? ' · ${copy.today}' : ''}';
+        '${AppDateFormat.date(context, day)} · ${widget.describeDay(day)}${today ? ' · ${copy.today}' : ''}';
     return Semantics(
       key: ValueKey('heatmap_day_${HeatmapCalendarWindow.dateKey(day)}'),
       button: true,

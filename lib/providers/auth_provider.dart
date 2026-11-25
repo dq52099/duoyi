@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_config.dart';
 import '../services/account_local_data_cleaner.dart';
+import '../core/oauth_calendar_storage.dart';
+import '../core/oauth_calendar_inventory.dart';
+import '../core/account_preference_writes.dart';
 import '../services/api_client.dart';
 
 class AuthState {
@@ -124,20 +127,138 @@ final class AuthSessionLease {
       _token = state.token;
 }
 
+/// Guest authority requires verified storage hydration and exact owner absence.
+/// A default AuthState alone is not evidence of a prepared guest workspace.
+final class AuthGuestWorkspaceLease {
+  final AuthProvider _owner;
+  final ApiClient _client;
+  final int _epoch;
+  AuthGuestWorkspaceLease._(this._owner, this._client, this._epoch);
+}
+
+final class AuthOAuthScopeInitializationTicket {
+  AuthOAuthScopeInitializationTicket._();
+  @override
+  String toString() => 'AuthOAuthScopeInitializationTicket';
+}
+
+final class AuthOAuthScopeInitializationOutcome {
+  final AuthOAuthScopeInitializationTicket? ticket;
+  final bool Function() _originalCurrent;
+  AuthOAuthScopeInitializationOutcome._(this.ticket, this._originalCurrent);
+  bool get isCurrent => _originalCurrent();
+}
+
+final class _AuthOAuthInitializationBinding {
+  final AuthOAuthScopeInitializationTicket ticket =
+      AuthOAuthScopeInitializationTicket._();
+  final OAuthScopeInitializationTicket coreTicket;
+  final SharedPreferences preferences;
+  final bool account;
+  final bool Function() resourcesCurrent;
+  _AuthOAuthInitializationBinding(
+    this.coreTicket,
+    this.preferences,
+    this.account,
+    this.resourcesCurrent,
+  );
+}
+
+/// Only the real Auth issuer can wrap a verified durable guest identity.
+/// Consumers must still reload and compare [workspace] inside the storage lane.
+final class AuthGuestOAuthScopeLease {
+  final AuthGuestWorkspaceLease _guest;
+  final int _preparation;
+  final OAuthScopedWorkspaceSnapshot workspace;
+  AuthGuestOAuthScopeLease._(this._guest, this._preparation, this.workspace);
+}
+
+final class _VerifiedGuestAuthStorage {
+  final SharedPreferences preferences;
+  final Object? authState;
+  _VerifiedGuestAuthStorage(this.preferences, this.authState);
+}
+
+/// Recovery-only authority. Ordinary OAuth remains unavailable until the
+/// exact original diagnostic has been restored and independently validated.
+final class AuthGuestOAuthReconciliationLease {
+  final AuthGuestWorkspaceLease _guest;
+  final int _preparation;
+  final _VerifiedGuestAuthStorage _evidence;
+  final OAuthScopedReconciliationSnapshot recovery;
+  const AuthGuestOAuthReconciliationLease._(
+    this._guest,
+    this._preparation,
+    this._evidence,
+    this.recovery,
+  );
+}
+
+final class _VerifiedAccountAuthStorage {
+  final SharedPreferences preferences;
+  final Object? authState;
+  final String accountOwner;
+  const _VerifiedAccountAuthStorage(
+    this.preferences,
+    this.authState,
+    this.accountOwner,
+  );
+}
+
+/// Only Auth can issue this capability after checked account storage preparation.
+final class AuthOAuthScopeLease {
+  final AuthGuestOAuthScopeLease? _guest;
+  final AuthSessionLease? _session;
+  final _VerifiedAccountAuthStorage? _evidence;
+  final int _preparation;
+  final OAuthScopedWorkspaceSnapshot workspace;
+  AuthOAuthScopeLease._guest(AuthGuestOAuthScopeLease guest)
+    : _guest = guest,
+      _session = null,
+      _evidence = null,
+      _preparation = 0,
+      workspace = guest.workspace;
+  const AuthOAuthScopeLease._account(
+    this._session,
+    this._evidence,
+    this._preparation,
+    this.workspace,
+  ) : _guest = null;
+}
+
+final class AuthOAuthReconciliationLease {
+  final AuthOAuthScopeLease _lease;
+  final OAuthScopedReconciliationSnapshot recovery;
+  const AuthOAuthReconciliationLease._(this._lease, this.recovery);
+}
+
 /// 登录态 + 连接到服务器的 ApiClient。
 ///
 /// 服务器地址完全由 [AppConfig.bakedServerUrl] 决定，不可在运行时修改。
 /// 对于历史版本在本地留下的 `auth_base_url_admin` 键，启动时会清理掉。
 class AuthProvider extends ChangeNotifier {
+  static const Object _uncheckedAuthState = Object();
   AuthState _state = const AuthState();
   late String _baseUrl;
   Map<String, dynamic> _serverConfig = const {};
   late ApiClient _client;
   int _stateMutationSerial = 0;
   int _sessionEpoch = 0;
+  int _successfulAccountTransitionRevision = 0;
   bool _isDisposed = false;
   bool _accountTransitionInProgress = false;
   bool _localAccountDataBlocked = false;
+  bool _authStorageReady = false;
+  bool _verifiedGuestOwnerAbsence = false;
+  _VerifiedGuestAuthStorage? _verifiedGuestAuthStorage;
+  OAuthScopedWorkspaceSnapshot? _preparedGuestOAuthScope;
+  int _guestOAuthPreparation = 0;
+  int _guestOAuthPreparationRequest = 0;
+  _VerifiedAccountAuthStorage? _verifiedAccountAuthStorage;
+  OAuthScopedWorkspaceSnapshot? _preparedAccountOAuthScope;
+  int _accountOAuthPreparation = 0;
+  int _accountOAuthPreparationRequest = 0;
+  _AuthOAuthInitializationBinding? _oauthInitialization;
   String? _verifiedWidgetOwnerIdentity;
   Future<void> _accountWritebackTail = Future<void>.value();
   int _refreshMeRequestSerial = 0;
@@ -164,8 +285,746 @@ class AuthProvider extends ChangeNotifier {
   void Function()? onWidgetPublicationAuthorityRevoked;
 
   AuthState get state => _state;
+
+  /// Invalidates retained UI authority across guest/login/logout transitions.
+  int get sessionGeneration => _sessionEpoch;
+
+  /// Advances only after every required transition write/cleanup has succeeded.
+  int get successfulAccountTransitionRevision =>
+      _successfulAccountTransitionRevision;
   bool get isAccountTransitionInProgress => _accountTransitionInProgress;
   bool get isLocalAccountDataBlocked => _localAccountDataBlocked;
+  bool get isGuestWorkspaceReady =>
+      _authStorageReady &&
+      _verifiedGuestOwnerAbsence &&
+      !_state.isLoggedIn &&
+      !_isDisposed &&
+      !_accountTransitionInProgress &&
+      !_localAccountDataBlocked;
+
+  AuthGuestWorkspaceLease captureGuestWorkspaceLease() {
+    if (!isGuestWorkspaceReady) {
+      throw const ApiException('账号已发生变化，请在当前账号重试操作。');
+    }
+    return AuthGuestWorkspaceLease._(this, _client, _sessionEpoch);
+  }
+
+  bool isGuestWorkspaceLeaseCurrent(AuthGuestWorkspaceLease lease) =>
+      isGuestWorkspaceReady &&
+      identical(lease._owner, this) &&
+      identical(lease._client, _client) &&
+      lease._epoch == _sessionEpoch;
+
+  AuthGuestOAuthScopeLease captureGuestOAuthScopeLease() {
+    final guest = captureGuestWorkspaceLease();
+    final scope = _preparedGuestOAuthScope;
+    if (scope == null ||
+        !OAuthCalendarStorage.isScopedWorkspaceRuntimeCurrent(scope)) {
+      throw const OAuthScopedWorkspaceUnavailable();
+    }
+    return AuthGuestOAuthScopeLease._(guest, _guestOAuthPreparation, scope);
+  }
+
+  bool isGuestOAuthScopeLeaseCurrent(AuthGuestOAuthScopeLease lease) =>
+      isGuestWorkspaceLeaseCurrent(lease._guest) &&
+      lease._preparation == _guestOAuthPreparation &&
+      identical(lease.workspace, _preparedGuestOAuthScope) &&
+      OAuthCalendarStorage.isScopedWorkspaceRuntimeCurrent(lease.workspace);
+
+  /// Retention never grants adoption, publication, HTTP or ordinary writes.
+  bool isGuestOAuthScopeLeaseRetainable(AuthGuestOAuthScopeLease lease) =>
+      isGuestWorkspaceLeaseCurrent(lease._guest) &&
+      lease._preparation == _guestOAuthPreparation &&
+      identical(lease.workspace, _preparedGuestOAuthScope) &&
+      (OAuthCalendarStorage.isScopedWorkspaceRuntimeCurrent(lease.workspace) ||
+          OAuthCalendarStorage.hasMatchingScopedReconciliation(
+            lease.workspace,
+          ));
+
+  AuthGuestOAuthReconciliationLease captureGuestOAuthReconciliationLease() {
+    final guest = captureGuestWorkspaceLease();
+    final scope = _preparedGuestOAuthScope;
+    final evidence = _verifiedGuestAuthStorage;
+    if (scope == null || evidence == null) {
+      throw const OAuthScopedWorkspaceUnavailable();
+    }
+    return AuthGuestOAuthReconciliationLease._(
+      guest,
+      _guestOAuthPreparation,
+      evidence,
+      OAuthCalendarStorage.captureScopedReconciliation(scope),
+    );
+  }
+
+  bool _isGuestOAuthReconciliationIdentityCurrent(
+    AuthGuestOAuthReconciliationLease lease,
+  ) =>
+      isGuestWorkspaceLeaseCurrent(lease._guest) &&
+      lease._preparation == _guestOAuthPreparation &&
+      identical(lease._evidence, _verifiedGuestAuthStorage) &&
+      identical(lease.recovery.workspace, _preparedGuestOAuthScope);
+
+  bool isGuestOAuthReconciliationLeaseCurrent(
+    AuthGuestOAuthReconciliationLease lease,
+  ) =>
+      _isGuestOAuthReconciliationIdentityCurrent(lease) &&
+      OAuthCalendarStorage.isScopedReconciliationRuntimeCurrent(lease.recovery);
+
+  bool isGuestOAuthReconciliationSettled(
+    AuthGuestOAuthReconciliationLease lease,
+  ) =>
+      _isGuestOAuthReconciliationIdentityCurrent(lease) &&
+      OAuthCalendarStorage.isScopedWorkspaceRuntimeCurrent(
+        lease.recovery.workspace,
+      );
+
+  Future<void> restoreGuestOAuthScope({bool Function()? isCurrent}) =>
+      _prepareGuestOAuthScope(isCurrent: isCurrent);
+  Future<void> initializeGuestOAuthScope({bool Function()? isCurrent}) =>
+      _prepareGuestOAuthScope(initialize: true, isCurrent: isCurrent);
+  Future<void> confirmGuestOAuthScopeInitialization({
+    bool Function()? isCurrent,
+    AuthOAuthScopeInitializationTicket? expectedInitialization,
+    bool requireExpectedInitialization = false,
+  }) => _prepareGuestOAuthScope(
+    confirm: true,
+    isCurrent: isCurrent,
+    expectedInitialization: expectedInitialization,
+    requireExpectedInitialization: requireExpectedInitialization,
+  );
+
+  AuthOAuthScopeLease _captureAccountOAuthIdentity() {
+    final session = captureSessionLease();
+    final evidence = _verifiedAccountAuthStorage;
+    final scope = _preparedAccountOAuthScope;
+    if (!_authStorageReady ||
+        evidence == null ||
+        scope == null ||
+        evidence.accountOwner != _stableAccountIdentity(_state)) {
+      throw const OAuthScopedWorkspaceUnavailable();
+    }
+    return AuthOAuthScopeLease._account(
+      session,
+      evidence,
+      _accountOAuthPreparation,
+      scope,
+    );
+  }
+
+  AuthOAuthScopeLease captureOAuthScopeLease() {
+    if (!_state.isLoggedIn) {
+      return AuthOAuthScopeLease._guest(captureGuestOAuthScopeLease());
+    }
+    final lease = _captureAccountOAuthIdentity();
+    if (!isOAuthScopeLeaseCurrent(lease)) {
+      throw const OAuthScopedWorkspaceUnavailable();
+    }
+    return lease;
+  }
+
+  bool _isAccountOAuthIdentityCurrent(AuthOAuthScopeLease lease) =>
+      lease._session != null &&
+      isSessionLeaseCurrent(lease._session) &&
+      _authStorageReady &&
+      identical(lease._evidence, _verifiedAccountAuthStorage) &&
+      lease._evidence?.accountOwner == _stableAccountIdentity(_state) &&
+      lease._preparation == _accountOAuthPreparation &&
+      identical(lease.workspace, _preparedAccountOAuthScope);
+
+  bool isOAuthScopeLeaseCurrent(AuthOAuthScopeLease lease) =>
+      lease._guest != null
+      ? isGuestOAuthScopeLeaseCurrent(lease._guest)
+      : _isAccountOAuthIdentityCurrent(lease) &&
+            OAuthCalendarStorage.isScopedWorkspaceRuntimeCurrent(
+              lease.workspace,
+            );
+
+  bool isOAuthScopeLeaseRetainable(AuthOAuthScopeLease lease) =>
+      lease._guest != null
+      ? isGuestOAuthScopeLeaseRetainable(lease._guest)
+      : _isAccountOAuthIdentityCurrent(lease) &&
+            (OAuthCalendarStorage.isScopedWorkspaceRuntimeCurrent(
+                  lease.workspace,
+                ) ||
+                OAuthCalendarStorage.hasMatchingScopedReconciliation(
+                  lease.workspace,
+                ));
+
+  AuthOAuthReconciliationLease captureOAuthReconciliationLease() {
+    final AuthOAuthScopeLease lease;
+    if (_state.isLoggedIn) {
+      lease = _captureAccountOAuthIdentity();
+    } else {
+      final recovery = captureGuestOAuthReconciliationLease();
+      lease = AuthOAuthScopeLease._guest(
+        AuthGuestOAuthScopeLease._(
+          recovery._guest,
+          recovery._preparation,
+          recovery.recovery.workspace,
+        ),
+      );
+    }
+    if (!isOAuthScopeLeaseRetainable(lease)) {
+      throw const OAuthScopedWorkspaceUnavailable();
+    }
+    return AuthOAuthReconciliationLease._(
+      lease,
+      OAuthCalendarStorage.captureScopedReconciliation(lease.workspace),
+    );
+  }
+
+  bool isOAuthReconciliationLeaseCurrent(AuthOAuthReconciliationLease lease) =>
+      isOAuthScopeLeaseRetainable(lease._lease) &&
+      OAuthCalendarStorage.isScopedReconciliationRuntimeCurrent(lease.recovery);
+
+  bool isOAuthReconciliationSettled(AuthOAuthReconciliationLease lease) =>
+      isOAuthScopeLeaseCurrent(lease._lease);
+
+  Future<void> restoreOAuthScope({bool Function()? isCurrent}) =>
+      _state.isLoggedIn
+      ? _prepareAccountOAuthScope(isCurrent: isCurrent)
+      : restoreGuestOAuthScope(isCurrent: isCurrent);
+  Future<void> initializeOAuthScope({bool Function()? isCurrent}) =>
+      _state.isLoggedIn
+      ? _prepareAccountOAuthScope(initialize: true, isCurrent: isCurrent)
+      : initializeGuestOAuthScope(isCurrent: isCurrent);
+  Future<void> confirmOAuthScopeInitialization({
+    bool Function()? isCurrent,
+    AuthOAuthScopeInitializationTicket? expectedInitialization,
+    bool requireExpectedInitialization = false,
+  }) {
+    final binding = _requireOAuthInitialization(
+      expectedInitialization,
+      requireExpectedInitialization,
+    );
+    return (binding?.account ?? _state.isLoggedIn)
+        ? _prepareAccountOAuthScope(
+            confirm: true,
+            isCurrent: isCurrent,
+            expectedInitialization: expectedInitialization,
+            requireExpectedInitialization: requireExpectedInitialization,
+          )
+        : confirmGuestOAuthScopeInitialization(
+            isCurrent: isCurrent,
+            expectedInitialization: expectedInitialization,
+            requireExpectedInitialization: requireExpectedInitialization,
+          );
+  }
+
+  _AuthOAuthInitializationBinding? _requireOAuthInitialization(
+    AuthOAuthScopeInitializationTicket? expected,
+    bool required,
+  ) {
+    if (required && expected == null) {
+      throw ArgumentError('The original initialization ticket is required');
+    }
+    if (expected == null) return null;
+    final binding = _oauthInitialization;
+    if (binding == null ||
+        !identical(binding.ticket, expected) ||
+        !binding.resourcesCurrent() ||
+        !OAuthCalendarStorage.isScopeInitializationRuntimeCurrent(
+          binding.coreTicket,
+          binding.preferences,
+        )) {
+      throw const OAuthScopedWorkspaceUnavailable();
+    }
+    return binding;
+  }
+
+  AuthOAuthScopeInitializationTicket? captureOAuthScopeInitializationTicket({
+    required bool Function() isCurrent,
+  }) {
+    final binding = _oauthInitialization;
+    if (!_oauthCallerCurrent(isCurrent) ||
+        binding == null ||
+        !binding.resourcesCurrent() ||
+        !OAuthCalendarStorage.isScopeInitializationRuntimeCurrent(
+          binding.coreTicket,
+          binding.preferences,
+        )) {
+      return null;
+    }
+    return binding.ticket;
+  }
+
+  Future<AuthOAuthScopeInitializationTicket?> initializeOAuthScopeWithTicket({
+    required bool Function() isCurrent,
+  }) async {
+    final outcome = await initializeOAuthScopeWithOutcome(isCurrent: isCurrent);
+    if (!outcome.isCurrent) throw const AccountPreferenceWriteCanceled();
+    return outcome.ticket;
+  }
+
+  /// Carries the original completion predicate through consumer await boundaries.
+  Future<AuthOAuthScopeInitializationOutcome> initializeOAuthScopeWithOutcome({
+    required bool Function() isCurrent,
+  }) => _prepareOAuthScopeWithOutcome(initialize: true, isCurrent: isCurrent);
+
+  Future<AuthOAuthScopeInitializationOutcome>
+  confirmOAuthScopeInitializationWithOutcome({
+    required bool Function() isCurrent,
+    required AuthOAuthScopeInitializationTicket expectedInitialization,
+  }) => _prepareOAuthScopeWithOutcome(
+    confirm: true,
+    isCurrent: isCurrent,
+    expectedInitialization: expectedInitialization,
+  );
+
+  Future<AuthOAuthScopeInitializationOutcome> _prepareOAuthScopeWithOutcome({
+    bool initialize = false,
+    bool confirm = false,
+    required bool Function() isCurrent,
+    AuthOAuthScopeInitializationTicket? expectedInitialization,
+  }) async {
+    final initialization = _requireOAuthInitialization(
+      expectedInitialization,
+      confirm,
+    );
+    bool Function()? originalOutcomeCurrent;
+    void captureOutcome(bool Function() current) =>
+        originalOutcomeCurrent = current;
+    try {
+      if (initialization?.account ?? _state.isLoggedIn) {
+        await _prepareAccountOAuthScope(
+          initialize: initialize,
+          confirm: confirm,
+          isCurrent: isCurrent,
+          expectedInitialization: expectedInitialization,
+          requireExpectedInitialization: confirm,
+          returnPendingTicket: true,
+          onOutcomeReady: captureOutcome,
+        );
+      } else {
+        await _prepareGuestOAuthScope(
+          initialize: initialize,
+          confirm: confirm,
+          isCurrent: isCurrent,
+          expectedInitialization: expectedInitialization,
+          requireExpectedInitialization: confirm,
+          returnPendingTicket: true,
+          onOutcomeReady: captureOutcome,
+        );
+      }
+      if (!_oauthCallerCurrent(isCurrent) ||
+          originalOutcomeCurrent?.call() != true) {
+        throw const AccountPreferenceWriteCanceled();
+      }
+      return AuthOAuthScopeInitializationOutcome._(
+        null,
+        originalOutcomeCurrent!,
+      );
+    } on OAuthScopeInitializationPending catch (pending) {
+      if (!_oauthCallerCurrent(isCurrent) ||
+          (originalOutcomeCurrent != null && !originalOutcomeCurrent!())) {
+        throw const AccountPreferenceWriteCanceled();
+      }
+      if (originalOutcomeCurrent == null) rethrow;
+      final binding = _oauthInitialization;
+      if (pending.ticket == null ||
+          binding == null ||
+          !identical(binding.coreTicket, pending.ticket) ||
+          !binding.resourcesCurrent() ||
+          !OAuthCalendarStorage.isScopeInitializationRuntimeCurrent(
+            binding.coreTicket,
+            binding.preferences,
+          )) {
+        rethrow;
+      }
+      return AuthOAuthScopeInitializationOutcome._(
+        binding.ticket,
+        () =>
+            originalOutcomeCurrent!() &&
+            identical(_oauthInitialization, binding) &&
+            binding.resourcesCurrent() &&
+            OAuthCalendarStorage.isScopeInitializationRuntimeCurrent(
+              binding.coreTicket,
+              binding.preferences,
+            ),
+      );
+    }
+  }
+
+  static bool _oauthCallerCurrent(bool Function()? isCurrent) {
+    try {
+      return isCurrent?.call() ?? true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _prepareAccountOAuthScope({
+    bool initialize = false,
+    bool confirm = false,
+    bool Function()? isCurrent,
+    AuthOAuthScopeInitializationTicket? expectedInitialization,
+    bool requireExpectedInitialization = false,
+    bool returnPendingTicket = false,
+    void Function(bool Function())? onOutcomeReady,
+  }) async {
+    if (!_oauthCallerCurrent(isCurrent)) {
+      throw const AccountPreferenceWriteCanceled();
+    }
+    final initialization = _requireOAuthInitialization(
+      expectedInitialization,
+      requireExpectedInitialization,
+    );
+    if (initialization != null && !initialization.account) {
+      throw const OAuthScopedWorkspaceUnavailable();
+    }
+    final session = captureSessionLease();
+    final evidence = _verifiedAccountAuthStorage;
+    if (!_authStorageReady ||
+        evidence == null ||
+        evidence.accountOwner != _stableAccountIdentity(_state)) {
+      throw const OAuthScopedWorkspaceUnavailable();
+    }
+    final failure = OAuthCalendarStorage.failure;
+    if (failure != null) throw failure;
+    final preferences = evidence.preferences;
+    final originalOwner = preferences.get(OAuthCalendarStorage.scopeOwnerKey);
+    var preparation = _accountOAuthPreparation;
+    final request = ++_accountOAuthPreparationRequest;
+    final epoch = OAuthCalendarStorage.epoch;
+    final reset = OAuthCalendarStorage.resetRevision;
+    final writes = AccountPreferenceWrites.generation;
+    final accounts = AccountLocalDataCleaner.accountDataGeneration;
+    bool resourcesCurrent() =>
+        isSessionLeaseCurrent(session) &&
+        identical(evidence, _verifiedAccountAuthStorage) &&
+        preparation == _accountOAuthPreparation &&
+        epoch == OAuthCalendarStorage.epoch &&
+        reset == OAuthCalendarStorage.resetRevision &&
+        writes == AccountPreferenceWrites.generation &&
+        accounts == AccountLocalDataCleaner.accountDataGeneration;
+    bool current() =>
+        _oauthCallerCurrent(isCurrent) &&
+        resourcesCurrent() &&
+        request == _accountOAuthPreparationRequest;
+    var authorityChanged = false;
+    OAuthScopedWorkspaceSnapshot? completedScope;
+    OAuthScopeInitializationPending? initializationPending;
+    try {
+      await _queueAccountWriteback(() async {
+        await AccountPreferenceWrites.runResult<void>((token) {
+          bool admitted() =>
+              token.isCurrent &&
+              current() &&
+              (initialization == null || initialization.resourcesCurrent());
+          return OAuthCalendarStorage.run<void>(
+            () async {
+              final singleton = await SharedPreferences.getInstance();
+              if (!admitted() || !identical(singleton, preferences)) {
+                throw const AccountPreferenceWriteCanceled();
+              }
+              await preferences.reload();
+              if (!admitted()) throw const AccountPreferenceWriteCanceled();
+              if (preferences.get('auth_state') != evidence.authState ||
+                  preferences.get(
+                        AccountLocalDataCleaner.accountDataOwnerKey,
+                      ) !=
+                      evidence.accountOwner ||
+                  (!confirm &&
+                      preferences.get(OAuthCalendarStorage.scopeOwnerKey) !=
+                          originalOwner) ||
+                  !(initialize || confirm
+                      ? OAuthCalendarStorage.isEmptyAccountScopeLocked(
+                          preferences,
+                          expectedAccountOwner: evidence.accountOwner,
+                          allowExistingOwner: true,
+                        )
+                      : _canRestoreAccountOAuthInventoryLocked(
+                          preferences,
+                          evidence.accountOwner,
+                        ))) {
+                throw const OAuthScopedWorkspaceUnavailable();
+              }
+              if (!confirm) {
+                OAuthCalendarStorage.ensureAccountAdmissionLocked(preferences);
+              }
+              if (initialization == null) {
+                preparation = ++_accountOAuthPreparation;
+              }
+              _preparedAccountOAuthScope = null;
+              authorityChanged = true;
+              final OAuthScopedWorkspaceSnapshot? scope;
+              try {
+                if (confirm) {
+                  scope =
+                      await OAuthCalendarStorage.confirmAccountScopeInitializationLocked(
+                        preferences,
+                        expectedAuthState: evidence.authState,
+                        expectedAccountOwner: evidence.accountOwner,
+                        isCurrent: admitted,
+                        expectedInitialization: initialization?.coreTicket,
+                        requireExpectedInitialization: initialization != null,
+                      );
+                } else if (initialize) {
+                  scope =
+                      await OAuthCalendarStorage.initializeEmptyAccountScopeLocked(
+                        preferences,
+                        expectedAuthState: evidence.authState,
+                        expectedAccountOwner: evidence.accountOwner,
+                        isCurrent: admitted,
+                      );
+                } else {
+                  scope = OAuthCalendarStorage.readScopedWorkspaceLocked(
+                    preferences,
+                    expectedAuthState: evidence.authState,
+                    expectedAccountOwner: evidence.accountOwner,
+                  );
+                }
+              } on OAuthScopeInitializationPending catch (pending) {
+                if (initialize &&
+                    pending.ticket != null &&
+                    resourcesCurrent() &&
+                    OAuthCalendarStorage.isScopeInitializationRuntimeCurrent(
+                      pending.ticket!,
+                      preferences,
+                    )) {
+                  _oauthInitialization = _AuthOAuthInitializationBinding(
+                    pending.ticket!,
+                    preferences,
+                    true,
+                    resourcesCurrent,
+                  );
+                }
+                if (!_oauthCallerCurrent(isCurrent) ||
+                    (initialization != null && !current())) {
+                  throw const AccountPreferenceWriteCanceled();
+                }
+                if (!returnPendingTicket && initialization == null) rethrow;
+                initializationPending = pending;
+                return;
+              }
+              if (!admitted()) throw const AccountPreferenceWriteCanceled();
+              if (scope == null) throw const OAuthScopedWorkspaceUnavailable();
+              OAuthCalendarStorage.ensureScopedWorkspaceCurrentLocked(
+                scope,
+                preferences,
+              );
+              OAuthCalendarInventory.validate(preferences, scope.record);
+              if (initialization != null) {
+                preparation = ++_accountOAuthPreparation;
+              }
+              _oauthInitialization = null;
+              _preparedAccountOAuthScope = scope;
+              completedScope = scope;
+            },
+            epoch: epoch,
+            isCurrent: admitted,
+          );
+        }, canceledResult: () => throw const AccountPreferenceWriteCanceled());
+      });
+    } finally {
+      // Notify after leaving both queues. A listener may start a fresh action,
+      // but cannot prolong the caller or the scope that was just revoked.
+      if (authorityChanged && !_isDisposed) notifyListeners();
+    }
+    if (initializationPending != null) {
+      if (!current()) throw const AccountPreferenceWriteCanceled();
+      onOutcomeReady?.call(current);
+      throw initializationPending!;
+    }
+    if (!current() ||
+        completedScope == null ||
+        !identical(completedScope, _preparedAccountOAuthScope) ||
+        !OAuthCalendarStorage.isScopedWorkspaceRuntimeCurrent(
+          completedScope!,
+        )) {
+      throw const AccountPreferenceWriteCanceled();
+    }
+    final originalScope = completedScope!;
+    onOutcomeReady?.call(
+      () =>
+          current() &&
+          identical(originalScope, _preparedAccountOAuthScope) &&
+          OAuthCalendarStorage.isScopedWorkspaceRuntimeCurrent(originalScope),
+    );
+  }
+
+  Future<void> _prepareGuestOAuthScope({
+    bool initialize = false,
+    bool confirm = false,
+    bool Function()? isCurrent,
+    AuthOAuthScopeInitializationTicket? expectedInitialization,
+    bool requireExpectedInitialization = false,
+    bool returnPendingTicket = false,
+    void Function(bool Function())? onOutcomeReady,
+  }) async {
+    if (!_oauthCallerCurrent(isCurrent)) {
+      throw const AccountPreferenceWriteCanceled();
+    }
+    // Capture originating Auth/client/session/store before the first await.
+    final initialization = _requireOAuthInitialization(
+      expectedInitialization,
+      requireExpectedInitialization,
+    );
+    if (initialization != null && initialization.account) {
+      throw const OAuthScopedWorkspaceUnavailable();
+    }
+    final guest = captureGuestWorkspaceLease();
+    final evidence = _verifiedGuestAuthStorage;
+    if (evidence == null) throw const OAuthScopedWorkspaceUnavailable();
+    // An unsuccessful ordinary prepare must not destroy the original private
+    // scope evidence needed by this issuer's matching-diagnostic recovery.
+    final failure = OAuthCalendarStorage.failure;
+    if (failure != null) throw failure;
+    final preferences = evidence.preferences;
+    final originalOwner = preferences.get(OAuthCalendarStorage.scopeOwnerKey);
+    var preparation = _guestOAuthPreparation;
+    final request = ++_guestOAuthPreparationRequest;
+    final epoch = OAuthCalendarStorage.epoch;
+    final reset = OAuthCalendarStorage.resetRevision;
+    final writeGeneration = AccountPreferenceWrites.generation;
+    final accountGeneration = AccountLocalDataCleaner.accountDataGeneration;
+    bool resourcesCurrent() =>
+        isGuestWorkspaceLeaseCurrent(guest) &&
+        identical(_verifiedGuestAuthStorage, evidence) &&
+        preparation == _guestOAuthPreparation &&
+        epoch == OAuthCalendarStorage.epoch &&
+        reset == OAuthCalendarStorage.resetRevision &&
+        writeGeneration == AccountPreferenceWrites.generation &&
+        accountGeneration == AccountLocalDataCleaner.accountDataGeneration;
+    bool current() =>
+        _oauthCallerCurrent(isCurrent) &&
+        resourcesCurrent() &&
+        request == _guestOAuthPreparationRequest;
+    var authorityChanged = false;
+    OAuthScopedWorkspaceSnapshot? completedScope;
+    OAuthScopeInitializationPending? initializationPending;
+    try {
+      await _queueAccountWriteback(() async {
+        // Enroll here, outside any consumer write. Login may drain this operation
+        // without waiting for a write that itself waits on the Auth tail.
+        await AccountPreferenceWrites.runResult<void>((token) {
+          bool admitted() =>
+              current() &&
+              token.isCurrent &&
+              (initialization == null || initialization.resourcesCurrent());
+          return OAuthCalendarStorage.run<void>(
+            () async {
+              final singleton = await SharedPreferences.getInstance();
+              if (!admitted() || !identical(singleton, preferences)) {
+                throw const AccountPreferenceWriteCanceled();
+              }
+              await preferences.reload();
+              if (!admitted()) throw const AccountPreferenceWriteCanceled();
+              if (preferences.get('auth_state') != evidence.authState ||
+                  preferences.containsKey(
+                    AccountLocalDataCleaner.accountDataOwnerKey,
+                  ) ||
+                  (!confirm &&
+                      preferences.get(OAuthCalendarStorage.scopeOwnerKey) !=
+                          originalOwner) ||
+                  !(initialize || confirm
+                      ? OAuthCalendarStorage.isEmptyGuestScopeLocked(
+                          preferences,
+                          allowExistingOwner: true,
+                        )
+                      : _canRestoreGuestOAuthInventoryLocked(preferences))) {
+                throw const OAuthScopedWorkspaceUnavailable();
+              }
+              // Prior owned writes have now settled in this lane. If one became
+              // indeterminate, run() refused admission before reaching this
+              // revocation, leaving its original issuer evidence recoverable.
+              if (!confirm) {
+                OAuthCalendarStorage.ensureAccountAdmissionLocked(preferences);
+              }
+              if (initialization == null) {
+                preparation = ++_guestOAuthPreparation;
+              }
+              _preparedGuestOAuthScope = null;
+              authorityChanged = true;
+              final OAuthScopedWorkspaceSnapshot? scope;
+              try {
+                if (confirm) {
+                  scope =
+                      await OAuthCalendarStorage.confirmGuestScopeInitializationLocked(
+                        preferences,
+                        expectedAuthState: evidence.authState,
+                        isCurrent: admitted,
+                        expectedInitialization: initialization?.coreTicket,
+                        requireExpectedInitialization: initialization != null,
+                      );
+                } else if (initialize) {
+                  scope =
+                      await OAuthCalendarStorage.initializeEmptyGuestScopeLocked(
+                        preferences,
+                        expectedAuthState: evidence.authState,
+                        isCurrent: admitted,
+                      );
+                } else {
+                  scope = OAuthCalendarStorage.readScopedWorkspaceLocked(
+                    preferences,
+                    expectedAuthState: evidence.authState,
+                  );
+                }
+              } on OAuthScopeInitializationPending catch (pending) {
+                if (initialize &&
+                    pending.ticket != null &&
+                    resourcesCurrent() &&
+                    OAuthCalendarStorage.isScopeInitializationRuntimeCurrent(
+                      pending.ticket!,
+                      preferences,
+                    )) {
+                  _oauthInitialization = _AuthOAuthInitializationBinding(
+                    pending.ticket!,
+                    preferences,
+                    false,
+                    resourcesCurrent,
+                  );
+                }
+                if (!_oauthCallerCurrent(isCurrent) ||
+                    (initialization != null && !current())) {
+                  throw const AccountPreferenceWriteCanceled();
+                }
+                if (!returnPendingTicket && initialization == null) rethrow;
+                initializationPending = pending;
+                return;
+              }
+              if (!admitted()) throw const AccountPreferenceWriteCanceled();
+              if (scope == null) throw const OAuthScopedWorkspaceUnavailable();
+              OAuthCalendarStorage.ensureScopedWorkspaceCurrentLocked(
+                scope,
+                preferences,
+              );
+              if (initialization != null) {
+                preparation = ++_guestOAuthPreparation;
+              }
+              _oauthInitialization = null;
+              _preparedGuestOAuthScope = scope;
+              completedScope = scope;
+            },
+            epoch: epoch,
+            isCurrent: admitted,
+          );
+        }, canceledResult: () => throw const AccountPreferenceWriteCanceled());
+      });
+    } finally {
+      if (authorityChanged && !_isDisposed) notifyListeners();
+    }
+    if (initializationPending != null) {
+      if (!current()) throw const AccountPreferenceWriteCanceled();
+      onOutcomeReady?.call(current);
+      throw initializationPending!;
+    }
+    if (!current() ||
+        completedScope == null ||
+        !identical(completedScope, _preparedGuestOAuthScope) ||
+        !OAuthCalendarStorage.isScopedWorkspaceRuntimeCurrent(
+          completedScope!,
+        )) {
+      throw const AccountPreferenceWriteCanceled();
+    }
+    final originalScope = completedScope!;
+    onOutcomeReady?.call(
+      () =>
+          current() &&
+          identical(originalScope, _preparedGuestOAuthScope) &&
+          OAuthCalendarStorage.isScopedWorkspaceRuntimeCurrent(originalScope),
+    );
+  }
 
   /// Available only after auth and owner writes report success and the owner
   /// readback matches the current stable identity.
@@ -242,6 +1101,7 @@ class AuthProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _revokeGuestWorkspaceReadiness();
     _verifiedWidgetOwnerIdentity = null;
     _sessionEpoch++;
     _stateMutationSerial++;
@@ -264,15 +1124,71 @@ class AuthProvider extends ChangeNotifier {
     if (_isDisposed || _accountTransitionInProgress) {
       throw const ApiException('账号正在切换，请稍后重试。');
     }
-    // Remain closed if hydration or its cleanup barrier fails or times out.
-    _localAccountDataBlocked = true;
-    _verifiedWidgetOwnerIdentity = null;
-    _accountTransitionInProgress = true;
-    _sessionEpoch++;
-    _markAccountMutation('storage_hydration');
+    // Readonly rehydration cannot revoke the only original issuer evidence
+    // while a matching transaction still needs explicit reconciliation.
+    final failure = OAuthCalendarStorage.failure;
+    if (failure != null) throw failure;
+    final claimSession = _sessionEpoch;
+    final claimMutation = _stateMutationSerial;
+    final claimClient = _client;
+    final hydrationOAuthEpoch = OAuthCalendarStorage.epoch;
+    final hydrationOAuthReset = OAuthCalendarStorage.resetRevision;
+    final hydrationWriteGeneration = AccountPreferenceWrites.generation;
+    final hydrationAccountGeneration =
+        AccountLocalDataCleaner.accountDataGeneration;
+    bool canClaim() =>
+        !_isDisposed &&
+        !_accountTransitionInProgress &&
+        claimSession == _sessionEpoch &&
+        claimMutation == _stateMutationSerial &&
+        identical(claimClient, _client) &&
+        hydrationOAuthReset == OAuthCalendarStorage.resetRevision &&
+        hydrationWriteGeneration == AccountPreferenceWrites.generation &&
+        hydrationAccountGeneration ==
+            AccountLocalDataCleaner.accountDataGeneration;
+    // Claim only after already-issued OAuth writes settle. Readonly hydration
+    // must not turn their failed rollback into an unreachable old diagnostic.
+    await OAuthCalendarStorage.run<void>(
+      () async {
+        if (!canClaim()) throw const AccountPreferenceWriteCanceled();
+        // Remain closed if admitted hydration or its cleanup barrier fails.
+        _localAccountDataBlocked = true;
+        _verifiedWidgetOwnerIdentity = null;
+        _accountTransitionInProgress = true;
+        _sessionEpoch++;
+        _markAccountMutation('storage_hydration');
+      },
+      epoch: hydrationOAuthEpoch,
+      isCurrent: canClaim,
+    );
+    final hydrationEpoch = _sessionEpoch;
+    final hydrationMutation = _stateMutationSerial;
+    final hydrationClient = _client;
+    bool hydrationCurrent() =>
+        !_isDisposed &&
+        hydrationEpoch == _sessionEpoch &&
+        hydrationMutation == _stateMutationSerial &&
+        identical(hydrationClient, _client);
+    // Readonly hydration cannot adopt authority created after this request.
+    // Ordinary retirement/recovery keeps its own transition authority below.
+    bool readonlyHydrationCurrent() =>
+        hydrationCurrent() &&
+        hydrationOAuthEpoch == OAuthCalendarStorage.epoch &&
+        hydrationOAuthReset == OAuthCalendarStorage.resetRevision &&
+        hydrationWriteGeneration == AccountPreferenceWrites.generation &&
+        hydrationAccountGeneration ==
+            AccountLocalDataCleaner.accountDataGeneration;
     notifyListeners();
     try {
-      await _queueAccountWriteback(_loadFromStorageNow);
+      await _queueAccountWriteback(
+        () => _loadFromStorageNow(
+          readonlyHydrationCurrent: readonlyHydrationCurrent,
+          hydrationOAuthEpoch: hydrationOAuthEpoch,
+        ),
+      );
+      if (!_isDisposed && !_localAccountDataBlocked) {
+        _successfulAccountTransitionRevision++;
+      }
     } finally {
       _accountTransitionInProgress = false;
       if (!_isDisposed) notifyListeners();
@@ -282,9 +1198,185 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _loadFromStorageNow() async {
+  Future<void> _loadFromStorageNow({
+    required bool Function() readonlyHydrationCurrent,
+    required int hydrationOAuthEpoch,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     if (_isDisposed) return;
+    await prefs.reload();
+    _requireNotDisposed();
+    final originalAuth = prefs.get('auth_state');
+    final verifiedGuest = _decodeVerifiedGuestState(originalAuth);
+    final hasOAuth = prefs.getKeys().any(OAuthCalendarStorage.isOAuthScopeKey);
+    AuthState? verifiedAccount;
+    if (originalAuth is String) {
+      try {
+        final value = jsonDecode(originalAuth);
+        if (value is Map<String, dynamic> &&
+            value['token'] is String &&
+            (value['token'] as String).isNotEmpty) {
+          final decoded = AuthState.fromJson(value);
+          if (decoded.isLoggedIn) verifiedAccount = decoded;
+        }
+      } catch (_) {}
+    }
+    final accountOwner = verifiedAccount == null
+        ? null
+        : _stableAccountIdentity(verifiedAccount);
+    // A same-account cold restore classifies private data before any owner
+    // write or normalization. Invalid owned bytes remain available for recovery.
+    if (hasOAuth &&
+        verifiedAccount != null &&
+        accountOwner != null &&
+        prefs.get(AccountLocalDataCleaner.accountDataOwnerKey) ==
+            accountOwner &&
+        !OAuthCalendarStorage.isAccountRetiring(prefs)) {
+      final loadedAccount = verifiedAccount;
+      final inventory = {
+        for (final key in prefs.getKeys().where(
+          OAuthCalendarStorage.isOAuthScopeKey,
+        ))
+          key: AccountPreferenceTransaction.freezeValue(prefs.get(key)),
+      };
+      try {
+        await OAuthCalendarStorage.run<void>(
+          () async {
+            await prefs.reload();
+            if (!readonlyHydrationCurrent() ||
+                prefs.get('auth_state') != originalAuth ||
+                !_canRestoreAccountOAuthInventoryLocked(prefs, accountOwner) ||
+                inventory.length !=
+                    prefs
+                        .getKeys()
+                        .where(OAuthCalendarStorage.isOAuthScopeKey)
+                        .length ||
+                !inventory.entries.every(
+                  (e) =>
+                      prefs.containsKey(e.key) &&
+                      AccountPreferenceTransaction.valuesEqual(
+                        prefs.get(e.key),
+                        e.value,
+                      ),
+                )) {
+              throw const OAuthScopedWorkspaceUnavailable();
+            }
+            final scope = OAuthCalendarStorage.readScopedWorkspaceLocked(
+              prefs,
+              expectedAuthState: originalAuth,
+              expectedAccountOwner: accountOwner,
+            );
+            if (!readonlyHydrationCurrent()) {
+              throw const OAuthScopedWorkspaceUnavailable();
+            }
+            if (scope != null) {
+              OAuthCalendarStorage.ensureScopedWorkspaceCurrentLocked(
+                scope,
+                prefs,
+              );
+            }
+            _baseUrl = AppConfig.bakedServerUrl;
+            _state = loadedAccount;
+            _client = ApiClient(baseUrl: _baseUrl, token: loadedAccount.token);
+            _verifiedAccountAuthStorage = _VerifiedAccountAuthStorage(
+              prefs,
+              originalAuth,
+              accountOwner,
+            );
+            _preparedAccountOAuthScope = scope;
+            _verifiedWidgetOwnerIdentity = accountOwner;
+            _authStorageReady = true;
+            _localAccountDataBlocked = false;
+          },
+          epoch: hydrationOAuthEpoch,
+          isCurrent: readonlyHydrationCurrent,
+        );
+      } catch (_) {
+        _blockLocalAccountData();
+        throw const AccountLocalDataCleanupBlockedException('账号归属未能安全保存，请重试。');
+      }
+      return;
+    }
+    // Narrow no-owner exception: strictly owned guest rows/cache (or an empty
+    // container) hydrate without sanitation. Legacy unbound data stays blocked.
+    if (verifiedGuest != null &&
+        hasOAuth &&
+        !prefs.containsKey('auth_base_url') &&
+        !prefs.containsKey('auth_base_url_admin') &&
+        _canRestoreGuestOAuthInventoryLocked(prefs)) {
+      final originalInventory = {
+        for (final key in prefs.getKeys().where(
+          OAuthCalendarStorage.isOAuthScopeKey,
+        ))
+          key: AccountPreferenceTransaction.freezeValue(prefs.get(key)),
+      };
+      try {
+        await OAuthCalendarStorage.run<void>(
+          () async {
+            await prefs.reload();
+            if (!readonlyHydrationCurrent() ||
+                prefs.get('auth_state') != originalAuth ||
+                !_canRestoreGuestOAuthInventoryLocked(prefs) ||
+                prefs
+                        .getKeys()
+                        .where(OAuthCalendarStorage.isOAuthScopeKey)
+                        .length !=
+                    originalInventory.length ||
+                !originalInventory.entries.every(
+                  (e) =>
+                      prefs.containsKey(e.key) &&
+                      AccountPreferenceTransaction.valuesEqual(
+                        prefs.get(e.key),
+                        e.value,
+                      ),
+                )) {
+              throw const OAuthScopedWorkspaceUnavailable();
+            }
+            final scope = OAuthCalendarStorage.readScopedWorkspaceLocked(
+              prefs,
+              expectedAuthState: originalAuth,
+            );
+            if (!readonlyHydrationCurrent()) {
+              throw const OAuthScopedWorkspaceUnavailable();
+            }
+            if (scope != null) {
+              OAuthCalendarStorage.ensureScopedWorkspaceCurrentLocked(
+                scope,
+                prefs,
+              );
+            }
+            // All readbacks and the original private hydration ticket settled.
+            // Publish synchronously before replacing its captured client.
+            _baseUrl = AppConfig.bakedServerUrl;
+            _state = verifiedGuest;
+            _client = ApiClient(baseUrl: _baseUrl);
+            _verifiedGuestAuthStorage = _VerifiedGuestAuthStorage(
+              prefs,
+              originalAuth,
+            );
+            _preparedGuestOAuthScope = scope;
+            _authStorageReady = true;
+            _verifiedGuestOwnerAbsence = true;
+            _localAccountDataBlocked = false;
+          },
+          epoch: hydrationOAuthEpoch,
+          isCurrent: readonlyHydrationCurrent,
+        );
+      } catch (_) {
+        _blockLocalAccountData();
+        throw const AccountLocalDataCleanupBlockedException('账号归属未能安全保存，请重试。');
+      }
+      return;
+    }
+    // Unowned OAuth data outside the strict read-only branch cannot acquire
+    // authority through ordinary startup normalization. Explicit retirement
+    // keeps the recovery path below and its own original authority.
+    if (hasOAuth &&
+        !prefs.containsKey(AccountLocalDataCleaner.accountDataOwnerKey) &&
+        !OAuthCalendarStorage.isAccountRetiring(prefs)) {
+      _blockLocalAccountData();
+      throw const AccountLocalDataCleanupBlockedException('账号归属未能安全保存，请重试。');
+    }
     // 清理旧版本可能遗留的本地服务器覆盖；当前策略不允许 APP 内改地址。
     await prefs.remove('auth_base_url');
     _requireNotDisposed();
@@ -300,6 +1392,15 @@ class AuthProvider extends ChangeNotifier {
         loadedState = AuthState.fromJson(json.decode(raw));
       } catch (_) {}
     }
+    await _recoverOAuthRetirementBeforeOwnerMutation(prefs);
+    // Never manufacture an account owner that makes unowned legacy OAuth
+    // credentials look eligible for migration into the loaded account.
+    if (!prefs.containsKey(OAuthCalendarStorage.retirementFenceKey) &&
+        !prefs.containsKey(AccountLocalDataCleaner.accountDataOwnerKey) &&
+        prefs.getKeys().any(OAuthCalendarStorage.isOAuthScopeKey)) {
+      _blockLocalAccountData();
+      throw const AccountLocalDataCleanupBlockedException('账号归属未能安全保存，请重试。');
+    }
     if (loadedState.isLoggedIn) {
       await _clearStoredAccountDataIfOwnerMismatched(prefs, loadedState);
     } else {
@@ -308,9 +1409,203 @@ class AuthProvider extends ChangeNotifier {
     if (_isDisposed) return;
     _state = loadedState;
     _client = ApiClient(baseUrl: _baseUrl, token: _state.token);
-    await _persistAccountDataOwner(prefs, _state);
+    await _persistAccountDataOwner(prefs, _state, expectedAuthState: raw);
     _requireNotDisposed();
     _localAccountDataBlocked = false;
+  }
+
+  // Pure inventory validation. Identity parsing cannot supply Auth authority;
+  // both callers still hold their original private ticket and storage CAS.
+  bool _canRestoreGuestOAuthInventoryLocked(SharedPreferences preferences) {
+    if (OAuthCalendarStorage.isEmptyGuestScopeLocked(
+      preferences,
+      allowExistingOwner: true,
+    )) {
+      return true;
+    }
+    if (preferences.containsKey(AccountLocalDataCleaner.accountDataOwnerKey) ||
+        OAuthCalendarStorage.isAccountRetiring(preferences)) {
+      return false;
+    }
+    final scope = OAuthScopedOwnerRecord.parse(
+      preferences.get(OAuthCalendarStorage.scopeOwnerKey),
+    );
+    if (scope == null || scope.scopeKind != 'guest') return false;
+    try {
+      OAuthCalendarInventory.validate(preferences, scope);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _canRestoreAccountOAuthInventoryLocked(
+    SharedPreferences preferences,
+    String owner,
+  ) {
+    if (OAuthCalendarStorage.isAccountRetiring(preferences) ||
+        preferences.get(AccountLocalDataCleaner.accountDataOwnerKey) != owner) {
+      return false;
+    }
+    final raw = preferences.get(OAuthCalendarStorage.scopeOwnerKey);
+    if (!preferences.containsKey(OAuthCalendarStorage.scopeOwnerKey)) {
+      return OAuthCalendarStorage.isEmptyAccountScopeLocked(
+        preferences,
+        expectedAccountOwner: owner,
+      );
+    }
+    final scope = OAuthScopedOwnerRecord.parse(raw);
+    if (scope == null ||
+        scope.scopeKind != 'account' ||
+        !scope.matchesAccountOwner(owner)) {
+      return false;
+    }
+    try {
+      OAuthCalendarInventory.validate(preferences, scope);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Explicit guest sanitation is separate from full-account logout cleanup.
+  /// It cannot adopt an account found during its queued storage preparation.
+  Future<void> prepareGuestOAuthWorkspace() async {
+    _requireNotDisposed();
+    if (_state.isLoggedIn || _accountTransitionInProgress) {
+      throw const ApiException('账号正在切换，请稍后重试。');
+    }
+    _accountTransitionInProgress = true;
+    _localAccountDataBlocked = true;
+    _revokeGuestWorkspaceReadiness();
+    _sessionEpoch++;
+    _markAccountMutation('guest_oauth_preparation');
+    notifyListeners();
+    try {
+      await _queueAccountWriteback(() async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.reload();
+        _requireNotDisposed();
+        final raw = prefs.get('auth_state');
+        if (prefs.containsKey(AccountLocalDataCleaner.accountDataOwnerKey) ||
+            _storedAuthIsLoggedIn(raw)) {
+          throw const AccountLocalDataCleanupBlockedException(
+            '账号归属未能安全保存，请重试。',
+          );
+        }
+        await _retireOAuthScope(
+          prefs,
+          OAuthScopeRetirementPurpose.explicitReconnect,
+        );
+        await prefs.reload();
+        _requireNotDisposed();
+        if (prefs.get('auth_state') != raw ||
+            _state.isLoggedIn ||
+            prefs.containsKey(AccountLocalDataCleaner.accountDataOwnerKey)) {
+          throw const AccountLocalDataCleanupBlockedException(
+            '账号归属未能安全保存，请重试。',
+          );
+        }
+        await _persistAccountDataOwner(prefs, _state, expectedAuthState: raw);
+        _localAccountDataBlocked = false;
+      });
+    } catch (_) {
+      _blockLocalAccountData();
+      rethrow;
+    } finally {
+      _accountTransitionInProgress = false;
+      if (!_isDisposed) notifyListeners();
+    }
+  }
+
+  bool _storedAuthIsLoggedIn(Object? raw) {
+    if (raw == null) return false;
+    if (raw is! String) {
+      throw const AccountLocalDataCleanupBlockedException('账号归属未能安全保存，请重试。');
+    }
+    try {
+      final value = jsonDecode(raw);
+      if (value is! Map<String, dynamic>) throw const FormatException();
+      return AuthState.fromJson(value).isLoggedIn;
+    } catch (_) {
+      throw const AccountLocalDataCleanupBlockedException('账号归属未能安全保存，请重试。');
+    }
+  }
+
+  static AuthState? _decodeVerifiedGuestState(Object? raw) {
+    if (raw == null) return const AuthState();
+    if (raw is! String || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      final state = AuthState.fromJson(decoded);
+      return state.isLoggedIn ? null : state;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _recoverOAuthRetirementBeforeOwnerMutation(
+    SharedPreferences prefs,
+  ) async {
+    final inspection = OAuthCalendarStorage.inspectRetirementLocked(prefs);
+    if (inspection.fullPending) return;
+    if (inspection.scopedPending) {
+      if (!inspection.scopedRecoverable) {
+        _blockLocalAccountData();
+        throw const AccountLocalDataCleanupBlockedException('账号归属未能安全保存，请重试。');
+      }
+      await _retireOAuthScope(
+        prefs,
+        OAuthScopeRetirementPurpose.resumeKnownScope,
+      );
+      await prefs.reload();
+    } else if (inspection.runtimePending) {
+      _blockLocalAccountData();
+      throw const AccountLocalDataCleanupBlockedException('账号归属未能安全保存，请重试。');
+    }
+  }
+
+  Future<void> _retireOAuthScope(
+    SharedPreferences prefs,
+    OAuthScopeRetirementPurpose purpose,
+  ) async {
+    final epoch = _sessionEpoch;
+    final generation = _stateMutationSerial;
+    bool current() =>
+        !_isDisposed &&
+        _accountTransitionInProgress &&
+        _sessionEpoch == epoch &&
+        _stateMutationSerial == generation;
+    String? owner(String key) {
+      if (!prefs.containsKey(key)) return null;
+      final value = prefs.get(key);
+      if (value is! String) {
+        throw const AccountLocalDataCleanupBlockedException('账号归属未能安全保存，请重试。');
+      }
+      return value;
+    }
+
+    try {
+      if (!current()) throw const OAuthAccountRetirementPending();
+      final request = OAuthScopeRetirementRequest(
+        preferences: prefs,
+        expectedAccountOwner: owner(
+          AccountLocalDataCleaner.accountDataOwnerKey,
+        ),
+        expectedScopedOwner: owner(OAuthCalendarStorage.scopeOwnerKey),
+        purpose: purpose,
+        isCurrent: current,
+      );
+      await AccountLocalDataCleaner.runOAuthScopeRetirement<void>(
+        request,
+        () async {},
+      );
+      if (!current()) throw const OAuthAccountRetirementPending();
+    } catch (_) {
+      _blockLocalAccountData();
+      throw const AccountLocalDataCleanupBlockedException('账号归属未能安全保存，请重试。');
+    }
   }
 
   Future<void> refreshServerConfigFromServer({bool force = false}) {
@@ -386,17 +1681,30 @@ class AuthProvider extends ChangeNotifier {
     AuthState state,
     int generation, {
     bool allowTransition = false,
+    bool Function()? storageCurrent,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    bool isCurrent() => _isCurrentAccountWriteback(
-      state,
-      generation,
-      allowTransition: allowTransition,
-    );
+    bool isCurrent() =>
+        (storageCurrent?.call() ?? true) &&
+        _isCurrentAccountWriteback(
+          state,
+          generation,
+          allowTransition: allowTransition,
+        );
     if (!isCurrent()) return false;
+    _revokeGuestWorkspaceReadiness();
     _revokeVerifiedWidgetOwnerIdentity();
+    final encoded = json.encode(state.toJson());
     try {
-      if (!await prefs.setString('auth_state', json.encode(state.toJson()))) {
+      await prefs.reload();
+      if (!isCurrent()) return false;
+      OAuthCalendarStorage.ensureAccountAdmissionLocked(prefs);
+      if (!await prefs.setString('auth_state', encoded)) {
+        throw const AccountLocalDataCleanupBlockedException('账号状态未能安全保存，请重试。');
+      }
+      await prefs.reload();
+      if (!isCurrent()) return false;
+      if (prefs.get('auth_state') != encoded) {
         throw const AccountLocalDataCleanupBlockedException('账号状态未能安全保存，请重试。');
       }
     } catch (_) {
@@ -404,7 +1712,12 @@ class AuthProvider extends ChangeNotifier {
       rethrow;
     }
     if (!isCurrent()) return false;
-    await _persistAccountDataOwner(prefs, state);
+    await _persistAccountDataOwner(
+      prefs,
+      state,
+      expectedAuthState: encoded,
+      storageCurrent: storageCurrent,
+    );
     if (!isCurrent()) return false;
     _localAccountDataBlocked = false;
     return true;
@@ -461,7 +1774,9 @@ class AuthProvider extends ChangeNotifier {
         _requireNotDisposed();
         _state = nextState;
         _client = ApiClient(baseUrl: _baseUrl, token: nextState.token);
-        await _persistAndNotifyAccount(payload, allowTransition: true);
+        if (await _persistAndNotifyAccount(payload, allowTransition: true)) {
+          _successfulAccountTransitionRevision++;
+        }
       });
     } finally {
       _accountTransitionInProgress = false;
@@ -478,13 +1793,116 @@ class AuthProvider extends ChangeNotifier {
     _guardAccountRequest(requestClient, generation);
     return _queueAccountWriteback(() async {
       _guardAccountRequest(requestClient, generation);
-      _state = _stateFromAuthResponse(payload, keepToken: true);
-      _markAccountMutation(reason);
-      if (await _persistAndNotifyAccount(payload)) notifyListeners();
+      await _applyOrdinaryProfileState(
+        _stateFromAuthResponse(payload, keepToken: true),
+        payload,
+        reason: reason,
+        isCurrent: () =>
+            !_isDisposed &&
+            !_accountTransitionInProgress &&
+            identical(requestClient, _client) &&
+            generation == _stateMutationSerial,
+      );
     });
   }
 
+  /// Wait for issued OAuth writes before changing same-account Auth preimages.
+  /// Notifications remain outside the lane because they may enroll new writes.
+  Future<void> _applyOrdinaryProfileState(
+    AuthState next,
+    Map<String, dynamic> payload, {
+    required String reason,
+    required bool Function() isCurrent,
+  }) async {
+    final epoch = OAuthCalendarStorage.epoch;
+    final reset = OAuthCalendarStorage.resetRevision;
+    final writes = AccountPreferenceWrites.generation;
+    final accounts = AccountLocalDataCleaner.accountDataGeneration;
+    bool resourcesCurrent() =>
+        epoch == OAuthCalendarStorage.epoch &&
+        reset == OAuthCalendarStorage.resetRevision &&
+        writes == AccountPreferenceWrites.generation &&
+        accounts == AccountLocalDataCleaner.accountDataGeneration;
+    var persisted = false;
+    await AccountPreferenceWrites.runResult<void>((token) {
+      bool storageCurrent() => token.isCurrent && resourcesCurrent();
+      return OAuthCalendarStorage.run<void>(
+        () async {
+          if (!isCurrent() || !storageCurrent()) {
+            throw const AccountPreferenceWriteCanceled();
+          }
+          final originalScope = _preparedAccountOAuthScope;
+          final evidence = _verifiedAccountAuthStorage;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.reload();
+          if (!isCurrent() || !storageCurrent()) {
+            throw const AccountPreferenceWriteCanceled();
+          }
+          if (originalScope != null) {
+            OAuthCalendarStorage.ensureScopedWorkspaceCurrentLocked(
+              originalScope,
+              prefs,
+            );
+            OAuthCalendarInventory.validate(prefs, originalScope.record);
+            if (evidence == null ||
+                !identical(evidence.preferences, prefs) ||
+                evidence.accountOwner != _stableAccountIdentity(next)) {
+              throw const OAuthScopedWorkspaceUnavailable();
+            }
+          }
+          _state = next;
+          _markAccountMutation(reason);
+          persisted = await _persistState(
+            next,
+            _stateMutationSerial,
+            storageCurrent: storageCurrent,
+          );
+          if (!storageCurrent()) throw const AccountPreferenceWriteCanceled();
+          if (persisted && originalScope != null) {
+            final updated = _verifiedAccountAuthStorage;
+            if (updated == null) throw const OAuthScopedWorkspaceUnavailable();
+            final scope = OAuthCalendarStorage.readScopedWorkspaceLocked(
+              prefs,
+              expectedAuthState: updated.authState,
+              expectedAccountOwner: updated.accountOwner,
+            );
+            if (scope == null ||
+                scope.record.encode() != originalScope.record.encode()) {
+              throw const OAuthScopedWorkspaceUnavailable();
+            }
+            OAuthCalendarInventory.validate(prefs, scope.record);
+            _preparedAccountOAuthScope = scope;
+          }
+        },
+        epoch: epoch,
+        isCurrent: () => isCurrent() && storageCurrent(),
+      );
+    }, canceledResult: () => throw const AccountPreferenceWriteCanceled());
+    if (!resourcesCurrent()) throw const AccountPreferenceWriteCanceled();
+    if (!persisted ||
+        _isDisposed ||
+        _accountTransitionInProgress ||
+        !identical(_state, next)) {
+      return;
+    }
+    await _notifyAccountPayloadChanged(payload);
+    if (!resourcesCurrent() ||
+        _isDisposed ||
+        _accountTransitionInProgress ||
+        !identical(_state, next)) {
+      return;
+    }
+    await _notifyAccountProfileChanged(next);
+    if (!_isDisposed &&
+        resourcesCurrent() &&
+        !_accountTransitionInProgress &&
+        identical(_state, next)) {
+      notifyListeners();
+    }
+  }
+
   void _markAccountMutation(String reason) {
+    _revokeGuestWorkspaceReadiness();
     _stateMutationSerial++;
     _refreshMeInFlight = null;
     debugPrint(
@@ -695,6 +2113,7 @@ class AuthProvider extends ChangeNotifier {
       await _accountWritebackTail;
       _requireNotDisposed();
       await _logoutAfterCleanup();
+      _successfulAccountTransitionRevision++;
     } finally {
       _accountTransitionInProgress = false;
       if (!_isDisposed) notifyListeners();
@@ -753,6 +2172,7 @@ class AuthProvider extends ChangeNotifier {
       await _accountWritebackTail;
       _requireNotDisposed();
       await _clearLocalSessionAfterCleanup();
+      _successfulAccountTransitionRevision++;
     } finally {
       _accountTransitionInProgress = false;
       if (!_isDisposed) notifyListeners();
@@ -783,15 +2203,42 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _resetLocalSession() async {
     if (_isDisposed) return;
+    SharedPreferences? clearedStore;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _requireNotDisposed();
+      await prefs.reload();
+      _requireNotDisposed();
+      if (OAuthCalendarStorage.isAccountRetiring(prefs)) {
+        throw const AccountLocalDataCleanupBlockedException('账号归属未能安全清除，请重试。');
+      }
+      if (!await prefs.remove('auth_state')) {
+        throw const AccountLocalDataCleanupBlockedException('登录状态未能安全清除，请重试。');
+      }
+      _requireNotDisposed();
+      if (!await prefs.remove(AccountLocalDataCleaner.accountDataOwnerKey)) {
+        throw const AccountLocalDataCleanupBlockedException('账号归属未能安全清除，请重试。');
+      }
+      await prefs.reload();
+      _requireNotDisposed();
+      if (prefs.containsKey('auth_state') ||
+          prefs.containsKey(AccountLocalDataCleaner.accountDataOwnerKey) ||
+          OAuthCalendarStorage.isAccountRetiring(prefs)) {
+        throw const AccountLocalDataCleanupBlockedException('账号归属未能安全清除，请重试。');
+      }
+      clearedStore = prefs;
+    } catch (_) {
+      _blockLocalAccountData();
+      rethrow;
+    }
     _verifiedWidgetOwnerIdentity = null;
     _state = const AuthState();
     _markAccountMutation('logout');
     _client = ApiClient(baseUrl: _baseUrl);
-    final prefs = await SharedPreferences.getInstance();
-    if (_isDisposed) return;
-    await prefs.remove('auth_state');
-    _requireNotDisposed();
-    await prefs.remove(AccountLocalDataCleaner.accountDataOwnerKey);
+    _verifiedGuestAuthStorage = _VerifiedGuestAuthStorage(clearedStore, null);
+    _authStorageReady = true;
+    _verifiedGuestOwnerAbsence = true;
+    _localAccountDataBlocked = false;
     if (!_isDisposed) notifyListeners();
   }
 
@@ -819,6 +2266,14 @@ class AuthProvider extends ChangeNotifier {
     SharedPreferences prefs,
     AuthState loadedState,
   ) async {
+    if (OAuthCalendarStorage.isAccountRetiring(prefs)) {
+      await _notifyAccountIdentityChanging(
+        const AuthState(),
+        loadedState,
+        force: true,
+      );
+      return;
+    }
     final storedOwner = prefs
         .getString(AccountLocalDataCleaner.accountDataOwnerKey)
         ?.trim();
@@ -864,6 +2319,10 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _clearResidualAccountDataIfSignedOut(
     SharedPreferences prefs,
   ) async {
+    if (OAuthCalendarStorage.isAccountRetiring(prefs)) {
+      await _notifyAccountLoggedOut();
+      return;
+    }
     final storedOwner = prefs
         .getString(AccountLocalDataCleaner.accountDataOwnerKey)
         ?.trim();
@@ -967,16 +2426,53 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _persistAccountDataOwner(
     SharedPreferences prefs,
-    AuthState state,
-  ) async {
+    AuthState state, {
+    Object? expectedAuthState = _uncheckedAuthState,
+    bool Function()? storageCurrent,
+  }) async {
+    if (!(storageCurrent?.call() ?? true)) {
+      throw const AccountPreferenceWriteCanceled();
+    }
+    _revokeGuestWorkspaceReadiness();
     _revokeVerifiedWidgetOwnerIdentity();
     final owner = _stableAccountIdentity(state);
     try {
+      await prefs.reload();
+      _requireNotDisposed();
+      void checkAuthState() {
+        if (!(storageCurrent?.call() ?? true)) {
+          throw const AccountPreferenceWriteCanceled();
+        }
+        if (!identical(expectedAuthState, _uncheckedAuthState) &&
+            prefs.get('auth_state') != expectedAuthState) {
+          throw const AccountLocalDataCleanupBlockedException(
+            '账号归属未能安全保存，请重试。',
+          );
+        }
+      }
+
+      checkAuthState();
+      if (OAuthCalendarStorage.isAccountRetiring(prefs)) {
+        throw const AccountLocalDataCleanupBlockedException('账号归属未能安全保存，请重试。');
+      }
       if (state.isLoggedIn && owner != null) {
-        if (!await prefs.setString(
-              AccountLocalDataCleaner.accountDataOwnerKey,
-              owner,
-            ) ||
+        // This write must not turn an unowned legacy OAuth collection into
+        // account-owned data. Guest adoption retires it before reaching here.
+        if (!prefs.containsKey(AccountLocalDataCleaner.accountDataOwnerKey) &&
+            prefs.getKeys().any(OAuthCalendarStorage.isOAuthScopeKey)) {
+          throw const AccountLocalDataCleanupBlockedException(
+            '账号归属未能安全保存，请重试。',
+          );
+        }
+        final saved = await prefs.setString(
+          AccountLocalDataCleaner.accountDataOwnerKey,
+          owner,
+        );
+        await prefs.reload();
+        _requireNotDisposed();
+        checkAuthState();
+        if (!saved ||
+            OAuthCalendarStorage.isAccountRetiring(prefs) ||
             prefs.getString(AccountLocalDataCleaner.accountDataOwnerKey) !=
                 owner) {
           throw const AccountLocalDataCleanupBlockedException(
@@ -984,13 +2480,34 @@ class AuthProvider extends ChangeNotifier {
           );
         }
         _verifiedWidgetOwnerIdentity = owner;
+        _verifiedAccountAuthStorage = _VerifiedAccountAuthStorage(
+          prefs,
+          AccountPreferenceTransaction.freezeValue(prefs.get('auth_state')),
+          owner,
+        );
       } else {
-        if (!await prefs.remove(AccountLocalDataCleaner.accountDataOwnerKey) ||
+        final removed = await prefs.remove(
+          AccountLocalDataCleaner.accountDataOwnerKey,
+        );
+        await prefs.reload();
+        _requireNotDisposed();
+        checkAuthState();
+        if (!removed ||
+            OAuthCalendarStorage.isAccountRetiring(prefs) ||
             prefs.containsKey(AccountLocalDataCleaner.accountDataOwnerKey)) {
           throw const AccountLocalDataCleanupBlockedException(
             '账号归属未能安全清除，请重试。',
           );
         }
+        _verifiedGuestOwnerAbsence = !state.isLoggedIn;
+      }
+      _authStorageReady = true;
+      if (_verifiedGuestOwnerAbsence &&
+          _decodeVerifiedGuestState(prefs.get('auth_state')) != null) {
+        _verifiedGuestAuthStorage = _VerifiedGuestAuthStorage(
+          prefs,
+          AccountPreferenceTransaction.freezeValue(prefs.get('auth_state')),
+        );
       }
     } catch (_) {
       _blockLocalAccountData();
@@ -1007,8 +2524,21 @@ class AuthProvider extends ChangeNotifier {
   void _blockLocalAccountData() {
     final wasBlocked = _localAccountDataBlocked;
     _localAccountDataBlocked = true;
+    _revokeGuestWorkspaceReadiness();
     _verifiedWidgetOwnerIdentity = null;
     if (!_isDisposed && !wasBlocked) notifyListeners();
+  }
+
+  void _revokeGuestWorkspaceReadiness() {
+    _oauthInitialization = null;
+    _authStorageReady = false;
+    _verifiedGuestOwnerAbsence = false;
+    _verifiedGuestAuthStorage = null;
+    _preparedGuestOAuthScope = null;
+    _guestOAuthPreparation++;
+    _verifiedAccountAuthStorage = null;
+    _preparedAccountOAuthScope = null;
+    _accountOAuthPreparation++;
   }
 
   Future<void> refreshMe({String reason = 'manual', bool force = false}) {
@@ -1094,13 +2624,23 @@ class AuthProvider extends ChangeNotifier {
           debugPrint('[auth-sync] refreshMe#$requestId skipped: unchanged');
           return;
         }
-        _state = nextState;
-        if (await _persistAndNotifyAccount(me)) {
+        await _applyOrdinaryProfileState(
+          nextState,
+          me,
+          reason: 'refresh_me',
+          isCurrent: () =>
+              !_isDisposed &&
+              !_accountTransitionInProgress &&
+              _state.token == tokenAtStart &&
+              _stateMutationSerial == mutationSerialAtStart &&
+              requestId == _refreshMeRequestSerial,
+        );
+        if (identical(_state, nextState)) {
+          _lastRefreshMeMutationSerial = _stateMutationSerial;
           debugPrint(
             '[auth-sync] refreshMe#$requestId applied '
             'coin=${_state.coinBalance} lifetime=${_state.lifetimeCoins}',
           );
-          notifyListeners();
         }
       });
     } on ApiException catch (e) {
@@ -1168,11 +2708,16 @@ class AuthProvider extends ChangeNotifier {
         debugPrint('[auth-sync] $reason skipped: unchanged');
         return;
       }
-      _state = nextState;
-      _markAccountMutation(reason);
-      if (await _persistAndNotifyAccount(Map<String, dynamic>.from(data))) {
-        notifyListeners();
-      }
+      await _applyOrdinaryProfileState(
+        nextState,
+        Map<String, dynamic>.from(data),
+        reason: reason,
+        isCurrent: () =>
+            !_isDisposed &&
+            !_accountTransitionInProgress &&
+            identical(requestClient, _client) &&
+            generation == _stateMutationSerial,
+      );
     });
   }
 
@@ -1802,6 +3347,21 @@ class AuthProvider extends ChangeNotifier {
     bool force = false,
   }) async {
     _requireNotDisposed();
+    if (!force) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      _requireNotDisposed();
+      await _recoverOAuthRetirementBeforeOwnerMutation(prefs);
+      if (!previous.isLoggedIn &&
+          next.isLoggedIn &&
+          !prefs.containsKey(OAuthCalendarStorage.retirementFenceKey) &&
+          !prefs.containsKey(AccountLocalDataCleaner.accountDataOwnerKey)) {
+        await _retireOAuthScope(
+          prefs,
+          OAuthScopeRetirementPurpose.guestAdoption,
+        );
+      }
+    }
     if (!force &&
         !await _shouldClearLocalAccountDataBeforeApplying(previous, next)) {
       return;
@@ -1812,7 +3372,7 @@ class AuthProvider extends ChangeNotifier {
       if (callback == null) {
         await AccountLocalDataCleaner.clearSharedPreferences();
       } else {
-        await AccountLocalDataCleaner.runPreferenceBoundary(() async {
+        await AccountLocalDataCleaner.runAccountRetirement(() async {
           await callback(previous, next);
           _requireNotDisposed();
           // Keep user writes suspended through the app and final cleanup passes.
@@ -1832,7 +3392,7 @@ class AuthProvider extends ChangeNotifier {
       if (callback == null) {
         await AccountLocalDataCleaner.clearSharedPreferences();
       } else {
-        await AccountLocalDataCleaner.runPreferenceBoundary(() async {
+        await AccountLocalDataCleaner.runAccountRetirement(() async {
           await callback();
           _requireNotDisposed();
           await AccountLocalDataCleaner.clearSharedPreferences();
@@ -1850,6 +3410,8 @@ class AuthProvider extends ChangeNotifier {
   ) async {
     if (!next.isLoggedIn) return false;
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    if (OAuthCalendarStorage.isAccountRetiring(prefs)) return true;
     final storedOwner = prefs
         .getString(AccountLocalDataCleaner.accountDataOwnerKey)
         ?.trim();
