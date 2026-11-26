@@ -528,7 +528,9 @@ def _app_version_code(value: str) -> int:
     computed = _version_to_code(normalized)
     if _version_gt(normalized, current) and computed <= APP_CURRENT_VERSION_CODE:
         current_computed = _version_to_code(current)
-        return APP_CURRENT_VERSION_CODE + max(1, computed - current_computed)
+        diff = computed - current_computed
+        stride = 10 if APP_CURRENT_VERSION_CODE >= 1500000 else 1
+        return APP_CURRENT_VERSION_CODE + max(1, diff) * stride
     return computed
 
 

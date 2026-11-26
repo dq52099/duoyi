@@ -157,22 +157,22 @@
 <body>
   <main>
     <section class="hero">
-      <h1>多仪 v1.1.46 测试下载版</h1>
-      <p>当前 Web 版本基于 1.1.46+140012 发布构建。电脑 Web 包与手机 Web 包分别提供桌面端与移动端界面，Android 正式签名 APK/AAB 可由 GitHub Release 直接下载。</p>
+      <h1>多仪 v1.1.47 测试下载版</h1>
+      <p>当前 Web 版本基于 1.1.47+1500000 发布构建。电脑 Web 包与手机 Web 包分别提供桌面端与移动端界面，Android 正式签名 APK/AAB 可由 GitHub Release 直接下载，并已解决早期分包升级时的版本降级报错。</p>
       <div class="actions">
         <a class="button" href="/duoyi/">打开网页版</a>
-        <a class="button secondary" href="https://github.com/dq52099/duoyi/releases/download/v1.1.46/duoyi-web-desktop-v1.1.46.tar.gz">下载电脑 Web 包</a>
-        <a class="button secondary" href="https://github.com/dq52099/duoyi/releases/download/v1.1.46/duoyi-web-mobile-v1.1.46.tar.gz">下载手机 Web 包</a>
-        <a class="button secondary" href="https://github.com/dq52099/duoyi/releases/download/v1.1.46/duoyi-v1.1.46-arm64-v8a.apk">下载 Android APK (arm64)</a>
-        <a class="button secondary" href="https://github.com/dq52099/duoyi/releases/download/v1.1.46/duoyi-v1.1.46.apk">下载通用 Android APK</a>
+        <a class="button secondary" href="https://github.com/dq52099/duoyi/releases/download/v1.1.47/duoyi-web-desktop-v1.1.47.tar.gz">下载电脑 Web 包</a>
+        <a class="button secondary" href="https://github.com/dq52099/duoyi/releases/download/v1.1.47/duoyi-web-mobile-v1.1.47.tar.gz">下载手机 Web 包</a>
+        <a class="button secondary" href="https://github.com/dq52099/duoyi/releases/download/v1.1.47/duoyi-v1.1.47-arm64-v8a.apk">下载 Android APK (arm64，直接升级)</a>
+        <a class="button secondary" href="https://github.com/dq52099/duoyi/releases/download/v1.1.47/duoyi-v1.1.47.apk">下载通用 Android APK（直接升级）</a>
       </div>
-      <p class="note">GitHub Release 已配置正式签名；大多数现代 Android 手机推荐下载 arm64-v8a 分包，通用包作为全架构兜底。Web 包仍部署在 <code>/duoyi/</code> 子路径。</p>
+      <p class="note">GitHub Release 已配置正式签名；大多数现代 Android 手机推荐下载 <code>duoyi-v1.1.47-arm64-v8a.apk</code>，通用包 <code>duoyi-v1.1.47.apk</code> 作为全架构兜底。<code>v1.1.47</code> 已重构 Android <code>versionCode</code> 序列（<code>1500001</code>~<code>1500009</code>），这两个包均支持从任意早期 <code>v1.1.43</code>/<code>v1.1.46</code> 分包或通用包直接覆盖升级，不再触发 <code>INSTALL_FAILED_VERSION_DOWNGRADE</code>。Web 包仍部署在 <code>/duoyi/</code> 子路径。</p>
     </section>
 
     <section class="grid" aria-label="下载信息">
       <div class="item">
         <div class="label">发布状态</div>
-        <div class="value"><code>GitHub Release v1.1.46</code></div>
+        <div class="value"><code>GitHub Release v1.1.47</code></div>
       </div>
       <div class="item">
         <div class="label">下载页</div>
@@ -184,27 +184,27 @@
       </div>
       <div class="item">
         <div class="label">GitHub Release</div>
-        <div class="value"><code>https://github.com/dq52099/duoyi/releases/tag/v1.1.46</code></div>
+        <div class="value"><code>https://github.com/dq52099/duoyi/releases/tag/v1.1.47</code></div>
       </div>
       <div class="item">
         <div class="label">电脑 Web 包</div>
-        <div class="value"><code>duoyi-web-desktop-v1.1.46.tar.gz</code></div>
+        <div class="value"><code>duoyi-web-desktop-v1.1.47.tar.gz</code></div>
       </div>
       <div class="item">
         <div class="label">手机 Web 包</div>
-        <div class="value"><code>duoyi-web-mobile-v1.1.46.tar.gz</code></div>
+        <div class="value"><code>duoyi-web-mobile-v1.1.47.tar.gz</code></div>
       </div>
       <div class="item">
-        <div class="label">Android 推荐 APK</div>
-        <div class="value"><code>duoyi-v1.1.46-arm64-v8a.apk</code></div>
+        <div class="label">Android 推荐 APK（支持直接覆盖升级）</div>
+        <div class="value"><code>duoyi-v1.1.47-arm64-v8a.apk</code>（<code>versionCode 1500002</code>，可直接升级自任意早期 v1.1.43/v1.1.46 分包或通用包）</div>
       </div>
       <div class="item">
-        <div class="label">Android 通用 APK</div>
-        <div class="value"><code>duoyi-v1.1.46.apk</code></div>
+        <div class="label">Android 通用 APK（支持直接覆盖升级）</div>
+        <div class="value"><code>duoyi-v1.1.47.apk</code>（<code>versionCode 1500009</code>，可直接升级自任意早期 v1.1.43/v1.1.46 分包或通用包）</div>
       </div>
       <div class="item">
         <div class="label">版本号</div>
-        <div class="value"><code>1.1.46+140012</code></div>
+        <div class="value"><code>1.1.47+1500000</code></div>
       </div>
       <div class="item">
         <div class="label">签名证书 SHA-256</div>

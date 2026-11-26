@@ -2,6 +2,8 @@ import java.util.Properties
 import java.io.FileInputStream
 import java.util.Base64
 import org.gradle.api.GradleException
+import com.android.build.VariantOutput
+import com.android.build.gradle.api.ApkVariantOutput
 
 plugins {
     id("com.android.application")
@@ -93,6 +95,25 @@ android {
             }
             isMinifyEnabled = false
             isShrinkResources = false
+        }
+    }
+
+    // Override FlutterPlugin's abiVersionCode * 1000 + versionCode so split APKs stay
+    // strictly inside the +10 release stride and below the universal APK (+9).
+    @Suppress("DEPRECATION")
+    applicationVariants.all {
+        val baseCode = flutter.versionCode
+        outputs.all {
+            val apkOutput = this as? ApkVariantOutput ?: return@all
+            val abi = apkOutput.getFilter(VariantOutput.FilterType.ABI)
+            val offset = when (abi) {
+                "armeabi-v7a" -> 1
+                "arm64-v8a" -> 2
+                "x86_64" -> 4
+                null, "" -> 9
+                else -> 0
+            }
+            apkOutput.versionCodeOverride = baseCode + offset
         }
     }
 }

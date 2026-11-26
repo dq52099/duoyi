@@ -214,6 +214,100 @@ jobs:
 
           ls -lh artifacts
 
+      - name: Verify staged APK versionCodes
+        env:
+          SUFFIX: ${{ steps.stage.outputs.suffix }}
+        run: |
+          AAPT2=""
+          for sdk_root in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}"; do
+            if [ -n "$sdk_root" ] && [ -d "$sdk_root/build-tools" ]; then
+              candidate="$(find "$sdk_root/build-tools" -maxdepth 2 -type f -name aapt2 2>/dev/null | sort -V | tail -n 1 || true)"
+              if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+                AAPT2="$candidate"
+                break
+              fi
+            fi
+          done
+          if [ -z "$AAPT2" ]; then
+            AAPT2="$(command -v aapt2 || true)"
+          fi
+          if [ -z "$AAPT2" ] || [ ! -x "$AAPT2" ]; then
+            echo "::error::Android SDK aapt2 not found under ANDROID_HOME/ANDROID_SDK_ROOT."
+            exit 1
+          fi
+          echo "Using aapt2: $AAPT2"
+
+          AAPT2="$AAPT2" SUFFIX="$SUFFIX" python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+          import subprocess
+
+          aapt2 = os.environ["AAPT2"]
+          suffix = os.environ["SUFFIX"]
+          pubspec = pathlib.Path("pubspec.yaml").read_text(encoding="utf-8")
+          m_pub = re.search(r"^version:\s*([^\s+]+)\+(\d+)\s*$", pubspec, re.M)
+          if not m_pub:
+              raise SystemExit("ERROR: Could not parse version: <name>+<build> from pubspec.yaml")
+          expected_name = m_pub.group(1)
+          base_code = int(m_pub.group(2))
+          print(f"pubspec.yaml version={expected_name}+{base_code}")
+
+          expected_apks = {
+              "armeabi-v7a": pathlib.Path(f"artifacts/duoyi-{suffix}-armeabi-v7a.apk"),
+              "arm64-v8a": pathlib.Path(f"artifacts/duoyi-{suffix}-arm64-v8a.apk"),
+              "x86_64": pathlib.Path(f"artifacts/duoyi-{suffix}-x86_64.apk"),
+              "universal": pathlib.Path(f"artifacts/duoyi-{suffix}.apk"),
+          }
+
+          all_staged = sorted(pathlib.Path("artifacts").glob("*.apk"))
+          if not all_staged:
+              raise SystemExit("ERROR: No staged APKs found in artifacts/")
+
+          codes = {}
+          names = {}
+          for apk in all_staged:
+              out = subprocess.check_output([aapt2, "dump", "badging", str(apk)], text=True)
+              m_pkg = re.search(r"versionCode='(\d+)'\s+versionName='([^']*)'", out)
+              if not m_pkg:
+                  raise SystemExit(
+                      f"ERROR: Could not parse versionCode/versionName from {apk}:\n{out[:400]}"
+                  )
+              vcode = int(m_pkg.group(1))
+              vname = m_pkg.group(2)
+              print(f"APK {apk.name}: versionName={vname} versionCode={vcode}")
+              codes[apk.name] = vcode
+              names[apk.name] = vname
+
+          for label, path in expected_apks.items():
+              if not path.is_file():
+                  raise SystemExit(f"ERROR: Missing expected staged APK for {label}: {path}")
+              if names[path.name] != expected_name:
+                  raise SystemExit(
+                      f"ERROR: {path.name} versionName={names[path.name]!r} != pubspec {expected_name!r}"
+                  )
+
+          v7a = codes[expected_apks["armeabi-v7a"].name]
+          arm64 = codes[expected_apks["arm64-v8a"].name]
+          x86_64 = codes[expected_apks["x86_64"].name]
+          universal = codes[expected_apks["universal"].name]
+
+          assert v7a > 144012, f"v7a versionCode {v7a} must be strictly > 144012"
+          assert v7a >= 1500001, f"v7a versionCode {v7a} must be >= 1500001"
+          assert v7a < arm64 < x86_64 < universal, (
+              f"Expected v7a < arm64 < x86_64 < universal, got "
+              f"v7a={v7a}, arm64={arm64}, x86_64={x86_64}, universal={universal}"
+          )
+          assert v7a == base_code + 1, f"Expected v7a == {base_code + 1}, got {v7a}"
+          assert arm64 == base_code + 2, f"Expected arm64 == {base_code + 2}, got {arm64}"
+          assert x86_64 == base_code + 4, f"Expected x86_64 == {base_code + 4}, got {x86_64}"
+          assert universal == base_code + 9, f"Expected universal == {base_code + 9}, got {universal}"
+          print(
+              f"PASS: versionCodes verified (base={base_code}: "
+              f"v7a={v7a} < arm64={arm64} < x86_64={x86_64} < universal={universal})"
+          )
+          PY
+
       - name: Print signing fingerprint
         run: |
           APK="$(ls artifacts/*.apk 2>/dev/null | head -n 1 || true)"
